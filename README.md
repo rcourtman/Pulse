@@ -1,31 +1,43 @@
-<div style="border: 2px solid #d1d5db; padding: 20px; border-radius: 8px; background-color: #f9fafb;">
-  <h2 align="center">Proxmox VE Helper-Scripts Project Update</h2>
-  <p>Dear Community,</p>
-  <p>I wanted to share a personal update. I’ve recently transitioned into hospice care and, as a result, will be slowing down the development of this project. While I’m grateful for the progress we’ve made together, I recognize that I’ll be taking a step back for some rest and reflection during this time.</p>
-  <p>Thank you for your continued support, encouragement, and understanding. Your dedication to the community and this project means the world to me, and I am grateful for each of you.</p>
-  <p>Warm regards,<br>tteck/tteckster</p>
-</div>
 <div align="center">
   <a href="#">
-    <img src="https://raw.githubusercontent.com/tteck/Proxmox/main/misc/images/logo.png" height="100px" />
+    <img src="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/images/logo.png" height="100px" />
  </a>
 </div>
+
+<div style="border: 2px solid #d1d5db; padding: 20px; border-radius: 8px; background-color: #f9fafb;">
+  <h2 align="center">Proxmox VE Helper-Scripts: A Community Legacy</h2>
+  <p>Dear Community,</p>
+  <p>In agreement with tteck, this project has now transitioned into a community-driven effort. We aim to continue his work, building on the foundation he laid to support Proxmox users worldwide.</p>
+  <p>tteck, whose contribution has been invaluable, shared recently that he is now in hospice care. His scripts have empowered thousands, and we honor his legacy by carrying this project forward with the same passion and commitment. We’re deeply grateful for his vision, which made Proxmox accessible to so many.</p>
+  <p>To tteck: Your impact will be felt in this community for years to come. We thank you for everything.</p>
+  <p>Warm regards,<br>The Community</p>
+</div>
+
+
+
 <h1 align="center">Proxmox VE Helper-Scripts</h1>
 
 <p align="center">
-  <a href="https://helper-scripts.com">Website</a> | 
-  <a href="https://github.com/tteck/Proxmox/blob/main/.github/CONTRIBUTING.md">Contribute</a> |
-  <a href="https://github.com/tteck/Proxmox/blob/main/USER_SUBMITTED_GUIDES.md">Guides</a> |
-  <a href="https://github.com/tteck/Proxmox/blob/main/CHANGELOG.md">Changelog</a> |
-  <a href="https://ko-fi.com/D1D7EP4GF">Support</a>
+  <a href="https://helper-scripts.com">Website (tteck)</a> | 
+  <a href="https://ko-fi.com/proxmoxhelperscripts">Ko-Fi (for tteck)</a> |
+  <a href="https://github.com/community-scripts/ProxmoxVE/blob/main/.github/CONTRIBUTING.md">Contribute</a> |
+  <a href="https://github.com/community-scripts/ProxmoxVE/blob/main/USER_SUBMITTED_GUIDES.md">Guides</a> |
+  <a href="https://github.com/community-scripts/ProxmoxVE/blob/main/CHANGELOG.md">Changelog</a>
 </p>
 
 ---
 
-These scripts empower users to create a Linux container or virtual machine interactively, providing choices for both simple and advanced configurations. The basic setup adheres to default settings, while the advanced setup gives users the ability to customize these defaults. 
+This community-managed project continues tteck’s original vision of simplifying Proxmox VE setup. The scripts allow users to create Linux containers or virtual machines interactively, with options for both simple and advanced configurations. While the basic setup adheres to default settings, the advanced setup offers extensive customization options for specific needs.
 
-Options are displayed to users in a dialog box format. Once the user makes their selections, the script collects and validates their input to generate the final configuration for the container or virtual machine.
+All configuration choices are displayed in a dialog box, where users can select their preferences. The script then validates these inputs to generate a final configuration for the container or virtual machine.
+
 <p align="center">
-Be cautious and thoroughly evaluate scripts and automation tasks obtained from external sources. <a href="https://github.com/tteck/Proxmox/blob/main/CODE-AUDIT.md">Read more</a>
+Please exercise caution and thoroughly review scripts and automation tasks from external sources. <a href="https://github.com/community/Proxmox/blob/main/CODE-AUDIT.md">Read more</a>
 </p>
+
 <sub><div align="center"> Proxmox® is a registered trademark of Proxmox Server Solutions GmbH. </div></sub>
+
+---
+
+### Note on the Transition:
+This project is now maintained by the community in memory of tteck’s invaluable contribution. His dedication transformed the Proxmox experience for countless users, and we’re committed to continuing his work with the same dedication.
