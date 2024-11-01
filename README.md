@@ -13,9 +13,7 @@
   <p>Warm regards,<br>The Community</p>
 </div>
 
-
-
-<h1 align="center">Proxmox VE Helper-Scripts</h1>
+--- 
 
 <p align="center">
   <a href="https://helper-scripts.com">Website (tteck)</a> | 
@@ -40,6 +38,6 @@ Please exercise caution and thoroughly review scripts and automation tasks from 
 ### Note on the Transition:
 This project is now maintained by the community in memory of tteck’s invaluable contribution. His dedication transformed the Proxmox experience for countless users, and we’re committed to continuing his work with the same dedication.
 
-
+---
 
 <sub><div align="center"> Proxmox® is a registered trademark of Proxmox Server Solutions GmbH. </div></sub>
