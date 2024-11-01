@@ -29,8 +29,10 @@ This community-managed project continues tteck’s original vision of simplifyin
 
 All configuration choices are displayed in a dialog box, where users can select their preferences. The script then validates these inputs to generate a final configuration for the container or virtual machine.
 
+<hr>
+
 <p align="center">
-Please exercise caution and thoroughly review scripts and automation tasks from external sources. <a href="https://github.com/community/Proxmox/blob/main/CODE-AUDIT.md">Read more</a>
+Please exercise caution and thoroughly review scripts and automation tasks from external sources. <a href="https://github.com/community-scripts/ProxmoxVE/blob/main/CODE-AUDIT.md">Read more</a>
 </p>
 
 ---
