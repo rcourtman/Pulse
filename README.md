@@ -35,9 +35,11 @@ All configuration choices are displayed in a dialog box, where users can select 
 Please exercise caution and thoroughly review scripts and automation tasks from external sources. <a href="https://github.com/community/Proxmox/blob/main/CODE-AUDIT.md">Read more</a>
 </p>
 
-<sub><div align="center"> Proxmox® is a registered trademark of Proxmox Server Solutions GmbH. </div></sub>
-
 ---
 
 ### Note on the Transition:
 This project is now maintained by the community in memory of tteck’s invaluable contribution. His dedication transformed the Proxmox experience for countless users, and we’re committed to continuing his work with the same dedication.
+
+
+
+<sub><div align="center"> Proxmox® is a registered trademark of Proxmox Server Solutions GmbH. </div></sub>
