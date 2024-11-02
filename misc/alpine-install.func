@@ -103,7 +103,7 @@ update_os() {
 
 motd_ssh() {
   echo "export TERM='xterm-256color'" >>/root/.bashrc
-  echo -e "$APPLICATION LXC provided by https://tteck.github.io/Proxmox/\n" >/etc/motd
+  echo -e "$APPLICATION LXC provided by https://Helper-Scripts.com/\n" >/etc/motd
   if [[ "${SSH_ROOT}" == "yes" ]]; then
     $STD rc-update add sshd
     sed -i "s/#PermitRootLogin prohibit-password/PermitRootLogin yes/g" /etc/ssh/sshd_config

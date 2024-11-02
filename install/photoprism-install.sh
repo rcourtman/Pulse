@@ -3,7 +3,7 @@
 # Copyright (c) 2021-2024 tteck
 # Author: tteck (tteckster)
 # License: MIT
-# https://github.com/tteck/Proxmox/raw/main/LICENSE
+# https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
 source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
 color
@@ -46,7 +46,7 @@ PHOTOPRISM_AUTH_MODE='password'
 PHOTOPRISM_ADMIN_PASSWORD='helper-scripts.com'
 PHOTOPRISM_HTTP_HOST='0.0.0.0'
 PHOTOPRISM_HTTP_PORT='2342'
-PHOTOPRISM_SITE_CAPTION='https://tteck.github.io/Proxmox/'
+PHOTOPRISM_SITE_CAPTION='https://Helper-Scripts.com'
 PHOTOPRISM_STORAGE_PATH='/opt/photoprism/storage'
 PHOTOPRISM_ORIGINALS_PATH='/opt/photoprism/photos/originals'
 PHOTOPRISM_IMPORT_PATH='/opt/photoprism/photos/import'
