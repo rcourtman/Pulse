@@ -1,5 +1,5 @@
 > [!NOTE]
-I am meticulous when it comes to merging code into the main branch, so please understand that I may reject pull requests that do not meet the project's standards. It's never personal. Also, game-related scripts have a lower chance of being merged.
+We are meticulous when it comes to merging code into the main branch, so please understand that we may reject pull requests that do not meet the project's standards. It's never personal. Also, game-related scripts have a lower chance of being merged.
 
 ## Description
 
