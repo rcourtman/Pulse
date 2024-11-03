@@ -60,7 +60,7 @@ if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_v
   msg_info "Updating $APP to ${RELEASE}"
   systemctl stop zoraxy
   wget -q "https://github.com/tobychui/zoraxy/releases/download/${RELEASE}/zoraxy_linux_amd64"
-  rm /opt/zoraxy/zoraxy
+  rm -rf /opt/zoraxy/zoraxy
   mv zoraxy_linux_amd64 /opt/zoraxy/zoraxy
   chmod +x /opt/zoraxy/zoraxy
   systemctl start zoraxy
