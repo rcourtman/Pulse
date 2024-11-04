@@ -1,5 +1,5 @@
 > [!NOTE]
-We are meticulous when it comes to merging code into the main branch, so please understand that we may reject pull requests that do not meet the project's standards. It's never personal. Also, game-related scripts have a lower chance of being merged.
+> We are meticulous when it comes to merging code into the main branch, so please understand that we may reject pull requests that do not meet the project's standards. It's never personal. Also, game-related scripts have a lower chance of being merged.
 
 ## Description
 
@@ -8,7 +8,6 @@ Provide a summary of the changes made and/or reference the issue being addressed
 Fixes # (issue)
 
 ## Type of change
-
 Please check the relevant option(s):
 
 - [ ] Bug fix (non-breaking change that resolves an issue)
@@ -18,3 +17,18 @@ Please check the relevant option(s):
 - [ ] Self-review performed (I have reviewed my code, ensuring it follows established patterns and conventions)
 - [ ] Documentation update required (this change requires an update to the documentation)
 
+## Additional Information (optional)
+Provide any additional context or screenshots about the feature or fix here.
+
+
+## Related Pull Requests / Discussions
+
+If there are other pull requests or discussions related to this change, please link them here:
+- Related PR #1
+- Related PR #2
+
+## Review Guidelines
+
+- [ ] This PR requires review and approval by at least **two contributors**.
+- [ ] If changes affect critical functionality, please notify the project maintainers.
+- [ ] For major updates, ensure all conversations on this PR are resolved before merging.
