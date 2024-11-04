@@ -15,7 +15,7 @@ const nextConfig = {
   },
 
   output: "export",
-  // basePath: "/proxmox-helper-scripts",
+  basePath: "/ProxmoxVE",
 };
 
 export default nextConfig;
