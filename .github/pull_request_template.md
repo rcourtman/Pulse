@@ -27,8 +27,3 @@ If there are other pull requests or discussions related to this change, please l
 - Related PR #1
 - Related PR #2
 
-## Review Guidelines
-
-- [ ] This PR requires review and approval by at least **two contributors**.
-- [ ] If changes affect critical functionality, please notify the project maintainers.
-- [ ] For major updates, ensure all conversations on this PR are resolved before merging.
