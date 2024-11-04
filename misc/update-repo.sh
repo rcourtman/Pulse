@@ -37,6 +37,8 @@ function update_container() {
     if pct exec "$container" -- [ -e /usr/bin/update ]; then
       if pct exec "$container" -- grep -q "community-scripts/ProxmoxVE" /usr/bin/update; then
         echo -e "${RD}[No Change]${CL} /usr/bin/update is already up to date in ${BL}$container${CL}.\n"
+      elif pct exec "$container" -- grep -q "tteck" /usr/bin/update; then
+        echo -e "${RD}[Warning]${CL} /usr/bin/update in ${BL}$container${CL} contains a different entry (${RD}tteck${CL}). No changes made.\n"
       else
         pct exec "$container" -- bash -c "sed -i 's/tteck\\/Proxmox/community-scripts\\/ProxmoxVE/g' /usr/bin/update"
         echo -e "${GN}[Success]${CL} /usr/bin/update updated in ${BL}$container${CL}.\n"
