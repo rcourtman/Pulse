@@ -53,7 +53,7 @@ export default function CommandMenu() {
   const fetchCategories = async () => {
     setIsLoading(true);
       fetch(
-        `/api/categories?_=${process.env.NEXT_PUBLIC_BUILD_TIME || Date.now()}`,
+        `api/categories?_=${process.env.NEXT_PUBLIC_BUILD_TIME || Date.now()}`,
       )
         .then((response) => response.json())
         .then((categories) => {

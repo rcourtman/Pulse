@@ -48,7 +48,7 @@ function ScriptContent() {
 
   useEffect(() => {
       fetch(
-        `/api/categories?_=${process.env.NEXT_PUBLIC_BUILD_TIME || Date.now()}`,
+        `api/categories?_=${process.env.NEXT_PUBLIC_BUILD_TIME || Date.now()}`,
       )
         .then((response) => response.json())
         .then((categories) => {
