@@ -15,7 +15,7 @@ const nextConfig = {
   },
 
   env: {
-    NEXT_PUBLIC_BUILD_TIME: Date.now(),
+    NEXT_PUBLIC_BUILD_TIME: `${Date.now()}`,
   },
 
   output: "export",
