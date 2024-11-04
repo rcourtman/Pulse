@@ -1,4 +1,4 @@
-import TextCopyBlock from "@/lib/TextCopyBlock";
+import TextCopyBlock from "@/components/TextCopyBlock";
 import { Script } from "@/lib/types";
 
 export default function Description({ item }: { item: Script }) {

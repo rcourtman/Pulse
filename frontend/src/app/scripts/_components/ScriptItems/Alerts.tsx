@@ -1,4 +1,4 @@
-import TextCopyBlock from "@/lib/TextCopyBlock";
+import TextCopyBlock from "@/components/TextCopyBlock";
 import { Script } from "@/lib/types";
 import { Info } from "lucide-react";
 
