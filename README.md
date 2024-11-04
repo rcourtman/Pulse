@@ -20,6 +20,7 @@
   <a href="https://ko-fi.com/proxmoxhelperscripts">Ko-Fi (for tteck🙏)</a> |
   <a href="https://github.com/community-scripts/ProxmoxVE/blob/main/.github/CONTRIBUTING.md">Contribute</a> |
   <a href="https://github.com/community-scripts/ProxmoxVE/blob/main/USER_SUBMITTED_GUIDES.md">Guides</a> |
+  <a href="https://discord.gg/UHrpNWGwkH">Discord</a> |
   <a href="https://github.com/community-scripts/ProxmoxVE/blob/main/CHANGELOG.md">Changelog</a>
 </p>
 
