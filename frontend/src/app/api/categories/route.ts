@@ -3,7 +3,6 @@ import { Category } from "@/lib/types";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-static";
-export const revalidate = 0; // This will force a new fetch on each build
 
 export async function GET() {
   try {
