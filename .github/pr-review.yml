@@ -1,0 +1,28 @@
+name: Pull Request Review Enforcement
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+jobs:
+  enforce-review-requirements:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v2
+
+      - name: Verify Reviewer Approvals
+        id: review-check
+        run: |
+          reviews=$(gh api repos/$GITHUB_REPOSITORY/pulls/$GITHUB_EVENT_NUMBER/reviews --jq '[.[] | select(.state == "APPROVED") | .user.login] | unique | length')
+          if [ "$reviews" -lt 2 ]; then
+            echo "PR requires at least 2 approvals from the Contributor team."
+            exit 1
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Confirm Ready to Merge
+        if: ${{ steps.review-check.outputs.reviews == '2' }}
+        run: echo "PR is ready to be merged."
