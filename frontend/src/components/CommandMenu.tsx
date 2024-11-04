@@ -52,17 +52,19 @@ export default function CommandMenu() {
 
   const fetchCategories = async () => {
     setIsLoading(true);
-    fetch("api/categories")
-      .then((response) => response.json())
-      .then((categories) => {
-        const sortedCategories = sortCategories(categories);
-        setLinks(sortedCategories);
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        setIsLoading(false);
-        console.error(error)
-      });
+      fetch(
+        `/api/categories?_=${process.env.NEXT_PUBLIC_BUILD_TIME || Date.now()}`,
+      )
+        .then((response) => response.json())
+        .then((categories) => {
+          const sortedCategories = sortCategories(categories);
+          setLinks(sortedCategories);
+          setIsLoading(false);
+        })
+        .catch((error) => {
+          setIsLoading(false);
+          console.error(error);
+        });
   };
 
   return (

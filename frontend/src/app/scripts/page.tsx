@@ -47,13 +47,15 @@ function ScriptContent() {
   };
 
   useEffect(() => {
-    fetch("api/categories")
-      .then((response) => response.json())
-      .then((categories) => {
-        const sortedCategories = sortCategories(categories);
-        setLinks(sortedCategories);
-      })
-      .catch((error) => console.error(error));
+      fetch(
+        `/api/categories?_=${process.env.NEXT_PUBLIC_BUILD_TIME || Date.now()}`,
+      )
+        .then((response) => response.json())
+        .then((categories) => {
+          const sortedCategories = sortCategories(categories);
+          setLinks(sortedCategories);
+        })
+        .catch((error) => console.error(error));
   }, []);
 
   return (
