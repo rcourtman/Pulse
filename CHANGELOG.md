@@ -13,6 +13,14 @@ Exercise vigilance regarding copycat or coat-tailing sites that seek to exploit 
 > [!NOTE]
 All LXC instances created using this repository come pre-installed with Midnight Commander, which is a command-line tool (`mc`) that offers a user-friendly file and directory management interface for the terminal environment.
 
+## 2024-11-04
+
+### Breaking Change
+- **Automatic Update of Repository:** The update function now uses the new repository `community-scripts/ProxmoxVE` for Debian/Ubuntu LXC containers.
+  
+  ```bash
+  bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/misc/update-repo.sh)"
+
 ## 2024-10-27
 
 ### Changed
