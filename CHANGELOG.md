@@ -13,6 +13,13 @@ Exercise vigilance regarding copycat or coat-tailing sites that seek to exploit 
 > [!NOTE]
 All LXC instances created using this repository come pre-installed with Midnight Commander, which is a command-line tool (`mc`) that offers a user-friendly file and directory management interface for the terminal environment.
 
+## 2024-11-05
+
+### Changed
+
+- **Bookstack LXC** [(View Source)](https://github.com/community-scripts/ProxmoxVE/blob/main/install/bookstack-install.sh)
+  - NEW Script
+
 ## 2024-11-04
 
 ### Breaking Change
@@ -20,6 +27,15 @@ All LXC instances created using this repository come pre-installed with Midnight
   
   ```bash
   bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/misc/update-repo.sh)"
+
+## 2024-10-31
+
+### Changed
+
+- **NZBGet LXC** [(View Source)](https://github.com/community-scripts/ProxmoxVE/blob/main/install/nzbget-install.sh)
+  - NEW Script
+- **Memos LXC** [(View Source)](https://github.com/community-scripts/ProxmoxVE/blob/main/install/memos-install.sh)
+  - NEW Script
 
 ## 2024-10-27
 
