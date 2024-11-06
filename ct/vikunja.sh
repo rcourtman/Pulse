@@ -65,7 +65,7 @@ RELEASE=$(curl -s https://dl.vikunja.io/vikunja/ | grep -oP 'href="/vikunja/\K[0
 if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
   msg_info "Stopping ${APP}"
   systemctl stop vikunja
-  msg_ok "Services ${APP}"
+  msg_ok "Stopped ${APP}"
 
   msg_info "Updating ${APP} to ${RELEASE}"
   cd /opt
