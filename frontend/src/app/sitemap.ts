@@ -1,20 +1,19 @@
+import { basePath } from "@/config/siteConfig";
 import type { MetadataRoute } from "next";
 
 export const dynamic = "force-static";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  let domain = "community-scripts.github.io";
+  let protocol = "https";
   return [
     {
-      url: "https://community-scripts.github.io/Proxmox/",
+      url: `${protocol}://${domain}/${basePath}`,
       lastModified: new Date(),
-      changeFrequency: "yearly",
-      priority: 0.8,
     },
     {
-      url: "https://community-scripts.github.io/Proxmox/scripts",
+      url: `${protocol}://${domain}/${basePath}/scripts`,
       lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 1,
     },
   ];
 }

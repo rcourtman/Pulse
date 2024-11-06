@@ -7,8 +7,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { mostPopularScripts } from "@/config/siteConfig";
 import { extractDate } from "@/lib/time";
-import { Category } from "@/lib/types";
+import { Category, Script } from "@/lib/types";
 import { CalendarPlus } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -16,14 +17,28 @@ import { useMemo, useState } from "react";
 
 const ITEMS_PER_PAGE = 3;
 
+export const getDisplayValueFromType = (type: string) => {
+  switch (type) {
+    case "ct":
+      return "LXC";
+    case "vm":
+      return "VM";
+    case "misc":
+      return "";
+    default:
+      return "";
+  }
+};
+
 export function LatestScripts({ items }: { items: Category[] }) {
   const [page, setPage] = useState(1);
 
   const latestScripts = useMemo(() => {
     if (!items) return [];
-    const scripts = items.flatMap((category) => category.expand.items || []);
+    const scripts = items.flatMap((category) => category.scripts || []);
     return scripts.sort(
-      (a, b) => new Date(b.created).getTime() - new Date(a.created).getTime(),
+      (a, b) =>
+        new Date(b.date_created).getTime() - new Date(a.date_created).getTime(),
     );
   }, [items]);
 
@@ -68,16 +83,16 @@ export function LatestScripts({ items }: { items: Category[] }) {
         </div>
       )}
       <div className="min-w flex w-full flex-row flex-wrap gap-4">
-        {latestScripts.slice(startIndex, endIndex).map((item) => (
+        {latestScripts.slice(startIndex, endIndex).map((script) => (
           <Card
-            key={item.id}
+            key={script.name}
             className="min-w-[250px] flex-1 flex-grow bg-accent/30"
           >
             <CardHeader>
               <CardTitle className="flex items-center gap-3">
                 <div className="flex h-16 w-16 items-center justify-center rounded-lg bg-accent p-1">
                   <Image
-                    src={item.logo}
+                    src={script.logo || "/logo.png"}
                     unoptimized
                     height={64}
                     width={64}
@@ -87,18 +102,18 @@ export function LatestScripts({ items }: { items: Category[] }) {
                 </div>
                 <div className="flex flex-col">
                   <p className="text-lg line-clamp-1">
-                    {item.title} {item.item_type}
+                    {script.name} {getDisplayValueFromType(script.type)}
                   </p>
                   <p className="text-sm text-muted-foreground flex items-center gap-1">
                     <CalendarPlus className="h-4 w-4" />
-                    {extractDate(item.created)}
+                    {extractDate(script.date_created)}
                   </p>
                 </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <CardDescription className="line-clamp-3 text-card-foreground">
-                {item.description}
+                {script.description}
               </CardDescription>
             </CardContent>
             <CardFooter className="">
@@ -106,7 +121,7 @@ export function LatestScripts({ items }: { items: Category[] }) {
                 <Link
                   href={{
                     pathname: "/scripts",
-                    query: { id: item.title },
+                    query: { id: script.name },
                   }}
                 >
                   View Script
@@ -121,29 +136,12 @@ export function LatestScripts({ items }: { items: Category[] }) {
 }
 
 export function MostViewedScripts({ items }: { items: Category[] }) {
-  const [page, setPage] = useState(1);
-
-  const mostViewedScripts = useMemo(() => {
-    if (!items) return [];
-    const scripts = items.flatMap((category) => category.expand.items || []);
-    const mostViewedScripts = scripts
-      .filter((script) => script.isMostViewed)
-      .map((script) => ({
-        ...script,
-      }));
-    return mostViewedScripts;
-  }, [items]);
-
-  const goToNextPage = () => {
-    setPage((prevPage) => prevPage + 1);
-  };
-
-  const goToPreviousPage = () => {
-    setPage((prevPage) => prevPage - 1);
-  };
-
-  const startIndex = (page - 1) * ITEMS_PER_PAGE;
-  const endIndex = page * ITEMS_PER_PAGE;
+  const mostViewedScripts = items.reduce((acc: Script[], category) => {
+    const foundScripts = category.scripts.filter((script) =>
+      mostPopularScripts.includes(script.name),
+    );
+    return acc.concat(foundScripts);
+  }, []);
 
   return (
     <div className="">
@@ -153,9 +151,9 @@ export function MostViewedScripts({ items }: { items: Category[] }) {
         </>
       )}
       <div className="min-w flex w-full flex-row flex-wrap gap-4">
-        {mostViewedScripts.slice(startIndex, endIndex).map((item) => (
+        {mostViewedScripts.map((script) => (
           <Card
-            key={item.id}
+            key={script.name}
             className="min-w-[250px] flex-1 flex-grow bg-accent/30"
           >
             <CardHeader>
@@ -163,7 +161,7 @@ export function MostViewedScripts({ items }: { items: Category[] }) {
                 <div className="flex max-h-16 min-h-16 min-w-16 max-w-16 items-center justify-center rounded-lg bg-accent p-1">
                   <Image
                     unoptimized
-                    src={item.logo}
+                    src={script.logo || "/logo.png"}
                     height={64}
                     width={64}
                     alt=""
@@ -172,18 +170,18 @@ export function MostViewedScripts({ items }: { items: Category[] }) {
                 </div>
                 <div className="flex flex-col">
                   <p className="line-clamp-1 text-lg">
-                    {item.title} {item.item_type}
+                    {script.name} {getDisplayValueFromType(script.type)}
                   </p>
                   <p className="flex items-center gap-1 text-sm text-muted-foreground">
                     <CalendarPlus className="h-4 w-4" />
-                    {extractDate(item.created)}
+                    {extractDate(script.date_created)}
                   </p>
                 </div>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <CardDescription className="line-clamp-3 text-card-foreground break-words">
-                {item.description}
+                {script.description}
               </CardDescription>
             </CardContent>
             <CardFooter className="">
@@ -191,7 +189,7 @@ export function MostViewedScripts({ items }: { items: Category[] }) {
                 <Link
                   href={{
                     pathname: "/scripts",
-                    query: { id: item.title },
+                    query: { id: script.name },
                   }}
                   prefetch={false}
                 >
@@ -201,18 +199,6 @@ export function MostViewedScripts({ items }: { items: Category[] }) {
             </CardFooter>
           </Card>
         ))}
-      </div>
-      <div className="flex justify-end gap-1 p-2">
-        {page > 1 && (
-          <Button onClick={goToPreviousPage} variant="outline">
-            Previous
-          </Button>
-        )}
-        {endIndex < mostViewedScripts.length && (
-          <Button onClick={goToNextPage} variant="outline">
-            {page === 1 ? "More.." : "Next"}
-          </Button>
-        )}
       </div>
     </div>
   );

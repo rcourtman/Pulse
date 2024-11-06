@@ -15,11 +15,11 @@ const nextConfig = {
   },
 
   env: {
-    NEXT_PUBLIC_BUILD_TIME: `${Date.now()}`,
+    BASE_PATH: "ProxmoxVE",
   },
 
   output: "export",
-  basePath: "/ProxmoxVE",
+  basePath: `/${process.env.BASE_PATH}`,
 };
 
 export default nextConfig;

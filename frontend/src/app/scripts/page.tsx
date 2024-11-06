@@ -12,6 +12,7 @@ import {
   LatestScripts,
   MostViewedScripts,
 } from "./_components/ScriptInfoBlocks";
+import { fetchCategories } from "@/lib/data";
 
 function ScriptContent() {
   const [selectedScript, setSelectedScript] = useQueryState("id");
@@ -21,41 +22,19 @@ function ScriptContent() {
   useEffect(() => {
     if (selectedScript && links.length > 0) {
       const script = links
-        .map((category) => category.expand.items)
+        .map((category) => category.scripts)
         .flat()
-        .find((script) => script.title === selectedScript);
+        .find((script) => script.name === selectedScript);
       setItem(script);
     }
   }, [selectedScript, links]);
 
-  const sortCategories = (categories: Category[]): Category[] => {
-    return categories.sort((a: Category, b: Category) => {
-      if (
-        a.catagoryName === "Proxmox VE Tools" &&
-        b.catagoryName !== "Proxmox VE Tools"
-      ) {
-        return -1;
-      } else if (
-        a.catagoryName !== "Proxmox VE Tools" &&
-        b.catagoryName === "Proxmox VE Tools"
-      ) {
-        return 1;
-      } else {
-        return a.catagoryName.localeCompare(b.catagoryName);
-      }
-    });
-  };
-
   useEffect(() => {
-      fetch(
-        `api/categories?_=${process.env.NEXT_PUBLIC_BUILD_TIME || Date.now()}`,
-      )
-        .then((response) => response.json())
-        .then((categories) => {
-          const sortedCategories = sortCategories(categories);
-          setLinks(sortedCategories);
-        })
-        .catch((error) => console.error(error));
+    fetchCategories()
+      .then((categories) => {
+        setLinks(categories);
+      })
+      .catch((error) => console.error(error));
   }, []);
 
   return (

@@ -6,6 +6,7 @@ import "@/styles/globals.css";
 import { Inter } from "next/font/google";
 import React from "react";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
+import { analytics, basePath } from "@/config/siteConfig";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -34,7 +35,7 @@ export const metadata = {
     address: false,
     telephone: false,
   },
-  metadataBase: new URL("https://community-scripts.github.io/Proxmox/"),
+  metadataBase: new URL(`https://community-scripts.github.io/${basePath}/`),
   openGraph: {
     title: "Proxmox VE Helper-Scripts",
     description:
@@ -42,7 +43,7 @@ export const metadata = {
     url: "/defaultimg.png",
     images: [
       {
-        url: "https://community-scripts.github.io/Proxmox/defaultimg.png",
+        url: `https://community-scripts.github.io/${basePath}/defaultimg.png`,
       },
     ],
     locale: "en_US",
@@ -60,15 +61,20 @@ export default function RootLayout({
       <head>
         <script
           defer
-          src={`https://${process.env.NEXT_PUBLIC_ANALYTICS_URL}/script.js`}
-          data-website-id={process.env.NEXT_PUBLIC_ANALYTICS_TOKEN}
+          src={`https://${analytics.url}/script.js`}
+          data-website-id={analytics.token}
         ></script>
         <link rel="manifest" href="manifest.webmanifest" />
         <link rel="preconnect" href={process.env.NEXT_PUBLIC_POCKETBASE_URL} />
         <link rel="preconnect" href="https://api.github.com" />
       </head>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem
+          disableTransitionOnChange
+        >
           <div className="flex w-full flex-col justify-center">
             <Navbar />
             <div className="flex min-h-screen flex-col justify-center">
