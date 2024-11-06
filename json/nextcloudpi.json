@@ -24,6 +24,17 @@
                 "os": "debian",
                 "version": "12"
             }
+        },
+        {
+            "type": "alpine",
+            "script": "ct/alpine-nextcloud.sh",
+            "resources": {
+                "cpu": "2",
+                "ram": "1024",
+                "hdd": "2",
+                "os": "alpine",
+                "version": "3.19"
+            }
         }
     ],
     "default_credentials": {
