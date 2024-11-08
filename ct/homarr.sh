@@ -74,6 +74,7 @@ if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_v
   unzip -q v${RELEASE}.zip
   mv homarr-${RELEASE} /opt/homarr
   mv /opt/.env /opt/homarr/.env
+  rm -rf /opt/homarr/data
   mv /opt/data /opt/homarr/
   yarn install &>/dev/null
   yarn build &>/dev/null
