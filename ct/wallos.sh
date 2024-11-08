@@ -67,6 +67,7 @@ if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_v
   wget -q "https://github.com/ellite/Wallos/archive/refs/tags/v${RELEASE}.zip"
   mv /opt/wallos/db/wallos.db /opt/wallos.db
   unzip -q v${RELEASE}.zip
+  rm -rf /opt/wallos
   mv Wallos-${RELEASE} /opt/wallos
   rm -rf /opt/wallos/db/wallos.empty.db
   mv /opt/wallos.db /opt/wallos/db/wallos.db
