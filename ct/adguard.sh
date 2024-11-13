@@ -60,7 +60,7 @@ if (( $(df /boot | awk 'NR==2{gsub("%","",$5); print $5}') > 80 )); then
   read -r -p "Warning: Storage is dangerously low, continue anyway? <y/N> " prompt
   [[ ${prompt,,} =~ ^(y|yes)$ ]] || exit
 fi
-echo "Adguard Home should be updated via the user interface. You can access it at: ${BL}http://${IP}:3000"
+echo "Adguard Home should be updated via the user interface."
 }
 
 start
