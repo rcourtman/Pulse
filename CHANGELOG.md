@@ -21,6 +21,8 @@ All LXC instances created using this repository come pre-installed with Midnight
   - NEW Script
 - **Wavelog LXC** [(View Source)](https://github.com/community-scripts/ProxmoxVE/blob/main/install/wavelog-install.sh)
   - NEW Script
+- **Vaultwarden LXC:** RAM has now been increased to 6144 MB [(PR)](https://github.com/community-scripts/ProxmoxVE/pull/285)
+  - Breaking Change
 
 
 ## 2024-11-05
