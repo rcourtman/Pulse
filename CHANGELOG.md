@@ -19,6 +19,9 @@ All LXC instances created using this repository come pre-installed with Midnight
 
 - **Recyclarr LXC** [(View Source)](https://github.com/community-scripts/ProxmoxVE/blob/main/install/recyclarr-install.sh)
   - NEW Script
+- **Wavelog LXC** [(View Source)](https://github.com/community-scripts/ProxmoxVE/blob/main/install/wavelog-install.sh)
+  - NEW Script
+
 
 ## 2024-11-05
 
