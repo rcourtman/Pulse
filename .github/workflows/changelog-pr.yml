@@ -3,7 +3,6 @@ name: Create Changelog Pull Request
 on:
   push:
     branches: ["main"]
-
   workflow_dispatch:
 
 jobs:
@@ -36,6 +35,19 @@ jobs:
             echo "LATEST_DATE=$SECOND_LATEST_DATE" >> $GITHUB_ENV
           else
             echo "LATEST_DATE=$LATEST_DATE" >> $GITHUB_ENV
+          fi
+
+      - name: Check if CHANGELOG.md was modified
+        id: changelog-check
+        run: |
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }})
+          echo "Changed files: $CHANGED_FILES"
+          if echo "$CHANGED_FILES" | grep -q 'CHANGELOG.md'; then
+            echo "Changes detected in CHANGELOG.md, skipping additional checks."
+            echo "changelog_modified=true" >> $GITHUB_ENV
+          else
+            echo "No changes to CHANGELOG.md, continuing with protection checks."
+            echo "changelog_modified=false" >> $GITHUB_ENV
           fi
 
       - name: Get categorized pull requests
