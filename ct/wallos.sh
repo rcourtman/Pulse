@@ -63,14 +63,15 @@ if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_v
   msg_info "Updating ${APP} to ${RELEASE}"
   cd /opt
   wget -q "https://github.com/ellite/Wallos/archive/refs/tags/v${RELEASE}.zip"
+  mkdir -p /opt/logos
   mv /opt/wallos/db/wallos.db /opt/wallos.db
-  mv /opt/wallos/images/uploads /opt/images/uploads
+  mv /opt/wallos/images/uploads/logos /opt/logos/
   unzip -q v${RELEASE}.zip
   rm -rf /opt/wallos
   mv Wallos-${RELEASE} /opt/wallos
   rm -rf /opt/wallos/db/wallos.empty.db
   mv /opt/wallos.db /opt/wallos/db/wallos.db
-  mv /opt/images/uploads /opt/wallos/images/uploads
+  mv /opt/logos/* /opt/wallos/images/uploads/logos
   chown -R www-data:www-data /opt/wallos
   chmod -R 755 /opt/wallos
   mkdir -p /var/log/cron
