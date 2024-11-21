@@ -1,5 +1,5 @@
 import { MessagesSquare, Scroll } from "lucide-react";
-import { FaGithub } from "react-icons/fa";
+import { FaDiscord, FaGithub } from "react-icons/fa";
 
 export const basePath = process.env.BASE_PATH;
 
@@ -11,15 +11,21 @@ export const navbarLinks = [
     text: "Github",
   },
   {
+    href: `https://discord.gg/2wvnMDgdnU`,
+    event: "Discord",
+    icon: <FaDiscord className="h-4 w-4" />,
+    text: "Discord",
+  },
+  {
     href: `https://github.com/community-scripts/${basePath}/blob/main/CHANGELOG.md`,
     event: "Change Log",
-    icon: <Scroll className="h-4 w-4" />,
+    icon: <Scroll className="h-4 w-4 hidden sm:block" />,
     text: "Change Log",
   },
   {
     href: `https://github.com/community-scripts/${basePath}/discussions`,
     event: "Discussions",
-    icon: <MessagesSquare className="h-4 w-4" />,
+    icon: <MessagesSquare className="h-4 w-4 hidden sm:block" />,
     text: "Discussions",
   },
 ];
