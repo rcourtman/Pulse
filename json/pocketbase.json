@@ -18,9 +18,9 @@
             "type": "default",
             "script": "ct/pocketbase.sh",
             "resources": {
-                "cpu": "1",
-                "ram": "512",
-                "hdd": "8",
+                "cpu": 1,
+                "ram": 512,
+                "hdd": 8,
                 "os": "debian",
                 "version": "12"
             }
