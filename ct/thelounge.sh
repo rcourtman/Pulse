@@ -53,39 +53,35 @@ function default_settings() {
 }
 
 function update_script() {
-  header_info
-  check_container_storage
-  check_container_resources
+header_info
+check_container_storage
+check_container_resources
+if [[ ! -f /usr/lib/systemd/system/thelounge.service ]]; then msg_error "No ${APP} Installation Found!"; exit; fi
+RELEASE=$(curl -s https://api.github.com/repos/thelounge/thelounge-deb/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
+if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
+  msg_info "Stopping Service"
+  systemctl stop thelounge
+  msg_ok "Stopped Service"
 
-  if [[ ! -f /usr/lib/systemd/system/thelounge.service ]]; then
-    msg_error "No ${APP} Installation Found!"
-    exit
-  fi
-  RELEASE=$(curl -s https://api.github.com/repos/thelounge/thelounge-deb/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
-  if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
-    msg_info "Stopping Service"
-    systemctl stop thelounge
-    msg_ok "Stopped Service"
+  msg_info "Updating ${APP} to v${RELEASE}"
+  apt-get install --only-upgrade nodejs &>/dev/null
+  cd /opt
+  wget -q https://github.com/thelounge/thelounge-deb/releases/download/v${RELEASE}/thelounge_${RELEASE}_all.deb
+  dpkg -i ./thelounge_${RELEASE}_all.deb
+  msg_ok "Updated ${APP} to v${RELEASE}"
 
-    msg_info "Updating ${APP} to v${RELEASE}"
-    apt-get install --only-upgrade nodejs &>/dev/null
-    cd /opt
-    wget -q https://github.com/thelounge/thelounge-deb/releases/download/v${RELEASE}/thelounge_${RELEASE}_all.deb
-    dpkg -i ./thelounge_${RELEASE}_all.deb
-    msg_ok "Updated ${APP} to v${RELEASE}"
+  msg_info "Starting Service"
+  systemctl start thelounge
+  msg_ok "Started Service"
 
-    msg_info "Starting Service"
-    systemctl start thelounge
-    msg_ok "Started Service"
-
-    msg_info "Cleaning up"
-    rm -rf "/opt/thelounge_${RELEASE}_all.deb"
-    msg_ok "Cleaned"
-    msg_ok "Updated Successfully"
-  else
-    msg_ok "No update required.  ${APP} is already at v${RELEASE}."
-  fi
-  exit
+  msg_info "Cleaning up"
+  rm -rf "/opt/thelounge_${RELEASE}_all.deb"
+  msg_ok "Cleaned"
+  msg_ok "Updated Successfully"
+else
+  msg_ok "No update required.  ${APP} is already at v${RELEASE}."
+fi
+exit
 }
 
 start
@@ -93,5 +89,5 @@ build_container
 description
 
 msg_ok "Completed Successfully!\n"
-echo -e "${APP} should be reachable by going to the following URL.
+echo -e "${APP} Setup should be reachable by going to the following URL.
          ${BL}http://${IP}:9000${CL} \n"
