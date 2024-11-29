@@ -16,7 +16,7 @@
     "install_methods": [
       {
         "type": "default",
-        "script": "/ct/the-lounge.sh",
+        "script": "ct/the-lounge.sh",
         "resources": {
           "cpu": 2,
           "ram": 2048,
