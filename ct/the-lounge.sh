@@ -8,6 +8,12 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 function header_info {
 clear
 cat <<"EOF"
+  ________               __                               
+ /_  __/ /_  ___        / /   ____  __  ______  ____ ____ 
+  / / / __ \/ _ \______/ /   / __ \/ / / / __ \/ __ `/ _ \
+ / / / / / /  __/_____/ /___/ /_/ / /_/ / / / / /_/ /  __/
+/_/ /_/ /_/\___/     /_____/\____/\__,_/_/ /_/\__, /\___/ 
+                                             /____/       
 EOF
 }
 header_info
@@ -42,7 +48,7 @@ function default_settings() {
   MAC=""
   VLAN=""
   SSH="no"
-  VERB="no"
+  VERB="yes"
   echo_default
 }
 
