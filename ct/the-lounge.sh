@@ -8,17 +8,11 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 function header_info {
 clear
 cat <<"EOF"
-  ________            __                               
- /_  __/ /_  ___     / /   ____  __  ______  ____ ____ 
-  / / / __ \/ _ \   / /   / __ \/ / / / __ \/ __ `/ _ \
- / / / / / /  __/  / /___/ /_/ / /_/ / / / / /_/ /  __/
-/_/ /_/ /_/\___/  /_____/\____/\__,_/_/ /_/\__, /\___/ 
-                                          /____/       
 EOF
 }
 header_info
 echo -e "Loading..."
-APP="nextpvr"
+APP="The-Lounge"
 var_disk="4"
 var_cpu="2"
 var_ram="2048"
