@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Copyright (c) 2021-2024 tteck
-# Author: kristocopani
+# Author: tteck (tteckster)
 # License: MIT
 # https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
@@ -44,7 +44,7 @@ motd_ssh
 customize
 
 msg_info "Cleaning up"
-rm -rf "/opt/thelounge_${RELEASE}_all.deb"
+rm -rf /opt/thelounge_${RELEASE}_all.deb
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean
 msg_ok "Cleaned"
