@@ -1,6 +1,6 @@
 {
     "name": "The Lounge",
-    "slug": "thelounge",
+    "slug": "the-lounge",
     "categories": [
       0
     ],
@@ -16,7 +16,7 @@
     "install_methods": [
       {
         "type": "default",
-        "script": "/ct/thelounge.sh",
+        "script": "/ct/the-lounge.sh",
         "resources": {
           "cpu": 2,
           "ram": 2048,
