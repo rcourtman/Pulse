@@ -22,8 +22,8 @@ APP="nextpvr"
 var_disk="4"
 var_cpu="2"
 var_ram="2048"
-var_os="ubuntu"
-var_version="24.04"
+var_os="debian"
+var_version="12"
 variables
 color
 catch_errors
