@@ -16,7 +16,7 @@
     "install_methods": [
       {
         "type": "default",
-        "script": "/ct/inspircd.sh",
+        "script": "ct/inspircd.sh",
         "resources": {
           "cpu": 1,
           "ram": 512,
