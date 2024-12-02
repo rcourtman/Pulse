@@ -16,7 +16,7 @@
   "install_methods": [
     {
       "type": "default",
-      "script": "/ct/hoarder.sh",
+      "script": "ct/hoarder.sh",
       "resources": {
         "cpu": 2,
         "ram": 4096,
