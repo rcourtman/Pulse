@@ -4,7 +4,7 @@
     "categories": [
         8
     ],
-    "date_created": "2024-11-25",
+    "date_created": "2024-12-02",
     "type": "ct",
     "updateable": false,
     "privileged": false,
@@ -17,9 +17,9 @@
             "type": "default",
             "script": "ct/snipeit.sh",
             "resources": {
-                "cpu": "2",
-                "ram": "2048",
-                "hdd": "4",
+                "cpu": 2,
+                "ram": 2048,
+                "hdd": 4,
                 "os": "debian",
                 "version": "12"
             }
@@ -27,5 +27,6 @@
     "default_credentials": {
         "username": null,
         "password": null
-    }
+    },
+    "notes": []
 }

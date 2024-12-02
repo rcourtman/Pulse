@@ -21,8 +21,8 @@
           "cpu": 2,
           "ram": 2048,
           "hdd": 4,
-          "os": "Ubuntu",
-          "version": 24.04
+          "os": "ubuntu",
+          "version": "24.04"
         }
       }
     ],

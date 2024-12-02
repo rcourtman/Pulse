@@ -4,11 +4,11 @@
     "categories": [
         12
     ],
-    "date_created": "2024-11-27",
+    "date_created": "2024-12-02",
     "type": "ct",
     "updateable": true,
     "privileged": false,
-    "interface_port": "8090",
+    "interface_port": 8090,
     "documentation": "https://mylarcomics.com/docs/introduction/",
     "website": "https://mylarcomics.com/",
     "logo": "https://mylarcomics.com/img/mylarlogo.png",
@@ -18,9 +18,9 @@
             "type": "default",
             "script": "ct/mylar3.sh",
             "resources": {
-                "cpu": "1",
-                "ram": "512",
-                "hdd": "4",
+                "cpu": 1,
+                "ram": 512,
+                "hdd": 4,
                 "os": "debian",
                 "version": "12"
             }
