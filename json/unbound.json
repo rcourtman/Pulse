@@ -4,11 +4,11 @@
     "categories": [
         13
     ],
-    "date_created": "2024-11-27",
+    "date_created": "2024-12-02",
     "type": "ct",
     "updateable": true,
     "privileged": false,
-    "interface_port": "5335",
+    "interface_port": 5335,
     "documentation": null,
     "website": "https://www.nlnetlabs.nl/projects/unbound/about/",
     "logo": "https://nlnetlabs.nl/static/logos/Unbound/Unbound_FC_Shaded_cropped.svg",
@@ -18,11 +18,11 @@
             "type": "default",
             "script": "ct/unbound.sh",
             "resources": {
-                "cpu": "1",
-                "ram": "512",
-                "hdd": "2",
-                "os": "debian",
-                "version": "12"
+                "cpu": 1,
+                "ram": 512,
+                "hdd": 2,
+                "os": debian,
+                "version": 12
             }
         }
     ],
