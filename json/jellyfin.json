@@ -9,8 +9,8 @@
     "updateable": false,
     "privileged": false,
     "interface_port": 8096,
-    "documentation": null,
-    "website": null,
+    "documentation": "https://jellyfin.org/docs/",
+    "website": "https://jellyfin.org/",
     "logo": "https://github.com/home-assistant/brands/blob/master/core_integrations/jellyfin/icon.png?raw=true",
     "description": "Jellyfin is a free and open-source media server and suite of multimedia applications designed to organize, manage, and share digital media files to networked devices.",
     "install_methods": [

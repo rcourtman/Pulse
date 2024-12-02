@@ -9,8 +9,8 @@
     "updateable": true,
     "privileged": false,
     "interface_port": 8090,
-    "documentation": null,
-    "website": null,
+    "documentation": "https://docs.hyperion-project.org/",
+    "website": "https://hyperion-project.org/forum/",
     "logo": "https://github.com/hyperion-project/hyperion.ng/raw/master/doc/logo_dark.png?raw=true",
     "description": "Hyperion is an opensource Ambient Lighting implementation. It supports many LED devices and video grabbers.",
     "install_methods": [
