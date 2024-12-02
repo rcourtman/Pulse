@@ -11,7 +11,7 @@
     "interface_port": null,
     "documentation": null,
     "website": "https://snipeitapp.com/",
-    "logo": "https://github.com/snipe/snipe-it/blob/master/public/img/logo.png",
+    "logo": "https://raw.githubusercontent.com/snipe/snipe-it/refs/heads/master/public/img/snipe-logo-bug.png",
     "description": "This is a FOSS project for asset management in IT Operations. Knowing who has which laptop, when it was purchased in order to depreciate it correctly, handling software licenses, etc.",
     "install_methods":{
             "type": "default",
