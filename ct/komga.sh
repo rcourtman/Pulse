@@ -56,7 +56,7 @@ function update_script() {
 header_info
 check_container_storage
 check_container_resources
-if [[ ! -f /opt/komga/komga*.jar ]]; then msg_error "No ${APP} Installation Found!"; exit; fi
+if [[ ! -f /opt/komga/komga.jar ]]; then msg_error "No ${APP} Installation Found!"; exit; fi
 msg_info "Updating ${APP}"
 RELEASE=$(curl -s https://api.github.com/repos/gotson/komga/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
 if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
@@ -65,8 +65,8 @@ if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_v
   msg_ok "Stopped ${APP}"
 
   msg_info "Updating ${APP} to ${RELEASE}"
-  rm -rf /opt/komga/komga*.jar
-  wget -q "https://github.com/gotson/komga/releases/download/v${RELEASE}/komga-${RELEASE}.jar"
+  wget -q "https://github.com/gotson/komga/releases/download/${RELEASE}/komga-${RELEASE}.jar"
+  rm -rf /opt/komga/komga.jar
   mv -f komga-${RELEASE}.jar /opt/komga/komga.jar
   echo "${RELEASE}" >/opt/${APP}_version.txt
   msg_ok "Updated ${APP} to ${RELEASE}"
