@@ -95,7 +95,7 @@ export default function CommandMenu() {
               {category.scripts.map((script) => (
                 <CommandItem
                   key={`script:${script.slug}`}
-                  value={script.slug}
+                  value={`${script.slug}-${script.name}`}
                   onSelect={() => {
                     setOpen(false);
                     router.push(`/scripts?id=${script.slug}`);
