@@ -16,6 +16,14 @@ All LXC instances created using this repository come pre-installed with Midnight
 > [!IMPORTANT]
 Do not break established syntax in this file, as it is automatically updated by a Github Workflow
 
+## 2024-12-09
+
+### Changed
+
+### 🚀 Updated Scripts
+
+- Fix PostgreSQL password bug in Umami install [@michelroegl-brunner](https://github.com/michelroegl-brunner) ([#750](https://github.com/community-scripts/ProxmoxVE/pull/750))
+
 ## 2024-12-08
 
 ### Changed
