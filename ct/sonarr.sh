@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Sonarr"
-TAGS="*arr"
+TAGS="arr"
 var_cpu="2"
 var_ram="1024"
 var_disk="4"
