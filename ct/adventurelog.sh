@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="AdventureLog"
-TAGS="traveling"
+var_tags="traveling"
 var_disk="7"
 var_cpu="2"
 var_ram="2048"

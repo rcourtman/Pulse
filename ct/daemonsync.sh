@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Daemon Sync"
-TAGS="sync"
+var_tags="sync"
 var_cpu="1"
 var_ram="512"
 var_disk="8"

@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="evcc"
-TAGS="solar;ev;automation"
+var_tags="solar;ev;automation"
 var_cpu="1"
 var_ram="1024"
 var_disk="4"

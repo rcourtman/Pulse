@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Komga"
-TAGS="media;eBook;comic"
+var_tags="media;eBook;comic"
 var_cpu="1"
 var_ram="2048"
 var_disk="4"

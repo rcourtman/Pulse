@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="FlowiseAI"
-TAGS="low-code"
+var_tags="low-code"
 var_disk="10"
 var_cpu="4"
 var_ram="4096"

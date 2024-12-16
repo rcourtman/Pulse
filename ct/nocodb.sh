@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="NocoDB"
-TAGS="noCode"
+var_tags="noCode"
 var_cpu="1"
 var_ram="1024"
 var_disk="4"

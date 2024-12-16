@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Apache-Cassandra"
-TAGS="database;NoSQL"
+var_tags="database;NoSQL"
 var_cpu="1"
 var_ram="2048"
 var_disk="4"

@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Docker"
-TAGS="docker"
+var_tags="docker"
 var_cpu="2"
 var_ram="2048"
 var_disk="4"

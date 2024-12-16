@@ -6,7 +6,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Podman-Home Assistant"
-TAGS="podman;smarthome"
+var_tags="podman;smarthome"
 var_cpu="2"
 var_ram="2048"
 var_disk="16"

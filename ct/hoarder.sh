@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Hoarder"
-TAGS="bookmark"
+var_tags="bookmark"
 var_cpu="2"
 var_ram="4096"
 var_disk="8"

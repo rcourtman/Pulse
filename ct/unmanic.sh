@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Unmanic"
-TAGS="file;media"
+var_tags="file;media"
 var_cpu="2"
 var_ram="2048"
 var_disk="4"

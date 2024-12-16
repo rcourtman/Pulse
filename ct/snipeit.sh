@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="SnipeIT"
-TAGS="assat-management;foss"
+var_tags="assat-management;foss"
 var_cpu="2"
 var_ram="2048"
 var_disk="4"

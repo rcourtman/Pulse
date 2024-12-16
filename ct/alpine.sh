@@ -6,7 +6,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Alpine"
-TAGS="os;alpine"
+var_tags="os;alpine"
 var_cpu="1"
 var_ram="512"
 var_disk="0.1"

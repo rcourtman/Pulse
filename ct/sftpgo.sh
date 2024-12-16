@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="SFTPGo"
-TAGS="ftp;sftp"
+var_tags="ftp;sftp"
 var_cpu="2"
 var_ram="2048"
 var_disk="4"

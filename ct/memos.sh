@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Memos"
-TAGS="notes"
+var_tags="notes"
 var_cpu="2"
 var_ram="2048"
 var_disk="7"

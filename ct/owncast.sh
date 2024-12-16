@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Owncast"
-TAGS="broadcasting"
+var_tags="broadcasting"
 var_cpu="2"
 var_ram="2048"
 var_disk="2"

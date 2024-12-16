@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Jackett"
-TAGS="torrent"
+var_tags="torrent"
 var_cpu="1"
 var_ram="512"
 var_disk="2"

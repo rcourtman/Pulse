@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Apache-CouchDB"
-TAGS="database"
+var_tags="database"
 var_cpu="2"
 var_ram="4096"
 var_disk="10"

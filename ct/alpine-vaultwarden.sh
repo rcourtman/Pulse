@@ -6,7 +6,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Alpine-Vaultwarden"
-TAGS="alpine;vault"
+var_tags="alpine;vault"
 var_cpu="1"
 var_ram="256"
 var_disk="0.3"

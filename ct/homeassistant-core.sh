@@ -7,7 +7,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 # App Default Values
 APP="Home Assistant-Core"
-TAGS="automation;smarthome"
+var_tags="automation;smarthome"
 var_cpu="2"
 var_ram="1024"
 var_disk="8"
