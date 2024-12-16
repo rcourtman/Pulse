@@ -231,6 +231,11 @@ motd_ssh() {
 
   # Disable default MOTD scripts
   chmod -x /etc/update-motd.d/*
+
+  if [[ "${SSH_ROOT}" == "yes" ]]; then
+    sed -i "s/#PermitRootLogin prohibit-password/PermitRootLogin yes/g" /etc/ssh/sshd_config
+    systemctl restart sshd
+  fi
 }
 
 # This function customizes the container by modifying the getty service and enabling auto-login for the root user
