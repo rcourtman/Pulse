@@ -2,73 +2,48 @@
 source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Copyright (c) 2021-2024 tteck
 # Author: tteck (tteckster)
-# License: MIT
-# https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# Source: https://www.tp-link.com/us/support/download/omada-software-controller/
 
-function header_info {
-clear
-cat <<"EOF"
-   ____                      __     
-  / __ \____ ___  ____ _____/ /___ _
- / / / / __  __ \/ __  / __  / __  /
-/ /_/ / / / / / / /_/ / /_/ / /_/ / 
-\____/_/ /_/ /_/\__,_/\__,_/\__,_/  
- 
-EOF
-}
-header_info
-echo -e "Loading..."
+# App Default Values
 APP="Omada"
-var_disk="8"
+TAGS="tp-link;controller"
 var_cpu="2"
 var_ram="2048"
+var_disk="8"
 var_os="debian"
 var_version="12"
+var_unprivileged="1"
+
+# App Output & Base Settings
+header_info "$APP"
+base_settings
+
+# Core
 variables
 color
 catch_errors
 
-function default_settings() {
-  CT_TYPE="1"
-  PW=""
-  CT_ID=$NEXTID
-  HN=$NSAPP
-  DISK_SIZE="$var_disk"
-  CORE_COUNT="$var_cpu"
-  RAM_SIZE="$var_ram"
-  BRG="vmbr0"
-  NET="dhcp"
-  GATE=""
-  APT_CACHER=""
-  APT_CACHER_IP=""
-  DISABLEIP6="no"
-  MTU=""
-  SD=""
-  NS=""
-  MAC=""
-  VLAN=""
-  SSH="no"
-  VERB="no"
-  echo_default
-}
-
 function update_script() {
-header_info
-check_container_storage
-check_container_resources
-if [[ ! -d /opt/tplink ]]; then msg_error "No ${APP} Installation Found!"; exit; fi
-latest_url=$(curl -fsSL "https://www.tp-link.com/en/support/download/omada-software-controller/" | grep -o 'https://.*x64.deb' | head -n1)
-latest_version=$(basename "${latest_url}")
-if [ -z "${latest_version}" ]; then
-  msg_error "It seems that the server (tp-link.com) might be down. Please try again at a later time."
+  header_info
+  check_container_storage
+  check_container_resources
+  if [[ ! -d /opt/tplink ]]; then
+    msg_error "No ${APP} Installation Found!"
+    exit
+  fi
+  latest_url=$(curl -fsSL "https://www.tp-link.com/en/support/download/omada-software-controller/" | grep -o 'https://.*x64.deb' | head -n1)
+  latest_version=$(basename "${latest_url}")
+  if [ -z "${latest_version}" ]; then
+    msg_error "It seems that the server (tp-link.com) might be down. Please try again at a later time."
+    exit
+  fi
+  echo -e "Updating Omada Controller"
+  wget -qL ${latest_url}
+  dpkg -i ${latest_version}
+  rm -rf ${latest_version}
+  echo -e "Updated Omada Controller"
   exit
-fi
-echo -e "Updating Omada Controller"
-wget -qL ${latest_url}
-dpkg -i ${latest_version}
-rm -rf ${latest_version}
-echo -e "Updated Omada Controller"
-exit
 }
 
 start
@@ -76,5 +51,6 @@ build_container
 description
 
 msg_ok "Completed Successfully!\n"
-echo -e "${APP} should be reachable by going to the following URL.
-         ${BL}https://${IP}:8043${CL} \n"
+echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
+echo -e "${INFO}${YW} Access it using the following URL:${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8043${CL}"
