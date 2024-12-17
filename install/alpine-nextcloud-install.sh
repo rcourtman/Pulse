@@ -24,18 +24,18 @@ $STD apk add nginx
 msg_ok "Installed Dependencies"
 
 msg_info "Installing PHP/Redis"
-$STD apk add php82-opcache
-$STD apk add php82-redis
-$STD apk add php82-apcu
-$STD apk add php82-fpm
-$STD apk add php82-sysvsem
-$STD apk add php82-ftp
-$STD apk add php82-pecl-smbclient
-$STD apk add php82-pecl-imagick
-$STD apk add php82-pecl-vips
-$STD apk add php82-exif
-$STD apk add php82-sodium
-$STD apk add php82-bz2
+$STD apk add php83-opcache
+$STD apk add php83-redis
+$STD apk add php83-apcu
+$STD apk add php83-fpm
+$STD apk add php83-sysvsem
+$STD apk add php83-ftp
+$STD apk add php83-pecl-smbclient
+$STD apk add php83-pecl-imagick
+$STD apk add php83-pecl-vips
+$STD apk add php83-exif
+$STD apk add php83-sodium
+$STD apk add php83-bz2
 $STD apk add redis
 msg_ok "Installed PHP/Redis"
 
@@ -50,7 +50,7 @@ echo -e "Nextcloud Database Username: \e[32m$DB_USER\e[0m" >>~/nextcloud.creds
 echo -e "Nextcloud Database Password: \e[32m$DB_PASS\e[0m" >>~/nextcloud.creds
 echo -e "Nextcloud Database Name: \e[32m$DB_NAME\e[0m" >>~/nextcloud.creds
 $STD apk add nextcloud-mysql mariadb mariadb-client
-$STD mysql_install_db --user=mysql --datadir=/var/lib/mysql
+$STD mariadb-install-db --user=mysql --datadir=/var/lib/mysql
 $STD service mariadb start
 $STD rc-update add mariadb
 mysql -uroot -p"$ADMIN_PASS" -e "GRANT ALL PRIVILEGES ON *.* TO 'root'@'localhost' IDENTIFIED BY '$ADMIN_PASS' WITH GRANT OPTION; DELETE FROM mysql.user WHERE User=''; DELETE FROM mysql.user WHERE User='root' AND Host NOT IN ('localhost', '127.0.0.1', '::1'); DROP DATABASE test; DELETE FROM mysql.db WHERE Db='test' OR Db='test\_%'; CREATE DATABASE $DB_NAME; GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS'; GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost.localdomain' IDENTIFIED BY '$DB_PASS'; FLUSH PRIVILEGES;"
@@ -134,11 +134,12 @@ server {
         location ^~ /.well-known/nodeinfo { return 301 /index.php/.well-known/nodeinfo; }
 }
 EOF
-sed -i -e 's|memory_limit = 128M|memory_limit = 512M|; $aapc.enable_cli=1' /etc/php82/php.ini
-sed -i -E '/^php_admin_(flag|value)\[opcache/s/^/;/' /etc/php82/php-fpm.d/nextcloud.conf
+sed -i -e 's|memory_limit = 128M|memory_limit = 512M|; $aapc.enable_cli=1' /etc/php83/php.ini
+sed -i -E '/^php_admin_(flag|value)\[opcache/s/^/;/' /etc/php83/php-fpm.d/nextcloud.conf
 msg_ok "Installed Nextcloud"
 
 msg_info "Adding Additional Nextcloud Packages"
+$STD apk add nextcloud-occ
 $STD apk add nextcloud-default-apps
 $STD apk add nextcloud-activity
 $STD apk add nextcloud-admin_audit
@@ -163,9 +164,10 @@ msg_ok "Added Additional Nextcloud Packages"
 msg_info "Starting Services"
 $STD rc-service redis start
 $STD rc-update add redis default
-$STD rc-service php-fpm82 start
+$STD rc-service php-fpm83 start
 chown -R nextcloud:www-data /var/log/nextcloud/
-$STD rc-service php-fpm82 restart
+chown -R nextcloud:www-data /usr/share/webapps/nextcloud/
+$STD rc-service php-fpm83 restart
 $STD rc-service nginx start
 $STD rc-service nextcloud start
 $STD rc-update add nginx default
@@ -175,16 +177,16 @@ msg_ok "Started Services"
 msg_info "Start Nextcloud Setup-Wizard"
 echo -e "export VISUAL=nano\nexport EDITOR=nano" >>/etc/profile
 cd /usr/share/webapps/nextcloud
-$STD su nextcloud -s /bin/sh -c "php82 occ maintenance:install \
+$STD su nextcloud -s /bin/sh -c "php83 occ maintenance:install \
 --database='mysql' --database-name $DB_NAME \
 --database-user '$DB_USER' --database-pass '$DB_PASS' \
 --admin-user '$ADMIN_USER' --admin-pass '$ADMIN_PASS' \
 --data-dir '/var/lib/nextcloud/data'"
-$STD su nextcloud -s /bin/sh -c 'php82 occ background:cron'
+$STD su nextcloud -s /bin/sh -c 'php83 occ background:cron'
 rm -rf /usr/share/webapps/nextcloud/apps/serverinfo
 IP4=$(/sbin/ip -o -4 addr list eth0 | awk '{print $4}' | cut -d/ -f1)
 sed -i "/0 => \'localhost\',/a \    \1 => '$IP4'," /usr/share/webapps/nextcloud/config/config.php
-su nextcloud -s /bin/sh -c 'php82 -f /usr/share/webapps/nextcloud/cron.php'
+su nextcloud -s /bin/sh -c 'php83 -f /usr/share/webapps/nextcloud/cron.php'
 msg_ok "Finished Nextcloud Setup-Wizard"
 
 motd_ssh
