@@ -26,6 +26,7 @@ Do not break established syntax in this file, as it is automatically updated by 
 
 ### 🚀 Updated Scripts
 
+- Fix Kernel-Clean for Proxmox 8.x [@MickLesk](https://github.com/MickLesk) ([#904](https://github.com/community-scripts/ProxmoxVE/pull/904))
 - [Frigate] Remove SSE 4.2 from instruction set supporting OpenVino [@remz1337](https://github.com/remz1337) ([#902](https://github.com/community-scripts/ProxmoxVE/pull/902))
 
 ### 🌐 Website
