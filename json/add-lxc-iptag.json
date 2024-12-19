@@ -38,6 +38,10 @@
         {
             "text": "Configuration: `nano /opt/lxc-iptag/iptag.conf`. iptag.service must be restarted after change.",
             "type": "Info"
+        },
+        {
+            "text": "The Proxmox Node must contain ipcalc and net-tools. ´apt-get install -y ipcalc net-tools´",
+            "type": "warn"
         }
     ]
 }
