@@ -14,11 +14,12 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y curl
-$STD apt-get install -y sudo
-$STD apt-get install -y mc
-$STD apt-get install -y gnupg
-$STD apt-get install -y jsvc
+$STD apt-get install -y \
+  curl \
+  sudo \
+  mc \
+  gnupg \
+  jsvc
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Azul Zulu"
@@ -37,7 +38,7 @@ wget -qL https://repo.mongodb.org/apt/ubuntu/dists/bionic/mongodb-org/3.6/multiv
 $STD dpkg -i mongodb-org-server_3.6.23_amd64.deb
 msg_ok "Installed MongoDB"
 
-latest_url=$(curl -fsSL "https://www.tp-link.com/en/support/download/omada-software-controller/" | grep -o 'https://.*x64.deb' | head -n1)
+latest_url=$(curl -fsSL "https://www.tp-link.com/en/support/download/omada-software-controller/" | grep -oP 'href="([^"]+linux_x64[^"]+\.deb)"' | sed 's/href="//' | sort | tail -n 1)
 latest_version=$(basename "$latest_url")
 
 msg_info "Installing Omada Controller"
