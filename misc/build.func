@@ -622,7 +622,7 @@ install_script() {
         ;;
       2)
         header_info
-        echo -e "${DEFAULT}${BOLD}${BL}Using Default Settings on node $PVEHOST_NAME(${SEARCH}${BOLD}${BL} Verbose)${CL}"
+        echo -e "${DEFAULT}${BOLD}${BL}Using Default Settings on node $PVEHOST_NAME (${SEARCH}${BL}Verbose)${CL}"
         VERB="yes"
         base_settings "$VERB"  
         echo_default
