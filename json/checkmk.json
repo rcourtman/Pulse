@@ -11,7 +11,7 @@
   "interface_port": 80,
   "documentation": "https://docs.checkmk.com/",
   "website": "https://checkmk.com/",
-  "logo": "https://github.com/Checkmk/checkmk/blob/master/omd/license_sources/checkmk_logo.svg",
+  "logo": "https://checkmk.com/application/files/cache/thumbnails/67fc39c599afdf20557d538416e3efd3.png",
   "description": "Checkmk - Your complete IT monitoring solution",
   "install_methods": [
     {
