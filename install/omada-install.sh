@@ -38,7 +38,9 @@ wget -qL https://repo.mongodb.org/apt/ubuntu/dists/bionic/mongodb-org/3.6/multiv
 $STD dpkg -i mongodb-org-server_3.6.23_amd64.deb
 msg_ok "Installed MongoDB"
 
-latest_url=$(curl -fsSL "https://www.tp-link.com/en/support/download/omada-software-controller/" | grep -oP 'href="([^"]+linux_x64[^"]+\.deb)' | sed 's/href="//' | sort | tail -n 1)
+latest_url=$(curl -s "https://support.omadanetworks.com/en/product/omada-software-controller/?resourceType=download" | \
+grep -o 'https://static\.tp-link\.com/upload/software/[^"]*linux_x64[^"]*\.deb' | \
+head -n 1)
 latest_version=$(basename "$latest_url")
 
 msg_info "Installing Omada Controller"
