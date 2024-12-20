@@ -28,17 +28,18 @@ $STD apt-get install -y /opt/checkmk.deb
 echo "${RELEASE}" >"/opt/checkmk_version.txt"
 msg_ok "Installed Checkmk"
 
+motd_ssh
+customize
+
 msg_info "Creating Service"
+PASSWORD=$(omd create monitoring | grep "password:" | awk '{print $NF}')
 $STD omd start
 {
     echo "Application-Credentials"
     echo "Username: cmkadmin"
-    echo "Password: cmkadmin"
+    echo "Password: $PASSWORD"
 } >> ~/checkmk.creds
 msg_ok "Created Service"
-
-motd_ssh
-customize
 
 msg_info "Cleaning up"
 rm -rf /opt/checkmk.deb
