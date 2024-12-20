@@ -29,12 +29,11 @@ echo "${RELEASE}" >"/opt/checkmk_version.txt"
 msg_ok "Installed Checkmk"
 
 msg_info "Creating Service"
-PASSWORD=$(omd create monitoring | grep "password:" | awk '{print $NF}')
-$STD omd start &>/dev/null 
+$STD omd start
 {
     echo "Application-Credentials"
     echo "Username: cmkadmin"
-    echo "Password: $PASSWORD"
+    echo "Password: cmkadmin"
 } >> ~/checkmk.creds
 msg_ok "Created Service"
 
