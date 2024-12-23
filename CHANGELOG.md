@@ -22,6 +22,7 @@ Do not break established syntax in this file, as it is automatically updated by 
 
 ### 🚀 Updated Scripts
 
+- Fix Navidrome Update & Install [@MickLesk](https://github.com/MickLesk) ([#991](https://github.com/community-scripts/ProxmoxVE/pull/991))
 - Update emby.sh to correct port [@Rageplant](https://github.com/Rageplant) ([#989](https://github.com/community-scripts/ProxmoxVE/pull/989))
 
 ## 2024-12-21
