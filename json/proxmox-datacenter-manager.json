@@ -2,10 +2,9 @@
     "name": "Proxmox Datacenter Manager",
     "slug": "proxmox-datacenter-manager",
     "categories": [
-      11,
       1
     ],
-    "date_created": "2024-12-20",
+    "date_created": "2024-12-25",
     "type": "ct",
     "updateable": true,
     "privileged": false,
