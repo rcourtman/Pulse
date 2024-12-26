@@ -27,6 +27,7 @@ Do not break established syntax in this file, as it is automatically updated by 
 
 ### 🚀 Updated Scripts
 
+- ChangeDetection Update: Update also Browsers [@Niklas04](https://github.com/Niklas04) ([#1027](https://github.com/community-scripts/ProxmoxVE/pull/1027))
 - ensure all RFC1918 local Ipv4 addresses are in iptag script [@AskAlice](https://github.com/AskAlice) ([#992](https://github.com/community-scripts/ProxmoxVE/pull/992))
 - Fix Proxmox DataCenter: incorrect build.func url [@rbradley0](https://github.com/rbradley0) ([#1013](https://github.com/community-scripts/ProxmoxVE/pull/1013))
 
