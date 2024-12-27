@@ -98,6 +98,11 @@ cat *.sql | mysql -u root ${DB_NAME}
 msg_ok "Setup Database"
 
 msg_info "Setup Service"
+cat <<EOF >/etc/guacamole/guacd.conf
+[server]
+bind_host = 127.0.0.1
+bind_port = 4822
+EOF
 JAVA_HOME=$(update-alternatives --query javadoc | grep Value: | head -n1 | sed 's/Value: //' | sed 's@bin/javadoc$@@')
 cat <<EOF >/etc/systemd/system/tomcat.service
 [Unit]
