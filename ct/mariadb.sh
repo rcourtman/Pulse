@@ -28,7 +28,7 @@ function update_script() {
     header_info
     check_container_storage
     check_container_resources
-    if [[ ! -f /etc/apt/sources.list.d/mariadb.list ]]; then
+    if [[ ! -d /etc/mysql/mariadb.conf.d ]]; then
         msg_error "No ${APP} Installation Found!"
         exit
     fi
