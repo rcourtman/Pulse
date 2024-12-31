@@ -43,8 +43,6 @@ rm -rf homepage-${RELEASE}
 cd /opt/homepage
 cp /opt/homepage/src/skeleton/* /opt/homepage/config
 $STD pnpm install
-$STD NEXT_PUBLIC_VERSION=v$RELEASE 
-$STD NEXT_PUBLIC_REVISION='source' 
 $STD pnpm build
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed Homepage v${RELEASE}"
