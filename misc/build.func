@@ -198,7 +198,7 @@ header_info() {
       apt-get update -y &> /dev/null
       apt-get install -y tar build-essential &> /dev/null
     elif [ -f /etc/alpine-release ]; then
-      apk add --no-cache tar build-base &> /dev/null
+      apk add --no-cache tar xz build-base &> /dev/null
       export TERM=xterm
     else
       return 1
