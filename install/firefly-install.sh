@@ -23,8 +23,8 @@ echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.
 $STD apt-get update
 $STD apt-get install -y \
     apache2 \
-    libapache2-mod-php8.3 \
-    php8.3-{bcmath,cli,intl,curl,zip,gd,xml,mbstring,mysql} \
+    libapache2-mod-php8.4 \
+    php8.4-{bcmath,cli,intl,curl,zip,gd,xml,mbstring,mysql} \
     mariadb-server \
     composer
 msg_ok "Installed Dependencies"
