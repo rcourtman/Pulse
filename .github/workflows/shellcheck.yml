@@ -17,9 +17,12 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Get changed files
+      id: changes
+      run: |
+        echo "::set-output name=files::$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '\.sh$')"
+
     - name: Run ShellCheck
-      uses: ludeeus/action-shellcheck@master
-      with:
-        ignore_paths: >-
-          frontend
-          json
+      if: steps.changes.outputs.files != ''
+      run: |
+        echo "${{ steps.changes.outputs.files }}" | xargs shellcheck
