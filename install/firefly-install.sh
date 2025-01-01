@@ -84,7 +84,7 @@ cat <<EOF >/etc/apache2/sites-available/firefly.conf
 
 </VirtualHost>
 EOF
-$STD a2enmod php8.3
+$STD a2enmod php8.4
 $STD a2enmod rewrite
 $STD a2ensite firefly.conf
 $STD a2dissite 000-default.conf  
