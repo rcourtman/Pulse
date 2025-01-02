@@ -42,11 +42,10 @@ cat <<EOF >> /etc/apache2/apache2.conf
 EOF
 rm -rf /var/www/html
 ln -s "/opt/Pf2eTools" /var/www/html
-
 chown -R www-data: "/opt/Pf2eTools"
 chmod -R 755 "/opt/Pf2eTools"
-apache2ctl start
-msg_ok "Creating Service"
+msg_ok "Created Service"
+
 # Cleanup
 msg_info "Cleaning up"
 rm "${RELEASE}.zip"
