@@ -16,7 +16,7 @@
     "install_methods": [
         {
             "type": "default",
-            "script": "ct/Pf2eTools.sh",
+            "script": "ct/pf2etools.sh",
             "resources": {
                 "cpu": 1,
                 "ram": 512,
