@@ -23,7 +23,7 @@ $STD apt-get install -y \
   gnupg \
   make \
   g++ \
-  build-essentials
+  build-essential
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up Node.js Repository"
