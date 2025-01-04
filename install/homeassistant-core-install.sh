@@ -15,8 +15,8 @@ update_os
 
 msg_info "Installing Dependencies (Patience)"
 $STD apt-get install -y \
-  git \ 
-  curl \ 
+  curl \
+  git \
   sudo \
   mc \
   bluez \
@@ -42,7 +42,6 @@ $STD apt-get install -y \
   libavfilter-dev \
   libmariadb-dev-compat \
   libatlas-base-dev
-  
 msg_ok "Installed Dependencies"
 
 msg_info "Setup Python3"
