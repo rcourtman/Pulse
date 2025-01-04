@@ -45,6 +45,7 @@ function update_script() {
 
         # Execute Update
         msg_info "Updating base 5etools"
+        cd /opt
         wget -q "https://github.com/5etools-mirror-3/5etools-src/archive/refs/tags/${RELEASE}.zip"
         unzip -q "${RELEASE}.zip"
         mv "/opt/${APP}/img" "/opt/img-backup"
@@ -93,7 +94,8 @@ function update_script() {
 
         # Cleaning up
         msg_info "Cleaning Up"
-        rm "${IMG_RELEASE}.zip"
+        rm -rf /opt/${RELEASE}.zip
+        rm -rf ${IMG_RELEASE}.zip
         $STD apt-get -y autoremove
         $STD apt-get -y autoclean
         msg_ok "Cleanup Completed"
