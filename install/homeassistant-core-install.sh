@@ -19,6 +19,8 @@ $STD apt-get install -y \
   git \
   sudo \
   mc \
+  gnupg \
+  ca-certificates \
   bluez \
   libtiff6 \
   tzdata \
