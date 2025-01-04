@@ -48,7 +48,7 @@ $STD apt-get install -y \
 msg_ok "Installed Dependencies"
 
 msg_info "Setup Python3"
-$STD add-apt-repository ppa:deadsnakes/ppa
+$STD add-apt-repository -y ppa:deadsnakes/ppa
 $STD apt-get update
 $STD apt-get install -y \
   python3.13-* \
