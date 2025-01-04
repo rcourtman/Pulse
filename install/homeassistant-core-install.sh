@@ -43,18 +43,18 @@ $STD apt-get install -y \
   libavutil-dev \
   libavfilter-dev \
   libmariadb-dev-compat \
-  libatlas-base-dev
+  libatlas-base-dev \
+  software-properties-common
 msg_ok "Installed Dependencies"
 
 msg_info "Setup Python3"
-curl -fsSL https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu/dists/focal/Release.gpg | gpg --dearmor -o /usr/share/keyrings/deadsnakes-archive.gpg
-echo "deb [signed-by=/usr/share/keyrings/deadsnakes-archive.gpg] http://ppa.launchpad.net/deadsnakes/ppa/ubuntu focal main" | sudo tee /etc/apt/sources.list.d/deadsnakes-ppa.list
+$STD add-apt-repository ppa:deadsnakes/ppa
 $STD apt-get update
-$STD apt get install -y \
-  python3 \
+$STD apt-get install -y \
+  python3.13-* \
   python3-pip \
-  python3-dev \
-  python3-venv
+  python3.13-dev \
+  python3.13-venv
 msg_ok "Setup Python3"
 
 msg_info "Installing UV"
