@@ -53,7 +53,7 @@ $STD apt get install -y \
   python3-pip \
   python3-dev \
   python3-venv
-msg_ok "Setup Python3
+msg_ok "Setup Python3"
 
 msg_info "Installing UV"
 $STD pip install uv
