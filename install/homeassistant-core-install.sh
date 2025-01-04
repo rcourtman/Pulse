@@ -20,7 +20,7 @@ $STD apt-get install -y \
   sudo \
   mc \
   bluez \
-  libtiff \
+  libtiff6 \
   tzdata \
   libffi-dev \
   libssl-dev \
