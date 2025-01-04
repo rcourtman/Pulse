@@ -47,7 +47,7 @@ $STD apt-get install -y \
 msg_ok "Installed Dependencies"
 
 msg_info "Setup Python3"
-curl -fsSL https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x6A755776 | sudo gpg --dearmor -o /usr/share/keyrings/deadsnakes-archive.gpg
+curl -fsSL https://ppa.launchpadcontent.net/deadsnakes/ppa/ubuntu/dists/focal/Release.gpg | gpg --dearmor -o /usr/share/keyrings/deadsnakes-archive.gpg
 echo "deb [signed-by=/usr/share/keyrings/deadsnakes-archive.gpg] http://ppa.launchpad.net/deadsnakes/ppa/ubuntu focal main" | sudo tee /etc/apt/sources.list.d/deadsnakes-ppa.list
 $STD apt-get update
 $STD apt get install -y \
