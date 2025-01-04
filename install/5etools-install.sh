@@ -23,12 +23,27 @@ $STD apt-get install -y \
   apache2
 msg_ok "Installed Dependencies"
 
+msg_info "Setting up Node.js Repository"
+mkdir -p /etc/apt/keyrings
+curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
+echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" >/etc/apt/sources.list.d/nodesource.list
+msg_ok "Set up Node.js Repository"
+
+msg_info "Installing Node.js"
+$STD apt-get update
+$STD apt-get install -y nodejs
+msg_ok "Installed Node.js"
+
 # Setup App
 msg_info "Set up 5etools Base"
 RELEASE=$(curl -s https://api.github.com/repos/5etools-mirror-3/5etools-src/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
 wget -q "https://github.com/5etools-mirror-3/5etools-src/archive/refs/tags/${RELEASE}.zip"
 unzip -q "${RELEASE}.zip"
 mv "5etools-src-${RELEASE:1}" /opt/5etools
+cd /opt/5etools
+$STD npm install
+$STD npm run build
+cd ~
 echo "${RELEASE}" >"/opt/5etools_version.txt"
 rm "${RELEASE}.zip"
 msg_ok "Set up 5etools Base"
