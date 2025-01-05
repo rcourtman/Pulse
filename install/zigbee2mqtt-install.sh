@@ -68,6 +68,7 @@ StandardError=inherit
 Restart=always
 User=root
 [Install]
+WantedBy=multi-user.target
 EOF
 systemctl enable -q --now zigbee2mqtt.service
 msg_ok "Created Service"
