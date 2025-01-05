@@ -43,7 +43,6 @@ msg_ok "Installed pnpm"
 
 msg_info "Setting up Zigbee2MQTT"
 cd /opt
-$STD corepack enable
 RELEASE=$(curl -s https://api.github.com/repos/Koenkk/zigbee2mqtt/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
 wget -q "https://github.com/Koenkk/zigbee2mqtt/archive/refs/tags/${RELEASE}.zip"
 unzip -q ${RELEASE}.zip
@@ -57,7 +56,7 @@ msg_ok "Installed Zigbee2MQTT"
 
 msg_info "Creating Service"
 cat <<EOF >/etc/systemd/system/zigbee2mqtt.service
-echo "[Unit]
+[Unit]
 Description=zigbee2mqtt
 After=network.target
 [Service]
