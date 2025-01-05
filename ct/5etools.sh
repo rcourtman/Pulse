@@ -57,14 +57,12 @@ function update_script() {
         $STD npm run build
         cd ~
         echo "${RELEASE}" >"/opt/${APP}_version.txt"
-        msg_ok "Updated base 5etools"
-
         chown -R www-data: "/opt/${APP}"
         chmod -R 755 "/opt/${APP}"
-
+        msg_ok "Updated base 5etools"
         # Cleaning up
         msg_info "Cleaning Up"
-        rm "${RELEASE}.zip"
+        rm -rf /opt/${RELEASE}.zip
         $STD apt-get -y autoremove
         $STD apt-get -y autoclean
         msg_ok "Cleanup Completed"
@@ -87,10 +85,10 @@ function update_script() {
         rm -rf "/opt/${APP}/img"
         mv "${APP}-img-${IMG_RELEASE:1}" "/opt/${APP}/img"
         echo "${IMG_RELEASE}" >"/opt/${APP}_IMG_version.txt"
-        msg_ok "Updating 5etools images"
-
         chown -R www-data: "/opt/${APP}"
         chmod -R 755 "/opt/${APP}"
+
+        msg_ok "Updating 5etools images"
 
         # Cleaning up
         msg_info "Cleaning Up"
