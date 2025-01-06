@@ -157,6 +157,7 @@ jobs:
           if [ -n "$PR_NUMBER" ]; then
             gh pr review $PR_NUMBER --approve
           fi
+          
       - name: Re-approve pull request after update
         if: steps.verify-diff.outputs.changed == 'true'
         env:
@@ -166,4 +167,3 @@ jobs:
           if [ -n "$PR_NUMBER" ]; then
             gh pr review $PR_NUMBER --approve
           fi
-
