@@ -125,7 +125,7 @@ $STD a2ensite glpi.conf
 msg_ok "Setup Service"
 
 msg_info "Setup Cronjob"
-(crontab -l 2>/dev/null; echo "* * * * * php /opt/glpi/front/cron.php") | crontab -
+echo "* * * * * php /opt/glpi/front/cron.php" | crontab -
 msg_ok "Setup Cronjob"
 
 msg_info "Update PHP Params"
