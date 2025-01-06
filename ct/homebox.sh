@@ -37,11 +37,13 @@ function update_script() {
     systemctl stop homebox
     msg_ok "${APP} Stopped"
 
-    msg_info "Updating ${APP} to ${RELEASE}"
+    msg_info "Updating ${APP} to v${RELEASE}"
     cd /opt
     rm -rf homebox_bak
+    rm -rf /tmp/homebox.tar.gz
     mv homebox homebox_bak
-    wget -qO- https://github.com/sysadminsmedia/homebox/releases/download/${RELEASE}/homebox_Linux_x86_64.tar.gz | tar -xzf - -C /opt
+    wget -qO /tmp/homebox.tar.gz https://github.com/sysadminsmedia/homebox/releases/download/${RELEASE}/homebox_Linux_x86_64.tar.gz
+    tar -xzf /tmp/homebox.tar.gz -C /opt
     chmod +x /opt/homebox
     echo "${RELEASE}" >/opt/${APP}_version.txt
     msg_ok "Updated Homebox"
@@ -52,7 +54,7 @@ function update_script() {
 
     msg_ok "Updated Successfully"
   else
-    msg_ok "No update required. ${APP} is already at ${RELEASE}"
+    msg_ok "No update required. ${APP} is already at v${RELEASE}"
   fi
   exit
 }
