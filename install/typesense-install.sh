@@ -23,7 +23,7 @@ msg_ok "Installed Dependencies"
 msg_info "Installing TypeSense"
 RELEASE=$(curl -s https://api.github.com/repos/typesense/typesense/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
 cd /opt
-wget -q -O https://dl.typesense.org/releases/${RELEASE}/typesense-server-${RELEASE}-amd64.deb
+wget -q https://dl.typesense.org/releases/${RELEASE}/typesense-server-${RELEASE}-amd64.deb
 $STD apt install -y /opt/typesense-server-${RELEASE}-amd64.deb
 echo 'enable-cors = true' >> /etc/typesense/typesense-server.ini
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
