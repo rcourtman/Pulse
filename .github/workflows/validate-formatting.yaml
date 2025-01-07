@@ -4,11 +4,10 @@ on:
   push:
     branches:
       - main
-  pull_request:
+  pull_request_target:
     paths:
       - "**/*.sh"
       - "**/*.func"
-      - ".github/workflows/validate-formatting.yaml"
 
 jobs:
   shfmt:
@@ -18,10 +17,22 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: Get pull request information
+        uses: actions/github-script@v7
+        id: pr
+        with:
+          script: |
+            const { data: pullRequest } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            return pullRequest;
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Ensure the full history is fetched for accurate diffing
+          ref: ${{ fromJSON(steps.pr.outputs.result).merge_commit_sha }}
 
       - name: Get changed files
         id: changed-files
