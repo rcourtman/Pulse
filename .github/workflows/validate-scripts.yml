@@ -33,10 +33,6 @@ jobs:
         with:
           fetch-depth: 0 # Ensure the full history is fetched for accurate diffing
           ref: ${{ github.event_name == 'pull_request_target' && fromJSON(steps.pr.outputs.result).merge_commit_sha || '' }}
-          
-      - name: Set execute permission for .sh files
-        run: |
-          chmod +x ct/*.sh
 
       - name: Get changed files
         id: changed-files

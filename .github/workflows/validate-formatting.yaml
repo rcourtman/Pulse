@@ -38,7 +38,7 @@ jobs:
       - name: Get changed files
         id: changed-files
         run: |
-          if ${{ github.event_name == 'pull_request' }}; then
+          if ${{ github.event_name == 'pull_request_target' }}; then
               echo "files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ steps.pr.outputs.result && fromJSON(steps.pr.outputs.result).merge_commit_sha }} | grep -E '\.(sh|func)$' | xargs)" >> $GITHUB_OUTPUT
           else
               echo "files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E '\.(sh|func)$' | xargs)" >> $GITHUB_OUTPUT
@@ -70,7 +70,7 @@ jobs:
           fi
 
       - name: Post comment with results
-        if: always() && steps.changed-files.outputs.files != '' && github.event_name == 'pull_request'
+        if: always() && steps.changed-files.outputs.files != '' && github.event_name == 'pull_request_target'
         uses: actions/github-script@v7
         with:
           script: |
