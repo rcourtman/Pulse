@@ -26,6 +26,7 @@ Do not break established syntax in this file, as it is automatically updated by 
 
 ### 🧰 Maintenance
 
+- fix(ci): formatting event & chmod +x [@se-bastiaan](https://github.com/se-bastiaan) ([#1335](https://github.com/community-scripts/ProxmoxVE/pull/1335))
 - fix: correctly handle pull_request_target event [@se-bastiaan](https://github.com/se-bastiaan) ([#1327](https://github.com/community-scripts/ProxmoxVE/pull/1327))
 
 ## 2025-01-07
