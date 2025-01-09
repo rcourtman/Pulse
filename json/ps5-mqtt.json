@@ -19,7 +19,7 @@
             "script": "ct/ps5-mqtt.sh",
             "resources": {
                 "cpu": 1,
-                "ram": 265,
+                "ram": 512,
                 "hdd": 3,
                 "os": "debian",
                 "version": "12"
