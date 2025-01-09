@@ -70,22 +70,25 @@ jobs:
               per_page: 100,
             });
 
-            pulls.filter((pr) => 
-              pr.merged_at && new Date(pr.merged_at) > latestDateInChangelog
-            ).forEach((pr) => {
-              const prLabels = pr.labels.map((label) => label.name.toLowerCase());
-              const prNote = `- ${pr.title} [@${pr.user.login}](https://github.com/${pr.user.login}) ([#${pr.number}](${pr.html_url}))`;
+            const excludedLabels = ["invalid", "wontdo", process.env.AUTOMATED_PR_LABEL];
 
-              for (const { labels, notes } of categorizedPRs) {
-                const prHasCategoryLabel = labels.some((label) => prLabels.includes(label));
-                const isUnlabelledCategory = labels.length === 0;
-                const prShouldBeExcluded = prLabels.includes(process.env.AUTOMATED_PR_LABEL);
-                if ((prHasCategoryLabel || isUnlabelledCategory) && !prShouldBeExcluded) {
-                  notes.push(prNote);
-                  break;
-                }
-              };
-            });
+pulls.filter((pr) => 
+  pr.merged_at && 
+  new Date(pr.merged_at) > latestDateInChangelog && 
+  !pr.labels.some((label) => excludedLabels.includes(label.name.toLowerCase()))
+).forEach((pr) => {
+  const prLabels = pr.labels.map((label) => label.name.toLowerCase());
+  const prNote = `- ${pr.title} [@${pr.user.login}](https://github.com/${pr.user.login}) ([#${pr.number}](${pr.html_url}))`;
+
+  for (const { labels, notes } of categorizedPRs) {
+    const prHasCategoryLabel = labels.some((label) => prLabels.includes(label));
+    const isUnlabelledCategory = labels.length === 0;
+    if (prHasCategoryLabel || isUnlabelledCategory) {
+      notes.push(prNote);
+      break;
+    }
+  }
+});
 
             return categorizedPRs;
 
