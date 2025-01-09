@@ -186,7 +186,11 @@ jobs:
               newCommentBody += ':x: We found issues in the following changed files:\n\n';
               for (const [check, files] of Object.entries(nonCompliantFiles)) {
                 if (files) {
-                  newCommentBody += `**${check}:**\n${files.trim().split(' ').map(file => `- ${file}`).join('\n')}\n\n`;
+                  newCommentBody += `**${check}:**\n`;
+                  files.trim().split(' ').forEach(file => {
+                    newCommentBody += `- ${file}: ${check}\n`;
+                  });
+                  newCommentBody += `\n`;
                 }
               }
             } else {
@@ -205,7 +209,7 @@ jobs:
 
               if (existingComment) {
                 if (existingComment.body.includes(commentIdentifier)) {
-                  const re = new RegExp(String.raw`<!-- ${commentIdentifier}-start -->[\s\S]*?<!-- ${commentIdentifier}-end -->`, "");
+                  const re = new RegExp(String.raw`<!-- ${commentIdentifier}-start -->[\\s\\S]*?<!-- ${commentIdentifier}-end -->`, "");
                   newCommentBody = existingComment.body.replace(re, newCommentBody);
                 } else {
                   newCommentBody = existingComment.body + '\n\n---\n\n' + newCommentBody;
