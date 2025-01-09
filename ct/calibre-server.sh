@@ -43,7 +43,7 @@ function update_script() {
   msg_ok "Packages updated"
 
   msg_info "Updating Calibre (latest)"
-  bash -c "$(curl -fsSL https://download.calibre-ebook.com/linux-installer.sh)"
+  wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sh /dev/stdin &>/dev/null
   msg_ok "Updated Calibre"
 
   msg_info "Starting ${APP}"
