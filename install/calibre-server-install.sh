@@ -20,7 +20,8 @@ $STD apt-get install -y \
   mc \
   imagemagick \
   xvfb \
-  libxcomposite1
+  libxcomposite1 \
+  libegl1
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Calibre"
