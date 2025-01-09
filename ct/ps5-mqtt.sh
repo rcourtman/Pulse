@@ -9,7 +9,7 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 APP="PS5-MQTT"
 var_tags="smarthome;automation"
 var_cpu="1"
-var_ram="256"
+var_ram="512"
 var_disk="3"
 var_os="debian"
 var_version="12"
