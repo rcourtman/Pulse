@@ -38,7 +38,7 @@ jobs:
         id: changed-files
         run: |
           if ${{ github.event_name == 'pull_request_target' }}; then
-              echo "files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ steps.pr.outputs.result && fromJSON(steps.pr.outputs.result).merge_commit_sha }} | xargs)" >> $GITHUB_OUTPUT
+              echo "files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ steps.pr.outputs.result && fromJSON(steps.pr.outputs.result).merge_commit_sha }} | grep -E '\.(sh|func)$' | xargs)" >> $GITHUB_OUTPUT
           else
               echo "files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E '\.(sh|func)$' | xargs)" >> $GITHUB_OUTPUT
           fi
