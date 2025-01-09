@@ -21,6 +21,7 @@ $STD apt-get install -y \
   imagemagick \
   xvfb \
   libxcomposite1 \
+  libegl1 \
   libopengl0
 msg_ok "Installed Dependencies"
 
