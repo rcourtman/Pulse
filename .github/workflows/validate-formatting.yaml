@@ -1,4 +1,4 @@
-name: Validate script formatting
+name: Validate and auto-fix script formatting
 
 on:
   push:
@@ -11,9 +11,10 @@ on:
 
 jobs:
   shfmt:
-    name: Check changed files
+    name: Check and fix formatting
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       pull-requests: write
 
     steps:
@@ -32,13 +33,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Ensure the full history is fetched for accurate diffing
+          fetch-depth: 0
           ref: ${{ github.event_name == 'pull_request_target' && fromJSON(steps.pr.outputs.result).merge_commit_sha || '' }}
 
       - name: Get changed files
         id: changed-files
         run: |
-          if ${{ github.event_name == 'pull_request_target' }}; then
+          if [ "${{ github.event_name }}" == "pull_request_target" ]; then
               echo "files=$(git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ steps.pr.outputs.result && fromJSON(steps.pr.outputs.result).merge_commit_sha }} | grep -E '\.(sh|func)$' | xargs)" >> $GITHUB_OUTPUT
           else
               echo "files=$(git diff --name-only ${{ github.event.before }} ${{ github.event.after }} | grep -E '\.(sh|func)$' | xargs)" >> $GITHUB_OUTPUT
@@ -54,42 +55,36 @@ jobs:
           go install mvdan.cc/sh/v3/cmd/shfmt@latest
           echo "$GOPATH/bin" >> $GITHUB_PATH
 
-      - name: Run shfmt
+      - name: Fix formatting
         if: steps.changed-files.outputs.files != ''
-        id: shfmt
         run: |
-          set +e
+          shfmt -w ${{ steps.changed-files.outputs.files }}
 
-          shfmt_output=$(shfmt -d ${{ steps.changed-files.outputs.files }})
-          if [[ $? -eq 0 ]]; then
-            exit 0
-          else
-            echo "diff=\"$(echo -n "$shfmt_output" | base64 -w 0)\"" >> $GITHUB_OUTPUT
-            printf "%s" "$shfmt_output"
-            exit 1
-          fi
+      - name: Commit and push changes
+        if: steps.changed-files.outputs.files != '' && github.event_name == 'pull_request_target'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ${{ steps.changed-files.outputs.files }}
+          git commit -m "chore: auto-fix formatting issues"
+          git push
 
       - name: Post comment with results
-        if: always() && steps.changed-files.outputs.files != '' && github.event_name == 'pull_request_target'
+        if: always() && github.event_name == 'pull_request_target'
         uses: actions/github-script@v7
         with:
           script: |
             const result = "${{ job.status }}" === "success" ? "success" : "failure";
-            const diff = Buffer.from(
-              ${{ steps.shfmt.outputs.diff }},
-              "base64",
-            ).toString();
             const issueNumber = context.payload.pull_request
               ? context.payload.pull_request.number
               : null;
             const commentIdentifier = "validate-formatting";
-            let newCommentBody = `<!-- ${commentIdentifier}-start -->\n### Script formatting\n\n`;
+            let newCommentBody = `<!-- ${commentIdentifier}-start -->\n### Script Formatting Results\n\n`;
 
             if (result === "failure") {
-              newCommentBody +=
-                `:x: We found issues in the formatting of the following changed files:\n\n\`\`\`diff\n${diff}\n\`\`\`\n`;
+              newCommentBody += `:x: Formatting issues were found and automatically fixed.\n`;
             } else {
-              newCommentBody += `:rocket: All changed shell scripts are formatted correctly!\n`;
+              newCommentBody += `:rocket: All scripts are properly formatted!\n`;
             }
 
             newCommentBody += `\n\n<!-- ${commentIdentifier}-end -->`;
@@ -101,20 +96,11 @@ jobs:
               });
 
               const existingComment = comments.find(
-                (comment) => comment.user.login === "github-actions[bot]",
+                (comment) => comment.user.login === "github-actions[bot]" &&
+                             comment.body.includes(commentIdentifier)
               );
 
               if (existingComment) {
-                if (existingComment.body.includes(commentIdentifier)) {
-                  const re = new RegExp(
-                    String.raw`<!-- ${commentIdentifier}-start -->[\s\S]*?<!-- ${commentIdentifier}-end -->`,
-                    "",
-                  );
-                  newCommentBody = existingComment.body.replace(re, newCommentBody);
-                } else {
-                  newCommentBody = existingComment.body + "\n\n---\n\n" + newCommentBody;
-                }
-
                 await github.rest.issues.updateComment({
                   ...context.repo,
                   comment_id: existingComment.id,
@@ -127,4 +113,3 @@ jobs:
                   body: newCommentBody,
                 });
               }
-            }
