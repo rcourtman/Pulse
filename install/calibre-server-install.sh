@@ -25,7 +25,7 @@ $STD apt-get install -y \
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Calibre"
-$STD bash -c "$(curl -fsSL https://download.calibre-ebook.com/linux-installer.sh)"
+wget -nv -O- https://download.calibre-ebook.com/linux-installer.sh | sh /dev/stdin
 useradd -c "Calibre Server" -d /opt/calibre -s /bin/bash -m calibre
 mkdir -p /opt/calibre/calibre-library
 chown -R calibre:calibre /opt/calibre
