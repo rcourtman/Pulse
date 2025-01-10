@@ -76,19 +76,6 @@ jobs:
             echo "PR already exists, skipping creation."
           fi
 
-      - name: Merge pull request (Squash and Merge)
-        if: steps.create-pr.outputs.pr_exists == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Get the PR number and merge it if it exists
-          PR_NUMBER=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
-          if [ -n "$PR_NUMBER" ]; then
-            # Squash and merge the PR automatically
-            gh pr merge $PR_NUMBER --squash --auto --delete-branch
-          fi
-
       - name: Final Status
-        if: steps.check-changes.outcome != 'success'
         run: |
-          echo "No changes detected or already merged, workflow completed successfully."
+          echo "Workflow completed successfully."
