@@ -25,7 +25,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Figlet
+      - name: Set up Figlet (Optional, for decoration)
         run: sudo apt-get install -y figlet
 
       - name: Run generate-app-headers script
@@ -52,7 +52,7 @@ jobs:
             touch ./misc/.app-headers
           fi
           
-          # Make sure there are changes to commit (whether new or modified file)
+          # Commit the changes if there are any
           git diff --quiet || git commit -am "[core]: update .app-headers to latest version"
           
           # Push changes to the branch if there are any
