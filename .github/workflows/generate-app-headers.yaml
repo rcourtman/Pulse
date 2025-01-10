@@ -61,8 +61,7 @@ jobs:
             gh pr create --title "Update app-headers to latest" \
                          --body "This PR automatically updates the app-headers file." \
                          --head update-app-headers \
-                         --base main \
-                         --label "automated"
+                         --base main
           fi
 
       - name: Approve pull request
