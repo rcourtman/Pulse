@@ -34,7 +34,7 @@ jobs:
 
       - name: Create or update branch
         run: |
-          # Check if the branch exists
+          # Check if the branch exists, and create it if not
           git fetch origin
           git checkout -b update-app-headers || git checkout update-app-headers
           
@@ -42,10 +42,10 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Check if there are changes to commit
+          # Make sure there are changes to commit
           git diff --quiet || git commit -am "[core]: update .app-headers to latest version"
           
-          # Push changes to the branch only if there are changes
+          # Push changes to the branch if there are any
           git push origin update-app-headers --force || echo "No changes to push"
 
       - name: Create pull request
@@ -55,6 +55,7 @@ jobs:
         run: |
           PR_EXISTS=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
           if [ -z "$PR_EXISTS" ]; then
+            # Create the pull request if it doesn't exist
             gh pr create --title "[core]: update .app-headers to latest version" \
                          --body "This PR automatically updates the app-headers file." \
                          --head update-app-headers \
@@ -66,7 +67,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Get the PR number and merge it if it exists
           PR_NUMBER=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
           if [ -n "$PR_NUMBER" ]; then
+            # Squash and merge the PR automatically
             gh pr merge $PR_NUMBER --squash --auto --delete-branch
           fi
