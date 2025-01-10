@@ -6,53 +6,32 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-and-merge-pr:
+  update-and-create-pr:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
 
     steps:
-      # Step 1: Setup job (Check environment & install dependencies)
-      - name: Setup environment
-        run: |
-          echo "Setting up the environment for the workflow."
-          sudo apt-get update
-          sudo apt-get install -y figlet gh jq
-
-      # Step 2: Generate Token
-      - name: Generate a token
-        id: generate-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.CREATE_HEADER_APP_ID }}  
-          private-key: ${{ secrets.CREATE_HEADER_SECRET }}
-
-      # Step 3: Checkout repository
+      # Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch all history to ensure we have full access to the repo history
+          fetch-depth: 0  # Ensure we have full access to all branches
 
-      # Step 4: Check or Update Branch (Create or update the update-app-headers branch)
-      - name: Check or Update Branch
+      # Step 2: Check if update-app-headers branch exists, create if not
+      - name: Check or Create update-app-headers branch
         run: |
           git fetch origin
           if ! git show-ref --quiet refs/heads/update-app-headers; then
-            echo "Creating the 'update-app-headers' branch as it does not exist."
+            echo "Creating 'update-app-headers' branch."
             git checkout -b update-app-headers origin/main
           else
-            echo "Switching to the existing 'update-app-headers' branch."
+            echo "Switching to 'update-app-headers' branch."
             git checkout update-app-headers
           fi
 
-      # Step 4.1: Configure Git user
-      - name: Configure Git user
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-
-      # Step 5: Ensure .app-headers file exists
+      # Step 3: Ensure .app-headers file exists (if missing, create it)
       - name: Ensure .app-headers file exists
         run: |
           if [ ! -f ".app-headers" ]; then
@@ -62,77 +41,35 @@ jobs:
             echo ".app-headers already exists."
           fi
 
-      # Step 6: Setup Figlet (Install and set up Figlet for text generation)
-      - name: Set up Figlet
-        run: sudo apt-get install -y figlet
-
-      # Step 7: Run generate-app-headers script
-      - name: Run generate-app-headers script
-        run: |
-          bash .github/workflows/generate-app-headers.sh
-
-      # Step 8: Check for changes (ensure file is updated)
-      - name: Check for changes
-        run: |
-          git diff --exit-code || echo "Changes detected."
-
-      # Step 9: Commit changes if any
-      - name: Commit changes if any
-        run: |
-          git diff --exit-code || git commit -am "[core]: update .app-headers to latest version"
-
-      # Step 10: Push changes to the branch
-      - name: Push changes to the branch
-        run: |
-          git push origin update-app-headers --force || echo "No changes to push"
-
-      # Step 11: Compare branches (Check for differences between main and update-app-headers)
-      - name: Compare branches (Check for differences between main and update-app-headers)
+      # Step 4: Compare .app-headers with main, commit if changes
+      - name: Compare with main and commit changes
         run: |
           git fetch origin
-          DIFF=$(git diff --quiet origin/main..origin/update-app-headers || echo "Changes detected")
+          DIFF=$(git diff --quiet origin/main..origin/update-app-headers -- .app-headers || echo "Changes detected")
           if [[ "$DIFF" == "Changes detected" ]]; then
-            echo "Changes found between main and update-app-headers. Proceeding with PR creation."
+            echo "Changes detected in .app-headers. Committing changes."
+            git commit -am "[core]: update .app-headers to latest version"
+            git push origin update-app-headers --force
           else
-            echo "No changes found between main and update-app-headers. Skipping PR creation."
-            exit 0  # Skip PR creation if no changes are found
+            echo "No changes in .app-headers. Skipping commit."
           fi
 
-      # Step 12: Create Pull Request (If changes exist, create a PR)
-      - name: Create PR
-        id: create-pr
-        if: steps.compare-branches.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Step 5: Create Pull Request if changes detected
+      - name: Create Pull Request if changes detected
         run: |
           PR_EXISTS=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
           if [ -z "$PR_EXISTS" ]; then
             echo "Creating a new PR."
             gh pr create --title "[core]: update .app-headers to latest version" \
-                         --body "This PR automatically updates the app-headers file." \
+                         --body "This PR automatically updates the .app-headers file." \
                          --head update-app-headers \
                          --base main
           else
             echo "PR already exists."
           fi
 
-      # Step 13: Final status (Output status to console)
+      # Step 6: Final status output
       - name: Output final status
         run: |
           echo "Workflow completed successfully. Branch and PR status updated."
 
-      # Step 14: Post checkout repo (Make sure to clean up the repository state)
-      - name: Post checkout repo
-        run: |
-          echo "Repository check complete."
-          git status
-
-      # Step 15: Post generate token (Output generated token for logging purposes)
-      - name: Post generate token
-        run: |
-          echo "Generated token: ${GITHUB_TOKEN}"
-
-      # Step 16: Complete (Final confirmation that workflow has finished)
-      - name: Complete
-        run: |
-          echo "Workflow has completed successfully."
