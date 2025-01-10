@@ -23,7 +23,7 @@ jobs:
         run: |
           git fetch origin
           git checkout update-app-headers
-          git merge origin/main --no-ff --no-commit -m "Merge main into update-app-headers"
+          git merge origin/main --allow-unrelated-histories --no-commit -m "Merge main into update-app-headers"
           git push origin update-app-headers > /dev/null 2>&1 || true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
