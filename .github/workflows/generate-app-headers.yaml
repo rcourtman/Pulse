@@ -86,10 +86,22 @@ jobs:
         run: |
           git push origin update-app-headers --force || echo "No changes to push"
 
-      # Step 11: Create Pull Request (If changes exist, create a PR)
+      # Step 11: Compare branches (Check for differences between main and update-app-headers)
+      - name: Compare branches (Check for differences between main and update-app-headers)
+        run: |
+          git fetch origin
+          DIFF=$(git diff --quiet origin/main..origin/update-app-headers || echo "Changes detected")
+          if [[ "$DIFF" == "Changes detected" ]]; then
+            echo "Changes found between main and update-app-headers. Proceeding with PR creation."
+          else
+            echo "No changes found between main and update-app-headers. Skipping PR creation."
+            exit 0  # Skip PR creation if no changes are found
+          fi
+
+      # Step 12: Create Pull Request (If changes exist, create a PR)
       - name: Create PR
         id: create-pr
-        if: steps.check-changes.outcome == 'success'
+        if: steps.compare-branches.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -104,23 +116,23 @@ jobs:
             echo "PR already exists."
           fi
 
-      # Step 12: Final status (Output status to console)
+      # Step 13: Final status (Output status to console)
       - name: Output final status
         run: |
           echo "Workflow completed successfully. Branch and PR status updated."
 
-      # Step 13: Post checkout repo (Make sure to clean up the repository state)
+      # Step 14: Post checkout repo (Make sure to clean up the repository state)
       - name: Post checkout repo
         run: |
           echo "Repository check complete."
           git status
 
-      # Step 14: Post generate token (Output generated token for logging purposes)
+      # Step 15: Post generate token (Output generated token for logging purposes)
       - name: Post generate token
         run: |
           echo "Generated token: ${GITHUB_TOKEN}"
 
-      # Step 15: Complete (Final confirmation that workflow has finished)
+      # Step 16: Complete (Final confirmation that workflow has finished)
       - name: Complete
         run: |
           echo "Workflow has completed successfully."
