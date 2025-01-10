@@ -46,7 +46,13 @@ jobs:
             git checkout update-app-headers
           fi
 
-      # Step 5: Ensure .app-headers file exists (if missing, create it)
+      # Step 4.1: Configure Git user
+      - name: Configure Git user
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      # Step 5: Ensure .app-headers file exists
       - name: Ensure .app-headers file exists
         run: |
           if [ ! -f ".app-headers" ]; then
