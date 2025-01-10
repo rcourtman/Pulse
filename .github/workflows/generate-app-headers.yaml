@@ -34,15 +34,25 @@ jobs:
 
       - name: Create or update branch
         run: |
-          # Check if the branch exists, and create it if not
+          # Check if the branch exists, create it if it doesn't exist
           git fetch origin
-          git checkout -b update-app-headers || git checkout update-app-headers
+          if ! git show-ref --quiet refs/heads/update-app-headers; then
+            git checkout -b update-app-headers
+          else
+            git checkout update-app-headers
+          fi
           
           # Configure Git user info
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Make sure there are changes to commit
+          # Check if the file exists, and if not, create it
+          if [ ! -f "./misc/.app-headers" ]; then
+            echo "File .app-headers not found, creating it."
+            touch ./misc/.app-headers
+          fi
+          
+          # Make sure there are changes to commit (whether new or modified file)
           git diff --quiet || git commit -am "[core]: update .app-headers to latest version"
           
           # Push changes to the branch if there are any
