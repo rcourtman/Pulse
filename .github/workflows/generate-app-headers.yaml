@@ -71,6 +71,8 @@ jobs:
                          --body "This PR automatically updates the app-headers file." \
                          --head update-app-headers \
                          --base main
+          else
+            echo "PR already exists, skipping creation."
           fi
 
       - name: Merge pull request (Squash and Merge)
@@ -84,3 +86,8 @@ jobs:
             # Squash and merge the PR automatically
             gh pr merge $PR_NUMBER --squash --auto --delete-branch
           fi
+
+      - name: Final Status
+        if: steps.check-changes.outcome != 'success'
+        run: |
+          echo "No changes detected or already merged, workflow completed successfully."
