@@ -81,14 +81,14 @@ jobs:
             echo "$(figlet $APP_NAME)" >> .app-headers
           done
 
-      # Step 7: Check if there are changes to commit
+      # Step 7: Check for changes and commit
       - name: Check for changes and commit
         run: |
           git diff --exit-code --quiet .app-headers
           if [ $? -eq 1 ]; then
             echo ".app-headers has been updated, committing changes."
             git commit -am "[core]: update .app-headers to latest version"
-            git push origin update-app-headers --force
+            git push origin update-app-headers
           else
             echo "No changes to .app-headers detected, skipping commit."
           fi
