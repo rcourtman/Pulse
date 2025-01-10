@@ -48,8 +48,19 @@ jobs:
           # Push changes to the branch if there are any
           git push origin update-app-headers --force || echo "No changes to push"
 
+      - name: Check if there are changes before creating PR
+        id: check-changes
+        run: |
+          git fetch origin
+          git diff --quiet origin/main..update-app-headers || echo "Changes detected" > changes.txt
+          if [ ! -f changes.txt ]; then
+            echo "No changes detected, skipping PR creation."
+            exit 0
+          fi
+
       - name: Create pull request
         id: create-pr
+        if: steps.check-changes.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
