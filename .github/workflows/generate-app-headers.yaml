@@ -38,6 +38,10 @@ jobs:
           git fetch origin
           git checkout -b update-app-headers || git checkout update-app-headers
           
+          # Configure Git user info
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
           # Make your changes, e.g., update app-headers file
           echo "update app-headers to latest" >> misc/.app-headers
           
