@@ -53,15 +53,17 @@ jobs:
         run: |
           # Check if there are any changes between 'main' and 'update-app-headers'
           git fetch origin
-          git diff --quiet origin/main..update-app-headers || echo "Changes detected" > changes.txt
-          if [ ! -f changes.txt ]; then
+          git diff --quiet origin/main..update-app-headers
+          if [ $? -eq 0 ]; then
             echo "No changes detected, skipping PR creation."
-            exit 0  # Exit successfully if no changes are found
+            echo "skip_pr_creation=true" >> $GITHUB_ENV
+          else
+            echo "Changes detected, proceeding with PR creation."
           fi
 
       - name: Create pull request
         id: create-pr
-        if: steps.check-changes.outcome == 'success'  # Only create PR if changes are detected
+        if: env.skip_pr_creation != 'true'  # Only create PR if changes are detected
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
