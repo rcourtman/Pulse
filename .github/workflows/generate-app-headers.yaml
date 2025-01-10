@@ -48,41 +48,23 @@ jobs:
         run: |
           git merge origin/main --no-edit || echo "No changes to merge from main."
 
-      # Step 5: Identify added .sh files and extract app names
-      - name: Check for added .sh files and extract app names
-        id: detect_sh_files
+      # Step 5: Check all .sh files in ct/ directory that contain APP=
+      - name: Check .sh files in ct/ that contain APP=
         run: |
-          # Get the list of added files in the PR (new .sh files)
-          ADDED_FILES=$(git diff --name-only --diff-filter=A HEAD origin/main)
-          
-          # Filter out the .sh files
-          ADDED_SH_FILES=$(echo "$ADDED_FILES" | grep '\.sh$')
-          
-          if [ -z "$ADDED_SH_FILES" ]; then
-            echo "No new .sh files added."
+          echo "Checking .sh files in ct/ directory that contain APP=."
+          SH_FILES=$(find ct/ -type f -name "*.sh" -exec grep -l "APP=" {} \;)
+
+          if [ -z "$SH_FILES" ]; then
+            echo "No .sh files with APP= found in ct/ directory."
             exit 0
           else
-            echo "New .sh files added:"
-            echo "$ADDED_SH_FILES"
-            
-            # Extract app names from the file names
-            APP_NAMES=""
-            for FILE in $ADDED_SH_FILES; do
-              # Assuming the app name is part of the file name (e.g., 'appName.sh')
-              APP_NAME=$(basename "$FILE" .sh)
-              APP_NAMES="$APP_NAMES$APP_NAME "
-            done
-            
-            echo "App names to process: $APP_NAMES"
-            echo "::set-output name=app_names::$APP_NAMES"
+            echo "Found .sh files with APP= in ct/ directory:"
+            echo "$SH_FILES"
           fi
 
-      # Step 6: Process the app names and update .app-headers
-      - name: Process app names and update .app-headers
-        if: steps.detect_sh_files.outputs.app_names != ''
+      # Step 6: Overwrite .app-headers
+      - name: Overwrite .app-headers file
         run: |
-          APP_NAMES="${{ steps.detect_sh_files.outputs.app_names }}"
-          
           # Ensure .app-headers file exists
           if [ ! -f ".app-headers" ]; then
             echo "Creating .app-headers file."
@@ -91,9 +73,11 @@ jobs:
             echo ".app-headers file already exists."
           fi
 
-          # For each app name, run figlet and append to .app-headers
-          for APP_NAME in $APP_NAMES; do
-            echo "Processing app: $APP_NAME"
+          # Overwrite .app-headers with figlet output of each .sh file name containing APP=
+          echo "Overwriting .app-headers with new entries."
+          > .app-headers  # Clear the existing file
+          for FILE in $SH_FILES; do
+            APP_NAME=$(basename "$FILE" .sh)
             echo "$(figlet $APP_NAME)" >> .app-headers
           done
 
