@@ -36,7 +36,8 @@ function update_script() {
     msg_info "Stopping ${APP} Service"
     systemctl stop tianji
     msg_ok "Stopped ${APP} Service"
-    msg_info "Updating ${APP} to ${RELEASE}"
+    
+    msg_info "Updating ${APP} to v${RELEASE}"
     cd /opt
     cp /opt/tianji/src/server/.env /opt/.env
     mv /opt/tianji /opt/tianji_bak
@@ -54,10 +55,12 @@ function update_script() {
     cd src/server
     pnpm db:migrate:apply >/dev/null 2>&1
     echo "${RELEASE}" >/opt/${APP}_version.txt
-    msg_ok "Updated ${APP} to ${RELEASE}"
+    msg_ok "Updated ${APP} to v${RELEASE}"
+    
     msg_info "Starting ${APP}"
     systemctl start tianji
     msg_ok "Started ${APP}"
+    
     msg_info "Cleaning up"
     rm -R /opt/v${RELEASE}.zip
     rm -rf /opt/tianji_bak
@@ -67,7 +70,7 @@ function update_script() {
     msg_ok "Cleaned"
     msg_ok "Updated Successfully"
   else
-    msg_ok "No update required.  ${APP} is already at ${RELEASE}."
+    msg_ok "No update required.  ${APP} is already at v${RELEASE}."
   fi
   exit
 }
