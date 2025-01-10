@@ -67,7 +67,17 @@ jobs:
         run: |
           git diff --exit-code || echo "Changes detected."
       
-      # Step 9: Create Pull Request (If changes exist, create a PR)
+      # Step 9: Commit changes if any
+      - name: Commit changes if any
+        run: |
+          git diff --exit-code || git commit -am "[core]: update .app-headers to latest version"
+
+      # Step 10: Push changes to the branch
+      - name: Push changes to the branch
+        run: |
+          git push origin update-app-headers --force || echo "No changes to push"
+
+      # Step 11: Create Pull Request (If changes exist, create a PR)
       - name: Create PR
         id: create-pr
         if: steps.check-changes.outcome == 'success'
@@ -85,23 +95,23 @@ jobs:
             echo "PR already exists."
           fi
 
-      # Step 10: Final status (Output status to console)
+      # Step 12: Final status (Output status to console)
       - name: Output final status
         run: |
           echo "Workflow completed successfully. Branch and PR status updated."
 
-      # Step 11: Post checkout repo (Make sure to clean up the repository state)
+      # Step 13: Post checkout repo (Make sure to clean up the repository state)
       - name: Post checkout repo
         run: |
           echo "Repository check complete."
           git status
 
-      # Step 12: Post generate token (Output generated token for logging purposes)
+      # Step 14: Post generate token (Output generated token for logging purposes)
       - name: Post generate token
         run: |
           echo "Generated token: ${GITHUB_TOKEN}"
 
-      # Step 13: Complete (Final confirmation that workflow has finished)
+      # Step 15: Complete (Final confirmation that workflow has finished)
       - name: Complete
         run: |
           echo "Workflow has completed successfully."
