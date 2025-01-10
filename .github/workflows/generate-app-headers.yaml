@@ -6,8 +6,7 @@ on:
       - closed
     branches:
       - main
-    # Stellen sicher, dass nur gemergte PRs den Workflow auslösen
-    # Triggern nur wenn der PR gemerged wurde
+    # Trigger nur, wenn der PR gemerged wurde
     if: github.event.pull_request.merged == true
   schedule:
     - cron: "59 23 * * *"  # Führen den Workflow täglich um 23:59 UTC aus
@@ -79,7 +78,7 @@ jobs:
             PR_URL=$(gh pr create --title "[core]: update .app-headers to latest version" \
                                    --body "This PR automatically updates the .app-headers file." \
                                    --head update-app-headers \
-                                   --base main -q .url)
+                                   --base main)
             echo "PR created: $PR_URL"
           else
             echo "PR already exists."
@@ -99,6 +98,7 @@ jobs:
           else
             echo "No PR found to merge."
           fi
+
       # Step 9: Final status output
       - name: Output final status
         run: |
