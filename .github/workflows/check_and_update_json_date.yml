@@ -2,7 +2,7 @@ name: Check and Update JSON Date
 
 on:
   pull_request:
-    types: [synchronize, opened, edited]
+    types: [synchronize, opened, reopened, edited]
 
 jobs:
   update-date:
@@ -20,10 +20,10 @@ jobs:
       - name: Install dependencies
         run: pip install jq
 
-      - name: Find and Update JSON files
+      - name: Find and Update JSON files in /json folder
         run: |
           TODAY=$(date +%Y-%m-%d)
-          for file in $(git diff --diff-filter=A --name-only HEAD | grep '\.json$'); do
+          for file in $(git diff --diff-filter=A --name-only HEAD | grep '^json/.*\.json$'); do
             if jq -e '.date_created' $file > /dev/null 2>&1; then
               echo "Updating date_created in $file"
               jq --arg date "$TODAY" '.date_created = $date' $file > temp.json && mv temp.json $file
