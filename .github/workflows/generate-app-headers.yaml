@@ -41,11 +41,10 @@ jobs:
             echo ".app-headers already exists."
           fi
 
-      # Step 4: Check for changes between main and update-app-headers
-      - name: Check if changes are detected
+      # Step 4: Check for changes in the .app-headers file content
+      - name: Check if .app-headers has changes
         id: check_changes
         run: |
-          git fetch origin
           git diff --quiet origin/main..HEAD -- .app-headers
           echo "Changes detected: $?"
         continue-on-error: true  # So the workflow continues even if no changes are detected
