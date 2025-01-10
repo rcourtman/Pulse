@@ -81,11 +81,17 @@ jobs:
             echo "$(figlet $APP_NAME)" >> .app-headers
           done
 
-      # Step 7: Commit and push changes (if any)
-      - name: Commit and push changes
+      # Step 7: Check if there are changes to commit
+      - name: Check for changes and commit
         run: |
-          git diff --quiet -- .app-headers || git commit -am "[core]: update .app-headers to latest version"
-          git push origin update-app-headers --force
+          git diff --exit-code --quiet .app-headers
+          if [ $? -eq 1 ]; then
+            echo ".app-headers has been updated, committing changes."
+            git commit -am "[core]: update .app-headers to latest version"
+            git push origin update-app-headers --force
+          else
+            echo "No changes to .app-headers detected, skipping commit."
+          fi
 
       # Step 8: Create Pull Request if changes detected
       - name: Create Pull Request if changes detected
