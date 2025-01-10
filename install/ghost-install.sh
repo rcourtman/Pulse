@@ -21,7 +21,7 @@ $STD apt-get install -y \
   sudo \
   mc \
   nginx \
-  mysql-server \
+  mariadb-server \
   ca-certificates \
   gnupg
 msg_ok "Installed Dependencies"
