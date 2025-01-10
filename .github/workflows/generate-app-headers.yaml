@@ -41,20 +41,24 @@ jobs:
             echo ".app-headers already exists."
           fi
 
-      # Step 4: Compare with main and commit changes
-      - name: Compare with main and commit changes
+      # Step 4: Check for changes between main and update-app-headers
+      - name: Check if changes are detected
+        id: check_changes
         run: |
           git fetch origin
-          DIFF=$(git diff --quiet origin/main..origin/update-app-headers -- .app-headers || echo "Changes detected")
-          if [[ "$DIFF" == "Changes detected" ]]; then
-            echo "Changes detected in .app-headers. Committing changes."
-            git commit -am "[core]: update .app-headers to latest version"
-            git push origin update-app-headers --force
-          else
-            echo "No changes in .app-headers. Skipping commit."
-          fi
+          git diff --quiet origin/main..HEAD -- .app-headers
+          echo "Changes detected: $?"
+        continue-on-error: true  # So the workflow continues even if no changes are detected
 
-      # Step 5: Create Pull Request if changes detected
+      # Step 5: Commit changes if detected
+      - name: Commit changes if detected
+        if: steps.check_changes.outcome == 'failure'
+        run: |
+          echo "Changes detected in .app-headers. Committing changes."
+          git commit -am "[core]: update .app-headers to latest version"
+          git push origin update-app-headers --force
+
+      # Step 6: Create Pull Request if changes detected
       - name: Create Pull Request if changes detected
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -70,7 +74,7 @@ jobs:
             echo "PR already exists."
           fi
 
-      # Step 6: Final status output
+      # Step 7: Final status output
       - name: Output final status
         run: |
           echo "Workflow completed successfully. Branch and PR status updated."
