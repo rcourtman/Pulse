@@ -1,4 +1,4 @@
-name: App-Header: Merge main into update-app-headers
+name: Merge main into update-app-headers
 
 on:
   push:
