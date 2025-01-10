@@ -1,8 +1,16 @@
 name: Update .app-headers in /misc
 
 on:
-  push:
-    branches: ["main"]
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+    # Stellen sicher, dass nur gemergte PRs den Workflow auslösen
+    # Triggern nur wenn der PR gemerged wurde
+    if: github.event.pull_request.merged == true
+  schedule:
+    - cron: "59 23 * * *"  # Führen den Workflow täglich um 23:59 UTC aus
   workflow_dispatch:
 
 jobs:
