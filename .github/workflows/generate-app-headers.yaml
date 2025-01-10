@@ -1,79 +1,59 @@
-name: Update .app-headers in /misc
+name: Auto Update .app-headers and Create PR
 
 on:
   push:
-    paths:
-      - 'ct/*' 
     branches:
       - main
-  workflow_dispatch:
+    paths:
+      - 'ct/**.sh'
 
 jobs:
-  update-and-create-pr:
+  update-app-headers:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-
     steps:
-      # Step 1: Checkout repository
+      # Step 1: Checkout the repository
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Ensure we have full access to all branches
+        uses: actions/checkout@v2
 
-      # Step 2: Configure git user
-      - name: Configure Git user
+      # Step 2: Set up Git user for committing changes
+      - name: Set up Git
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      # Step 3: Install figlet
-      - name: Install figlet
+      # Step 3: Ensure .app-headers file exists
+      - name: Ensure .app-headers file exists
         run: |
-          sudo apt-get update
-          sudo apt-get install -y figlet
-
-      # Step 4: Merge main into update-app-headers
-      - name: Merge main into update-app-headers
-        run: |
-          git fetch origin
-          git checkout update-app-headers || git checkout -b update-app-headers
-          git merge origin/main --no-ff --no-edit
-          git push origin update-app-headers --force
-
-      # Step 5: Ensure .app-headers file exists and initialize it
-      - name: Initialize .app-headers file
-        run: |
-          if [ ! -f "ct/.app-headers" ]; then
-            echo "Creating .app-headers file"
+          if [ ! -f ct/.app-headers ]; then
+            echo "Creating .app-headers file."
             touch ct/.app-headers
           fi
 
-      # Step 6: Loop through ct/ scripts and execute figlet if APP= is found
+      # Step 4: Process the ct/*.sh files and update .app-headers
       - name: Update .app-headers with figlet output
         run: |
           echo "Updating .app-headers with figlet output."
-          for file in ct/*.sh; do
-            if grep -q "APP=" "$file"; then
-              APP_NAME=$(grep -oP 'APP=\K.*' "$file")
-              echo "Processing $file for APP: $APP_NAME"
+          for script in ct/*.sh; do
+            if grep -q 'APP=' "$script"; then
+              APP_NAME=$(grep -oP 'APP=\K\w+' "$script")
+              echo "Processing $script for APP: \"$APP_NAME\""
               figlet "$APP_NAME" >> ct/.app-headers
             fi
           done
-          
-      # Step 7: Commit the changes to .app-headers
-      - name: Commit updated .app-headers
-        run: |
-          git diff --quiet -- ct/.app-headers || git commit -am "[core]: update .app-headers to latest version"
-          git push origin update-app-headers --force
 
-      # Step 8: Create Pull Request to merge changes into main
-      - name: Create Pull Request if changes detected
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Step 5: Check out and merge main into the update-app-headers branch without committing
+      - name: Merge main into update-app-headers
+        run: |
+          git fetch origin
+          git checkout update-app-headers
+          git merge origin/main --no-ff --no-commit -m "Merge main into update-app-headers"
+          echo "Merge complete. Please review and commit the changes manually."
+
+      # Step 6: Check if a PR exists and create one if it doesn't
+      - name: Create Pull Request if not exists
         run: |
           PR_EXISTS=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
+
           if [ -z "$PR_EXISTS" ]; then
             echo "Creating a new PR."
             PR_URL=$(gh pr create --title "[core]: update .app-headers to latest version" \
@@ -84,22 +64,3 @@ jobs:
           else
             echo "PR already exists."
           fi
-
-      # Step 9: Automatically merge PR
-      - name: Automatically merge PR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Attempting to merge PR."
-          PR_NUMBER=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
-          if [ -n "$PR_NUMBER" ]; then
-            gh pr merge "$PR_NUMBER" --merge --admin --delete-branch
-            echo "PR merged successfully."
-          else
-            echo "No PR found to merge."
-          fi
-
-      # Step 10: Final status output
-      - name: Output final status
-        run: |
-          echo "Workflow completed successfully. Branch and PR status updated."
