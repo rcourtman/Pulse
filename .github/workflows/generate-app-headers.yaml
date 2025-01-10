@@ -6,7 +6,6 @@ on:
       - closed
     branches:
       - main
-    # Trigger nur, wenn der PR gemerged wurde
     if: github.event.pull_request.merged == true
   schedule:
     - cron: "59 23 * * *"  # Führen den Workflow täglich um 23:59 UTC aus
@@ -49,26 +48,26 @@ jobs:
         run: |
           git merge origin/main --no-edit || echo "No changes to merge from main."
 
-      # Step 5: Identify changes in .sh files
-      - name: Check for .sh files and extract app names
+      # Step 5: Identify added .sh files and extract app names
+      - name: Check for added .sh files and extract app names
         id: detect_sh_files
         run: |
-          # Get the list of changed files in the PR
-          CHANGED_FILES=$(git diff --name-only HEAD origin/main)
+          # Get the list of added files in the PR (new .sh files)
+          ADDED_FILES=$(git diff --name-only --diff-filter=A HEAD origin/main)
           
-          # Find .sh files and extract app names
-          CHANGED_SH_FILES=$(echo "$CHANGED_FILES" | grep '\.sh$')
+          # Filter out the .sh files
+          ADDED_SH_FILES=$(echo "$ADDED_FILES" | grep '\.sh$')
           
-          if [ -z "$CHANGED_SH_FILES" ]; then
-            echo "No .sh files changed."
+          if [ -z "$ADDED_SH_FILES" ]; then
+            echo "No new .sh files added."
             exit 0
           else
-            echo "Changed .sh files detected:"
-            echo "$CHANGED_SH_FILES"
+            echo "New .sh files added:"
+            echo "$ADDED_SH_FILES"
             
-            # Extract app names from the file names or content
+            # Extract app names from the file names
             APP_NAMES=""
-            for FILE in $CHANGED_SH_FILES; do
+            for FILE in $ADDED_SH_FILES; do
               # Assuming the app name is part of the file name (e.g., 'appName.sh')
               APP_NAME=$(basename "$FILE" .sh)
               APP_NAMES="$APP_NAMES$APP_NAME "
