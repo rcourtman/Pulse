@@ -6,17 +6,19 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-combined:
+  update-and-merge-pr:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  
+      contents: write
+      pull-requests: write
+
     steps:
       - name: Generate a token
         id: generate-token
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ secrets.CREATE_HEADER_APP_ID }}  
-          private-key: ${{ secrets.CREATE_HEADER_SECRET }} 
+          private-key: ${{ secrets.CREATE_HEADER_SECRET }}
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,12 +32,45 @@ jobs:
         run: |
           bash .github/workflows/generate-app-headers.sh
 
-      - name: Commit and push changes
-        env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+      - name: Create or update branch
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add ./misc/.app-headers
-          git commit -m "Update .app-headers in /misc" || echo "No changes to commit"
-          git push origin main
+          # Check if the branch exists
+          git fetch origin
+          git checkout -b update-app-headers || git checkout update-app-headers
+          
+          # Make your changes, e.g., update app-headers file
+          echo "update app-headers to latest" >> misc/.app-headers
+          
+          git add misc/.app-headers
+          git commit -m "update app-headers to latest"
+          
+          # Push changes to the branch
+          git push origin update-app-headers --force
+
+      - name: Create pull request
+        id: create-pr
+        run: |
+          PR_EXISTS=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
+          if [ -z "$PR_EXISTS" ]; then
+            gh pr create --title "Update app-headers to latest" \
+                         --body "This PR automatically updates the app-headers file." \
+                         --head update-app-headers \
+                         --base main \
+                         --label "automated"
+          fi
+
+      - name: Approve pull request
+        if: steps.create-pr.outputs.pr_exists == 'true'
+        run: |
+          PR_NUMBER=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr review $PR_NUMBER --approve --body "Approved automatically by GitHub Action."
+          fi
+
+      - name: Merge pull request
+        if: steps.create-pr.outputs.pr_exists == 'true'
+        run: |
+          PR_NUMBER=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr merge $PR_NUMBER --merge --auto --delete-branch
+          fi
