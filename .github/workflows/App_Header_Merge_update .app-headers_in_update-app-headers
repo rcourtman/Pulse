@@ -24,7 +24,10 @@ jobs:
           for script in ct/*.sh; do
             if grep -q 'APP=' "$script"; then
               APP_NAME=$(grep -oP 'APP=\K\w+' "$script")
-              figlet "$APP_NAME" >> ct/.app-headers 2>/dev/null
+              if [ ! -z "$APP_NAME" ]; then
+                echo "Adding $APP_NAME to .app-headers"
+                figlet "$APP_NAME" >> ct/.app-headers 2>/dev/null || echo "figlet failed for $APP_NAME"
+              fi
             fi
           done
         env:
