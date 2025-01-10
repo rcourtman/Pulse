@@ -53,6 +53,8 @@ jobs:
 
       - name: Create pull request
         id: create-pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_EXISTS=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
           if [ -z "$PR_EXISTS" ]; then
@@ -65,6 +67,8 @@ jobs:
 
       - name: Approve pull request
         if: steps.create-pr.outputs.pr_exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
           if [ -n "$PR_NUMBER" ]; then
@@ -73,6 +77,8 @@ jobs:
 
       - name: Merge pull request
         if: steps.create-pr.outputs.pr_exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           PR_NUMBER=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
           if [ -n "$PR_NUMBER" ]; then
