@@ -52,13 +52,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_EXISTS=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
+          PR_EXISTS=$(gh pr list --head "update-app-headers" | grep -o '[0-9]\+')
           if [ -z "$PR_EXISTS" ]; then
             echo "Creating a new PR."
             PR_URL=$(gh pr create --title "[core]: update .app-headers to latest version" \
                                    --body "This PR automatically updates the .app-headers file." \
                                    --head update-app-headers \
-                                   --base main --json url -q .url)
+                                   --base main -q .url)
             echo "PR created: $PR_URL"
           else
             echo "PR already exists."
@@ -70,7 +70,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Attempting to merge PR."
-          PR_NUMBER=$(gh pr list --head "update-app-headers" --json number --jq '.[].number')
+          PR_NUMBER=$(gh pr list --head "update-app-headers" | grep -o '[0-9]\+')
           if [ -n "$PR_NUMBER" ]; then
             gh pr merge "$PR_NUMBER" --merge --admin --delete-branch
             echo "PR merged successfully."
