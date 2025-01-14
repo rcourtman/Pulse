@@ -34,17 +34,18 @@ jobs:
       env:
         INPUT_VERSION: "v0.10.0"
       run: |
+        set -euo pipefail
         if [[ "${{ runner.os }}" == "macOS" ]]; then
           osvariant="darwin"
         else
           osvariant="linux"
         fi
-
+    
         baseurl="https://github.com/koalaman/shellcheck/releases/download"
-
         curl -Lso "${{ github.action_path }}/sc.tar.xz" \
           "${baseurl}/${INPUT_VERSION}/shellcheck-${INPUT_VERSION}.${osvariant}.x86_64.tar.xz"
-
+    
+        mkdir -p "${{ github.action_path }}/shellcheck-${INPUT_VERSION}"
         tar -xf "${{ github.action_path }}/sc.tar.xz" -C "${{ github.action_path }}"
         mv "${{ github.action_path }}/shellcheck-${INPUT_VERSION}/shellcheck" \
           "${{ github.action_path }}/shellcheck"
