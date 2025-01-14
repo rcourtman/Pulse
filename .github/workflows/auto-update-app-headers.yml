@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'ct/**.sh'
+    workflow_dispatch: 
 
 jobs:
   auto-update:
