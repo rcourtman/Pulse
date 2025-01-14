@@ -29,8 +29,11 @@ jobs:
           git fetch origin
           git checkout main
           git pull origin main
-          BRANCH_NAME="update-app-headers-$(date +'%Y-%m-%d-%H-%M-%S')"
+          
+          # Feste Branch-Name für Debugging
+          BRANCH_NAME="update-app-headers-branch"
           echo "Branch name: $BRANCH_NAME"  # Debugging
+          
           git checkout -b "$BRANCH_NAME"
           echo "Created and switched to branch $BRANCH_NAME"
           
