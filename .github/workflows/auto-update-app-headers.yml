@@ -32,6 +32,9 @@ jobs:
           BRANCH_NAME="update-app-headers-$(date +'%Y-%m-%d-%H-%M-%S')"
           git checkout -b "$BRANCH_NAME"
           echo "Created and switched to branch $BRANCH_NAME"
+          
+      - name: Install figlet
+        run: sudo apt-get install -y figlet
 
       # Step 4: Run the generate-app-headers.sh script to update .app-headers
       - name: Run generate-app-headers.sh to update .app-headers
