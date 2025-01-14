@@ -42,13 +42,20 @@ jobs:
         fi
     
         baseurl="https://github.com/koalaman/shellcheck/releases/download"
-        curl -Lso "${{ github.action_path }}/sc.tar.xz" \
+        
+        # ShellCheck herunterladen ins Arbeitsverzeichnis
+        curl -Lso "${{ github.workspace }}/sc.tar.xz" \
           "${baseurl}/${INPUT_VERSION}/shellcheck-${INPUT_VERSION}.${osvariant}.x86_64.tar.xz"
     
-        mkdir -p "${{ github.action_path }}/shellcheck-${INPUT_VERSION}"
-        tar -xf "${{ github.action_path }}/sc.tar.xz" -C "${{ github.action_path }}"
-        mv "${{ github.action_path }}/shellcheck-${INPUT_VERSION}/shellcheck" \
-          "${{ github.action_path }}/shellcheck"
+        # Entpacken und verschieben
+        tar -xf "${{ github.workspace }}/sc.tar.xz" -C "${{ github.workspace }}"
+        mv "${{ github.workspace }}/shellcheck-${INPUT_VERSION}/shellcheck" \
+          "${{ github.workspace }}/shellcheck"
+    
+        # Debugging: Zeige den Pfad und die Datei
+        echo "ShellCheck binary path:"
+        ls -l "${{ github.workspace }}/shellcheck"
+
 
     - name: Display shellcheck version
       shell: bash
