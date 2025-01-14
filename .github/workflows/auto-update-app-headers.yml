@@ -1,0 +1,63 @@
+name: Auto Update .app-headers with Hard Merge from Main
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ct/**.sh'
+
+jobs:
+  auto-update:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Checkout repository
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      # Step 2: Set up Git user
+      - name: Set up Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+
+      # Step 3: Reset update-app-headers to main
+      - name: Reset update-app-headers branch to main
+        run: |
+          git checkout -B update-app-headers origin/main
+          echo "Branch update-app-headers reset to match main"
+
+      # Step 4: Ensure .app-headers file exists
+      - name: Ensure .app-headers file exists
+        run: |
+          touch ct/.app-headers
+
+      # Step 5: Update .app-headers with figlet output
+      - name: Update .app-headers
+        run: |
+          output_file="./ct/.app-headers"
+          > "$output_file"  # Clear or create the file
+
+          current_date=$(date +"%m-%d-%Y")
+          echo "### Generated on $current_date" >> "$output_file"
+          echo "##################################################" >> "$output_file"
+          echo >> "$output_file"
+
+          find ./ct -type f -name "*.sh" | sort | while read -r script; do
+            app_name=$(grep -oP '^APP="\K[^"]+' "$script" 2>/dev/null)
+
+            if [[ -n "$app_name" ]]; then
+              figlet_output=$(figlet -f slant "$app_name" 2>/dev/null || echo "FIGLET ERROR: $app_name")
+              echo "### $(basename "$script")" >> "$output_file"
+              echo "APP=$app_name" >> "$output_file"
+              echo "$figlet_output" >> "$output_file"
+              echo >> "$output_file"
+            fi
+          done
+
+      # Step 6: Commit and push changes
+      - name: Commit and push changes
+        run: |
+          git add ct/.app-headers
+          git commit -m "Update .app-headers on $(date +"%Y-%m-%d")" || echo "No changes to commit"
+          git push --force origin update-app-headers
