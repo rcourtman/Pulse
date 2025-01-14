@@ -24,12 +24,7 @@ jobs:
         files: |
           **.sh
 
-    # This is a manual copy from https://github.com/ludeeus/action-shellcheck/blob/00b27aa7cb85167568cb48a3838b75f4265f2bca/action.yaml#L59
-    # Why? Because the action is not capable of adding ONLY a list of files.
-    # We aim to only check the files that have changed.
-    # This is used as we deal with a codebase that throws a lot of warnings.
-    # Checking only the changed files is a good compromise to improve the codebase over time.
-    - name: Download shellcheck
+    - name: Download ShellCheck
       shell: bash
       env:
         INPUT_VERSION: "v0.10.0"
@@ -40,31 +35,26 @@ jobs:
         else
           osvariant="linux"
         fi
-    
+
         baseurl="https://github.com/koalaman/shellcheck/releases/download"
-        
-        # ShellCheck herunterladen ins Arbeitsverzeichnis
         curl -Lso "${{ github.workspace }}/sc.tar.xz" \
           "${baseurl}/${INPUT_VERSION}/shellcheck-${INPUT_VERSION}.${osvariant}.x86_64.tar.xz"
-    
-        # Entpacken und verschieben
+
         tar -xf "${{ github.workspace }}/sc.tar.xz" -C "${{ github.workspace }}"
         mv "${{ github.workspace }}/shellcheck-${INPUT_VERSION}/shellcheck" \
           "${{ github.workspace }}/shellcheck"
-    
-        # Debugging: Zeige den Pfad und die Datei
-        echo "ShellCheck binary path:"
+
+    - name: Verify ShellCheck binary
+      run: |
         ls -l "${{ github.workspace }}/shellcheck"
 
-
-    - name: Display shellcheck version
-      shell: bash
+    - name: Display ShellCheck version
       run: |
-        "${{ github.action_path }}/shellcheck" --version
+        "${{ github.workspace }}/shellcheck" --version
 
     - name: Run ShellCheck
-      if: steps.changed-files-specific.outputs.any_changed == 'true'
+      if: steps.changed-files.outputs.any_changed == 'true'
       env:
         ALL_CHANGED_FILES: ${{ steps.changed-files.outputs.all_changed_files }}
       run: |
-        echo "${ALL_CHANGED_FILES}" | xargs shellcheck
+        echo "${ALL_CHANGED_FILES}" | xargs "${{ github.workspace }}/shellcheck"
