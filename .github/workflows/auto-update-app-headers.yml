@@ -30,6 +30,7 @@ jobs:
           git checkout main
           git pull origin main
           BRANCH_NAME="update-app-headers-$(date +'%Y-%m-%d-%H-%M-%S')"
+          echo "Branch name: $BRANCH_NAME"  # Debugging
           git checkout -b "$BRANCH_NAME"
           echo "Created and switched to branch $BRANCH_NAME"
           
@@ -47,6 +48,7 @@ jobs:
       # Step 5: Push changes to the new branch
       - name: Push changes to the new branch
         run: |
+          echo "Pushing changes to branch $BRANCH_NAME"  # Debugging
           git add ./misc/.app-headers
           git commit -m "Update .app-headers file"
           git push origin "$BRANCH_NAME"
