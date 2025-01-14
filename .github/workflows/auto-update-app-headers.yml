@@ -6,59 +6,52 @@ on:
       - main
     paths:
       - 'ct/**.sh'
-  workflow_dispatch: 
+  workflow_dispatch:  # Ermöglicht das manuelle Ausführen der Action
 
 jobs:
-  auto-update:
+  update-app-headers:
     runs-on: ubuntu-latest
+
     steps:
-      # Step 1: Checkout repository
+      # Step 1: Checkout the repository
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # Step 2: Set up Git user
+      # Step 2: Set up Git user for committing changes
       - name: Set up Git
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
 
-      # Step 3: Reset update-app-headers to main
-      - name: Reset update-app-headers branch to main
+      # Step 3: Create a new branch from main
+      - name: Create a new branch based on main
         run: |
-          git checkout -B update-app-headers origin/main
-          echo "Branch update-app-headers reset to match main"
+          git fetch origin
+          git checkout main
+          git pull origin main
+          BRANCH_NAME="update-app-headers-$(date +'%Y-%m-%d-%H-%M-%S')"
+          git checkout -b "$BRANCH_NAME"
+          echo "Created and switched to branch $BRANCH_NAME"
 
-      # Step 4: Ensure .app-headers file exists
-      - name: Ensure .app-headers file exists
+      # Step 4: Run the generate-app-headers.sh script to update .app-headers
+      - name: Run generate-app-headers.sh to update .app-headers
         run: |
-          touch ct/.app-headers
+          chmod +x .github/workflows/generate-app-headers.sh
+          .github/workflows/generate-app-headers.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 5: Update .app-headers with figlet output
-      - name: Update .app-headers
+      # Step 5: Push changes to the new branch
+      - name: Push changes to the new branch
         run: |
-          output_file="./ct/.app-headers"
-          > "$output_file"  # Clear or create the file
+          git add ./misc/.app-headers
+          git commit -m "Update .app-headers file"
+          git push origin "$BRANCH_NAME"
 
-          current_date=$(date +"%m-%d-%Y")
-          echo "### Generated on $current_date" >> "$output_file"
-          echo "##################################################" >> "$output_file"
-          echo >> "$output_file"
-
-          find ./ct -type f -name "*.sh" | sort | while read -r script; do
-            app_name=$(grep -oP '^APP="\K[^"]+' "$script" 2>/dev/null)
-
-            if [[ -n "$app_name" ]]; then
-              figlet_output=$(figlet -f slant "$app_name" 2>/dev/null || echo "FIGLET ERROR: $app_name")
-              echo "### $(basename "$script")" >> "$output_file"
-              echo "APP=$app_name" >> "$output_file"
-              echo "$figlet_output" >> "$output_file"
-              echo >> "$output_file"
-            fi
-          done
-
-      # Step 6: Commit and push changes
-      - name: Commit and push changes
+      # Step 6: Delete the created branch locally and remotely after push
+      - name: Delete the branch after push
         run: |
-          git add ct/.app-headers
-          git commit -m "Update .app-headers on $(date +"%Y-%m-%d")" || echo "No changes to commit"
-          git push --force origin update-app-headers
+          git push origin --delete "$BRANCH_NAME"  # Delete remote branch
+          git checkout main
+          git branch -D "$BRANCH_NAME"  # Delete local branch
+          echo "Branch $BRANCH_NAME deleted."
