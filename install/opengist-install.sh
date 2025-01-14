@@ -16,7 +16,8 @@ msg_info "Installing Dependencies"
 $STD apt-get install -y \
     mc \
     curl \
-    sudo
+    sudo \
+    git
 msg_ok "Installed Dependencies"
 
 msg_info "Install Opengist"
@@ -40,7 +41,7 @@ After=network.target
 
 [Service]
 WorkingDirectory=/opt/opengist
-ExecStart=/opt/opengist/opengist --config config.yaml
+ExecStart=/opt/opengist/opengist --config /opt/opengist/config.yml
 Restart=always
 User=root
 
