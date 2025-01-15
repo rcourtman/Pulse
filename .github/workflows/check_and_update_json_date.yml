@@ -1,4 +1,4 @@
-name: Update JSON and Push Changes
+name: Update JSON Date and Push Changes
 
 on:
   push:
@@ -10,33 +10,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v3
-
-      - name: Authenticate with GitHub App
-        uses: tibdex/github-app-token@v1
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
         with:
-          app_id: ${{ secrets.JSON_APP_ID }}
-          private_key: ${{ secrets.JSON_APP_KEY }}
+          app-id: ${{ vars.JSON_APP_ID }}
+          private-key: ${{ secrets.JSON_APP_KEY }}
 
-      - name: Modify JSON file
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up authentication
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          JSON_FILE="json/mailrise.json"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global credential.helper 'store'
+          echo "https://github-actions[bot]:$GH_TOKEN@github.com" > ~/.git-credentials
+
+      - name: Modify JSON file(s)
+        run: |
           TODAY=$(date -u +%Y-%m-%d)
-          
-          if [ -f "$JSON_FILE" ]; then
-            echo "Updating date_created in $JSON_FILE to $TODAY"
-            jq --arg today "$TODAY" '.date_created = $today' $JSON_FILE > tmp.json && mv tmp.json $JSON_FILE
-          else
-            echo "File $JSON_FILE does not exist."
-            exit 1
-          fi
+          for json_file in $(find . -type f -name "*.json"); do
+            jq --arg today "$TODAY" '.date_created = $today' "$json_file" > tmp.json && mv tmp.json "$json_file"
+          done
 
       - name: Commit changes
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add json/mailrise.json
-          git commit -m "Update date_created in mailrise.json to $TODAY"
+          git add *.json
+          git commit -m "Update date_created in JSON files to $TODAY"
           git push origin main
-
