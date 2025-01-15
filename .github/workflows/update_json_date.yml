@@ -1,27 +1,25 @@
-name: Update date_created in PR JSON files
+name: Update JSON Date in PR
 
 on:
   pull_request:
-    types: [opened, synchronize]
+    paths:
+      - '.github/workflows/scripts/*.sh'
+      - 'json/*.json'
+    types: [opened, synchronize, reopened]
+
   schedule:
-    - cron: "0 0,6,12,18 * * *"  
-  workflow_dispatch:  
+    - cron: '0 */2 * * *' 
 
 jobs:
-  update-date:
+  update_json:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout PR
+      - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}  
 
-      - name: Install yq
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
+      - name: Make script executable
+        run: chmod +x .github/workflows/scripts/update_json_date.sh
 
-      - name: Update date in JSON
-        run: |
-          ./update_json_date.sh
+      - name: Run the update script
+        run: ./.github/workflows/scripts/update_json_date.sh
