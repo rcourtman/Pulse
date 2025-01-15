@@ -33,11 +33,15 @@ jobs:
         run: |
           TODAY=$(date -u +%Y-%m-%d)
           for json_file in $(find . -type f -name "*.json"); do
-            jq --arg today "$TODAY" '.date_created = $today' "$json_file" > tmp.json && mv tmp.json "$json_file"
+            # Ensure the JSON structure is an object
+            if jq -e 'type == "object"' "$json_file" > /dev/null 2>&1; then
+              # Update the date_created field
+              jq --arg today "$TODAY" '.date_created = $today' "$json_file" > tmp.json && mv tmp.json "$json_file"
+            fi
           done
 
       - name: Commit changes
         run: |
           git add *.json
-          git commit -m "Update date_created in JSON files to $TODAY"
+          git commit -m "Update date_created to $TODAY"
           git push origin main
