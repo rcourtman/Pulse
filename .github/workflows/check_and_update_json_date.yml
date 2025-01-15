@@ -36,5 +36,5 @@ jobs:
       - name: Commit changes
         run: |
           git add *.json
-          git commit -m "Update date_created to $TODAY"
+          git commit -m "Update date_created to $TODAY" || echo "No changes to commit"
           git push origin ${{ github.head_ref }}  # Push direkt in den PR-Branch
