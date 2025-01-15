@@ -3,12 +3,11 @@ name: Update JSON Date in PR
 on:
   pull_request:
     paths:
-      - '.github/workflows/scripts/*.sh'
       - 'json/*.json'
     types: [opened, synchronize, reopened]
 
   schedule:
-    - cron: '0 */2 * * *' 
+    - cron: '0 */2 * * *'  # Alle 2 Stunden
 
 jobs:
   update_json:
@@ -18,8 +17,29 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Configure Git user
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+
+      - name: Get the PR branch
+        run: |
+          echo "Fetching PR branch"
+          PR_BRANCH=$(jq --raw-output .pull_request.head.ref "$GITHUB_EVENT_PATH")
+          echo "PR Branch is $PR_BRANCH"
+
+      - name: Checkout PR branch
+        run: git checkout $PR_BRANCH
+
       - name: Make script executable
         run: chmod +x .github/workflows/scripts/update_json_date.sh
 
       - name: Run the update script
         run: ./.github/workflows/scripts/update_json_date.sh
+
+      - name: Commit changes if updated
+        run: |
+          git add *.json
+          git diff --cached --quiet || git commit -m "Update JSON dates"
+          git push
+        continue-on-error: true
