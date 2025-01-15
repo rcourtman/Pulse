@@ -28,12 +28,23 @@ jobs:
       - name: Check and modify JSON files
         run: |
           TODAY=$(date -u +%Y-%m-%d)
-          # Überprüfen, ob JSON-Dateien vorhanden sind und das Datum setzen
+          
+          # Durchsuchen der Verzeichnisse nach JSON-Dateien
           for json_file in $(find . -name "*.json"); do
-            if jq -e 'type == "object"' "$json_file" > /dev/null 2>&1; then
-              current_date=$(jq -r '.date_created' "$json_file")
+            if python3 -c "import json, sys; print(json.load(sys.stdin).get('date_created'))" < "$json_file" &>/dev/null; then
+              current_date=$(python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('date_created'))" < "$json_file")
               if [ "$current_date" != "$TODAY" ]; then
-                jq --arg today "$TODAY" '.date_created = $today' "$json_file" > tmp.json && mv tmp.json "$json_file"
+                python3 -c "
+import json
+import sys
+
+# Lade die JSON-Datei
+with open('$json_file', 'r+') as file:
+    data = json.load(file)
+    data['date_created'] = '$TODAY'  # Setze das 'date_created' auf das heutige Datum
+    file.seek(0)
+    json.dump(data, file, indent=4)
+    file.truncate()  # Truncate file to remove any extra content"
                 git add "$json_file"
               fi
             fi
