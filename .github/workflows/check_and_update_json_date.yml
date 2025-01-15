@@ -6,7 +6,7 @@ on:
     paths:
     - "json/*.json"
   schedule:
-    - cron: "0 0,6,12,18 * * *" 
+    - cron: "0 0,6,12,18 * * *" # Viermal täglich
   workflow_dispatch:
 
 jobs:
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.ref }} 
+          ref: ${{ github.event.pull_request.head.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -38,33 +38,11 @@ jobs:
             fi
           done
 
-      - name: Commit changes
+      - name: Commit and push changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
         run: |
-          git config user.name "GitHub Action"
-          git config user.email "action@github.com"
+          git config user.name "GitHub Bot"
+          git config user.email "bot@github.com"
           git commit -m "Update date_created in new JSON files" || echo "No changes to commit"
-
-      - name: Push changes
-        uses: ad-m/github-push-action@v0.6.0
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-
-  iterate-prs:
-    needs: update-date
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install GitHub CLI
-        run: sudo apt-get install -y gh
-
-      - name: List all open PRs
-        run: |
-          gh pr list --state open --json number,title > pr_list.json
-          jq -r '.[] | .number' pr_list.json > pr_numbers.txt
-
-      - name: Process each PR
-        run: |
-          while read pr_number; do
-            gh pr checkout $pr_number
-            git fetch origin
-            git checkout origin/$pr_number
-          done < pr_numbers.txt
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
