@@ -1,19 +1,20 @@
-name: Update JSON Date and Push Changes
+name: Update JSON Date in PR
 
 on:
+  schedule:
+    - cron: '0 0,6,12,18 * * *'  # Viermal täglich (Mitternacht, 6 Uhr, 12 Uhr, 18 Uhr UTC)
   pull_request:
     branches:
-      - main
+      - main  # Der PR muss gegen den Main-Branch geöffnet werden
 
 jobs:
-  update-json:
+  update-json-date:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout code
+      - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.head_ref }}  # Den PR-Branch auschecken
 
       - name: Set up authentication
         env:
@@ -24,17 +25,20 @@ jobs:
           git config --global credential.helper 'store'
           echo "https://json-updater-bot:$GH_TOKEN@github.com" > ~/.git-credentials
 
-      - name: Modify JSON files
+      - name: Check and modify JSON files
         run: |
           TODAY=$(date -u +%Y-%m-%d)
+          # Überprüfen, ob JSON-Dateien vorhanden sind und das Datum setzen
           for json_file in $(find . -name "*.json"); do
             if jq -e 'type == "object"' "$json_file" > /dev/null 2>&1; then
-              jq --arg today "$TODAY" '.date_created = $today' "$json_file" > tmp.json && mv tmp.json "$json_file"
+              current_date=$(jq -r '.date_created' "$json_file")
+              if [ "$current_date" != "$TODAY" ]; then
+                jq --arg today "$TODAY" '.date_created = $today' "$json_file" > tmp.json && mv tmp.json "$json_file"
+                git add "$json_file"
+              fi
             fi
           done
 
-      - name: Commit changes
+      - name: Commit changes if necessary
         run: |
-          git add *.json
-          git commit -m "Update date_created to $TODAY" || echo "No changes to commit"
-          git push origin ${{ github.head_ref }}  # Push direkt in den PR-Branch
+          git diff --quiet || (git commit -m "Update date_created to $TODAY" && git push origin ${{ github.head_ref }})
