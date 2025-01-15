@@ -16,20 +16,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}  # Stellt sicher, dass der PR-Branch ausgecheckt wird
 
       - name: Configure Git user
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
-
-      - name: Get the PR branch
-        run: |
-          echo "Fetching PR branch"
-          PR_BRANCH=$(jq --raw-output .pull_request.head.ref "$GITHUB_EVENT_PATH")
-          echo "PR Branch is $PR_BRANCH"
-
-      - name: Checkout PR branch
-        run: git checkout $PR_BRANCH
 
       - name: Make script executable
         run: chmod +x .github/workflows/scripts/update_json_date.sh
@@ -41,5 +34,11 @@ jobs:
         run: |
           git add *.json
           git diff --cached --quiet || git commit -m "Update JSON dates"
+
+      - name: Push changes with API keys
+        env:
+          JSON_API_ID: ${{ secrets.JSON_API_ID }}
+          JSON_API_KEY: ${{ secrets.JSON_API_KEY }}
+        run: |
+          git remote set-url origin https://$JSON_API_ID:$JSON_API_KEY@github.com/${{ github.repository }}.git
           git push
-        continue-on-error: true
