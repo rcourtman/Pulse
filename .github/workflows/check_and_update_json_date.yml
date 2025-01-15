@@ -5,6 +5,7 @@ on:
     paths:
       - '*.json'
     types: [opened, synchronize]
+  workflow_dispatch:
 
 jobs:
   update-date:
