@@ -27,8 +27,7 @@ jobs:
       - name: Modify JSON files
         run: |
           TODAY=$(date -u +%Y-%m-%d)
-          # Filtern der geänderten Dateien im aktuellen PR im Vergleich zum Basisbranch
-          for json_file in $(git diff --name-only ${{ github.base_ref }}...${{ github.head_ref }} | grep '.json$'); do
+          for json_file in $(find . -name "*.json"); do
             if jq -e 'type == "object"' "$json_file" > /dev/null 2>&1; then
               jq --arg today "$TODAY" '.date_created = $today' "$json_file" > tmp.json && mv tmp.json "$json_file"
             fi
