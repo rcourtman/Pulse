@@ -34,8 +34,8 @@ jobs:
       # Step 4: Run the generate-app-headers.sh script to update .app-headers
       - name: Run generate-app-headers.sh to update .app-headers
         run: |
-          chmod +x .github/workflows/generate-app-headers.sh
-          .github/workflows/generate-app-headers.sh
+          chmod +x .github/workflows/scripts/generate-app-headers.sh
+          .github/workflows/scripts/generate-app-headers.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
