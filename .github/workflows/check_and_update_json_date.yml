@@ -1,46 +1,47 @@
-name: Update Pull Request
+name: Update "date_created" in new JSON files
 
 on:
-  push:
-    branches-ignore: ["main"]
+  pull_request:
+    types:
+      - opened
+      - synchronize
   workflow_dispatch:
 
 jobs:
-  update-pr:
+  update-date-created:
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
 
     steps:
-      - name: Generate a token
-        id: generate-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - name: Checkout code
+      - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Update JSON files
+      - name: Identify new JSON files
+        id: new-json-files
         run: |
-          TODAY=$(date +%Y-%m-%d)
-          for file in $(git diff --diff-filter=A --name-only HEAD | grep '^json/.*\.json$'); do
-            if jq -e '.date_created' $file > /dev/null 2>&1; then
-              echo "Updating date_created in $file"
-              jq --arg date "$TODAY" '.date_created = $date' $file > temp.json && mv temp.json $file
-              git add $file
-            fi
+          BASE_BRANCH=$(jq -r '.base.ref' < "$GITHUB_EVENT_PATH")
+          git fetch origin $BASE_BRANCH
+          NEW_JSON_FILES=$(git diff --diff-filter=A --name-only origin/$BASE_BRANCH HEAD -- 'json/*.json')
+          echo "NEW_JSON_FILES=$NEW_JSON_FILES" >> $GITHUB_ENV
+
+      - name: Update date_created in new JSON files
+        if: env.NEW_JSON_FILES != ""
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+          for file in $NEW_JSON_FILES; do
+            echo "Updating date_created in $file"
+            jq --arg date "$TODAY" '.date_created = $date' "$file" > temp.json && mv temp.json "$file"
           done
 
-      - name: Commit and push changes to PR branch
-        env:
-          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+      - name: Commit and push changes
+        if: env.NEW_JSON_FILES != ""
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git commit -m "Update date_created in JSON files" || echo "No changes to commit"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }} --force
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add $NEW_JSON_FILES
+          git commit -m "Update date_created in new JSON files"
+          git push origin HEAD:${{ github.head_ref }}
