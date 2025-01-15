@@ -1,33 +1,31 @@
-name: Check and Update JSON Date
+name: Update Pull Request
 
 on:
-  pull_request:
-    types: [synchronize, opened, reopened, edited]
-    paths:
-    - "json/*.json"
-  schedule:
-    - cron: "0 0,6,12,18 * * *" # Viermal täglich
+  push:
+    branches-ignore: ["main"]
   workflow_dispatch:
 
 jobs:
-  update-date:
+  update-pr:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
 
     steps:
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.12
-
-      - name: Install dependencies
-        run: pip install jq
-
-      - name: Find and Update JSON files in /json folder
+      - name: Update JSON files
         run: |
           TODAY=$(date +%Y-%m-%d)
           for file in $(git diff --diff-filter=A --name-only HEAD | grep '^json/.*\.json$'); do
@@ -38,11 +36,11 @@ jobs:
             fi
           done
 
-      - name: Commit and push changes
+      - name: Commit and push changes to PR branch
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_BOT_TOKEN }}
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         run: |
-          git config user.name "GitHub Bot"
-          git config user.email "bot@github.com"
-          git commit -m "Update date_created in new JSON files" || echo "No changes to commit"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update date_created in JSON files" || echo "No changes to commit"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }} --force
