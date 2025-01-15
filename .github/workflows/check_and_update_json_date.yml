@@ -1,55 +1,32 @@
-name: Update JSON Date in PR
+name: Update Date Created in PR
 
 on:
-  schedule:
-    - cron: '0 0,6,12,18 * * *'  # Viermal täglich (Mitternacht, 6 Uhr, 12 Uhr, 18 Uhr UTC)
   pull_request:
-    branches:
-      - main  # Der PR muss gegen den Main-Branch geöffnet werden
+    paths:
+      - '*.json'
+    types: [opened, synchronize]
 
 jobs:
-  update-json-date:
+  update-date:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout PR branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}  # Den PR-Branch auschecken
+          ref: ${{ github.head_ref }}
 
-      - name: Set up authentication
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Install yq
         run: |
-          git config --global user.name "json-updater-bot"
-          git config --global user.email "json-updater-bot@users.noreply.github.com"
-          git config --global credential.helper 'store'
-          echo "https://json-updater-bot:$GH_TOKEN@github.com" > ~/.git-credentials
+          curl -sSL https://github.com/mikefarah/yq/releases/download/v4.18.1/yq_linux_amd64 -o /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
 
-      - name: Check and modify JSON files
+      - name: Update date_created in JSON
         run: |
           TODAY=$(date -u +%Y-%m-%d)
-          
-          # Durchsuchen der Verzeichnisse nach JSON-Dateien
-          for json_file in $(find . -name "*.json"); do
-            if python3 -c "import json, sys; print(json.load(sys.stdin).get('date_created'))" < "$json_file" &>/dev/null; then
-              current_date=$(python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('date_created'))" < "$json_file")
-              if [ "$current_date" != "$TODAY" ]; then
-                python3 -c "
-import json
-import sys
-
-# Lade die JSON-Datei
-with open('$json_file', 'r+') as file:
-    data = json.load(file)
-    data['date_created'] = '$TODAY'  # Setze das 'date_created' auf das heutige Datum
-    file.seek(0)
-    json.dump(data, file, indent=4)
-    file.truncate()  # Truncate file to remove any extra content"
-                git add "$json_file"
-              fi
-            fi
-          done
+          yq e '.date_created = strftime("%Y-%m-%d")' -i your_file.json
 
       - name: Commit changes if necessary
         run: |
+          git status
           git diff --quiet || (git commit -m "Update date_created to $TODAY" && git push origin ${{ github.head_ref }})
