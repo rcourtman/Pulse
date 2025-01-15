@@ -6,9 +6,6 @@ on:
       - 'json/*.json'
     types: [opened, synchronize, reopened]
 
-  schedule:
-    - cron: '0 */2 * * *'  # Alle 2 Stunden
-
 jobs:
   update_json:
     runs-on: ubuntu-latest
@@ -17,7 +14,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}  # Stellt sicher, dass der PR-Branch ausgecheckt wird
+          ref: ${{ github.head_ref }}
 
       - name: Configure Git user
         run: |
