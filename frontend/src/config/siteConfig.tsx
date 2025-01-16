@@ -1,6 +1,7 @@
 import { OperatingSystem } from "@/lib/types";
 import { MessagesSquare, Scroll } from "lucide-react";
 import { FaDiscord, FaGithub } from "react-icons/fa";
+import React from "react";
 
 export const basePath = process.env.BASE_PATH;
 
@@ -33,7 +34,7 @@ export const navbarLinks = [
         text: "Discussions",
       }
     : null,
-].filter(Boolean) as { href: string; event: string; icon: JSX.Element; text: string }[]; // Typ-Anpassung nach filter(Boolean)
+].filter(Boolean) as { href: string; event: string; icon: React.ReactNode; text: string }[];
 
 export const mostPopularScripts = [
   "Proxmox VE Post Install",
