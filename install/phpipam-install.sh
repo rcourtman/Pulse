@@ -19,6 +19,7 @@ $STD apt-get install -y \
   mc \
   mariadb-server \
   apache2 \
+  libapache2-mod-php \
   php8.2 php8.2-{fpm,curl,cli,mysql,gd,intl,imap,apcu,pspell,tidy,xmlrpc,mbstring,gmp,xml,ldap,common,snmp} \
   php-pear
 msg_ok "Installed Dependencies"
