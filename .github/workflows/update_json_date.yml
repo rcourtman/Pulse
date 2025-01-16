@@ -17,41 +17,49 @@ jobs:
       with:
         ref: ${{ github.head_ref }}
         token: ${{ secrets.JSON_APP_KEY }}
-    - name: Update Date in JSON-Files 
+        fetch-depth: 0
+        
+    - name: Check and Update New JSON Files
       run: |
         BASE_BRANCH=${{ github.event.pull_request.base.ref }}
         HEAD_BRANCH=${{ github.event.pull_request.head.ref }}
         
-        git fetch origin $BASE_BRANCH       
+        # Hole die Base-Branch
+        git fetch origin $BASE_BRANCH
         
-        CHANGED_FILES=$(git diff --name-only origin/$BASE_BRANCH HEAD)
+        # Finde nur neue Dateien im PR
+        NEW_FILES=$(git diff --name-status origin/$BASE_BRANCH HEAD | grep "^A" | awk '{print $2}' | grep '\.json$')
         
-        echo "Changed files: $CHANGED_FILES"
-               
-        for FILE in $CHANGED_FILES; do
-          if [[ "$FILE" =~ /(.*)\.sh ]]; then
-            echo ${BASH_REMATCH[1]}
-            NAME="$(echo "${BASH_REMATCH[1]}" | sed 's/-install//')"
-          elif [[ "$FILE" =~ /(.*)\.json ]]; then
-            NAME="${BASH_REMATCH[1]}"
-          else
-            echo "no Match on $FILE"
-            continue
-          fi
-          
-          JSON_FILE="json/${NAME}.json"
-          if [[ -f "$JSON_FILE" ]]; then
-            echo "Updating date_created in $JSON_FILE"
-            jq --arg date "$(date +%Y-%m-%d)" '.date_created = $date' "$JSON_FILE" > tmp.json && mv tmp.json "$JSON_FILE"
-          else
-            echo "JSON file $JSON_FILE not found"
+        echo "New JSON files found: $NEW_FILES"
+        
+        TODAY=$(date +%Y-%m-%d)
+        
+        for FILE in $NEW_FILES; do
+          if [ -f "$FILE" ]; then
+            echo "Checking $FILE"
+            
+            # Prüfe das date_created Feld
+            CURRENT_DATE=$(jq -r '.date_created' "$FILE")
+            
+            if [ "$CURRENT_DATE" != "$TODAY" ]; then
+              echo "Updating date_created in $FILE from $CURRENT_DATE to $TODAY"
+              jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
+            else
+              echo "date_created is already set to today in $FILE"
+            fi
           fi
         done
-             
+        
+        # Nur committen wenn es Änderungen gibt
         git config --global user.name "json-updater-bot[bot]"
         git config --global user.email "json-updater-bot[bot]@users.noreply.github.com"
-        git diff --exit-code || git commit -am "Updating Dates in affected JSON files."
-        git push 
+        
+        if [[ -n $(git status -s) ]]; then
+          git commit -am "Update date_created to today's date in new JSON files"
+          git push
+        else
+          echo "No changes needed"
+        fi
       env:
         GH_TOKEN: ${{ secrets.JSON_APP_KEY }}
         APP_ID: ${{ secrets.JSON_APP_ID }}
