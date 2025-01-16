@@ -7,42 +7,52 @@ jobs:
   list-files:
     runs-on: ubuntu-latest
     steps:
-    - name: Checkout PR Branch
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.pull_request.base.ref }}
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          # Hier wird zunächst der base-Branch (z.B. 'main' oder 'master') ausgecheckt
+          ref: ${{ github.event.pull_request.base.ref }}
 
-    - name: Fetch PR changes
-      run: |
+      - name: Fetch PR changes
+        run: |
+          # Remote 'fork' zeigt auf das Repo des PR-Erstellers
           git remote add fork https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git
+          # Hole den Branch vom Fork und nenne ihn lokal 'pullreq'
           git fetch fork ${{ github.event.pull_request.head.ref }}:pullreq
           git checkout pullreq
 
-    - name: Update JSON
-      id: changed-files
-      run: |
+      - name: Update JSON
+        run: |
+          # Liste geänderte Dateien im PR auf
           FILES=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --jq '.[].filename' | tr '\n' ' ')
           echo "changed_files=${FILES}"
+
+          # Für jede geänderte Datei prüfen, ob es eine .json ist.
           for FILE in $FILES; do
             if [[ "$FILE" =~ /(.*)\.json ]]; then
               NAME="${BASH_REMATCH[1]}"
             else
-              echo "no new JSON in ${FILES}"
+              echo "no new JSON in $FILE"
               continue
             fi
-          
+
             JSON_FILE="json/${NAME}.json"
             if [[ -f "$JSON_FILE" ]]; then
               echo "Updating date_created in $JSON_FILE"
               jq --arg date "$(date +%Y-%m-%d)" '.date_created = $date' "$JSON_FILE" > tmp.json && mv tmp.json "$JSON_FILE"
             else
-              echo "JSON file $FILES not found"
+              echo "JSON file ${JSON_FILE} not found"
             fi
           done
-             
+          
+          # Git-Config und Commit
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Commit nur, wenn Änderungen stattgefunden haben
           git diff --exit-code || git commit -am "Updating Dates in affected JSON files."
-          git push 
-      env:
+
+          # WICHTIG: Upstream-Branch setzen und pushen
+          git push --set-upstream origin pullreq
+        env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
