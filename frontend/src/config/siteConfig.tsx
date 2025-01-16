@@ -2,9 +2,9 @@ import { OperatingSystem } from "@/lib/types";
 import { MessagesSquare, Scroll } from "lucide-react";
 import { FaDiscord, FaGithub } from "react-icons/fa";
 
-const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
-
 export const basePath = process.env.BASE_PATH;
+
+const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
 
 export const navbarLinks = [
   {
@@ -25,13 +25,15 @@ export const navbarLinks = [
     icon: <Scroll className="h-4 w-4" />,
     text: "Change Log",
   },
-  !isMobile && {
-    href: `https://github.com/community-scripts/${basePath}/discussions`,
-    event: "Discussions",
-    icon: <MessagesSquare className="h-4 w-4" />,
-    text: "Discussions",
-  },
-].filter(Boolean); 
+  !isMobile
+    ? {
+        href: `https://github.com/community-scripts/${basePath}/discussions`,
+        event: "Discussions",
+        icon: <MessagesSquare className="h-4 w-4" />,
+        text: "Discussions",
+      }
+    : null,
+].filter(Boolean);
 
 export const mostPopularScripts = [
   "Proxmox VE Post Install",
