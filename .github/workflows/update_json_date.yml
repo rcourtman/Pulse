@@ -1,5 +1,4 @@
 name: Update JSON Date on PR
-
 on:
   pull_request:
     branches:
@@ -8,23 +7,18 @@ on:
       - opened
       - synchronize
       - reopened
-permissions:
-  contents: write
-  pull-requests: write
 
 jobs:
   update-json-date:
     runs-on: ubuntu-latest
-
     steps:
     - name: Checkout PR Branch
       uses: actions/checkout@v4
       with:
         ref: ${{ github.head_ref }}
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.JSON_APP_KEY }}
     - name: Update Date in JSON-Files 
       run: |
-        
         BASE_BRANCH=${{ github.event.pull_request.base.ref }}
         HEAD_BRANCH=${{ github.event.pull_request.head.ref }}
         
@@ -36,7 +30,7 @@ jobs:
                
         for FILE in $CHANGED_FILES; do
           if [[ "$FILE" =~ /(.*)\.sh ]]; then
-            echo ${BASE_REAMTCH[1]}
+            echo ${BASH_REMATCH[1]}
             NAME="$(echo "${BASH_REMATCH[1]}" | sed 's/-install//')"
           elif [[ "$FILE" =~ /(.*)\.json ]]; then
             NAME="${BASH_REMATCH[1]}"
@@ -46,7 +40,6 @@ jobs:
           fi
           
           JSON_FILE="json/${NAME}.json"
-
           if [[ -f "$JSON_FILE" ]]; then
             echo "Updating date_created in $JSON_FILE"
             jq --arg date "$(date +%Y-%m-%d)" '.date_created = $date' "$JSON_FILE" > tmp.json && mv tmp.json "$JSON_FILE"
@@ -55,9 +48,10 @@ jobs:
           fi
         done
              
-        git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "json-updater-bot[bot]"
+        git config --global user.email "json-updater-bot[bot]@users.noreply.github.com"
         git diff --exit-code || git commit -am "Updating Dates in affected JSON files."
         git push 
       env:
-        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GH_TOKEN: ${{ secrets.JSON_APP_KEY }}
+        APP_ID: ${{ secrets.JSON_APP_ID }}
