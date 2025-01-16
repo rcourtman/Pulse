@@ -10,7 +10,13 @@ jobs:
     - name: Checkout PR Branch
       uses: actions/checkout@v4
       with:
-        ref: ${{ github.head_ref }}
+        ref: ${{ github.event.pull_request.base.ref }}
+
+    - name: Fetch PR changes
+      run: |
+          git remote add fork https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git
+          git fetch fork ${{ github.event.pull_request.head.ref }}:pullreq
+          git checkout pullreq
 
     - name: Update JSON
       id: changed-files
