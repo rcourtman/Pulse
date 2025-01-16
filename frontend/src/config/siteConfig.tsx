@@ -33,7 +33,7 @@ export const navbarLinks = [
         text: "Discussions",
       }
     : null,
-].filter(Boolean);
+].filter(Boolean) as { href: string; event: string; icon: JSX.Element; text: string }[]; // Typ-Anpassung nach filter(Boolean)
 
 export const mostPopularScripts = [
   "Proxmox VE Post Install",
