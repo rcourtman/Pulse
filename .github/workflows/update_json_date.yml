@@ -1,62 +1,61 @@
 name: Update JSON Date on PR
 on:
-  pull_request:
-    branches:
-      - main
-    types:
-      - opened
-      - synchronize
-      - reopened
+ pull_request:
+   branches:
+     - main
+   types:
+     - opened
+     - synchronize
+     - reopened
+
+permissions:
+ contents: write
+ pull-requests: write
 
 jobs:
-  update-json-date:
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout PR Branch
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ github.head_ref }}
-        token: ${{ secrets.JSON_APP_KEY }}
-        fetch-depth: 0
-        persist-credentials: true
-        
-    - name: Check and Update New JSON Files
-      run: |
-        git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
-        BASE_BRANCH=${{ github.event.pull_request.base.ref }}
-        HEAD_BRANCH=${{ github.event.pull_request.head.ref }}
-        git fetch origin $BASE_BRANCH
-        NEW_FILES=$(git diff --name-status origin/$BASE_BRANCH HEAD | grep "^A" | awk '{print $2}' | grep '\.json$')
-        
-        echo "New JSON files found: $NEW_FILES"
-        
-        TODAY=$(date +%Y-%m-%d)
-        
-        for FILE in $NEW_FILES; do
-          if [ -f "$FILE" ]; then
-            echo "Checking $FILE"
-            
-            CURRENT_DATE=$(jq -r '.date_created' "$FILE")
-            
-            if [ "$CURRENT_DATE" != "$TODAY" ]; then
-              echo "Updating date_created in $FILE from $CURRENT_DATE to $TODAY"
-              jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
-            else
-              echo "date_created is already set to today in $FILE"
-            fi
-          fi
-        done
-        
-        git config --global user.name "json-updater-bot[bot]"
-        git config --global user.email "json-updater-bot[bot]@users.noreply.github.com"
-        
-        if [[ -n $(git status -s) ]]; then
-          git commit -am "Update date_created to today's date in new JSON files"
-          git push origin HEAD
-        else
-          echo "No changes needed"
-        fi
-      env:
-        GH_TOKEN: ${{ secrets.JSON_APP_KEY }}
-        GITHUB_TOKEN: ${{ secrets.JSON_APP_KEY }}
-        APP_ID: ${{ secrets.JSON_APP_ID }}
+ update-json-date:
+   runs-on: ubuntu-latest
+   steps:
+   - uses: actions/checkout@v4
+     with:
+       token: ${{ secrets.JSON_APP_KEY }}
+       fetch-depth: 0
+   
+   - run: |
+       echo "https://x-access-token:${GH_TOKEN}@github.com" > ~/.git-credentials
+       git config --global credential.helper store
+       git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+       
+       BASE_BRANCH=${{ github.event.pull_request.base.ref }}
+       HEAD_BRANCH=${{ github.event.pull_request.head.ref }}
+       
+       git fetch origin $BASE_BRANCH
+       
+       NEW_FILES=$(git diff --name-status origin/$BASE_BRANCH HEAD | grep "^A" | awk '{print $2}' | grep '\.json$')
+       
+       echo "New JSON files found: $NEW_FILES"
+       
+       TODAY=$(date +%Y-%m-%d)
+       
+       for FILE in $NEW_FILES; do
+         if [ -f "$FILE" ]; then
+           echo "Checking $FILE"
+           CURRENT_DATE=$(jq -r '.date_created' "$FILE")
+           if [ "$CURRENT_DATE" != "$TODAY" ]; then
+             echo "Updating date_created in $FILE from $CURRENT_DATE to $TODAY"
+             jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
+           fi
+         fi
+       done
+       
+       git config --global user.name "json-updater-bot[bot]"
+       git config --global user.email "json-updater-bot[bot]@users.noreply.github.com"
+       
+       if [[ -n $(git status -s) ]]; then
+         git commit -am "Update date_created to today's date in new JSON files"
+         git push origin HEAD
+       fi
+     env:
+       GH_TOKEN: ${{ secrets.JSON_APP_KEY }}
+       GITHUB_TOKEN: ${{ secrets.JSON_APP_KEY }}
+       APP_ID: ${{ secrets.JSON_APP_ID }}
