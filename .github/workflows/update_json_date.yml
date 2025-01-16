@@ -22,16 +22,10 @@ jobs:
         
     - name: Check and Update New JSON Files
       run: |
-        # Konfiguriere Git mit dem Token für HTTPS
         git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
-        
         BASE_BRANCH=${{ github.event.pull_request.base.ref }}
         HEAD_BRANCH=${{ github.event.pull_request.head.ref }}
-        
-        # Hole die Base-Branch
         git fetch origin $BASE_BRANCH
-        
-        # Finde nur neue Dateien im PR
         NEW_FILES=$(git diff --name-status origin/$BASE_BRANCH HEAD | grep "^A" | awk '{print $2}' | grep '\.json$')
         
         echo "New JSON files found: $NEW_FILES"
@@ -42,7 +36,6 @@ jobs:
           if [ -f "$FILE" ]; then
             echo "Checking $FILE"
             
-            # Prüfe das date_created Feld
             CURRENT_DATE=$(jq -r '.date_created' "$FILE")
             
             if [ "$CURRENT_DATE" != "$TODAY" ]; then
@@ -54,7 +47,6 @@ jobs:
           fi
         done
         
-        # Nur committen wenn es Änderungen gibt
         git config --global user.name "json-updater-bot[bot]"
         git config --global user.email "json-updater-bot[bot]@users.noreply.github.com"
         
