@@ -19,7 +19,8 @@ $STD apt-get install -y \
   mc \
   mariadb-server \
   apache2 \
-  php8.2-{pdo,mysql,sockets,gmp,ldap,simplexml,json,cli,mbstring,pear,gd,curl}
+  php8.2 php8.2-{fpm,curl,cli,mysql,gd,intl,imap,apcu,pspell,tidy,xmlrpc,mbstring,gmp,xml,ldap,common,snmp} \
+  php-pear
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up MariaDB"
