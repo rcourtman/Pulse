@@ -18,9 +18,13 @@ jobs:
         ref: ${{ github.head_ref }}
         token: ${{ secrets.JSON_APP_KEY }}
         fetch-depth: 0
+        persist-credentials: true
         
     - name: Check and Update New JSON Files
       run: |
+        # Konfiguriere Git mit dem Token für HTTPS
+        git config --global url."https://x-access-token:${GH_TOKEN}@github.com/".insteadOf "https://github.com/"
+        
         BASE_BRANCH=${{ github.event.pull_request.base.ref }}
         HEAD_BRANCH=${{ github.event.pull_request.head.ref }}
         
@@ -56,10 +60,11 @@ jobs:
         
         if [[ -n $(git status -s) ]]; then
           git commit -am "Update date_created to today's date in new JSON files"
-          git push
+          git push origin HEAD
         else
           echo "No changes needed"
         fi
       env:
         GH_TOKEN: ${{ secrets.JSON_APP_KEY }}
+        GITHUB_TOKEN: ${{ secrets.JSON_APP_KEY }}
         APP_ID: ${{ secrets.JSON_APP_ID }}
