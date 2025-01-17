@@ -14,8 +14,7 @@ body:
         - 🛠️ **Supported environments only:** Ensure you are using a default Linux distribution. Custom setups may not be supported.  
         - 🔎 If you encounter `[ERROR] in line 23: exit code *: while executing command "$@" > /dev/null 2>&1`, rerun the script with verbose mode before submitting the issue.  
         - 💡 For general questions, feature requests, or suggestions, use the [Discussions section](https://github.com/community-scripts/ProxmoxVE/discussions).  
----
-
+        
   - type: input
     id: guidelines
     attributes:
