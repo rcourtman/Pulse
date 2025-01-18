@@ -26,6 +26,13 @@ catch_errors
 
 function update_script() {
   header_info
+
+  # OS Check
+  if ! lsb_release -d | grep -q "Ubuntu 24.10"; then
+    msg_error "Wrong OS detected. This script only supports Ubuntu 24.10."
+    msg_error "Read Guide: https://github.com/community-scripts/ProxmoxVE/discussions/1549"
+    exit 1
+  fi
   check_container_storage
   check_container_resources
   if [[ ! -d /srv/homeassistant ]]; then
@@ -57,7 +64,7 @@ function update_script() {
 
     msg_info "Updating Home Assistant"
     source /srv/homeassistant/bin/activate
-    uv pip install ${BR}--upgrade homeassistant &>/dev/null
+    pip install ${BR}--upgrade homeassistant &>/dev/null
     msg_ok "Updated Home Assistant"
 
     msg_info "Starting Home Assistant"
