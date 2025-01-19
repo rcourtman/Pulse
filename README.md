@@ -17,7 +17,7 @@
       <img src="https://img.shields.io/badge/Discord-7289da?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" />
     </a> 
     <a href="https://ko-fi.com/community_scripts">
-      <img src="https://img.shields.io/badge/Donate-FF5F5F?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Donate" />
+      <img src="https://img.shields.io/badge/Support-FF5F5F?style=for-the-badge&logo=ko-fi&logoColor=white" alt="Donate" />
     </a>
     <a href="https://github.com/community-scripts/ProxmoxVE/blob/main/.github/CONTRIBUTING.md">
       <img src="https://img.shields.io/badge/Contribute-ff4785?style=for-the-badge&logo=git&logoColor=white" alt="Contribute" />
