@@ -24,9 +24,7 @@
 		{ "name": "Bots & ChatOps", "id": 22, "sort_order": 22.0 },
 		{ "name": "Finance & Budgeting", "id": 23, "sort_order": 23.0 },
 		{ "name": "Gaming & Leisure", "id": 24, "sort_order": 24.0 },
-		{ "name": "API Gateways & Microservices", "id": 26, "sort_order": 25.0 },
-		{ "name": "Email & Groupware", "id": 27, "sort_order": 26.0 },
-		{ "name": "Business & ERP", "id": 28, "sort_order": 27.0 },
+		{ "name": "Business & ERP", "id": 25, "sort_order": 25.0 },
 		{ "name": "Miscellaneous", "id": 0, "sort_order": 99.0 }
 	]
 }
