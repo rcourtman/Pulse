@@ -25,7 +25,7 @@ $STD apt-get install -y \
   composer \
   mariadb-server \
   libapache2-mod-php \
-  php8.2-{mbstring,gd,intl,pdo,mysql,tokenizer,zip,xml} 
+  php8.3-{mbstring,gd,intl,pdo,mysql,tokenizer,zip,xml} 
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up database"
