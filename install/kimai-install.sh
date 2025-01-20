@@ -35,6 +35,8 @@ $STD apt-get update
 msg_ok "Setup PHP8.4 Repository"
 
 msg_info "Setup PHP"
+$STD apt-get remove -y php8.2*
+$STD apt-get remove -y php8.3*
 $STD apt-get install -y \
   php8.4 \
   php8.4-{mbstring,gd,intl,common,mysql,zip,xml} \
