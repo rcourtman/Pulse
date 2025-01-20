@@ -32,8 +32,9 @@ $STD curl -sSLo /tmp/debsuryorg-archive-keyring.deb https://packages.sury.org/de
 $STD dpkg -i /tmp/debsuryorg-archive-keyring.deb
 $STD sh -c 'echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
 $STD apt-get update
-
 msg_ok "Setup PHP8.4 Repository"
+
+msg_info "Setup PHP"
 $STD apt-get install -y \
   php8.4-{mbstring,gd,intl,common,mysql,zip,xml} \
   libapache2-mod-php8.4
