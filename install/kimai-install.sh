@@ -87,6 +87,7 @@ send "helper-scripts.com\r"
 
 expect eof
 EOF
+$STD composer update --no-interaction
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed Kimai"
 
