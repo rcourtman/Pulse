@@ -2,6 +2,7 @@
     "name": "phpIPAM",
     "slug": "phpipam",
     "categories": [
+        4
     ],
     "date_created": "2025-01-15",
     "type": "ct",
