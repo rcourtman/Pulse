@@ -19,7 +19,7 @@
 		{ "name": "ZigBee, Z-Wave & Matter", "id": 17, "sort_order": 17.0 },
 		{ "name": "MQTT & Messaging", "id": 18, "sort_order": 18.0 },
 		{ "name": "Automation & Scheduling", "id": 19, "sort_order": 19.0 },
-		{ "name": "Coding & Dev Tools", "id": 20, "sort_order": 20.0 },
+		{ "name": "AI / Coding & Dev-Tools", "id": 20, "sort_order": 20.0 },
 		{ "name": "Webservers & Proxies", "id": 21, "sort_order": 21.0 },
 		{ "name": "Bots & ChatOps", "id": 22, "sort_order": 22.0 },
 		{ "name": "Finance & Budgeting", "id": 23, "sort_order": 23.0 },
