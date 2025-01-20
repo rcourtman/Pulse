@@ -36,6 +36,7 @@ msg_ok "Setup PHP8.4 Repository"
 
 msg_info "Setup PHP"
 $STD apt-get install -y \
+  php8.4 \
   php8.4-{mbstring,gd,intl,common,mysql,zip,xml} \
   libapache2-mod-php8.4
 msg_info "Setup PHP"
