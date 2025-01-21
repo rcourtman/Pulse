@@ -42,7 +42,6 @@ wget -q -cO - https://dl.photoprism.app/pkg/linux/amd64.tar.gz | tar -xz -C /opt
 LIBHEIF_URL=$(wget -q -O - "https://dl.photoprism.app/dist/libheif/" | grep -oP "libheif-$(lsb_release -cs)-amd64-v[0-9\.]+\.tar\.gz" | sort -V | tail -n 1)
 wget -q -cO - "https://dl.photoprism.app/dist/libheif/$LIBHEIF_URL" | tar -xzf - -C /usr/local --strip-components=1
 ldconfig
-chown -R /opt/photoprism/photos/originals
 chmod -R 755 /opt/photoprism/photos/originals
 cat <<EOF >/opt/photoprism/config/.env
 PHOTOPRISM_AUTH_MODE='password'
