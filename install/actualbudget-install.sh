@@ -38,7 +38,7 @@ msg_ok "Installed Node.js"
 
 msg_info "Installing Actual Budget"
 RELEASE=$(curl -s https://api.github.com/repos/actualbudget/actual-server/tags | jq --raw-output '.[0].name')
-wget -q https://codeload.github.com/actualbudget/actual-server/legacy.tar.gz/refs/tags/${RELEASE} 
+wget -q https://github.com/actualbudget/actual-server/archive/refs/tags/${RELEASE} 
 mv ${RELEASE} actual-server.tar.gz
 $STD tar -xzvf actual-server.tar.gz
 mv *ctual-server-* /opt/actualbudget
