@@ -47,7 +47,7 @@ function update_script() {
         msg_ok "${APP} Stopped"
         
         msg_info "Updating ${APP} to ${RELEASE}"
-        wget -q https://github.com/actualbudget/actual-server/archive/refs/tags/${RELEASE}.tar.gz -O actual-server.tar.gz
+        wget -q https://codeload.github.com/actualbudget/actual-server/legacy.tar.gz/refs/tags/${RELEASE} -O actual-server.tar.gz
         tar -xzvf actual-server.tar.gz >/dev/null 2>&1
         mv /opt/actualbudget /opt/actualbudget_bak
         mkdir -p /opt/actualbudget/
