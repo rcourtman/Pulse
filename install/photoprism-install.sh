@@ -27,7 +27,8 @@ $STD apt-get install -y \
     imagemagick \
     darktable \
     rawtherapee \
-    libvips42
+    libvips42 \
+    lsb-release
 
 echo 'export PATH=/usr/local:$PATH' >>~/.bashrc
 export PATH=/usr/local:$PATH
