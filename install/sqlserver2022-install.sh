@@ -39,13 +39,12 @@ $STD apt-get update
 $STD apt-get install -y \
   mssql-tools18 \
   unixodbc-dev
-echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bash_profile
-source ~/.bash_profile
+echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bashrc
+source ~/.bashrc
 msg_ok "Installed SQL Server Tools"
 
 msg_info "Start Service"
-systemctl enable -q mssql-server 
-systemctl start -q mssql-server 
+systemctl enable -q --now mssql-server 
 msg_ok "Service started"
 
 motd_ssh
