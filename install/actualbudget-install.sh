@@ -39,9 +39,8 @@ msg_ok "Installed Node.js"
 msg_info "Installing Actual Budget"
 RELEASE=$(curl -s https://api.github.com/repos/actualbudget/actual/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
 #wget -q https://github.com/actualbudget/actual-server/archive/refs/tags/v${RELEASE}
-#$STD tar -xzvf v${RELEASE}.tar.gz
-wget https://github.com/actualbudget/actual-server/archive/refs/tags/v25.1.0.tar.gz
-$STD tar -xzvf v25.1.0.tar.gz
+$STD curl -L -o actual-server.tar.gz https://github.com/actualbudget/actual-server/archive/refs/tags/v${RELEASE}.tar.gz
+$STD tar -xzvf v${RELEASE}.tar.gz
 mv *ctual-server-* /opt/actualbudget
 mkdir -p /opt/actualbudget/server-files
 mkdir -p /opt/actualbudget-data
