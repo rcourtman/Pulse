@@ -402,7 +402,7 @@ for i in {0,1}; do
 done
 
 msg_info "Installing Pre-Requisite libguestfs-tools onto Host"
-apt-get -qq update && apt-get -qq install libguestfs-tools -y >/dev/null
+apt-get -qq update && apt-get -qq install libguestfs-tools lsb-release -y >/dev/null
 msg_ok "Installed libguestfs-tools successfully"
 
 msg_info "Adding Docker and Docker Compose Plugin to Debian 12 Qcow2 Disk Image"
