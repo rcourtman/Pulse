@@ -35,6 +35,8 @@ msg_info "Installing SQL Server Tools"
 curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trusted.gpg.d/microsoft.asc
 curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | tee /etc/apt/sources.list.d/mssql-release.list
 $STD apt-get update
+export DEBIAN_FRONTEND=noninteractive
+echo "msodbcsql18 msodbcsql18/accept_eula boolean true" | sudo debconf-set-selections
 echo "mssql-tools18 mssql-tools18/license_terms select yes" | sudo debconf-set-selections
 $STD apt-get install -y \
   mssql-tools18 \
