@@ -35,11 +35,12 @@ msg_info "Installing SQL Server Tools"
 curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trusted.gpg.d/microsoft.asc
 curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | tee /etc/apt/sources.list.d/mssql-release.list
 $STD apt-get update
+echo "mssql-tools18 mssql-tools18/license_terms select yes" | sudo debconf-set-selections
 $STD apt-get install -y \
   mssql-tools18 \
   unixodbc-dev
-echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bashrc
-source ~/.bashrc
+echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bash_profile
+source ~/.bash_profile
 msg_ok "Installed SQL Server Tools"
 
 read -r -p "Do you want to run the SQL server setup now? (Later is also possible) <y/N>" prompt
