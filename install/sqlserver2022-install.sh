@@ -36,9 +36,7 @@ export DEBIAN_FRONTEND=noninteractive
 curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trusted.gpg.d/microsoft.asc
 curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | tee /etc/apt/sources.list.d/mssql-release.list
 $STD apt-get update
-echo "msodbcsql18 msodbcsql18/accept_eula boolean true" | sudo debconf-set-selections
-echo "mssql-tools18 mssql-tools18/license_terms select yes" | sudo debconf-set-selections
-$STD apt-get install -y \
+$STD apt-get install -y -qq \
   mssql-tools18 \
   unixodbc-dev
 echo 'export PATH="$PATH:/opt/mssql-tools18/bin"' >> ~/.bash_profile
