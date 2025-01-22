@@ -22,22 +22,22 @@ $STD apt install -y \
 	coreutils
 msg_ok "Installed Dependencies"
 
-msg_info "Get SQL Server 2022 Repository"
+msg_info "Setup SQL Server 2022"
 $STD curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
 $STD curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trusted.gpg.d/microsoft.asc
 $STD curl -fsSL https://packages.microsoft.com/config/ubuntu/22.04/mssql-server-2022.list | tee /etc/apt/sources.list.d/mssql-server-2022.list
 $STD apt-get clean *
 $STD apt-get update -y
 $STD apt-get install -y mssql-server
-msg_ok "Get SQL Server 2022 Repository"
+msg_ok "Setup Server 2022"
 
 msg_info "Installing SQL Server Tools"
-curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trusted.gpg.d/microsoft.asc
-curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | tee /etc/apt/sources.list.d/mssql-release.list
-$STD apt-get update
 export DEBIAN_FRONTEND=noninteractive
 echo "msodbcsql18 msodbcsql18/accept_eula boolean true" | sudo debconf-set-selections
 echo "mssql-tools18 mssql-tools18/license_terms select yes" | sudo debconf-set-selections
+curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trusted.gpg.d/microsoft.asc
+curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | tee /etc/apt/sources.list.d/mssql-release.list
+$STD apt-get update
 $STD apt-get install -y \
   mssql-tools18 \
   unixodbc-dev
