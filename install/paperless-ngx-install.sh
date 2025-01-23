@@ -61,7 +61,7 @@ $STD apt-get install -y \
   tesseract-ocr \
   tesseract-ocr-eng
 
-echo "deb http://deb.debian.org/debian trixie main" | sudo tee /etc/apt/sources.list.d/trixie.list
+$STD echo "deb http://deb.debian.org/debian trixie main" | sudo tee /etc/apt/sources.list.d/trixie.list
 $STD cat <<EOF | sudo tee /etc/apt/preferences.d/ghostscript
 Package: *
 Pin: release n=trixie
@@ -72,8 +72,8 @@ Pin: release n=trixie
 Pin-Priority: 990
 EOF
 $STD apt-get update
-echo "libc6 libraries/restart-without-asking boolean true" | sudo debconf-set-selections
-DEBIAN_FRONTEND=noninteractive apt install -t trixie ghostscript -y
+$STD echo "libc6 libraries/restart-without-asking boolean true" | sudo debconf-set-selections
+$STD DEBIAN_FRONTEND=noninteractive apt install -t trixie ghostscript -y
 msg_ok "Installed OCR Dependencies"
 
 msg_info "Installing JBIG2"
