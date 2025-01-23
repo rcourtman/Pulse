@@ -3,7 +3,6 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Grid } from "@mui/material";
 import { fetchCategories } from "@/lib/data";
 import { Category } from "@/lib/types";
 
@@ -33,36 +32,33 @@ const CategoryView = () => {
             Back to Categories
           </Button>
           <h2 className="text-xl font-semibold mb-4">{selectedCategory.name}</h2>
-          <Grid container spacing={3}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {selectedCategory.scripts
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((script) => (
-                <Grid item xs={12} sm={6} md={4} key={script.name}>
-                  <Card>
-                    <CardContent>
-                      <h3 className="text-lg font-medium">{script.name}</h3>
-                      <p className="text-sm text-gray-600">{script.date || "N/A"}</p>
-                    </CardContent>
-                  </Card>
-                </Grid>
+                <Card key={script.name}>
+                  <CardContent>
+                    <h3 className="text-lg font-medium">{script.name}</h3>
+                    <p className="text-sm text-gray-600">{script.date || "N/A"}</p>
+                  </CardContent>
+                </Card>
               ))}
-          </Grid>
+          </div>
         </div>
       ) : (
         <div>
           <h1 className="text-2xl font-bold mb-6">Categories</h1>
-          <Grid container spacing={3}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {categories.map((category) => (
-              <Grid item xs={12} sm={6} md={4} key={category.name}>
-                <Card
-                  onClick={() => handleCategoryClick(category)}
-                  className="cursor-pointer hover:shadow-lg"
-                >
-                  <CardHeader title={category.name} className="text-lg font-semibold" />
-                </Card>
-              </Grid>
+              <Card
+                key={category.name}
+                onClick={() => handleCategoryClick(category)}
+                className="cursor-pointer hover:shadow-lg"
+              >
+                <CardHeader title={category.name} className="text-lg font-semibold" />
+              </Card>
             ))}
-          </Grid>
+          </div>
         </div>
       )}
     </div>
