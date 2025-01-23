@@ -53,12 +53,26 @@ const CategoryView = () => {
             {selectedCategory.scripts
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((script) => (
-                <Card key={script.name}>
-                  <CardContent>
-                    <h3 className="text-lg font-medium">{script.name}</h3>
-                    <p className="text-sm text-gray-600">
-                      {script.date_created || "No date available"}
-                    </p>
+                <Card key={script.name} className="p-4">
+                  <CardContent className="flex flex-col gap-4">
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={script.logo || defaultLogo}
+                        alt={script.name}
+                        className="h-12 w-12 object-contain"
+                      />
+                      <div>
+                        <h3 className="text-lg font-bold">{script.name}</h3>
+                        <p className="text-sm text-gray-500">Created at: {script.date_created || "No date available"}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-700">{script.description || "No description available."}</p>
+                    <div className="text-right text-sm text-gray-600">
+                      <b>Default settings</b>
+                      <div><b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU</div>
+                      <div><b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB</div>
+                      <div><b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB</div>
+                    </div>
                   </CardContent>
                 </Card>
               ))}
