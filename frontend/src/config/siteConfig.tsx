@@ -42,11 +42,7 @@ export const navbarLinks = [
 	mobileHidden?: boolean;
 }[];
 
-export const mostPopularScripts = [
-	"Proxmox VE Post Install",
-	"Docker",
-	"Home Assistant OS",
-];
+export const mostPopularScripts = ["post-pve-install", "docker", "homeassistant"];
 
 export const analytics = {
   url: "analytics.proxmoxve-scripts.com",
