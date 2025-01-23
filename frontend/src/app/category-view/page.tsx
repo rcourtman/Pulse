@@ -15,7 +15,7 @@ const CategoryView = () => {
     const fetchCategories = async () => {
       try {
         const basePath = process.env.NODE_ENV === "production" ? "/ProxmoxVE" : "";
-        const response = await fetch(`${basePath}/api/categories`); // Prüfe den Endpunkt
+        const response = await fetch(`${basePath}/api/categories`);
         if (!response.ok) {
           throw new Error("Failed to fetch categories");
         }
@@ -39,19 +39,18 @@ const CategoryView = () => {
   };
 
   return (
-    <div className="p-4">
-      {categories.length === 0 ? (
-        <p className="text-center text-gray-500">
-          No categories available. Please check the API endpoint.
-        </p>
-      ) : selectedCategory ? (
+    <div className="p-4 mt-20">
+      {categories.length === 0 && (
+        <p className="text-center text-gray-500">No categories available. Please check the API endpoint.</p>
+      )}
+      {selectedCategory ? (
         <div>
           <Button variant="default" onClick={handleBackClick} className="mb-4">
             Back to Categories
           </Button>
           <h2 className="text-xl font-semibold mb-4">{selectedCategory.name}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {(selectedCategory.scripts || [])
+            {selectedCategory.scripts
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((script) => (
                 <Card key={script.name}>
@@ -67,7 +66,12 @@ const CategoryView = () => {
         </div>
       ) : (
         <div>
-          <h1 className="text-2xl font-bold mb-6">Categories</h1>
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Categories</h1>
+            <p className="text-sm text-gray-500">
+              {categories.reduce((acc, cat) => acc + (cat.scripts?.length || 0), 0)} Total scripts
+            </p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {categories.map((category) => (
               <Card
@@ -77,7 +81,7 @@ const CategoryView = () => {
               >
                 <CardContent className="flex flex-col items-center">
                   <div className="flex flex-wrap justify-center gap-1 mb-2">
-                    {(category.scripts || []).slice(0, 4).map((script, index) => (
+                    {category.scripts && category.scripts.slice(0, 4).map((script, index) => (
                       <img
                         key={index}
                         src={script.logo || defaultLogo}
@@ -88,7 +92,7 @@ const CategoryView = () => {
                   </div>
                   <h3 className="text-lg font-bold mb-1">{category.name}</h3>
                   <p className="text-sm text-gray-500 text-center">
-                    {(category as any).description || "No description available."}
+                    {category.description || "No description available."}
                   </p>
                 </CardContent>
               </Card>
