@@ -1,27 +1,29 @@
-import React, { useState } from 'react';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { routes } from '@/routes'; // Assuming your route.ts file is at this location
-import { Grid } from '@mui/material'; // Using Material-UI's Grid
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Grid } from "@mui/material";
+import { fetchCategories } from "@/lib/data";
+import { Category } from "@/lib/types";
 
 const CategoryView = () => {
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
-  const handleCategoryClick = (category) => {
+  useEffect(() => {
+    fetchCategories()
+      .then(setCategories)
+      .catch((error) => console.error("Error fetching categories:", error));
+  }, []);
+
+  const handleCategoryClick = (category: Category) => {
     setSelectedCategory(category);
   };
 
   const handleBackClick = () => {
     setSelectedCategory(null);
   };
-
-  const categories = routes.map((route) => ({
-    name: route.category,
-    scripts: route.scripts.map((script) => ({
-      name: script.name,
-      date: script.date || 'N/A', // Assuming scripts have a `date` field
-    })),
-  }));
 
   return (
     <div className="p-4">
@@ -39,7 +41,7 @@ const CategoryView = () => {
                   <Card>
                     <CardContent>
                       <h3 className="text-lg font-medium">{script.name}</h3>
-                      <p className="text-sm text-gray-600">{script.date}</p>
+                      <p className="text-sm text-gray-600">{script.date || "N/A"}</p>
                     </CardContent>
                   </Card>
                 </Grid>
