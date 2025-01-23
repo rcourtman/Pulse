@@ -51,7 +51,7 @@ const CategoryView = () => {
         ).then((results) => results.filter((script) => script !== null));
 
         // Kategorien und Skripte verknüpfen
-        categories.forEach((category) => {
+        categories.forEach((category: Category) => {
           category.scripts = scripts.filter((script: Script) =>
             script.categories.includes(category.id)
           );
