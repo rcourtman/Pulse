@@ -71,17 +71,14 @@ const CategoryView = () => {
                       />
                       <div>
                         <h3 className="text-lg font-bold">{script.name}</h3>
-                        <p className="text-sm text-gray-500">Created at: {script.date_created || "No date available"}</p>
+                        <p className="text-sm text-gray-500"><b>Created at:</b> {script.date_created || "No date available"}</p>
                         <p className="text-sm text-gray-700">
                           {truncateDescription(script.description || "No description available.")}
                         </p>
                       </div>
                     </div>
-                    <div className="text-right text-sm text-gray-600">
-                      <b>Default settings</b>
-                      <div><b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU</div>
-                      <div><b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB</div>
-                      <div><b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB</div>
+                    <div className="text-sm text-gray-600">
+                      <b>Settings:</b> <b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU | <b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB | <b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB
                     </div>
                   </CardContent>
                 </Card>
