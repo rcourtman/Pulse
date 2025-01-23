@@ -1,10 +1,13 @@
+// Folder: category-view
+// File: index.tsx
+
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { fetchCategories } from "@/lib/data";
-import { Category } from "@/lib/types";
+import { Category, Script } from "@/lib/types";
 
 const CategoryView = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -35,11 +38,13 @@ const CategoryView = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {selectedCategory.scripts
               .sort((a, b) => a.name.localeCompare(b.name))
-              .map((script) => (
+              .map((script: Script) => (
                 <Card key={script.name}>
                   <CardContent>
                     <h3 className="text-lg font-medium">{script.name}</h3>
-                    <p className="text-sm text-gray-600">{script.date || "N/A"}</p>
+                    <p className="text-sm text-gray-600">
+                      {script.date_created || "No date available"}
+                    </p>
                   </CardContent>
                 </Card>
               ))}
