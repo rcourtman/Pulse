@@ -7,6 +7,8 @@ import { Category } from "@/lib/types";
 
 const defaultLogo = "/default-logo.png"; // Fallback logo path
 
+const MAX_DESCRIPTION_LENGTH = 100; // Set max length for description
+
 const CategoryView = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -38,6 +40,12 @@ const CategoryView = () => {
     setSelectedCategory(null);
   };
 
+  const truncateDescription = (text: string) => {
+    return text.length > MAX_DESCRIPTION_LENGTH
+      ? `${text.slice(0, MAX_DESCRIPTION_LENGTH)}...`
+      : text;
+  };
+
   return (
     <div className="p-4 mt-20">
       {categories.length === 0 && (
@@ -64,9 +72,11 @@ const CategoryView = () => {
                       <div>
                         <h3 className="text-lg font-bold">{script.name}</h3>
                         <p className="text-sm text-gray-500">Created at: {script.date_created || "No date available"}</p>
+                        <p className="text-sm text-gray-700">
+                          {truncateDescription(script.description || "No description available.")}
+                        </p>
                       </div>
                     </div>
-                    <p className="text-sm text-gray-700">{script.description || "No description available."}</p>
                     <div className="text-right text-sm text-gray-600">
                       <b>Default settings</b>
                       <div><b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU</div>
