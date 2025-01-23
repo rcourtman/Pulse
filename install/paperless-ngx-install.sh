@@ -61,7 +61,7 @@ $STD apt-get install -y \
   tesseract-ocr \
   tesseract-ocr-eng
 
-$STD echo "deb http://deb.debian.org/debian trixie main" | sudo tee /etc/apt/sources.list.d/trixie.list
+echo "deb http://deb.debian.org/debian trixie main" |  tee /etc/apt/sources.list.d/trixie.list >/dev/null
 $STD cat <<EOF | sudo tee /etc/apt/preferences.d/ghostscript
 Package: *
 Pin: release n=trixie
