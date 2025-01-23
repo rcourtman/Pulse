@@ -10,27 +10,61 @@ const CategoryView = () => {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchCategoriesAndScripts = async () => {
       try {
-        const basePath = process.env.NODE_ENV === "production" ? "/ProxmoxVE" : "";
-        const response = await fetch(`${basePath}/json/metadata.json`);
-        if (!response.ok) {
+        const basePath = process.env.NODE_ENV === "production" ? "/ProxmoxVE" : ""; // Dynamischer Basis-Pfad
+
+        // Kategorien laden
+        const categoriesResponse = await fetch(`${basePath}/json/metadata.json`);
+        if (!categoriesResponse.ok) {
           throw new Error("Failed to fetch categories");
         }
-        const metadata = await response.json();
-        const categories = metadata.categories.map((category: Category) => {
-          category.scripts = metadata.scripts.filter((script: Script) =>
+        const metadata = await categoriesResponse.json();
+        console.log("Raw metadata:", metadata); // Debugging
+
+        if (!metadata.categories) {
+          throw new Error("Invalid metadata structure: categories missing");
+        }
+
+        const categories = metadata.categories.map((category: Category) => ({
+          ...category,
+          scripts: [],
+        }));
+
+        // Skripte laden
+        const scriptsResponse = await fetch(`${basePath}/json`);
+        if (!scriptsResponse.ok) {
+          throw new Error("Failed to fetch scripts");
+        }
+
+        const scriptsList = await scriptsResponse.json();
+        const scripts: Script[] = await Promise.all(
+          scriptsList
+            .filter((file: string) => file.endsWith(".json") && file !== "metadata.json")
+            .map(async (file: string) => {
+              const scriptResponse = await fetch(`${basePath}/json/${file}`);
+              if (scriptResponse.ok) {
+                return await scriptResponse.json();
+              }
+              return null;
+            })
+        ).then((results) => results.filter((script) => script !== null));
+
+        // Kategorien und Skripte verknüpfen
+        categories.forEach((category) => {
+          category.scripts = scripts.filter((script: Script) =>
             script.categories.includes(category.id)
           );
-          return category;
         });
+
+        console.log("Parsed categories with scripts:", categories); // Debugging
         setCategories(categories);
       } catch (error) {
-        console.error("Error fetching categories:", error);
+        console.error("Error fetching categories and scripts:", error);
       }
     };
 
-    fetchCategories();
+    fetchCategoriesAndScripts();
   }, []);
 
   const handleCategoryClick = (category: Category) => {
@@ -43,6 +77,9 @@ const CategoryView = () => {
 
   return (
     <div className="p-4">
+      {categories.length === 0 && (
+        <p className="text-center text-gray-500">No categories available. Please check the JSON file.</p>
+      )}
       {selectedCategory ? (
         <div>
           <Button variant="default" onClick={handleBackClick} className="mb-4">
