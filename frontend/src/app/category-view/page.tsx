@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Category } from "@/lib/types";
@@ -12,6 +13,7 @@ const MAX_DESCRIPTION_LENGTH = 100; // Set max length for description
 const CategoryView = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -40,6 +42,10 @@ const CategoryView = () => {
     setSelectedCategory(null);
   };
 
+  const handleScriptClick = (scriptSlug: string) => {
+    router.push(`/scripts?id=${scriptSlug}`);
+  };
+
   const truncateDescription = (text: string) => {
     return text.length > MAX_DESCRIPTION_LENGTH
       ? `${text.slice(0, MAX_DESCRIPTION_LENGTH)}...`
@@ -61,7 +67,7 @@ const CategoryView = () => {
             {selectedCategory.scripts
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((script) => (
-                <Card key={script.name} className="p-4">
+                <Card key={script.name} className="p-4 cursor-pointer" onClick={() => handleScriptClick(script.slug)}>
                   <CardContent className="flex flex-col gap-4">
                     <div className="flex items-center gap-4">
                       <img
@@ -78,7 +84,7 @@ const CategoryView = () => {
                       </div>
                     </div>
                     <div className="text-sm text-gray-600">
-                      <b>Settings:</b> <b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU | <b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB | <b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB
+                      <b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU | <b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB | <b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB
                     </div>
                   </CardContent>
                 </Card>
