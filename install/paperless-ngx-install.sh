@@ -61,19 +61,13 @@ $STD apt-get install -y \
   tesseract-ocr \
   tesseract-ocr-eng
 
-echo "deb http://deb.debian.org/debian trixie main" |  tee /etc/apt/sources.list.d/trixie.list >/dev/null
-$STD cat <<EOF | sudo tee /etc/apt/preferences.d/ghostscript
-Package: *
-Pin: release n=trixie
-Pin-Priority: 100
-
-Package: ghostscript
-Pin: release n=trixie
-Pin-Priority: 990
-EOF
-$STD apt-get update
-$STD echo "libc6 libraries/restart-without-asking boolean true" | sudo debconf-set-selections
-DEBIAN_FRONTEND=noninteractive apt install -t trixie ghostscript -y -qq
+cd /tmp
+wget -q https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10040/ghostscript-10.04.0.tar.gz
+$STD tar -xzf ghostscript-10.04.0.tar.gz
+cd ghostscript-10.04.0
+$STD ./configure
+$STD make
+$STD sudo make install
 msg_ok "Installed OCR Dependencies"
 
 msg_info "Installing JBIG2"
@@ -235,6 +229,7 @@ customize
 
 msg_info "Cleaning up"
 rm -rf /opt/paperless/docker
+rm -rf /tmp/ghostscript*
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean
 msg_ok "Cleaned"
