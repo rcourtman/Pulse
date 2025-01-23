@@ -1,12 +1,8 @@
-// Folder: category-view
-// File: index.tsx
-
 "use client";
 
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { fetchCategories } from "@/lib/data";
 import { Category, Script } from "@/lib/types";
 
 const CategoryView = () => {
@@ -14,9 +10,26 @@ const CategoryView = () => {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
   useEffect(() => {
-    fetchCategories()
-      .then(setCategories)
-      .catch((error) => console.error("Error fetching categories:", error));
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/json/metadata.json"); // JSON-Datei direkt laden
+        if (!response.ok) {
+          throw new Error("Failed to fetch categories");
+        }
+        const metadata = await response.json();
+        const categories = metadata.categories.map((category: Category) => {
+          category.scripts = metadata.scripts.filter((script: Script) =>
+            script.categories.includes(category.id)
+          );
+          return category;
+        });
+        setCategories(categories);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   const handleCategoryClick = (category: Category) => {
