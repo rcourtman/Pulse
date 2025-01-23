@@ -28,7 +28,7 @@ const CategoryView = () => {
     <div className="p-4">
       {selectedCategory ? (
         <div>
-          <Button variant="primary" onClick={handleBackClick} className="mb-4">
+          <Button variant="default" onClick={handleBackClick} className="mb-4">
             Back to Categories
           </Button>
           <h2 className="text-xl font-semibold mb-4">{selectedCategory.name}</h2>
