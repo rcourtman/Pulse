@@ -12,19 +12,20 @@ const CategoryView = () => {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const response = await fetch("/api/categories");
-        if (!response.ok) {
-          throw new Error("Failed to fetch categories");
-        }
-        const data = await response.json();
-        console.log("Fetched categories:", data); // Debugging
-        setCategories(data);
-      } catch (error) {
-        console.error("Error fetching categories:", error);
-      }
-    };
+	const fetchCategories = async () => {
+	  try {
+		const basePath = process.env.NODE_ENV === "production" ? "/ProxmoxVE" : "";
+		const response = await fetch(`${basePath}/json/categories.json`);
+		if (!response.ok) {
+		  throw new Error("Failed to fetch categories");
+		}
+		const data = await response.json();
+		console.log("Fetched categories:", data); // Debugging
+		setCategories(data);
+	  } catch (error) {
+		console.error("Error fetching categories:", error);
+	  }
+	};
 
     fetchCategories();
   }, []);
