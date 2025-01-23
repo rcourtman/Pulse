@@ -12,7 +12,8 @@ const CategoryView = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch("/json/metadata.json"); // JSON-Datei direkt laden
+        const basePath = process.env.NODE_ENV === "production" ? "/ProxmoxVE" : "";
+        const response = await fetch(`${basePath}/json/metadata.json`);
         if (!response.ok) {
           throw new Error("Failed to fetch categories");
         }
