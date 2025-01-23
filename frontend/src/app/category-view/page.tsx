@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Category } from "@/lib/types";
 
+const defaultLogo = "/default-logo.png"; // Fallback logo path
+
 const CategoryView = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
@@ -76,16 +78,16 @@ const CategoryView = () => {
                     {category.scripts && category.scripts.slice(0, 4).map((script, index) => (
                       <img
                         key={index}
-                        src={script.logo}
-                        alt={script.name}
+                        src={script.logo || defaultLogo}
+                        alt={script.name || "Script logo"}
                         className="h-6 w-6 object-contain"
                       />
                     ))}
                   </div>
                   <h3 className="text-lg font-bold mb-1">{category.name}</h3>
-                  {category.description && (
-                    <p className="text-sm text-gray-500 text-center">{category.description}</p>
-                  )}
+                  <p className="text-sm text-gray-500 text-center">
+                    {category.description || "No description available."}
+                  </p>
                 </CardContent>
               </Card>
             ))}
