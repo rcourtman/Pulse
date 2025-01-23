@@ -73,7 +73,7 @@ Pin-Priority: 990
 EOF
 $STD apt-get update
 $STD echo "libc6 libraries/restart-without-asking boolean true" | sudo debconf-set-selections
-$STD DEBIAN_FRONTEND=noninteractive apt install -t trixie ghostscript -y
+DEBIAN_FRONTEND=noninteractive apt install -t trixie ghostscript -y -qq
 msg_ok "Installed OCR Dependencies"
 
 msg_info "Installing JBIG2"
