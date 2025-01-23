@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Category } from "@/lib/types";
 
@@ -12,20 +12,20 @@ const CategoryView = () => {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
   useEffect(() => {
-	const fetchCategories = async () => {
-	  try {
-		const basePath = process.env.NODE_ENV === "production" ? "/ProxmoxVE" : "";
-		const response = await fetch(`${basePath}/json/categories.json`);
-		if (!response.ok) {
-		  throw new Error("Failed to fetch categories");
-		}
-		const data = await response.json();
-		console.log("Fetched categories:", data); // Debugging
-		setCategories(data);
-	  } catch (error) {
-		console.error("Error fetching categories:", error);
-	  }
-	};
+    const fetchCategories = async () => {
+      try {
+        const basePath = process.env.NODE_ENV === "production" ? "/ProxmoxVE" : "";
+        const response = await fetch(`${basePath}/api/categories`); // Prüfe den Endpunkt
+        if (!response.ok) {
+          throw new Error("Failed to fetch categories");
+        }
+        const data = await response.json();
+        console.log("Fetched categories:", data); // Debugging
+        setCategories(data);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+      }
+    };
 
     fetchCategories();
   }, []);
@@ -40,17 +40,18 @@ const CategoryView = () => {
 
   return (
     <div className="p-4">
-      {categories.length === 0 && (
-        <p className="text-center text-gray-500">No categories available. Please check the API endpoint.</p>
-      )}
-      {selectedCategory ? (
+      {categories.length === 0 ? (
+        <p className="text-center text-gray-500">
+          No categories available. Please check the API endpoint.
+        </p>
+      ) : selectedCategory ? (
         <div>
           <Button variant="default" onClick={handleBackClick} className="mb-4">
             Back to Categories
           </Button>
           <h2 className="text-xl font-semibold mb-4">{selectedCategory.name}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {selectedCategory.scripts
+            {(selectedCategory.scripts || [])
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((script) => (
                 <Card key={script.name}>
@@ -76,7 +77,7 @@ const CategoryView = () => {
               >
                 <CardContent className="flex flex-col items-center">
                   <div className="flex flex-wrap justify-center gap-1 mb-2">
-                    {category.scripts && category.scripts.slice(0, 4).map((script, index) => (
+                    {(category.scripts || []).slice(0, 4).map((script, index) => (
                       <img
                         key={index}
                         src={script.logo || defaultLogo}
@@ -87,7 +88,7 @@ const CategoryView = () => {
                   </div>
                   <h3 className="text-lg font-bold mb-1">{category.name}</h3>
                   <p className="text-sm text-gray-500 text-center">
-                    {(category as any).description || "No description available."}
+                    {category.description || "No description available."}
                   </p>
                 </CardContent>
               </Card>
