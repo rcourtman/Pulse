@@ -10,20 +10,19 @@ const CategoryView = () => {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
 
   useEffect(() => {
-	const fetchCategories = async () => {
-	  try {
-		const basePath = process.env.NODE_ENV === "production" ? "/ProxmoxVE" : ""; // Passe den Basis-Pfad an
-		const response = await fetch(`${basePath}/api/categories`);
-		if (!response.ok) {
-		  throw new Error("Failed to fetch categories");
-		}
-		const data = await response.json();
-		console.log("Fetched categories:", data); // Debugging
-		setCategories(data);
-	  } catch (error) {
-		console.error("Error fetching categories:", error);
-	  }
-	};
+    const fetchCategories = async () => {
+      try {
+        const response = await fetch("/api/categories");
+        if (!response.ok) {
+          throw new Error("Failed to fetch categories");
+        }
+        const data = await response.json();
+        console.log("Fetched categories:", data); // Debugging
+        setCategories(data);
+      } catch (error) {
+        console.error("Error fetching categories:", error);
+      }
+    };
 
     fetchCategories();
   }, []);
@@ -70,9 +69,24 @@ const CategoryView = () => {
               <Card
                 key={category.name}
                 onClick={() => handleCategoryClick(category)}
-                className="cursor-pointer hover:shadow-lg"
+                className="cursor-pointer hover:shadow-lg flex flex-col items-center justify-center"
               >
-                <CardHeader title={category.name} className="text-lg font-semibold" />
+                <CardContent className="flex flex-col items-center">
+                  <div className="flex flex-wrap justify-center gap-1 mb-2">
+                    {category.scripts && category.scripts.slice(0, 4).map((script, index) => (
+                      <img
+                        key={index}
+                        src={script.logo}
+                        alt={script.name}
+                        className="h-6 w-6 object-contain"
+                      />
+                    ))}
+                  </div>
+                  <h3 className="text-lg font-bold mb-1">{category.name}</h3>
+                  {category.description && (
+                    <p className="text-sm text-gray-500 text-center">{category.description}</p>
+                  )}
+                </CardContent>
               </Card>
             ))}
           </div>
