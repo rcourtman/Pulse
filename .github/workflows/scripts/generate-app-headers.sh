@@ -1,13 +1,19 @@
 #!/usr/bin/env bash
 
+# Base directory for headers
+headers_dir="./ct/headers"
+
+# Ensure the headers directory exists
+mkdir -p "$headers_dir"
+
 # Find all .sh files in ./ct directory, sorted alphabetically
 find ./ct -type f -name "*.sh" | sort | while read -r script; do
   # Extract the APP name from the APP line
   app_name=$(grep -oP '^APP="\K[^"]+' "$script" 2>/dev/null)
 
   if [[ -n "$app_name" ]]; then
-    # Define the output file name based on the .sh file
-    output_file="${script%.sh}.app"
+    # Define the output file name in the headers directory
+    output_file="${headers_dir}/$(basename "${script%.*}")"
 
     # Check if the output file already exists
     if [[ ! -f "$output_file" ]]; then
