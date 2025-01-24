@@ -70,9 +70,20 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Get the PR number for the current branch
           PR_NUMBER=$(gh pr list --head "pr-update-app-files" --json number --jq '.[].number')
-          PR_AUTHOR=$(gh pr view "$PR_NUMBER" --json author --jq '.author.login')
-          if [ "$PR_AUTHOR" != "github-actions[bot]" ]; then
-            gh pr review "$PR_NUMBER" --approve
+          
+          # Check if a PR number was retrieved
+          if [ -n "$PR_NUMBER" ]; then
+            # Get the PR author
+            PR_AUTHOR=$(gh pr view "$PR_NUMBER" --json author --jq '.author.login')
+            
+            # Approve the PR if it was not created by the bot
+            if [ "$PR_AUTHOR" != "github-actions[bot]" ]; then
+              gh pr review "$PR_NUMBER" --approve
+            else
+              echo "PR was created by the bot, skipping review."
+            fi
           else
-            echo "PR was created by the bot, skipping review."
+            echo "No PR found for the current branch."
+          fi
