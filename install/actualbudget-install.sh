@@ -54,7 +54,7 @@ PORT=5006
 EOF
 cd /opt/actualbudget
 $STD yarn install
-echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
+echo "${RELEASE}" >"/opt/actualbudget_version.txt"
 msg_ok "Installed Actual Budget"
 
 msg_info "Creating Service"
