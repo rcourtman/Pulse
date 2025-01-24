@@ -19,8 +19,6 @@ $STD apt-get install -y \
   sudo \
   mc \
   gpg \
-  git \
-  jq \
   build-essential
 msg_ok "Installed Dependencies"
 
