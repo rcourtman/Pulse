@@ -40,7 +40,7 @@ function update_script() {
         echo "Installed jq..."
     fi
 
-    RELEASE=$(curl -s https://api.github.com/repos/actualbudget/actual-server/tags | jq --raw-output '.[0].name')
+    RELEASE=$(curl -s https://api.github.com/repos/actualbudget/actual/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
     if [[ ! -f /opt/actualbudget_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/actualbudget_version.txt)" ]]; then
         msg_info "Stopping ${APP}"
         systemctl stop actualbudget
@@ -49,10 +49,10 @@ function update_script() {
         msg_info "Updating ${APP} to ${RELEASE}"
         cd /tmp
         wget -q https://codeload.github.com/actualbudget/actual-server/legacy.tar.gz/refs/tags/${RELEASE} -O actual-server.tar.gz
-        tar -xzvf actual-server.tar.gz >/dev/null 2>&1
+        tar -xzf actual-server.tar.gz >/dev/null 2>&1
         mv /opt/actualbudget /opt/actualbudget_bak
         mkdir -p /opt/actualbudget/
-        mv actual-server-* /opt/actualbudget
+        mv *ctual-server-* /opt/actualbudget
         mv /opt/actualbudget_bak/.env /opt/actualbudget
         mv /opt/actualbudget_bak/server-files /opt/actualbudget/server-files
         cd /opt/actualbudget
