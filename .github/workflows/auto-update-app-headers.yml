@@ -39,11 +39,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 5: Check for changes
+      # Step 5: Check if there are any changes
       - name: Check if there are any changes
         id: verify-diff
         run: |
-          git diff --quiet . || echo "changed=true" >> $GITHUB_OUTPUT
+          if git diff --quiet; then
+            echo "No changes detected."
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changes detected."
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
 
       # Step 6: Commit changes (if any) and create a PR
       - name: Commit and create PR if changes exist
@@ -51,8 +57,9 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add ct/*.app
+          git add ./ct/*.app
           git commit -m "Update .app files"
+          # Create a temporary branch for the PR
           git checkout -b pr-update-app-files
           git push origin pr-update-app-files --force
 
@@ -64,6 +71,12 @@ jobs:
                        --label "automated pr"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 7: Output success message when no changes
+      - name: No changes detected
+        if: steps.verify-diff.outputs.changed == 'false'
+        run: echo "No changes to commit. Workflow completed successfully."
+
 
       - name: Re-approve pull request after update
         if: steps.verify-diff.outputs.changed == 'true'
