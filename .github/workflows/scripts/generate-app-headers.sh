@@ -14,9 +14,13 @@ find ./ct -type f -name "*.sh" | sort | while read -r script; do
       # Generate figlet output
       figlet_output=$(figlet -f slant "$app_name")
 
-      # Write the figlet output to the file
-      echo "$figlet_output" > "$output_file"
-      echo "Generated: $output_file"
+      # Check if figlet output is not empty
+      if [[ -n "$figlet_output" ]]; then
+        echo "$figlet_output" > "$output_file"
+        echo "Generated: $output_file"
+      else
+        echo "Figlet failed for $app_name in $script"
+      fi
     else
       echo "Skipped: $output_file already exists"
     fi
