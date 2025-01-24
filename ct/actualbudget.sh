@@ -33,13 +33,7 @@ function update_script() {
         msg_error "No ${APP} Installation Found!"
         exit
     fi
-
-    if ! command -v jq >/dev/null 2>&1; then
-        echo "Installing jq..."
-        apt-get install -y jq >/dev/null 2>&1
-        echo "Installed jq..."
-    fi
-
+    
     RELEASE=$(curl -s https://api.github.com/repos/actualbudget/actual/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
     if [[ ! -f /opt/actualbudget_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/actualbudget_version.txt)" ]]; then
         msg_info "Stopping ${APP}"
