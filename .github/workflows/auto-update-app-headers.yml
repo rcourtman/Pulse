@@ -17,21 +17,25 @@ jobs:
       pull-requests: write
 
     steps:
-      # Step 1: Checkout repository
+            # Step 1: Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v2
 
-      # Step 2: Set up Git user for committing changes
+      # Step 2: Disable file mode changes detection
+      - name: Disable file mode changes
+        run: git config core.fileMode false
+
+      # Step 3: Set up Git user for committing changes
       - name: Set up Git
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      # Step 3: Install figlet
+      # Step 4: Install figlet
       - name: Install figlet
         run: sudo apt-get install -y figlet
 
-      # Step 4: Run the updated generate-app-files.sh script
+      # Step 5: Run the updated generate-app-files.sh script
       - name: Run generate-app-files.sh
         run: |
           chmod +x .github/workflows/scripts/generate-app-headers.sh
@@ -39,7 +43,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 5: Check if there are any changes
+      # Step 6: Check if there are any changes
       - name: Check if there are any changes
         id: verify-diff
         run: |
@@ -51,7 +55,7 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
-      # Step 6: Commit changes (if any) and create a PR
+      # Step 7: Commit changes (if any) and create a PR
       - name: Commit and create PR if changes exist
         if: steps.verify-diff.outputs.changed == 'true'
         run: |
@@ -68,7 +72,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 7: Output success message when no changes
+      # Step 8: Output success message when no changes
       - name: No changes detected
         if: steps.verify-diff.outputs.changed == 'false'
         run: echo "No changes to commit. Workflow completed successfully."
