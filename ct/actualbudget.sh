@@ -57,7 +57,7 @@ function update_script() {
         mv /opt/actualbudget_bak/server-files /opt/actualbudget/server-files
         cd /opt/actualbudget
         yarn install &>/dev/null
-        echo "${RELEASE}" >/opt/${APP}_version.txt
+        echo "${RELEASE}" >/opt/actualbudget_version.txt
         msg_ok "Updated ${APP}"
         
         msg_info "Starting ${APP}"
