@@ -43,7 +43,7 @@ function update_script() {
         msg_info "Updating ${APP} to ${RELEASE}"
         cd /tmp
         wget -q https://github.com/actualbudget/actual-server/archive/refs/tags/v${RELEASE}.tar.gz
-        tar -xzf actual-server.tar.gz >/dev/null 2>&1
+        tar -xzf v${RELEASE}.tar.gz >/dev/null 2>&1
         mv /opt/actualbudget /opt/actualbudget_bak
         mkdir -p /opt/actualbudget/
         mv *ctual-server-* /opt/actualbudget
