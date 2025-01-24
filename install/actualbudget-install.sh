@@ -18,6 +18,7 @@ $STD apt-get install -y \
   curl \
   sudo \
   mc \
+  tini \
   gpg \
   build-essential
 msg_ok "Installed Dependencies"
