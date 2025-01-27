@@ -67,12 +67,12 @@ const CategoryView = () => {
     const cpu = script.install_methods[0]?.resources.cpu;
     const ram = script.install_methods[0]?.resources.ram;
     const hdd = script.install_methods[0]?.resources.hdd;
-  
+
     const resourceParts = [];
     if (cpu) resourceParts.push(<span key="cpu"><b>CPU:</b> {cpu}vCPU</span>);
     if (ram) resourceParts.push(<span key="ram"><b>RAM:</b> {ram}MB</span>);
     if (hdd) resourceParts.push(<span key="hdd"><b>HDD:</b> {hdd}GB</span>);
-  
+
     return resourceParts.length > 0 ? (
       <div className="text-sm text-gray-400">
         {resourceParts.map((part, index) => (
@@ -83,6 +83,14 @@ const CategoryView = () => {
         ))}
       </div>
     ) : null;
+  };
+
+  const renderType = (type: string) => {
+    return (
+      <span className="text-xs font-semibold text-blue-500 bg-gray-200 px-2 py-1 rounded-full">
+        {type.toUpperCase()}
+      </span>
+    );
   };
 
   return (
@@ -122,25 +130,19 @@ const CategoryView = () => {
                   onClick={() => handleScriptClick(script.slug)}
                 >
                   <CardContent className="flex flex-col gap-4">
-                    <div className="flex items-center gap-4">
-                      <img
-                        src={script.logo || defaultLogo}
-                        alt={script.name}
-                        className="h-12 w-12 object-contain"
-                      />
-                      <div>
-                        <h3 className="text-lg font-bold">{script.name}</h3>
-                        <p className="text-sm text-gray-500">
-                          <b>Created at:</b> {script.date_created || "No date available"}
-                        </p>
-                        <p
-                          className="text-sm text-gray-700"
-                          title={script.description || "No description available."}
-                        >
-                          {truncateDescription(script.description || "No description available.")}
-                        </p>
-                      </div>
+                    <div className="flex justify-between">
+                      <h3 className="text-lg font-bold">{script.name}</h3>
+                      {renderType(script.type || "MISC")}
                     </div>
+                    <p className="text-sm text-gray-500">
+                      <b>Created at:</b> {script.date_created || "No date available"}
+                    </p>
+                    <p
+                      className="text-sm text-gray-700 hover:text-gray-900"
+                      title={script.description || "No description available."}
+                    >
+                      {truncateDescription(script.description || "No description available.")}
+                    </p>
                     {renderResources(script)}
                   </CardContent>
                 </Card>
@@ -162,9 +164,9 @@ const CategoryView = () => {
         <div>
           {/* Categories Grid */}
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-4xl font-bold">Categories</h1>
+            <h1 className="text-3xl font-semibold mb-4">Categories</h1>
             <p className="text-sm text-gray-500">
-              {categories.reduce((acc, cat) => acc + (cat.scripts?.length || 0), 0)} Total scripts
+              {new Set(categories.flatMap((cat) => cat.scripts.map((s) => s.slug))).size} Total scripts
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
