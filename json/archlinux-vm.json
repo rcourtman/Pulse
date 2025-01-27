@@ -16,7 +16,7 @@
   "install_methods": [
     {
       "type": "default",
-      "script": "/vm/archlinux-vm.sh",
+      "script": "vm/archlinux-vm.sh",
       "resources": {
         "cpu": 1,
         "ram": 1024,
