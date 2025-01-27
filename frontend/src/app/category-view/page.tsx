@@ -52,6 +52,10 @@ const CategoryView = () => {
       : text;
   };
 
+  const getRandomLogos = (scripts: any[], count: number) => {
+    return scripts.sort(() => Math.random() - 0.5).slice(0, count);
+  };
+
   return (
     <div className="p-4 mt-20">
       {categories.length === 0 && (
@@ -62,7 +66,7 @@ const CategoryView = () => {
           <Button variant="default" onClick={handleBackClick} className="mb-4">
             Back to Categories
           </Button>
-          <h2 className="text-xl font-semibold mb-4">{selectedCategory.name}</h2>
+          <h2 className="text-3xl font-extrabold mb-4">{selectedCategory.name}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {selectedCategory.scripts
               .sort((a, b) => a.name.localeCompare(b.name))
@@ -94,7 +98,7 @@ const CategoryView = () => {
       ) : (
         <div>
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold">Categories</h1>
+            <h1 className="text-4xl font-extrabold">Categories</h1>
             <p className="text-sm text-gray-500">
               {categories.reduce((acc, cat) => acc + (cat.scripts?.length || 0), 0)} Total scripts
             </p>
@@ -107,19 +111,19 @@ const CategoryView = () => {
                 className="cursor-pointer hover:shadow-lg flex flex-col items-center justify-center"
               >
                 <CardContent className="flex flex-col items-center">
-                  <div className="flex flex-wrap justify-center gap-1 mb-2">
-                    {category.scripts && category.scripts.slice(0, 4).map((script, index) => (
+                  <div className="flex flex-wrap justify-center gap-2 mb-2">
+                    {category.scripts && getRandomLogos(category.scripts, 5).map((script, index) => (
                       <img
                         key={index}
                         src={script.logo || defaultLogo}
                         alt={script.name || "Script logo"}
-                        className="h-6 w-6 object-contain"
+                        className="h-8 w-8 object-contain"
                       />
                     ))}
                   </div>
                   <h3 className="text-lg font-bold mb-1">{category.name}</h3>
-                  <p className="text-sm text-gray-500 text-center">
-                    {(category as any).description || "No description available."}
+                  <p className="text-sm text-gray-400 text-center">
+                    {category.description || "No description available."}
                   </p>
                 </CardContent>
               </Card>
