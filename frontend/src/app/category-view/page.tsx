@@ -164,24 +164,21 @@ const CategoryView = () => {
                   onClick={() => handleScriptClick(script.slug)}
                 >
                   <CardContent className="flex flex-col gap-4">
-                    <div className="flex justify-between">
-                      <h3 className="text-lg font-bold script-text">{script.name}</h3>
-                      {formattedBadge(script.type || "misc")}
-                    </div>
-                    <p className="text-sm text-gray-500">
+                    <h3 className="text-lg font-bold script-text text-center">{script.name}</h3>
+                    <img
+                      src={script.logo || defaultLogo}
+                      alt={script.name || "Script logo"}
+                      className="h-12 w-12 object-contain mx-auto"
+                    />
+                    <p className="text-sm text-gray-500 text-center">
                       <b>Created at:</b> {script.date_created || "No date available"}
                     </p>
                     <p
-                      className="text-sm text-gray-700 hover:text-gray-900"
+                      className="text-sm text-gray-700 hover:text-gray-900 text-center"
                       title={script.description || "No description available."}
                     >
                       {truncateDescription(script.description || "No description available.")}
                     </p>
-                    <img
-                      src={script.logo || defaultLogo}
-                      alt={script.name || "Script logo"}
-                      className="h-16 w-16 object-contain mx-auto mt-4"
-                    />
                     {renderResources(script)}
                   </CardContent>
                 </Card>
