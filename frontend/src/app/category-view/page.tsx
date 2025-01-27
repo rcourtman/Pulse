@@ -15,13 +15,13 @@ const MAX_LOGOS = 5; // Max logos to display at once
 const formattedBadge = (type: string) => {
   switch (type) {
     case "vm":
-      return <Badge className="text-blue-500/75 border-blue-500/75">VM</Badge>;
+      return <Badge className="text-blue-500/75 border-blue-500/75 badge">VM</Badge>;
     case "ct":
       return (
-        <Badge className="text-yellow-500/75 border-yellow-500/75">LXC</Badge>
+        <Badge className="text-yellow-500/75 border-yellow-500/75 badge">LXC</Badge>
       );
     case "misc":
-      return <Badge className="text-green-500/75 border-green-500/75">MISC</Badge>;
+      return <Badge className="text-green-500/75 border-green-500/75 badge">MISC</Badge>;
   }
   return null;
 };
@@ -173,6 +173,11 @@ const CategoryView = () => {
                     >
                       {truncateDescription(script.description || "No description available.")}
                     </p>
+                    <img
+                      src={script.logo || defaultLogo}
+                      alt={script.name || "Script logo"}
+                      className="h-16 w-16 object-contain mx-auto mt-4"
+                    />
                     {renderResources(script)}
                   </CardContent>
                 </Card>
