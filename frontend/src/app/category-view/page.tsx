@@ -139,15 +139,17 @@ const CategoryView = () => {
             <Button
               variant="ghost"
               onClick={() => navigateCategory("prev")}
-              className="p-2"
+              className="p-2 transition-transform duration-300 hover:scale-105"
             >
               <ChevronLeft className="h-6 w-6" />
             </Button>
-            <h2 className="text-3xl font-semibold">{categories[selectedCategoryIndex].name}</h2>
+            <h2 className="text-3xl font-semibold transition-opacity duration-300 hover:opacity-90">
+              {categories[selectedCategoryIndex].name}
+            </h2>
             <Button
               variant="ghost"
               onClick={() => navigateCategory("next")}
-              className="p-2"
+              className="p-2 transition-transform duration-300 hover:scale-105"
             >
               <ChevronRight className="h-6 w-6" />
             </Button>
@@ -160,11 +162,13 @@ const CategoryView = () => {
               .map((script) => (
                 <Card
                   key={script.name}
-                  className="p-4 cursor-pointer"
+                  className="p-4 cursor-pointer hover:shadow-md transition-shadow duration-300"
                   onClick={() => handleScriptClick(script.slug)}
                 >
                   <CardContent className="flex flex-col gap-4">
-                    <h3 className="text-lg font-bold script-text text-center">{script.name}</h3>
+                    <h3 className="text-lg font-bold script-text text-center hover:text-blue-600 transition-colors duration-300">
+                      {script.name}
+                    </h3>
                     <img
                       src={script.logo || defaultLogo}
                       alt={script.name || "Script logo"}
@@ -174,7 +178,7 @@ const CategoryView = () => {
                       <b>Created at:</b> {script.date_created || "No date available"}
                     </p>
                     <p
-                      className="text-sm text-gray-700 hover:text-gray-900 text-center"
+                      className="text-sm text-gray-700 hover:text-gray-900 text-center transition-colors duration-300"
                       title={script.description || "No description available."}
                     >
                       {truncateDescription(script.description || "No description available.")}
@@ -190,7 +194,7 @@ const CategoryView = () => {
             <Button
               variant="default"
               onClick={handleBackClick}
-              className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md transition"
+              className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-md transition-transform duration-300 hover:scale-105"
             >
               Back to Categories
             </Button>
@@ -210,10 +214,12 @@ const CategoryView = () => {
               <Card
                 key={category.name}
                 onClick={() => handleCategoryClick(index)}
-                className="cursor-pointer hover:shadow-lg flex flex-col items-center justify-center py-6"
+                className="cursor-pointer hover:shadow-lg flex flex-col items-center justify-center py-6 transition-shadow duration-300"
               >
                 <CardContent className="flex flex-col items-center">
-                  <h3 className="text-xl font-bold mb-4 category-title">{category.name}</h3>
+                  <h3 className="text-xl font-bold mb-4 category-title transition-colors duration-300 hover:text-blue-600">
+                    {category.name}
+                  </h3>
                   <div className="flex justify-center items-center gap-2 mb-4">
                     <Button
                       variant="ghost"
@@ -221,7 +227,7 @@ const CategoryView = () => {
                         e.stopPropagation();
                         switchLogos(category.name, "prev");
                       }}
-                      className="p-1"
+                      className="p-1 transition-transform duration-300 hover:scale-110"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -229,17 +235,19 @@ const CategoryView = () => {
                       category.scripts
                         .slice(logoIndices[category.name] || 0, (logoIndices[category.name] || 0) + MAX_LOGOS)
                         .map((script, i) => (
-                          <img
-                            key={i}
-                            src={script.logo || defaultLogo}
-                            alt={script.name || "Script logo"}
-                            title={script.name}
-                            className="h-8 w-8 object-contain cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleScriptClick(script.slug);
-                            }}
-                          />
+                          <div key={i} className="flex flex-col items-center">
+                            <img
+                              src={script.logo || defaultLogo}
+                              alt={script.name || "Script logo"}
+                              title={script.name}
+                              className="h-8 w-8 object-contain cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleScriptClick(script.slug);
+                              }}
+                            />
+                            {formattedBadge(script.type)}
+                          </div>
                         ))}
                     <Button
                       variant="ghost"
@@ -247,7 +255,7 @@ const CategoryView = () => {
                         e.stopPropagation();
                         switchLogos(category.name, "next");
                       }}
-                      className="p-1"
+                      className="p-1 transition-transform duration-300 hover:scale-110"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
