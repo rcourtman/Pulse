@@ -67,14 +67,21 @@ const CategoryView = () => {
     const cpu = script.install_methods[0]?.resources.cpu;
     const ram = script.install_methods[0]?.resources.ram;
     const hdd = script.install_methods[0]?.resources.hdd;
-
+  
     const resourceParts = [];
     if (cpu) resourceParts.push(<span key="cpu"><b>CPU:</b> {cpu}vCPU</span>);
     if (ram) resourceParts.push(<span key="ram"><b>RAM:</b> {ram}MB</span>);
     if (hdd) resourceParts.push(<span key="hdd"><b>HDD:</b> {hdd}GB</span>);
-
+  
     return resourceParts.length > 0 ? (
-      <div className="text-sm text-gray-400">{resourceParts.reduce((prev, curr) => [prev, " | ", curr])}</div>
+      <div className="text-sm text-gray-400">
+        {resourceParts.map((part, index) => (
+          <React.Fragment key={index}>
+            {part}
+            {index < resourceParts.length - 1 && " | "}
+          </React.Fragment>
+        ))}
+      </div>
     ) : null;
   };
 
