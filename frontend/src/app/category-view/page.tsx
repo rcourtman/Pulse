@@ -15,7 +15,7 @@ const MAX_LOGOS = 5; // Max logos to display at once
 const CategoryView = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [logoIndex, setLogoIndex] = useState(0); // Keeps track of logo pagination
+  const [logoIndexes, setLogoIndexes] = useState<Record<string, number>>({}); // Track logo index for each category
   const router = useRouter();
 
   useEffect(() => {
@@ -29,6 +29,13 @@ const CategoryView = () => {
         const data = await response.json();
         console.log("Fetched categories:", data); // Debugging
         setCategories(data);
+
+        // Initialize logo indexes for all categories
+        const initialIndexes = data.reduce((acc: Record<string, number>, category: Category) => {
+          acc[category.name] = 0;
+          return acc;
+        }, {});
+        setLogoIndexes(initialIndexes);
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
@@ -39,12 +46,10 @@ const CategoryView = () => {
 
   const handleCategoryClick = (category: Category) => {
     setSelectedCategory(category);
-    setLogoIndex(0); // Reset logo pagination when switching categories
   };
 
   const handleBackClick = () => {
     setSelectedCategory(null);
-    setLogoIndex(0); // Reset logo pagination when going back
   };
 
   const handleScriptClick = (scriptSlug: string) => {
@@ -57,8 +62,25 @@ const CategoryView = () => {
       : text;
   };
 
-  const getVisibleLogos = (scripts: any[]) => {
-    return scripts.slice(logoIndex, logoIndex + MAX_LOGOS);
+  const getVisibleLogos = (scripts: any[], categoryName: string) => {
+    const index = logoIndexes[categoryName] || 0;
+    return scripts.slice(index, index + MAX_LOGOS);
+  };
+
+  const updateLogoIndex = (categoryName: string, direction: "prev" | "next", totalScripts: number) => {
+    setLogoIndexes((prev) => {
+      const currentIndex = prev[categoryName] || 0;
+      if (direction === "prev") {
+        return { ...prev, [categoryName]: Math.max(0, currentIndex - MAX_LOGOS) };
+      }
+      if (direction === "next") {
+        return {
+          ...prev,
+          [categoryName]: Math.min(currentIndex + MAX_LOGOS, totalScripts - MAX_LOGOS),
+        };
+      }
+      return prev;
+    });
   };
 
   return (
@@ -129,17 +151,17 @@ const CategoryView = () => {
                     <Button
                       variant="ghost"
                       className="p-1"
-                      disabled={logoIndex === 0}
+                      disabled={logoIndexes[category.name] === 0}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setLogoIndex((prev) => Math.max(0, prev - MAX_LOGOS));
+                        updateLogoIndex(category.name, "prev", category.scripts.length);
                       }}
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </Button>
                     <div className="flex flex-wrap justify-center gap-3">
                       {category.scripts &&
-                        getVisibleLogos(category.scripts).map((script, index) => (
+                        getVisibleLogos(category.scripts, category.name).map((script, index) => (
                           <img
                             key={index}
                             src={script.logo || defaultLogo}
@@ -156,10 +178,12 @@ const CategoryView = () => {
                     <Button
                       variant="ghost"
                       className="p-1"
-                      disabled={logoIndex + MAX_LOGOS >= (category.scripts?.length || 0)}
+                      disabled={
+                        logoIndexes[category.name] + MAX_LOGOS >= (category.scripts?.length || 0)
+                      }
                       onClick={(e) => {
                         e.stopPropagation();
-                        setLogoIndex((prev) => Math.min(prev + MAX_LOGOS, category.scripts?.length || 0));
+                        updateLogoIndex(category.name, "next", category.scripts.length);
                       }}
                     >
                       <ChevronRight className="h-5 w-5" />
