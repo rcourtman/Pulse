@@ -41,7 +41,6 @@ const CategoryView = () => {
           throw new Error("Failed to fetch categories");
         }
         const data = await response.json();
-        console.log("Fetched categories:", data); // Debugging
         setCategories(data);
 
         // Initialize logo indices
@@ -162,7 +161,7 @@ const CategoryView = () => {
                 >
                   <CardContent className="flex flex-col gap-4">
                     <div className="flex justify-between">
-                      <h3 className="text-lg font-bold">{script.name}</h3>
+                      <h3 className="text-lg font-bold script-text">{script.name}</h3>
                       {formattedBadge(script.type || "misc")}
                     </div>
                     <p className="text-sm text-gray-500">
@@ -197,7 +196,7 @@ const CategoryView = () => {
           <div className="flex justify-between items-center mb-8">
             <h1 className="text-3xl font-semibold mb-4">Categories</h1>
             <p className="text-sm text-gray-500">
-              {new Set(categories.flatMap((cat) => cat.scripts.map((s) => s.slug))).size} Total scripts
+              {categories.reduce((total, category) => total + (category.scripts?.length || 0), 0)} Total scripts
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
@@ -208,11 +207,14 @@ const CategoryView = () => {
                 className="cursor-pointer hover:shadow-lg flex flex-col items-center justify-center py-6"
               >
                 <CardContent className="flex flex-col items-center">
-                  <h3 className="text-xl font-bold mb-4">{category.name}</h3>
+                  <h3 className="text-xl font-bold mb-4 category-title">{category.name}</h3>
                   <div className="flex justify-center items-center gap-2 mb-4">
                     <Button
                       variant="ghost"
-                      onClick={() => switchLogos(category.name, "prev")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        switchLogos(category.name, "prev");
+                      }}
                       className="p-1"
                     >
                       <ChevronLeft className="h-4 w-4" />
@@ -235,7 +237,10 @@ const CategoryView = () => {
                         ))}
                     <Button
                       variant="ghost"
-                      onClick={() => switchLogos(category.name, "next")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        switchLogos(category.name, "next");
+                      }}
                       className="p-1"
                     >
                       <ChevronRight className="h-4 w-4" />
