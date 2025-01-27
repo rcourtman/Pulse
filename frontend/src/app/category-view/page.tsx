@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Category } from "@/lib/types";
 
@@ -11,9 +12,24 @@ const defaultLogo = "/default-logo.png"; // Fallback logo path
 const MAX_DESCRIPTION_LENGTH = 100; // Set max length for description
 const MAX_LOGOS = 5; // Max logos to display at once
 
+const formattedBadge = (type: string) => {
+  switch (type) {
+    case "vm":
+      return <Badge className="text-blue-500/75 border-blue-500/75">VM</Badge>;
+    case "ct":
+      return (
+        <Badge className="text-yellow-500/75 border-yellow-500/75">LXC</Badge>
+      );
+    case "misc":
+      return <Badge className="text-green-500/75 border-green-500/75">MISC</Badge>;
+  }
+  return null;
+};
+
 const CategoryView = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState<number | null>(null);
+  const [logoIndices, setLogoIndices] = useState<{ [key: string]: number }>({});
   const router = useRouter();
 
   useEffect(() => {
@@ -27,6 +43,13 @@ const CategoryView = () => {
         const data = await response.json();
         console.log("Fetched categories:", data); // Debugging
         setCategories(data);
+
+        // Initialize logo indices
+        const initialLogoIndices: { [key: string]: number } = {};
+        data.forEach((category: any) => {
+          initialLogoIndices[category.name] = 0;
+        });
+        setLogoIndices(initialLogoIndices);
       } catch (error) {
         console.error("Error fetching categories:", error);
       }
@@ -57,6 +80,22 @@ const CategoryView = () => {
     }
   };
 
+  const switchLogos = (categoryName: string, direction: "prev" | "next") => {
+    setLogoIndices((prev) => {
+      const currentIndex = prev[categoryName] || 0;
+      const category = categories.find((cat) => cat.name === categoryName);
+      if (!category || !category.scripts) return prev;
+
+      const totalLogos = category.scripts.length;
+      const newIndex =
+        direction === "prev"
+          ? (currentIndex - MAX_LOGOS + totalLogos) % totalLogos
+          : (currentIndex + MAX_LOGOS) % totalLogos;
+
+      return { ...prev, [categoryName]: newIndex };
+    });
+  };
+
   const truncateDescription = (text: string) => {
     return text.length > MAX_DESCRIPTION_LENGTH
       ? `${text.slice(0, MAX_DESCRIPTION_LENGTH)}...`
@@ -83,14 +122,6 @@ const CategoryView = () => {
         ))}
       </div>
     ) : null;
-  };
-
-  const renderType = (type: string) => {
-    return (
-      <span className="text-xs font-semibold text-blue-500 bg-gray-200 px-2 py-1 rounded-full">
-        {type.toUpperCase()}
-      </span>
-    );
   };
 
   return (
@@ -132,7 +163,7 @@ const CategoryView = () => {
                   <CardContent className="flex flex-col gap-4">
                     <div className="flex justify-between">
                       <h3 className="text-lg font-bold">{script.name}</h3>
-                      {renderType(script.type || "MISC")}
+                      {formattedBadge(script.type || "misc")}
                     </div>
                     <p className="text-sm text-gray-500">
                       <b>Created at:</b> {script.date_created || "No date available"}
@@ -178,21 +209,37 @@ const CategoryView = () => {
               >
                 <CardContent className="flex flex-col items-center">
                   <h3 className="text-xl font-bold mb-4">{category.name}</h3>
-                  <div className="flex justify-center gap-2 mb-4">
+                  <div className="flex justify-center items-center gap-2 mb-4">
+                    <Button
+                      variant="ghost"
+                      onClick={() => switchLogos(category.name, "prev")}
+                      className="p-1"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
                     {category.scripts &&
-                      category.scripts.slice(0, 5).map((script, i) => (
-                        <img
-                          key={i}
-                          src={script.logo || defaultLogo}
-                          alt={script.name || "Script logo"}
-                          title={script.name} // Hover zeigt den Scriptnamen an
-                          className="h-8 w-8 object-contain cursor-pointer"
-                          onClick={(e) => {
-                            e.stopPropagation(); // Verhindert Klick auf die Kategorie
-                            handleScriptClick(script.slug);
-                          }}
-                        />
-                      ))}
+                      category.scripts
+                        .slice(logoIndices[category.name] || 0, (logoIndices[category.name] || 0) + MAX_LOGOS)
+                        .map((script, i) => (
+                          <img
+                            key={i}
+                            src={script.logo || defaultLogo}
+                            alt={script.name || "Script logo"}
+                            title={script.name}
+                            className="h-8 w-8 object-contain cursor-pointer"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleScriptClick(script.slug);
+                            }}
+                          />
+                        ))}
+                    <Button
+                      variant="ghost"
+                      onClick={() => switchLogos(category.name, "next")}
+                      className="p-1"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
                   </div>
                   <p className="text-sm text-gray-400 text-center">
                     {(category as any).description || "No description available."}
