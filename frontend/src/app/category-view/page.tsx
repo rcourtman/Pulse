@@ -58,17 +58,17 @@ const CategoryView = () => {
   };
 
   return (
-    <div className="p-4 mt-20">
+    <div className="p-6 mt-20">
       {categories.length === 0 && (
         <p className="text-center text-gray-500">No categories available. Please check the API endpoint.</p>
       )}
       {selectedCategory ? (
         <div>
-          <Button variant="default" onClick={handleBackClick} className="mb-4">
+          <Button variant="default" onClick={handleBackClick} className="mb-6">
             Back to Categories
           </Button>
-          <h2 className="text-3xl font-semibold mb-4">{selectedCategory.name}</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <h2 className="text-3xl font-semibold mb-6">{selectedCategory.name}</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {selectedCategory.scripts
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((script) => (
@@ -108,29 +108,34 @@ const CategoryView = () => {
         </div>
       ) : (
         <div>
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-4xl font-bold mb-2">Categories</h1>
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-4xl font-bold">Categories</h1>
             <p className="text-sm text-gray-500">
               {categories.reduce((acc, cat) => acc + (cat.scripts?.length || 0), 0)} Total scripts
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
             {categories.map((category) => (
               <Card
                 key={category.name}
                 onClick={() => handleCategoryClick(category)}
-                className="cursor-pointer hover:shadow-lg flex flex-col items-center justify-center"
+                className="cursor-pointer hover:shadow-lg flex flex-col items-center justify-center py-6"
               >
                 <CardContent className="flex flex-col items-center">
-                  <h3 className="text-xl font-bold mb-2">{category.name}</h3>
-                  <div className="flex flex-wrap justify-center gap-2 mb-4">
+                  <h3 className="text-xl font-bold mb-4">{category.name}</h3>
+                  <div className="flex flex-wrap justify-center gap-3 mb-4">
                     {category.scripts &&
                       getRandomScripts(category.scripts).map((script, index) => (
                         <img
                           key={index}
                           src={script.logo || defaultLogo}
                           alt={script.name || "Script logo"}
-                          className="h-8 w-8 object-contain"
+                          title={script.name} // Tooltip on hover
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent card click
+                            handleScriptClick(script.slug);
+                          }}
+                          className="h-8 w-8 object-contain cursor-pointer hover:scale-110 transition-transform"
                         />
                       ))}
                   </div>
