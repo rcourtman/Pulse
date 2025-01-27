@@ -29,6 +29,7 @@ const formattedBadge = (type: string) => {
 const CategoryView = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryIndex, setSelectedCategoryIndex] = useState<number | null>(null);
+  const [currentScripts, setCurrentScripts] = useState<any[]>([]);
   const [logoIndices, setLogoIndices] = useState<{ [key: string]: number }>({});
   const router = useRouter();
 
@@ -59,10 +60,12 @@ const CategoryView = () => {
 
   const handleCategoryClick = (index: number) => {
     setSelectedCategoryIndex(index);
+    setCurrentScripts(categories[index]?.scripts || []); // Update scripts for the selected category
   };
 
   const handleBackClick = () => {
     setSelectedCategoryIndex(null);
+    setCurrentScripts([]); // Clear scripts when going back
   };
 
   const handleScriptClick = (scriptSlug: string) => {
@@ -76,6 +79,7 @@ const CategoryView = () => {
           ? (selectedCategoryIndex - 1 + categories.length) % categories.length
           : (selectedCategoryIndex + 1) % categories.length;
       setSelectedCategoryIndex(newIndex);
+      setCurrentScripts(categories[newIndex]?.scripts || []); // Update scripts for the new category
     }
   };
 
@@ -151,7 +155,7 @@ const CategoryView = () => {
 
           {/* Scripts Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {categories[selectedCategoryIndex].scripts
+            {currentScripts
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((script) => (
                 <Card
