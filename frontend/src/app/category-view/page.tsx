@@ -52,8 +52,9 @@ const CategoryView = () => {
       : text;
   };
 
-  const getRandomLogos = (scripts: any[], count: number) => {
-    return scripts.sort(() => Math.random() - 0.5).slice(0, count);
+  const getRandomScripts = (scripts: any[]) => {
+    if (!scripts || scripts.length <= 5) return scripts;
+    return scripts.sort(() => 0.5 - Math.random()).slice(0, 5);
   };
 
   return (
@@ -66,12 +67,16 @@ const CategoryView = () => {
           <Button variant="default" onClick={handleBackClick} className="mb-4">
             Back to Categories
           </Button>
-          <h2 className="text-3xl font-extrabold mb-4">{selectedCategory.name}</h2>
+          <h2 className="text-3xl font-semibold mb-4">{selectedCategory.name}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             {selectedCategory.scripts
               .sort((a, b) => a.name.localeCompare(b.name))
               .map((script) => (
-                <Card key={script.name} className="p-4 cursor-pointer" onClick={() => handleScriptClick(script.slug)}>
+                <Card
+                  key={script.name}
+                  className="p-4 cursor-pointer"
+                  onClick={() => handleScriptClick(script.slug)}
+                >
                   <CardContent className="flex flex-col gap-4">
                     <div className="flex items-center gap-4">
                       <img
@@ -81,14 +86,18 @@ const CategoryView = () => {
                       />
                       <div>
                         <h3 className="text-lg font-bold">{script.name}</h3>
-                        <p className="text-sm text-gray-500"><b>Created at:</b> {script.date_created || "No date available"}</p>
+                        <p className="text-sm text-gray-500">
+                          <b>Created at:</b> {script.date_created || "No date available"}
+                        </p>
                         <p className="text-sm text-gray-700">
                           {truncateDescription(script.description || "No description available.")}
                         </p>
                       </div>
                     </div>
                     <div className="text-sm text-gray-600">
-                      <b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU | <b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB | <b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB
+                      <b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU |{" "}
+                      <b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB |{" "}
+                      <b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB
                     </div>
                   </CardContent>
                 </Card>
@@ -98,12 +107,12 @@ const CategoryView = () => {
       ) : (
         <div>
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-4xl font-extrabold">Categories</h1>
+            <h1 className="text-4xl font-bold mb-2">Categories</h1>
             <p className="text-sm text-gray-500">
               {categories.reduce((acc, cat) => acc + (cat.scripts?.length || 0), 0)} Total scripts
             </p>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {categories.map((category) => (
               <Card
                 key={category.name}
@@ -111,17 +120,18 @@ const CategoryView = () => {
                 className="cursor-pointer hover:shadow-lg flex flex-col items-center justify-center"
               >
                 <CardContent className="flex flex-col items-center">
-                  <div className="flex flex-wrap justify-center gap-2 mb-2">
-                    {category.scripts && getRandomLogos(category.scripts, 5).map((script, index) => (
-                      <img
-                        key={index}
-                        src={script.logo || defaultLogo}
-                        alt={script.name || "Script logo"}
-                        className="h-8 w-8 object-contain"
-                      />
-                    ))}
+                  <div className="flex flex-wrap justify-center gap-2 mb-4">
+                    {category.scripts &&
+                      getRandomScripts(category.scripts).map((script, index) => (
+                        <img
+                          key={index}
+                          src={script.logo || defaultLogo}
+                          alt={script.name || "Script logo"}
+                          className="h-8 w-8 object-contain"
+                        />
+                      ))}
                   </div>
-                  <h3 className="text-lg font-bold mb-1">{category.name}</h3>
+                  <h3 className="text-xl font-bold mb-2">{category.name}</h3>
                   <p className="text-sm text-gray-400 text-center">
                     {category.description || "No description available."}
                   </p>
