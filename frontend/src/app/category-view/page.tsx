@@ -176,6 +176,22 @@ const CategoryView = () => {
               >
                 <CardContent className="flex flex-col items-center">
                   <h3 className="text-xl font-bold mb-4">{category.name}</h3>
+                  <div className="flex justify-center gap-2 mb-4">
+                    {category.scripts &&
+                      category.scripts.slice(0, 5).map((script, i) => (
+                        <img
+                          key={i}
+                          src={script.logo || defaultLogo}
+                          alt={script.name || "Script logo"}
+                          title={script.name} // Hover zeigt den Scriptnamen an
+                          className="h-8 w-8 object-contain cursor-pointer"
+                          onClick={(e) => {
+                            e.stopPropagation(); // Verhindert Klick auf die Kategorie
+                            handleScriptClick(script.slug);
+                          }}
+                        />
+                      ))}
+                  </div>
                   <p className="text-sm text-gray-400 text-center">
                     {(category as any).description || "No description available."}
                   </p>
