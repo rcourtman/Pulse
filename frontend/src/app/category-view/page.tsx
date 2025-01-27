@@ -78,26 +78,28 @@ const CategoryView = () => {
                   onClick={() => handleScriptClick(script.slug)}
                 >
                   <CardContent className="flex flex-col gap-4">
-                    <div className="flex items-center gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold">{script.name}</h3>
+                      <p className="text-sm text-gray-500">
+                        <b>Created at:</b> {script.date_created || "No date available"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap justify-center gap-2">
                       <img
                         src={script.logo || defaultLogo}
                         alt={script.name}
                         className="h-12 w-12 object-contain"
                       />
-                      <div>
-                        <h3 className="text-lg font-bold">{script.name}</h3>
-                        <p className="text-sm text-gray-500">
-                          <b>Created at:</b> {script.date_created || "No date available"}
-                        </p>
-                        <p className="text-sm text-gray-700">
-                          {truncateDescription(script.description || "No description available.")}
-                        </p>
-                      </div>
                     </div>
-                    <div className="text-sm text-gray-600">
-                      <b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU |{" "}
-                      <b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB |{" "}
-                      <b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB
+                    <div>
+                      <p className="text-sm text-gray-700">
+                        {truncateDescription(script.description || "No description available.")}
+                      </p>
+                      <div className="text-sm text-gray-600 mt-2">
+                        <b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU |{" "}
+                        <b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB |{" "}
+                        <b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -120,6 +122,7 @@ const CategoryView = () => {
                 className="cursor-pointer hover:shadow-lg flex flex-col items-center justify-center"
               >
                 <CardContent className="flex flex-col items-center">
+                  <h3 className="text-xl font-bold mb-2">{category.name}</h3>
                   <div className="flex flex-wrap justify-center gap-2 mb-4">
                     {category.scripts &&
                       getRandomScripts(category.scripts).map((script, index) => (
@@ -131,7 +134,6 @@ const CategoryView = () => {
                         />
                       ))}
                   </div>
-                  <h3 className="text-xl font-bold mb-2">{category.name}</h3>
                   <p className="text-sm text-gray-400 text-center">
                     {(category as any).description || "No description available."}
                   </p>
