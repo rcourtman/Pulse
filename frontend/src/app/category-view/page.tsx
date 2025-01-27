@@ -133,7 +133,7 @@ const CategoryView = () => {
                   </div>
                   <h3 className="text-xl font-bold mb-2">{category.name}</h3>
                   <p className="text-sm text-gray-400 text-center">
-                    {category.description || "No description available."}
+                    {(category as any).description || "No description available."}
                   </p>
                 </CardContent>
               </Card>
