@@ -4,15 +4,18 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Category } from "@/lib/types";
 
 const defaultLogo = "/default-logo.png"; // Fallback logo path
 
 const MAX_DESCRIPTION_LENGTH = 100; // Set max length for description
+const MAX_LOGOS = 5; // Max logos to display at once
 
 const CategoryView = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [logoIndex, setLogoIndex] = useState(0); // Keeps track of logo pagination
   const router = useRouter();
 
   useEffect(() => {
@@ -36,10 +39,12 @@ const CategoryView = () => {
 
   const handleCategoryClick = (category: Category) => {
     setSelectedCategory(category);
+    setLogoIndex(0); // Reset logo pagination when switching categories
   };
 
   const handleBackClick = () => {
     setSelectedCategory(null);
+    setLogoIndex(0); // Reset logo pagination when going back
   };
 
   const handleScriptClick = (scriptSlug: string) => {
@@ -52,9 +57,8 @@ const CategoryView = () => {
       : text;
   };
 
-  const getRandomScripts = (scripts: any[]) => {
-    if (!scripts || scripts.length <= 5) return scripts;
-    return scripts.sort(() => 0.5 - Math.random()).slice(0, 5);
+  const getVisibleLogos = (scripts: any[]) => {
+    return scripts.slice(logoIndex, logoIndex + MAX_LOGOS);
   };
 
   return (
@@ -78,28 +82,26 @@ const CategoryView = () => {
                   onClick={() => handleScriptClick(script.slug)}
                 >
                   <CardContent className="flex flex-col gap-4">
-                    <div>
-                      <h3 className="text-lg font-bold">{script.name}</h3>
-                      <p className="text-sm text-gray-500">
-                        <b>Created at:</b> {script.date_created || "No date available"}
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap justify-center gap-2">
+                    <div className="flex items-center gap-4">
                       <img
                         src={script.logo || defaultLogo}
                         alt={script.name}
                         className="h-12 w-12 object-contain"
                       />
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-700">
-                        {truncateDescription(script.description || "No description available.")}
-                      </p>
-                      <div className="text-sm text-gray-600 mt-2">
-                        <b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU |{" "}
-                        <b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB |{" "}
-                        <b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB
+                      <div>
+                        <h3 className="text-lg font-bold">{script.name}</h3>
+                        <p className="text-sm text-gray-500">
+                          <b>Created at:</b> {script.date_created || "No date available"}
+                        </p>
+                        <p className="text-sm text-gray-700">
+                          {truncateDescription(script.description || "No description available.")}
+                        </p>
                       </div>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      <b>CPU:</b> {script.install_methods[0]?.resources.cpu || "N/A"}vCPU |{" "}
+                      <b>RAM:</b> {script.install_methods[0]?.resources.ram || "N/A"}MB |{" "}
+                      <b>HDD:</b> {script.install_methods[0]?.resources.hdd || "N/A"}GB
                     </div>
                   </CardContent>
                 </Card>
@@ -123,21 +125,45 @@ const CategoryView = () => {
               >
                 <CardContent className="flex flex-col items-center">
                   <h3 className="text-xl font-bold mb-4">{category.name}</h3>
-                  <div className="flex flex-wrap justify-center gap-3 mb-4">
-                    {category.scripts &&
-                      getRandomScripts(category.scripts).map((script, index) => (
-                        <img
-                          key={index}
-                          src={script.logo || defaultLogo}
-                          alt={script.name || "Script logo"}
-                          title={script.name} // Tooltip on hover
-                          onClick={(e) => {
-                            e.stopPropagation(); // Prevent card click
-                            handleScriptClick(script.slug);
-                          }}
-                          className="h-8 w-8 object-contain cursor-pointer hover:scale-110 transition-transform"
-                        />
-                      ))}
+                  <div className="flex items-center gap-3 mb-4">
+                    <Button
+                      variant="ghost"
+                      className="p-1"
+                      disabled={logoIndex === 0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLogoIndex((prev) => Math.max(0, prev - MAX_LOGOS));
+                      }}
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </Button>
+                    <div className="flex flex-wrap justify-center gap-3">
+                      {category.scripts &&
+                        getVisibleLogos(category.scripts).map((script, index) => (
+                          <img
+                            key={index}
+                            src={script.logo || defaultLogo}
+                            alt={script.name || "Script logo"}
+                            title={script.name} // Tooltip on hover
+                            onClick={(e) => {
+                              e.stopPropagation(); // Prevent card click
+                              handleScriptClick(script.slug);
+                            }}
+                            className="h-8 w-8 object-contain cursor-pointer hover:scale-110 transition-transform"
+                          />
+                        ))}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      className="p-1"
+                      disabled={logoIndex + MAX_LOGOS >= (category.scripts?.length || 0)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLogoIndex((prev) => Math.min(prev + MAX_LOGOS, category.scripts?.length || 0));
+                      }}
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </Button>
                   </div>
                   <p className="text-sm text-gray-400 text-center">
                     {(category as any).description || "No description available."}
