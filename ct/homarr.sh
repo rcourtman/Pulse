@@ -59,6 +59,7 @@ fi
     mv homarr-${RELEASE} /opt/homarr
     mv /opt/homarr-data-backup/.env /opt/homarr/.env
     cd /opt/homarr
+    pnpm install &>/dev/null
     pnpm run db:migration:sqlite:run &>/dev/null
     pnpm build &>/dev/null
     mkdir build
