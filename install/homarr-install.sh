@@ -47,12 +47,12 @@ mv homarr-${RELEASE} /opt/homarr
 mkdir -p /opt/homarr_db
 touch /opt/homarr_db/db.sqlite
 AUTH_SECRET="$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-13)"
-SECRET_ENCRYPTION_KEY="$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | cut -c1-32)"
+SECRET_ENCRYPTION_KEY="$(openssl rand -hex 32)"
 
 cat <<EOF >/opt/homarr/.env
-AUTH_SECRET="${AUTH_SECRET}"
+AUTH_SECRET='${AUTH_SECRET}'
 DB_DRIVER='better-sqlite3'
-SECRET_ENCRYPTION_KEY="${SECRET_ENCRYPTION_KEY}"
+SECRET_ENCRYPTION_KEY='${SECRET_ENCRYPTION_KEY}'
 DB_URL='/opt/homarr_db/db.sqlite'
 TURBO_TELEMETRY_DISABLED=1
 NODE_OPTIONS='-r @homarr/log/override'
