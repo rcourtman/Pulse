@@ -55,7 +55,6 @@ DB_DRIVER='better-sqlite3'
 SECRET_ENCRYPTION_KEY='${SECRET_ENCRYPTION_KEY}'
 DB_URL='/opt/homarr_db/db.sqlite'
 TURBO_TELEMETRY_DISABLED=1
-NODE_OPTIONS='-r @homarr/log/override'
 EOF
 
 cd /opt/homarr
