@@ -2,8 +2,7 @@
 
 # Copyright (c) 2021-2025 community-scripts ORG
 # Author: MickLesk (Canbiz)
-# License: MIT
-# https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/ajnart/homarr
 
 source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
@@ -60,6 +59,7 @@ NODE_OPTIONS='-r @homarr/log/override'
 EOF
 
 cd /opt/homarr
+$STD pnpm install
 $STD pnpm run db:migration:sqlite:run
 $STD pnpm build
 mkdir build
