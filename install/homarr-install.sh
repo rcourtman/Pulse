@@ -35,7 +35,7 @@ msg_ok "Set up Node.js Repository"
 msg_info "Installing Node.js/pnpm"
 $STD apt-get update
 $STD apt-get install -y nodejs
-$STD npm install -g pnpm
+$STD npm install -g pnpm@latest
 msg_ok "Installed Node.js/pnpm"
 
 msg_info "Installing Homarr (Patience)"
