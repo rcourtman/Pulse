@@ -16,7 +16,7 @@
     "install_methods": [
         {
             "type": "default",
-            "script": "misc/clean_orphaned_lvm.sh",
+            "script": "misc/clean-orphaned-lvm.sh",
             "resources": {
                 "cpu": null,
                 "ram": null,
