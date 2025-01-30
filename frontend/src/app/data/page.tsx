@@ -166,7 +166,7 @@ const DataFetcher: React.FC = () => {
           {showChart ? "Hide Chart" : "Show Chart"}
         </button>
       </div>
-      {showChart && <ApplicationChart data={filteredData} />}
+      <ApplicationChart data={filteredData} />
       <div className="mb-4 flex justify-between items-center">
         <p className="text-lg font-bold">{filteredData.length} results found</p>
         <select value={itemsPerPage} onChange={handleItemsPerPageChange} className="p-2 border">
