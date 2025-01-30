@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { string } from "zod";
-
+import ApplicationChart from "../../components/ApplicationChart";
 
 interface DataModel {
   id: number;
@@ -36,6 +36,7 @@ const DataFetcher: React.FC = () => {
   const [sortConfig, setSortConfig] = useState<{ key: keyof DataModel | null, direction: 'ascending' | 'descending' }>({ key: 'id', direction: 'descending' });
   const [itemsPerPage, setItemsPerPage] = useState(5);
   const [currentPage, setCurrentPage] = useState(1);
+  const [showChart, setShowChart] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -158,7 +159,14 @@ const DataFetcher: React.FC = () => {
           />
           <label className="text-sm text-gray-600 mt-1 block">Set a end date</label>
         </div>
+        <button
+          onClick={() => setShowChart((prev) => !prev)}
+          className="p-2 bg-blue-500 text-white rounded"
+          >
+          {showChart ? "Hide Chart" : "Show Chart"}
+        </button>
       </div>
+      {showChart && <ApplicationChart data={filteredData} />}
       <div className="mb-4 flex justify-between items-center">
         <p className="text-lg font-bold">{filteredData.length} results found</p>
         <select value={itemsPerPage} onChange={handleItemsPerPageChange} className="p-2 border">
