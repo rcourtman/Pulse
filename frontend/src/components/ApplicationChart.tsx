@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Pie } from "react-chartjs-2";
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 import ChartDataLabels from "chartjs-plugin-datalabels";
-import Modal from "@/components/Modal";
+import Modal from "@/components/Modal"; 
 
 ChartJS.register(ArcElement, Tooltip, Legend, ChartDataLabels);
 
@@ -16,6 +16,7 @@ const ApplicationChart: React.FC<ApplicationChartProps> = ({ data }) => {
   const [isChartOpen, setIsChartOpen] = useState(false);
   const [isTableOpen, setIsTableOpen] = useState(false);
   const [chartStartIndex, setChartStartIndex] = useState(0);
+  const [tableLimit, setTableLimit] = useState(20);
 
   const appCounts: Record<string, number> = {};
   data.forEach((item) => {
@@ -59,7 +60,7 @@ const ApplicationChart: React.FC<ApplicationChartProps> = ({ data }) => {
       </button>
 
       <Modal isOpen={isChartOpen} onClose={() => setIsChartOpen(false)}>
-        <h2 className="text-xl font-bold mb-4">Top Applications (Chart)</h2>
+        <h2 className="text-xl font-bold text-black dark:text-white mb-4">Top Applications (Chart)</h2>
         <div className="w-3/4 mx-auto">
           <Pie
             data={chartData}
@@ -82,21 +83,21 @@ const ApplicationChart: React.FC<ApplicationChartProps> = ({ data }) => {
             disabled={chartStartIndex === 0}
             className="p-2 border rounded bg-blue-500 text-white"
           >
-            ◀ Vorherige 20
+            ◀ Last 20
           </button>
           <button
             onClick={() => setChartStartIndex(chartStartIndex + 20)}
             disabled={chartStartIndex + 20 >= sortedApps.length}
             className="p-2 border rounded bg-blue-500 text-white"
           >
-            Nächste 20 ▶
+            Next 20 ▶
           </button>
         </div>
       </Modal>
 
       <Modal isOpen={isTableOpen} onClose={() => setIsTableOpen(false)}>
-        <h2 className="text-xl font-bold mb-4">Application Count Table</h2>
-        <table className="w-full border-collapse border border-gray-600">
+        <h2 className="text-xl font-bold text-black dark:text-white mb-4">Application Count Table</h2>
+        <table className="w-full border-collapse border border-gray-600 dark:border-gray-500">
           <thead>
             <tr className="bg-gray-800 text-white">
               <th className="p-2 border">Application</th>
@@ -104,14 +105,25 @@ const ApplicationChart: React.FC<ApplicationChartProps> = ({ data }) => {
             </tr>
           </thead>
           <tbody>
-            {sortedApps.map(([name, count]) => (
-              <tr key={name} className="hover:bg-gray-200">
+            {sortedApps.slice(0, tableLimit).map(([name, count]) => (
+              <tr key={name} className="hover:bg-gray-200 dark:hover:bg-gray-700 text-black dark:text-white">
                 <td className="p-2 border">{name}</td>
                 <td className="p-2 border">{count}</td>
               </tr>
             ))}
           </tbody>
         </table>
+
+        {tableLimit < sortedApps.length && (
+          <div className="text-center mt-4">
+            <button
+              onClick={() => setTableLimit(tableLimit + 20)}
+              className="p-2 bg-green-500 text-white rounded"
+            >
+              Load More
+            </button>
+          </div>
+        )}
       </Modal>
     </div>
   );

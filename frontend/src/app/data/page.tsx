@@ -159,12 +159,6 @@ const DataFetcher: React.FC = () => {
           />
           <label className="text-sm text-gray-600 mt-1 block">Set a end date</label>
         </div>
-        <button
-          onClick={() => setShowChart((prev) => !prev)}
-          className="p-2 bg-blue-500 text-white rounded"
-          >
-          {showChart ? "Hide Chart" : "Show Chart"}
-        </button>
       </div>
       <ApplicationChart data={filteredData} />
       <div className="mb-4 flex justify-between items-center">
