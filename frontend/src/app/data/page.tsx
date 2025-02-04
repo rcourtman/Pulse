@@ -11,18 +11,16 @@ interface DataModel {
   disk_size: number;
   core_count: number;
   ram_size: number;
-  verbose: string;
   os_type: string;
   os_version: string;
-  hn: string;
   disableip6: string;
-  ssh: string;
-  tags: string;
   nsapp: string;
   created_at: string;
   method: string;
   pve_version: string;
   status: string;
+  error: string;
+  type: string;
 }
 
 
@@ -36,8 +34,8 @@ const DataFetcher: React.FC = () => {
   const [sortConfig, setSortConfig] = useState<{ key: keyof DataModel | null, direction: 'ascending' | 'descending' }>({ key: 'id', direction: 'descending' });
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [currentPage, setCurrentPage] = useState(1);
-  const [interval, setIntervalTime] = useState<number>(10); // Default interval 10 seconds
-  const [reloadInterval, setReloadInterval] = useState<NodeJS.Timeout | null>(null);
+
+  const [showErrorRow, setShowErrorRow] = useState<number | null>(null);
 
 
   useEffect(() => {
@@ -118,38 +116,6 @@ const DataFetcher: React.FC = () => {
 
   const paginatedData = sortedData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  useEffect(() => {
-    const storedInterval = localStorage.getItem('reloadInterval');
-    if (storedInterval) {
-      setIntervalTime(Number(storedInterval));
-    }
-  }, []);
-
-  
-  useEffect(() => {
-    if (interval <= 10) { 
-      const newInterval = setInterval(() => {
-        window.location.reload();
-      }, 10000); 
-
-     
-      return () => clearInterval(newInterval);
-    } else {
-      const newInterval = setInterval(() => {
-        window.location.reload();
-      }, interval * 1000);
-    }
-
-  }, [interval]); 
-
-
-  useEffect(() => {
-    if (interval > 0) {
-      localStorage.setItem('reloadInterval', interval.toString());
-    } else {
-      localStorage.removeItem('reloadInterval');
-    }
-  }, [interval]);
 
   if (loading) return <p>Loading...</p>;
   if (error) return <p>Error: {error}</p>;
@@ -211,19 +177,6 @@ const DataFetcher: React.FC = () => {
           />
           <label className="text-sm text-gray-600 mt-1 block">Set a end date</label>
         </div>
-     
-      <div className="mb-4 flex space-x-4">
-        <div>
-          <input
-            type="number"
-            value={interval}
-            onChange={e => setIntervalTime(Number(e.target.value))}
-            className="p-2 border"
-            placeholder="Interval (seconds)"
-          />
-          <label className="text-sm text-gray-600 mt-1 block">Set reload interval (0 for no reload)</label>
-        </div>
-        </div>
       </div>
       <ApplicationChart data={filteredData} />
       <div className="mb-4 flex justify-between items-center">
@@ -242,6 +195,7 @@ const DataFetcher: React.FC = () => {
             <thead>
               <tr>
                 <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('status')}>Status</th>
+                <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('type')}>Type</th>
                 <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('nsapp')}>Application</th>
                 <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('os_type')}>OS</th>
                 <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('os_version')}>OS Version</th>
@@ -250,6 +204,7 @@ const DataFetcher: React.FC = () => {
                 <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('ram_size')}>RAM Size</th>
                 <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('method')}>Method</th>
                 <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('pve_version')}>PVE Version</th>
+                <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('error')}>Error Message</th>
                 <th className="px-4 py-2 border-b cursor-pointer" onClick={() => requestSort('created_at')}>Created At</th>
               </tr>
             </thead>
@@ -262,11 +217,18 @@ const DataFetcher: React.FC = () => {
                     ) : item.status === "failed" ? (
                       "❌"
                     ) : item.status === "installing" ? (
-                      "🔄"  
+                      "🔄"
                     ) : (
                       item.status
                     )}
                   </td>
+                  <td className="px-4 py-2 border-b">{item.type === "lxc" ? (
+                    "📦"
+                  ) : item.type === "vm" ? (
+                    "🖥️"
+                  ) : (
+                    item.type
+                  )}</td>
                   <td className="px-4 py-2 border-b">{item.nsapp}</td>
                   <td className="px-4 py-2 border-b">{item.os_type}</td>
                   <td className="px-4 py-2 border-b">{item.os_version}</td>
@@ -275,6 +237,20 @@ const DataFetcher: React.FC = () => {
                   <td className="px-4 py-2 border-b">{item.ram_size}</td>
                   <td className="px-4 py-2 border-b">{item.method}</td>
                   <td className="px-4 py-2 border-b">{item.pve_version}</td>
+                  <td className="px-4 py-2 border-b">
+                    {item.error && item.error !== "none" ? (
+                      showErrorRow === index ? (
+                        <>
+                          {item.error}
+                          <button onClick={() => setShowErrorRow(null)}>{item.error}</button>
+                        </>
+                      ) : (
+                        <button onClick={() => setShowErrorRow(index)}>Click to show error</button>
+                      )
+                    ) : (
+                      "none"
+                    )}
+                  </td>
                   <td className="px-4 py-2 border-b">{formatDate(item.created_at)}</td>
                 </tr>
               ))}
