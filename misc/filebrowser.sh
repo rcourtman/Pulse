@@ -90,10 +90,7 @@ if [[ "${install_prompt,,}" =~ ^(y|yes)$ ]]; then
     read -r -p "Would you like to use No Authentication? (y/N): " auth_prompt
     if [[ "${auth_prompt,,}" =~ ^(y|yes)$ ]]; then
         msg_info "Configuring No Authentication"
-        filebrowser config init -a '0.0.0.0' -p "$PORT" --database "$DB_PATH" &>/dev/null
-        filebrowser config set -a '0.0.0.0' -p "$PORT" --database "$DB_PATH" &>/dev/null
         filebrowser config init -a '0.0.0.0' -p "$PORT" --auth.method=noauth --database "$DB_PATH" &>/dev/null
-        filebrowser config set -a '0.0.0.0' -p "$PORT" --auth.method=noauth --database "$DB_PATH" &>/dev/null
         msg_ok "No Authentication configured"
     else
         msg_info "Setting up default authentication"
