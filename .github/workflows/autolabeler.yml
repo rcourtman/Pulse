@@ -16,60 +16,47 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install minimatch
+        run: npm install minimatch
+
       - name: Label PR based on config rules
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs').promises;
             const path = require('path');
-
-            // `require.resolve()` sorgt dafür, dass `minimatch` aus der GitHub-Umgebung geladen wird.
-            const minimatch = require(require.resolve("minimatch"));
+            const { minimatch } = require('minimatch');
 
             const configPath = path.resolve(process.env.CONFIG_PATH);
-            let config;
-            try {
-              const fileContent = await fs.readFile(configPath, 'utf-8');
-              config = JSON.parse(fileContent);
-            } catch (error) {
-              console.error(`❌ Fehler beim Laden der Konfigurationsdatei: ${error.message}`);
-              return;
-            }
-
+            const fileContent = await fs.readFile(configPath, 'utf-8');
+            const autolabelerConfig = JSON.parse(fileContent);
+ 
             const prNumber = context.payload.pull_request.number;
-            const prFiles = (await github.rest.pulls.listFiles({
+            const prListFilesResponse = await github.rest.pulls.listFiles({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber,
-            })).data;
+            });
+            const prFiles = prListFilesResponse.data;
 
-            let labelsToAdd = new Set();
-
-            for (const [label, rules] of Object.entries(config)) {
-              if (prFiles.some(prFile =>
-                rules.some(rule =>
-                  (!rule.fileStatus || rule.fileStatus === prFile.status) &&
-                  rule.includeGlobs.some(glob => minimatch(prFile.filename, glob)) &&
-                  !rule.excludeGlobs.some(glob => minimatch(prFile.filename, glob))
-                )
-              )) {
-                labelsToAdd.add(label);
-              }
-            }
-
-            const existingLabels = new Set((await github.rest.issues.listLabelsOnIssue({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-            })).data.map(l => l.name));
-
-            labelsToAdd = [...labelsToAdd].filter(label => !existingLabels.has(label));
-
-            if (labelsToAdd.length > 0) {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: prNumber,
-                labels: labelsToAdd,
+            for (const [label, rules] of Object.entries(autolabelerConfig)) {
+              const shouldAddLabel = prFiles.some((prFile) => {
+                return rules.some((rule) => {
+                  const isFileStatusMatch = rule.fileStatus ? rule.fileStatus === prFile.status : true;
+                  const isIncludeGlobMatch = rule.includeGlobs.some((glob) => minimatch(prFile.filename, glob));
+                  const isExcludeGlobMatch = rule.excludeGlobs.some((glob) => minimatch(prFile.filename, glob));
+                  
+                  return isFileStatusMatch && isIncludeGlobMatch && !isExcludeGlobMatch;
+                });
               });
+
+              if (shouldAddLabel) {
+                console.log(`Adding label ${label} to PR ${prNumber}`);
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: prNumber,
+                  labels: [label],
+                });
+              }
             }
