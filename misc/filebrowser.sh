@@ -91,6 +91,8 @@ if [[ "${install_prompt,,}" =~ ^(y|yes)$ ]]; then
     if [[ "${auth_prompt,,}" =~ ^(y|yes)$ ]]; then
         msg_info "Configuring No Authentication"
         filebrowser config init -a '0.0.0.0' -p "$PORT" --database "$DB_PATH" &>/dev/null
+        filebrowser config set -a '0.0.0.0' -p "$PORT" --database "$DB_PATH" &>/dev/null
+        filebrowser config init -a '0.0.0.0' -p "$PORT" --auth.method=noauth --database "$DB_PATH" &>/dev/null
         filebrowser config set -a '0.0.0.0' -p "$PORT" --auth.method=noauth --database "$DB_PATH" &>/dev/null
         msg_ok "No Authentication configured"
     else
