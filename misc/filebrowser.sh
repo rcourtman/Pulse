@@ -26,7 +26,7 @@ INFO="${BL}ℹ️${CL}"
 APP="FileBrowser"
 INSTALL_PATH="/usr/local/bin/filebrowser"
 SERVICE_PATH="/etc/systemd/system/filebrowser.service"
-DB_PATH="/root/filebrowser.db"
+DB_PATH="/var/lib/filebrowser/filebrowser.db"
 IP=$(hostname -I | awk '{print $1}')
 header_info
 
@@ -52,6 +52,7 @@ if [ -f "$INSTALL_PATH" ]; then
         msg_info "Uninstalling ${APP}"
         systemctl disable -q --now filebrowser.service
         rm -f "$INSTALL_PATH" "$DB_PATH" "$SERVICE_PATH"
+        
         msg_ok "${APP} has been uninstalled."
         exit 0
     fi
