@@ -86,13 +86,13 @@ if [[ "${install_prompt,,}" =~ ^(y|yes)$ ]]; then
     if [[ "${auth_prompt,,}" =~ ^(y|yes)$ ]]; then
         msg_info "Configuring No Authentication"
         filebrowser config init -a '0.0.0.0' --database /var/lib/filebrowser/filebrowser.db &>/dev/null
-        filebrowser config set -a '0.0.0.0' --auth.method=noauth &>/dev/null
+        filebrowser config set -a '0.0.0.0' --auth.method=noauth --database /var/lib/filebrowser/filebrowser.db &>/dev/null
         msg_ok "No Authentication configured"
     else
         msg_info "Setting up default authentication"
         filebrowser config init -a '0.0.0.0' --database /var/lib/filebrowser/filebrowser.db &>/dev/null
-        filebrowser config set -a '0.0.0.0' &>/dev/null
-        filebrowser users add admin helper-scripts.com --perm.admin &>/dev/null
+        filebrowser config set -a '0.0.0.0' --database /var/lib/filebrowser/filebrowser.db &>/dev/null
+        filebrowser users add admin helper-scripts.com --perm.admin --database /var/lib/filebrowser/filebrowser.db &>/dev/null
         msg_ok "Default authentication configured (admin:helper-scripts.com)"
     fi
 
