@@ -13,20 +13,26 @@ jobs:
     env:
       CONFIG_PATH: .github/autolabeler-config.json
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Label PR based on config rules
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs').promises;
-            const { minimatch } = require('minimatch');
+            const path = require('path');
 
-            const configPath = process.env.CONFIG_PATH;
+            // `require.resolve()` sorgt dafür, dass `minimatch` aus der GitHub-Umgebung geladen wird.
+            const minimatch = require(require.resolve("minimatch"));
+
+            const configPath = path.resolve(process.env.CONFIG_PATH);
             let config;
             try {
               const fileContent = await fs.readFile(configPath, 'utf-8');
               config = JSON.parse(fileContent);
             } catch (error) {
-              console.error(`❌ Issue while load config file: ${error.message}`);
+              console.error(`❌ Fehler beim Laden der Konfigurationsdatei: ${error.message}`);
               return;
             }
 
