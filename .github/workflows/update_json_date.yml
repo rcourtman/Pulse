@@ -1,4 +1,4 @@
-name: Auto Update JSON-Dateien (new files only)
+name: Auto Update JSON-Date
 
 on:
   push:
@@ -33,7 +33,7 @@ jobs:
       - name: Find newly added JSON files
         id: find_new_json
         run: |
-          NEW_JSON_FILES=$(git log --diff-filter=A --name-only --pretty=format: -- json/*.json || true)
+          NEW_JSON_FILES=$(git diff --diff-filter=A --name-only HEAD~1 -- json/*.json || true)
 
           if [[ -z "$NEW_JSON_FILES" ]]; then
             echo "CHANGED=false" >> $GITHUB_ENV
