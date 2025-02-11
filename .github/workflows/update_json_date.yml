@@ -40,8 +40,8 @@ jobs:
       - name: Get Open PRs
         run: |
           echo "Fetching open PRs..."
-          PRS=$(gh pr list --state open --json number,headRepositoryOwner,headRepositoryUrl,headRefName \
-            --jq '[.[] | {number: .number, repo: .headRepositoryUrl, branch: .headRefName}]' || echo "")
+          PRS=$(gh pr list --state open --json number,headRepository,headRefName \
+            --jq '[.[] | {number: .number, repo: .headRepository.nameWithOwner, branch: .headRefName}]' || echo "")
 
           if [[ -z "$PRS" || "$PRS" == "[]" ]]; then
             echo "No open PRs found."
@@ -63,25 +63,25 @@ jobs:
             fi
 
             PR_NUMBER=$(echo "$PR_ENTRY" | jq -r '.number // empty')
-            PR_REPO_URL=$(echo "$PR_ENTRY" | jq -r '.repo // empty')
+            PR_REPO=$(echo "$PR_ENTRY" | jq -r '.repo // empty')
             PR_BRANCH=$(echo "$PR_ENTRY" | jq -r '.branch // empty')
 
-            if [[ -z "$PR_NUMBER" || -z "$PR_REPO_URL" || -z "$PR_BRANCH" ]]; then
+            if [[ -z "$PR_NUMBER" || -z "$PR_REPO" || -z "$PR_BRANCH" ]]; then
               echo "Skipping invalid PR entry: $PR_ENTRY"
               continue
             fi
 
-            echo "Processing PR #$PR_NUMBER from $PR_REPO_URL:$PR_BRANCH"
+            echo "Processing PR #$PR_NUMBER from $PR_REPO:$PR_BRANCH"
 
             # Fork-Repo klonen
-            REPO_URL="${PR_REPO_URL/github.com/x-access-token:${{ env.GH_ACCESS_TOKEN }}@github.com}"
+            REPO_URL="https://x-access-token:${{ env.GH_ACCESS_TOKEN }}@github.com/$PR_REPO.git"
 
             echo "Cloning $REPO_URL"
             git clone --depth=1 "$REPO_URL"
-            cd ProxmoxVE || exit 1
+            cd "$(basename "$PR_REPO")" || exit 1
 
             # Sicherstellen, dass der Branch existiert
-            git fetch origin "$PR_BRANCH" || { echo "Branch $PR_BRANCH does not exist in fork. Skipping..."; cd ..; rm -rf ProxmoxVE; continue; }
+            git fetch origin "$PR_BRANCH" || { echo "Branch $PR_BRANCH does not exist in fork. Skipping..."; cd ..; rm -rf "$(basename "$PR_REPO")"; continue; }
             git checkout "$PR_BRANCH"
 
             # Get newly added JSON files
@@ -91,7 +91,7 @@ jobs:
             if [[ -z "$NEW_JSON_FILES" ]]; then
               echo "No new JSON files in PR #$PR_NUMBER"
               cd ..
-              rm -rf ProxmoxVE
+              rm -rf "$(basename "$PR_REPO")"
               continue
             fi
 
@@ -122,7 +122,7 @@ jobs:
             fi
 
             cd ..
-            rm -rf ProxmoxVE
+            rm -rf "$(basename "$PR_REPO")"
           done < pr_list.json
         env:
           GH_TOKEN: ${{ env.GH_ACCESS_TOKEN }}
