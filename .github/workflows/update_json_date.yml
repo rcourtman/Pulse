@@ -40,7 +40,8 @@ jobs:
       - name: Get Open PRs
         run: |
           echo "Fetching open PRs..."
-          PRS=$(gh pr list --state open --json number,headRepositoryOwner,headRefName --jq '.' || echo "")
+          PRS=$(gh pr list --state open --json number,headRepositoryOwner,headRefName \
+            --jq '[.[] | {number: .number, repo: .headRepositoryOwner.login, branch: .headRefName}]' || echo "")
 
           if [[ -z "$PRS" || "$PRS" == "[]" ]]; then
             echo "No open PRs found."
@@ -62,8 +63,8 @@ jobs:
             fi
 
             PR_NUMBER=$(echo "$PR_ENTRY" | jq -r '.number // empty')
-            PR_REPO=$(echo "$PR_ENTRY" | jq -r '.headRepositoryOwner // empty')
-            PR_BRANCH=$(echo "$PR_ENTRY" | jq -r '.headRefName // empty')
+            PR_REPO=$(echo "$PR_ENTRY" | jq -r '.repo // empty')
+            PR_BRANCH=$(echo "$PR_ENTRY" | jq -r '.branch // empty')
 
             if [[ -z "$PR_NUMBER" || -z "$PR_REPO" || -z "$PR_BRANCH" ]]; then
               echo "Skipping invalid PR entry: $PR_ENTRY"
@@ -72,13 +73,20 @@ jobs:
 
             echo "Processing PR #$PR_NUMBER from $PR_REPO:$PR_BRANCH"
 
-            git clone --depth=1 https://x-access-token:${{ env.GH_ACCESS_TOKEN }}@github.com/$PR_REPO/ProxmoxVE.git
+            # Richtige Repository-URL setzen
+            REPO_URL="https://x-access-token:${{ env.GH_ACCESS_TOKEN }}@github.com/$PR_REPO/ProxmoxVE.git"
+
+            # Fork klonen
+            git clone --depth=1 "$REPO_URL"
             cd ProxmoxVE || exit 1
 
+            # PR-Branch auschecken
             git fetch origin "$PR_BRANCH"
             git checkout "$PR_BRANCH"
 
-            NEW_JSON_FILES=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/files --jq '.[].filename' | grep '^json/.*\.json$' || true)
+            # Get newly added JSON files
+            NEW_JSON_FILES=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
+              --jq '.[].filename' | grep '^json/.*\.json$' || true)
 
             if [[ -z "$NEW_JSON_FILES" ]]; then
               echo "No new JSON files in PR #$PR_NUMBER"
