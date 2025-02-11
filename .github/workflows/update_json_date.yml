@@ -1,4 +1,4 @@
-name: Auto Update JSON-Dates
+name: Auto Update JSON-Dateien (new files only)
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Fetch full history for commit checks
+          fetch-depth: 0  # Full history to check commit timestamps
 
       - name: Set up Git
         run: |
@@ -36,11 +36,12 @@ jobs:
         id: find_new_json
         run: |
           TODAY=$(date -u +"%Y-%m-%d")
+          git fetch origin main --depth=1
+          LATEST_COMMIT=$(git rev-parse origin/main)
+
           > new_json_files.txt
 
-          git fetch origin main --depth=1
-
-          for FILE in $(git log --since="$TODAY 00:00:00" --diff-filter=A --name-only --pretty=format: origin/main -- json/*.json || true); do
+          for FILE in $(git diff --diff-filter=A --name-only $LATEST_COMMIT -- json/); do
             COMMIT_DATE=$(git log --format=%cI -- "$FILE" | tail -n 1 | cut -dT -f1)
             if [[ "$COMMIT_DATE" == "$TODAY" ]]; then
               echo "$FILE" >> new_json_files.txt
@@ -56,9 +57,9 @@ jobs:
       - name: Run update script
         if: env.CHANGED == 'true'
         run: |
-          chmod +x .github/workflows/scripts/update-json.sh
+          chmod +x .github/scripts/update-json.sh
           while read -r FILE; do
-            .github/workflows/scripts/update-json.sh "$FILE"
+            .github/scripts/update-json.sh "$FILE"
           done < new_json_files.txt
 
       - name: Commit and create PR if changes exist
