@@ -73,15 +73,20 @@ jobs:
 
             echo "Processing PR #$PR_NUMBER from $PR_REPO:$PR_BRANCH"
 
-            # Richtige Repository-URL setzen
+            # Fork-Repo klonen (anstatt community-scripts)
             REPO_URL="https://x-access-token:${{ env.GH_ACCESS_TOKEN }}@github.com/$PR_REPO/ProxmoxVE.git"
 
-            # Fork klonen
+            # Sicherstellen, dass der Fork existiert
+            if ! git ls-remote --exit-code "$REPO_URL" &>/dev/null; then
+              echo "Repository $PR_REPO/ProxmoxVE does not exist or is private. Skipping..."
+              continue
+            fi
+
             git clone --depth=1 "$REPO_URL"
             cd ProxmoxVE || exit 1
 
-            # PR-Branch auschecken
-            git fetch origin "$PR_BRANCH"
+            # Alle Branches abrufen & den richtigen Branch auschecken
+            git fetch origin "$PR_BRANCH" || { echo "Branch $PR_BRANCH does not exist in fork. Skipping..."; cd ..; rm -rf ProxmoxVE; continue; }
             git checkout "$PR_BRANCH"
 
             # Get newly added JSON files
