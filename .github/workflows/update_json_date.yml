@@ -1,4 +1,4 @@
-name: Update JSON Date
+name: Update JSON Date via GitHub App
 
 on:
   schedule:
@@ -12,59 +12,95 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      - name: Install Dependencies
+        run: |
+          sudo apt update && sudo apt install -y jq
+
+      - name: Authenticate GitHub App
+        id: auth
+        run: |
+          echo "Generating JWT for GitHub App authentication..."
+
+          # Header und Payload Base64 encodieren
+          HEADER_B64=$(echo -n '{"alg":"RS256","typ":"JWT"}' | openssl base64 -A | tr -d '=' | tr '/+' '_-')
+          NOW=$(date +%s)
+          EXP=$((NOW + 600))  # 10 Minuten gültig
+          PAYLOAD_B64=$(echo -n "{\"iat\":$NOW,\"exp\":$EXP,\"iss\":${{ secrets.JSON_APP_ID }}}" | openssl base64 -A | tr -d '=' | tr '/+' '_-')
+
+          # Signatur mit dem privaten Schlüssel erstellen
+          SIGNATURE=$(echo -n "$HEADER_B64.$PAYLOAD_B64" | openssl dgst -sha256 -sign <(echo "${{ secrets.JSON_APP_KEY }}") | openssl base64 -A | tr -d '=' | tr '/+' '_-')
+
+          # Komplette JWT-Token-Zeichenkette erstellen
+          JWT="$HEADER_B64.$PAYLOAD_B64.$SIGNATURE"
+
+          # App-Installation abrufen
+          INSTALLATION_ID=$(curl -s -X GET -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/app/installations | jq -r '.[0].id')
+
+          # Access Token generieren
+          ACCESS_TOKEN=$(curl -s -X POST -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens | jq -r '.token')
+
+          echo "GH_ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
+
       - name: Get Open PRs
-        id: list_prs
         run: |
           echo "Fetching open PRs..."
-          PRS=$(gh pr list --state open --json number --jq '.[].number' || echo "")
+          PRS=$(gh pr list --state open --json number,headRepositoryOwner,headRefName \
+            --jq '.[] | {number: .number, repo: .headRepositoryOwner, branch: .headRefName}' || echo "")
 
           if [[ -z "$PRS" ]]; then
             echo "No open PRs found."
             exit 0
           fi
 
-          echo "$PRS" | tr ' ' '\n' > pr_list.txt
+          echo "$PRS" | jq -c '.[]' > pr_list.json
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ env.GH_ACCESS_TOKEN }}
 
       - name: Process Each PR
-        if: success()
         run: |
           TODAY=$(date -u +"%Y-%m-%d")
-          
-          while read -r PR_NUMBER; do
-            echo "Processing PR #$PR_NUMBER"
 
-            BRANCH_NAME=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
-            REPO_NAME="${{ github.repository }}"
+          while read -r PR_ENTRY; do
+            PR_NUMBER=$(echo "$PR_ENTRY" | jq -r '.number')
+            PR_REPO=$(echo "$PR_ENTRY" | jq -r '.repo')
+            PR_BRANCH=$(echo "$PR_ENTRY" | jq -r '.branch')
 
-            # Prüfen, ob der Branch remote existiert
-            if ! git ls-remote --exit-code origin "$BRANCH_NAME"; then
-              echo "Branch $BRANCH_NAME für PR #$PR_NUMBER existiert nicht, überspringe..."
-              continue
-            fi
+            echo "Processing PR #$PR_NUMBER from $PR_REPO:$PR_BRANCH"
 
-            # Checkout PR Branch
-            git fetch origin "$BRANCH_NAME"
-            git checkout -B "$BRANCH_NAME" "origin/$BRANCH_NAME"
+            # Fork klonen mit App-Token
+            git clone --depth=1 https://x-access-token:${{ env.GH_ACCESS_TOKEN }}@github.com/$PR_REPO/ProxmoxVE.git
+            cd ProxmoxVE || exit 1
+
+            # PR-Branch auschecken
+            git fetch origin "$PR_BRANCH"
+            git checkout "$PR_BRANCH"
 
             # Get newly added JSON files
-            NEW_JSON_FILES=$(gh api repos/$REPO_NAME/pulls/$PR_NUMBER/files --jq '.[] | select(.status == "added") | .filename' | grep '^json/.*\.json$' || true)
+            NEW_JSON_FILES=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
+              --jq '.[] | select(.status == "added") | .filename' | grep '^json/.*\.json$' || true)
 
             if [[ -z "$NEW_JSON_FILES" ]]; then
               echo "No new JSON files in PR #$PR_NUMBER"
+              cd ..
+              rm -rf ProxmoxVE
               continue
             fi
 
             UPDATED=false
 
             for FILE in $NEW_JSON_FILES; do
-              DATE_IN_JSON=$(jq -r '.date_created' "$FILE")
+              if [[ -f "$FILE" ]]; then
+                DATE_IN_JSON=$(jq -r '.date_created' "$FILE")
 
-              if [[ "$DATE_IN_JSON" != "$TODAY" ]]; then
-                echo "Updating $FILE: $DATE_IN_JSON -> $TODAY"
-                jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
-                UPDATED=true
+                if [[ "$DATE_IN_JSON" != "$TODAY" ]]; then
+                  echo "Updating $FILE: $DATE_IN_JSON -> $TODAY"
+                  jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
+                  UPDATED=true
+                fi
+              else
+                echo "File $FILE not found in the forked repo"
               fi
             done
 
@@ -72,10 +108,14 @@ jobs:
               git config --global user.name "github-actions[bot]"
               git config --global user.email "github-actions[bot]@users.noreply.github.com"
               git commit -am "Update date_created in new JSON files"
-              git push origin "$BRANCH_NAME"
+              git push origin "$PR_BRANCH"
+              echo "Updated PR #$PR_NUMBER and pushed changes."
             else
               echo "No updates needed for PR #$PR_NUMBER"
             fi
-          done < pr_list.txt
+
+            cd ..
+            rm -rf ProxmoxVE
+          done < pr_list.json
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ env.GH_ACCESS_TOKEN }}
