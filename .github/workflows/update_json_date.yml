@@ -54,9 +54,9 @@ jobs:
       - name: Run update script
         if: env.CHANGED == 'true'
         run: |
-          chmod +x .github/scripts/update-json.sh
+          chmod +x .github/workflows/scripts/update-json.sh
           while read -r FILE; do
-            .github/scripts/update-json.sh "$FILE"
+            .github/workflows/scripts/update-json.sh "$FILE"
           done < new_json_files.txt
 
       - name: Commit and create PR if changes exist
