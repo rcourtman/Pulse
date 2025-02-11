@@ -1,4 +1,4 @@
-name: Auto Update JSON-Dates
+name: Auto Update JSON-Dateien (new files only)
 
 on:
   push:
@@ -25,7 +25,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 10  # Fetch at least 2 commits to compare changes
+          fetch-depth: 0  # Fetch full history to check commit timestamps
 
       - name: Set up Git
         run: |
@@ -36,27 +36,27 @@ jobs:
         id: find_new_json
         run: |
           TODAY=$(date -u +"%Y-%m-%d")
+          > new_json_files.txt
 
-          git fetch origin main --depth=1
+          for FILE in $(git ls-files --json | jq -r '.[]'); do
+            COMMIT_DATE=$(git log --format=%cI -- "$FILE" | tail -n 1 | cut -dT -f1)
+            if [[ "$COMMIT_DATE" == "$TODAY" ]]; then
+              echo "$FILE" >> new_json_files.txt
+            fi
+          done
 
-          NEW_JSON_FILES=$(git log --since="$TODAY 00:00:00" --diff-filter=A --name-only --pretty=format: origin/main -- json/*.json || true)
-
-          if [[ -z "$NEW_JSON_FILES" ]]; then
-            echo "No new JSON files created today."
-            echo "CHANGED=false" >> $GITHUB_ENV
-          else
-            echo "New JSON files detected today:"
-            echo "$NEW_JSON_FILES"
-            echo "$NEW_JSON_FILES" > new_json_files.txt
+          if [[ -s new_json_files.txt ]]; then
             echo "CHANGED=true" >> $GITHUB_ENV
+          else
+            echo "CHANGED=false" >> $GITHUB_ENV
           fi
 
       - name: Run update script
         if: env.CHANGED == 'true'
         run: |
-          chmod +x .github/workflows/scripts/update-json.sh
+          chmod +x .github/scripts/update-json.sh
           while read -r FILE; do
-            .github/workflows/scripts/update-json.sh "$FILE"
+            .github/scripts/update-json.sh "$FILE"
           done < new_json_files.txt
 
       - name: Commit and create PR if changes exist
