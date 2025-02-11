@@ -1,141 +1,102 @@
-name: Update JSON Date via GitHub App
+name: Auto Update JSON-Dateien
 
 on:
-  schedule:
-    - cron: "0 */6 * * *"  # Läuft alle 6 Stunden
+  push:
+    branches:
+      - main
+    paths:
+      - 'json/**.json'
   workflow_dispatch:
 
 jobs:
-  check-open-prs:
+  update-json-dates:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
     steps:
-      - name: Checkout Repository
+      - name: Generate a token
+        id: generate-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      # Repository auschecken
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: sudo apt update && sudo apt install -y jq
-
-      - name: Authenticate GitHub App
-        id: auth
+      # Git-Setup
+      - name: Set up Git
         run: |
-          echo "Authenticating GitHub App..."
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          HEADER_B64=$(echo -n '{"alg":"RS256","typ":"JWT"}' | openssl base64 -A | tr -d '=' | tr '/+' '_-')
-          NOW=$(date +%s)
-          EXP=$((NOW + 600))
-          PAYLOAD_B64=$(echo -n "{\"iat\":$NOW,\"exp\":$EXP,\"iss\":${{ secrets.JSON_APP_ID }}}" | openssl base64 -A | tr -d '=' | tr '/+' '_-')
-
-          SIGNATURE=$(echo -n "$HEADER_B64.$PAYLOAD_B64" | openssl dgst -sha256 -sign <(echo "${{ secrets.JSON_APP_KEY }}") | openssl base64 -A | tr -d '=' | tr '/+' '_-')
-
-          JWT="$HEADER_B64.$PAYLOAD_B64.$SIGNATURE"
-
-          INSTALLATION_ID=$(curl -s -X GET -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github+json" \
-            https://api.github.com/app/installations | jq -r '.[0].id')
-
-          ACCESS_TOKEN=$(curl -s -X POST -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github+json" \
-            https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens | jq -r '.token')
-
-          echo "GH_ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
-
-      - name: Debug: Anzeigen aller offenen PRs als JSON
+      # JSON-Dateien aktualisieren
+      - name: Update JSON date_created
         run: |
-          echo "Fetching open PRs with full JSON output..."
-          gh pr list --state open --json number,headRepository,headRefName > pr_debug.json || echo "Failed to fetch PRs"
-          cat pr_debug.json || echo "No PR data"
-
-      - name: Get Open PRs
-        run: |
-          echo "Fetching open PRs..."
-          PRS=$(gh pr list --state open --json number,headRepository,headRefName \
-            --jq '[.[] | select(.headRepository.owner.login and .headRepository.name) | {number: .number, repo: (.headRepository.owner.login + "/" + .headRepository.name), branch: .headRefName}]' || echo "")
-
-          if [[ -z "$PRS" || "$PRS" == "[]" ]]; then
-            echo "No open PRs found. Debug output:"
-            cat pr_debug.json || echo "No PRs available"
-            exit 0
-          fi
-
-          echo "$PRS" | jq -c '.[]' > pr_list.json
-        env:
-          GH_TOKEN: ${{ env.GH_ACCESS_TOKEN }}
-
-      - name: Process Each PR
-        if: success()
-        run: |
-          if [[ ! -f "pr_list.json" ]]; then
-            echo "pr_list.json not found, skipping PR processing"
-            exit 0
-          fi
-
           TODAY=$(date -u +"%Y-%m-%d")
+          CHANGED=false
 
-          while read -r PR_ENTRY; do
-            if [[ -z "$PR_ENTRY" ]]; then
-              echo "Skipping empty PR entry."
-              continue
-            fi
+          for FILE in json/*.json; do
+            if [[ -f "$FILE" ]]; then
+              DATE_IN_JSON=$(jq -r '.date_created' "$FILE" 2>/dev/null || echo "")
 
-            PR_NUMBER=$(echo "$PR_ENTRY" | jq -r '.number // empty')
-            PR_REPO=$(echo "$PR_ENTRY" | jq -r '.repo // empty')
-            PR_BRANCH=$(echo "$PR_ENTRY" | jq -r '.branch // empty')
-
-            if [[ -z "$PR_NUMBER" || -z "$PR_REPO" || -z "$PR_BRANCH" ]]; then
-              echo "Skipping invalid PR entry: $PR_ENTRY"
-              continue
-            fi
-
-            echo "Processing PR #$PR_NUMBER from $PR_REPO:$PR_BRANCH"
-
-            # Fork-Repo klonen
-            REPO_URL="https://x-access-token:${{ env.GH_ACCESS_TOKEN }}@github.com/$PR_REPO.git"
-
-            echo "Cloning $REPO_URL"
-            git clone --depth=1 "$REPO_URL"
-            cd "$(basename "$PR_REPO")" || exit 1
-
-            # Sicherstellen, dass der Branch existiert
-            git fetch origin "$PR_BRANCH" || { echo "Branch $PR_BRANCH does not exist in fork. Skipping..."; cd ..; rm -rf "$(basename "$PR_REPO")"; continue; }
-            git checkout "$PR_BRANCH"
-
-            # Get newly added JSON files
-            NEW_JSON_FILES=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
-              --jq '.[].filename' | grep '^json/.*\.json$' || true)
-
-            if [[ -z "$NEW_JSON_FILES" ]]; then
-              echo "No new JSON files in PR #$PR_NUMBER"
-              cd ..
-              rm -rf "$(basename "$PR_REPO")"
-              continue
-            fi
-
-            UPDATED=false
-
-            for FILE in $NEW_JSON_FILES; do
-              if [[ -f "$FILE" ]]; then
-                DATE_IN_JSON=$(jq -r '.date_created' "$FILE")
-
-                if [[ "$DATE_IN_JSON" != "$TODAY" ]]; then
-                  echo "Updating $FILE: $DATE_IN_JSON -> $TODAY"
-                  jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
-                  UPDATED=true
-                fi
-              else
-                echo "File $FILE not found in the forked repo"
+              if [[ "$DATE_IN_JSON" != "$TODAY" ]]; then
+                echo "Updating date_created in $FILE: $DATE_IN_JSON -> $TODAY"
+                jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
+                CHANGED=true
               fi
-            done
-
-            if [[ "$UPDATED" == "true" ]]; then
-              git config --global user.name "github-actions[bot]"
-              git config --global user.email "github-actions[bot]@users.noreply.github.com"
-              git commit -am "Update date_created in new JSON files"
-              git push origin "$PR_BRANCH"
-              echo "Updated PR #$PR_NUMBER and pushed changes."
-            else
-              echo "No updates needed for PR #$PR_NUMBER"
             fi
+          done
 
-            cd ..
-            rm -rf "$(basename "$PR_REPO")"
-          done < pr_list.json
+          if [[ "$CHANGED" == "true" ]]; then
+            echo "CHANGED=true" >> $GITHUB_ENV
+          else
+            echo "CHANGED=false" >> $GITHUB_ENV
+          fi
+
+      # Falls Änderungen existieren: Commit und PR erstellen
+      - name: Commit and create PR if changes exist
+        if: env.CHANGED == 'true'
+        run: |
+          git add json/*.json
+          git commit -m "Auto-update JSON date_created fields"
+          git checkout -b pr-update-json-dates
+          git push origin pr-update-json-dates --force
+          gh pr create --title "[core] Auto-update JSON files" \
+                       --body "This PR is auto-generated by a GitHub Action to update the `date_created` field in JSON files." \
+                       --head pr-update-json-dates \
+                       --base main \
+                       --label "automated pr"
         env:
-          GH_TOKEN: ${{ env.GH_ACCESS_TOKEN }}
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
+
+      # PR automatisch approven
+      - name: Approve pull request
+        if: env.CHANGED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh pr list --head "pr-update-json-dates" --json number --jq '.[].number')
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr review $PR_NUMBER --approve
+          fi
+
+      # PR erneut approven, falls erforderlich
+      - name: Re-approve pull request after update
+        if: env.CHANGED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUMBER=$(gh pr list --head "pr-update-json-dates" --json number --jq '.[].number')
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr review $PR_NUMBER --approve
+          fi
+
+      # Falls keine Änderungen erkannt wurden
+      - name: No changes detected
+        if: env.CHANGED == 'false'
+        run: echo "No changes to commit. Workflow completed successfully."
