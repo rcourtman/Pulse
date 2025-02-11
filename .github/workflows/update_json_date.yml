@@ -1,4 +1,4 @@
-name: Auto Update JSON-Date
+name: Auto Update Latest JSON-Datei
 
 on:
   push:
@@ -24,90 +24,53 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 2  # Ensure we have at least the last commit for comparison
 
       - name: Set up Git
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Find newly added JSON files (created today)
-        id: find_new_json
+      - name: Find latest created JSON file
+        id: find_latest_json
         run: |
-          TODAY=$(date -u +"%Y-%m-%d")
-          
-          # Fetch latest main for proper diff
-          git fetch origin main --depth=1
+          LATEST_JSON=$(git log --diff-filter=A --name-only --pretty=format: -- json/*.json | tail -n 1 || true)
 
-          # Find new JSON files added today
-          NEW_JSON_FILES=$(git log --since="$TODAY 00:00:00" --diff-filter=A --name-only --pretty=format: origin/main -- json/*.json || true)
-
-          if [[ -z "$NEW_JSON_FILES" ]]; then
+          if [[ -z "$LATEST_JSON" ]]; then
+            echo "No new JSON files found."
             echo "CHANGED=false" >> $GITHUB_ENV
           else
-            echo "$NEW_JSON_FILES" > new_json_files.txt
+            echo "Latest JSON file: $LATEST_JSON"
+            echo "LATEST_JSON=$LATEST_JSON" >> $GITHUB_ENV
             echo "CHANGED=true" >> $GITHUB_ENV
           fi
 
-      - name: Update date_created in new JSON files
+      - name: Run update script
         if: env.CHANGED == 'true'
         run: |
-          TODAY=$(date -u +"%Y-%m-%d")
-          UPDATED=false
-
-          while read -r FILE; do
-            if [[ -f "$FILE" ]]; then
-              DATE_IN_JSON=$(jq -r '.date_created' "$FILE" 2>/dev/null || echo "")
-
-              if [[ "$DATE_IN_JSON" != "$TODAY" ]]; then
-                jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
-                UPDATED=true
-              fi
-            fi
-          done < new_json_files.txt
-
-          if [[ "$UPDATED" == "true" ]]; then
-            echo "UPDATED=true" >> $GITHUB_ENV
-          else
-            echo "UPDATED=false" >> $GITHUB_ENV
-          fi
+          chmod +x .github/workflows/scripts/update-json.sh
+          .github/workflows/scripts/update-json.sh "$LATEST_JSON"
 
       - name: Commit and create PR if changes exist
-        if: env.UPDATED == 'true'
+        if: env.CHANGED == 'true'
         run: |
           git add json/*.json
-          git commit -m "Auto-update JSON date_created fields (new files only)"
-          git checkout -b pr-update-json-dates
-          git push origin pr-update-json-dates --force
-          gh pr create --title "[core] Auto-update new JSON files" \
-                       --body "This PR is auto-generated to update the `date_created` field in newly created JSON files." \
-                       --head pr-update-json-dates \
+          git commit -m "Auto-update date_created in latest JSON file"
+          git checkout -b pr-update-json-date
+          git push origin pr-update-json-date --force
+          gh pr create --title "[core] Auto-update latest JSON file" \
+                       --body "This PR is auto-generated to update the `date_created` field in the latest created JSON file." \
+                       --head pr-update-json-date \
                        --base main \
                        --label "automated pr"
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
 
       - name: Approve pull request
-        if: env.UPDATED == 'true'
+        if: env.CHANGED == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=$(gh pr list --head "pr-update-json-dates" --json number --jq '.[].number')
+          PR_NUMBER=$(gh pr list --head "pr-update-json-date" --json number --jq '.[].number')
           if [ -n "$PR_NUMBER" ]; then
             gh pr review $PR_NUMBER --approve
           fi
-
-      - name: Re-approve pull request after update
-        if: env.UPDATED == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PR_NUMBER=$(gh pr list --head "pr-update-json-dates" --json number --jq '.[].number')
-          if [ -n "$PR_NUMBER" ]; then
-            gh pr review $PR_NUMBER --approve
-          fi
-
-      - name: No changes detected
-        if: env.UPDATED == 'false'
-        run: echo "No new JSON files needed an update. Workflow completed successfully."
