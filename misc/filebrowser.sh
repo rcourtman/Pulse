@@ -26,7 +26,7 @@ INFO="${BL}ℹ️${CL}"
 APP="FileBrowser"
 INSTALL_PATH="/usr/local/bin/filebrowser"
 SERVICE_PATH="/etc/systemd/system/filebrowser.service"
-DB_PATH="/var/lib/filebrowser/filebrowser.db"
+DB_PATH="/usr/local/community-scripts/filebrowser.db"
 IP=$(hostname -I | awk '{print $1}')
 DEFAULT_PORT=8080
 
@@ -82,9 +82,9 @@ if [[ "${install_prompt,,}" =~ ^(y|yes)$ ]]; then
     msg_ok "Installed ${APP}"
 
     msg_info "Creating FileBrowser directory"
-    mkdir -p /var/lib/filebrowser
-    chown root:root /var/lib/filebrowser
-    chmod 755 /var/lib/filebrowser
+    mkdir -p /usr/local/community-scripts
+    chown root:root /usr/local/community-scripts
+    chmod 755 /usr/local/community-scripts
     msg_ok "Directory created successfully"
 
     read -r -p "Would you like to use No Authentication? (y/N): " auth_prompt
