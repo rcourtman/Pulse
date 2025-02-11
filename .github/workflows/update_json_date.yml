@@ -15,16 +15,25 @@ jobs:
       - name: Get Open PRs
         id: list_prs
         run: |
-          PRS=$(gh pr list --state open --json number --jq '.[].number')
-          echo "OPEN_PRS=$PRS" >> $GITHUB_ENV
+          echo "Fetching open PRs..."
+          PRS=$(gh pr list --state open --json number --jq '.[].number' || echo "")
+
+          if [[ -z "$PRS" ]]; then
+            echo "No open PRs found."
+            exit 0
+          fi
+
+          echo "$PRS" | tr ' ' '\n' > pr_list.txt
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Process Each PR
-        if: env.OPEN_PRS != ''
+        if: success()
         run: |
-          for PR_NUMBER in $OPEN_PRS; do
-            echo "Checking PR #$PR_NUMBER"
+          TODAY=$(date -u +"%Y-%m-%d")
+          
+          while read -r PR_NUMBER; do
+            echo "Processing PR #$PR_NUMBER"
             
             BRANCH_NAME=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
             REPO_NAME="${{ github.repository }}"
@@ -41,7 +50,6 @@ jobs:
               continue
             fi
 
-            TODAY=$(date -u +"%Y-%m-%d")
             UPDATED=false
 
             for FILE in $NEW_JSON_FILES; do
@@ -62,6 +70,6 @@ jobs:
             else
               echo "No updates needed for PR #$PR_NUMBER"
             fi
-          done
+          done < pr_list.txt
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
