@@ -13,31 +13,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Dependencies
-        run: |
-          sudo apt update && sudo apt install -y jq
+        run: sudo apt update && sudo apt install -y jq
 
       - name: Authenticate GitHub App
         id: auth
         run: |
-          echo "Generating JWT for GitHub App authentication..."
+          echo "Authenticating GitHub App..."
 
-          # Header und Payload Base64 encodieren
           HEADER_B64=$(echo -n '{"alg":"RS256","typ":"JWT"}' | openssl base64 -A | tr -d '=' | tr '/+' '_-')
           NOW=$(date +%s)
-          EXP=$((NOW + 600))  # 10 Minuten gültig
+          EXP=$((NOW + 600))
           PAYLOAD_B64=$(echo -n "{\"iat\":$NOW,\"exp\":$EXP,\"iss\":${{ secrets.JSON_APP_ID }}}" | openssl base64 -A | tr -d '=' | tr '/+' '_-')
 
-          # Signatur mit dem privaten Schlüssel erstellen
           SIGNATURE=$(echo -n "$HEADER_B64.$PAYLOAD_B64" | openssl dgst -sha256 -sign <(echo "${{ secrets.JSON_APP_KEY }}") | openssl base64 -A | tr -d '=' | tr '/+' '_-')
 
-          # Komplette JWT-Token-Zeichenkette erstellen
           JWT="$HEADER_B64.$PAYLOAD_B64.$SIGNATURE"
 
-          # App-Installation abrufen
           INSTALLATION_ID=$(curl -s -X GET -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github+json" \
             https://api.github.com/app/installations | jq -r '.[0].id')
 
-          # Access Token generieren
           ACCESS_TOKEN=$(curl -s -X POST -H "Authorization: Bearer $JWT" -H "Accept: application/vnd.github+json" \
             https://api.github.com/app/installations/$INSTALLATION_ID/access_tokens | jq -r '.token')
 
@@ -46,10 +40,9 @@ jobs:
       - name: Get Open PRs
         run: |
           echo "Fetching open PRs..."
-          PRS=$(gh pr list --state open --json number,headRepositoryOwner,headRefName \
-            --jq '.[] | {number: .number, repo: .headRepositoryOwner, branch: .headRefName}' || echo "")
+          PRS=$(gh pr list --state open --json number,headRepositoryOwner,headRefName --jq '.' || echo "")
 
-          if [[ -z "$PRS" ]]; then
+          if [[ -z "$PRS" || "$PRS" == "[]" ]]; then
             echo "No open PRs found."
             exit 0
           fi
@@ -63,23 +56,29 @@ jobs:
           TODAY=$(date -u +"%Y-%m-%d")
 
           while read -r PR_ENTRY; do
-            PR_NUMBER=$(echo "$PR_ENTRY" | jq -r '.number')
-            PR_REPO=$(echo "$PR_ENTRY" | jq -r '.repo')
-            PR_BRANCH=$(echo "$PR_ENTRY" | jq -r '.branch')
+            if [[ -z "$PR_ENTRY" ]]; then
+              echo "Skipping empty PR entry."
+              continue
+            fi
+
+            PR_NUMBER=$(echo "$PR_ENTRY" | jq -r '.number // empty')
+            PR_REPO=$(echo "$PR_ENTRY" | jq -r '.headRepositoryOwner // empty')
+            PR_BRANCH=$(echo "$PR_ENTRY" | jq -r '.headRefName // empty')
+
+            if [[ -z "$PR_NUMBER" || -z "$PR_REPO" || -z "$PR_BRANCH" ]]; then
+              echo "Skipping invalid PR entry: $PR_ENTRY"
+              continue
+            fi
 
             echo "Processing PR #$PR_NUMBER from $PR_REPO:$PR_BRANCH"
 
-            # Fork klonen mit App-Token
             git clone --depth=1 https://x-access-token:${{ env.GH_ACCESS_TOKEN }}@github.com/$PR_REPO/ProxmoxVE.git
             cd ProxmoxVE || exit 1
 
-            # PR-Branch auschecken
             git fetch origin "$PR_BRANCH"
             git checkout "$PR_BRANCH"
 
-            # Get newly added JSON files
-            NEW_JSON_FILES=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/files \
-              --jq '.[] | select(.status == "added") | .filename' | grep '^json/.*\.json$' || true)
+            NEW_JSON_FILES=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/files --jq '.[].filename' | grep '^json/.*\.json$' || true)
 
             if [[ -z "$NEW_JSON_FILES" ]]; then
               echo "No new JSON files in PR #$PR_NUMBER"
