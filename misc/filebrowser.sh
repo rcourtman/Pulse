@@ -114,8 +114,8 @@ After=network-online.target
 
 [Service]
 User=root
-WorkingDirectory=/var/lib/filebrowser/
-ExecStart=/usr/local/bin/filebrowser -r / --database "$DB_PATH" -p "$PORT"
+WorkingDirectory=/usr/local/community-scripts
+ExecStart=/usr/local/bin/filebrowser -r / -d "$DB_PATH" -p "$PORT"
 Restart=always
 
 [Install]
