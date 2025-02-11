@@ -24,16 +24,24 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # Ensure we have at least the last commit for comparison
 
       - name: Set up Git
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Find newly added JSON files
+      - name: Find newly added JSON files (created today)
         id: find_new_json
         run: |
-          NEW_JSON_FILES=$(git diff --diff-filter=A --name-only HEAD~1 -- json/*.json || true)
+          TODAY=$(date -u +"%Y-%m-%d")
+          
+          # Fetch latest main for proper diff
+          git fetch origin main --depth=1
+
+          # Find new JSON files added today
+          NEW_JSON_FILES=$(git log --since="$TODAY 00:00:00" --diff-filter=A --name-only --pretty=format: origin/main -- json/*.json || true)
 
           if [[ -z "$NEW_JSON_FILES" ]]; then
             echo "CHANGED=false" >> $GITHUB_ENV
