@@ -1,41 +1,50 @@
 name: Update JSON Date
+
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 */6 * * *"  # Läuft alle 6 Stunden
   workflow_dispatch:
-  pull_request:
-    types: [opened, synchronize, reopened]
 
 jobs:
-  check-and-update-json:
+  check-open-prs:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout PR Branch
+      - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.head_ref }}
 
-      - name: List changed files
-        id: changed-files
+      - name: Get Open PRs
+        id: list_prs
         run: |
-          PR_NUMBER="${{ github.event.pull_request.number }}"
-          if [[ -n "$PR_NUMBER" ]]; then
-            FILES=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/files --jq '.[].filename' | tr '\n' ' ')
-          else
-            FILES=$(git diff --name-status HEAD~1 | awk '$1 == "A" {print $2}')
-          fi
-          
-          echo "FILES=$FILES" >> $GITHUB_ENV
+          PRS=$(gh pr list --state open --json number --jq '.[].number')
+          echo "OPEN_PRS=$PRS" >> $GITHUB_ENV
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Process JSON files
+      - name: Process Each PR
+        if: env.OPEN_PRS != ''
         run: |
-          TODAY=$(date -u +"%Y-%m-%d")
-          UPDATED=false
+          for PR_NUMBER in $OPEN_PRS; do
+            echo "Checking PR #$PR_NUMBER"
+            
+            BRANCH_NAME=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
+            REPO_NAME="${{ github.repository }}"
 
-          for FILE in $FILES; do
-            if [[ "$FILE" =~ ^json/.*\.json$ ]]; then
+            # Checkout PR Branch
+            git fetch origin $BRANCH_NAME
+            git checkout $BRANCH_NAME
+
+            # Get newly added JSON files
+            NEW_JSON_FILES=$(gh api repos/$REPO_NAME/pulls/$PR_NUMBER/files --jq '.[] | select(.status == "added") | .filename' | grep '^json/.*\.json$' || true)
+
+            if [[ -z "$NEW_JSON_FILES" ]]; then
+              echo "No new JSON files in PR #$PR_NUMBER"
+              continue
+            fi
+
+            TODAY=$(date -u +"%Y-%m-%d")
+            UPDATED=false
+
+            for FILE in $NEW_JSON_FILES; do
               DATE_IN_JSON=$(jq -r '.date_created' "$FILE")
 
               if [[ "$DATE_IN_JSON" != "$TODAY" ]]; then
@@ -43,16 +52,16 @@ jobs:
                 jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
                 UPDATED=true
               fi
+            done
+
+            if [[ "$UPDATED" == "true" ]]; then
+              git config --global user.name "github-actions[bot]"
+              git config --global user.email "github-actions[bot]@users.noreply.github.com"
+              git commit -am "Update date_created in new JSON files"
+              git push origin $BRANCH_NAME
+            else
+              echo "No updates needed for PR #$PR_NUMBER"
             fi
           done
-
-          if [[ "$UPDATED" == "true" ]]; then
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
-            git commit -am "Update date_created in new JSON files"
-            git push
-          else
-            echo "No updates needed."
-          fi
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
