@@ -1,4 +1,4 @@
-name: Auto Update JSON-Dateien (new files only)
+name: Auto Update JSON-Date
 
 on:
   push:
@@ -25,30 +25,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history to check commit timestamps
+          fetch-depth: 0  # Full history for proper detection
 
       - name: Set up Git
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Find newly created JSON files from today
-        id: find_new_json
+      - name: Find JSON files with incorrect date_created
+        id: find_wrong_json
         run: |
           TODAY=$(date -u +"%Y-%m-%d")
-          git fetch origin main --depth=1
-          LATEST_COMMIT=$(git rev-parse origin/main)
+          > incorrect_json_files.txt
 
-          > new_json_files.txt
+          for FILE in json/*.json; do
+            if [[ -f "$FILE" ]]; then
+              DATE_IN_JSON=$(jq -r '.date_created' "$FILE" 2>/dev/null || echo "")
 
-          for FILE in $(git diff --diff-filter=A --name-only $LATEST_COMMIT -- json/); do
-            COMMIT_DATE=$(git log --format=%cI -- "$FILE" | tail -n 1 | cut -dT -f1)
-            if [[ "$COMMIT_DATE" == "$TODAY" ]]; then
-              echo "$FILE" >> new_json_files.txt
+              if [[ "$DATE_IN_JSON" != "$TODAY" ]]; then
+                echo "$FILE" >> incorrect_json_files.txt
+              fi
             fi
           done
 
-          if [[ -s new_json_files.txt ]]; then
+          if [[ -s incorrect_json_files.txt ]]; then
             echo "CHANGED=true" >> $GITHUB_ENV
           else
             echo "CHANGED=false" >> $GITHUB_ENV
@@ -57,21 +57,21 @@ jobs:
       - name: Run update script
         if: env.CHANGED == 'true'
         run: |
-          chmod +x .github/scripts/update-json.sh
+          chmod +x .github/workflows/scripts/update-json.sh
           while read -r FILE; do
-            .github/scripts/update-json.sh "$FILE"
-          done < new_json_files.txt
+            .github/workflows/scripts/update-json.sh "$FILE"
+          done < incorrect_json_files.txt
 
       - name: Commit and create PR if changes exist
         if: env.CHANGED == 'true'
         run: |
           git add json/*.json
-          git commit -m "Auto-update date_created in new JSON files"
-          git checkout -b pr-update-json-dates
-          git push origin pr-update-json-dates --force
-          gh pr create --title "[core] Auto-update new JSON files" \
-                       --body "This PR is auto-generated to update the `date_created` field in newly created JSON files." \
-                       --head pr-update-json-dates \
+          git commit -m "Auto-update date_created in incorrect JSON files"
+          git checkout -b pr-fix-json-dates
+          git push origin pr-fix-json-dates --force
+          gh pr create --title "[core] Fix incorrect JSON date_created fields" \
+                       --body "This PR is auto-generated to fix incorrect `date_created` fields in JSON files." \
+                       --head pr-fix-json-dates \
                        --base main \
                        --label "automated pr"
         env:
@@ -82,7 +82,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_NUMBER=$(gh pr list --head "pr-update-json-dates" --json number --jq '.[].number')
+          PR_NUMBER=$(gh pr list --head "pr-fix-json-dates" --json number --jq '.[].number')
           if [ -n "$PR_NUMBER" ]; then
             gh pr review $PR_NUMBER --approve
           fi
