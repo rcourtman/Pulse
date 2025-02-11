@@ -37,6 +37,12 @@ jobs:
 
           echo "GH_ACCESS_TOKEN=$ACCESS_TOKEN" >> $GITHUB_ENV
 
+      - name: Debug: Anzeigen aller offenen PRs als JSON
+        run: |
+          echo "Fetching open PRs with full JSON output..."
+          gh pr list --state open --json number,headRepository,headRefName > pr_debug.json || echo "Failed to fetch PRs"
+          cat pr_debug.json || echo "No PR data"
+
       - name: Get Open PRs
         run: |
           echo "Fetching open PRs..."
@@ -44,7 +50,8 @@ jobs:
             --jq '[.[] | select(.headRepository.owner.login and .headRepository.name) | {number: .number, repo: (.headRepository.owner.login + "/" + .headRepository.name), branch: .headRefName}]' || echo "")
 
           if [[ -z "$PRS" || "$PRS" == "[]" ]]; then
-            echo "No open PRs found."
+            echo "No open PRs found. Debug output:"
+            cat pr_debug.json || echo "No PRs available"
             exit 0
           fi
 
@@ -53,7 +60,13 @@ jobs:
           GH_TOKEN: ${{ env.GH_ACCESS_TOKEN }}
 
       - name: Process Each PR
+        if: success()
         run: |
+          if [[ ! -f "pr_list.json" ]]; then
+            echo "pr_list.json not found, skipping PR processing"
+            exit 0
+          fi
+
           TODAY=$(date -u +"%Y-%m-%d")
 
           while read -r PR_ENTRY; do
