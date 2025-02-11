@@ -41,7 +41,7 @@ jobs:
         run: |
           echo "Fetching open PRs..."
           PRS=$(gh pr list --state open --json number,headRepository,headRefName \
-            --jq '[.[] | {number: .number, repo: (.headRepository.owner.login + "/" + .headRepository.name), branch: .headRefName}]' || echo "")
+            --jq '[.[] | select(.headRepository.owner.login and .headRepository.name) | {number: .number, repo: (.headRepository.owner.login + "/" + .headRepository.name), branch: .headRefName}]' || echo "")
 
           if [[ -z "$PRS" || "$PRS" == "[]" ]]; then
             echo "No open PRs found."
