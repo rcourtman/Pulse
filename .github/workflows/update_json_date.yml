@@ -34,13 +34,19 @@ jobs:
           
           while read -r PR_NUMBER; do
             echo "Processing PR #$PR_NUMBER"
-            
+
             BRANCH_NAME=$(gh pr view $PR_NUMBER --json headRefName --jq '.headRefName')
             REPO_NAME="${{ github.repository }}"
 
+            # Prüfen, ob der Branch remote existiert
+            if ! git ls-remote --exit-code origin "$BRANCH_NAME"; then
+              echo "Branch $BRANCH_NAME für PR #$PR_NUMBER existiert nicht, überspringe..."
+              continue
+            fi
+
             # Checkout PR Branch
-            git fetch origin $BRANCH_NAME
-            git checkout $BRANCH_NAME
+            git fetch origin "$BRANCH_NAME"
+            git checkout -B "$BRANCH_NAME" "origin/$BRANCH_NAME"
 
             # Get newly added JSON files
             NEW_JSON_FILES=$(gh api repos/$REPO_NAME/pulls/$PR_NUMBER/files --jq '.[] | select(.status == "added") | .filename' | grep '^json/.*\.json$' || true)
@@ -66,7 +72,7 @@ jobs:
               git config --global user.name "github-actions[bot]"
               git config --global user.email "github-actions[bot]@users.noreply.github.com"
               git commit -am "Update date_created in new JSON files"
-              git push origin $BRANCH_NAME
+              git push origin "$BRANCH_NAME"
             else
               echo "No updates needed for PR #$PR_NUMBER"
             fi
