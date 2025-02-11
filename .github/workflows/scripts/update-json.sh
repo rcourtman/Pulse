@@ -16,8 +16,5 @@ fi
 DATE_IN_JSON=$(jq -r '.date_created' "$FILE" 2>/dev/null || echo "")
 
 if [[ "$DATE_IN_JSON" != "$TODAY" ]]; then
-    echo "Updating $FILE: $DATE_IN_JSON -> $TODAY"
     jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
-else
-    echo "No update needed."
 fi
