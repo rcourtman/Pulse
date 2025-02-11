@@ -1,0 +1,58 @@
+name: Update JSON Date
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  check-and-update-json:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR Branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.head_ref }}
+
+      - name: List changed files
+        id: changed-files
+        run: |
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          if [[ -n "$PR_NUMBER" ]]; then
+            FILES=$(gh api repos/${{ github.repository }}/pulls/$PR_NUMBER/files --jq '.[].filename' | tr '\n' ' ')
+          else
+            FILES=$(git diff --name-status HEAD~1 | awk '$1 == "A" {print $2}')
+          fi
+          
+          echo "FILES=$FILES" >> $GITHUB_ENV
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Process JSON files
+        run: |
+          TODAY=$(date -u +"%Y-%m-%d")
+          UPDATED=false
+
+          for FILE in $FILES; do
+            if [[ "$FILE" =~ ^json/.*\.json$ ]]; then
+              DATE_IN_JSON=$(jq -r '.date_created' "$FILE")
+
+              if [[ "$DATE_IN_JSON" != "$TODAY" ]]; then
+                echo "Updating $FILE: $DATE_IN_JSON -> $TODAY"
+                jq --arg date "$TODAY" '.date_created = $date' "$FILE" > tmp.json && mv tmp.json "$FILE"
+                UPDATED=true
+              fi
+            fi
+          done
+
+          if [[ "$UPDATED" == "true" ]]; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -am "Update date_created in new JSON files"
+            git push
+          else
+            echo "No updates needed."
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
