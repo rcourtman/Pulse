@@ -24,7 +24,7 @@ $STD apt-get install -y \
 msg_ok "Installed Dependencies"
 
 msg_info "Setup Python3"
-$STD apt-get install python3-venv
+$STD apt-get install -y python3-venv
 msg_ok "Setup Python3"
 
 msg_info "Setup Node.js & yarn"
