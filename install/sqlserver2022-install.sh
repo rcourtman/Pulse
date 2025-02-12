@@ -27,7 +27,7 @@ $STD curl https://packages.microsoft.com/keys/microsoft.asc | tee /etc/apt/trust
 $STD curl -fsSL https://packages.microsoft.com/config/ubuntu/22.04/mssql-server-2022.list | tee /etc/apt/sources.list.d/mssql-server-2022.list
 $STD apt-get clean *
 $STD apt-get update -y
-$STD apt-get install -y mssql-server
+apt-get install -y mssql-server
 msg_ok "Setup Server 2022"
 
 msg_info "Installing SQL Server Tools"
