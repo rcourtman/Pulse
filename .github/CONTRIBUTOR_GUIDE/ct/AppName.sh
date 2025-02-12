@@ -46,8 +46,6 @@ function update_script() {
     # Crawling the new version and checking whether an update is required
     RELEASE=$(curl -fsSL [RELEASE_URL] | [PARSE_RELEASE_COMMAND])
     if [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]] || [[ ! -f /opt/${APP}_version.txt ]]; then
-        msg_info "Updating $APP"
-
         # Stopping Services
         msg_info "Stopping $APP"
         systemctl stop [SERVICE_NAME]
