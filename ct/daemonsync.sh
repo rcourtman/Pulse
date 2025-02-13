@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://daemonsync.me/
 
-# App Default Values
 APP="Daemon Sync"
 var_tags="sync"
 var_cpu="1"

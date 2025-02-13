@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/minio/minio
 
-# App Default Values
 APP="MinIO"
 var_tags="object-storage"
 var_cpu="1"

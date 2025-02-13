@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/janeczku/calibre-web
 
-# App Default Values
 APP="Calibre-Web"
 var_tags="eBook"
 var_cpu="2"

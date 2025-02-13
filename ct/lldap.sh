@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/lldap/lldap
 
-# App Default Values
 APP="lldap"
 var_tags="ldap"
 var_cpu="1"

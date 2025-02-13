@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://snipeitapp.com/
 
-# App Default Values
 APP="SnipeIT"
 var_tags="assat-management;foss"
 var_cpu="2"

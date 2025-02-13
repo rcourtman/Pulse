@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://readarr.com/
 
-# App Default Values
 APP="Readarr"
 var_tags="media;comic;eBook"
 var_cpu="2"

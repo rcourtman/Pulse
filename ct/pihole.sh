@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://pi-hole.net/
 
-# App Default Values
 APP="Pihole"
 var_tags="adblock"
 var_cpu="1"

@@ -2,11 +2,9 @@
 source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Copyright (c) 2021-2025 community-scripts ORG
 # Author: quantumryuu
-# License: MIT
-# https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://firefly-iii.org/
 
-# App Default Values
 APP="Firefly"
 var_tags="finance"
 var_cpu="1"

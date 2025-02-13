@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://cronicle.net/
 
-# App Default Values
 APP="Cronicle"
 var_tags="task-scheduler"
 var_cpu="1"

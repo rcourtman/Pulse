@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.emqx.com/en
 
-# App Default Values
 APP="EMQX"
 var_tags="mqtt"
 var_cpu="2"

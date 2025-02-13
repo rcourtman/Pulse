@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://mafl.hywax.space/
 
-# App Default Values
 APP="Mafl"
 var_tags="dashboard"
 var_cpu="2"

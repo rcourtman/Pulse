@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docs.unmanic.app/
 
-# App Default Values
 APP="Unmanic"
 var_tags="file;media"
 var_cpu="2"

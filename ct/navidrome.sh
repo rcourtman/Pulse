@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.navidrome.org/
 
-# App Default Values
 APP="Navidrome"
 var_tags="music"
 var_cpu="2"

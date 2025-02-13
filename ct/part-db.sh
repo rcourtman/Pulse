@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docs.part-db.de/
 
-# App Default Values
 APP="Part-DB"
 var_tags="inventory;parts"
 var_cpu="2"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: Proxmox Server Solution GmbH
 
-# App Default Values
 APP="Proxmox-Datacenter-Manager"
 var_tags="datacenter"
 var_cpu="2"

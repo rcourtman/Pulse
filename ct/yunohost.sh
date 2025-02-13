@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://yunohost.org/
 
-# App Default Values
 APP="YunoHost"
 var_tags="os"
 var_cpu="2"

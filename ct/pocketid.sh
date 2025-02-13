@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/pocket-id/pocket-id
 
-# App Default Values
 APP="PocketID"
 var_tags="identity-provider"
 var_cpu="2"

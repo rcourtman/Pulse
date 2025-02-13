@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://adventurelog.app/
 
-# App Default Values
 APP="AdventureLog"
 var_tags="traveling"
 var_disk="7"

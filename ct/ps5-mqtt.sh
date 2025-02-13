@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/FunkeyFlo/ps5-mqtt/
 
-# App Default Values
 APP="PS5-MQTT"
 var_tags="smarthome;automation"
 var_cpu="1"

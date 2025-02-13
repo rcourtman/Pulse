@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docs.jellyseerr.dev/
 
-# App Default Values
 APP="Jellyseerr"
 var_tags="media"
 var_cpu="4"

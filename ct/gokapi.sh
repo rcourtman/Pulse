@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/Forceu/Gokapi
 
-# App Default Values
 APP="Gokapi"
 var_tags="file;sharing"
 var_cpu="1"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/AlexxIT/go2rtc
 
-# App Default Values
 APP="go2rtc"
 var_tags="recorder;video"
 var_cpu="2"

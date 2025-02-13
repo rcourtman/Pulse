@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://umbrel.com/
 
-# App Default Values
 APP="Umbrel"
 var_tags="os"
 var_cpu="2"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://ghost.org/
 
-# App Default Values
 APP="Ghost"
 var_tags="cms;blog"
 var_cpu="2"

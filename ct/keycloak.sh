@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.keycloak.org/
 
-# App Default Values
 APP="Keycloak"
 var_tags="access-management"
 var_cpu="2"

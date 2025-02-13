@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/Luligu/matterbridge
 
-# App Default Values
 APP="Matterbridge"
 var_tags="matter;smarthome"
 var_cpu="1"

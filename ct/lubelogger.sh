@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://lubelogger.com/
 
-# App Default Values
 APP="LubeLogger"
 var_tags="vehicle;car"
 var_cpu="1"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://ollama.com/
 
-# App Default Values
 APP="Ollama"
 var_tags="ai"
 var_cpu="4"

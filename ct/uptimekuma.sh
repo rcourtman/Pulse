@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://uptime.kuma.pet/
 
-# App Default Values
 APP="Uptime Kuma"
 var_tags="analytics;monitoring"
 var_cpu="1"

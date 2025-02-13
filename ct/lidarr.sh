@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://lidarr.audio/
 
-# App Default Values
 APP="Lidarr"
 var_tags="arr;torrent;usenet"
 var_cpu="2"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://openwebui.com/
 
-# App Default Values
 APP="Open WebUI"
 var_tags="ai;interface"
 var_cpu="4"

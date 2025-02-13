@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://flowiseai.com/
 
-# App Default Values
 APP="FlowiseAI"
 var_tags="low-code"
 var_disk="10"

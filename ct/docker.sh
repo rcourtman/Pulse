@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.docker.com/
 
-# App Default Values
 APP="Docker"
 var_tags="docker"
 var_cpu="2"

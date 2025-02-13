@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://mattermost.com/
 
-# App Default Values
 APP="Mattermost"
 var_tags="collaboration"
 var_cpu="1"

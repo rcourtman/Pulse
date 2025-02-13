@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.kimai.org/
 
-# App Default Values
 APP="Kimai"
 var_tags="time-tracking"
 var_cpu="2"

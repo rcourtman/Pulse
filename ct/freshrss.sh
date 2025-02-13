@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/FreshRSS/FreshRSS
 
-# App Default Values
 APP="FreshRSS"
 var_tags="RSS"
 var_cpu="2"

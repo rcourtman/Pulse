@@ -3,8 +3,8 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # Copyright (c) 2021-2025 tteck
 # Author: tteck (tteckster)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# Source: https://www.zigbee2mqtt.io/
 
-# App Default Values
 APP="Alpine-Zigbee2MQTT"
 var_tags="alpine;zigbee;mqtt;smarthome"
 var_disk="0.3"

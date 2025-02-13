@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://syncthing.net/
 
-# App Default Values
 APP="Syncthing"
 var_tags="sync"
 var_cpu="2"

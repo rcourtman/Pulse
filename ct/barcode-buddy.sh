@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/Forceu/barcodebuddy
 
-# App Default Values
 APP="Barcode-Buddy"
 var_tags="grocery;household"
 var_cpu="1"

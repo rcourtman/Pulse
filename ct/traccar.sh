@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.traccar.org/
 
-# App Default Values
 APP="Traccar"
 var_tags="gps;tracker"
 var_cpu="1"

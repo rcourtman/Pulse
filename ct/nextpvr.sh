@@ -6,7 +6,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # https://github.com/tteck/Proxmox/raw/main/LICENSE
 # Source: https://nextpvr.com/
 
-# App Default Values
 APP="NextPVR"
 var_tags="pvr"
 var_cpu="1"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/mylar3/mylar3
 
-# App Default Values
 APP="Mylar3"
 var_tags="torrent;downloader;comic"
 var_cpu="1"

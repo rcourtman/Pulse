@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.hyperhdr.eu/
 
-# App Default Values
 APP="HyperHDR"
 var_tags="ambient-lightning"
 var_cpu="2"

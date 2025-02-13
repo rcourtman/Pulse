@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://gitlab.com/LazyLibrarian/LazyLibrarian
 
-# App Default Values
 APP="LazyLibrarian"
 var_tags="eBook"
 var_cpu="2"

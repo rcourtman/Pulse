@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://magicmirror.builders/
 
-# App Default Values
 APP="MagicMirror"
 var_tags="smarthome"
 var_cpu="1"

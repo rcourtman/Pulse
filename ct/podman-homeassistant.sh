@@ -3,8 +3,8 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # Copyright (c) 2021-2025 tteck
 # Author: tteck (tteckster)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# Source: https://www.home-assistant.io/
 
-# App Default Values
 APP="Podman-Home Assistant"
 var_tags="podman;smarthome"
 var_cpu="2"

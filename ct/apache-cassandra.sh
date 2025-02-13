@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://cassandra.apache.org/_/index.html
 
-# App Default Values
 APP="Apache-Cassandra"
 var_tags="database;NoSQL"
 var_cpu="1"

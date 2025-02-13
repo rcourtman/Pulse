@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/clusterzx/paperless-ai
 
-# App Default Values
 APP="Paperless-AI"
 var_tags="ai;document"
 var_cpu="2"

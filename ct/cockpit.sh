@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://cockpit-project.org/
 
-# App Default Values
 APP="Cockpit"
 var_tags="monitoring;network"
 var_cpu="2"

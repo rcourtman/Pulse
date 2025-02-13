@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://phpipam.net/
 
-# App Default Values
 APP="phpIPAM"
 var_tags="network"
 var_cpu="1"

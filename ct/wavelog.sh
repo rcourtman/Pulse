@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.wavelog.org/
 
-# App Default Values
 APP="Wavelog"
 var_tags="radio-logging"
 var_cpu="1"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.kavitareader.com/
 
-# App Default Values
 APP="Kavita"
 var_tags="reader"
 var_cpu="2"

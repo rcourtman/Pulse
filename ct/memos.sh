@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.usememos.com/
 
-# App Default Values
 APP="Memos"
 var_tags="notes"
 var_cpu="2"

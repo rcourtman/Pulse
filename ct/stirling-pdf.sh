@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.stirlingpdf.com/
 
-# App Default Values
 APP="Stirling-PDF"
 var_tags="pdf-editor"
 var_cpu="2"

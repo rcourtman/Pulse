@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.turnkeylinux.org/nextcloud
 
-# App Default Values
 APP="NextCloudPi"
 var_tags="cloud"
 var_cpu="2"

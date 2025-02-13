@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.tp-link.com/us/support/download/omada-software-controller/
 
-# App Default Values
 APP="Omada"
 var_tags="tp-link;controller"
 var_cpu="2"

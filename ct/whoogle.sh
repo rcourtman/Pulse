@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/benbusby/whoogle-search
 
-# App Default Values
 APP="Whoogle"
 var_tags="network;seaching"
 var_cpu="1"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://sabre.io/baikal/
 
-# App Default Values
 APP="Baikal"
 var_tags="Dav"
 var_cpu="1"

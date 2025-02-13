@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/alexta69/metube
 
-# App Default Values
 APP="MeTube"
 var_tags="media;youtube"
 var_cpu="1"

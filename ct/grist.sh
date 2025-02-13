@@ -2,7 +2,6 @@
 source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Source: https://github.com/gristlabs/grist-core
 
-# App Default Values
 APP="Grist"
 var_tags="database;spreadsheet"
 var_cpu="2"

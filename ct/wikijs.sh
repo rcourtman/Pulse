@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://js.wiki/
 
-# App Default Values
 APP="Wikijs"
 var_tags="wiki"
 var_cpu="1"

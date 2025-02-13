@@ -3,8 +3,8 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # Copyright (c) 2021-2025 tteck
 # Author: tteck (tteckster)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
+# Source: https://grafana.com/
 
-# App Default Values
 APP="Alpine-Grafana"
 var_tags="alpine;monitoring"
 var_cpu="1"

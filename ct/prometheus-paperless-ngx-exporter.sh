@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/hansmi/prometheus-paperless-exporter
 
-# App Default Values
 APP="Prometheus-Paperless-NGX-Exporter"
 var_tags="monitoring;alerting"
 var_cpu="1"

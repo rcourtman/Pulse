@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/TasmoAdmin/TasmoAdmin
 
-# App Default Values
 APP="TasmoAdmin"
 var_tags="tasmota;smarthome"
 var_cpu="1"

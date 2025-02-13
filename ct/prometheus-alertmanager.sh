@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://prometheus.io/
 
-# App Default Values
 APP="Prometheus-Alertmanager"
 var_tags="monitoring;alerting"
 var_cpu="1"

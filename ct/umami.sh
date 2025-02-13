@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://umami.is/
 
-# App Default Values
 APP="Umami"
 var_tags="analytics"
 var_cpu="2"

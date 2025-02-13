@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.influxdata.com/
 
-# App Default Values
 APP="InfluxDB"
 var_tags="database"
 var_cpu="2"

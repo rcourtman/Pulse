@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/aceberg/WatchYourLAN
 
-# App Default Values
 APP="WatchYourLAN"
 var_tags="network"
 var_cpu="1"

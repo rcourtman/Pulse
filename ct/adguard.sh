@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://adguard.com/
 
-# App Default Values
 APP="Adguard"
 var_tags="adblock"
 var_cpu="1"

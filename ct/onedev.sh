@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://onedev.io/
 
-# App Default Values
 APP="OneDev"
 var_tags="git"
 var_cpu="2"

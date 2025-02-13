@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.openhab.org/
 
-# App Default Values
 APP="openHAB"
 var_tags="automation"
 var_cpu="2"

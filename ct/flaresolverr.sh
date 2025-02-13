@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/FlareSolverr/FlareSolverr
 
-# App Default Values
 APP="FlareSolverr"
 var_tags="proxy"
 var_cpu="2"

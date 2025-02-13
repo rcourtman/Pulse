@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.projectsend.org/
 
-# App Default Values
 APP="ProjectSend"
 var_tags="media"
 var_cpu="1"

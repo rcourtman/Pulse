@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://thelounge.chat/
 
-# App Default Values
 APP="The-Lounge"
 var_tags="irc"
 var_cpu="2"

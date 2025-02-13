@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://oss.oetiker.ch/smokeping/
 
-# App Default Values
 APP="SmokePing"
 var_tags="network"
 var_cpu="1"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/prometheus-pve/prometheus-pve-exporter
 
-# App Default Values
 APP="Prometheus-PVE-Exporter"
 var_tags="monitoring"
 var_cpu="1"

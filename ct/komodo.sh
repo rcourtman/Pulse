@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://komo.do
 
-# App Default Values
 APP="Komodo"
 var_tags="docker"
 var_cpu="2"

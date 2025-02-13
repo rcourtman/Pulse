@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docs.paperless-ngx.com/
 
-# App Default Values
 APP="Paperless-ngx"
 var_tags="document;management"
 var_cpu="2"

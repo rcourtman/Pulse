@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://hyperion-project.org/forum/
 
-# App Default Values
 APP="Hyperion"
 var_tags="ambient-lightning"
 var_cpu="1"

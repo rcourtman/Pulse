@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://forgejo.org/
 
-# App Default Values
 APP="Forgejo"
 var_tags="git"
 var_cpu="2"

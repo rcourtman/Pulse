@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://frigate.video/
 
-# App Default Values
 APP="Frigate"
 var_tags="nvr"
 var_cpu="4"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://meshcentral.com/
 
-# App Default Values
 APP="MeshCentral"
 var_tags="remote-management"
 var_cpu="1"

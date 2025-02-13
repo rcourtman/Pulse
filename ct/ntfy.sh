@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://ntfy.sh/
 
-# App Default Values
 APP="ntfy"
 var_tags="notification"
 var_cpu="1"

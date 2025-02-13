@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://archivebox.io/
 
-# App Default Values
 APP="ArchiveBox"
 var_tags="archive;bookmark"
 var_cpu="2"

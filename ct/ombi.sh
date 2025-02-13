@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://ombi.io/
 
-# App Default Values
 APP="Ombi"
 var_tags="media"
 var_cpu="1"

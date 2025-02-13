@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docs.2fauth.app/
 
-# App Default Values
 APP="2FAuth"
 var_tags="2fa;authenticator"
 var_cpu="1"

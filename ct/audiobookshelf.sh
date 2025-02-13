@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.audiobookshelf.org/
 
-# App Default Values
 APP="audiobookshelf"
 var_tags="podcast;audiobook"
 var_cpu="2"

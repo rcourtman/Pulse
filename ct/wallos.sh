@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://wallosapp.com/
 
-# App Default Values
 APP="Wallos"
 var_tags="finance"
 var_cpu="1"

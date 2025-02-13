@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://ersatztv.org/
 
-# App Default Values
 APP="ErsatzTV"
 var_tags="iptv"
 var_cpu="1"

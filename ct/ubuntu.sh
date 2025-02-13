@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://ubuntu.com/
 
-# App Default Values
 echo -e "Loading..."
 APP="Ubuntu"
 var_tags="os"

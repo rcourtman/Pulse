@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://prowlarr.com/
 
-# App Default Values
 APP="Prowlarr"
 var_tags="arr"
 var_cpu="2"

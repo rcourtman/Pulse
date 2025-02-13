@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/element-hq/synapse
 
-# App Default Values
 APP="Element Synapse"
 var_tags="server"
 var_cpu="1"

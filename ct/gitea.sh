@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://about.gitea.com/
 
-# App Default Values
 APP="Gitea"
 var_tags="git"
 var_cpu="1"

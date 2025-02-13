@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/searxng/searxng
 
-# App Default Values
 APP="SearXNG"
 var_tags="search"
 var_cpu="2"

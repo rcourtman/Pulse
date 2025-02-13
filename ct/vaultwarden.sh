@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.vaultwarden.net/
 
-# App Default Values
 APP="Vaultwarden"
 var_tags="password-manager"
 var_cpu="4"

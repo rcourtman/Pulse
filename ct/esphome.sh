@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://esphome.io/
 
-# App Default Values
 APP="ESPHome"
 var_tags="automation"
 var_cpu="2"

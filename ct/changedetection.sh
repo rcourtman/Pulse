@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://changedetection.io/
 
-# App Default Values
 APP="Change Detection"
 var_tags="monitoring;crawler"
 var_cpu="2"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://getchannels.com/dvr-server/
 
-# App Default Values
 APP="Channels"
 var_tags="dvr"
 var_cpu="2"

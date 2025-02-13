@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.home-assistant.io/
 
-# App Default Values
 APP="Home Assistant"
 var_tags="automation;smarthome"
 var_cpu="2"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.phoscon.de/en/conbee2/software#deconz
 
-# App Default Values
 APP="deCONZ"
 var_tags="zigbee"
 var_cpu="2"

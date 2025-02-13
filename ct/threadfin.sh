@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/Threadfin/Threadfin
 
-# App Default Values
 APP="Threadfin"
 var_tags="media"
 var_cpu="1"

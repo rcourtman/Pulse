@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/Jackett/Jackett
 
-# App Default Values
 APP="Jackett"
 var_tags="torrent"
 var_cpu="1"

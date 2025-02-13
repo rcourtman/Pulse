@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.iobroker.net/#en/intro
 
-# App Default Values
 APP="ioBroker"
 var_tags="automtation"
 var_cpu="2"

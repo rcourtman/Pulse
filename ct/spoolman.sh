@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/Donkie/Spoolman
 
-# App Default Values
 APP="Spoolman"
 var_tags="3d-printing"
 var_cpu="1"

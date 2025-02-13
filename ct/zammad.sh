@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://zammad.com
 
-#App Default Values
 APP="Zammad"
 var_tags="webserver;ticket-system"
 var_disk="8"

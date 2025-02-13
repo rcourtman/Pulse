@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://sftpgo.com/
 
-# App Default Values
 APP="SFTPGo"
 var_tags="ftp;sftp"
 var_cpu="2"

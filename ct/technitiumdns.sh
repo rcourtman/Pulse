@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://technitium.com/dns/
 
-# App Default Values
 APP="Technitium DNS"
 var_tags="dns"
 var_cpu="1"

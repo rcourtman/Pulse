@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.commafeed.com/#/welcome
 
-# App Default Values
 APP="CommaFeed"
 var_tags="rss-reader"
 var_cpu="2"

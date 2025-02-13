@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.zigbee2mqtt.io/
 
-# App Default Values
 APP="Zigbee2MQTT"
 var_tags="smarthome;zigbee;mqtt"
 var_cpu="2"

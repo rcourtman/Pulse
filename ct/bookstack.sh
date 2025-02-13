@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/BookStackApp/BookStack
 
-# App Default Values
 APP="Bookstack"
 var_tags="organizer"
 var_cpu="1"

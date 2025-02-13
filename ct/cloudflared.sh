@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.cloudflare.com/
 
-# App Default Values
 APP="Cloudflared"
 var_tags="network;cloudflare"
 var_cpu="1"

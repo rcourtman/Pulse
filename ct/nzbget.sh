@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://nzbget.com/
 
-# App Default Values
 APP="NZBGet"
 var_tags="usenet;downloader"
 var_cpu="2"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://owncast.online/
 
-# App Default Values
 APP="Owncast"
 var_tags="broadcasting"
 var_cpu="2"

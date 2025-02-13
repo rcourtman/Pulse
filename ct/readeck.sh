@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://readeck.org/en/
 
-# App Default Values
 APP="Readeck"
 var_tags="bookmark"
 var_cpu="1"

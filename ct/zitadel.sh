@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://zitadel.com/
 
-# App Default Values
 APP="Zitadel"
 var_tags="identity-provider"
 var_cpu="1"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://sonarr.tv/
 
-# App Default Values
 APP="Sonarr"
 var_tags="arr"
 var_cpu="2"

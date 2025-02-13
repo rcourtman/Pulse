@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://neo4j.com/product/neo4j-graph-database/
 
-# App Default Values
 APP="Neo4j"
 var_tags="database"
 var_cpu="1"

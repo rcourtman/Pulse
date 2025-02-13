@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://nginxproxymanager.com/
 
-# App Default Values
 APP="Nginx Proxy Manager"
 var_tags="proxy"
 var_cpu="2"

@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/matze/wastebin
 
-# App Default Values
 APP="Wastebin"
 var_tags="file;code"
 var_cpu="1"

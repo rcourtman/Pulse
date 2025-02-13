@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.photoprism.app/
 
-# App Default Values
 APP="PhotoPrism"
 var_tags="media;photo"
 var_cpu="2"

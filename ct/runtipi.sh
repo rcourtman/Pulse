@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://runtipi.io/
 
-# App Default Values
 APP="Runtipi"
 var_tags="os"
 var_cpu="2"

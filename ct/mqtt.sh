@@ -5,7 +5,6 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://mosquitto.org/
 
-# App Default Values
 APP="MQTT"
 var_tags="mqtt"
 var_cpu="1"
