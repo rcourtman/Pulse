@@ -23,11 +23,7 @@ var_version="[VERSION]"
 var_unprivileged="[UNPRIVILEGED]"
 # 1 = unprivileged container, 0 = privileged container
 
-# App Output & Base Settings
 header_info "$APP"
-base_settings
-
-# Core
 variables
 color
 catch_errors
