@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Copyright (c) 2021-2025 community-scripts ORG
-# Author: michelroegl-brunner
+# Author: Michel Roegl-Brunner (michelroegl-brunner)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
 color() {
@@ -10,7 +10,6 @@ catch_errors() {
   set -Eeuo pipefail
   trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 }
-
 
 error_handler() {
     local exit_code="$?"
@@ -68,6 +67,7 @@ function select_storage() {
   *) false || { msg_error "Invalid storage class."; exit 201; };;
   esac
   
+  # This Queries all storage locations
   local -a MENU
   while read -r line; do
     local TAG=$(echo $line | awk '{print $1}')
@@ -81,6 +81,7 @@ function select_storage() {
     MENU+=("$TAG" "$ITEM" "OFF")
   done < <(pvesm status -content $CONTENT | awk 'NR>1')
   
+  # Select storage location
   if [ $((${#MENU[@]}/3)) -eq 1 ]; then
     printf ${MENU[0]}
   else
@@ -103,17 +104,12 @@ if pct status $CTID &>/dev/null; then
   exit 206
 fi
 
-
 TEMPLATE_STORAGE=$(select_storage template) || exit
-msg_ok "Using  $TEMPLATE_STORAGE   for Template Storage."
-
 
 CONTAINER_STORAGE=$(select_storage container) || exit
-msg_ok "Using  $CONTAINER_STORAGE   for Container Storage."
 
-msg_info "Updating LXC Template List"
 pveam update >/dev/null
-msg_ok "Updated LXC Template List"
+
 
 TEMPLATE_SEARCH=${PCT_OSTYPE}-${PCT_OSVERSION:-}
 mapfile -t TEMPLATES < <(pveam available -section system | sed -n "s/.*\($TEMPLATE_SEARCH.*\)/\1/p" | sort -t - -k 2 -V)
@@ -124,35 +120,29 @@ TEMPLATE_PATH="/var/lib/vz/template/cache/$TEMPLATE"
 
 if ! pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE"; then
   [[ -f "$TEMPLATE_PATH" ]] && rm -f "$TEMPLATE_PATH"
-  msg_info "Downloading LXC Template"
   pveam download "$TEMPLATE_STORAGE" "$TEMPLATE" >/dev/null ||
     { msg_error "A problem occurred while downloading the LXC template."; exit 208; }
-  msg_ok "Downloaded LXC Template"
 fi
 
 
 grep -q "root:100000:65536" /etc/subuid || echo "root:100000:65536" >> /etc/subuid
 grep -q "root:100000:65536" /etc/subgid || echo "root:100000:65536" >> /etc/subgid
 
-
 PCT_OPTIONS=(${PCT_OPTIONS[@]:-${DEFAULT_PCT_OPTIONS[@]}})
 [[ " ${PCT_OPTIONS[@]} " =~ " -rootfs " ]] || PCT_OPTIONS+=(-rootfs "$CONTAINER_STORAGE:${PCT_DISK_SIZE:-8}")
 
-echo "${PCT_OPTIONS[@]}"
 
-
-msg_info "Creating LXC Container"
   if ! pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" "${PCT_OPTIONS[@]}" &>/dev/null; then
       [[ -f "$TEMPLATE_PATH" ]] && rm -f "$TEMPLATE_PATH"
       
-    msg_ok "Template integrity check completed"
+
     pveam download "$TEMPLATE_STORAGE" "$TEMPLATE" >/dev/null ||    
       { msg_error "A problem occurred while re-downloading the LXC template."; exit 208; }
     
-    msg_ok "Re-downloaded LXC Template"
+
     if ! pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" "${PCT_OPTIONS[@]}" &>/dev/null; then
         msg_error "A problem occurred while trying to create container after re-downloading template."
       exit 200
     fi
   fi
-msg_ok "LXC Container  $CTID   was successfully created."
+

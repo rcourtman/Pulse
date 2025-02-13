@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # Copyright (c) 2021-2025 community-scripts ORG
-# Author: michelroegl-brunner
+# Author: Michel Roegl-Brunner (michelroegl-brunner)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
 variables() {
-  NSAPP=$(echo ${APP,,} | tr -d ' ') 
-  var_install="${NSAPP}-install"     
-
+  NSAPP=$(echo ${APP,,} | tr -d ' ') # This function sets the NSAPP variable by converting the value of the APP variable to lowercase and removing any spaces.
+  var_install="${NSAPP}-install"     # sets the var_install variable by appending "-install" to the value of NSAPP.
 }
 
 NEXTID=$(pvesh get /cluster/nextid)
@@ -16,7 +15,7 @@ header_info(){
 }
 
 base_settings() {
-  
+  # Default Settings
   CT_TYPE="1"
   DISK_SIZE="4"
   CORE_COUNT="1"
@@ -40,7 +39,7 @@ base_settings() {
   SSH_AUTHORIZED_KEY=""
   TAGS="community-script;"
 
-  
+  # Override default settings with variables from ct script
   CT_TYPE=${var_unprivileged:-$CT_TYPE}
   DISK_SIZE=${var_disk:-$DISK_SIZE}
   CORE_COUNT=${var_cpu:-$CORE_COUNT}
@@ -48,6 +47,7 @@ base_settings() {
   VERB=${var_verbose:-$VERBOSE}
   TAGS="${TAGS}${var_tags:-}"
 
+  # Since these 2 are only defined outside of default_settings function, we add a temporary fallback. TODO: To align everything, we should add these as constant variables (e.g. OSTYPE and OSVERSION), but that would currently require updating the default_settings function for all existing scripts
   if [ -z "$var_os" ]; then
     var_os="debian"
   fi
@@ -112,9 +112,8 @@ error_handler() {
   SCRIPT_NAME=$(basename "$0")
   local error_message="$SCRIPT_NAME: Failure in line $line_number while executing command $command"
   echo -e "\n$error_message"
-  exit "$error_message"
+  exit 100
 }
-
 
 msg_info() {
   local msg="$1"
@@ -136,7 +135,8 @@ start(){
 }
 
 build_container() {
- 
+  #  if [ "$VERB" == "yes" ]; then set -x; fi
+
   if [ "$CT_TYPE" == "1" ]; then
     FEATURES="keyctl=1,nesting=1"
   else
