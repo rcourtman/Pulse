@@ -91,6 +91,10 @@ jobs:
             fi
             git remote add community-scripts https://github.com/community-scripts/ProxmoxVE.git
             git fetch community-scripts
+            rm -f .github/workflows/scripts/app-test/pr-build.func || true
+            rm -f .github/workflows/scripts/app-test/pr-install.func || true
+            rm -f .github/workflows/scripts/app-test/pr-alpine-install.func || true
+            rm -f .github/workflows/scripts/app-test/pr-create-lxc.sh || true
             git checkout community-scripts/main -- .github/workflows/scripts/app-test/pr-build.func
             git checkout community-scripts/main -- .github/workflows/scripts/app-test/pr-install.func
             git checkout community-scripts/main -- .github/workflows/scripts/app-test/pr-alpine-install.func
