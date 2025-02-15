@@ -50,6 +50,13 @@ chmod -R g+rX /opt/freshrss
 chmod -R g+w /opt/freshrss/data/
 msg_ok "Installed FreshRSS"
 
+msg_info "Setting up cron job for feed refresh"
+cat <<EOF >/etc/cron.d/freshrss-actualize
+*/15 * * * * www-data /bin/php -f /opt/freshrss/app/actualize_script.php > /tmp/FreshRSS.log 2>&1
+EOF
+chmod 644 /etc/cron.d/freshrss-actualize
+msg_ok "Set up Cron - if you need to modify the timing edit file /etc/cron.d/freshrss-actualize"
+
 msg_info "Creating Service"
 cat <<EOF >/etc/apache2/sites-available/freshrss.conf
 <VirtualHost *:80>
