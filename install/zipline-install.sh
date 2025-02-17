@@ -33,7 +33,7 @@ msg_ok "Set up Node.js Repository"
 msg_info "Installing Node.js"
 $STD apt-get update
 $STD apt-get install -y nodejs
-$STD npm install -g yarn
+$STD npm install -g pnpm
 msg_ok "Installed Node.js"
 
 msg_info "Setting up PostgreSQL"
@@ -60,13 +60,15 @@ wget -q "https://github.com/diced/zipline/archive/refs/tags/v${RELEASE}.zip"
 unzip -q v${RELEASE}.zip
 mv zipline-${RELEASE} /opt/zipline
 cd /opt/zipline
-mv .env.local.example .env
-sudo sed -i "s|CORE_SECRET=.*|CORE_SECRET=\"$SECRET_KEY\"|" /opt/zipline/.env
-sudo sed -i "s|CORE_RETURN_HTTPS=.*|CORE_RETURN_HTTPS=false|" /opt/zipline/.env
-sudo sed -i "s|CORE_DATABASE_URL=.*|CORE_DATABASE_URL=\"postgres://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME\"|" /opt/zipline/.env
+cat <<EOF >/opt/zipline/.env
+DATABASE_URL=postgres://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME
+CORE_SECRET=$SECRET_KEY
+CORE_HOSTNAME=0.0.0.0
+CORE_PORT=3000
 CORE_RETURN_HTTPS=false
-$STD yarn install
-$STD yarn build
+EOF
+$STD pnpm install
+$STD pnpm build
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed Zipline"
 
@@ -78,18 +80,17 @@ After=network.target
 
 [Service]
 WorkingDirectory=/opt/zipline
-ExecStart=/usr/bin/yarn start
+ExecStart=/usr/bin/pnpm start
 Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable -q --now zipline.service
+systemctl enable -q --now zipline
 msg_ok "Created Service"
 
 motd_ssh
 customize
-
 msg_info "Cleaning up"
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean

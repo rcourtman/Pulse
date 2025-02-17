@@ -26,6 +26,12 @@ function update_script() {
     msg_error "No ${APP} Installation Found!"
     exit
   fi
+  if ! command -v pnpm &>/dev/null; then  
+    msg_info "Installing pnpm"
+    #export NODE_OPTIONS=--openssl-legacy-provider
+    npm install -g pnpm@latest &>/dev/null
+    msg_ok "Installed pnpm"
+  fi
   RELEASE=$(curl -s https://api.github.com/repos/diced/zipline/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
   if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
     msg_info "Stopping ${APP}"
@@ -40,8 +46,8 @@ function update_script() {
     mv zipline-${RELEASE} /opt/zipline
     cd /opt/zipline
     mv /opt/.env /opt/zipline/.env
-    yarn install &>/dev/null
-    yarn build &>/dev/null
+    pnpm install &>/dev/null
+    pnpm build &>/dev/null
     echo "${RELEASE}" >/opt/${APP}_version.txt
     msg_ok "Updated ${APP}"
 
