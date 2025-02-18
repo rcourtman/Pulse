@@ -150,7 +150,7 @@ amd() {
 }
 
 # Check if this is a Proxmox Backup Server by verifying the presence of the datastore config.
-if [ ! -f /etc/proxmox-backup/datastore.cfg ]; then
+if [ ! -f /etc/proxmox-backup/user.cfg ]; then
   header_info
   msg_error "Proxmox Backup Server not detected!"
   exit
