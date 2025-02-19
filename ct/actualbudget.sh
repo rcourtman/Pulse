@@ -42,6 +42,14 @@ function update_script() {
         tar -xzf v${RELEASE}.tar.gz >/dev/null 2>&1
         mv *ctual-server-* /opt/actualbudget
         rm -rf /opt/actualbudget/.env
+        if [ ! -f /opt/actualbudget_bak/.env ]; then
+          cat <<EOF > /opt/actualbudget/.env
+            ACTUAL_UPLOAD_DIR=/opt/actualbudget/server-files
+            ACTUAL_DATA_DIR=/opt/actualbudget-data
+            ACTUAL_SERVER_FILES_DIR=/opt/actualbudget/server-files
+            PORT=5006
+          EOF
+        fi
         mv /opt/actualbudget_bak/.env /opt/actualbudget
         mv /opt/actualbudget_bak/.migrate /opt/actualbudget
         mv /opt/actualbudget_bak/server-files /opt/actualbudget/server-files
