@@ -17,6 +17,16 @@ All LXC instances created using this repository come pre-installed with Midnight
 Do not break established syntax in this file, as it is automatically updated by a Github Workflow
 
 
+## 2025-02-19
+
+### Changes
+
+### 🚀 Updated Scripts
+
+- Fix: file replacement in Watcharr Update Script [@Clusters](https://github.com/Clusters) ([#2498](https://github.com/community-scripts/ProxmoxVE/pull/2498))
+- Fix: Kometa - fixed successful setup message and added info to json [@tremor021](https://github.com/tremor021) ([#2495](https://github.com/community-scripts/ProxmoxVE/pull/2495))
+- Fix: Actual Budget, add missing .env when updating [@MickLesk](https://github.com/MickLesk) ([#2494](https://github.com/community-scripts/ProxmoxVE/pull/2494))
+
 ## 2025-02-18
 
 ### Changes
