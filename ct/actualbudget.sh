@@ -46,7 +46,6 @@ function update_script() {
         tar -xzf "v${RELEASE}.tar.gz" >/dev/null 2>&1
         mv *ctual-server-* /opt/actualbudget
 
-        # Sicherstellen, dass .env existiert
         rm -rf /opt/actualbudget/.env
         if [[ ! -f /opt/actualbudget_bak/.env ]]; then
             cat <<EOF > /opt/actualbudget_bak/.env
@@ -56,10 +55,8 @@ ACTUAL_SERVER_FILES_DIR=/opt/actualbudget/server-files
 PORT=5006
 EOF
         fi
-
         mv /opt/actualbudget_bak/.env /opt/actualbudget
-        mv /opt/actualbudget_bak/.migrate /opt/actualbudget
-        mv /opt/actualbudget_bak/server-files /opt/actualbudget/server-files
+        #mv /opt/actualbudget_bak/.migrate /opt/actualbudget
 
         cd /opt/actualbudget
         yarn install &>/dev/null
@@ -67,6 +64,24 @@ EOF
         msg_ok "Updated ${APP}"
 
         msg_info "Starting ${APP}"
+        cat <<EOF >/etc/systemd/system/actualbudget.service
+[Unit]
+Description=Actual Budget Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/actualbudget
+EnvironmentFile=/opt/actualbudget/.env
+ExecStart=/usr/bin/yarn start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
         systemctl start actualbudget
         msg_ok "Started ${APP}"
 
