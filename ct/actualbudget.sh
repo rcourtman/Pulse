@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+
 # Copyright (c) 2021-2025 tteck
 # Author: tteck (tteckster)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -26,51 +27,58 @@ function update_script() {
 
     if [[ ! -d /opt/actualbudget ]]; then
         msg_error "No ${APP} Installation Found!"
-        exit
+        exit 1
     fi
-    
-    RELEASE=$(curl -s https://api.github.com/repos/actualbudget/actual/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
+
+    RELEASE=$(curl -s https://api.github.com/repos/actualbudget/actual/releases/latest | \
+              grep "tag_name" | awk -F '"' '{print substr($4, 2)}')
+
     if [[ ! -f /opt/actualbudget_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/actualbudget_version.txt)" ]]; then
         msg_info "Stopping ${APP}"
         systemctl stop actualbudget
         msg_ok "${APP} Stopped"
-        
+
         msg_info "Updating ${APP} to ${RELEASE}"
         cd /tmp
-        wget -q https://github.com/actualbudget/actual-server/archive/refs/tags/v${RELEASE}.tar.gz
+        wget -q "https://github.com/actualbudget/actual-server/archive/refs/tags/v${RELEASE}.tar.gz"
+
         mv /opt/actualbudget /opt/actualbudget_bak
-        tar -xzf v${RELEASE}.tar.gz >/dev/null 2>&1
+        tar -xzf "v${RELEASE}.tar.gz" >/dev/null 2>&1
         mv *ctual-server-* /opt/actualbudget
+
+        # Sicherstellen, dass .env existiert
         rm -rf /opt/actualbudget/.env
-        if [ ! -f /opt/actualbudget_bak/.env ]; then
-          cat <<EOF > /opt/actualbudget/.env
-            ACTUAL_UPLOAD_DIR=/opt/actualbudget/server-files
-            ACTUAL_DATA_DIR=/opt/actualbudget-data
-            ACTUAL_SERVER_FILES_DIR=/opt/actualbudget/server-files
-            PORT=5006
-          EOF
+        if [[ ! -f /opt/actualbudget_bak/.env ]]; then
+            cat <<EOF > /opt/actualbudget/.env
+ACTUAL_UPLOAD_DIR=/opt/actualbudget/server-files
+ACTUAL_DATA_DIR=/opt/actualbudget-data
+ACTUAL_SERVER_FILES_DIR=/opt/actualbudget/server-files
+PORT=5006
+EOF
         fi
+
         mv /opt/actualbudget_bak/.env /opt/actualbudget
         mv /opt/actualbudget_bak/.migrate /opt/actualbudget
         mv /opt/actualbudget_bak/server-files /opt/actualbudget/server-files
+
         cd /opt/actualbudget
         yarn install &>/dev/null
-        echo "${RELEASE}" >/opt/actualbudget_version.txt
+        echo "${RELEASE}" > /opt/actualbudget_version.txt
         msg_ok "Updated ${APP}"
-        
+
         msg_info "Starting ${APP}"
         systemctl start actualbudget
         msg_ok "Started ${APP}"
-        
+
         msg_info "Cleaning Up"
         rm -rf /opt/actualbudget_bak
-        rm -rf /tmp/v${RELEASE}.tar.gz
+        rm -rf "/tmp/v${RELEASE}.tar.gz"
         msg_ok "Cleaned"
         msg_ok "Updated Successfully"
     else
         msg_ok "No update required. ${APP} is already at ${RELEASE}"
     fi
-    exit
+    exit 0
 }
 
 start
