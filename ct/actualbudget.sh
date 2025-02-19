@@ -59,7 +59,9 @@ PORT=5006
 EOF
         fi
         mv /opt/actualbudget_bak/.env /opt/actualbudget/
-        mv /opt/actualbudget_bak/server-files/* /opt/actualbudget/server-files/
+        if [[ -d /opt/actualbudget_bak/server-files ]] && [[ -n $(ls -A /opt/actualbudget_bak/server-files 2>/dev/null) ]]; then
+            mv /opt/actualbudget_bak/server-files/* /opt/actualbudget/server-files/
+        fi
         if [[ -d /opt/actualbudget_bak/.migrate ]]; then
             mv /opt/actualbudget_bak/.migrate /opt/actualbudget/
         fi
