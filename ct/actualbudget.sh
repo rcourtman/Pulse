@@ -45,6 +45,9 @@ function update_script() {
         mv /opt/actualbudget /opt/actualbudget_bak
         tar -xzf "v${RELEASE}.tar.gz" >/dev/null 2>&1
         mv *ctual-server-* /opt/actualbudget
+        if [[ ! -d /opt/actualbudget-data ]]; then
+            mkdir -p /opt/actualbudget-data/server-files
+        fi
 
         rm -rf /opt/actualbudget/.env
         if [[ ! -f /opt/actualbudget_bak/.env ]]; then
@@ -55,8 +58,11 @@ ACTUAL_SERVER_FILES_DIR=/opt/actualbudget/server-files
 PORT=5006
 EOF
         fi
-        mv /opt/actualbudget_bak/.env /opt/actualbudget
-        #mv /opt/actualbudget_bak/.migrate /opt/actualbudget
+        mv /opt/actualbudget_bak/.env /opt/actualbudget/
+        mv /opt/actualbudget_bak/server-files/* /opt/actualbudget/server-files/
+        if [[ -d /opt/actualbudget_bak/.migrate ]]; then
+            mv /opt/actualbudget_bak/.migrate /opt/actualbudget/
+        fi
 
         cd /opt/actualbudget
         yarn install &>/dev/null
