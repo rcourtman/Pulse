@@ -49,7 +49,7 @@ function update_script() {
         # Sicherstellen, dass .env existiert
         rm -rf /opt/actualbudget/.env
         if [[ ! -f /opt/actualbudget_bak/.env ]]; then
-            cat <<EOF > /opt/actualbudget/.env
+            cat <<EOF > /opt/actualbudget_bak/.env
 ACTUAL_UPLOAD_DIR=/opt/actualbudget/server-files
 ACTUAL_DATA_DIR=/opt/actualbudget-data
 ACTUAL_SERVER_FILES_DIR=/opt/actualbudget/server-files
