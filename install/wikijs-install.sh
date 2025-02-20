@@ -79,8 +79,8 @@ sed -i -E '
 }
 ' /opt/wikijs/config.yml
 cd /opt/wikijs
-$STD yarn build 
 $STD yarn install
+$STD yarn build
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed Wiki.js"
 
@@ -101,7 +101,7 @@ WorkingDirectory=/opt/wikijs
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable --now wikijs
+systemctl enable -q --now wikijs
 msg_ok "Created Service"
 
 motd_ssh
