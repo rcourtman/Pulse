@@ -33,7 +33,7 @@ msg_ok "Set up Node.js Repository"
 msg_info "Installing Node.js"
 $STD apt-get update
 $STD apt-get install -y nodejs
-$STD npm install -g pnpm
+$STD npm install -g pnpm@latest
 msg_ok "Installed Node.js"
 
 msg_info "Setting up PostgreSQL"
