@@ -20,7 +20,11 @@ $STD apt-get install -y \
   mc \
   git \
   ca-certificates \
-  gnupg
+  gnupg \
+  build-essential \
+  python3 \
+  g++ \
+  make
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up Node.js Repository"
@@ -38,6 +42,7 @@ msg_info "Installing Node.js"
 $STD apt-get update
 $STD apt-get install -y nodejs
 $STD npm install --global yarn
+$STD npm install -g node-gyp
 msg_ok "Installed Node.js"
 
 msg_info "Set up PostgreSQL"
