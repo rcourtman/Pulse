@@ -7,9 +7,9 @@ source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/m
 
 APP="Wikijs"
 var_tags="wiki"
-var_cpu="1"
-var_ram="1024"
-var_disk="5"
+var_cpu="2"
+var_ram="2048"
+var_disk="7"
 var_os="debian"
 var_version="12"
 var_unprivileged="1"
