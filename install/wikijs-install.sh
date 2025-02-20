@@ -84,6 +84,7 @@ sed -i -E '
 }
 ' /opt/wikijs/config.yml
 cd /opt/wikijs
+export NODE_OPTIONS="--max-old-space-size=2048"
 $STD yarn install
 $STD yarn build
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
