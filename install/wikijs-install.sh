@@ -37,6 +37,7 @@ msg_ok "Set up PostgreSQL Repository"
 msg_info "Installing Node.js"
 $STD apt-get update
 $STD apt-get install -y nodejs
+$STD npm install --global yarn
 msg_ok "Installed Node.js"
 
 msg_info "Set up PostgreSQL"
@@ -65,7 +66,21 @@ wget -q "https://github.com/Requarks/wiki/archive/refs/tags/v${RELEASE}.tar.gz" 
 tar -xzf "$temp_file"
 mv wiki-${RELEASE} /opt/wikijs
 mv /opt/wikijs/config.sample.yml /opt/wikijs/config.yml
-sed -i -E "s|(host: ).*|\1localhost|; s|(port: ).*|\15432|; s|(user: ).*|\1$DB_USER|; s|(pass: ).*|\1$DB_PASS|; s|(db: ).*|\1$DB_NAME|; s|(ssl: ).*|\1false|" /opt/wikijs/config.yml
+sed -i -E '
+/db:/,/^$/ {
+    s|(host: ).*|\1localhost|;
+    s|(port: ).*|\15432|;
+    s|(user: ).*|\1'"$DB_USER"'|;
+    s|(pass: ).*|\1'"$DB_PASS"'|;
+    s|(db: ).*|\1'"$DB_NAME"'|;
+}
+/^ssl:/,/^$/ {
+    s|(enabled: ).*|\1false|;
+}
+' /opt/wikijs/config.yml
+cd /opt/wikijs
+$STD yarn build 
+$STD yarn install
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed Wiki.js"
 
@@ -77,7 +92,7 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/node server
+ExecStart=/usr/bin/yarn start
 Restart=always
 User=root
 Environment=NODE_ENV=production
