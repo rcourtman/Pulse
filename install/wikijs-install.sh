@@ -47,7 +47,7 @@ msg_ok "Installed Node.js"
 
 msg_info "Set up PostgreSQL"
 $STD apt-get install -y postgresql-17
-DB_NAME="wikijs_db"
+DB_NAME="wiki"
 DB_USER="wikijs_user"
 DB_PASS="$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-13)"
 $STD sudo -u postgres psql -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASS';"
@@ -71,18 +71,8 @@ wget -q "https://github.com/Requarks/wiki/archive/refs/tags/v${RELEASE}.tar.gz" 
 tar -xzf "$temp_file"
 mv wiki-${RELEASE} /opt/wikijs
 mv /opt/wikijs/config.sample.yml /opt/wikijs/config.yml
-sed -i -E '
-/db:/,/^$/ {
-    s|(host: ).*|\1localhost|;
-    s|(port: ).*|\15432|;
-    s|(user: ).*|\1'"$DB_USER"'|;
-    s|(pass: ).*|\1'"$DB_PASS"'|;
-    s|(db: ).*|\1'"$DB_NAME"'|;
-}
-/^ssl:/,/^$/ {
-    s|(enabled: ).*|\1false|;
-}
-' /opt/wikijs/config.yml
+sed -i -E 's|^( *user: ).*|\1'"$DB_USER"'|' /opt/wikijs/config.yml
+sed -i -E 's|^( *pass: ).*|\1'"$DB_PASS"'|' /opt/wikijs/config.yml
 cd /opt/wikijs
 export NODE_OPTIONS="--max-old-space-size=2048"
 $STD yarn install --ignore-engines
