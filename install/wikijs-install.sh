@@ -85,7 +85,7 @@ sed -i -E '
 ' /opt/wikijs/config.yml
 cd /opt/wikijs
 export NODE_OPTIONS="--max-old-space-size=2048"
-$STD yarn install
+$STD yarn install --ignore-engines
 $STD yarn build
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed Wiki.js"
