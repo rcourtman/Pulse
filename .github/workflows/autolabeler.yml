@@ -60,8 +60,8 @@ jobs:
             }
 
             const templateLabelMappings = {
-              "🐞 bug fix": "bug fix",
-              "✨ new feature": "new feature",
+              "🐞 bug fix": "bugfix",
+              "✨ new feature": "feature",
               "💥 breaking change": "breaking change",
               "🆕 new script": "new script"
             };
