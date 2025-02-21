@@ -56,7 +56,6 @@ jobs:
             const fileContent = await fs.readFile(configPath, 'utf-8');
             let changelogConfig = JSON.parse(fileContent);
 
-            // Reihenfolge der Kategorien beibehalten
             const order = [
               "💥 Breaking Changes",
               "🆕 New Scripts",
@@ -87,7 +86,7 @@ jobs:
             });
 
             if (!pulls || pulls.length === 0) {
-              console.log("⚠️ No merged PRs found. create empty Changelog.");
+              console.log("⚠️ No merged PRs found. Generating empty changelog.");
               core.setOutput("result", JSON.stringify([]));
               return;
             }
@@ -101,7 +100,6 @@ jobs:
               const prBody = pr.body ? pr.body.toLowerCase() : "";
               const prNote = `- ${pr.title} [@${pr.user.login}](https://github.com/${pr.user.login}) ([#${pr.number}](${pr.html_url}))`;
 
-              // Mapping für PR-Checkboxen → Labels
               const templateLabelMappings = {
                 "🐞 bug fix": "bugfix",
                 "✨ new feature": "feature",
@@ -113,7 +111,7 @@ jobs:
               for (const [checkbox, label] of Object.entries(templateLabelMappings)) {
                 const regex = new RegExp(`- \\[(.*?)\\] ${checkbox}`, "i");
                 const match = prBody.match(regex);
-                if (match && match[1].trim() !== "") { // Checkbox ist gesetzt
+                if (match && match[1].trim() !== "") {
                   prLabels.push(label);
                   addedByTemplate = true;
                 }
@@ -141,11 +139,12 @@ jobs:
               }
 
               if (addedByTemplate) {
-                console.log(`PR #${pr.number} added by PR-Template category`);
+                console.log(`PR #${pr.number} categorized via PR template selection.`);
               }
             });
 
-            core.setOutput("result", JSON.stringify(categorizedPRs));
+            core.setOutput("result", JSON.stringify(categorizedPRs.length ? categorizedPRs : []));
+
 
       - name: Update CHANGELOG.md
         uses: actions/github-script@v7
