@@ -4,7 +4,7 @@
     "labels": ["breaking change"]
   },
   {
-    "title": "✨ New Scripts",
+    "title": "🆕 New Scripts",
     "labels": ["new script"]
   },
   {
@@ -12,7 +12,15 @@
     "labels": ["update script"]
   },
   {
-    "title": "🆕 Features",
+    "title": "🐞 Bug Fixes (Updated Scripts)",
+    "labels": ["update script", "bugfix"]
+  },
+  {
+    "title": "✨ Feature Updates (Updated Scripts)",
+    "labels": ["update script", "feature"]
+  },
+  {
+    "title": "✨ New Features",
     "labels": ["feature"]
   },
   {
@@ -20,16 +28,12 @@
     "labels": ["website"]
   },
   {
-    "title": "🐞 Bug Fixes",
-    "labels": ["bugfix"]
+    "title": "📡 API",
+    "labels": ["api"]
   },
   {
     "title": "🧰 Maintenance",
     "labels": ["maintenance"]
-  },
-  {
-    "title": "📡 API",
-    "labels": ["api"]
   },
   {
     "title": "❔ Unlabelled",
