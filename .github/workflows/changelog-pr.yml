@@ -86,8 +86,8 @@ jobs:
             });
 
             if (!pulls || pulls.length === 0) {
-              console.log("⚠️ No merged PRs found. Generating empty changelog.");
-              core.setOutput("result", JSON.stringify([]));
+              console.log("⚠️ Keine gemergten PRs gefunden. Erzeuge leeres Changelog.");
+              core.setOutput("result", "[]");
               return;
             }
 
@@ -139,13 +139,12 @@ jobs:
               }
 
               if (addedByTemplate) {
-                console.log(`PR #${pr.number} categorized via PR template selection.`);
+                console.log(`PR #${pr.number} wurde durch PR-Template-Kategorie hinzugefügt.`);
               }
             });
 
             core.setOutput("result", JSON.stringify(categorizedPRs.length ? categorizedPRs : []));
-
-
+            
       - name: Update CHANGELOG.md
         uses: actions/github-script@v7
         with:
