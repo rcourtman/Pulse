@@ -13,7 +13,7 @@
   },
   {
     "title": "🆕 Features",
-    "labels": ["new feature"]
+    "labels": ["feature"]
   },
   {
     "title": "🌐 Website",
@@ -21,7 +21,7 @@
   },
   {
     "title": "🐞 Bug Fixes",
-    "labels": ["bug fix"]
+    "labels": ["bugfix"]
   },
   {
     "title": "🧰 Maintenance",
