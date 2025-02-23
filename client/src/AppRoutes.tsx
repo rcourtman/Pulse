@@ -1,7 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
-import Onboarding from './pages/Onboarding';
 import NodeDetails from './pages/NodeDetails';
 
 const AppRoutes: React.FC = () => {
@@ -12,7 +11,6 @@ const AppRoutes: React.FC = () => {
       </h1>
       <Routes>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/onboarding" element={<Onboarding />} />
         <Route path="/nodes/:nodeId" element={<NodeDetails />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -20,4 +18,4 @@ const AppRoutes: React.FC = () => {
   );
 };
 
-export default AppRoutes; 
+export default AppRoutes;
