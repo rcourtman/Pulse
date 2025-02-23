@@ -31,18 +31,12 @@ const Dashboard: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <button
-            onClick={() => navigate('/onboarding')}
-            className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors"
-          >
-            Add Node
-          </button>
         </div>
 
         {nodes.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg shadow-sm">
             <p className="text-gray-600 text-lg">
-              No nodes added yet. Click "Add Node" to get started.
+              No nodes configured. Please check your server environment configuration.
             </p>
           </div>
         ) : (

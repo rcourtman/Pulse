@@ -13,15 +13,16 @@ pnpm-debug.log*
 lerna-debug.log*
 
 # Dependencies
-node_modules
-dist
+node_modules/
+dist/
 dist-ssr
 *.local
 
 # Environment variables
 .env
 .env.local
-.env.*.local
+.env.development
+.env.production
 
 # Editor directories and files
 .vscode/*

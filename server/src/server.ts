@@ -10,10 +10,18 @@ import { logger } from './utils/logger';
 import { ProxmoxService } from './services/proxmox';
 import crypto from 'crypto';
 import { config } from 'dotenv';
+import path from 'path';
 
 // Load environment variables
-dotenv.config();
-config();
+if (process.env.NODE_ENV === 'production') {
+  dotenv.config({ path: path.resolve(process.cwd(), '.env.production') });
+} else {
+  // Try to load .env.local first, fall back to .env
+  const result = dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+  if (result.error) {
+    dotenv.config(); // Fall back to .env
+  }
+}
 
 // Initialize cache
 const cache = new NodeCache({ stdTTL: 100, checkperiod: 120 });
@@ -61,89 +69,85 @@ interface ProxmoxConfig {
 
 async function initializeDefaultProxmox() {
   try {
-    const proxmoxConfigs: ProxmoxConfig[] = [];
-    let counter = 1;
-    
-    // Add the default (unnumbered) configuration
-    if (process.env.PROXMOX_HOST && process.env.PROXMOX_TOKEN_ID && process.env.PROXMOX_TOKEN_SECRET) {
-      const host = process.env.PROXMOX_HOST.replace(/\/$/, ''); // Normalize host
-      
-      // Check if this host is already configured
-      const existingNodes = monitor?.getNodes() || [];
-      const isDuplicate = existingNodes.some(node => 
-        node.host.replace(/\/$/, '') === host
-      );
-
-      if (!isDuplicate) {
-        proxmoxConfigs.push({
-          host: process.env.PROXMOX_HOST,
-          tokenId: process.env.PROXMOX_TOKEN_ID,
-          tokenSecret: process.env.PROXMOX_TOKEN_SECRET
-        });
-      }
-    }
-
-    // Look for numbered configurations
-    while (true) {
-      const suffix = counter === 1 ? '' : `_${counter}`;
-      const host = process.env[`PROXMOX_HOST${suffix}`];
-      const tokenId = process.env[`PROXMOX_TOKEN_ID${suffix}`];
-      const tokenSecret = process.env[`PROXMOX_TOKEN_SECRET${suffix}`];
-
-      if (!host || !tokenId || !tokenSecret) break;
-
-      proxmoxConfigs.push({
-        host,
-        tokenId,
-        tokenSecret
-      });
-      counter++;
-    }
-
-    // Initialize each Proxmox configuration
-    for (const config of proxmoxConfigs) {
-      // Normalize the host URL by removing trailing slash
-      const normalizedConfigHost = config.host.replace(/\/$/, '');
-      
-      // Check if this server is already configured by matching host
-      const isDuplicate = (monitor?.getNodes() || []).some(node => {
-        if (!node?.host) return false;
-        const normalizedNodeHost = node.host.replace(/\/$/, '');
-        return normalizedNodeHost === normalizedConfigHost;
-      });
-
-      if (!isDuplicate) {
-        const service = new ProxmoxService({
+    // Get all environment variables starting with PROXMOX_HOST
+    const envVars = Object.entries(process.env);
+    const proxmoxHosts = envVars
+      .filter(([key]) => key.startsWith('PROXMOX_HOST'))
+      .map(([key, host]) => {
+        // Fix the index extraction
+        const suffix = key === 'PROXMOX_HOST' ? '' : `_${key.split('_').pop()}`;
+        
+        const config = {
+          host: host!,
+          tokenId: process.env[`PROXMOX_TOKEN_ID${suffix}`]!,
+          tokenSecret: process.env[`PROXMOX_TOKEN_SECRET${suffix}`]!
+        };
+        
+        logger.debug('Processing Proxmox config:', { 
+          key,
+          suffix,
           host: config.host,
           tokenId: config.tokenId,
-          tokenSecret: config.tokenSecret
+          hasSecret: !!config.tokenSecret
         });
-
-        try {
-          // Validate connection and get node info
-          await service.validate();
-          const nodes = await service.getNodes();
-          
-          if (nodes && nodes.length > 0) {
-            // Log the node data to see what we're getting
-            logger.debug('Node data from Proxmox:', nodes[0]);
-
-            monitor.addNode({
-              host: config.host,
-              tokenId: config.tokenId,
-              tokenSecret: config.tokenSecret,
-              nodeName: nodes[0].node || nodes[0].name || 'Unknown Node' // Try both properties
-            });
-            
-            logger.info(`Successfully connected to Proxmox server: ${config.host} (${nodes[0].node || 'Unknown Node'})`);
-          }
-        } catch (error) {
-          logger.error(`Failed to connect to Proxmox server: ${config.host}`, error);
+        
+        return config;
+      })
+      .filter((config): config is ProxmoxConfig => {
+        const isValid = !!config.host && !!config.tokenId && !!config.tokenSecret;
+        if (!isValid) {
+          logger.warn('Incomplete Proxmox configuration found:', { 
+            host: config.host, 
+            hasTokenId: !!config.tokenId,
+            hasTokenSecret: !!config.tokenSecret 
+          });
         }
+        return isValid;
+      });
+
+    logger.info('Environment variables:', 
+      Object.keys(process.env)
+        .filter(key => key.startsWith('PROXMOX_'))
+        .map(key => `${key}=${key.includes('SECRET') ? '***' : process.env[key]}`)
+    );
+
+    if (proxmoxHosts.length === 0) {
+      logger.warn('No valid Proxmox configurations found in environment variables');
+      return;
+    }
+
+    logger.info(`Found ${proxmoxHosts.length} Proxmox configurations:`, 
+      proxmoxHosts.map(h => ({ host: h.host, tokenId: h.tokenId }))
+    );
+
+    // Initialize each Proxmox host
+    for (const config of proxmoxHosts) {
+      const service = new ProxmoxService({
+        host: config.host,
+        tokenId: config.tokenId,
+        tokenSecret: config.tokenSecret
+      });
+
+      try {
+        await service.validate();
+        const nodes = await service.getNodes();
+        
+        if (nodes && nodes.length > 0) {
+          monitor.addNode({
+            host: config.host,
+            tokenId: config.tokenId,
+            tokenSecret: config.tokenSecret,
+            nodeName: nodes[0].node || 'Unknown Node'
+          });
+          
+          logger.info(`Successfully connected to Proxmox server: ${config.host}`);
+        }
+      } catch (error) {
+        logger.error(`Failed to connect to Proxmox server: ${config.host}`, error);
       }
     }
   } catch (error) {
-    logger.error('Error initializing default Proxmox configurations', error);
+    logger.error('Error initializing Proxmox configurations:', error);
   }
 }
 
@@ -192,9 +196,6 @@ app.get('/health', (req, res) => {
 app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Pulse API is running' });
 });
-
-// Add routes
-app.use('/api/proxmox', proxmoxRoutes);
 
 // Catch-all route
 app.get('*', (req, res) => {
