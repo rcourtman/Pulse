@@ -2,16 +2,6 @@
 
 ## I. Core Features
 
-### Onboarding Wizard:
-- **Node Addition:**  
-  - Add Proxmox nodes by entering the server address and API token.
-  - Guide users through the token creation process ensuring "pve auditor" permissions.
-- **Multi-Node Management:**  
-  - Enable users to manage multiple nodes and securely store their credentials.
-- **Error Handling:**  
-  - Provide immediate feedback on connection issues and token validity.
-  - Implement retry mechanisms and user-friendly error messages.
-
 ### Dashboard Grid:
 - **Metrics Display:**  
   - Show Name, CPU, Memory, and Network metrics using horizontal bar graphs.
@@ -65,7 +55,7 @@ pulse/
 │   │   ├── assets/            # Images, fonts, etc.
 │   │   ├── components/        # Reusable UI components (Grid, Sliders, SearchBox)
 │   │   ├── hooks/             # Custom hooks (useWebSocket, useSorting)
-│   │   ├── pages/             # Main pages (Onboarding, Dashboard)
+│   │   ├── pages/             # Main pages (Dashboard)
 │   │   ├── services/          # API & WebSocket service calls
 │   │   ├── styles/            # Tailwind and global styles
 │   │   └── App.tsx            # Application root
@@ -103,13 +93,7 @@ pulse/
 
 ### Phase 2: Core Feature Development
 
-1. **Onboarding Wizard:**
-   - Build the node connection form and token creation guide.
-   - Implement multi-node management with secure credential storage.
-   - Integrate immediate feedback mechanisms for connection/token validation.
-   - Write unit and integration tests for the onboarding process.
-
-2. **Dashboard Grid:**
+1. **Dashboard Grid:**
    - Develop the real-time metrics display using WebSocket (Socket.IO).
    - Render horizontal bar graphs for each metric.
    - Optimize performance with list virtualization and batch updates.
