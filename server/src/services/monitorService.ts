@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { v4 as uuidv4 } from 'uuid';
 import { Server as SocketIOServer } from 'socket.io';
 import fs from 'fs';
+import path from 'path';
 
 interface NodeStatus {
   cpu: number;
@@ -169,6 +170,14 @@ class NodeMonitor {
     }
   }
 
+  private getNodesFilePath(): string {
+    const configDir = process.env.CONFIG_DIR || './config';
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    return path.join(configDir, 'nodes.json');
+  }
+
   private saveNodes() {
     const nodes = Array.from(this.nodes.entries()).map(([id, node]) => ({
       id,
@@ -178,13 +187,14 @@ class NodeMonitor {
       nodeName: node.service.getNodeName()
     }));
     
-    fs.writeFileSync('nodes.json', JSON.stringify(nodes, null, 2));
+    fs.writeFileSync(this.getNodesFilePath(), JSON.stringify(nodes, null, 2));
   }
 
   private loadNodes() {
     try {
-      if (fs.existsSync('nodes.json')) {
-        const nodes = JSON.parse(fs.readFileSync('nodes.json', 'utf8'));
+      const nodesPath = this.getNodesFilePath();
+      if (fs.existsSync(nodesPath)) {
+        const nodes = JSON.parse(fs.readFileSync(nodesPath, 'utf8'));
         nodes.forEach(node => this.addNode(node));
       }
     } catch (error) {
