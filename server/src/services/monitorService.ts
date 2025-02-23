@@ -1,215 +1,119 @@
-import { ProxmoxService } from './proxmox';
-import { logger } from '../utils/logger';
-import { v4 as uuidv4 } from 'uuid';
 import { Server as SocketIOServer } from 'socket.io';
-import fs from 'fs';
-import path from 'path';
+import { logger } from '../utils/logger';
+import { ProxmoxService } from './proxmox';
+import { v4 as uuidv4 } from 'uuid';
 
-interface NodeStatus {
-  cpu: number;
-  memory: {
-    total: number;
-    used: number;
-    free: number;
-  };
-  uptime: number;
-}
-
-interface MonitoredNode {
+interface Node {
   id: string;
-  service: ProxmoxService;
-  status?: NodeStatus;
-  errorCount?: number;
+  host: string;
+  tokenId: string;
+  tokenSecret: string;
+  nodeName?: string;
+  status?: 'online' | 'error';
 }
 
-class NodeMonitor {
-  private nodes: Map<string, MonitoredNode>;
-  private updateInterval: number;
-  private intervalId?: NodeJS.Timeout;
+interface MonitorConfig {
+  maxNodes?: number;          // Maximum number of nodes allowed
+  updateInterval?: number;    // How often to update metrics (ms)
+  maxRetries?: number;       // Max retries before marking node as failed
+  timeout?: number;          // API call timeout
+}
+
+export class NodeMonitor {
+  private nodes: Map<string, Node> = new Map();
   private io: SocketIOServer;
+  private config: MonitorConfig;
 
-  constructor(io: SocketIOServer, updateInterval = 2000) {
-    this.nodes = new Map();
-    this.updateInterval = updateInterval;
+  constructor(io: SocketIOServer, config: MonitorConfig = {}) {
     this.io = io;
-    logger.info('NodeMonitor initialized');
-    this.loadNodes();
+    this.config = {
+      maxNodes: process.env.MAX_NODES ? parseInt(process.env.MAX_NODES) : 100,
+      updateInterval: process.env.UPDATE_INTERVAL ? parseInt(process.env.UPDATE_INTERVAL) : 5000,
+      maxRetries: process.env.MAX_RETRIES ? parseInt(process.env.MAX_RETRIES) : 3,
+      timeout: process.env.API_TIMEOUT ? parseInt(process.env.API_TIMEOUT) : 5000,
+      ...config
+    };
+    logger.info('NodeMonitor initialized with config:', this.config);
   }
 
-  addNode(credentials: any): string {
-    const nodeId = uuidv4();
-    const service = new ProxmoxService(credentials);
-    
-    this.nodes.set(nodeId, {
-      id: nodeId,
-      service
-    });
-
-    this.io.emit('nodeStatus', {
-      nodeId,
-      name: service.getNodeName(),
-      host: service.getHost(),
-      tokenId: service.getTokenId(),
-      status: 'online'
-    });
-
-    logger.info(`Node added: ${nodeId}`);
-    this.saveNodes();
-    return nodeId;
-  }
-
-  removeNode(nodeId: string): boolean {
-    const removed = this.nodes.delete(nodeId);
-    if (removed) {
-      this.io.emit('nodeRemoved', nodeId);
-      logger.info(`Node removed: ${nodeId}`);
-      this.saveNodes();
+  addNode(nodeData: Omit<Node, 'id'>): string {
+    // Check node limit
+    if (this.nodes.size >= this.config.maxNodes!) {
+      throw new Error(`Maximum number of nodes (${this.config.maxNodes}) reached`);
     }
-    return removed;
+
+    const id = uuidv4();
+    const node: Node = { 
+      ...nodeData, 
+      id,
+      status: 'online' 
+    };
+
+    // Check for existing node with same host
+    const existingNode = Array.from(this.nodes.values())
+      .find(n => n.host.replace(/\/$/, '') === node.host.replace(/\/$/, ''));
+    
+    if (existingNode) {
+      // Update existing node instead of adding new one
+      this.nodes.set(existingNode.id, {
+        ...existingNode,
+        ...nodeData,
+        status: 'online'
+      });
+      
+      // Emit update event
+      this.emitNodeStatus(existingNode.id);
+      return existingNode.id;
+    }
+    
+    // Add new node
+    this.nodes.set(id, node);
+    
+    // Emit new node event
+    this.emitNodeStatus(id);
+    logger.info('Added new node:', { id, host: node.host });
+    
+    return id;
   }
 
-  getNode(nodeId: string): MonitoredNode | undefined {
-    return this.nodes.get(nodeId);
-  }
-
-  getAllNodes(): MonitoredNode[] {
+  getNodes(): Node[] {
     return Array.from(this.nodes.values());
   }
 
-  async updateNodeStatus(nodeId: string): Promise<NodeStatus | null> {
+  private emitNodeStatus(nodeId: string) {
     const node = this.nodes.get(nodeId);
-    if (!node) {
-      logger.warn(`Unknown node: ${nodeId}`);
-      return null;
-    }
+    if (!node) return;
 
-    try {
-      const nodeStatus = await node.service.getNodeStatus();
-
-      const status: NodeStatus = {
-        cpu: nodeStatus.cpu,
-        memory: {
-          total: nodeStatus.memory.total,
-          used: nodeStatus.memory.used,
-          free: nodeStatus.memory.free
-        },
-        uptime: nodeStatus.uptime
-      };
-
-      node.status = status;
-
-      // Emit the updated status to all clients
-      this.io.emit('nodeStatus', {
-        nodeId: node.id,
-        name: node.service.getNodeName(),
-        host: node.service.getHost(),
-        tokenId: node.service.getTokenId(),
-        status: 'online',
-        metrics: status
-      });
-
-      this.saveNodes();
-      return status;
-    } catch (error) {
-      // Don't remove the node on first error, increment error count
-      node.errorCount = (node.errorCount || 0) + 1;
-      
-      logger.error(`Status update failed for node ${nodeId}`, { 
-        error,
-        errorCount: node.errorCount 
-      });
-
-      // Only remove node after multiple consecutive failures
-      if (node.errorCount > 3) {
-        logger.error(`Removing node ${nodeId} after ${node.errorCount} consecutive failures`);
-        this.removeNode(nodeId);
-      } else {
-        // Just mark as error but keep trying
-        this.io.emit('nodeStatus', {
-          nodeId,
-          name: node.service.getNodeName(),
-          host: node.service.getHost(),
-          tokenId: node.service.getTokenId(),
-          status: 'error',
-          metrics: node.status // Keep last known metrics
-        });
-      }
-
-      this.saveNodes();
-      return null;
-    }
-  }
-
-  startMonitoring(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-    }
-
-    this.intervalId = setInterval(async () => {
-      for (const [nodeId, node] of this.nodes) {
-        try {
-          const status = await this.updateNodeStatus(nodeId);
-          if (status) {
-            // Reset error count on successful update
-            node.errorCount = 0;
-          }
-        } catch (error) {
-          logger.error(`Monitor update failed for node ${nodeId}`, { error });
-        }
-      }
-    }, this.updateInterval);
-
-    logger.info('Node monitoring started');
-  }
-
-  stopMonitoring(): void {
-    if (this.intervalId) {
-      clearInterval(this.intervalId);
-      this.intervalId = undefined;
-      logger.info('Node monitoring stopped');
-    }
-  }
-
-  private getNodesFilePath(): string {
-    const configDir = process.env.CONFIG_DIR || './config';
-    if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true });
-    }
-    return path.join(configDir, 'nodes.json');
-  }
-
-  private saveNodes() {
-    const nodes = Array.from(this.nodes.entries()).map(([id, node]) => ({
-      id,
-      host: node.service.getHost(),
-      tokenId: node.service.getTokenId(),
-      tokenSecret: node.service.credentials.tokenSecret,
-      nodeName: node.service.getNodeName()
-    }));
+    this.io.emit('nodeStatus', {
+      nodeId: node.id,
+      name: node.nodeName,
+      host: node.host,
+      tokenId: node.tokenId,
+      status: 'online'  // We can update this based on actual status later
+    });
     
-    fs.writeFileSync(this.getNodesFilePath(), JSON.stringify(nodes, null, 2));
+    logger.debug('Emitted node status:', { nodeId, host: node.host });
   }
 
-  private loadNodes() {
-    try {
-      const nodesPath = this.getNodesFilePath();
-      if (fs.existsSync(nodesPath)) {
-        const nodes = JSON.parse(fs.readFileSync(nodesPath, 'utf8'));
-        nodes.forEach(node => this.addNode(node));
-      }
-    } catch (error) {
-      logger.error('Failed to load nodes:', error);
-    }
+  getStats(): MonitorStats {
+    return {
+      totalNodes: this.nodes.size,
+      maxNodes: this.config.maxNodes!,
+      activeConnections: this.io.engine.clientsCount,
+      updateInterval: this.config.updateInterval!,
+      memoryUsage: process.memoryUsage()
+    };
   }
 }
 
 let monitor: NodeMonitor | null = null;
 
-export function initMonitor(io: SocketIOServer, updateInterval?: number): NodeMonitor {
+export function initMonitor(io: SocketIOServer, options?: { quiet: boolean }): NodeMonitor {
   if (!monitor) {
-    monitor = new NodeMonitor(io, updateInterval);
-    monitor.startMonitoring();
-    logger.info('Monitor initialized successfully');
+    monitor = new NodeMonitor(io);
+    if (!options?.quiet) {
+      logger.info('Monitor initialized successfully');
+    }
   }
   return monitor;
 }

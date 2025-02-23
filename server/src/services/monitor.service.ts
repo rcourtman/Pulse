@@ -14,6 +14,13 @@ export class NodeMonitor {
     }
 
     addNode(node: Node) {
+        // Check for existing node with same host
+        const existingNode = this.nodes.find(n => n.host === node.host);
+        if (existingNode) {
+            // Update existing node instead of adding new one
+            Object.assign(existingNode, node);
+            return;
+        }
         this.nodes.push(node);
     }
 

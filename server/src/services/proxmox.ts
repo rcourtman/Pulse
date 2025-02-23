@@ -10,6 +10,22 @@ interface ProxmoxCredentials {
   node?: string;
 }
 
+interface NodeStatus {
+  cpu: number;
+  memory: {
+    total: number;
+    used: number;
+    free: number;
+  };
+  uptime: number;
+  loadavg: [number, number, number];
+  disk: {
+    total: number;
+    used: number;
+    free: number;
+  };
+}
+
 export class ProxmoxService {
   private client: AxiosInstance;
   private baseUrl: string;
@@ -46,18 +62,18 @@ export class ProxmoxService {
     return this.credentials.tokenId;
   }
 
-  async validate(): Promise<boolean> {
+  async validate(): Promise<void> {
     try {
-      await this.client.get('/api2/json/version');
-      return true;
+      const response = await this.client.get('/api2/json/version');
+      logger.debug('Proxmox API version response:', response.data);
+      
+      // Get node info as part of validation
+      const nodesResponse = await this.client.get('/api2/json/nodes');
+      logger.debug('Proxmox nodes response:', nodesResponse.data);
+      
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        logger.error(`Validation failed for ${this.nodeName}`, {
-          status: error.response?.status,
-          message: error.message
-        });
-      }
-      throw error;
+      logger.error('Validation failed:', error);
+      throw new Error('Failed to validate Proxmox connection');
     }
   }
 
@@ -71,22 +87,40 @@ export class ProxmoxService {
     }
   }
 
-  async getNodeStatus(): Promise<any> {
+  async getNodeStatus(): Promise<NodeStatus> {
     try {
       const response = await this.client.get(`/api2/json/nodes/${this.nodeName}/status`);
-      return response.data.data;
+      const data = response.data.data;
+      
+      return {
+        cpu: data.cpu,
+        memory: {
+          total: data.memory.total,
+          used: data.memory.used,
+          free: data.memory.free
+        },
+        uptime: data.uptime,
+        loadavg: data.loadavg,
+        disk: {
+          total: data.rootfs.total,
+          used: data.rootfs.used,
+          free: data.rootfs.free
+        }
+      };
     } catch (error) {
       logger.error(`Failed to get status for ${this.nodeName}`, { error });
       throw error;
     }
   }
 
-  async getNodes(): Promise<string[]> {
+  async getNodes(): Promise<any[]> {
     try {
       const response = await this.client.get('/api2/json/nodes');
-      return response.data.data.map((node: any) => node.node);
+      const nodes = response.data.data;
+      logger.debug('Retrieved nodes from Proxmox:', nodes);
+      return nodes; // This should contain node objects with 'node' property
     } catch (error) {
-      logger.error(`Failed to get nodes for ${this.nodeName}`, { error });
+      logger.error('Failed to get nodes:', error);
       throw error;
     }
   }

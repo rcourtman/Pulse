@@ -44,55 +44,142 @@ const io = new Server(httpServer, {
     origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true
-  }
+  },
+  pingTimeout: 60000, // Increase ping timeout
+  transports: ['websocket', 'polling']
 });
 
-// Initialize the monitor
-const monitor = initMonitor(io);
+// Initialize the monitor with a quiet option
+const monitor = initMonitor(io, { quiet: true });
 
-// Initialize default Proxmox node if environment variables are present
+// Update the interface to match our Node type
+interface ProxmoxConfig {
+  host: string;
+  tokenId: string;
+  tokenSecret: string;
+}
+
 async function initializeDefaultProxmox() {
   try {
+    const proxmoxConfigs: ProxmoxConfig[] = [];
+    let counter = 1;
+    
+    // Add the default (unnumbered) configuration
     if (process.env.PROXMOX_HOST && process.env.PROXMOX_TOKEN_ID && process.env.PROXMOX_TOKEN_SECRET) {
-      // Create a service instance to validate and get node info
-      const service = new ProxmoxService({
-        host: process.env.PROXMOX_HOST,
-        tokenId: process.env.PROXMOX_TOKEN_ID,
-        tokenSecret: process.env.PROXMOX_TOKEN_SECRET
-      });
-
-      // Validate connection and get node info
-      await service.validate();
-      const nodes = await service.getNodes();
+      const host = process.env.PROXMOX_HOST.replace(/\/$/, ''); // Normalize host
       
-      if (nodes && nodes.length > 0) {
-        const nodeId = monitor.addNode({
+      // Check if this host is already configured
+      const existingNodes = monitor?.getNodes() || [];
+      const isDuplicate = existingNodes.some(node => 
+        node.host.replace(/\/$/, '') === host
+      );
+
+      if (!isDuplicate) {
+        proxmoxConfigs.push({
           host: process.env.PROXMOX_HOST,
           tokenId: process.env.PROXMOX_TOKEN_ID,
-          tokenSecret: process.env.PROXMOX_TOKEN_SECRET,
-          node: nodes[0] // Use the first available node name
+          tokenSecret: process.env.PROXMOX_TOKEN_SECRET
         });
-        
-        logger.info('Default Proxmox node added:', { 
-          nodeId,
-          nodeName: nodes[0],
-          host: process.env.PROXMOX_HOST 
+      }
+    }
+
+    // Look for numbered configurations
+    while (true) {
+      const suffix = counter === 1 ? '' : `_${counter}`;
+      const host = process.env[`PROXMOX_HOST${suffix}`];
+      const tokenId = process.env[`PROXMOX_TOKEN_ID${suffix}`];
+      const tokenSecret = process.env[`PROXMOX_TOKEN_SECRET${suffix}`];
+
+      if (!host || !tokenId || !tokenSecret) break;
+
+      proxmoxConfigs.push({
+        host,
+        tokenId,
+        tokenSecret
+      });
+      counter++;
+    }
+
+    // Initialize each Proxmox configuration
+    for (const config of proxmoxConfigs) {
+      // Normalize the host URL by removing trailing slash
+      const normalizedConfigHost = config.host.replace(/\/$/, '');
+      
+      // Check if this server is already configured by matching host
+      const isDuplicate = (monitor?.getNodes() || []).some(node => {
+        if (!node?.host) return false;
+        const normalizedNodeHost = node.host.replace(/\/$/, '');
+        return normalizedNodeHost === normalizedConfigHost;
+      });
+
+      if (!isDuplicate) {
+        const service = new ProxmoxService({
+          host: config.host,
+          tokenId: config.tokenId,
+          tokenSecret: config.tokenSecret
         });
-      } else {
-        throw new Error('No nodes found on Proxmox server');
+
+        try {
+          // Validate connection and get node info
+          await service.validate();
+          const nodes = await service.getNodes();
+          
+          if (nodes && nodes.length > 0) {
+            // Log the node data to see what we're getting
+            logger.debug('Node data from Proxmox:', nodes[0]);
+
+            monitor.addNode({
+              host: config.host,
+              tokenId: config.tokenId,
+              tokenSecret: config.tokenSecret,
+              nodeName: nodes[0].node || nodes[0].name || 'Unknown Node' // Try both properties
+            });
+            
+            logger.info(`Successfully connected to Proxmox server: ${config.host} (${nodes[0].node || 'Unknown Node'})`);
+          }
+        } catch (error) {
+          logger.error(`Failed to connect to Proxmox server: ${config.host}`, error);
+        }
       }
     }
   } catch (error) {
-    logger.error('Failed to initialize default Proxmox server:', error);
+    logger.error('Error initializing default Proxmox configurations', error);
   }
 }
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  logger.info(`Client connected: ${socket.id}`);
+  logger.info('Client connected');
+  
+  // Send current nodes to newly connected client
+  const nodes = monitor.getNodes();
+  logger.info('Sending nodes to new client:', nodes);
+  
+  nodes.forEach(node => {
+    socket.emit('nodeStatus', {
+      nodeId: node.id,
+      name: node.nodeName,
+      host: node.host,
+      tokenId: node.tokenId,
+      status: 'online'
+    });
+  });
 
-  socket.on('disconnect', () => {
-    logger.info(`Client disconnected: ${socket.id}`);
+  socket.on('getNodes', () => {
+    logger.info('Client requested nodes');
+    nodes.forEach(node => {
+      socket.emit('nodeStatus', {
+        nodeId: node.id,
+        name: node.nodeName,
+        host: node.host,
+        tokenId: node.tokenId,
+        status: 'online'
+      });
+    });
+  });
+
+  socket.on('disconnect', (reason) => {
+    logger.info('Client disconnected:', reason);
   });
 });
 
@@ -106,17 +193,17 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Pulse API is running' });
 });
 
-// Add routes BEFORE the catch-all route
+// Add routes
 app.use('/api/proxmox', proxmoxRoutes);
 
-// Then the catch-all route
+// Catch-all route
 app.get('*', (req, res) => {
-  res.json({ status: 'not_found', message: 'Route not found' });
+  res.status(404).json({ status: 'not_found', message: 'Route not found' });
 });
 
 // Error handling middleware
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  logger.error(err.stack);
+  logger.error('Server error:', err);
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
@@ -127,5 +214,4 @@ httpServer.listen(PORT, async () => {
   await initializeDefaultProxmox();
 });
 
-// Export app and other utilities, but not monitor
 export { app, io, logger, cache };

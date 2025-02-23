@@ -14,50 +14,33 @@ interface NodeState {
 }
 
 type NodeAction = 
-  | { type: 'ADD_NODE'; payload: Node }
-  | { type: 'REMOVE_NODE'; payload: string }
-  | { type: 'UPDATE_NODE'; payload: { id: string; name?: string; host?: string; tokenId?: string; status: string; metrics?: any } };
+  | { type: 'UPDATE_NODE'; payload: Node }
+  | { type: 'REMOVE_NODE'; payload: string };
 
-const initialState: NodeState = {
-  nodes: {}
-};
-
-function nodeReducer(state: NodeState, action: NodeAction): NodeState {
+const nodeReducer = (state: NodeState, action: NodeAction): NodeState => {
+  console.log('NodeReducer:', { action, currentState: state }); // Debug log
+  
   switch (action.type) {
-    case 'ADD_NODE':
-      return {
+    case 'UPDATE_NODE':
+      const newState = {
         ...state,
         nodes: {
           ...state.nodes,
           [action.payload.id]: action.payload
         }
       };
+      console.log('New state after update:', newState); // Debug log
+      return newState;
     case 'REMOVE_NODE':
-      const { [action.payload]: removed, ...remainingNodes } = state.nodes;
+      const { [action.payload]: removed, ...remaining } = state.nodes;
       return {
         ...state,
-        nodes: remainingNodes
-      };
-    case 'UPDATE_NODE':
-      return {
-        ...state,
-        nodes: {
-          ...state.nodes,
-          [action.payload.id]: {
-            ...state.nodes[action.payload.id],
-            id: action.payload.id,
-            name: action.payload.name || state.nodes[action.payload.id]?.name,
-            host: action.payload.host || state.nodes[action.payload.id]?.host,
-            tokenId: action.payload.tokenId || state.nodes[action.payload.id]?.tokenId,
-            status: action.payload.status,
-            metrics: action.payload.metrics
-          }
-        }
+        nodes: remaining
       };
     default:
       return state;
   }
-}
+};
 
 const NodeContext = createContext<{
   state: NodeState;
@@ -65,7 +48,9 @@ const NodeContext = createContext<{
 } | null>(null);
 
 export const NodeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(nodeReducer, initialState);
+  const [state, dispatch] = useReducer(nodeReducer, { nodes: {} });
+
+  console.log('NodeProvider rendering:', state); // Debug log
 
   // Clear localStorage on mount to ensure fresh start
   useEffect(() => {

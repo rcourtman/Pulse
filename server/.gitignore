@@ -1,6 +1,7 @@
 # Node configuration
 nodes.json
 config/
+config/*.json
 
 # Logs
 logs
