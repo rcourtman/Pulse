@@ -16,6 +16,10 @@
     "labels": ["update script", "bugfix"]
   },
   {
+    "title": "🐞 Bug Fixes",
+    "labels": ["bugfix"]
+  },
+  {
     "title": "✨ Feature Updates (Updated Scripts)",
     "labels": ["update script", "feature"]
   },
