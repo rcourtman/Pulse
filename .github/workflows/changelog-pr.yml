@@ -78,10 +78,29 @@ jobs:
               const prLabels = pr.labels.map(label => label.name.toLowerCase());
               const prNote = `- ${pr.title} [@${pr.user.login}](https://github.com/${pr.user.login}) ([#${pr.number}](${pr.html_url}))`;
 
+              let isCategorized = false;
+
               for (const { labels, notes } of categorizedPRs) {
-                if (labels.length === 0 || labels.some(label => prLabels.includes(label))) {
+                // If no labels are specified (e.g., "Unlabelled"), assign to this category
+                if (labels.length === 0 && prLabels.length === 0) {
                   notes.push(prNote);
+                  isCategorized = true;
                   break;
+                }
+
+                // If labels are specified, check if PR has ALL required labels
+                if (labels.length > 0 && labels.every(label => prLabels.includes(label.toLowerCase()))) {
+                  notes.push(prNote);
+                  isCategorized = true;
+                  break;
+                }
+              }
+
+              // If PR is not categorized, assign it to the "Unlabelled" category
+              if (!isCategorized) {
+                const unlabelledCategory = categorizedPRs.find(cat => cat.title === "❔ Unlabelled");
+                if (unlabelledCategory) {
+                  unlabelledCategory.notes.push(prNote);
                 }
               }
             });
@@ -110,7 +129,6 @@ jobs:
             const changelogContent = await fs.readFile(changelogPath, 'utf-8');
             const changelogIncludesTodaysReleaseNotes = changelogContent.includes(`\n## ${today}`);
 
-            // Ersetze oder füge Release Notes ein
             const regex = changelogIncludesTodaysReleaseNotes 
               ? new RegExp(`## ${today}.*(?=## ${latestDateInChangelog})`, "gs") 
               : new RegExp(`(?=## ${latestDateInChangelog})`, "gs");
