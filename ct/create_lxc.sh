@@ -178,18 +178,18 @@ function select_storage() {
 }
 
 # Check for network connectivity (IPv4 & IPv6)
-function check_network() {
-  local CHECK_URLS=("8.8.8.8" "1.1.1.1" "9.9.9.9" "2606:4700:4700::1111" "2001:4860:4860::8888" "2620:fe::fe")
-
-  for url in "${CHECK_URLS[@]}"; do
-    if ping -c 1 -W 2 "$url" &>/dev/null; then
-      return 0 # Success: At least one connection works
-    fi
-  done
-
-  msg_error "No network connection detected. Check your internet connection."
-  exit 101
-}
+#function check_network() {
+#  local CHECK_URLS=("8.8.8.8" "1.1.1.1" "9.9.9.9" "2606:4700:4700::1111" "2001:4860:4860::8888" "2620:fe::fe")
+#
+#  for url in "${CHECK_URLS[@]}"; do
+#    if ping -c 1 -W 2 "$url" &>/dev/null; then
+#      return 0 # Success: At least one connection works
+#    fi
+#  done
+#
+#  msg_error "No network connection detected. Check your internet connection."
+#  exit 101
+#}
 
 # Test if ID is in use
 if qm status "$CTID" &>/dev/null || pct status "$CTID" &>/dev/null; then
@@ -209,7 +209,7 @@ msg_ok "Using ${BL}$CONTAINER_STORAGE${CL} ${GN}for Container Storage."
 
 # Update LXC template list
 msg_info "Updating LXC Template List"
-check_network
+#check_network
 pveam update >/dev/null
 msg_ok "Updated LXC Template List"
 
