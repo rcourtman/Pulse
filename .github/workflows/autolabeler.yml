@@ -32,7 +32,7 @@ jobs:
             const autolabelerConfig = JSON.parse(fileContent);
 
             const prNumber = context.payload.pull_request.number;
-            const prBody = context.payload.pull_request.body.toLowerCase();
+            const prBody = context.payload.pull_request.body;
             
             // Label-Sammlung (um doppelte API-Calls zu vermeiden)
             let labelsToAdd = new Set();
@@ -70,9 +70,8 @@ jobs:
             };
 
             for (const [checkbox, label] of Object.entries(templateLabelMappings)) {
-              const regex = new RegExp(`- \\[(.*?)\\] ${checkbox}`, "i");
-              const match = prBody.match(regex);
-              if (match && match[1].trim() !== "") { // Checkbox ist gesetzt
+              const regex = new RegExp(`- \\[x\\] ${checkbox}`, "i"); // Match only checked checkboxes
+              if (regex.test(prBody)) {
                 labelsToAdd.add(label);
               }
             }
