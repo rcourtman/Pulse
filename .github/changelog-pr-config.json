@@ -8,20 +8,8 @@
     "labels": ["new script"]
   },
   {
-    "title": "🚀 Updated Scripts",
-    "labels": ["update script"]
-  },
-  {
-    "title": "🐞 Bug Fixes (Updated Scripts)",
-    "labels": ["update script", "bugfix"]
-  },
-  {
     "title": "🐞 Bug Fixes",
     "labels": ["bugfix"]
-  },
-  {
-    "title": "✨ Feature Updates (Updated Scripts)",
-    "labels": ["update script", "feature"]
   },
   {
     "title": "✨ New Features",
