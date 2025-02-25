@@ -29,9 +29,11 @@ function update_script() {
   fi
 
   msg_info "Updating MongoDB"
-  MONGODB_VERSION="8.0"
+  MONGODB_VERSION="7.0"
   if ! lscpu | grep -q 'avx'; then
     MONGODB_VERSION="4.4"
+    msg_error "No AVX detected: TP-Link Canceled Support for Old MongoDB for Debian 12\n https://www.tp-link.com/baltic/support/faq/4160/"
+    exit 1 
   fi
 
   wget -qO- https://www.mongodb.org/static/pgp/server-${MONGODB_VERSION}.asc | gpg --dearmor >/usr/share/keyrings/mongodb-server-${MONGODB_VERSION}.gpg
