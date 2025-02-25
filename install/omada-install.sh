@@ -21,11 +21,12 @@ msg_info "Checking CPU Features"
 if lscpu | grep -q 'avx'; then
     USE_AVX=true
     MONGODB_VERSION="7.0"
-    msg_ok "AVX detected: Using MongoDB 8.0"
+    msg_ok "AVX detected: Using MongoDB 7.0"
 else
     USE_AVX=false
     MONGODB_VERSION="4.4"
-    msg_ok "No AVX detected: Using MongoDB 4.4"
+    msg_error "No AVX detected: TP-Link Canceled Support for Old MongoDB for Debian 12\n https://www.tp-link.com/baltic/support/faq/4160/"
+    exit 1
 fi
 
 msg_info "Installing Azul Zulu Java"
