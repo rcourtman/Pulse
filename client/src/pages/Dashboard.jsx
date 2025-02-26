@@ -326,21 +326,17 @@ const Dashboard = () => {
             // Or if it has a custom property indicating direct percentage
             processed.directValues === true;
           
-          if (processed.cpu > 1 && !isDirect) {
-            // If CPU value is > 1, it's already been converted to percentage by the server
-            // Divide by 100 to get back to 0-1 scale for consistent handling
-            processed.cpuPercentage = processed.cpu / 100;
-            if (isDev) {
-              console.log(`Scaling down CPU value for ${processed.name}: ${processed.cpu} → ${processed.cpuPercentage}`);
-            }
-          } else {
-            // Value is already in 0-1 range
-            processed.cpuPercentage = processed.cpu;
-          }
-          
-          // Mark as direct percentage if needed
           if (isDirect) {
+            // For direct percentage reporters, use the value as is
             processed.isDirectPercentage = true;
+            processed.cpuPercentage = processed.cpu;
+          } else {
+            // The server has already converted Proxmox CPU values from 0-1 to 0-100
+            // Just use the value directly
+            processed.cpuPercentage = processed.cpu;
+            if (isDev) {
+              console.log(`CPU value for ${processed.name}: ${processed.cpu}%`);
+            }
           }
         } else {
           processed.cpuPercentage = 0;
@@ -494,6 +490,7 @@ const Dashboard = () => {
         let aValue, bValue;
         
         if (sortConfig.key === 'cpu') {
+          // Use cpuPercentage for consistent comparison (all values in 0-100 range)
           aValue = a.cpuPercentage !== undefined ? a.cpuPercentage : a.cpu;
           bValue = b.cpuPercentage !== undefined ? b.cpuPercentage : b.cpu;
         } else if (sortConfig.key === 'memory') {

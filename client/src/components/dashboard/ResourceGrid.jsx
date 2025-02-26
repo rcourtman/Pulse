@@ -76,7 +76,7 @@ const ResourceGrid = ({
   // Format raw Proxmox CPU value (0-1 range)
   const formatProxmoxCpu = (cpu) => {
     if (cpu === undefined || cpu === null) return '0%';
-    // Proxmox returns CPU as a decimal between 0-1, convert to percentage
+    // Proxmox returns CPU in 0-1 range, convert to percentage
     return `${Math.round(cpu * 100)}%`;
   };
   
@@ -107,22 +107,23 @@ const ResourceGrid = ({
   const getCpuDisplay = (resource) => {
     const cpuCores = resource.cpuCores || 1;
     
-    // Check if this resource reports direct percentage values
+    // Check if this resource reports direct percentages values
     if (resource.isDirectPercentage) {
       // For resources that report direct percentages, just display the value as is
       return `${Math.round(resource.cpu * 10) / 10}%`; // Round to 1 decimal place
     }
     
-    // Use cpuPercentage if available (already normalized in Dashboard component)
+    // Use cpuPercentage if available (normalized in Dashboard component)
     if (typeof resource.cpuPercentage === 'number') {
-      // cpuPercentage is in 0-1 range, convert to percentage
-      const normalizedCpu = Math.min(Math.round(resource.cpuPercentage * 100), 100);
+      // Just round the percentage value
+      const normalizedCpu = Math.min(Math.round(resource.cpuPercentage), 100);
       return `${normalizedCpu}%`;
     }
     
     // Fallback to legacy handling
-    // For normal resources and Proxmox
-    let cpuValue = isRawProxmoxFormat(resource) ? (resource.cpu * 100) : resource.cpu;
+    // For raw Proxmox format, multiply by 100 since it's in 0-1 range
+    let cpuValue = isRawProxmoxFormat(resource) && resource.cpu <= 1 ? 
+      (resource.cpu * 100) : resource.cpu;
     
     // Normalize CPU as a percentage of total assigned cores
     if (cpuCores > 1) {
@@ -203,26 +204,27 @@ const ResourceGrid = ({
     
     // Check if this resource reports direct percentage values
     if (resource.isDirectPercentage) {
-      // For resources that report direct percentages, use the value directly for the progress bar
+      // For resources that report direct percentages, use the value directly
       return Math.min(Math.round(resource.cpu), 100);
     }
     
-    // Use cpuPercentage if available (already normalized in Dashboard component)
+    // Use cpuPercentage if available (normalized in Dashboard component)
     if (typeof resource.cpuPercentage === 'number') {
-      // cpuPercentage is in 0-1 range, convert to percentage
-      return Math.min(Math.round(resource.cpuPercentage * 100), 100);
+      // Just round the percentage value
+      return Math.min(Math.round(resource.cpuPercentage), 100);
     }
     
     // Fallback to legacy handling
-    // For normal resources and Proxmox
-    const cpuValue = isRawProxmoxFormat(resource) ? (resource.cpu * 100) : resource.cpu;
+    // For raw Proxmox format, multiply by 100 since it's in 0-1 range
+    let cpuValue = isRawProxmoxFormat(resource) && resource.cpu <= 1 ? 
+      (resource.cpu * 100) : resource.cpu;
     
-    // For multi-core systems, divide by number of cores to get percentage of total capacity
+    // Normalize CPU as a percentage of total assigned cores
     if (cpuCores > 1) {
       return Math.min(Math.round((cpuValue / cpuCores)), 100);
     }
     
-    // For single-core systems, cap at 100%
+    // For single-core, cap at 100%
     return Math.min(Math.round(cpuValue), 100);
   };
   

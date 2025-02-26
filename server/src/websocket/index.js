@@ -407,7 +407,7 @@ const setupWebSocketServer = (io) => {
       // Make a copy to avoid modifying the original
       const processed = { ...resource };
       
-      // Process CPU values (Proxmox returns CPU as a decimal between 0-1)
+      // Process CPU values (Proxmox returns CPU in 0-1 range where 1.0 = 100%)
       if (typeof processed.cpu === 'number') {
         // Store the raw CPU value for reference
         processed._rawCpu = processed.cpu;
