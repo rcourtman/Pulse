@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply antialiased;
+  }
+  
+  body {
+    @apply min-h-screen;
+  }
+
+  body.dark {
+    @apply bg-dark-background text-dark-foreground;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2 rounded-md font-medium transition-colors;
+  }
+  
+  .btn-primary {
+    @apply bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-700 dark:hover:bg-primary-800;
+  }
+  
+  .btn-secondary {
+    @apply bg-secondary-600 text-white hover:bg-secondary-700 dark:bg-secondary-700 dark:hover:bg-secondary-800;
+  }
+  
+  .btn-outline {
+    @apply border border-gray-300 hover:bg-gray-100 dark:border-gray-600 dark:hover:bg-gray-800 dark:text-gray-200;
+  }
+  
+  .input {
+    @apply px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-gray-800 dark:border-gray-600 dark:text-white dark:focus:ring-primary-600;
+  }
+  
+  .card {
+    @apply bg-white rounded-lg shadow-md p-6 dark:bg-dark-card;
+  }
+  
+  .horizontal-bar {
+    @apply h-4 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700;
+  }
+  
+  .horizontal-bar-fill-cpu {
+    @apply h-full bg-red-500;
+  }
+  
+  .horizontal-bar-fill-memory {
+    @apply h-full bg-blue-500;
+  }
+  
+  .horizontal-bar-fill-network {
+    @apply h-full bg-green-500;
+  }
+  
+  .horizontal-bar-fill-disk {
+    @apply h-full bg-amber-500;
+  }
+} 
