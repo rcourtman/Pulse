@@ -20,7 +20,7 @@ jobs:
         run: |
           YESTERDAY=$(date -u --date="yesterday" +%Y-%m-%d)
 
-          # Extract only the section for yesterday
+          # Extract the changelog section for yesterday, stopping at the next date
           awk -v date="## $YESTERDAY" '
             $0 ~ date {found=1; print; next} 
             found && /^## [0-9]{4}-[0-9]{2}-[0-9]{2}/ {exit} 
