@@ -4,6 +4,7 @@ on:
   schedule:
     # Runs "At 00:01 every night" (UTC)
     - cron: '1 0 * * *'
+  workflow_dispatch:
 
 jobs:
   create-new-release:
