@@ -20,12 +20,16 @@ jobs:
         run: |
           YESTERDAY=$(date -u --date="yesterday" +%Y-%m-%d)
 
-          # Extract the changelog section for YESTERDAY, stopping at the next date
+          # Crop the changelog first (keep first 20,000 characters)
+          MAX_SIZE=20000
+          head -c "$MAX_SIZE" CHANGELOG.md > changelog_cropped.md
+
+          # Extract exactly the section for YESTERDAY, stopping at the next date
           awk -v date="## $YESTERDAY" '
-            $0 ~ date {found=1; print; next} 
-            found && /^## [0-9]{4}-[0-9]{2}-[0-9]{2}/ {exit} 
-            found {print}
-          ' CHANGELOG.md | sed '/^## [0-9]/d' > changelog_tmp.md
+            $0 ~ date {found=1} 
+            found && /^## [0-9]{4}-[0-9]{2}-[0-9]{2}/ && $0 != date {exit} 
+            found
+          ' changelog_cropped.md > changelog_tmp.md
 
           echo "=== Extracted Changelog ==="
           cat changelog_tmp.md
@@ -34,17 +38,6 @@ jobs:
           if [ ! -s changelog_tmp.md ]; then
             echo "No changes found for $YESTERDAY, skipping release."
             exit 0
-          fi
-
-          CHANGELOG_SIZE=$(wc -c < changelog_tmp.md)
-          echo "Changelog size: $CHANGELOG_SIZE bytes"
-
-          # Crop to first 20,000 characters if too large
-          MAX_SIZE=20000
-          if [ "$CHANGELOG_SIZE" -gt "$MAX_SIZE" ]; then
-            echo "WARNING: Changelog too large, cropping to first $MAX_SIZE characters..."
-            head -c "$MAX_SIZE" changelog_tmp.md > changelog_cropped.md
-            mv changelog_cropped.md changelog_tmp.md
           fi
 
           echo "Creating GitHub release for $YESTERDAY..."
