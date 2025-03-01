@@ -148,6 +148,7 @@ EOF
 
     msg_info "Starting Services"
     systemctl start homarr
+    systemctl restart homarr
     msg_ok "Started Services"
     msg_ok "Updated Successfully"
   else
