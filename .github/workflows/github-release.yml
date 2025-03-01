@@ -4,7 +4,7 @@ on:
   schedule:
     # Runs "At 00:01 every night" (UTC)
     - cron: '1 0 * * *'
-  workflow_dispatch:
+  workflow_dispatch:  # Allows manual execution
 
 jobs:
   create-new-release:
@@ -14,17 +14,26 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Parse CHANGELOG.md for yesterday's entries and create a new release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           YESTERDAY=$(date -u --date="yesterday" +%Y-%m-%d)
-          YESTERDAY_CHANGELOG_NOTES=$(awk '/^## '"$YESTERDAY"'/ {f=1; next} f && /^## [0-9]{4}-[0-9]{2}-[0-9]{2}/ {f=0} f && !/^## / {print}' CHANGELOG.md)
-          
-          if [ ${#YESTERDAY_CHANGELOG_NOTES} -gt 10000 ]; then
-            echo "Changelog is too large, saving to file..."
-            echo "$YESTERDAY_CHANGELOG_NOTES" > changelog_tmp.md
-            gh release create "$YESTERDAY" -t "$YESTERDAY" -F changelog_tmp.md --latest
-          elif [ -n "$YESTERDAY_CHANGELOG_NOTES" ]; then
-            gh release create "$YESTERDAY" -t "$YESTERDAY" -n "$YESTERDAY_CHANGELOG_NOTES" --latest
+          awk '/^## '"$YESTERDAY"'/ {f=1; next} f && /^## [0-9]{4}-[0-9]{2}-[0-9]{2}/ {f=0} f && !/^## / {print}' CHANGELOG.md > changelog_tmp.md
+
+          if [ ! -s changelog_tmp.md ]; then
+            echo "No changes found for $YESTERDAY, skipping release."
+            exit 0
           fi
+
+          CHANGELOG_SIZE=$(wc -c < changelog_tmp.md)
+
+          if [ "$CHANGELOG_SIZE" -gt 10000 ]; then
+            echo "ERROR: Changelog is too large to process automatically! Manual review required."
+            echo "To manually trigger the release, use the 'workflow_dispatch' event."
+            exit 1
+          fi
+
+          # Creating the GitHub release (without --latest)
+          gh release create "$YESTERDAY" -t "$YESTERDAY" -F changelog_tmp.md
