@@ -4,11 +4,6 @@ on:
   schedule:
     - cron: '1 0 * * *'  # Runs nightly
   workflow_dispatch:
-    inputs:
-      force_release:
-        description: "Bypass changelog size limit"
-        required: false
-        default: "false"
 
 jobs:
   create-new-release:
@@ -22,7 +17,6 @@ jobs:
       - name: Parse CHANGELOG.md for yesterday's entries and create a new release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FORCE_RELEASE: ${{ github.event.inputs.force_release }}
         run: |
           YESTERDAY=$(date -u --date="yesterday" +%Y-%m-%d)
           awk '/^## '"$YESTERDAY"'/ {f=1; next} f && /^## [0-9]{4}-[0-9]{2}-[0-9]{2}/ {f=0} f && !/^## / {print}' CHANGELOG.md > changelog_tmp.md
@@ -35,10 +29,11 @@ jobs:
           CHANGELOG_SIZE=$(wc -c < changelog_tmp.md)
           echo "Changelog size: $CHANGELOG_SIZE bytes"
 
-          if [ "$CHANGELOG_SIZE" -gt 10000 ] && [ "$FORCE_RELEASE" != "true" ]; then
-            echo "ERROR: Changelog is too large! Manual review required."
-            echo "To manually trigger the release, use 'workflow_dispatch' with 'force_release: true'."
-            exit 1
+          # Crop to last 10,000 bytes if too large
+          if [ "$CHANGELOG_SIZE" -gt 10000 ]; then
+            echo "WARNING: Changelog too large, cropping to last 10,000 bytes..."
+            tail -c 10000 changelog_tmp.md > changelog_cropped.md
+            mv changelog_cropped.md changelog_tmp.md
           fi
 
           echo "Creating GitHub release for $YESTERDAY..."
