@@ -41,7 +41,7 @@ export default function Buttons({ item }: { item: Script }) {
   const isCtOrDefault = ["ct"].includes(item.type);
   const installSourceUrl = isCtOrDefault ? generateInstallSourceUrl(item.slug) : null;
   const updateSourceUrl = isCtOrDefault ? generateUpdateUrl(item.slug) : null;
-  const sourceUrl = !isCtOrDefault ? generateSourceUrl(item.slug) : null;
+  const sourceUrl = !isCtOrDefault ? generateSourceUrl(item.slug, item.type) : null;
 
   const buttons = [
     item.website && {
