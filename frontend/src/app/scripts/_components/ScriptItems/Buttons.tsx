@@ -16,7 +16,7 @@ const generateSourceUrl = (slug: string) => {
 
 const generateUpdateUrl = (slug: string) => {
   const baseUrl = `https://raw.githubusercontent.com/community-scripts/${basePath}/main`;
-  return `${baseUrl}/update/${slug}-update.sh`;
+  return `${baseUrl}/ct/${slug}.sh`;
 };
 
 interface ButtonLinkProps {
