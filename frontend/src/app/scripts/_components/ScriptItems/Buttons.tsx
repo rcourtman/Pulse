@@ -9,8 +9,9 @@ const generateInstallSourceUrl = (slug: string) => {
   return `${baseUrl}/install/${slug}-install.sh`;
 };
 
-const generateSourceUrl = (slug: string) => {
+const generateSourceUrl = (slug: string, type: string) => {
   const baseUrl = `https://raw.githubusercontent.com/community-scripts/${basePath}/main`;
+  return type === "vm" ? `${baseUrl}/vm/${slug}.sh` : `${baseUrl}/misc/${slug}.sh`;
   return `${baseUrl}/misc/${slug}.sh`;
 };
 
