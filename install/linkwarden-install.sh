@@ -40,8 +40,10 @@ $STD npm install -g yarn
 msg_ok "Installed Node.js/Yarn"
 
 msg_info "Installing Rust"
-$STD curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+$STD curl https://sh.rustup.rs -sSf | sh -s -- -y
 echo 'export PATH=/usr/local/cargo/bin:$PATH' >> /etc/profile
+chmod +x $HOME/.cargo/env
+$HOME/.cargo/env
 $STD cargo install monolith
 msg_ok "Installed Rust"
 
