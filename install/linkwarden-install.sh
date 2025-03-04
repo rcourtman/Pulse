@@ -41,9 +41,7 @@ msg_ok "Installed Node.js/Yarn"
 
 msg_info "Installing Rust"
 $STD curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source $HOME/.cargo/env
 echo 'export PATH=/usr/local/cargo/bin:$PATH' >> /etc/profile
-source /etc/profile
 $STD cargo install monolith
 msg_ok "Installed Rust"
 
