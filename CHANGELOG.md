@@ -18,16 +18,10 @@ All LXC instances created using this repository come pre-installed with Midnight
 
 ### 🌐 Website
 
-  - #### 🐞 Bug Fixes
-
-    - Prowlarr icon [@bannert1337](https://github.com/bannert1337) ([#2906](https://github.com/community-scripts/ProxmoxVE/pull/2906))
-
-  - #### ✨ New Features
-
-    - Update Apache Tika icon to SVG [@bannert1337](https://github.com/bannert1337) ([#2904](https://github.com/community-scripts/ProxmoxVE/pull/2904))
-
   - #### 📝 Script Information
 
+    - Prowlarr icon [@bannert1337](https://github.com/bannert1337) ([#2906](https://github.com/community-scripts/ProxmoxVE/pull/2906))
+    - Update Apache Tika icon to SVG [@bannert1337](https://github.com/bannert1337) ([#2904](https://github.com/community-scripts/ProxmoxVE/pull/2904))
     - Update Prometheus Alertmanager Icon [@bannert1337](https://github.com/bannert1337) ([#2905](https://github.com/community-scripts/ProxmoxVE/pull/2905))
 
 ## 2025-03-06
