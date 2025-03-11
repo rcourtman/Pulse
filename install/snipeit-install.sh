@@ -15,14 +15,14 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  composer \
-  git \
-  sudo \
-  mc \
-  nginx \
-  php8.2-{bcmath,common,ctype,curl,fileinfo,fpm,gd,iconv,intl,mbstring,mysql,soap,xml,xsl,zip,cli} \
-  mariadb-server 
+    curl \
+    composer \
+    git \
+    sudo \
+    mc \
+    nginx \
+    php8.2-{bcmath,common,ctype,curl,fileinfo,fpm,gd,iconv,intl,mbstring,mysql,soap,xml,xsl,zip,cli} \
+    mariadb-server
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up database"
@@ -37,12 +37,12 @@ mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVI
     echo "SnipeIT Database User: $DB_USER"
     echo "SnipeIT Database Password: $DB_PASS"
     echo "SnipeIT Database Name: $DB_NAME"
-} >> ~/snipeit.creds
+} >>~/snipeit.creds
 msg_ok "Set up database"
 
 msg_info "Installing Snipe-IT"
 temp_file=$(mktemp)
-RELEASE=$(curl -s https://api.github.com/repos/snipe/snipe-it/releases/latest | grep '"tag_name"' | sed -E 's/.*"tag_name": "v([^"]+).*/\1/')
+RELEASE=$(curl -s https://api.github.com/repos/snipe/snipe-it/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
 wget -q "https://github.com/snipe/snipe-it/archive/refs/tags/v${RELEASE}.tar.gz" -O $temp_file
 tar zxf $temp_file
 mv snipe-it-${RELEASE} /opt/snipe-it
@@ -51,15 +51,15 @@ cp .env.example .env
 IPADDRESS=$(hostname -I | awk '{print $1}')
 
 sed -i -e "s|^APP_URL=.*|APP_URL=http://$IPADDRESS|" \
-       -e "s|^DB_DATABASE=.*|DB_DATABASE=$DB_NAME|" \
-       -e "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USER|" \
-       -e "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASS|" .env
+    -e "s|^DB_DATABASE=.*|DB_DATABASE=$DB_NAME|" \
+    -e "s|^DB_USERNAME=.*|DB_USERNAME=$DB_USER|" \
+    -e "s|^DB_PASSWORD=.*|DB_PASSWORD=$DB_PASS|" .env
 
 chown -R www-data: /opt/snipe-it
 chmod -R 755 /opt/snipe-it
 export COMPOSER_ALLOW_SUPERUSER=1
 $STD composer update --no-plugins --no-scripts
-$STD composer install --no-dev --prefer-source --no-plugins --no-scripts
+$STD composer install --no-dev
 $STD php artisan key:generate --force
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed SnipeIT"
@@ -69,13 +69,13 @@ cat <<EOF >/etc/nginx/conf.d/snipeit.conf
 server {
         listen 80;
         root /opt/snipe-it/public;
-        server_name $IPADDRESS; 
+        server_name $IPADDRESS;
         index index.php;
-                
+
         location / {
                 try_files \$uri \$uri/ /index.php?\$query_string;
         }
-        
+
         location ~ \.php\$ {
                 include fastcgi.conf;
                 include snippets/fastcgi-php.conf;
@@ -89,7 +89,6 @@ EOF
 
 systemctl reload nginx
 msg_ok "Configured Service"
-
 
 motd_ssh
 customize
