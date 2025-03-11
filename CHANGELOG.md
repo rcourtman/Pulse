@@ -18,7 +18,8 @@ All LXC instances created using this repository come pre-installed with Midnight
 
 ### 🆕 New Scripts
 
-  - Seafile [@dave-yap](https://github.com/dave-yap) ([#2987](https://github.com/community-scripts/ProxmoxVE/pull/2987))
+  - Plant-it [@MickLesk](https://github.com/MickLesk) ([#3000](https://github.com/community-scripts/ProxmoxVE/pull/3000))
+- Seafile [@dave-yap](https://github.com/dave-yap) ([#2987](https://github.com/community-scripts/ProxmoxVE/pull/2987))
 
 ### 🚀 Updated Scripts
 
@@ -33,6 +34,12 @@ All LXC instances created using this repository come pre-installed with Midnight
   - #### 📂 Github
 
     - Additions and amends to the CONTIRBUTOR docs [@tremor021](https://github.com/tremor021) ([#2983](https://github.com/community-scripts/ProxmoxVE/pull/2983))
+
+### 🌐 Website
+
+  - #### 📝 Script Information
+
+    - Fix Website - Show correct wget path for alpine [@MickLesk](https://github.com/MickLesk) ([#2998](https://github.com/community-scripts/ProxmoxVE/pull/2998))
 
 ## 2025-03-10
 
