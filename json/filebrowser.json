@@ -24,6 +24,17 @@
                 "os": null,
                 "version": null
             }
+        },
+        {
+            "type": "alpine",
+            "script": "misc/filebrowser.sh",
+            "resources": {
+                "cpu": null,
+                "ram": null,
+                "hdd": null,
+                "os": null,
+                "version": null
+            }
         }
     ],
     "default_credentials": {
