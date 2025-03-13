@@ -104,5 +104,3 @@ for i in {1..60}; do
     fi
     sleep 2
 done
-echo -e "Failed to retrieve default login credentials. Please try manually: docker ps, docker logs"
-return 1
