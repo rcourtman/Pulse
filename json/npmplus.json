@@ -47,7 +47,7 @@
             "type": "info"
         },
         {
-            "text": "Application credentials: ´cat /opt/.npm_pwd´",
+            "text": "Application credentials: `cat /opt/.npm_pwd`",
             "type": "info"
         }
     ]
