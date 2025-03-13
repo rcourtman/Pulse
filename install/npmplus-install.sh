@@ -94,12 +94,19 @@ motd_ssh
 customize
 
 msg_info "Retrieving Default Login (Patience)"
+PASSWORD_FOUND=0
 for i in {1..60}; do
-    PASSWORD_LINE=$(docker logs "$CONTAINER_ID" 2>&1 | awk '/Creating a new user:/ {print; exit}')
+    PASSWORD_LINE=$(docker logs "$CONTAINER_ID" 2>&1 | grep -m1 "Creating a new user:")
     if [[ -n "$PASSWORD_LINE" ]]; then
         PASSWORD=$(echo "$PASSWORD_LINE" | awk -F 'password: ' '{print $2}')
         echo -e "username: admin@example.org\npassword: $PASSWORD" >/opt/.npm_pwd
         msg_ok "Saved default login to /opt/.npm_pwd"
+        PASSWORD_FOUND=1
+        break
     fi
     sleep 2
 done
+
+if [[ $PASSWORD_FOUND -eq 0 ]]; then
+    msg_ok "No default login found, use docker ps & docker logs for container password."
+fi
