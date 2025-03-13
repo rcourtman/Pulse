@@ -93,15 +93,16 @@ msg_ok "Builded and started NPMplus"
 motd_ssh
 customize
 
-echo -e "Retrieving Default Login (Patience)"
+msg_info "Retrieving Default Login (Patience)"
 for i in {1..60}; do
     PASSWORD_LINE=$(docker logs "$CONTAINER_ID" 2>&1 | awk '/Creating a new user:/ {print; exit}')
     if [[ -n "$PASSWORD_LINE" ]]; then
         PASSWORD=$(echo "$PASSWORD_LINE" | awk -F 'password: ' '{print $2}')
         echo -e "username: admin@example.org\npassword: $PASSWORD" >/opt/.npm_pwd
         msg_ok "Saved default login to /opt/.npm_pwd"
-        exit 0
+        return 0
     fi
     sleep 2
-    [[ $i -eq 60 ]] && echo -e "Failed to retrieve default login credentials. Please try it manually (docker ps, docker logs)" && exit 1
 done
+echo -e "Failed to retrieve default login credentials. Please try manually: docker ps, docker logs"
+return 1
