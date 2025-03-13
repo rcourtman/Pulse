@@ -103,5 +103,5 @@ for i in {1..60}; do
         exit 0
     fi
     sleep 2
-    [[ $i -eq 60 ]] && echo -e "Failed to retrieve default login credentials." && exit 1
+    [[ $i -eq 60 ]] && echo -e "Failed to retrieve default login credentials. Please try it manually (docker ps, docker logs)" && exit 1
 done
