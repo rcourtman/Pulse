@@ -188,6 +188,8 @@ msg_info "Adjusting Conf files"
 sed -i "0,/127.0.0.1/s/127.0.0.1/0.0.0.0/" /opt/seafile/conf/gunicorn.conf.py
 sed -i "0,/SERVICE_URL = \"http:\/\/$IP\"/s/SERVICE_URL = \"http:\/\/$IP\"/SERVICE_URL = \"http:\/\/$IP:8000\"/" /opt/seafile/conf/seahub_settings.py
 echo -e "\nFILE_SERVER_ROOT = \"http://$IP:8082\"" >> /opt/seafile/conf/seahub_settings.py
+echo -e "CSRF_TRUSTED_ORIGINS = [\"http://$IP/\"]" >> /opt/seafile/conf/seahub_settings.py
+echo -e "ALLOWED_HOSTS = [\"$IP\"]" >> /opt/seafile/conf/seahub_settings.py
 echo -e "CSRF_TRUSTED_ORIGINS = ['http://$IP/']" >> /opt/seafile/conf/seahub_settings.py
 msg_ok "Conf files adjusted"
 
@@ -224,14 +226,15 @@ After=network.target mysql.service memcached.service
 Wants=mysql.service memcached.service
 
 [Service]
-Type=forking
+Type=oneshot
 User=seafile
 Group=seafile
 WorkingDirectory=/opt/seafile
+RemainAfterExit=yes
 
-ExecStart=/opt/seafile/seafile-server-latest/seafile.sh start
-ExecStartPost=/opt/seafile/seafile-server-latest/seahub.sh start
-ExecStop=/opt/seafile/seafile-server-latest/seahub.sh stop
+ExecStart=/opt/seafile/seafile-server-latest/seafile.sh start 
+ExecStart=/opt/seafile/seafile-server-latest/seahub.sh start
+ExecStop=/opt/seafile/seafile-server-latest/seahub.sh stop 
 ExecStop=/opt/seafile/seafile-server-latest/seafile.sh stop
 
 Restart=on-failure
@@ -265,8 +268,13 @@ IP=$(ip a s dev eth0 | awk '/inet / {print $2}' | cut -d/ -f1)
 DOMAIN_NOSCHEME=$(echo $DOMAIN | sed 's|^https://||')
 
 #Change the CORS to provided domain
-sed -i "s|CSRF_TRUSTED_ORIGINS = ['http://$IP:8000/']|CSRF_TRUSTED_ORIGINS = ['$DOMAIN']|g" /opt/seafile/conf/seahub_settings.py
+sed -i "s|SERVICE_URL = \"http://$IP:8000\"|SERVICE_URL = \"$DOMAIN\"|g" /opt/seafile/conf/seahub_settings.py
+sed -i "s|CSRF_TRUSTED_ORIGINS = \[\"http://$IP/\"\]|CSRF_TRUSTED_ORIGINS = \[\"$DOMAIN/\"\]|g" /opt/seafile/conf/seahub_settings.py
 sed -i "s|FILE_SERVER_ROOT = \"http://$IP:8082\"|FILE_SERVER_ROOT = \"$DOMAIN/seafhttp\"|g" /opt/seafile/conf/seahub_settings.py
+sed -i "s|ALLOWED_HOSTS = \[\"$IP\"\]|ALLOWED_HOSTS = \[\"\.$DOMAIN_NOSCHEME\"\]|g" /opt/seafile/conf/seahub_settings.py
+
+systemctl restart seafile
+echo "Seafile server restarted! Access it at $DOMAIN."
 EOF
 chmod +x ~/domain.sh
 msg_ok "Bash Script for Domain access created"
