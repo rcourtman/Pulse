@@ -1,6 +1,6 @@
 # Testing the Cluster Resources Feature
 
-This document provides instructions for testing the new Proxmox cluster resources endpoint feature, which allows Pulse to fetch all VMs and containers from a Proxmox cluster in a single API call.
+This document provides instructions for testing the Proxmox cluster resources endpoint feature, which allows Pulse to fetch all VMs and containers from a Proxmox cluster in a single API call.
 
 ## Testing with Mock Data
 
@@ -31,7 +31,7 @@ The easiest way to test the cluster resources feature is to use the mock data se
 
    This script will:
    - Copy the test environment file to `.env`
-   - Start the development server with mock data and the cluster resources endpoint enabled
+   - Start the development server with mock data and the cluster resources endpoint enabled by default
 
 4. Open your browser and navigate to `http://localhost:7654` to see the dashboard.
 
@@ -57,7 +57,7 @@ If you have access to a real Proxmox cluster, you can test the feature with actu
 
 2. Edit the `.env` file to configure your Proxmox cluster:
    - Set `PROXMOX_NODE_1_NAME`, `PROXMOX_NODE_1_HOST`, `PROXMOX_NODE_1_TOKEN_ID`, and `PROXMOX_NODE_1_TOKEN_SECRET` to connect to your Proxmox node.
-   - Set `PROXMOX_USE_CLUSTER_RESOURCES=true` to enable the cluster resources endpoint.
+   - The cluster resources endpoint is enabled by default for clusters, no additional configuration needed.
 
 3. Start the server:
    ```bash
@@ -75,13 +75,21 @@ If you encounter issues with the cluster resources feature:
 3. Ensure that the API token has sufficient permissions to access the cluster resources endpoint.
 4. If the cluster resources endpoint fails, Pulse will automatically fall back to the standard approach of querying each node separately.
 
+## Disabling the Feature
+
+If you need to disable the cluster resources endpoint for troubleshooting:
+
+```
+PROXMOX_USE_CLUSTER_RESOURCES=false
+```
+
 ## Fallback Mechanism
 
 The implementation includes a fallback mechanism that will revert to the standard approach if the cluster resources endpoint fails. This ensures backward compatibility and robustness.
 
 To test the fallback mechanism:
 
-1. Set `PROXMOX_USE_CLUSTER_RESOURCES=true` in your `.env` file.
+1. Keep the default setting with cluster resources enabled.
 2. Intentionally cause the cluster resources endpoint to fail (e.g., by using an invalid API token).
 3. Observe that Pulse falls back to querying each node separately.
 

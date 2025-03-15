@@ -6,7 +6,8 @@ import { NodeConfig } from '../types';
 process.env.USE_MOCK_DATA = 'true';
 process.env.MOCK_DATA_ENABLED = 'true';
 process.env.MOCK_CLUSTER_ENABLED = 'true';
-process.env.PROXMOX_USE_CLUSTER_RESOURCES = 'true';
+// Cluster resources is now enabled by default, no need to set it explicitly
+// process.env.PROXMOX_USE_CLUSTER_RESOURCES = 'true';
 
 // Create a logger
 const logger = createLogger('TestClusterResources');
@@ -14,7 +15,7 @@ const logger = createLogger('TestClusterResources');
 // Get cluster resources from mock client
 async function testClusterResources() {
   logger.info('Testing cluster resources feature with MockClient');
-  logger.info(`PROXMOX_USE_CLUSTER_RESOURCES env: ${process.env.PROXMOX_USE_CLUSTER_RESOURCES}`);
+  logger.info(`PROXMOX_USE_CLUSTER_RESOURCES env: ${process.env.PROXMOX_USE_CLUSTER_RESOURCES || 'true (default)'}`);
   
   // Create a mock client
   const nodeConfig: NodeConfig = {
