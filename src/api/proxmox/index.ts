@@ -9,6 +9,16 @@ import config from '../../config';
 import winston from 'winston';
 import { ProxmoxClientMethods } from './types';
 import { isNodeInCluster } from './cluster';
+import { getClusterResources } from './cluster-resources';
+import { formatProxmoxError, getErrorMessage } from '../../utils/errors';
+import { ApiClient } from '../api-client';
+import { MockClient } from '../mock/client';
+import { createProxmoxApiClient } from './api-client';
+import { getNodeStatus } from './node-status';
+import { getVirtualMachines } from './virtual-machines';
+import { getContainerList } from './containers';
+import { updateVm } from './update-vm';
+import { updateContainer } from './update-container';
 
 // Define the class without the method implementations
 export class ProxmoxClient extends EventEmitter implements ProxmoxClientMethods {
@@ -20,6 +30,7 @@ export class ProxmoxClient extends EventEmitter implements ProxmoxClientMethods 
   eventLastTimestamp = 0;
   isMockData: boolean = false;
   nodeName = '';
+  useClusterResources: boolean = true;
 
   constructor(config: NodeConfig, ignoreSSLErrors: boolean = false) {
     super();
@@ -194,21 +205,30 @@ export class ProxmoxClient extends EventEmitter implements ProxmoxClientMethods 
   }
 
   /**
-   * Get all VMs and containers from all nodes in the cluster using the cluster/resources endpoint
-   * This is more efficient than querying each node separately
+   * Get all VMs and containers from all nodes in the cluster with one API call
    */
-  async getClusterResources(): Promise<{ vms: any[], containers: any[] }> {
+  async getClusterResources(): Promise<{ vms: any[], containers: any[], nodes: string[] }> {
     this.logger.debug(`Getting cluster resources for ${this.config.name}`);
     
     try {
+      if (!this.useClusterResources) {
+        throw new Error("Cluster resources feature is disabled");
+      }
+      
       const response = await this.client?.get('/cluster/resources');
-      const resources = response?.data.data;
+      const resources = response?.data.data || [];
       
       const vms: any[] = [];
       const containers: any[] = [];
+      const nodeSet = new Set<string>();
       
       // Filter resources to only include VMs and containers
       resources?.forEach((resource: any) => {
+        // Track all unique node names
+        if (resource.node) {
+          nodeSet.add(resource.node);
+        }
+        
         if (resource.type === 'qemu') {
           vms.push({
             ...resource,
@@ -230,10 +250,18 @@ export class ProxmoxClient extends EventEmitter implements ProxmoxClientMethods 
         }
       });
       
-      return { vms, containers };
+      const nodes = Array.from(nodeSet);
+      this.logger.info(`Found ${nodes.length} unique nodes in cluster resources`);
+      
+      return { vms, containers, nodes };
     } catch (error) {
-      this.logger.error(`Error getting cluster resources for ${this.config.name}: ${error}`);
-      throw error;
+      this.logger.error(`Error getting cluster resources for ${this.config.name}:`, error);
+      
+      return {
+        vms: [],
+        containers: [],
+        nodes: []
+      };
     }
   }
 }

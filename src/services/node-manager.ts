@@ -229,6 +229,43 @@ export class NodeManager extends EventEmitter {
             // Process VMs from cluster resources
             this.logger.debug(`Received ${clusterResources.vms.length} VMs from cluster resources`);
             
+            // Get the list of nodes directly from the cluster resources API
+            this.logger.info(`Cluster resources found ${clusterResources.nodes?.length || 0} nodes in the cluster`);
+            
+            // Process nodes list from cluster resources API
+            if (clusterResources.nodes && clusterResources.nodes.length > 0) {
+              // Use the nodes list to ensure we handle all nodes
+              for (const nodeName of clusterResources.nodes) {
+                // Find the node configuration for this node name
+                const matchingNodeConfig = config.nodes.find(n => n.name === nodeName);
+                if (matchingNodeConfig) {
+                  this.logger.debug(`Ensuring node from cluster is registered: ${nodeName} (${matchingNodeConfig.id})`);
+                  
+                  // Make sure all nodes have a status entry
+                  const existingNodeStatus = this.nodeStatus.get(matchingNodeConfig.id);
+                  if (!existingNodeStatus || existingNodeStatus.status !== 'online') {
+                    // Create a basic online status for nodes that haven't reported yet
+                    const baseNodeStatus: ProxmoxNodeStatus = {
+                      id: matchingNodeConfig.id,
+                      name: matchingNodeConfig.name,
+                      configName: matchingNodeConfig.name,
+                      status: 'online',
+                      uptime: 0,
+                      cpu: 0,
+                      memory: { total: 0, used: 0, free: 0, usedPercentage: 0 },
+                      swap: { total: 0, used: 0, free: 0, usedPercentage: 0 },
+                      disk: { total: 0, used: 0, free: 0, usedPercentage: 0 },
+                      loadAverage: [0, 0, 0],
+                      cpuInfo: { cores: 0, sockets: 0, model: 'Unknown' }
+                    };
+                    this.handleNodeStatusUpdate(matchingNodeConfig.id, baseNodeStatus);
+                  }
+                } else {
+                  this.logger.warn(`Found node in cluster resources that's not in our configuration: ${nodeName}`);
+                }
+              }
+            }
+            
             // Process all nodes' VMs through this single node
             for (const nodeConfig of config.nodes) {
               const nodeVMs = clusterResources.vms.filter((vm: ProxmoxVM) => vm.node === nodeConfig.name);
@@ -256,7 +293,7 @@ export class NodeManager extends EventEmitter {
                     name: nodeConfig.name,
                     configName: nodeConfig.name,
                     status: 'online',
-                    uptime: nodeStatus.uptime || 0,
+                    uptime: 0,
                     cpu: 0,
                     memory: { total: 0, used: 0, free: 0, usedPercentage: 0 },
                     swap: { total: 0, used: 0, free: 0, usedPercentage: 0 },
