@@ -79,5 +79,7 @@ export default defineConfig({
     'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || ''),
     'import.meta.env.DOCKER_CONTAINER': JSON.stringify(process.env.DOCKER_CONTAINER || ''),
     'import.meta.env.DEV': JSON.stringify(process.env.NODE_ENV === 'development' || true),
+    'import.meta.env.VITE_USE_MOCK_DATA': JSON.stringify(process.env.USE_MOCK_DATA || 'false'),
+    'import.meta.env.VITE_MOCK_DATA_ENABLED': JSON.stringify(process.env.MOCK_DATA_ENABLED || 'false'),
   }
 }); 

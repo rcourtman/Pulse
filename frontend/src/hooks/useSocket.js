@@ -26,9 +26,15 @@ const useSocket = (url) => {
   // For production, we use the same origin that served the page
   let socketUrl;
   if (isDevelopment) {
-    // Check if we're using mock data
-    const useMockData = localStorage.getItem('use_mock_data') === 'true' || 
-                        localStorage.getItem('MOCK_DATA_ENABLED') === 'true';
+    // First check environment variables, then fall back to localStorage
+    const envUseMockData = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+    const envMockDataEnabled = import.meta.env.VITE_MOCK_DATA_ENABLED === 'true';
+    
+    // If environment variables are set, they take precedence
+    // Otherwise, check localStorage
+    const useMockData = (envUseMockData || envMockDataEnabled) || 
+                        (localStorage.getItem('use_mock_data') === 'true' || 
+                         localStorage.getItem('MOCK_DATA_ENABLED') === 'true');
     
     // Always connect to the backend server (7654), which will handle the mock data if needed
     socketUrl = `http://${currentHost}:7654`;
@@ -37,9 +43,14 @@ const useSocket = (url) => {
     socketUrl = window.location.origin;
   }
   
-  // Check if we're using mock data
-  const useMockData = localStorage.getItem('use_mock_data') === 'true' || 
-                      localStorage.getItem('MOCK_DATA_ENABLED') === 'true';
+  // Check if we're using mock data - prioritize environment variables
+  const envUseMockData = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+  const envMockDataEnabled = import.meta.env.VITE_MOCK_DATA_ENABLED === 'true';
+  
+  // First check environment variables, then fall back to localStorage
+  const useMockData = (envUseMockData || envMockDataEnabled) || 
+                      (localStorage.getItem('use_mock_data') === 'true' || 
+                       localStorage.getItem('MOCK_DATA_ENABLED') === 'true');
   
   // Store the mock data status as a state variable so it can be exposed in the return value
   const [isMockData, setIsMockData] = useState(useMockData);

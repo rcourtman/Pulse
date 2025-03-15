@@ -147,15 +147,15 @@ const NetworkTableHeader = ({
     // For flexible equal columns (cpu, memory, disk), calculate percentage 
     if (flexibleEqualColumns.includes(columnId)) {
       // Calculate how many flexible columns are visible
-      const visibleFlexColumns = columnGroups.flexibleEqual.length;
+      const visibleFlexColumns = columnGroups.flexibleEqual?.length || 0;
       
       if (visibleFlexColumns > 0) {
         // Calculate total width taken by fixed columns
         // (This is an approximation since auto columns are unknown)
         const approximateFixedWidth = 
-          (columnGroups.fixedNarrow.length * 60) + 
-          (columnGroups.fixedWidth.length * 90) + 
-          (columnGroups.autoSize.length * 120); // Rough estimate for auto columns
+          ((columnGroups.fixedNarrow?.length || 0) * 60) + 
+          ((columnGroups.fixedWidth?.length || 0) * 90) + 
+          ((columnGroups.autoSize?.length || 0) * 120); // Rough estimate for auto columns
         
         // Approximate remaining percentage for flexible columns
         // Assuming table width is roughly 1000px (this is just a heuristic)
@@ -324,7 +324,7 @@ const NetworkTableHeader = ({
         return column || null;
       })
       .filter(Boolean);
-  }, [columnVisibility, columnOrder]);
+  }, [columnVisibility, columnOrder, forceUpdateCounter]);
 
   const moveColumnUp = (columnId) => {
     const currentIndex = columnOrder.indexOf(columnId);
@@ -348,6 +348,21 @@ const NetworkTableHeader = ({
   const [dragOverColumn, setDragOverColumn] = React.useState(null);
   const [previewOrder, setPreviewOrder] = React.useState(null);
   const dragHandleRef = React.useRef(null);
+
+  // Add cleanup for drag event classes
+  React.useEffect(() => {
+    // Cleanup function to ensure we don't leave classes when component unmounts
+    return () => {
+      // Remove any drag-related classes
+      document.querySelectorAll('.drop-highlight-before, .drop-highlight-after')
+        .forEach(el => {
+          el.classList.remove('drop-highlight-before', 'drop-highlight-after');
+        });
+      
+      // Remove dragging class from body
+      document.body.classList.remove('column-dragging');
+    };
+  }, []);
 
   const handleDragStart = (e, columnId) => {
     console.log('Drag start:', columnId);
@@ -380,9 +395,17 @@ const NetworkTableHeader = ({
     // Add a class to the body to show we're dragging
     document.body.classList.add('column-dragging');
     
-    setTimeout(() => {
-      document.body.removeChild(ghostElement);
-    }, 0);
+    // Store reference to the ghost element to ensure cleanup
+    const ghostRef = ghostElement;
+    
+    // Clean up ghost element immediately after drag image is set
+    // Use requestAnimationFrame to ensure it happens after browser processes the drag image
+    requestAnimationFrame(() => {
+      // Check if the element is still in the DOM before removing
+      if (ghostRef && ghostRef.parentNode) {
+        ghostRef.parentNode.removeChild(ghostRef);
+      }
+    });
   };
 
   const handleDragOver = (e, columnId) => {
@@ -737,11 +760,14 @@ const NetworkTableHeader = ({
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
+                  // Combined background color logic for all conditions
                   backgroundColor: draggedColumn === column.id 
-                      ? alpha(theme.palette.primary.main, 0.1)
-                      : dragOverColumn === column.id
-                        ? alpha(theme.palette.primary.main, 0.05)
-                        : theme.palette.background.paper,
+                      ? alpha(theme.palette.primary.main, 0.15) // Use the darker shade from the active state
+                      : hoveredColumn === column.id
+                        ? alpha(theme.palette.primary.light, 0.1)
+                        : dragOverColumn === column.id
+                          ? alpha(theme.palette.primary.main, 0.05)
+                          : alpha(theme.palette.primary.light, 0.05),
                   borderBottom: '1px solid',
                   borderBottomColor: 'divider',
                   borderTop: 'none',
@@ -757,14 +783,9 @@ const NetworkTableHeader = ({
                   position: 'relative',
                   transition: 'background-color 0.2s, transform 0.1s, box-shadow 0.2s',
                   
-                  backgroundColor: hoveredColumn === column.id
-                        ? alpha(theme.palette.primary.light, 0.1)
-                        : draggedColumn === column.id
-                          ? alpha(theme.palette.primary.main, 0.15)
-                          : alpha(theme.palette.primary.light, 0.05),
-                    '& .drag-handle': {
-                      visibility: 'visible',
-                      opacity: 0.7
+                  '& .drag-handle': {
+                    visibility: 'visible',
+                    opacity: 0.7
                   },
                   '&:active': {
                     cursor: 'grabbing',
