@@ -159,7 +159,7 @@ export const getSortedAndFilteredData = (
           if (spaceTerms.length > 1) {
             // For OR search, at least one term must match
             return spaceTerms.some(spaceTerm => {
-              return matchesTerm(guest, spaceTerm, nodeData);
+              return matchesTerm(guest, spaceTerm, nodeData, metricsData);
             });
           }
           
@@ -168,19 +168,76 @@ export const getSortedAndFilteredData = (
             const orTerms = termLower.split('|').map(t => t.trim()).filter(t => t);
             // For OR search, at least one term must match
             return orTerms.some(orTerm => {
-              return matchesTerm(guest, orTerm, nodeData);
+              return matchesTerm(guest, orTerm, nodeData, metricsData);
             });
           }
           
           // Regular term matching (single term)
-          return matchesTerm(guest, termLower, nodeData);
+          return matchesTerm(guest, termLower, nodeData, metricsData);
         });
       });
     }
   }
   
   // Function to check if a guest matches a single term
-  function matchesTerm(guest, termLower, nodeData) {
+  function matchesTerm(guest, termLower, nodeData, metricsData) {
+    // CHECK FOR PARTIAL EXPRESSIONS FIRST - Don't filter when user is typing an incomplete expression
+    // This handles cases like 'cpu>' which shouldn't filter anything yet 
+    if (/^(cpu|mem(ory)?|disk|network|net)\s*(>|<|>=|<=|=)$/i.test(termLower)) {
+      // Return true for all items to show everything while the user is still typing
+      return true;
+    }
+    
+    // Check for resource metric expressions like cpu>50, memory<20, etc.
+    const resourceExpressionRegex = /^(cpu|mem(ory)?|disk|network|net)\s*(>|<|>=|<=|=)\s*(\d+)$/i;
+    const match = termLower.match(resourceExpressionRegex);
+    
+    if (match) {
+      // Extract the resource type and handle mem/memory correctly
+      let resource = match[1].toLowerCase();
+      // If it's 'mem', treat it as 'memory'
+      if (resource === 'mem') {
+        resource = 'memory';
+      }
+      
+      const operator = match[match.length - 2]; // The operator will be the second-to-last matched group
+      const valueStr = match[match.length - 1]; // The value will be the last matched group
+      const value = parseFloat(valueStr);
+      
+      console.log(`Resource expression match: ${resource} ${operator} ${value}`); // Debug output
+      
+      // Get the appropriate metric based on the resource type
+      let metricValue = null;
+      
+      if (resource === 'cpu') {
+        metricValue = metricsData?.cpu?.[guest.id]?.usage ?? 0;
+      } else if (resource === 'memory') {
+        metricValue = metricsData?.memory?.[guest.id]?.usagePercent ?? 0;
+      } else if (resource === 'disk') {
+        metricValue = metricsData?.disk?.[guest.id]?.usagePercent ?? 0;
+      } else if (resource === 'network' || resource === 'net') {
+        // Combine both in and out rates for 'network'
+        const inRate = metricsData?.network?.[guest.id]?.inRate ?? 0;
+        const outRate = metricsData?.network?.[guest.id]?.outRate ?? 0;
+        metricValue = inRate + outRate;
+        
+        // Convert network value to Mbps for easier comparison
+        metricValue = metricValue / (1024 * 1024 / 8);
+      }
+      
+      console.log(`Metric value for ${guest.name}: ${metricValue}`); // Debug output
+      
+      // Compare using the specified operator
+      switch (operator) {
+        case '>': return metricValue > value;
+        case '<': return metricValue < value;
+        case '>=': return metricValue >= value;
+        case '<=': return metricValue <= value;
+        case '=': return metricValue === value;
+        default: return false;
+      }
+    }
+    
     // Special handling for exact type searches
     if (termLower === 'ct' || termLower === 'container') {
       return guest.type === 'lxc';
@@ -193,9 +250,20 @@ export const getSortedAndFilteredData = (
     // Handle column-specific searches (using prefixes)
     if (termLower.includes(':')) {
       const [prefix, value] = termLower.split(':', 2);
+      const prefixTrim = prefix.trim();
       
-      // If there's no value after the colon, just do a regular search
+      // If there's no value after the colon, show all results for that column type
+      // This improves the UX when the user is still typing
       if (!value || value.trim() === '') {
+        const validPrefixes = ['name', 'id', 'node', 'status', 'type', 'cpu', 'memory', 'mem', 'disk', 'network', 'net'];
+        
+        // If it's a valid prefix, don't filter yet - return true to show all results
+        // This prevents everything from disappearing while the user is typing a filter
+        if (validPrefixes.includes(prefixTrim)) {
+          return true;
+        }
+        
+        // Otherwise, do a regular search
         return searchableText(guest, nodeData).includes(termLower);
       }
       
@@ -220,10 +288,57 @@ export const getSortedAndFilteredData = (
             return guest.type === 'lxc';
           }
           return String(guest.type || '').toLowerCase().includes(searchValue);
+        case 'cpu':
+          // Handle cpu:<value> format as cpu>=<value>
+          const cpuValue = parseFloat(searchValue);
+          if (!isNaN(cpuValue)) {
+            const cpuMetric = metricsData?.cpu?.[guest.id]?.usage ?? 0;
+            return cpuMetric >= cpuValue;
+          }
+          return false;
+        case 'memory':
+        case 'mem':
+          // Handle memory:<value> and mem:<value> format as memory>=<value>
+          const memoryValue = parseFloat(searchValue);
+          if (!isNaN(memoryValue)) {
+            const memoryMetric = metricsData?.memory?.[guest.id]?.usagePercent ?? 0;
+            return memoryMetric >= memoryValue;
+          }
+          return false;
+        case 'disk':
+          // Handle disk:<value> format as disk>=<value>
+          const diskValue = parseFloat(searchValue);
+          if (!isNaN(diskValue)) {
+            const diskMetric = metricsData?.disk?.[guest.id]?.usagePercent ?? 0;
+            return diskMetric >= diskValue;
+          }
+          return false;
+        case 'network':
+        case 'net':
+          // Handle network:<value> format as network>=<value>
+          const networkValue = parseFloat(searchValue);
+          if (!isNaN(networkValue)) {
+            const inRate = metricsData?.network?.[guest.id]?.inRate ?? 0;
+            const outRate = metricsData?.network?.[guest.id]?.outRate ?? 0;
+            const totalRate = (inRate + outRate) / (1024 * 1024 / 8); // Convert to Mbps
+            return totalRate >= networkValue;
+          }
+          return false;
         default:
           // If we don't recognize the prefix, treat it as a regular search
           return searchableText(guest, nodeData).includes(termLower);
       }
+    }
+    
+    // Special handling for pure numeric IDs - must match exactly
+    if (/^\d+$/.test(termLower)) {
+      const guestId = extractNumericId(guest.id);
+      // For single digits (1-9), treat as a prefix match for better UX while typing
+      if (termLower.length <= 2) {
+        return guestId.startsWith(termLower);
+      }
+      // For longer numbers, require exact match
+      return guestId === termLower;
     }
     
     // For regular searches, check if the term is in the searchable text
@@ -244,7 +359,11 @@ export const getSortedAndFilteredData = (
       guest.type === 'qemu' ? 'vm virtual machine' : '',
       guest.type === 'lxc' ? 'ct container' : '',
       // Include status labels for better searching
-      guest.status?.toLowerCase() === 'running' ? 'online active' : 'offline inactive stopped'
+      guest.status?.toLowerCase() === 'running' ? 'online active' : 'offline inactive stopped',
+      // Include resource metrics for easy finding
+      `cpu ${metricsData?.cpu?.[guest.id]?.usage ?? 0}`,
+      `memory ${metricsData?.memory?.[guest.id]?.usagePercent ?? 0}`,
+      `disk ${metricsData?.disk?.[guest.id]?.usagePercent ?? 0}`
     ].map(val => String(val).toLowerCase()).join(' ');
   }
   
@@ -295,6 +414,16 @@ export const getSortedAndFilteredData = (
   
   // Apply sorting
   if (sortConfig) {
+    // Debug logging for sorting
+    console.log('Applying sort:', sortConfig, 'to', filteredData.length, 'items');
+    console.log('Has metrics data?', metricsData ? 'Yes' : 'No', 
+      metricsData ? {
+        cpu: Object.keys(metricsData.cpu || {}).length,
+        memory: Object.keys(metricsData.memory || {}).length,
+        disk: Object.keys(metricsData.disk || {}).length,
+        network: Object.keys(metricsData.network || {}).length
+      } : 'None');
+    
     filteredData.sort((a, b) => {
       // Handle special cases for metrics-based sorting
       if (sortConfig.key === 'cpu') {
@@ -421,48 +550,36 @@ export const getSortedAndFilteredData = (
 /**
  * Calculate dynamic column widths based on visible columns
  * @param {Object} columnVisibility - Object containing column visibility state
- * @returns {Object} - Object with column IDs as keys and percentage width strings as values
+ * @returns {Object} - Object with column IDs as keys and pixel values as values
  */
 export const calculateDynamicColumnWidths = (columnVisibility) => {
-  // Base widths (adjusted to be more space conservative)
-  const baseWidths = {
-    node: 7,     // Reduced from 8%
-    type: 3,     // Reduced from 4% to make it more compact
-    id: 6,       // Reduced from 7%
-    status: 3,   // Small width since it's only an icon now
-    name: 15,    // Increased slightly to use the space saved from type
-    cpu: 13,     // Reduced from 15%
-    memory: 13,  // Reduced from 15%
-    disk: 13,    // Reduced from 15%
-    download: 9, // Reduced from 10%
-    upload: 9,   // Reduced from 10%
-    uptime: 8    // Increased from 7% to accommodate longer uptime strings
+  const defaultWidths = {
+    node: 140,     // Moderate - node names
+    type: 30,      // Very small - just "VM" or "CT"
+    id: 40,        // Very small - just numeric IDs
+    status: 30,    // Minimal - just an icon
+    name: 250,     // Large - typically longer text
+    cpu: 90,       // Medium - progress bar with percentage
+    memory: 120,   // Larger - progress bar with byte values
+    disk: 120,     // Larger - progress bar with byte values
+    download: 80,  // Medium - network rates
+    upload: 80,    // Medium - network rates
+    uptime: 70     // Medium - time display
   };
   
-  // Get total width of visible columns
+  // Get visible columns
   const visibleColumns = Object.keys(columnVisibility).filter(key => columnVisibility[key].visible);
   
   // If no columns are visible, return default widths
-  // This prevents issues when all columns are hidden
   if (visibleColumns.length === 0) {
-    // Return a default object with all columns at their base widths
-    // This ensures the table doesn't break when no columns are visible
-    const defaultWidths = {};
-    Object.keys(baseWidths).forEach(key => {
-      defaultWidths[key] = `${baseWidths[key]}%`;
-    });
-    return defaultWidths;
+    // Return default pixel values instead of percentages
+    return { ...defaultWidths };
   }
   
-  const totalBaseWidth = visibleColumns.reduce((sum, key) => sum + baseWidths[key], 0);
-  
-  // Calculate scaling factor to make total width 100%
-  const scalingFactor = totalBaseWidth > 0 ? 100 / totalBaseWidth : 1;
-  
-  // Calculate adjusted widths
+  // Return the raw pixel values for each column - no percentage conversion
   const adjustedWidths = {};
   visibleColumns.forEach(key => {
-    adjustedWidths[key] = `${baseWidths[key] * scalingFactor}%`;
+    adjustedWidths[key] = defaultWidths[key];
   });
   
   return adjustedWidths;

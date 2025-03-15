@@ -222,4 +222,59 @@ export const KeyboardShortcut = ({ shortcut, sx = {} }) => (
   >
     {shortcut}
   </Box>
-); 
+);
+
+// Add a new HighlightedText component for search term highlighting
+export const HighlightedText = ({ text, searchTerms = [], variant = "body2", sx = {}, ...props }) => {
+  const theme = useTheme();
+  
+  if (!text || !searchTerms || searchTerms.length === 0) {
+    return <Typography variant={variant} sx={sx} {...props}>{text}</Typography>;
+  }
+  
+  // Convert to string to handle numeric values
+  const textStr = String(text || '');
+  
+  // Prepare regular expression for matching - case insensitive
+  // Escape special regex characters in search terms
+  const escapedTerms = searchTerms.map(term => 
+    String(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  );
+  
+  // Create regex pattern from all terms
+  const pattern = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
+  
+  // Split text by matches
+  const parts = textStr.split(pattern);
+  
+  // Skip highlighting if no matches
+  if (parts.length <= 1) {
+    return <Typography variant={variant} sx={sx} {...props}>{text}</Typography>;
+  }
+
+  return (
+    <Typography variant={variant} sx={sx} {...props}>
+      {parts.map((part, i) => {
+        // Check if this part matches any search term (case insensitive)
+        const isMatch = searchTerms.some(term => 
+          part.toLowerCase() === String(term).toLowerCase()
+        );
+        
+        return isMatch ? (
+          <Box 
+            component="span" 
+            key={i}
+            sx={{ 
+              backgroundColor: alpha(theme.palette.primary.main, 0.2),
+              borderRadius: '2px',
+              padding: '0 2px',
+              fontWeight: 'medium'
+            }}
+          >
+            {part}
+          </Box>
+        ) : part;
+      })}
+    </Typography>
+  );
+}; 

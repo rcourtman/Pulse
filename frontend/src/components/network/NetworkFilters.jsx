@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -20,7 +20,8 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   Divider,
-  Button
+  Button,
+  useTheme
 } from '@mui/material';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import FilterAltOffIcon from '@mui/icons-material/FilterAltOff';
@@ -33,7 +34,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import { formatPercentage, formatNetworkRateForFilter, sliderValueToNetworkRate } from '../../utils/formatters';
 import { KeyboardShortcut } from './UIComponents';
-import { useTheme } from '@mui/material/styles';
+import { useSearchContext } from '../../context/SearchContext';
 
 const NetworkFilters = ({
   filters,
@@ -54,9 +55,20 @@ const NetworkFilters = ({
   searchInputRef,
   guestTypeFilter,
   setGuestTypeFilter,
-  handleClose
+  handleClose,
+  formatPercentage,
+  formatNetworkRateForFilter
 }) => {
   const theme = useTheme();
+  // Get clearSearchTerms from context
+  const { clearSearchTerms } = useSearchContext();
+  
+  // Handle resetting all filters including search terms
+  const handleResetAllFilters = () => {
+    resetFilters();
+    clearSearchTerms();
+    if (handleClose) handleClose();
+  };
 
   // Handle search input submission
   const handleSearchSubmit = (e) => {
@@ -116,7 +128,14 @@ const NetworkFilters = ({
         <InputBase
           placeholder="Press Enter to search..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => {
+            // Log the current input value for debugging
+            console.log('NetworkFilters input onChange:', e.target.value, 'Previous value:', searchTerm);
+            
+            // Directly set the search term to the current input value
+            // This should ensure the value is properly updated
+            setSearchTerm(e.target.value);
+          }}
           sx={{ flex: 1 }}
           inputRef={searchInputRef}
           inputProps={{ 'aria-label': 'search systems' }}
@@ -125,7 +144,10 @@ const NetworkFilters = ({
               <IconButton
                 size="small"
                 aria-label="clear search"
-                onClick={() => setSearchTerm('')}
+                onClick={() => {
+                  setSearchTerm('');
+                  searchInputRef.current?.focus();
+                }}
                 sx={{ p: 0.5 }}
               >
                 <ClearIcon fontSize="small" />
@@ -237,16 +259,22 @@ const NetworkFilters = ({
         </Typography>
         
         {/* CPU Filter */}
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ 
+          mb: 2,
+          p: 1, 
+          borderRadius: 1,
+          bgcolor: filters.cpu > 0 ? alpha(theme.palette.primary.main, 0.08) : 'transparent'
+        }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color={filters.cpu > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.cpu > 0 ? 500 : 400 }}>
               CPU Usage
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color={filters.cpu > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.cpu > 0 ? 500 : 400 }}>
               {formatPercentage(filters.cpu)}+
             </Typography>
           </Box>
           <Slider
+            id="cpu-filter-slider"
             value={filters.cpu}
             onChange={(e, newValue) => updateFilter('cpu', newValue)}
             onMouseDown={() => handleSliderDragStart('cpu')}
@@ -257,20 +285,32 @@ const NetworkFilters = ({
             min={0}
             max={100}
             size="small"
+            sx={{
+              color: filters.cpu > 0 ? theme.palette.primary.main : undefined,
+              '& .MuiSlider-thumb': {
+                boxShadow: filters.cpu > 0 ? `0 0 0 8px ${alpha(theme.palette.primary.main, 0.16)}` : undefined,
+              }
+            }}
           />
         </Box>
         
         {/* Memory Filter */}
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ 
+          mb: 2,
+          p: 1, 
+          borderRadius: 1,
+          bgcolor: filters.memory > 0 ? alpha(theme.palette.primary.main, 0.08) : 'transparent'
+        }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color={filters.memory > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.memory > 0 ? 500 : 400 }}>
               Memory Usage
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color={filters.memory > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.memory > 0 ? 500 : 400 }}>
               {formatPercentage(filters.memory)}+
             </Typography>
           </Box>
           <Slider
+            id="memory-filter-slider"
             value={filters.memory}
             onChange={(e, newValue) => updateFilter('memory', newValue)}
             onMouseDown={() => handleSliderDragStart('memory')}
@@ -281,20 +321,32 @@ const NetworkFilters = ({
             min={0}
             max={100}
             size="small"
+            sx={{
+              color: filters.memory > 0 ? theme.palette.primary.main : undefined,
+              '& .MuiSlider-thumb': {
+                boxShadow: filters.memory > 0 ? `0 0 0 8px ${alpha(theme.palette.primary.main, 0.16)}` : undefined,
+              }
+            }}
           />
         </Box>
         
         {/* Disk Filter */}
-        <Box sx={{ mb: 2 }}>
+        <Box sx={{ 
+          mb: 2,
+          p: 1, 
+          borderRadius: 1,
+          bgcolor: filters.disk > 0 ? alpha(theme.palette.primary.main, 0.08) : 'transparent'
+        }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color={filters.disk > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.disk > 0 ? 500 : 400 }}>
               Disk Usage
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color={filters.disk > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.disk > 0 ? 500 : 400 }}>
               {formatPercentage(filters.disk)}+
             </Typography>
           </Box>
           <Slider
+            id="disk-filter-slider"
             value={filters.disk}
             onChange={(e, newValue) => updateFilter('disk', newValue)}
             onMouseDown={() => handleSliderDragStart('disk')}
@@ -305,20 +357,32 @@ const NetworkFilters = ({
             min={0}
             max={100}
             size="small"
+            sx={{
+              color: filters.disk > 0 ? theme.palette.primary.main : undefined,
+              '& .MuiSlider-thumb': {
+                boxShadow: filters.disk > 0 ? `0 0 0 8px ${alpha(theme.palette.primary.main, 0.16)}` : undefined,
+              }
+            }}
           />
         </Box>
         
-        {/* Network Download Filter */}
-        <Box sx={{ mb: 2 }}>
+        {/* Download Filter */}
+        <Box sx={{ 
+          mb: 2,
+          p: 1, 
+          borderRadius: 1,
+          bgcolor: filters.download > 0 ? alpha(theme.palette.primary.main, 0.08) : 'transparent'
+        }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color={filters.download > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.download > 0 ? 500 : 400 }}>
               Download Rate
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color={filters.download > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.download > 0 ? 500 : 400 }}>
               {formatNetworkRateForFilter(filters.download)}+
             </Typography>
           </Box>
           <Slider
+            id="download-filter-slider"
             value={filters.download}
             onChange={(e, newValue) => updateFilter('download', newValue)}
             onMouseDown={() => handleSliderDragStart('download')}
@@ -327,22 +391,34 @@ const NetworkFilters = ({
             valueLabelDisplay="auto"
             valueLabelFormat={formatNetworkRateForFilter}
             min={0}
-            max={100}
+            max={100000}
             size="small"
+            sx={{
+              color: filters.download > 0 ? theme.palette.primary.main : undefined,
+              '& .MuiSlider-thumb': {
+                boxShadow: filters.download > 0 ? `0 0 0 8px ${alpha(theme.palette.primary.main, 0.16)}` : undefined,
+              }
+            }}
           />
         </Box>
         
-        {/* Network Upload Filter */}
-        <Box sx={{ mb: 2 }}>
+        {/* Upload Filter */}
+        <Box sx={{ 
+          mb: 1,
+          p: 1, 
+          borderRadius: 1,
+          bgcolor: filters.upload > 0 ? alpha(theme.palette.primary.main, 0.08) : 'transparent'
+        }}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color={filters.upload > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.upload > 0 ? 500 : 400 }}>
               Upload Rate
             </Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color={filters.upload > 0 ? "primary" : "text.secondary"} sx={{ fontWeight: filters.upload > 0 ? 500 : 400 }}>
               {formatNetworkRateForFilter(filters.upload)}+
             </Typography>
           </Box>
           <Slider
+            id="upload-filter-slider"
             value={filters.upload}
             onChange={(e, newValue) => updateFilter('upload', newValue)}
             onMouseDown={() => handleSliderDragStart('upload')}
@@ -351,8 +427,14 @@ const NetworkFilters = ({
             valueLabelDisplay="auto"
             valueLabelFormat={formatNetworkRateForFilter}
             min={0}
-            max={100}
+            max={100000}
             size="small"
+            sx={{
+              color: filters.upload > 0 ? theme.palette.primary.main : undefined,
+              '& .MuiSlider-thumb': {
+                boxShadow: filters.upload > 0 ? `0 0 0 8px ${alpha(theme.palette.primary.main, 0.16)}` : undefined,
+              }
+            }}
           />
         </Box>
       </Box>
@@ -365,10 +447,7 @@ const NetworkFilters = ({
           size="small" 
           fullWidth 
           variant="outlined" 
-          onClick={() => {
-            resetFilters();
-            handleClose && handleClose();
-          }}
+          onClick={handleResetAllFilters}
           startIcon={<FilterAltOffIcon />}
         >
           Reset All Filters

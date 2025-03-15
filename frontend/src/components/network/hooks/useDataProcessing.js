@@ -1,18 +1,20 @@
 import { useMemo, useCallback } from 'react';
 import { getSortedAndFilteredData, getNodeFilteredGuests as nodeFilteredGuestsUtil, getNodeName as getNodeNameUtil, extractNumericId as extractNumericIdUtil } from '../../../utils/networkUtils';
+import { useSearchContext } from '../../../context/SearchContext';
 
 const useDataProcessing = ({
   guestData,
-  combinedMetrics,
+  nodeData,
   sortConfig,
   filters,
   showStopped,
-  activeSearchTerms,
-  searchTerm,
   selectedNode,
   guestTypeFilter,
-  nodeData
+  metricsData
 }) => {
+  // Get search state from context
+  const { searchTerm, activeSearchTerms } = useSearchContext();
+  
   // Helper function to extract numeric ID from strings like "node-1-ct-105"
   const extractNumericId = useCallback((fullId) => {
     return extractNumericIdUtil(fullId);
@@ -29,17 +31,17 @@ const useDataProcessing = ({
   }, [selectedNode]);
   
   // Get sorted and filtered data
-  const sortedAndFilteredData = useMemo(() => {
+  const processedData = useMemo(() => {
     // Debug logging
     console.log('useDataProcessing - Processing data:');
     console.log('- guestData:', guestData?.length || 0, 'guests');
     console.log('- selectedNode:', selectedNode);
-    console.log('- combinedMetrics:', combinedMetrics ? 'available' : 'not available');
+    console.log('- sortConfig:', sortConfig);
     
     // First filter by node
     const nodeFilteredData = selectedNode === 'all' 
       ? guestData 
-      : getNodeFilteredGuests(guestData, selectedNode);
+      : getNodeFilteredGuests(guestData);
     
     console.log('- nodeFilteredData:', nodeFilteredData?.length || 0, 'guests after node filtering');
     
@@ -51,7 +53,7 @@ const useDataProcessing = ({
       showStopped,
       activeSearchTerms,
       searchTerm,
-      combinedMetrics,
+      metricsData,
       guestTypeFilter,
       nodeData
     );
@@ -60,7 +62,6 @@ const useDataProcessing = ({
     return result;
   }, [
     guestData, 
-    combinedMetrics, 
     sortConfig, 
     filters, 
     showStopped, 
@@ -69,7 +70,8 @@ const useDataProcessing = ({
     selectedNode, 
     getNodeFilteredGuests,
     guestTypeFilter,
-    nodeData
+    nodeData,
+    metricsData
   ]);
 
   // Format percentage for display
@@ -90,7 +92,7 @@ const useDataProcessing = ({
     extractNumericId,
     getNodeName,
     getNodeFilteredGuests,
-    sortedAndFilteredData,
+    processedData,
     formatPercentage,
     formatNetworkRateForFilter
   };

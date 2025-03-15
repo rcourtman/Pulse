@@ -1,28 +1,43 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchContext } from '../../../context/SearchContext';
 
 const useKeyboardShortcuts = ({
   openFilters,
-  openSearch,
   openColumnMenu,
   resetFilters,
   closeAllPopovers,
-  handleSearchButtonClick,
-  searchButtonRef,
-  setSearchTerm,
-  showNotification,
-  searchInputRef
+  showNotification
 }) => {
   const [escRecentlyPressed, setEscRecentlyPressed] = useState(false);
-
+  
+  // Get search functions from context directly
+  const { setSearchTerm, setIsSearching, clearSearchTerms, isSearching } = useSearchContext();
+  
+  // Track last key pressed timestamp to prevent double handling of events
+  const lastKeyPressTime = useRef(0);
+  
   // Set up keyboard shortcuts
   useEffect(() => {
+    // Global keyboard handler
     const handleGlobalKeyDown = (e) => {
-      // Don't trigger shortcuts if typing in an input field
-      if (
+      // Critical protection against double event handling
+      // This prevents the same key event from being processed twice
+      const now = Date.now();
+      if (now - lastKeyPressTime.current < 50) {
+        return; // Ignore events that are too close together
+      }
+      lastKeyPressTime.current = now;
+      
+      // STOP HANDLING KEYBOARD SHORTCUTS IF USER IS TYPING IN A FORM ELEMENT
+      // This is the most important check to prevent shortcuts from interfering with typing
+      const isEditableElement = 
         e.target.tagName === 'INPUT' || 
         e.target.tagName === 'TEXTAREA' || 
-        e.target.isContentEditable
-      ) {
+        e.target.isContentEditable ||
+        e.target.getAttribute('role') === 'textbox';
+      
+      // If user is typing in ANY input, don't hijack their keystrokes
+      if (isEditableElement) {
         return;
       }
       
@@ -33,6 +48,9 @@ const useKeyboardShortcuts = ({
         
         // Reset all filters
         resetFilters();
+        
+        // Clear all search terms
+        clearSearchTerms();
         
         // Set flag to prevent other shortcuts from triggering
         setEscRecentlyPressed(true);
@@ -46,25 +64,31 @@ const useKeyboardShortcuts = ({
       // Ctrl+F or Cmd+F to focus search without setting a term
       if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
         e.preventDefault();
-        handleSearchButtonClick({ currentTarget: searchButtonRef.current });
+        setIsSearching(true);
         return;
       }
       
       // / to focus search without setting a term
       if (e.key === '/' && !escRecentlyPressed) {
         e.preventDefault();
-        handleSearchButtonClick({ currentTarget: searchButtonRef.current });
+        setIsSearching(true);
         return;
       }
       
       // Enter to focus search without setting a term
       if (e.key === 'Enter' && !escRecentlyPressed) {
         e.preventDefault();
-        handleSearchButtonClick({ currentTarget: searchButtonRef.current });
+        setIsSearching(true);
         return;
       }
       
-      // Capture single printable characters to both open search AND start typing
+      // Respect the search state
+      if (isSearching) {
+        // If the search field is focused, don't handle keyboard shortcuts
+        return;
+      }
+      
+      // Capture single printable characters to focus search AND start typing
       const isPrintableChar = 
         e.key.length === 1 && 
         !e.ctrlKey && 
@@ -72,39 +96,34 @@ const useKeyboardShortcuts = ({
         !e.altKey && 
         !e.key.match(/^F\d+$/); // Exclude function keys
       
-      if (isPrintableChar && !openSearch) {
+      if (isPrintableChar) {
         e.preventDefault();
         
-        // Store the first character
-        const firstChar = e.key;
+        // Set the first character
+        setSearchTerm(e.key);
         
-        // Open the search popover and focus the input field
-        handleSearchButtonClick({ currentTarget: searchButtonRef.current });
-        
-        // Set the search term after a short delay to ensure input is focused
-        setTimeout(() => {
-          setSearchTerm(firstChar);
-        }, 10);
+        // Focus the search field 
+        setIsSearching(true);
       }
-      
-      // NOTE: We no longer activate search on random typing - only explicit shortcuts
     };
     
+    // Use the capture phase to get events before other handlers
     window.addEventListener('keydown', handleGlobalKeyDown);
+    
     return () => {
       window.removeEventListener('keydown', handleGlobalKeyDown);
     };
   }, [
     openFilters, 
-    openSearch, 
     openColumnMenu, 
     escRecentlyPressed,
     resetFilters,
     closeAllPopovers,
-    handleSearchButtonClick,
-    searchButtonRef,
     setSearchTerm,
-    showNotification
+    setIsSearching,
+    clearSearchTerms,
+    showNotification,
+    isSearching
   ]);
 
   return {

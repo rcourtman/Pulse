@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useLayoutEffect } from 'react';
 import useSocket from '../../hooks/useSocket';
 import useFormattedMetrics from '../../hooks/useFormattedMetrics';
 import useMockMetrics from '../../hooks/useMockMetrics';
 import { useThemeContext } from '../../context/ThemeContext';
-import { Box, CircularProgress, useTheme, Typography, Button } from '@mui/material';
+import { Box, CircularProgress, useTheme, Typography, Button, IconButton, Badge, Tooltip } from '@mui/material';
+import ViewColumnIcon from '@mui/icons-material/ViewColumn';
+import { createPortal } from 'react-dom';
 
 // Import hooks
 import {
@@ -25,6 +27,8 @@ import {
   NetworkNotification,
   NetworkTable
 } from './components';
+
+import { useSearchContext } from '../../context/SearchContext';
 
 const NetworkDisplay = ({ selectedNode = 'all' }) => {
   const { 
@@ -401,25 +405,32 @@ const NetworkDisplay = ({ selectedNode = 'all' }) => {
     requestSort
   } = useSortManagement();
   
-  // Use network filters hook
+  // Get search state from context instead of local state
+  const { 
+    searchTerm, 
+    setSearchTerm, 
+    activeSearchTerms, 
+    addSearchTerm, 
+    removeSearchTerm,
+    clearSearchTerms
+  } = useSearchContext();
+  
+  // Use the network filters hook but don't use its search state
   const {
     filters,
+    setFilters,
     showStopped,
     setShowStopped,
     showFilters,
-    searchTerm,
-    setSearchTerm,
-    activeSearchTerms,
+    setShowFilters,
     guestTypeFilter,
     setGuestTypeFilter,
-    addSearchTerm,
-    removeSearchTerm,
+    sliderDragging,
     updateFilter,
     handleSliderDragStart,
     handleSliderDragEnd,
     clearFilter,
     resetFilters,
-    clearSearchTerms,
     activeFilterCount
   } = useNetworkFilters();
   
@@ -427,61 +438,199 @@ const NetworkDisplay = ({ selectedNode = 'all' }) => {
   const {
     filterAnchorEl,
     openFilters,
-    searchAnchorEl,
-    openSearch,
-    searchInputRef,
     filterButtonRef,
-    searchButtonRef,
     handleFilterButtonClick,
     handleCloseFilterPopover,
-    handleSearchButtonClick,
-    handleCloseSearchPopover,
     closeAllPopovers
   } = usePopoverManagement();
   
-  // Use keyboard shortcuts hook
+  // Update resetFilters to also clear search terms from context
+  const handleResetFilters = () => {
+    resetFilters();
+    clearSearchTerms();
+  };
+  
+  // Use keyboard shortcuts hook with handleResetFilters instead of resetFilters
   useKeyboardShortcuts({
     openFilters,
-    openSearch,
     openColumnMenu,
-    resetFilters,
+    resetFilters: handleResetFilters,
     closeAllPopovers,
-    handleSearchButtonClick,
-    searchButtonRef,
-    setSearchTerm,
-    showNotification,
-    searchInputRef
+    showNotification
   });
   
   // Use data processing hook
   const {
-    extractNumericId,
+    processedData,
     getNodeName,
-    sortedAndFilteredData,
+    extractNumericId,
+    getNodeFilteredGuests,
     formatPercentage,
     formatNetworkRateForFilter
   } = useDataProcessing({
     guestData,
-    combinedMetrics,
+    nodeData,
     sortConfig,
     filters,
     showStopped,
-    activeSearchTerms,
-    searchTerm,
     selectedNode,
     guestTypeFilter,
-    nodeData
+    metricsData: combinedMetrics
   });
+  
+  // Add debug logging for sorting
+  useEffect(() => {
+    console.log('Current sort configuration:', sortConfig);
+    console.log('Processed data after sorting:', processedData?.length || 0, 'items');
+  }, [sortConfig, processedData]);
   
   // Use active filtered columns hook
   const activeFilteredColumns = useActiveFilteredColumns({
     filters,
-    activeSearchTerms,
-    searchTerm,
     guestTypeFilter,
     showStopped,
     nodeData
   });
+  
+  // Add an effect to listen for search term events
+  useEffect(() => {
+    const handleSearchTermAction = (event) => {
+      const { term, action } = event.detail;
+      
+      // Handle status: filters
+      if (term.startsWith('status:')) {
+        const status = term.split(':', 2)[1]?.trim();
+        if (action === 'add') {
+          if (status === 'running') {
+            setShowStopped(false);
+          } else if (status === 'stopped') {
+            setShowStopped(true);
+          }
+        } else if (action === 'remove') {
+          // Reset status filter
+          setShowStopped(null);
+        }
+      }
+      
+      // Handle type: filters
+      if (term.startsWith('type:')) {
+        const type = term.split(':', 2)[1]?.trim();
+        if (action === 'add') {
+          if (type === 'vm' || type === 'qemu') {
+            setGuestTypeFilter('vm');
+          } else if (type === 'ct' || type === 'lxc' || type === 'container') {
+            setGuestTypeFilter('ct');
+          }
+        } else if (action === 'remove') {
+          // Reset type filter to "all"
+          setGuestTypeFilter('all');
+        }
+      }
+      
+      // Handle node: filters
+      if (term.startsWith('node:')) {
+        const node = term.split(':', 2)[1]?.trim();
+        if (action === 'add') {
+          // Find the node in availableNodes
+          const foundNode = availableNodes.find(n => 
+            n.name.toLowerCase() === node || 
+            n.id.toLowerCase() === node
+          );
+          
+          if (foundNode) {
+            // Dispatch a custom event to notify App.jsx about the node change
+            const nodeChangeEvent = new CustomEvent('nodeChange', {
+              detail: { node: foundNode.id }
+            });
+            window.dispatchEvent(nodeChangeEvent);
+          }
+        } else if (action === 'remove') {
+          // Reset node filter to "all"
+          const nodeChangeEvent = new CustomEvent('nodeChange', {
+            detail: { node: 'all' }
+          });
+          window.dispatchEvent(nodeChangeEvent);
+        }
+      }
+    };
+    
+    window.addEventListener('searchTermAction', handleSearchTermAction);
+    
+    return () => {
+      window.removeEventListener('searchTermAction', handleSearchTermAction);
+    };
+  }, [setShowStopped, setGuestTypeFilter, availableNodes]);
+  
+  // State for portal root element
+  const [portalRoot, setPortalRoot] = React.useState(null);
+
+  // Use createPortal to place the column visibility button in the app header
+  useLayoutEffect(() => {
+    // Find the column visibility container in the app header
+    const columnVisibilityContainer = document.getElementById('column-visibility-app-header');
+    
+    if (columnVisibilityContainer) {
+      // Create a div for the portal if it doesn't exist yet
+      let portalContainer = document.getElementById('column-visibility-portal');
+      if (!portalContainer) {
+        portalContainer = document.createElement('div');
+        portalContainer.id = 'column-visibility-portal';
+        // Clear previous content and append the portal container
+        columnVisibilityContainer.innerHTML = '';
+        columnVisibilityContainer.appendChild(portalContainer);
+      }
+      
+      // Set the portal root for rendering
+      setPortalRoot(portalContainer);
+      
+      // Clean up function
+      return () => {
+        setPortalRoot(null);
+        if (portalContainer && portalContainer.parentNode) {
+          portalContainer.parentNode.removeChild(portalContainer);
+        }
+      };
+    }
+  }, []);
+  
+  // Render the column visibility button in the portal
+  const renderColumnVisibilityPortal = () => {
+    if (!portalRoot) return null;
+    
+    // Count hidden columns for the badge
+    const hiddenColumnsCount = Object.values(columnVisibility).filter(config => !config.visible).length;
+    
+    return createPortal(
+      <Tooltip title={hiddenColumnsCount > 0 ? `Show hidden columns (${hiddenColumnsCount})` : "Column visibility settings"}>
+        <IconButton
+          onClick={handleColumnMenuOpen}
+          color={openColumnMenu ? 'primary' : 'default'}
+          size="small"
+          aria-controls={openColumnMenu ? 'column-menu' : undefined}
+          aria-haspopup="true"
+          aria-expanded={openColumnMenu ? 'true' : undefined}
+          sx={{ 
+            borderRadius: 1,
+            p: 0.5,
+            bgcolor: hiddenColumnsCount > 0 ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+            color: 'white',  // Make sure the icon is visible in the dark app bar
+            '&:hover': {
+              bgcolor: 'rgba(255, 255, 255, 0.2)'
+            }
+          }}
+        >
+          <Badge
+            badgeContent={hiddenColumnsCount}
+            color="error"
+            invisible={hiddenColumnsCount === 0}
+          >
+            <ViewColumnIcon />
+          </Badge>
+        </IconButton>
+      </Tooltip>,
+      portalRoot
+    );
+  };
   
   // Show loading state if not connected
   if (!isConnected) {
@@ -524,35 +673,24 @@ const NetworkDisplay = ({ selectedNode = 'all' }) => {
   
   return (
     <Box sx={{ width: '100%' }}>
-      {/* Header with buttons */}
-      <NetworkHeader
-        openColumnMenu={openColumnMenu}
-        openSearch={openSearch}
-        openFilters={openFilters}
-        activeSearchTerms={activeSearchTerms}
-        filters={filters}
-        columnVisibility={columnVisibility}
-        handleColumnMenuOpen={handleColumnMenuOpen}
-        handleSearchButtonClick={handleSearchButtonClick}
-        handleFilterButtonClick={handleFilterButtonClick}
-        searchButtonRef={searchButtonRef}
-        filterButtonRef={filterButtonRef}
-      />
+      {/* Render the column visibility button portal */}
+      {renderColumnVisibilityPortal()}
+      
+      {/* Column Menu - Ensure it's still rendered to handle the actual menu */}
+      <Box sx={{ position: 'absolute', top: 0, left: 0, visibility: 'hidden' }}>
+        {openColumnMenu && (
+          <span 
+            ref={(node) => {
+              if (node && !columnMenuAnchorEl) {
+                handleColumnMenuOpen({ currentTarget: node });
+              }
+            }} 
+          />
+        )}
+      </Box>
       
       {/* Popovers */}
       <NetworkPopovers
-        // Search popover props
-        searchAnchorEl={searchAnchorEl}
-        openSearch={openSearch}
-        handleCloseSearchPopover={handleCloseSearchPopover}
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        activeSearchTerms={activeSearchTerms}
-        addSearchTerm={addSearchTerm}
-        removeSearchTerm={removeSearchTerm}
-        searchInputRef={searchInputRef}
-        clearSearchTerms={clearSearchTerms}
-        
         // Filter popover props
         filterAnchorEl={filterAnchorEl}
         openFilters={openFilters}
@@ -561,7 +699,7 @@ const NetworkDisplay = ({ selectedNode = 'all' }) => {
         updateFilter={updateFilter}
         handleSliderDragStart={handleSliderDragStart}
         handleSliderDragEnd={handleSliderDragEnd}
-        resetFilters={resetFilters}
+        resetFilters={handleResetFilters}
         
         // Formatters
         formatPercentage={formatPercentage}
@@ -583,7 +721,7 @@ const NetworkDisplay = ({ selectedNode = 'all' }) => {
         columnOrder={columnOrder}
         setColumnOrder={setColumnOrder}
         activeFilteredColumns={activeFilteredColumns}
-        sortedAndFilteredData={sortedAndFilteredData}
+        sortedAndFilteredData={processedData}
         guestData={guestData}
         metricsData={combinedMetrics}
         getNodeName={getNodeName}
@@ -598,9 +736,13 @@ const NetworkDisplay = ({ selectedNode = 'all' }) => {
         handleNodeChange={handleNodeChange}
         handleStatusChange={handleStatusChange}
         handleTypeChange={handleTypeChange}
-        activeSearchTerms={activeSearchTerms}
-        addSearchTerm={addSearchTerm}
-        removeSearchTerm={removeSearchTerm}
+        // Pass filter-related props
+        filters={filters}
+        updateFilter={updateFilter}
+        handleFilterButtonClick={handleFilterButtonClick}
+        filterButtonRef={filterButtonRef}
+        openFilters={openFilters}
+        handleCloseFilterPopover={handleCloseFilterPopover}
       />
       
       {/* Notification Snackbar */}

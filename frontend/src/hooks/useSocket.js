@@ -1078,7 +1078,6 @@ const useSocket = (url) => {
   }, [isConnected]);
 
   return {
-    socket: socketRef.current,
     isConnected,
     lastMessage,
     error,

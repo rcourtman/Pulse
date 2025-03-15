@@ -3,7 +3,6 @@ import {
   STORAGE_KEY_FILTERS,
   STORAGE_KEY_SHOW_STOPPED,
   STORAGE_KEY_SHOW_FILTERS,
-  STORAGE_KEY_SEARCH_TERMS,
   STORAGE_KEY_GUEST_TYPE_FILTER
 } from '../../../constants/networkConstants';
 
@@ -57,18 +56,6 @@ const useNetworkFilters = () => {
     }
   });
 
-  // Search state
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeSearchTerms, setActiveSearchTerms] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_SEARCH_TERMS);
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error('Error loading active search terms:', e);
-      return [];
-    }
-  });
-
   // Add guest type filter state - load from localStorage or use default
   const [guestTypeFilter, setGuestTypeFilter] = useState(() => {
     try {
@@ -102,69 +89,10 @@ const useNetworkFilters = () => {
     localStorage.setItem(STORAGE_KEY_SHOW_FILTERS, JSON.stringify(showFilters));
   }, [showFilters]);
 
-  // Save active search terms whenever they change
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_SEARCH_TERMS, JSON.stringify(activeSearchTerms));
-  }, [activeSearchTerms]);
-
   // Save filter preferences whenever they change
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_FILTERS, JSON.stringify(filters));
   }, [filters]);
-
-  // Function to add a search term
-  const addSearchTerm = useCallback((term) => {
-    if (!activeSearchTerms.includes(term)) {
-      setActiveSearchTerms(prev => [...prev, term]);
-      
-      // Also update the corresponding column filter state
-      const termLower = term.toLowerCase().trim();
-      
-      // Handle status: filters
-      if (termLower.startsWith('status:')) {
-        const status = termLower.split(':', 2)[1]?.trim();
-        if (status === 'running') {
-          setShowStopped(false);
-        } else if (status === 'stopped') {
-          setShowStopped(true);
-        }
-      }
-      
-      // Handle type: filters
-      if (termLower.startsWith('type:')) {
-        const type = termLower.split(':', 2)[1]?.trim();
-        if (type === 'vm' || type === 'qemu') {
-          setGuestTypeFilter('vm');
-        } else if (type === 'ct' || type === 'lxc' || type === 'container') {
-          setGuestTypeFilter('ct');
-        }
-      }
-      
-      // Note: node: filters are handled elsewhere as they require the availableNodes data
-    }
-  }, [activeSearchTerms, setShowStopped, setGuestTypeFilter]);
-
-  // Function to remove a search term
-  const removeSearchTerm = useCallback((term) => {
-    setActiveSearchTerms(prev => prev.filter(t => t !== term));
-    
-    // Also update the corresponding column filter
-    const termLower = term.toLowerCase().trim();
-    
-    // Handle node: filters - we don't handle this here since selectedNode is managed elsewhere
-    
-    // Handle status: filters
-    if (termLower.startsWith('status:')) {
-      // Reset status filter
-      setShowStopped(null);
-    }
-    
-    // Handle type: filters
-    if (termLower.startsWith('type:')) {
-      // Reset type filter to "all"
-      setGuestTypeFilter('all');
-    }
-  }, [setShowStopped, setGuestTypeFilter]);
 
   // Update filter value
   const updateFilter = useCallback((filterName, newValue) => {
@@ -201,22 +129,12 @@ const useNetworkFilters = () => {
       download: 0,
       upload: 0
     });
-    setActiveSearchTerms([]);
-    setSearchTerm('');
     setShowStopped(null);
     setGuestTypeFilter('all');
   }, []);
 
-  // Function to clear only search terms
-  const clearSearchTerms = useCallback(() => {
-    setActiveSearchTerms([]);
-    setSearchTerm('');
-  }, []);
-
-  // Count active filters
-  const activeFilterCount = activeSearchTerms.length + 
-    (searchTerm && !activeSearchTerms.includes(searchTerm) ? 1 : 0) + 
-    Object.values(filters).filter(val => val > 0).length;
+  // Count active filters - now only count the slider filters
+  const activeFilterCount = Object.values(filters).filter(val => val > 0).length;
 
   return {
     filters,
@@ -225,21 +143,14 @@ const useNetworkFilters = () => {
     setShowStopped,
     showFilters,
     setShowFilters,
-    searchTerm,
-    setSearchTerm,
-    activeSearchTerms,
-    setActiveSearchTerms,
     guestTypeFilter,
     setGuestTypeFilter,
     sliderDragging,
-    addSearchTerm,
-    removeSearchTerm,
     updateFilter,
     handleSliderDragStart,
     handleSliderDragEnd,
     clearFilter,
     resetFilters,
-    clearSearchTerms,
     activeFilterCount
   };
 };
