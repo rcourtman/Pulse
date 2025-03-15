@@ -23,6 +23,7 @@ function generateClusterGuestId(type: string, vmid: number): string {
 export async function getClusterResources(this: ProxmoxClient): Promise<{
   vms: ProxmoxVM[];
   containers: ProxmoxContainer[];
+  nodes: string[];
 }> {
   try {
     if (!this.client) {
@@ -38,9 +39,17 @@ export async function getClusterResources(this: ProxmoxClient): Promise<{
     // Split the resources into VMs and containers
     const vms: ProxmoxVM[] = [];
     const containers: ProxmoxContainer[] = [];
-
+    
+    // Keep track of all unique node names
+    const nodeSet = new Set<string>();
+    
     // Process each resource
     for (const resource of resources) {
+      // Collect all unique node names
+      if (resource.node) {
+        nodeSet.add(resource.node);
+      }
+      
       // Only process VM and container resources
       if (resource.type === 'qemu') {
         try {
@@ -127,9 +136,9 @@ export async function getClusterResources(this: ProxmoxClient): Promise<{
 
     this.logger.info(`Processed ${vms.length} VMs and ${containers.length} containers from cluster resources`);
     
-    return { vms, containers };
+    return { vms, containers, nodes: Array.from(nodeSet) };
   } catch (error) {
     this.logger.error('Error getting cluster resources', { error });
-    return { vms: [], containers: [] };
+    return { vms: [], containers: [], nodes: [] };
   }
 } 

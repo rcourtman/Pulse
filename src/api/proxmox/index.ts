@@ -9,16 +9,6 @@ import config from '../../config';
 import winston from 'winston';
 import { ProxmoxClientMethods } from './types';
 import { isNodeInCluster } from './cluster';
-import { getClusterResources } from './cluster-resources';
-import { formatProxmoxError, getErrorMessage } from '../../utils/errors';
-import { ApiClient } from '../api-client';
-import { MockClient } from '../mock/client';
-import { createProxmoxApiClient } from './api-client';
-import { getNodeStatus } from './node-status';
-import { getVirtualMachines } from './virtual-machines';
-import { getContainerList } from './containers';
-import { updateVm } from './update-vm';
-import { updateContainer } from './update-container';
 
 // Define the class without the method implementations
 export class ProxmoxClient extends EventEmitter implements ProxmoxClientMethods {
@@ -149,6 +139,7 @@ export class ProxmoxClient extends EventEmitter implements ProxmoxClientMethods 
   async subscribeToEvents(callback: (event: ProxmoxEvent) => void): Promise<() => void> { throw new Error('Not implemented'); }
   determineEventType(event: any): 'node' | 'vm' | 'container' | 'storage' | 'pool' { throw new Error('Not implemented'); }
   setupEventPolling(): void { throw new Error('Not implemented'); }
+  async getClusterResources(): Promise<{ vms: any[], containers: any[], nodes: string[] }> { throw new Error('Not implemented'); }
 
   /**
    * Test the connection to the Proxmox API
@@ -203,67 +194,6 @@ export class ProxmoxClient extends EventEmitter implements ProxmoxClientMethods 
       this.logger.error('Error initializing cluster detection', { error });
     }
   }
-
-  /**
-   * Get all VMs and containers from all nodes in the cluster with one API call
-   */
-  async getClusterResources(): Promise<{ vms: any[], containers: any[], nodes: string[] }> {
-    this.logger.debug(`Getting cluster resources for ${this.config.name}`);
-    
-    try {
-      if (!this.useClusterResources) {
-        throw new Error("Cluster resources feature is disabled");
-      }
-      
-      const response = await this.client?.get('/cluster/resources');
-      const resources = response?.data.data || [];
-      
-      const vms: any[] = [];
-      const containers: any[] = [];
-      const nodeSet = new Set<string>();
-      
-      // Filter resources to only include VMs and containers
-      resources?.forEach((resource: any) => {
-        // Track all unique node names
-        if (resource.node) {
-          nodeSet.add(resource.node);
-        }
-        
-        if (resource.type === 'qemu') {
-          vms.push({
-            ...resource,
-            node: resource.node, // Ensure node property is set
-            id: `${resource.node}/${resource.id}`, // Create unique ID including node
-            vmid: resource.vmid,
-            name: resource.name,
-            status: resource.status
-          });
-        } else if (resource.type === 'lxc') {
-          containers.push({
-            ...resource,
-            node: resource.node, // Ensure node property is set
-            id: `${resource.node}/${resource.id}`, // Create unique ID including node
-            vmid: resource.vmid,
-            name: resource.name,
-            status: resource.status
-          });
-        }
-      });
-      
-      const nodes = Array.from(nodeSet);
-      this.logger.info(`Found ${nodes.length} unique nodes in cluster resources`);
-      
-      return { vms, containers, nodes };
-    } catch (error) {
-      this.logger.error(`Error getting cluster resources for ${this.config.name}:`, error);
-      
-      return {
-        vms: [],
-        containers: [],
-        nodes: []
-      };
-    }
-  }
 }
 
 // Import functionality after the class definition to avoid circular dependencies
@@ -288,9 +218,66 @@ import {
   setupEventPolling 
 } from './events';
 
-import {
-  getClusterResources
-} from './cluster-resources';
+/**
+ * Get all VMs and containers from all nodes in the cluster with one API call
+ */
+async function getClusterResources(this: ProxmoxClient): Promise<{ vms: any[], containers: any[], nodes: string[] }> {
+  this.logger.debug(`Getting cluster resources for ${this.config.name}`);
+  
+  try {
+    if (!this.useClusterResources) {
+      throw new Error("Cluster resources feature is disabled");
+    }
+    
+    const response = await this.client?.get('/cluster/resources');
+    const resources = response?.data.data || [];
+    
+    const vms: any[] = [];
+    const containers: any[] = [];
+    const nodeSet = new Set<string>();
+    
+    // Filter resources to only include VMs and containers
+    resources?.forEach((resource: any) => {
+      // Track all unique node names
+      if (resource.node) {
+        nodeSet.add(resource.node);
+      }
+      
+      if (resource.type === 'qemu') {
+        vms.push({
+          ...resource,
+          node: resource.node, // Ensure node property is set
+          id: `${resource.node}/${resource.id}`, // Create unique ID including node
+          vmid: resource.vmid,
+          name: resource.name,
+          status: resource.status
+        });
+      } else if (resource.type === 'lxc') {
+        containers.push({
+          ...resource,
+          node: resource.node, // Ensure node property is set
+          id: `${resource.node}/${resource.id}`, // Create unique ID including node
+          vmid: resource.vmid,
+          name: resource.name,
+          status: resource.status
+        });
+      }
+    });
+    
+    const nodes = Array.from(nodeSet);
+    this.logger.info(`Found ${nodes.length} unique nodes in cluster resources`);
+    
+    return { vms, containers, nodes };
+  } catch (error) {
+    this.logger.error(`Error getting cluster resources for ${this.config.name}:`, error);
+    
+    return {
+      vms: [],
+      containers: [],
+      nodes: []
+    };
+  }
+}
 
 // Assign methods to the prototype
 ProxmoxClient.prototype.discoverNodeName = discoverNodeName;
