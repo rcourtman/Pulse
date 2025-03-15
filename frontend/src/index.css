@@ -1,0 +1,28 @@
+/* Column dragging styles */
+.column-dragging {
+  cursor: grabbing !important;
+}
+
+.column-dragging * {
+  cursor: grabbing !important;
+}
+
+/* Table header styles for dragging */
+.MuiTableCell-head {
+  position: relative;
+  cursor: grab;
+}
+
+/* Drop highlight effect */
+.drop-highlight-before {
+  box-shadow: inset 3px 0 0 var(--mui-palette-primary-main) !important;
+}
+
+.drop-highlight-after {
+  box-shadow: inset -3px 0 0 var(--mui-palette-primary-main) !important;
+}
+
+/* Transition for all table cells */
+.MuiTableCell-head {
+  transition: background-color 0.2s, box-shadow 0.2s, transform 0.1s, opacity 0.2s !important;
+} 
