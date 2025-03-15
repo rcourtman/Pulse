@@ -12,6 +12,9 @@ import {
 import { StatusIndicator, ProgressWithLabel } from './UIComponents';
 import { formatBytes, formatNetworkRate, formatUptime, formatPercentage, formatBytesWithUnit } from '../../utils/formatters';
 import { calculateDynamicColumnWidths } from '../../utils/networkUtils';
+import { useSearchContext } from '../../context/SearchContext';
+import { useUserSettings } from '../../context/UserSettingsContext';
+import { getNodeColor, getNodeTextColor } from '../../utils/colorUtils';
 
 const NetworkTableRow = ({ 
   guest, 
@@ -20,9 +23,130 @@ const NetworkTableRow = ({
   getNodeName,
   extractNumericId,
   columnOrder,
-  activeFilteredColumns = {}
+  activeFilteredColumns = {},
+  thresholdColumn,
+  thresholdValue
 }) => {
   const theme = useTheme();
+  
+  // Get search terms for highlighting
+  const { searchTerm, activeSearchTerms } = useSearchContext();
+  
+  // Get user settings for compact mode
+  const { getTableCellPadding } = useUserSettings();
+  
+  // Get the node name for this guest
+  const nodeName = getNodeName(guest?.node);
+  
+  // Generate a text color for the node name
+  const nodeTextColor = useMemo(() => {
+    return getNodeTextColor(nodeName, theme.palette.mode);
+  }, [nodeName, theme.palette.mode]);
+  
+  // Combine all active search terms for highlighting
+  const allSearchTerms = useMemo(() => {
+    const terms = [...activeSearchTerms];
+    if (searchTerm && !terms.includes(searchTerm)) {
+      terms.push(searchTerm);
+    }
+    
+    // Process compound terms (e.g., with spaces or |)
+    const processedTerms = [];
+    // Keep track of column-specific search terms and their associated values
+    const columnSearchTerms = {};
+    
+    terms.forEach(term => {
+      const termLower = term.toLowerCase().trim();
+      
+      // Skip empty terms
+      if (!termLower) return;
+      
+      // Handle prefixed terms with colon (e.g., "node:pve-01")
+      if (termLower.includes(':')) {
+        const [prefix, value] = termLower.split(':', 2);
+        const prefixTrim = prefix.trim();
+        
+        // Add the original term
+        processedTerms.push({
+          term: termLower,
+          isColumnSpecific: true,
+          columnId: prefixTrim
+        });
+        
+        // Store the value for this column for highlighting only in that column
+        if (value && value.trim() !== '') {
+          if (!columnSearchTerms[prefixTrim]) {
+            columnSearchTerms[prefixTrim] = [];
+          }
+          columnSearchTerms[prefixTrim].push(value.trim());
+        }
+      } else if (termLower.split(' ').length > 1) {
+        // Handle OR search with spaces
+        const spaceTerms = termLower.split(' ').map(t => t.trim()).filter(t => t);
+        spaceTerms.forEach(t => {
+          processedTerms.push({
+            term: t,
+            isColumnSpecific: false
+          });
+        });
+      } else if (termLower.includes('|')) {
+        // Handle OR search with pipe character
+        const orTerms = termLower.split('|').map(t => t.trim()).filter(t => t);
+        orTerms.forEach(t => {
+          processedTerms.push({
+            term: t,
+            isColumnSpecific: false
+          });
+        });
+      } else {
+        processedTerms.push({
+          term: termLower,
+          isColumnSpecific: false
+        });
+      }
+    });
+    
+    // For numerical terms, remove leading zeros
+    const finalTerms = processedTerms.map(item => {
+      if (/^\d+$/.test(item.term)) {
+        return {
+          ...item,
+          term: String(parseInt(item.term, 10))
+        };
+      }
+      return item;
+    });
+    
+    return { 
+      terms: finalTerms, 
+      columnSearchTerms 
+    };
+  }, [searchTerm, activeSearchTerms]);
+  
+  // Function to check if text contains any of the search terms
+  const hasSearchMatch = (text, columnId) => {
+    if (!text || !allSearchTerms || !allSearchTerms.terms || allSearchTerms.terms.length === 0) {
+      return false;
+    }
+    
+    // Convert to string to handle numeric values
+    const textStr = String(text || '').toLowerCase();
+    
+    // Check for column-specific terms first
+    if (columnId && allSearchTerms.columnSearchTerms && allSearchTerms.columnSearchTerms[columnId]) {
+      // Look for matches from column-specific values
+      if (allSearchTerms.columnSearchTerms[columnId].some(term => 
+        textStr.includes(String(term).toLowerCase())
+      )) {
+        return true;
+      }
+    }
+    
+    // Check non-column-specific terms
+    return allSearchTerms.terms
+      .filter(item => !item.isColumnSpecific) // Only use generic terms
+      .some(item => textStr.includes(String(item.term).toLowerCase()));
+  };
   
   // Determine if the guest is running
   const isRunning = guest.status?.toLowerCase() === 'running';
@@ -66,10 +190,27 @@ const NetworkTableRow = ({
   // Get uptime
   const uptime = guest.uptime ?? 0;
   
-  // Calculate dynamic column widths based on visible columns
-  const columnWidths = useMemo(() => {
-    return calculateDynamicColumnWidths(columnVisibility);
-  }, [columnVisibility]);
+  // Define column groups for sizing strategy (same as in header)
+  const fixedNarrowColumns = ['type', 'id', 'status']; // Very narrow columns
+  const fixedWidthColumns = ['download', 'upload', 'uptime']; // Fixed width for network stats
+  const autoSizeColumns = ['name', 'node']; // Auto-size to content
+  const flexibleEqualColumns = ['cpu', 'memory', 'disk']; // Equal width with progress bars
+  
+  // Calculate visible columns and their groups
+  const getVisibleColumnGroups = useMemo(() => {
+    if (!columnOrder || !Array.isArray(columnOrder) || columnOrder.length === 0) {
+      return { fixedNarrow: [], fixedWidth: [], autoSize: [], flexibleEqual: [] };
+    }
+    
+    const visibleColumnIds = columnOrder.filter(id => columnVisibility[id]?.visible);
+    
+    return {
+      fixedNarrow: visibleColumnIds.filter(id => fixedNarrowColumns.includes(id)),
+      fixedWidth: visibleColumnIds.filter(id => fixedWidthColumns.includes(id)),
+      autoSize: visibleColumnIds.filter(id => autoSizeColumns.includes(id)),
+      flexibleEqual: visibleColumnIds.filter(id => flexibleEqualColumns.includes(id))
+    };
+  }, [columnOrder, columnVisibility]);
   
   // Get visible columns in the correct order
   const visibleColumns = useMemo(() => {
@@ -84,6 +225,107 @@ const NetworkTableRow = ({
       .filter(Boolean);
   }, [columnVisibility, columnOrder]);
 
+  // Helper function to get width for a column
+  const getColumnWidth = (columnId) => {
+    // Define fixed widths for specific columns
+    const fixedWidths = {
+      type: '50px',     // Just "VM" or "CT"
+      id: '60px',       // Just numeric IDs
+      status: '50px',   // Just the status circle
+      download: '90px', // Network rates
+      upload: '90px',   // Network rates
+      uptime: '90px'    // Time display
+    };
+    
+    // If column has a fixed width, return it
+    if (fixedWidths[columnId]) {
+      return fixedWidths[columnId];
+    }
+    
+    // For auto-sized columns, use different strategies for name vs node
+    if (autoSizeColumns.includes(columnId)) {
+      // Use max-content for node to fit content more closely
+      if (columnId === 'node') {
+        return 'max-content';
+      }
+      // Use auto for name which can be longer
+      return 'auto';
+    }
+    
+    // For flexible equal columns (cpu, memory, disk), use percentage
+    if (flexibleEqualColumns.includes(columnId)) {
+      const visibleFlexColumns = getVisibleColumnGroups.flexibleEqual.length;
+      
+      if (visibleFlexColumns > 0) {
+        // Use the same calculation as in the header
+        return `${Math.floor(100 / visibleFlexColumns)}%`;
+      }
+      
+      // Fallback if something goes wrong
+      return '20%';
+    }
+    
+    // Default fallback
+    return 'auto';
+  };
+
+  // Check if a column is a flexible column
+  const isFlexibleColumn = (columnId) => {
+    return flexibleEqualColumns.includes(columnId);
+  };
+
+  // Function to check if a cell contains content that matches search terms
+  const cellHasMatch = (columnId) => {
+    if (!columnId || !allSearchTerms || !allSearchTerms.terms || allSearchTerms.terms.length === 0) {
+      return false;
+    }
+
+    // Check for column-specific search terms first
+    const columnPrefixedTerms = allSearchTerms.terms.filter(item => {
+      if (!item.isColumnSpecific) return false;
+      return item.columnId === columnId;
+    });
+
+    // If we have column-specific terms targeting this column, it's a match
+    if (columnPrefixedTerms.length > 0) {
+      return true;
+    }
+
+    // Get the text content for this cell based on column ID
+    let cellText;
+    switch (columnId) {
+      case 'node':
+        cellText = getNodeName(guest?.node);
+        break;
+      case 'type':
+        cellText = isVM ? 'VM virtual machine' : 'CT container';
+        break;
+      case 'id':
+        cellText = extractNumericId(guest?.id);
+        break;
+      case 'status':
+        cellText = isRunning ? 'running' : 'stopped';
+        break;
+      case 'name':
+        cellText = guest?.name;
+        break;
+      case 'download':
+        cellText = formatNetworkRate(downloadRate);
+        break;
+      case 'upload':
+        cellText = formatNetworkRate(uploadRate);
+        break;
+      case 'uptime':
+        cellText = isRunning ? formatUptime(uptime) : '—';
+        break;
+      default:
+        cellText = '';
+    }
+
+    // Now check for general search terms that match this cell's content
+    return hasSearchMatch(cellText, columnId);
+  };
+
   // Render cell content based on column ID
   const renderCellContent = (columnId) => {
     if (!columnId) return null;
@@ -94,21 +336,21 @@ const NetworkTableRow = ({
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <Typography variant="body2" noWrap>
               {getNodeName(guest?.node)}
-              {isSharedGuest && isPrimaryNode && (
-                <Tooltip title="Primary Node - This node is currently running this shared guest">
-                  <Box component="span" sx={{ 
-                    display: 'inline-block',
-                    width: '6px',
-                    height: '6px',
-                    borderRadius: '50%',
-                    backgroundColor: 'primary.main',
-                    opacity: 0.6,
-                    ml: 1,
-                    verticalAlign: 'middle'
-                  }} />
-                </Tooltip>
-              )}
             </Typography>
+            {isSharedGuest && isPrimaryNode && (
+              <Tooltip title="Primary Node - This node is currently running this shared guest">
+                <Box component="span" sx={{ 
+                  display: 'inline-block',
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: 'primary.main',
+                  opacity: 0.6,
+                  ml: 1,
+                  verticalAlign: 'middle'
+                }} />
+              </Tooltip>
+            )}
           </Box>
         );
       case 'type':
@@ -211,6 +453,7 @@ const NetworkTableRow = ({
     }
   };
 
+  // Render the table row
   return (
     <TableRow 
       hover
@@ -223,26 +466,50 @@ const NetworkTableRow = ({
     >
       {/* Render cells based on column order */}
       {Array.isArray(visibleColumns) && visibleColumns.length > 0 ? (
-        visibleColumns.map(column => (
-          column && (
-            <TableCell 
-              key={column.id}
-              sx={{ 
-                width: columnWidths?.[column.id] || 'auto',
-                minWidth: getMinWidthForColumn(column.id),
-                backgroundColor: activeFilteredColumns[column.id] 
-                  ? 'rgba(25, 118, 210, 0.08)' // Light blue highlight that's more visible but still neutral
-                  : 'inherit',
-                ...(column.id === 'status' && {
-                  textAlign: 'center',
-                  padding: '0px 8px'
-                })
-              }}
-            >
-              {renderCellContent(column.id)}
-            </TableCell>
-          )
-        ))
+        visibleColumns.map(column => {
+          // Check if this cell has a matching search term
+          const hasMatch = cellHasMatch(column.id);
+          
+          // Special handling for node column to use custom text color
+          const isNodeColumn = column.id === 'node';
+          
+          return (
+            column && (
+              <TableCell 
+                key={column.id}
+                sx={{ 
+                  width: getColumnWidth(column.id),
+                  minWidth: getMinWidthForColumn(column.id),
+                  maxWidth: autoSizeColumns.includes(column.id) ? '300px' : 'none',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  boxSizing: 'border-box',
+                  // Use cell-level highlighting based on text match
+                  backgroundColor: hasMatch 
+                    ? alpha(theme.palette.primary.main, 0.15)
+                    : 'inherit',
+                  ...(fixedNarrowColumns.includes(column.id) && {
+                    textAlign: 'center',
+                    padding: getTableCellPadding(true)
+                  }),
+                  ...(!fixedNarrowColumns.includes(column.id) && {
+                    padding: getTableCellPadding(false)
+                  }),
+                  // Special styling for node column
+                  ...(isNodeColumn && {
+                    '& .MuiTypography-root': {
+                      color: nodeTextColor,
+                      fontWeight: 500
+                    }
+                  })
+                }}
+              >
+                {renderCellContent(column.id)}
+              </TableCell>
+            )
+          );
+        })
       ) : (
         <TableCell colSpan={2}>No visible columns</TableCell>
       )}
@@ -253,20 +520,27 @@ const NetworkTableRow = ({
 // Helper function to get minimum width for each column
 const getMinWidthForColumn = (columnId) => {
   const minWidths = {
-    node: 70,
-    type: 35,    // Reduced from 45px to make it more compact
-    id: 60,
-    status: 40,   // Reduced from 90px since we're only showing the icon now
-    name: 130,
-    cpu: 100,
-    memory: 100,
-    disk: 100,
-    download: 90,
-    upload: 90,
-    uptime: 85    // Increased from 70px to accommodate longer uptime strings
+    // Fixed narrow columns - add a few pixels to accommodate sort icon
+    type: 50,      // Very small - just "VM" or "CT"
+    id: 60,        // Very small - just numeric IDs
+    status: 50,    // Minimal - just an icon
+    
+    // Auto-sized columns
+    name: 120,     // Names - minimum width
+    node: 80,      // Node names - minimum width (reduced from 100)
+    
+    // Flexible equal columns
+    cpu: 100,      // Medium - progress bar with percentage
+    memory: 140,   // Progress bar with byte values
+    disk: 140,     // Progress bar with byte values
+    
+    // Fixed width columns
+    download: 90,  // Network rates
+    upload: 90,    // Network rates
+    uptime: 90     // Time display
   };
   
-  return minWidths[columnId] || 90;
+  return minWidths[columnId] || 80;
 };
 
 export default NetworkTableRow; 
