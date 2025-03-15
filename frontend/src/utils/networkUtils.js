@@ -559,7 +559,7 @@ export const calculateDynamicColumnWidths = (columnVisibility) => {
     id: 40,        // Very small - just numeric IDs
     status: 30,    // Minimal - just an icon
     name: 250,     // Large - typically longer text
-    cpu: 90,       // Medium - progress bar with percentage
+    cpu: 120,      // Medium - progress bar with percentage
     memory: 120,   // Larger - progress bar with byte values
     disk: 120,     // Larger - progress bar with byte values
     download: 80,  // Medium - network rates

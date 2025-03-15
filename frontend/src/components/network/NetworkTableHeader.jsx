@@ -1283,7 +1283,7 @@ const getMinWidthForColumn = (columnId) => {
     node: 80,      // Node names - minimum width (reduced from 100)
     
     // Flexible equal columns
-    cpu: 100,      // Medium - progress bar with percentage
+    cpu: 140,      // Medium - progress bar with percentage
     memory: 140,   // Progress bar with byte values
     disk: 140,     // Progress bar with byte values
     
