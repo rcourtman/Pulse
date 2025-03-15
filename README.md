@@ -25,6 +25,7 @@ git clone https://github.com/rcourtman/pulse.git && cd pulse && npm install && c
 - [Common Commands](#️-common-commands)
 - [Docker Configuration](#-docker-configuration)
 - [Features](#-features)
+- [Cluster Mode](docs/cluster-mode.md)
 - [Troubleshooting](#-troubleshooting)
   - [WebSocket Connection Issues](#websocket-connection-issues)
   - [Logging and Debugging](docs/logging.md)
@@ -322,6 +323,7 @@ npm run prod:docker
 - WebSocket connection for live updates
 - Automatic Proxmox cluster detection and support
 - Cluster mode for properly handling VMs/containers with the same ID across cluster nodes
+- Efficient cluster monitoring using the `/cluster/resources` endpoint ([learn more](docs/cluster-mode.md))
 
 ## ❓ Frequently Asked Questions
 

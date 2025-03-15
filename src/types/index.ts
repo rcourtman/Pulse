@@ -194,4 +194,5 @@ export interface AppConfig {
   clusterMode: boolean;
   clusterName: string;
   autoDetectCluster: boolean;
+  useClusterResourcesEndpoint: boolean; // Flag to use the cluster resources endpoint for more efficient data fetching
 } 

@@ -216,6 +216,10 @@ import {
   setupEventPolling 
 } from './events';
 
+import {
+  getClusterResources
+} from './cluster-resources';
+
 // Assign methods to the prototype
 ProxmoxClient.prototype.discoverNodeName = discoverNodeName;
 ProxmoxClient.prototype.extractIpAddress = extractIpAddress;
@@ -227,4 +231,5 @@ ProxmoxClient.prototype.getContainers = getContainers;
 ProxmoxClient.prototype.getGuestResourceUsage = getGuestResourceUsage;
 ProxmoxClient.prototype.subscribeToEvents = subscribeToEvents;
 ProxmoxClient.prototype.determineEventType = determineEventType;
-ProxmoxClient.prototype.setupEventPolling = setupEventPolling; 
+ProxmoxClient.prototype.setupEventPolling = setupEventPolling;
+ProxmoxClient.prototype.getClusterResources = getClusterResources; 

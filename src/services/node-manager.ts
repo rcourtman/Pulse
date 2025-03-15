@@ -214,35 +214,57 @@ export class NodeManager extends EventEmitter {
       
       // Only fetch VMs and containers if node is online
       if (nodeStatus.status === 'online') {
-        // Get VMs
-        this.logger.debug(`Getting VMs for node: ${nodeId}`);
-        let vms: ProxmoxVM[] = [];
+        // Check if we should use the cluster resources endpoint
+        const useClusterResources = config.useClusterResourcesEndpoint && 
+                                    config.clusterMode && 
+                                    client instanceof ProxmoxClient;
         
-        // Handle different client types
-        if (client instanceof ProxmoxClient) {
-          vms = await client.getVirtualMachines();
+        if (useClusterResources) {
+          this.logger.info(`Using cluster resources endpoint for node: ${nodeId}`);
+          
+          try {
+            // Get all resources from the cluster endpoint
+            const proxmoxClient = client as ProxmoxClient;
+            const clusterResources = await proxmoxClient.getClusterResources();
+            
+            // Process VMs from cluster resources
+            this.logger.debug(`Received ${clusterResources.vms.length} VMs from cluster resources`);
+            
+            // Process all nodes' VMs through this single node
+            for (const nodeConfig of config.nodes) {
+              const nodeVMs = clusterResources.vms.filter((vm: ProxmoxVM) => vm.node === nodeConfig.name);
+              this.handleVMListUpdate(nodeConfig.id, nodeVMs);
+            }
+            
+            // Process containers from cluster resources
+            this.logger.debug(`Received ${clusterResources.containers.length} containers from cluster resources`);
+            
+            // Process all nodes' containers through this single node
+            for (const nodeConfig of config.nodes) {
+              const nodeContainers = clusterResources.containers.filter((container: ProxmoxContainer) => container.node === nodeConfig.name);
+              this.handleContainerListUpdate(nodeConfig.id, nodeContainers);
+            }
+            
+            // Emit metrics update event
+            this.logger.debug(`Emitting cluster metrics update`);
+            this.emit('metricsUpdated', {
+              nodeId,
+              timestamp: Date.now(),
+              nodeStatus,
+              vms: clusterResources.vms,
+              containers: clusterResources.containers
+            });
+          } catch (error) {
+            this.logger.error(`Error using cluster resources endpoint for node: ${nodeId}`, { error });
+            
+            // Fall back to standard approach if cluster resources fails
+            this.logger.warn(`Falling back to standard node-by-node approach for ${nodeId}`);
+            await this.fetchNodeResourcesStandard(client, nodeId, nodeStatus);
+          }
         } else {
-          vms = await client.getVMs();
+          // Standard approach - get VMs and containers for just this node
+          await this.fetchNodeResourcesStandard(client, nodeId, nodeStatus);
         }
-        
-        this.logger.debug(`Received ${vms.length} VMs for node: ${nodeId}`);
-        this.handleVMListUpdate(nodeId, vms);
-        
-        // Get containers
-        this.logger.debug(`Getting containers for node: ${nodeId}`);
-        const containers = await client.getContainers();
-        this.logger.debug(`Received ${containers.length} containers for node: ${nodeId}`);
-        this.handleContainerListUpdate(nodeId, containers);
-        
-        // Emit metrics update event
-        this.logger.debug(`Emitting metrics update for node: ${nodeId}`);
-        this.emit('metricsUpdated', {
-          nodeId,
-          timestamp: Date.now(),
-          nodeStatus,
-          vms,
-          containers
-        });
       }
       
       this.logger.debug(`Refresh complete for node: ${nodeId}`);
@@ -259,6 +281,45 @@ export class NodeManager extends EventEmitter {
         this.handleNodeStatusUpdate(nodeId, offlineStatus);
       }
     }
+  }
+  
+  /**
+   * Fetch node resources using the standard node-by-node approach
+   */
+  private async fetchNodeResourcesStandard(
+    client: ProxmoxClient | MockClient, 
+    nodeId: string, 
+    nodeStatus: ProxmoxNodeStatus
+  ): Promise<void> {
+    // Get VMs
+    this.logger.debug(`Getting VMs for node: ${nodeId}`);
+    let vms: ProxmoxVM[] = [];
+    
+    // Handle different client types
+    if (client instanceof ProxmoxClient) {
+      vms = await client.getVirtualMachines();
+    } else {
+      vms = await client.getVMs();
+    }
+    
+    this.logger.debug(`Received ${vms.length} VMs for node: ${nodeId}`);
+    this.handleVMListUpdate(nodeId, vms);
+    
+    // Get containers
+    this.logger.debug(`Getting containers for node: ${nodeId}`);
+    const containers = await client.getContainers();
+    this.logger.debug(`Received ${containers.length} containers for node: ${nodeId}`);
+    this.handleContainerListUpdate(nodeId, containers);
+    
+    // Emit metrics update event
+    this.logger.debug(`Emitting metrics update for node: ${nodeId}`);
+    this.emit('metricsUpdated', {
+      nodeId,
+      timestamp: Date.now(),
+      nodeStatus,
+      vms,
+      containers
+    });
   }
 
   /**

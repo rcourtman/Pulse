@@ -14,4 +14,5 @@ export interface ProxmoxClientMethods {
   determineEventType(event: any): 'node' | 'vm' | 'container' | 'storage' | 'pool';
   setupEventPolling(): void;
   isNodeInCluster(): Promise<{ isCluster: boolean; clusterName: string }>;
+  getClusterResources(): Promise<{ vms: ProxmoxVM[]; containers: ProxmoxContainer[] }>;
 } 
