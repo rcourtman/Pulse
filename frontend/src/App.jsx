@@ -38,13 +38,45 @@ import { initializeStorage } from './utils/storageUtils';
 import { SnackbarProvider } from 'notistack';
 
 function AppContent() {
+  // Check if we're in development mode
+  const isDevelopment = import.meta.env.DEV;
+  
   // Initialize local storage with default values if needed
   useEffect(() => {
     initializeStorage();
   }, []);
   
+  // Initialize storage based on environment
+  useEffect(() => {
+    // Check environment variables to decide if mock data should be enabled
+    const envUseMockData = import.meta.env.VITE_USE_MOCK_DATA === 'true';
+    const envMockDataEnabled = import.meta.env.VITE_MOCK_DATA_ENABLED === 'true';
+    
+    console.log(`Environment variables: USE_MOCK_DATA=${envUseMockData}, MOCK_DATA_ENABLED=${envMockDataEnabled}`);
+    
+    // Only set mock data flags based on the environment variables
+    if (isDevelopment) {
+      if (envUseMockData || envMockDataEnabled) {
+        console.log('Setting mock data flags in localStorage based on environment variables');
+        localStorage.setItem('use_mock_data', 'true');
+        localStorage.setItem('MOCK_DATA_ENABLED', 'true');
+      } else {
+        console.log('Disabling mock data flags in localStorage based on environment variables');
+        localStorage.removeItem('use_mock_data');
+        localStorage.removeItem('MOCK_DATA_ENABLED');
+      }
+    } else {
+      // In production, always ensure mock data is disabled
+      if (localStorage.getItem('use_mock_data') === 'true' || localStorage.getItem('MOCK_DATA_ENABLED') === 'true') {
+        console.log('Resetting mock data flags to match production environment');
+        localStorage.removeItem('use_mock_data');
+        localStorage.removeItem('MOCK_DATA_ENABLED');
+      }
+    }
+  }, [isDevelopment]);
+  
   const theme = useTheme();
-  const { status, connected } = useSocket();
+  const { status, connected, isMockData } = useSocket();
   
   // Get theme context functions
   const { darkMode, toggleDarkMode } = useUserSettings();
@@ -67,6 +99,12 @@ function AppContent() {
   
   const [selectedNode, setSelectedNode] = useState('all');
   
+  // Check if mock data is enabled - using both localStorage values and socket status
+  const isMockDataEnabled = isMockData || 
+    localStorage.getItem('use_mock_data') === 'true' || 
+    localStorage.getItem('MOCK_DATA_ENABLED') === 'true' ||
+    import.meta.env.VITE_FORCE_MOCK_DATA === 'true';
+  
   // Generate content based on connection status
   return (
     <Box
@@ -78,6 +116,34 @@ function AppContent() {
         color: 'text.primary',
       }}
     >
+      {/* DEMO MODE Banner - Only visible when mock data is enabled */}
+      {(isMockDataEnabled) && (
+        <Alert 
+          severity="warning" 
+          variant="filled"
+          sx={{
+            borderRadius: 0,
+            py: 0.5,
+            bgcolor: theme.palette.mode === 'dark' 
+              ? 'rgba(255, 152, 0, 0.7)' 
+              : 'rgba(255, 152, 0, 0.85)',
+            color: '#fff',
+            fontWeight: 500,
+            '& .MuiAlert-icon': {
+              color: '#fff',
+              alignItems: 'center'
+            },
+            '& .MuiAlert-message': {
+              width: '100%',
+              textAlign: 'center',
+              fontSize: '0.95rem',
+              textShadow: '0 1px 1px rgba(0,0,0,0.15)'
+            }
+          }}
+        >
+          Demo Mode - Running with simulated data
+        </Alert>
+      )}
       <AppBar position="static" color="primary" elevation={0}>
         <Toolbar sx={{ px: { xs: 2, sm: 3 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
