@@ -59,4 +59,29 @@ PROXMOX_NODE_1_TOKEN_SECRET=your-token-secret-here
 PROXMOX_CLUSTER_MODE=true
 PROXMOX_USE_CLUSTER_RESOURCES=true
 PROXMOX_CLUSTER_NAME=my-cluster
-``` 
+```
+
+## Cluster Resources Endpoint
+
+When running in cluster mode, Pulse now automatically uses the more efficient `/cluster/resources` endpoint to fetch data about all VMs and containers in a single API call. This provides several benefits:
+
+1. **Improved Efficiency**: Fetches data about all nodes' resources in a single API call
+2. **Reduced API Load**: Makes fewer requests to your Proxmox cluster
+3. **Faster Updates**: Updates come in more quickly
+4. **Better Organization**: Resources are properly organized by node
+
+This feature is enabled by default when running in cluster mode. No additional configuration is required.
+
+### Fallback Mechanism
+
+If for any reason the cluster resources endpoint fails, Pulse will automatically fall back to the standard approach of querying each node separately. This ensures that your monitoring continues to work even if there are API issues.
+
+### Disabling Cluster Resources (If Needed)
+
+If you encounter issues with the cluster resources endpoint, you can disable it by setting:
+
+```
+PROXMOX_USE_CLUSTER_RESOURCES=false
+```
+
+This will cause Pulse to use the standard approach of querying each node separately, even when in cluster mode. 

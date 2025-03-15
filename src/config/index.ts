@@ -143,7 +143,7 @@ const config: AppConfig = {
   // Flag to indicate if cluster detection should be automatic
   autoDetectCluster: process.env.PROXMOX_AUTO_DETECT_CLUSTER !== 'false', // Default to true unless explicitly set to false
   // Flag to use the cluster resources endpoint for more efficient data fetching in cluster environments
-  useClusterResourcesEndpoint: process.env.PROXMOX_USE_CLUSTER_RESOURCES === 'true' // Default to false unless explicitly set to true
+  useClusterResourcesEndpoint: process.env.PROXMOX_USE_CLUSTER_RESOURCES !== 'false' // Default to true unless explicitly set to false
 };
 
 // Validate the configuration
