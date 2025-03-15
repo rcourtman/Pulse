@@ -44,19 +44,8 @@ while true; do
       # Ensure .env file exists
       [ -f .env ] || cp .env.example .env
       
-      # Configure environment for dev but explicitly set USE_MOCK_DATA=false
-      node scripts/configure-env.js dev
-      
-      # Override the mock data settings to use real data
-      if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS requires an empty string with sed
-        sed -i '' 's/USE_MOCK_DATA=true/USE_MOCK_DATA=false/' .env
-        sed -i '' 's/MOCK_DATA_ENABLED=true/MOCK_DATA_ENABLED=false/' .env
-      else
-        # Linux version
-        sed -i 's/USE_MOCK_DATA=true/USE_MOCK_DATA=false/' .env
-        sed -i 's/MOCK_DATA_ENABLED=true/MOCK_DATA_ENABLED=false/' .env
-      fi
+      # Configure environment for dev-real (with mock data disabled)
+      node scripts/configure-env.js dev-real
       
       echo -e "${GREEN}Configured environment to use real Proxmox data${NC}"
       
