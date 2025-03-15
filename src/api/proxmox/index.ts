@@ -192,6 +192,50 @@ export class ProxmoxClient extends EventEmitter implements ProxmoxClientMethods 
       this.logger.error('Error initializing cluster detection', { error });
     }
   }
+
+  /**
+   * Get all VMs and containers from all nodes in the cluster using the cluster/resources endpoint
+   * This is more efficient than querying each node separately
+   */
+  async getClusterResources(): Promise<{ vms: any[], containers: any[] }> {
+    this.logger.debug(`Getting cluster resources for ${this.config.name}`);
+    
+    try {
+      const response = await this.client?.get('/cluster/resources');
+      const resources = response?.data.data;
+      
+      const vms: any[] = [];
+      const containers: any[] = [];
+      
+      // Filter resources to only include VMs and containers
+      resources?.forEach((resource: any) => {
+        if (resource.type === 'qemu') {
+          vms.push({
+            ...resource,
+            node: resource.node, // Ensure node property is set
+            id: `${resource.node}/${resource.id}`, // Create unique ID including node
+            vmid: resource.vmid,
+            name: resource.name,
+            status: resource.status
+          });
+        } else if (resource.type === 'lxc') {
+          containers.push({
+            ...resource,
+            node: resource.node, // Ensure node property is set
+            id: `${resource.node}/${resource.id}`, // Create unique ID including node
+            vmid: resource.vmid,
+            name: resource.name,
+            status: resource.status
+          });
+        }
+      });
+      
+      return { vms, containers };
+    } catch (error) {
+      this.logger.error(`Error getting cluster resources for ${this.config.name}: ${error}`);
+      throw error;
+    }
+  }
 }
 
 // Import functionality after the class definition to avoid circular dependencies
