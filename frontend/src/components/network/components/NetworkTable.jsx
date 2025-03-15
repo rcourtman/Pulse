@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
   TableContainer,
   Table,
-  Paper
+  Paper,
+  Box,
+  alpha,
+  useTheme
 } from '@mui/material';
 import NetworkTableHeader from '../NetworkTableHeader';
 import NetworkTableBody from '../NetworkTableBody';
@@ -38,27 +41,57 @@ const NetworkTable = ({
   handleNodeChange = () => {},
   handleStatusChange = () => {},
   handleTypeChange = () => {},
-  activeSearchTerms = [],
-  addSearchTerm = () => {},
-  removeSearchTerm = () => {}
+  filters = {},
+  updateFilter = () => {},
+  handleFilterButtonClick = () => {},
+  filterButtonRef = null,
+  openFilters = false,
+  handleCloseFilterPopover = () => {},
 }) => {
+  const theme = useTheme();
+  
+  // Table container ref
+  const tableContainerRef = React.useRef(null);
+  const tableRef = React.useRef(null);
+
+  // Get the column index from the column order
+  const getColumnIndex = (columnId) => {
+    // First get visible columns in the right order
+    const visibleColumnIds = columnOrder.filter(id => columnVisibility[id]?.visible);
+    return visibleColumnIds.indexOf(columnId);
+  };
+
   return (
-    <Card>
-      <CardContent sx={{ p: 0 }}>
-        <TableContainer component={Paper} sx={{ maxHeight: 'calc(100vh - 200px)', overflow: 'auto' }}>
-          <Table stickyHeader size="small" sx={{
-            '& .MuiTableCell-stickyHeader': {
-              borderBottom: '2px solid',
-              borderBottomColor: 'divider',
-              zIndex: 3, // Ensure the header stays above other elements
-              // Ensure header cells are completely solid
-              backgroundColor: theme => theme.palette.background.paper,
-              // Prevent any transparency
-              backdropFilter: 'none',
-              // Add a subtle shadow for better visual separation
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-            }
-          }}>
+    <Card elevation={0} sx={{ borderRadius: 2, overflow: 'hidden', position: 'relative' }}>
+      <CardContent sx={{ 
+        p: 0, 
+        position: 'relative',
+        overflow: 'hidden',
+        '&:last-child': { pb: 0 }
+      }}>
+        <TableContainer 
+          component={Paper} 
+          elevation={0} 
+          sx={{ 
+            borderRadius: 0, 
+            position: 'relative', 
+            overflow: 'hidden'
+          }}
+          ref={tableContainerRef}
+        >
+          <Table 
+            size="small" 
+            aria-label="systems table" 
+            sx={{ 
+              tableLayout: 'auto', 
+              width: '100%',
+              '& .MuiTableCell-root': {
+                borderBottom: '1px solid',
+                borderColor: 'divider'
+              }
+            }}
+            ref={tableRef}
+          >
             <NetworkTableHeader
               sortConfig={sortConfig}
               requestSort={requestSort}
@@ -74,31 +107,28 @@ const NetworkTable = ({
               setColumnOrder={setColumnOrder}
               activeFilteredColumns={activeFilteredColumns}
               showStopped={showStopped}
-              guestTypeFilter={guestTypeFilter}
               setShowStopped={setShowStopped}
+              guestTypeFilter={guestTypeFilter}
               setGuestTypeFilter={setGuestTypeFilter}
               availableNodes={availableNodes}
               selectedNode={selectedNode}
               handleNodeChange={handleNodeChange}
               handleStatusChange={handleStatusChange}
               handleTypeChange={handleTypeChange}
-              activeSearchTerms={activeSearchTerms}
-              addSearchTerm={addSearchTerm}
-              removeSearchTerm={removeSearchTerm}
+              filters={filters}
+              updateFilter={updateFilter}
+              handleFilterButtonClick={handleFilterButtonClick}
+              filterButtonRef={filterButtonRef}
+              openFilters={openFilters}
+              handleCloseFilterPopover={handleCloseFilterPopover}
             />
             <NetworkTableBody
               sortedAndFilteredData={sortedAndFilteredData}
               guestData={guestData}
               metricsData={metricsData}
-              columnVisibility={columnVisibility}
               getNodeName={getNodeName}
               extractNumericId={extractNumericId}
-              resetFilters={resetFilters}
-              showStopped={showStopped}
-              setShowStopped={setShowStopped}
-              guestTypeFilter={guestTypeFilter}
-              resetColumnVisibility={resetColumnVisibility}
-              forceUpdateCounter={forceUpdateCounter}
+              columnVisibility={columnVisibility}
               columnOrder={columnOrder}
               activeFilteredColumns={activeFilteredColumns}
             />
