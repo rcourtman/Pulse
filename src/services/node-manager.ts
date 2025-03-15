@@ -217,15 +217,14 @@ export class NodeManager extends EventEmitter {
         // Check if we should use the cluster resources endpoint
         const useClusterResources = config.useClusterResourcesEndpoint && 
                                     config.clusterMode && 
-                                    client instanceof ProxmoxClient;
+                                    'getClusterResources' in client;
         
         if (useClusterResources) {
           this.logger.info(`Using cluster resources endpoint for node: ${nodeId}`);
           
           try {
             // Get all resources from the cluster endpoint
-            const proxmoxClient = client as ProxmoxClient;
-            const clusterResources = await proxmoxClient.getClusterResources();
+            const clusterResources = await (client as any).getClusterResources();
             
             // Process VMs from cluster resources
             this.logger.debug(`Received ${clusterResources.vms.length} VMs from cluster resources`);
