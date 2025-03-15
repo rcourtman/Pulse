@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { 
   Container, 
   Box, 
@@ -12,172 +12,72 @@ import {
   Button,
   Link,
   Chip,
-  Alert
+  Alert,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Switch,
+  Divider
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import GitHubIcon from '@mui/icons-material/GitHub';
+import SettingsIcon from '@mui/icons-material/Settings';
+import ViewCompactIcon from '@mui/icons-material/ViewCompact';
 import NetworkDisplay from './components/NetworkDisplay';
 import { AppThemeProvider, useThemeContext } from './context/ThemeContext';
+import { SearchProvider } from './context/SearchContext';
+import { UserSettingsProvider, useUserSettings } from './context/UserSettingsContext';
+import SearchField from './components/SearchField';
 import useSocket from './hooks/useSocket';
 import { VERSION } from './utils/version';
 import { AnimatedLogoWithText } from './components/network/UIComponents';
 import { initializeStorage } from './utils/storageUtils';
+import { SnackbarProvider } from 'notistack';
 
 function AppContent() {
-  const { darkMode, toggleDarkMode } = useThemeContext();
-  const [selectedNode, setSelectedNode] = useState('all');
-  const [hasError, setHasError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  
-  // Check if we're in development mode - moved up to fix initialization order
-  const isDevelopment = import.meta.env.DEV;
-  
-  // Error boundary effect
+  // Initialize local storage with default values if needed
   useEffect(() => {
-    const handleError = (event) => {
-      console.error('Global error caught:', event.error);
-      setHasError(true);
-      setErrorMessage(event.error?.message || 'An unknown error occurred');
-    };
-    
-    window.addEventListener('error', handleError);
-    
-    return () => {
-      window.removeEventListener('error', handleError);
-    };
+    initializeStorage();
   }, []);
   
-  // Initialize storage based on environment
-  useEffect(() => {
-    // Only initialize mock data flags if in development mode and not explicitly disabled
-    if (isDevelopment && import.meta.env.DISABLE_MOCK_DATA !== 'true') {
-      console.log('Development mode detected, mock data can be enabled if needed');
-    } else {
-      // In production or when explicitly disabled, ensure mock data is disabled
-      if (localStorage.getItem('use_mock_data') === 'true' || localStorage.getItem('MOCK_DATA_ENABLED') === 'true') {
-        console.log('Resetting mock data flags to match production environment');
-        localStorage.removeItem('use_mock_data');
-        localStorage.removeItem('MOCK_DATA_ENABLED');
-      }
-    }
-  }, [isDevelopment]);
-  
-  const { 
-    nodeData, 
-    guestData, 
-    isConnected,
-    isMockData,
-    processedMetricsData,
-    forceUpdateCounter
-  } = useSocket();
   const theme = useTheme();
+  const { status, connected } = useSocket();
   
-  // Force a re-render when the forceUpdateCounter changes
-  useEffect(() => {
-    if (forceUpdateCounter % 10 === 0 && forceUpdateCounter > 0) {
-      console.log('Force update triggered by counter:', forceUpdateCounter);
-    }
-  }, [forceUpdateCounter]);
+  // Get theme context functions
+  const { darkMode, toggleDarkMode } = useUserSettings();
   
-  // Check if mock data is enabled - using both localStorage values and socket status
-  const isMockDataEnabled = isMockData || 
-                          localStorage.getItem('use_mock_data') === 'true' || 
-                          localStorage.getItem('MOCK_DATA_ENABLED') === 'true';
+  // Get user settings
+  const { compactMode, toggleCompactMode } = useUserSettings();
   
-  // Initialize storage and check for environment changes
-  useEffect(() => {
-    const wasCleared = initializeStorage();
-    if (wasCleared) {
-      console.log('Application data was cleared due to environment change');
-    }
-  }, []);
+  // State for settings menu
+  const [settingsAnchorEl, setSettingsAnchorEl] = useState(null);
+  const isSettingsMenuOpen = Boolean(settingsAnchorEl);
   
-  // Add a listener for node change events from the NetworkDisplay component
-  useEffect(() => {
-    const handleNodeChangeEvent = (event) => {
-      if (event.detail && event.detail.node) {
-        setSelectedNode(event.detail.node);
-      }
-    };
-    
-    window.addEventListener('nodeChange', handleNodeChangeEvent);
-    
-    // Check URL parameters on initial load
-    const urlParams = new URLSearchParams(window.location.search);
-    const nodeParam = urlParams.get('node');
-    if (nodeParam) {
-      setSelectedNode(nodeParam);
-    }
-    
-    return () => {
-      window.removeEventListener('nodeChange', handleNodeChangeEvent);
-    };
-  }, []);
+  // Settings menu handlers
+  const handleSettingsClick = (event) => {
+    setSettingsAnchorEl(event.currentTarget);
+  };
   
-  // If there's an error, show an error message
-  if (hasError) {
-    return (
-      <Box sx={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        height: '100vh',
-        p: 3,
-        textAlign: 'center'
-      }}>
-        <Typography variant="h4" color="error" gutterBottom>
-          Something went wrong
-        </Typography>
-        <Typography variant="body1" paragraph>
-          {errorMessage}
-        </Typography>
-        <Typography variant="body2" paragraph>
-          Try refreshing the page or check the console for more details.
-        </Typography>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          onClick={() => window.location.reload()}
-        >
-          Refresh Page
-        </Button>
-      </Box>
-    );
-  }
+  const handleSettingsClose = () => {
+    setSettingsAnchorEl(null);
+  };
   
+  const [selectedNode, setSelectedNode] = useState('all');
+  
+  // Generate content based on connection status
   return (
-    <Box sx={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      minHeight: '100vh',
-      bgcolor: 'background.default'
-    }}
-    onClick={(e) => {
-      // Only blur if clicking the container itself, not its children
-      if (e.target === e.currentTarget) {
-        document.activeElement?.blur();
-      }
-    }}>
-      {/* DEMO MODE Banner - Only visible when mock data is enabled */}
-      {(isMockDataEnabled) && (
-        <Alert 
-          severity="warning" 
-          variant="standard"
-          sx={{ 
-            borderRadius: 0,
-            justifyContent: 'center', 
-            fontWeight: 'medium',
-            py: 0.5,
-            fontSize: '0.875rem'
-          }}
-        >
-          DEMO MODE - Viewing simulated data. To view real Proxmox data, disable mock data in your .env file.
-        </Alert>
-      )}
-      
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '100vh',
+        bgcolor: 'background.default',
+        color: 'text.primary',
+      }}
+    >
       <AppBar position="static" color="primary" elevation={0}>
         <Toolbar sx={{ px: { xs: 2, sm: 3 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
@@ -223,12 +123,23 @@ function AppContent() {
             </Tooltip>
           </Box>
           
-          {/* Dark Mode Toggle Button */}
-          <Tooltip title={darkMode ? "Switch to light mode" : "Switch to dark mode"}>
+          {/* Search Field */}
+          <SearchField />
+          
+          {/* Column Visibility Button - Add reference to NetworkDisplay to access this */}
+          <Box sx={{ display: { xs: 'none', sm: 'flex' }, mx: 1 }} id="column-visibility-app-header">
+            {/* This Box will be populated by NetworkDisplay with the column visibility button */}
+          </Box>
+          
+          {/* Settings Button */}
+          <Tooltip title="Settings">
             <IconButton
-              onClick={toggleDarkMode}
+              onClick={handleSettingsClick}
               size="small"
               color="inherit"
+              aria-controls={isSettingsMenuOpen ? 'settings-menu' : undefined}
+              aria-haspopup="true"
+              aria-expanded={isSettingsMenuOpen ? 'true' : undefined}
               sx={{ 
                 ml: 1,
                 borderRadius: 2,
@@ -239,19 +150,89 @@ function AppContent() {
                 },
               }}
             >
-              {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
+              <SettingsIcon />
             </IconButton>
           </Tooltip>
+          
+          {/* Settings Menu */}
+          <Menu
+            id="settings-menu"
+            anchorEl={settingsAnchorEl}
+            open={isSettingsMenuOpen}
+            onClose={handleSettingsClose}
+            MenuListProps={{
+              'aria-labelledby': 'settings-button',
+              dense: true,
+            }}
+            PaperProps={{
+              elevation: 3,
+              sx: {
+                mt: 1.5,
+                minWidth: 200,
+                borderRadius: 2,
+              }
+            }}
+          >
+            <MenuItem 
+              onClick={toggleDarkMode}
+              sx={{ py: 1 }}
+            >
+              <ListItemIcon>
+                {darkMode ? <Brightness7Icon fontSize="small" /> : <Brightness4Icon fontSize="small" />}
+              </ListItemIcon>
+              <ListItemText>
+                {darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              </ListItemText>
+              <Switch 
+                edge="end" 
+                checked={darkMode}
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleDarkMode();
+                }}
+              />
+            </MenuItem>
+            
+            <Divider />
+            
+            <MenuItem 
+              onClick={toggleCompactMode}
+              sx={{ py: 1 }}
+            >
+              <ListItemIcon>
+                <ViewCompactIcon fontSize="small" color={compactMode ? "primary" : "inherit"} />
+              </ListItemIcon>
+              <ListItemText 
+                primary="Compact Mode" 
+                secondary={compactMode ? "Reduces row spacing" : "Standard row spacing"}
+              />
+              <Tooltip title={compactMode ? "Disable compact mode" : "Enable compact mode"}>
+                <Switch 
+                  edge="end" 
+                  checked={compactMode}
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleCompactMode();
+                  }}
+                  color="primary"
+                />
+              </Tooltip>
+            </MenuItem>
+          </Menu>
         </Toolbar>
       </AppBar>
       
       <Container 
-        maxWidth="lg" 
+        maxWidth={false} 
         sx={{ 
-          mt: { xs: 1, sm: 2 }, 
+          mt: { xs: 0.5, sm: 0.5 }, 
           mb: { xs: 2, sm: 4 }, 
           flexGrow: 1,
-          px: { xs: 2, sm: 3 },
+          px: { xs: 1, sm: 2 },
+          width: '100%',
+          mx: 'auto'
         }}
         onClick={(e) => {
           if (e.target === e.currentTarget) {
@@ -259,7 +240,7 @@ function AppContent() {
           }
         }}
       >
-        <Box sx={{ my: { xs: 1, sm: 2 } }}>
+        <Box sx={{ my: { xs: 0.5, sm: 0.5 } }}>
           {/* Network Display Component - pass the selected node as a prop */}
           <NetworkDisplay selectedNode={selectedNode} />
         </Box>
@@ -288,7 +269,13 @@ function AppContent() {
 function App() {
   return (
     <AppThemeProvider>
-      <AppContent />
+      <SearchProvider>
+        <UserSettingsProvider>
+          <SnackbarProvider maxSnack={3}>
+            <AppContent />
+          </SnackbarProvider>
+        </UserSettingsProvider>
+      </SearchProvider>
     </AppThemeProvider>
   );
 }
