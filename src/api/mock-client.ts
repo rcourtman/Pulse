@@ -586,4 +586,103 @@ export class MockClient extends EventEmitter {
       this.disconnect();
     }
   }
-} 
+
+  /**
+   * Get all VMs and containers from all nodes in the cluster
+   * This is a mock implementation of the /cluster/resources endpoint
+   */
+  async getClusterResources(): Promise<{ vms: ProxmoxVM[]; containers: ProxmoxContainer[] }> {
+    this.logger.info('Getting cluster resources (mock implementation)');
+    
+    // Simulate a delay to mimic network request
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
+    // For the mock implementation, we'll gather all guests from customMockData
+    // to simulate what would come from the real cluster resources endpoint
+    const allVMs: ProxmoxVM[] = [];
+    const allContainers: ProxmoxContainer[] = [];
+    
+    // Process each node in our custom mock data
+    for (const node of customMockData.nodes) {
+      const nodeId = node.id;
+      
+      // Process each guest for this node
+      for (const guest of node.guests) {
+        // Check if this is a VM or container
+        if (guest.type === 'vm') {
+          // Extract the VMID from the guest ID
+          const vmid = parseInt(guest.id.split('-').pop() || '100');
+          
+          // For cluster resource endpoints, always use cluster-level IDs
+          const id = `${this.mockClusterName}-vm-${vmid}`;
+          
+          // Create a VM from the custom data
+          const vm: ProxmoxVM = {
+            id: id,
+            name: guest.name,
+            node: node.name, // Use the node name, not ID
+            status: guest.status === 'running' ? 'running' : 'stopped',
+            vmid: vmid,
+            type: 'qemu',
+            cpus: 2 + Math.floor(Math.random() * 6),
+            maxmem: guest.memory,
+            memory: guest.status === 'running' ? Math.floor(guest.memory * 0.7) : 0,
+            maxdisk: guest.disk.total,
+            disk: guest.disk.used,
+            uptime: guest.status === 'running' ? 3600 * (1 + Math.floor(Math.random() * 72)) : 0,
+            cpu: guest.status === 'running' ? guest.cpu : 0,
+            netout: guest.status === 'running' ? Math.random() * 1024 * 1024 * 10 : 0,
+            netin: guest.status === 'running' ? Math.random() * 1024 * 1024 * 5 : 0,
+            diskwrite: guest.status === 'running' ? Math.random() * 1024 * 1024 : 0,
+            diskread: guest.status === 'running' ? Math.random() * 1024 * 1024 * 2 : 0,
+            template: false
+          };
+          
+          allVMs.push(vm);
+        } else if (guest.type === 'ct') {
+          // Extract the VMID from the guest ID
+          const vmid = parseInt(guest.id.split('-').pop() || '200');
+          
+          // For cluster resource endpoints, always use cluster-level IDs
+          const id = `${this.mockClusterName}-ct-${vmid}`;
+          
+          // Create a container from the custom data
+          const container: ProxmoxContainer = {
+            id: id,
+            name: guest.name,
+            node: node.name, // Use the node name, not ID
+            status: guest.status === 'running' ? 'running' : 'stopped',
+            vmid: vmid,
+            type: 'lxc',
+            cpus: 1 + Math.floor(Math.random() * 4),
+            maxmem: guest.memory,
+            memory: guest.status === 'running' ? Math.floor(guest.memory * 0.6) : 0,
+            maxdisk: guest.disk.total,
+            disk: guest.disk.used,
+            uptime: guest.status === 'running' ? 3600 * (1 + Math.floor(Math.random() * 48)) : 0,
+            cpu: guest.status === 'running' ? guest.cpu : 0,
+            netout: guest.status === 'running' ? Math.random() * 1024 * 1024 * 5 : 0,
+            netin: guest.status === 'running' ? Math.random() * 1024 * 1024 * 3 : 0,
+            diskwrite: guest.status === 'running' ? Math.random() * 1024 * 512 : 0,
+            diskread: guest.status === 'running' ? Math.random() * 1024 * 1024 : 0,
+            template: false
+          };
+          
+          allContainers.push(container);
+        }
+      }
+    }
+    
+    this.logger.info(`Returning ${allVMs.length} VMs and ${allContainers.length} containers from cluster resources endpoint`);
+    
+    return { 
+      vms: allVMs, 
+      containers: allContainers 
+    };
+  }
+
+  /**
+   * Get cluster resources (VMs and containers from all nodes in cluster)
+   * @returns Promise with cluster resources
+   */
+}

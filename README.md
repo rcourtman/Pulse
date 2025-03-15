@@ -26,6 +26,7 @@ git clone https://github.com/rcourtman/pulse.git && cd pulse && npm install && c
 - [Docker Configuration](#-docker-configuration)
 - [Features](#-features)
 - [Cluster Mode](docs/cluster-mode.md)
+- [Testing Cluster Resources](docs/testing-cluster-resources.md)
 - [Troubleshooting](#-troubleshooting)
   - [WebSocket Connection Issues](#websocket-connection-issues)
   - [Logging and Debugging](docs/logging.md)
