@@ -113,11 +113,45 @@ export const checkAndClearDataIfNeeded = () => {
 };
 
 /**
+ * Clear all mock data settings from localStorage
+ * This should be called at application startup to ensure
+ * we start with a clean state and respect environment variables
+ */
+export const clearMockDataSettings = () => {
+  console.log('Clearing all mock data settings from localStorage');
+  
+  try {
+    // Remove all mock data related keys
+    localStorage.removeItem('use_mock_data');
+    localStorage.removeItem('MOCK_DATA_ENABLED');
+    localStorage.removeItem('mock_enabled');
+    localStorage.removeItem('MOCK_SERVER_URL');
+    
+    // Also clear any other mock-related items that might have been added
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes('mock')) {
+        localStorage.removeItem(key);
+      }
+    }
+    
+    console.log('Successfully cleared mock data settings');
+    return true;
+  } catch (error) {
+    console.error('Error clearing mock data settings:', error);
+    return false;
+  }
+};
+
+/**
  * Initialize the storage system
  * This should be called when the application starts
  */
 export const initializeStorage = () => {
-  // Check if we need to clear data
+  // First clear any mock data settings to ensure we start fresh
+  clearMockDataSettings();
+  
+  // Then check if we need to clear other data
   const wasCleared = checkAndClearDataIfNeeded();
   
   // Return whether data was cleared
