@@ -242,6 +242,31 @@ export class NodeManager extends EventEmitter {
             for (const nodeConfig of config.nodes) {
               const nodeContainers = clusterResources.containers.filter((container: ProxmoxContainer) => container.node === nodeConfig.name);
               this.handleContainerListUpdate(nodeConfig.id, nodeContainers);
+              
+              // Make sure all nodes from the cluster have their status updated
+              if (nodeConfig.id !== nodeId) {
+                this.logger.debug(`Updating status for cluster node: ${nodeConfig.id}`);
+                
+                // We need to ensure all nodes have a status entry
+                // If we don't have status yet for this node, create a basic online status
+                const existingNodeStatus = this.nodeStatus.get(nodeConfig.id);
+                if (!existingNodeStatus || existingNodeStatus.status !== 'online') {
+                  const baseNodeStatus: ProxmoxNodeStatus = {
+                    id: nodeConfig.id,
+                    name: nodeConfig.name,
+                    configName: nodeConfig.name,
+                    status: 'online',
+                    uptime: nodeStatus.uptime || 0,
+                    cpu: 0,
+                    memory: { total: 0, used: 0, free: 0, usedPercentage: 0 },
+                    swap: { total: 0, used: 0, free: 0, usedPercentage: 0 },
+                    disk: { total: 0, used: 0, free: 0, usedPercentage: 0 },
+                    loadAverage: [0, 0, 0],
+                    cpuInfo: { cores: 0, sockets: 0, model: 'Unknown' }
+                  };
+                  this.handleNodeStatusUpdate(nodeConfig.id, baseNodeStatus);
+                }
+              }
             }
             
             // Emit metrics update event
