@@ -36,7 +36,7 @@
     "react-router-dom": "^7.2.0",
     "recharts": "^2.15.1",
     "socket.io-client": "^4.8.1",
-    "vite": "^6.2.0"
+    "vite": "^6.2.2"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
