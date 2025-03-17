@@ -12,6 +12,7 @@ export interface NodeConfig {
   tokenId: string;
   tokenSecret: string;
   autoDetectCluster?: boolean;
+  isClusterEntryPoint?: boolean;
 }
 
 // Proxmox API response types

@@ -10,36 +10,80 @@ dotenv.config();
 function parseNodeConfigs(): NodeConfig[] {
   // Get the global auto-detect cluster setting
   const autoDetectCluster = process.env.PROXMOX_AUTO_DETECT_CLUSTER !== 'false';
+  const mockClusterEnabled = process.env.MOCK_CLUSTER_MODE !== 'false' && 
+                              process.env.MOCK_CLUSTER_ENABLED === 'true';
+  const clusterMode = process.env.PROXMOX_CLUSTER_MODE === 'true';
 
   // If mock data is enabled, return mock nodes instead of real ones
   if (process.env.USE_MOCK_DATA === 'true' || process.env.MOCK_DATA_ENABLED === 'true') {
     console.log('Mock data enabled. Using mock nodes instead of real Proxmox servers.');
-    return [
-      {
-        id: 'node-1',
-        name: 'pve-1',
-        host: 'http://localhost:7656',
-        tokenId: 'mock-token',
-        tokenSecret: 'mock-secret',
-        autoDetectCluster
-      },
-      {
-        id: 'node-2',
-        name: 'pve-2',
-        host: 'http://localhost:7656',
-        tokenId: 'mock-token',
-        tokenSecret: 'mock-secret',
-        autoDetectCluster
-      },
-      {
-        id: 'node-3',
-        name: 'pve-3',
-        host: 'http://localhost:7656',
-        tokenId: 'mock-token',
-        tokenSecret: 'mock-secret',
-        autoDetectCluster
-      }
-    ];
+    
+    // In mock cluster mode, we're modifying the approach to better match real Proxmox behavior
+    // In a real Proxmox cluster, you can connect to ANY node and get information about ALL nodes
+    // So we'll configure all mock nodes to point to the same mock server
+    
+    if (mockClusterEnabled || clusterMode) {
+      console.log('Mock cluster mode enabled. Marking the first node as cluster entry point.');
+      
+      // Return all nodes but mark the first one as a cluster entry point
+      return [
+        {
+          id: 'node-1',
+          name: 'pve-cluster-01',
+          host: 'http://localhost:7656',
+          tokenId: 'mock-token',
+          tokenSecret: 'mock-secret',
+          autoDetectCluster: true, // Force true in cluster mode
+          isClusterEntryPoint: true // Mark this node as the cluster entry point
+        },
+        {
+          id: 'node-2',
+          name: 'pve-prod-02',
+          host: 'http://localhost:7656',
+          tokenId: 'mock-token',
+          tokenSecret: 'mock-secret',
+          autoDetectCluster: true,
+          isClusterEntryPoint: false
+        },
+        {
+          id: 'node-3',
+          name: 'pve-dev-01',
+          host: 'http://localhost:7656',
+          tokenId: 'mock-token',
+          tokenSecret: 'mock-secret',
+          autoDetectCluster: true,
+          isClusterEntryPoint: false
+        }
+      ];
+    } else {
+      // Non-cluster mode - return all nodes separately as before
+      return [
+        {
+          id: 'node-1',
+          name: 'pve-prod-01',
+          host: 'http://localhost:7656',
+          tokenId: 'mock-token',
+          tokenSecret: 'mock-secret',
+          autoDetectCluster
+        },
+        {
+          id: 'node-2',
+          name: 'pve-prod-02',
+          host: 'http://localhost:7656',
+          tokenId: 'mock-token',
+          tokenSecret: 'mock-secret',
+          autoDetectCluster
+        },
+        {
+          id: 'node-3',
+          name: 'pve-dev-01',
+          host: 'http://localhost:7656',
+          tokenId: 'mock-token',
+          tokenSecret: 'mock-secret',
+          autoDetectCluster
+        }
+      ];
+    }
   }
 
   const nodes: NodeConfig[] = [];
