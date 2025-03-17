@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { clearAppData } from '../utils/storageUtils';
 
+// Constants
+const CONNECTION_TIMEOUT_MS = 5000; // 5 seconds timeout for connection attempts
+
 // Add this function for more dynamic mock data generation
 const generateDynamicMetric = (baseValue, min, max, changeRange) => {
   // Random value between -changeRange and +changeRange
@@ -55,13 +58,9 @@ const useSocket = (url) => {
   // Store the mock data status as a state variable so it can be exposed in the return value
   const [isMockData, setIsMockData] = useState(useMockData);
   
-  const [isConnected, setIsConnected] = useState(useMockData ? true : false);
+  const [isConnected, setIsConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
-  const [nodeData, setNodeData] = useState(useMockData ? [
-    { id: 'node-1', name: 'MOCK-pve1', status: 'online' },
-    { id: 'node-2', name: 'MOCK-pve2', status: 'online' },
-    { id: 'node-3', name: 'MOCK-pve3', status: 'online' }
-  ] : []);
+  const [nodeData, setNodeData] = useState([]);
   const [guestData, setGuestData] = useState([]);
   const [metricsData, setMetricsData] = useState([]);
   const [processedMetricsData, setProcessedMetricsData] = useState({
@@ -72,7 +71,7 @@ const useSocket = (url) => {
   });
   const [forceUpdateCounter, setForceUpdateCounter] = useState(0);
   const [error, setError] = useState(null);
-  const [connectionStatus, setConnectionStatus] = useState(useMockData ? 'connected' : 'connecting');
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
   
   // Use ref to maintain socket instance across renders
   const socketRef = useRef(null);
@@ -88,6 +87,9 @@ const useSocket = (url) => {
   // Track if we've already set up the interval
   const hasSetupMetricsInterval = useRef(false);
 
+  const [nodeStatus, setNodeStatus] = useState({});
+  const [pendingGuests, setPendingGuests] = useState({});
+
   // Initialize socket connection
   useEffect(() => {
     // Clear any existing socket connection
@@ -100,30 +102,19 @@ const useSocket = (url) => {
     
     // In mock data mode, we can immediately set up the UI without waiting for a connection
     if (useMockData) {
-      console.log('Using mock data mode - setting up immediate UI rendering');
-      setIsConnected(true);
-      setConnectionStatus('connected');
-      
-      // Set up mock data
-      const mockNodes = [
-        { id: 'node-1', name: 'MOCK-pve1', status: 'online' },
-        { id: 'node-2', name: 'MOCK-pve2', status: 'online' },
-        { id: 'node-3', name: 'MOCK-pve3', status: 'online' }
-      ];
-      setNodeData(mockNodes);
+      console.log('Using mock data mode - will connect to mock server');
+      // We'll let the actual server connection process handle setting up the data
+      // Don't create fake data here - rely on the mock server
     }
     
     // Set a timeout to ensure we don't wait forever for the socket connection
     const connectionTimeout = setTimeout(() => {
       if (!isConnected) {
-        console.log('Socket connection timeout - using fallback');
-        // Force connected state for mock data mode
-        if (useMockData || isDevelopment) {
-          setIsConnected(true);
-          setConnectionStatus('connected');
-        }
+        console.log('Socket connection timeout');
+        setConnectionStatus('error');
+        setError('Connection timeout - failed to connect to server');
       }
-    }, 3000); // Reduced from 5000ms to 3000ms
+    }, CONNECTION_TIMEOUT_MS);
     
     try {
       // Create new socket connection
@@ -147,6 +138,14 @@ const useSocket = (url) => {
         setError(null);
         reconnectAttemptsRef.current = 0; // Reset reconnect attempts on successful connection
         
+        // Register as a dashboard client to get all guests
+        socketRef.current.emit('register', { 
+          nodeId: 'dashboard', 
+          nodeName: 'dashboard',
+          clientType: 'dashboard'
+        });
+        console.log('Registered as dashboard client');
+        
         // Request server configuration to check if mock data is enabled on the server
         socketRef.current.emit('getServerConfig', (config) => {
           if (config && (config.useMockData || config.mockDataEnabled)) {
@@ -168,6 +167,42 @@ const useSocket = (url) => {
         socketRef.current.emit('requestNodeData');
         socketRef.current.emit('requestGuestData');
         socketRef.current.emit('requestMetricsData');
+        
+        // Set up custom guests handler to ensure no deduplication
+        socketRef.current.on('guests', (data) => {
+          // Check if we got either an array directly or an object with a guests property
+          const guestData = Array.isArray(data) ? data : (data && data.guests ? data.guests : []);
+          
+          if (!Array.isArray(guestData)) {
+            console.error('🔍 SOCKET: Received invalid guest data format:', data);
+            return;
+          }
+          
+          // Log what we received for debugging
+          console.log(`🔍 SOCKET: Received ${guestData.length} guests from server`);
+          
+          // Log distribution by node for debugging
+          const guestsByNode = {};
+          guestData.forEach(guest => {
+            if (!guest) return;
+            const nodeId = guest.node || 'unknown';
+            if (!guestsByNode[nodeId]) {
+              guestsByNode[nodeId] = [];
+            }
+            guestsByNode[nodeId].push(guest.id);
+          });
+          
+          console.log('🔍 SOCKET: Guest distribution from server:');
+          Object.keys(guestsByNode).sort().forEach(nodeId => {
+            console.log(`  - ${nodeId}: ${guestsByNode[nodeId].length} guests (${guestsByNode[nodeId].join(', ')})`);
+          });
+          
+          // CRITICAL: Set guest data directly without any filtering
+          setGuestData(guestData);
+          
+          // Force update to trigger re-renders
+          setForceUpdateCounter(prevCounter => prevCounter + 1);
+        });
         
         // Start ping interval
         if (pingIntervalRef.current) {
@@ -212,77 +247,14 @@ const useSocket = (url) => {
       socketRef.current.on('connect_error', (err) => {
         console.error('Socket connection error:', err);
         
-        // In development mode, immediately fall back to mock data mode
-        if (isDevelopment) {
-          console.log('Development mode: Immediately falling back to mock data mode');
-          socketRef.current.disconnect();
-          setConnectionStatus('connected'); // Set to connected anyway to show the UI
-          setIsConnected(true);
-          
-          // Generate mock data for the UI
-          const mockNodes = [
-            { id: 'node-1', name: 'MOCK-pve1', status: 'online' },
-            { id: 'node-2', name: 'MOCK-pve2', status: 'online' },
-            { id: 'node-3', name: 'MOCK-pve3', status: 'online' }
-          ];
-          
-          // Set mock data
-          setNodeData(mockNodes);
-          return;
-        }
-        
-        reconnectAttemptsRef.current++;
-        
-        if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
-          console.warn(`Maximum reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Not attempting further reconnections.`);
-          socketRef.current.disconnect();
-          setConnectionStatus('error');
-          setIsConnected(false);
-          setError(`Connection error after ${MAX_RECONNECT_ATTEMPTS} attempts: ${err.message}`);
-          
-          // If we're using mock data, we can still show the UI with mock data
-          if (useMockData) {
-            // Generate some mock data for the UI
-            console.log('Using mock data fallback due to connection error');
-            
-            // Mock node data
-            const mockNodes = [
-              { id: 'node-1', name: 'MOCK-pve1', status: 'online' },
-              { id: 'node-2', name: 'MOCK-pve2', status: 'online' },
-              { id: 'node-3', name: 'MOCK-pve3', status: 'online' }
-            ];
-            
-            // Set mock data
-            setNodeData(mockNodes);
-            
-            // Set connection status to connected so the UI renders
-            setConnectionStatus('connected');
-            setIsConnected(true);
-          }
+        // If we're reconnecting, emit events to get the current data
+        if (reconnectAttemptsRef.current > 0) {
+          setConnectionStatus('reconnecting');
+          console.log(`Reconnection attempt ${reconnectAttemptsRef.current}/${MAX_RECONNECT_ATTEMPTS} failed`);
         } else {
           setConnectionStatus('error');
           setIsConnected(false);
           setError(`Connection error: ${err.message}`);
-          
-          // If we're using mock data, we can still show the UI with mock data
-          if (useMockData) {
-            // Generate some mock data for the UI
-            console.log('Using mock data fallback due to connection error');
-            
-            // Mock node data
-            const mockNodes = [
-              { id: 'node-1', name: 'MOCK-pve1', status: 'online' },
-              { id: 'node-2', name: 'MOCK-pve2', status: 'online' },
-              { id: 'node-3', name: 'MOCK-pve3', status: 'online' }
-            ];
-            
-            // Set mock data
-            setNodeData(mockNodes);
-            
-            // Set connection status to connected so the UI renders
-            setConnectionStatus('connected');
-            setIsConnected(true);
-          }
         }
       });
       
@@ -294,11 +266,6 @@ const useSocket = (url) => {
         // Don't attempt to reconnect if we've reached the maximum attempts
         if (reconnectAttemptsRef.current >= MAX_RECONNECT_ATTEMPTS) {
           console.warn(`Maximum reconnection attempts (${MAX_RECONNECT_ATTEMPTS}) reached. Not attempting further reconnections.`);
-          // If using mock data, still show the UI
-          if (useMockData) {
-            setIsConnected(true);
-            setConnectionStatus('connected');
-          }
           return;
         }
         
@@ -365,14 +332,90 @@ const useSocket = (url) => {
       // Setup socket event listeners
       socketRef.current.on('nodeData', (data) => {
         if (Array.isArray(data)) {
-          // Check if this is mock data by looking for the 'MOCK-' prefix in node names
-          const isMockDataNodes = data.some(node => node.name && node.name.startsWith('MOCK-'));
+          console.log('🔍 SOCKET: Received nodeData event with', data.length, 'nodes');
+          console.log('🔍 SOCKET: Node data:', data);
+          
+          // Verify we have all three expected nodes
+          const nodeNames = data.map(node => node.name).sort();
+          console.log('🔍 SOCKET: Node names:', nodeNames);
+          
+          // Check if we have the expected PVE nodes
+          const hasPveNodes = data.some(node => 
+            (node.name && (node.name.includes('pve-prod') || node.name.includes('pve-dev')))
+          );
+          
+          if (!hasPveNodes) {
+            console.error('🚨 SOCKET: Missing expected PVE nodes in nodeData!');
+          }
+          
+          if (data.length < 3) {
+            console.warn(`⚠️ SOCKET: Expected at least 3 nodes but received ${data.length}`);
+          }
+          
+          // Check if this is mock data by looking for the 'pve-prod' prefix in node names
+          const isMockDataNodes = data.some(node => node.name && (
+            node.name.startsWith('pve-prod') || 
+            node.name.startsWith('MOCK-')
+          ));
           if (isMockDataNodes) {
             console.log('Detected mock data from node names');
             setIsMockData(true);
           }
-          setNodeData(data);
+          
+          // Ensure we're not getting empty or invalid node data
+          const validNodes = data.filter(node => node && node.id && node.name);
+          if (validNodes.length < data.length) {
+            console.warn(`⚠️ SOCKET: Filtered out ${data.length - validNodes.length} invalid nodes`);
+            setNodeData(validNodes);
+          } else {
+            setNodeData(data);
+          }
+        } else {
+          console.error('🚨 SOCKET: Received nodeData event but data is not an array:', data);
         }
+      });
+
+      // Handle guests update from server
+      socketRef.current.on('guests', (data) => {
+        // Check if we got either an array directly or an object with a guests property
+        const guestData = Array.isArray(data) ? data : (data.guests || []);
+        
+        if (!Array.isArray(guestData)) {
+          console.error('Received invalid guest data format from socket:', data);
+          return;
+        }
+        
+        // Add descriptive logging to help debug the issue
+        console.log(`🔍 SOCKET: Received ${guestData.length} guests from server`);
+        
+        // Log distribution by node for debugging
+        const guestsByNode = {};
+        guestData.forEach(guest => {
+          const nodeId = guest.node;
+          if (!guestsByNode[nodeId]) {
+            guestsByNode[nodeId] = [];
+          }
+          guestsByNode[nodeId].push(guest.id);
+        });
+        
+        console.log('🔍 SOCKET: Guest distribution by node:');
+        Object.keys(guestsByNode).sort().forEach(nodeId => {
+          console.log(`  - ${nodeId}: ${guestsByNode[nodeId].length} guests`);
+        });
+        
+        // IMPORTANT: Handle guest data without deduplication
+        // Just set the state directly without any filtering
+        setGuestData(guestData);
+        
+        // Mark the update with a new timestamp
+        setLastMessage({
+          type: 'GUEST_UPDATE',
+          timestamp: new Date().toISOString(),
+          count: guestData.length
+        });
+        
+        // Force update to trigger re-renders
+        setForceUpdateCounter(prevCounter => prevCounter + 1);
       });
 
       // Cleanup function
@@ -401,41 +444,10 @@ const useSocket = (url) => {
     }
   }, [socketUrl, useMockData]); // Remove isConnected from dependency array to prevent reconnection loops
 
-  // Generate mock guest data if we're using mock data and have no real data
-  useEffect(() => {
-    if (useMockData && guestData.length === 0 && nodeData.length > 0) {
-      console.log('Generating mock guest data');
-      
-      // Generate some basic mock guest data with more stopped guests
-      const mockGuests = [
-        { id: '101', name: 'mock-db-master', type: 'vm', status: 'running', node: 'node-1', uptime: 432000 }, // 5 days
-        { id: '104', name: 'mock-web1', type: 'vm', status: 'running', node: 'node-1', uptime: 345600 }, // 4 days
-        { id: '107', name: 'mock-web2', type: 'vm', status: 'stopped', node: 'node-1', uptime: 0 },
-        { id: '110', name: 'mock-redis', type: 'vm', status: 'running', node: 'node-1', uptime: 172800 }, // 2 days
-        { id: '121', name: 'mock-dev-db', type: 'vm', status: 'running', node: 'node-2', uptime: 86400 }, // 1 day
-        { id: '125', name: 'mock-dev-web1', type: 'vm', status: 'stopped', node: 'node-2', uptime: 0 },
-        { id: '126', name: 'mock-dev-web2', type: 'vm', status: 'paused', node: 'node-2', uptime: 0 },
-        { id: '130', name: 'mock-test-api', type: 'vm', status: 'stopped', node: 'node-2', uptime: 0 },
-        { id: '142', name: 'mock-jenkins', type: 'vm', status: 'running', node: 'node-2', uptime: 259200 }, // 3 days
-        { id: '150', name: 'mock-win10-test', type: 'vm', status: 'stopped', node: 'node-3', uptime: 0 },
-        { id: '151', name: 'mock-ubuntu22-template', type: 'vm', status: 'stopped', node: 'node-3', uptime: 0 },
-        { id: '155', name: 'mock-debian11-template', type: 'vm', status: 'running', node: 'node-3', uptime: 518400 }, // 6 days
-        { id: '203', name: 'mock-lb1', type: 'ct', status: 'running', node: 'node-1', uptime: 604800 }, // 7 days
-        { id: '204', name: 'mock-lb2', type: 'ct', status: 'stopped', node: 'node-1', uptime: 0 },
-        { id: '220', name: 'mock-dev-tools', type: 'ct', status: 'running', node: 'node-2', uptime: 691200 }, // 8 days
-        { id: '225', name: 'mock-staging-proxy', type: 'ct', status: 'stopped', node: 'node-2', uptime: 0 },
-        { id: '240', name: 'mock-pihole-dns', type: 'ct', status: 'running', node: 'node-3', uptime: 1209600 }, // 14 days
-        { id: '245', name: 'mock-home-automation', type: 'ct', status: 'running', node: 'node-3', uptime: 777600 }, // 9 days
-        { id: '250', name: 'mock-media-server', type: 'ct', status: 'stopped', node: 'node-3', uptime: 0 },
-        { id: '999', name: 'mock-shared-vm', type: 'vm', status: 'running', node: 'node-1', uptime: 259200 }, // 3 days
-        { id: '888', name: 'mock-shared-container', type: 'ct', status: 'running', node: 'node-1', uptime: 172800 } // 2 days
-      ];
-      
-      setGuestData(mockGuests);
-    }
-  }, [useMockData, guestData.length, nodeData]);
+  // Generate mock guest data useEffect has been removed to prevent duplicate guests
+  // Server-side mock data from src/mock/custom-data.ts is now the only source of truth
   
-  // Generate mock metrics data if we're using mock data and have no real metrics
+  // Create or update metrics for mock data display
   useEffect(() => {
     if (useMockData && guestData.length > 0) {
       console.log('Setting up mock metrics with %d guests (%d running)', 
@@ -473,8 +485,9 @@ const useSocket = (url) => {
                   percentUsed: diskPercent
                 },
                 network: {
-                  inRate: Math.random() * 20 * 1024 * 1024, // 0-20 MB/s
-                  outRate: Math.random() * 10 * 1024 * 1024, // 0-10 MB/s
+                  // Use more realistic values for data center environments
+                  inRate: 100 * 1024 + Math.random() * 400 * 1024, // 100-500 KB/s baseline
+                  outRate: 50 * 1024 + Math.random() * 150 * 1024, // 50-200 KB/s baseline
                 },
                 uptime: guest.uptime || 3600 * (1 + Math.floor(Math.random() * 72)) // Ensure uptime value exists
               }
@@ -494,17 +507,17 @@ const useSocket = (url) => {
         
         // Process each mock metric entry for UI components
         mockMetrics.forEach(metricEntry => {
-          const { guestId, metrics } = metricEntry;
+          const { guestId: metricGuestId, metrics } = metricEntry;
           
           // CPU - ensure it's a number and has correct properties
           const cpuValue = parseFloat(metrics.cpu) || 0;
-          processedData.cpu[guestId] = {
+          processedData.cpu[metricGuestId] = {
             usage: cpuValue
           };
           
           // Memory - ensure percentages are numbers and have correct properties
           const memPercentValue = parseFloat(metrics.memory.percentUsed) || 0;
-          processedData.memory[guestId] = {
+          processedData.memory[metricGuestId] = {
             total: metrics.memory.total,
             used: metrics.memory.used,
             percentUsed: memPercentValue,
@@ -513,41 +526,249 @@ const useSocket = (url) => {
           
           // Disk: More dynamic changes with occasional cleanups
           let diskDelta;
-          if (Math.random() < 0.1) {  // Doubled chance from 5% to 10%
+          if (Math.random() < 0.15) {  // Increased chance from 10% to 15%
             // More significant disk cleanup
-            diskDelta = -1 * (Math.random() * 6 + 2); // 2-8% reduction (doubled)
-            console.log(`Disk cleanup for ${guestId}: ${metrics.disk.percentUsed.toFixed(1)}% -> ${(metrics.disk.percentUsed + diskDelta).toFixed(1)}%`);
+            diskDelta = -1 * (Math.random() * 8 + 3); // 3-11% reduction (increased)
+            // Define shouldLog for conditionally enabling console logs
+            const diskShouldLog = Math.random() < 0.1; 
+            if (diskShouldLog) {
+              console.log(`Disk cleanup for ${metricGuestId}: ${(metrics.disk.percentUsed || 0).toFixed(1)}% -> ${((metrics.disk.percentUsed || 50) + diskDelta).toFixed(1)}%`);
+            }
           } else {
             // Disk more noticeable growth
-            diskDelta = Math.random() * 1.5; // 0-1.5% growth (tripled from 0.5%)
+            diskDelta = Math.random() * 2.5; // 0-2.5% growth (increased)
           }
-          const newDiskPercent = Math.max(20, Math.min(95, metrics.disk.percentUsed + diskDelta));
+          const newDiskPercent = Math.max(20, Math.min(95, (metrics.disk.percentUsed || 50) + diskDelta));
+          const newDiskUsed = (metrics.disk.total || 500 * 1024 * 1024 * 1024) * (newDiskPercent / 100);
           
           // Network: More dramatic bursty traffic patterns
-          let newInRate, newOutRate;
-          if (Math.random() < 0.3) {  // Increased from 20% to 30% chance
-            // Major traffic burst
-            newInRate = Math.max(1024, metrics.network.inRate + (Math.random() * 20 + 5) * 1024 * 1024); // Doubled
-            newOutRate = Math.max(1024, metrics.network.outRate + (Math.random() * 10 + 3) * 1024 * 1024); // Doubled
-            console.log(`Network burst for ${guestId}: In: ${(metrics.network.inRate/(1024*1024)).toFixed(1)}MB/s -> ${(newInRate/(1024*1024)).toFixed(1)}MB/s`);
-          } else {
-            // Larger variations
-            const inRateChange = (Math.random() * 8 - 4) * 1024 * 1024; // Doubled variation range
-            const outRateChange = (Math.random() * 6 - 3) * 1024 * 1024; // Doubled variation range
-            newInRate = Math.max(1024, metrics.network.inRate + inRateChange);
-            newOutRate = Math.max(1024, metrics.network.outRate + outRateChange);
+          let initialNewInRate, initialNewOutRate;
+          
+          // Define network traffic patterns based on VM type
+          // Simplified - use fewer variables and clearer workload patterns
+          const vmGuestId = metricGuestId || '';
+          const vmLastDigit = vmGuestId ? parseInt(vmGuestId.slice(-1)) : 0;
+          
+          // Define VM workload types (based on last digit of ID for deterministic behavior)
+          const workloadType = 
+            [9].includes(vmLastDigit) ? 'high_bandwidth' : // 10% are high bandwidth servers (backups, mirrors, etc)
+            [1, 5].includes(vmLastDigit) ? 'web_server' :   // 20% are web servers
+            [2, 3, 7].includes(vmLastDigit) ? 'database' :  // 30% are databases
+            [0, 4].includes(vmLastDigit) ? 'file_server' :  // 20% are file servers
+            'idle';                                         // 20% are mostly idle VMs
+          
+          // Get current values with fallbacks to appropriate defaults
+          let currentInRate = metrics.network?.inRate || 0;
+          let currentOutRate = metrics.network?.outRate || 0;
+          
+          // Define workload-specific network traffic patterns
+          const networkPatterns = {
+            high_bandwidth: {
+              // Very high bandwidth servers (backups, streaming, mirrors, etc.)
+              baselineIn: 100 * 1024,     // 100 KB/s in
+              baselineOut: 150 * 1024,    // 150 KB/s out
+              maxIn: 50 * 1024 * 1024,    // 50 MB/s max in
+              maxOut: 70 * 1024 * 1024,   // 70 MB/s max out
+              burstProbability: 0.3,      // 30% chance of burst
+              burstInSize: () => {
+                // 10% chance of mega burst (5-20 MB/s)
+                if (Math.random() < 0.1) {
+                  return (Math.random() * 15 + 5) * 1024 * 1024;
+                }
+                // Normal burst (0.5-3 MB/s)
+                return (Math.random() * 2.5 + 0.5) * 1024 * 1024;
+              },
+              burstOutSize: () => {
+                // 10% chance of mega burst (10-30 MB/s)
+                if (Math.random() < 0.1) {
+                  return (Math.random() * 20 + 10) * 1024 * 1024;
+                }
+                // Normal burst (1-5 MB/s)
+                return (Math.random() * 4 + 1) * 1024 * 1024;
+              },
+              decayRate: 0.3             // 30% decay rate (slower to allow higher values to persist)
+            },
+            web_server: {
+              // Web servers have higher baseline output than input, with frequent small bursts
+              baselineIn: 20 * 1024,      // 20 KB/s in
+              baselineOut: 50 * 1024,     // 50 KB/s out
+              maxIn: 5 * 1024 * 1024,     // 5 MB/s (~40 Mbps) max in
+              maxOut: 10 * 1024 * 1024,   // 10 MB/s (~80 Mbps) max out
+              burstProbability: 0.25,     // 25% chance of burst (increased)
+              burstInSize: () => {
+                // 5% chance of large burst (1-3 MB/s)
+                if (Math.random() < 0.05) {
+                  return (Math.random() * 2 + 1) * 1024 * 1024;
+                }
+                // Normal burst (50-300 KB/s)
+                return (Math.random() * 250 + 50) * 1024;
+              },
+              burstOutSize: () => {
+                // 5% chance of large burst (2-5 MB/s)
+                if (Math.random() < 0.05) {
+                  return (Math.random() * 3 + 2) * 1024 * 1024;
+                }
+                // Normal burst (100-500 KB/s)
+                return (Math.random() * 400 + 100) * 1024;
+              },
+              decayRate: 0.5             // 50% decay rate toward baseline
+            },
+            database: {
+              // Databases have moderate, more stable traffic
+              baselineIn: 30 * 1024,     // 30 KB/s in
+              baselineOut: 20 * 1024,    // 20 KB/s out
+              maxIn: 4 * 1024 * 1024,    // 4 MB/s max in
+              maxOut: 3 * 1024 * 1024,   // 3 MB/s max out
+              burstProbability: 0.15,    // 15% chance of burst (increased)
+              burstInSize: () => {
+                // 3% chance of large burst (0.5-2 MB/s)
+                if (Math.random() < 0.03) {
+                  return (Math.random() * 1.5 + 0.5) * 1024 * 1024;
+                }
+                // Normal burst (50-250 KB/s)
+                return (Math.random() * 200 + 50) * 1024;
+              },
+              burstOutSize: () => {
+                // 3% chance of large burst (0.3-1.5 MB/s)
+                if (Math.random() < 0.03) {
+                  return (Math.random() * 1.2 + 0.3) * 1024 * 1024;
+                }
+                // Normal burst (30-150 KB/s)
+                return (Math.random() * 120 + 30) * 1024;
+              },
+              decayRate: 0.45            // 45% decay rate (slower to allow higher values to persist)
+            },
+            file_server: {
+              // File servers have high baseline with large bursts
+              baselineIn: 50 * 1024,      // 50 KB/s in
+              baselineOut: 80 * 1024,     // 80 KB/s out
+              maxIn: 20 * 1024 * 1024,    // 20 MB/s max in
+              maxOut: 25 * 1024 * 1024,   // 25 MB/s max out
+              burstProbability: 0.2,      // 20% chance of burst (increased)
+              burstInSize: () => {
+                // 8% chance of large burst (2-8 MB/s)
+                if (Math.random() < 0.08) {
+                  return (Math.random() * 6 + 2) * 1024 * 1024;
+                }
+                // Normal burst (200-800 KB/s)
+                return (Math.random() * 600 + 200) * 1024;
+              },
+              burstOutSize: () => {
+                // 8% chance of large burst (3-12 MB/s)
+                if (Math.random() < 0.08) {
+                  return (Math.random() * 9 + 3) * 1024 * 1024;
+                }
+                // Normal burst (300-1200 KB/s)
+                return (Math.random() * 900 + 300) * 1024;
+              },
+              decayRate: 0.4             // 40% decay rate (slower to allow higher values to persist)
+            },
+            idle: {
+              // Idle VMs have minimal traffic
+              baselineIn: 2 * 1024,      // 2 KB/s in
+              baselineOut: 1 * 1024,     // 1 KB/s out
+              maxIn: 1 * 1024 * 1024,    // 1 MB/s max in
+              maxOut: 500 * 1024,        // 500 KB/s max out
+              burstProbability: 0.05,    // 5% chance of burst
+              burstInSize: () => {
+                // 1% chance of unexpected large burst (100-500 KB/s)
+                if (Math.random() < 0.01) {
+                  return (Math.random() * 400 + 100) * 1024;
+                }
+                // Normal small burst (10-50 KB/s)
+                return (Math.random() * 40 + 10) * 1024;
+              },
+              burstOutSize: () => {
+                // 1% chance of unexpected large burst (50-250 KB/s)
+                if (Math.random() < 0.01) {
+                  return (Math.random() * 200 + 50) * 1024;
+                }
+                // Normal small burst (5-30 KB/s)
+                return (Math.random() * 25 + 5) * 1024;
+              },
+              decayRate: 0.7             // 70% decay rate (quickly returns to baseline)
+            }
+          };
+          
+          // Get pattern for this VM
+          const pattern = networkPatterns[workloadType];
+          
+          // Determine if this update will create a burst
+          const createBurst = Math.random() < pattern.burstProbability;
+          // Occasional complete reset to baseline (1% chance)
+          const forceReset = Math.random() < 0.01;
+          
+          // Define log chance once for this section
+          const netLogChance = Math.random() < 0.05; // 5% chance to log
+          
+          if (forceReset) {
+            // Reset to baseline with small random variation
+            initialNewInRate = pattern.baselineIn * (0.8 + Math.random() * 0.4); // 80-120% of baseline
+            initialNewOutRate = pattern.baselineOut * (0.8 + Math.random() * 0.4);
+            
+            if (netLogChance) {
+              console.log(`Network reset for ${vmGuestId} (${workloadType}): In: ${(currentInRate/1024).toFixed(1)}KB/s → ${(initialNewInRate/1024).toFixed(1)}KB/s`);
+            }
+          } 
+          else if (createBurst) {
+            // Apply a burst (increase traffic significantly)
+            const burstInSize = pattern.burstInSize();
+            const burstOutSize = pattern.burstOutSize();
+            
+            initialNewInRate = Math.min(pattern.maxIn, currentInRate + burstInSize);
+            initialNewOutRate = Math.min(pattern.maxOut, currentOutRate + burstOutSize);
+            
+            if (netLogChance) {
+              console.log(`Network burst for ${vmGuestId} (${workloadType}): In: ${(currentInRate/1024).toFixed(1)}KB/s → ${(initialNewInRate/1024).toFixed(1)}KB/s`);
+            }
+          } 
+          else {
+            // Regular update: decay toward baseline + small random fluctuation
+            const inDistance = Math.max(0, currentInRate - pattern.baselineIn);
+            const outDistance = Math.max(0, currentOutRate - pattern.baselineOut);
+            
+            // Stronger decay when further from baseline (more realistic)
+            const inDecayFactor = pattern.decayRate * (1 + inDistance / (pattern.maxIn * 0.5));
+            const outDecayFactor = pattern.decayRate * (1 + outDistance / (pattern.maxOut * 0.5));
+            
+            // Apply decay with small random fluctuation
+            const inDecay = inDistance * Math.min(0.95, inDecayFactor);
+            const outDecay = outDistance * Math.min(0.95, outDecayFactor);
+            
+            // Small random fluctuations (-0.5KB to +1KB)
+            const fluctuation = (Math.random() * 1.5 - 0.5) * 1024;
+            
+            initialNewInRate = Math.max(
+              pattern.baselineIn * 0.8, // Don't go below 80% of baseline
+              Math.min(
+                pattern.maxIn,
+                currentInRate - inDecay + fluctuation
+              )
+            );
+            
+            initialNewOutRate = Math.max(
+              pattern.baselineOut * 0.8, // Don't go below 80% of baseline
+              Math.min(
+                pattern.maxOut,
+                currentOutRate - outDecay + (fluctuation * 0.8)
+              )
+            );
           }
           
-          processedData.disk[guestId] = {
+          // Final safety check - ensure values are within appropriate ranges
+          initialNewInRate = Math.max(1024, Math.min(pattern.maxIn, initialNewInRate));
+          initialNewOutRate = Math.max(512, Math.min(pattern.maxOut, initialNewOutRate));
+          
+          processedData.disk[metricGuestId] = {
             total: metrics.disk.total,
             used: metrics.disk.used,
             percentUsed: newDiskPercent,
             usagePercent: newDiskPercent // Important: UI uses this property
           };
           
-          processedData.network[guestId] = {
-            inRate: newInRate,
-            outRate: newOutRate
+          processedData.network[metricGuestId] = {
+            inRate: initialNewInRate,
+            outRate: initialNewOutRate
           };
         });
         
@@ -575,10 +796,10 @@ const useSocket = (url) => {
       
       metricsIntervalRef.current = setInterval(() => {
         try {
-          // Only log every 5th update to reduce console spam
-          const shouldLog = Math.random() < 0.1; // Only log about 10% of updates
+          // Define shouldLog once at the top for use throughout this interval function
+          const intervalShouldLog = Math.random() < 0.1; // Only log about 10% of updates
 
-          if (shouldLog) {
+          if (intervalShouldLog) {
             console.log('Mock update interval - updating data');
           }
           
@@ -612,7 +833,7 @@ const useSocket = (url) => {
                     uptime: newStatus === 'running' ? 300 : 0 // New running guests start with 5 min uptime
                   };
                   
-                  if (shouldLog) {
+                  if (intervalShouldLog) {
                     console.log(`Mock guest ${guest.name || 'unnamed'} (${guest.id}): changed status from ${guest.status} to ${newStatus}`);
                   }
                 }
@@ -670,13 +891,13 @@ const useSocket = (url) => {
                   if (Math.random() < 0.35) {  // Increased chance of spike from 20% to 35%
                     // Significant spike
                     newCpu = Math.min(95, metric.metrics.cpu + 25 + Math.random() * 30);
-                    if (shouldLog) {
+                    if (intervalShouldLog) {
                       console.log(`CPU spike for ${metric.guestId}: ${(metric.metrics.cpu || 0).toFixed(1)}% -> ${newCpu.toFixed(1)}%`);
                     }
                   } else if (Math.random() < 0.35) {  // Increased chance of drop from 20% to 35%
                     // Significant drop
                     newCpu = Math.max(5, metric.metrics.cpu - 25 - Math.random() * 20);
-                    if (shouldLog) {
+                    if (intervalShouldLog) {
                       console.log(`CPU drop for ${metric.guestId}: ${(metric.metrics.cpu || 0).toFixed(1)}% -> ${newCpu.toFixed(1)}%`);
                     }
                   } else {
@@ -693,7 +914,7 @@ const useSocket = (url) => {
                     // If CPU dropped significantly, memory might decrease too
                     memoryDelta -= 2;
                   }
-                  const newMemPercent = Math.max(10, Math.min(90, (metric.metrics.memory?.percentUsed || 50) + memoryDelta));
+                  const newMemPercent = Math.max(10, Math.min(90, (metric.metrics?.memory?.percentUsed || 50) + memoryDelta));
                   const newMemUsed = (metric.metrics.memory?.total || 16 * 1024 * 1024 * 1024) * (newMemPercent / 100);
                   
                   // Disk: More dynamic changes with occasional cleanups
@@ -701,7 +922,9 @@ const useSocket = (url) => {
                   if (Math.random() < 0.15) {  // Increased chance from 10% to 15%
                     // More significant disk cleanup
                     diskDelta = -1 * (Math.random() * 8 + 3); // 3-11% reduction (increased)
-                    if (shouldLog) {
+                    // Define shouldLog for conditionally enabling console logs
+                    const diskShouldLog = Math.random() < 0.1; 
+                    if (diskShouldLog) {
                       console.log(`Disk cleanup for ${metric.guestId}: ${(metric.metrics.disk?.percentUsed || 0).toFixed(1)}% -> ${((metric.metrics.disk?.percentUsed || 50) + diskDelta).toFixed(1)}%`);
                     }
                   } else {
@@ -712,21 +935,222 @@ const useSocket = (url) => {
                   const newDiskUsed = (metric.metrics.disk?.total || 500 * 1024 * 1024 * 1024) * (newDiskPercent / 100);
                   
                   // Network: More dramatic bursty traffic patterns
-                  let newInRate, newOutRate;
-                  if (Math.random() < 0.4) {  // Increased from 30% to 40% chance
-                    // Major traffic burst
-                    newInRate = Math.max(1024, (metric.metrics.network?.inRate || 1024) + (Math.random() * 30 + 10) * 1024 * 1024); // Increased
-                    newOutRate = Math.max(1024, (metric.metrics.network?.outRate || 1024) + (Math.random() * 15 + 5) * 1024 * 1024); // Increased
-                    if (shouldLog) {
-                      console.log(`Network burst for ${metric.guestId}: In: ${((metric.metrics.network?.inRate || 0)/(1024*1024)).toFixed(1)}MB/s -> ${(newInRate/(1024*1024)).toFixed(1)}MB/s`);
+                  let metricNewInRate, metricNewOutRate;
+                  
+                  // Define network traffic patterns based on VM type
+                  // Simplified - use fewer variables and clearer workload patterns
+                  const vmGuestId = metric.guestId || '';
+                  const vmLastDigit = vmGuestId ? parseInt(vmGuestId.slice(-1)) : 0;
+                  
+                  // Define VM workload types (based on last digit of ID for deterministic behavior)
+                  const workloadType = 
+                    [9].includes(vmLastDigit) ? 'high_bandwidth' : // 10% are high bandwidth servers (backups, mirrors, etc)
+                    [1, 5].includes(vmLastDigit) ? 'web_server' :   // 20% are web servers
+                    [2, 3, 7].includes(vmLastDigit) ? 'database' :  // 30% are databases
+                    [0, 4].includes(vmLastDigit) ? 'file_server' :  // 20% are file servers
+                    'idle';                                         // 20% are mostly idle VMs
+                  
+                  // Get current values with fallbacks to appropriate defaults
+                  let currentInRate = metric.metrics.network?.inRate || 0;
+                  let currentOutRate = metric.metrics.network?.outRate || 0;
+                  
+                  // Define workload-specific network traffic patterns
+                  const networkPatterns = {
+                    high_bandwidth: {
+                      // Very high bandwidth servers (backups, streaming, mirrors, etc.)
+                      baselineIn: 100 * 1024,     // 100 KB/s in
+                      baselineOut: 150 * 1024,    // 150 KB/s out
+                      maxIn: 50 * 1024 * 1024,    // 50 MB/s max in
+                      maxOut: 70 * 1024 * 1024,   // 70 MB/s max out
+                      burstProbability: 0.3,      // 30% chance of burst
+                      burstInSize: () => {
+                        // 10% chance of mega burst (5-20 MB/s)
+                        if (Math.random() < 0.1) {
+                          return (Math.random() * 15 + 5) * 1024 * 1024;
+                        }
+                        // Normal burst (0.5-3 MB/s)
+                        return (Math.random() * 2.5 + 0.5) * 1024 * 1024;
+                      },
+                      burstOutSize: () => {
+                        // 10% chance of mega burst (10-30 MB/s)
+                        if (Math.random() < 0.1) {
+                          return (Math.random() * 20 + 10) * 1024 * 1024;
+                        }
+                        // Normal burst (1-5 MB/s)
+                        return (Math.random() * 4 + 1) * 1024 * 1024;
+                      },
+                      decayRate: 0.3             // 30% decay rate (slower to allow higher values to persist)
+                    },
+                    web_server: {
+                      // Web servers have higher baseline output than input, with frequent small bursts
+                      baselineIn: 20 * 1024,      // 20 KB/s in
+                      baselineOut: 50 * 1024,     // 50 KB/s out
+                      maxIn: 5 * 1024 * 1024,     // 5 MB/s (~40 Mbps) max in
+                      maxOut: 10 * 1024 * 1024,   // 10 MB/s (~80 Mbps) max out
+                      burstProbability: 0.25,     // 25% chance of burst (increased)
+                      burstInSize: () => {
+                        // 5% chance of large burst (1-3 MB/s)
+                        if (Math.random() < 0.05) {
+                          return (Math.random() * 2 + 1) * 1024 * 1024;
+                        }
+                        // Normal burst (50-300 KB/s)
+                        return (Math.random() * 250 + 50) * 1024;
+                      },
+                      burstOutSize: () => {
+                        // 5% chance of large burst (2-5 MB/s)
+                        if (Math.random() < 0.05) {
+                          return (Math.random() * 3 + 2) * 1024 * 1024;
+                        }
+                        // Normal burst (100-500 KB/s)
+                        return (Math.random() * 400 + 100) * 1024;
+                      },
+                      decayRate: 0.5             // 50% decay rate toward baseline
+                    },
+                    database: {
+                      // Databases have moderate, more stable traffic
+                      baselineIn: 30 * 1024,     // 30 KB/s in
+                      baselineOut: 20 * 1024,    // 20 KB/s out
+                      maxIn: 4 * 1024 * 1024,    // 4 MB/s max in
+                      maxOut: 3 * 1024 * 1024,   // 3 MB/s max out
+                      burstProbability: 0.15,    // 15% chance of burst (increased)
+                      burstInSize: () => {
+                        // 3% chance of large burst (0.5-2 MB/s)
+                        if (Math.random() < 0.03) {
+                          return (Math.random() * 1.5 + 0.5) * 1024 * 1024;
+                        }
+                        // Normal burst (50-250 KB/s)
+                        return (Math.random() * 200 + 50) * 1024;
+                      },
+                      burstOutSize: () => {
+                        // 3% chance of large burst (0.3-1.5 MB/s)
+                        if (Math.random() < 0.03) {
+                          return (Math.random() * 1.2 + 0.3) * 1024 * 1024;
+                        }
+                        // Normal burst (30-150 KB/s)
+                        return (Math.random() * 120 + 30) * 1024;
+                      },
+                      decayRate: 0.45            // 45% decay rate (slower to allow higher values to persist)
+                    },
+                    file_server: {
+                      // File servers have high baseline with large bursts
+                      baselineIn: 50 * 1024,      // 50 KB/s in
+                      baselineOut: 80 * 1024,     // 80 KB/s out
+                      maxIn: 20 * 1024 * 1024,    // 20 MB/s max in
+                      maxOut: 25 * 1024 * 1024,   // 25 MB/s max out
+                      burstProbability: 0.2,      // 20% chance of burst (increased)
+                      burstInSize: () => {
+                        // 8% chance of large burst (2-8 MB/s)
+                        if (Math.random() < 0.08) {
+                          return (Math.random() * 6 + 2) * 1024 * 1024;
+                        }
+                        // Normal burst (200-800 KB/s)
+                        return (Math.random() * 600 + 200) * 1024;
+                      },
+                      burstOutSize: () => {
+                        // 8% chance of large burst (3-12 MB/s)
+                        if (Math.random() < 0.08) {
+                          return (Math.random() * 9 + 3) * 1024 * 1024;
+                        }
+                        // Normal burst (300-1200 KB/s)
+                        return (Math.random() * 900 + 300) * 1024;
+                      },
+                      decayRate: 0.4             // 40% decay rate (slower to allow higher values to persist)
+                    },
+                    idle: {
+                      // Idle VMs have minimal traffic
+                      baselineIn: 2 * 1024,      // 2 KB/s in
+                      baselineOut: 1 * 1024,     // 1 KB/s out
+                      maxIn: 1 * 1024 * 1024,    // 1 MB/s max in
+                      maxOut: 500 * 1024,        // 500 KB/s max out
+                      burstProbability: 0.05,    // 5% chance of burst
+                      burstInSize: () => {
+                        // 1% chance of unexpected large burst (100-500 KB/s)
+                        if (Math.random() < 0.01) {
+                          return (Math.random() * 400 + 100) * 1024;
+                        }
+                        // Normal small burst (10-50 KB/s)
+                        return (Math.random() * 40 + 10) * 1024;
+                      },
+                      burstOutSize: () => {
+                        // 1% chance of unexpected large burst (50-250 KB/s)
+                        if (Math.random() < 0.01) {
+                          return (Math.random() * 200 + 50) * 1024;
+                        }
+                        // Normal small burst (5-30 KB/s)
+                        return (Math.random() * 25 + 5) * 1024;
+                      },
+                      decayRate: 0.7             // 70% decay rate (quickly returns to baseline)
                     }
-                  } else {
-                    // Larger variations
-                    const inRateChange = (Math.random() * 12 - 6) * 1024 * 1024; // Increased variation range
-                    const outRateChange = (Math.random() * 10 - 5) * 1024 * 1024; // Increased variation range
-                    newInRate = Math.max(1024, (metric.metrics.network?.inRate || 1024) + inRateChange);
-                    newOutRate = Math.max(1024, (metric.metrics.network?.outRate || 1024) + outRateChange);
+                  };
+                  
+                  // Get pattern for this VM
+                  const pattern = networkPatterns[workloadType];
+                  
+                  // Determine if this update will create a burst
+                  const createBurst = Math.random() < pattern.burstProbability;
+                  // Occasional complete reset to baseline (1% chance)
+                  const forceReset = Math.random() < 0.01;
+                  
+                  // Define log chance once for this section
+                  const netLogChance = Math.random() < 0.05; // 5% chance to log
+                  
+                  if (forceReset) {
+                    // Reset to baseline with small random variation
+                    metricNewInRate = pattern.baselineIn * (0.8 + Math.random() * 0.4); // 80-120% of baseline
+                    metricNewOutRate = pattern.baselineOut * (0.8 + Math.random() * 0.4);
+                    
+                    if (netLogChance) {
+                      console.log(`Network reset for ${vmGuestId} (${workloadType}): In: ${(currentInRate/1024).toFixed(1)}KB/s → ${(metricNewInRate/1024).toFixed(1)}KB/s`);
+                    }
+                  } 
+                  else if (createBurst) {
+                    // Apply a burst (increase traffic significantly)
+                    const burstInSize = pattern.burstInSize();
+                    const burstOutSize = pattern.burstOutSize();
+                    
+                    metricNewInRate = Math.min(pattern.maxIn, currentInRate + burstInSize);
+                    metricNewOutRate = Math.min(pattern.maxOut, currentOutRate + burstOutSize);
+                    
+                    if (netLogChance) {
+                      console.log(`Network burst for ${vmGuestId} (${workloadType}): In: ${(currentInRate/1024).toFixed(1)}KB/s → ${(metricNewInRate/1024).toFixed(1)}KB/s`);
+                    }
+                  } 
+                  else {
+                    // Regular update: decay toward baseline + small random fluctuation
+                    const inDistance = Math.max(0, currentInRate - pattern.baselineIn);
+                    const outDistance = Math.max(0, currentOutRate - pattern.baselineOut);
+                    
+                    // Stronger decay when further from baseline (more realistic)
+                    const inDecayFactor = pattern.decayRate * (1 + inDistance / (pattern.maxIn * 0.5));
+                    const outDecayFactor = pattern.decayRate * (1 + outDistance / (pattern.maxOut * 0.5));
+                    
+                    // Apply decay with small random fluctuation
+                    const inDecay = inDistance * Math.min(0.95, inDecayFactor);
+                    const outDecay = outDistance * Math.min(0.95, outDecayFactor);
+                    
+                    // Small random fluctuations (-0.5KB to +1KB)
+                    const fluctuation = (Math.random() * 1.5 - 0.5) * 1024;
+                    
+                    metricNewInRate = Math.max(
+                      pattern.baselineIn * 0.8, // Don't go below 80% of baseline
+                      Math.min(
+                        pattern.maxIn,
+                        currentInRate - inDecay + fluctuation
+                      )
+                    );
+                    
+                    metricNewOutRate = Math.max(
+                      pattern.baselineOut * 0.8, // Don't go below 80% of baseline
+                      Math.min(
+                        pattern.maxOut,
+                        currentOutRate - outDecay + (fluctuation * 0.8)
+                      )
+                    );
                   }
+                  
+                  // Final safety check - ensure values are within appropriate ranges
+                  metricNewInRate = Math.max(1024, Math.min(pattern.maxIn, metricNewInRate));
+                  metricNewOutRate = Math.max(512, Math.min(pattern.maxOut, metricNewOutRate));
                   
                   return {
                     ...metric,
@@ -748,8 +1172,8 @@ const useSocket = (url) => {
                       },
                       network: {
                         ...(metric.metrics?.network || {}),
-                        inRate: newInRate,
-                        outRate: newOutRate
+                        inRate: metricNewInRate,
+                        outRate: metricNewOutRate
                       },
                       uptime: guest?.uptime || (metric.metrics?.uptime || 0) + 2 // Ensure uptime is defined
                     }
@@ -769,7 +1193,10 @@ const useSocket = (url) => {
                 const memPercent = Math.max(45, 35 + Math.random() * 40); // 45-75% initial memory 
                 const diskPercent = Math.max(50, 40 + Math.random() * 40); // 50-80% initial disk
                 
-                if (shouldLog) {
+                // Define shouldLog at the beginning of the function
+                const initialShouldLog = Math.random() < 0.1;
+                
+                if (initialShouldLog) {
                   console.log(`Initial metrics for ${guest.name || 'unnamed'} (${guest.id}): CPU: ${cpuUsage.toFixed(1)}%, Memory: ${memPercent.toFixed(1)}%, Disk: ${diskPercent.toFixed(1)}%`);
                 }
                 
@@ -790,8 +1217,8 @@ const useSocket = (url) => {
                       percentUsed: diskPercent
                     },
                     network: {
-                      inRate: Math.random() * 10 * 1024 * 1024, // 0-10 MB/s
-                      outRate: Math.random() * 5 * 1024 * 1024, // 0-5 MB/s
+                      inRate: 20 * 1024 + Math.random() * 30 * 1024, // 20-50 KB/s baseline
+                      outRate: 10 * 1024 + Math.random() * 15 * 1024, // 10-25 KB/s baseline
                     },
                     uptime: guest.uptime || 300 // 5 minutes default
                   }
@@ -898,30 +1325,40 @@ const useSocket = (url) => {
     // Handle both single guest and array of guests
     const guestData = Array.isArray(payload) ? payload : [payload];
     
-    setGuestData(prevGuests => {
-      const updatedGuests = [...prevGuests];
-      
-      guestData.forEach(guest => {
-        const index = updatedGuests.findIndex(g => g.id === guest.id);
-        if (index >= 0) {
-          updatedGuests[index] = guest;
-        } else {
-          updatedGuests.push(guest);
-        }
-      });
-      
-      // Store the current environment with the guest data
-      try {
-        localStorage.setItem('guest_data_cache', JSON.stringify({
-          environment: import.meta.env.MODE || 'development',
-          timestamp: Date.now()
-        }));
-      } catch (error) {
-        console.error('Error storing guest data cache info:', error);
+    // Log what we received for debugging
+    console.log(`🔍 SOCKET: handleGuestStatusUpdate received ${guestData.length} guests`);
+    
+    // Log distribution by node for debugging
+    const guestsByNode = {};
+    guestData.forEach(guest => {
+      const nodeId = guest.node || 'unknown';
+      if (!guestsByNode[nodeId]) {
+        guestsByNode[nodeId] = [];
       }
-      
-      return updatedGuests;
+      guestsByNode[nodeId].push(guest.id);
     });
+    
+    console.log('🔍 SOCKET: Guest distribution in update:');
+    Object.keys(guestsByNode).sort().forEach(nodeId => {
+      console.log(`  - ${nodeId}: ${guestsByNode[nodeId].length} guests`);
+    });
+    
+    // CRITICAL: Just use the new guest data directly without any filtering or deduplication
+    // The mock server should be sending the correct data
+    setGuestData(guestData);
+    
+    // Store the current environment with the guest data
+    try {
+      localStorage.setItem('guest_data_cache', JSON.stringify({
+        environment: import.meta.env.MODE || 'development',
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error('Error storing guest data cache info:', error);
+    }
+    
+    // Force update to trigger re-renders
+    setForceUpdateCounter(prevCounter => prevCounter + 1);
   }, []);
 
   // Handler for metrics updates
