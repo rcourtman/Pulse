@@ -11,7 +11,7 @@ export default defineConfig({
     proxy: {
       // Proxy WebSocket connections to the real backend
       '/socket.io': {
-        target: process.env.VITE_API_URL || 'http://localhost:7656',  // Proxy to the backend on 7656 during development
+        target: process.env.VITE_API_URL || 'http://localhost:7654',  // Proxy to the backend on 7654 during development
         ws: true,
         changeOrigin: true,
         secure: false,
@@ -59,7 +59,7 @@ export default defineConfig({
       },
       // Proxy API requests to the real backend
       '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:7656',  // Proxy to the backend on 7656 during development
+        target: process.env.VITE_API_URL || 'http://localhost:7654',  // Proxy to the backend on 7654 during development
         changeOrigin: true,
         configure: (proxy, _options) => {
           // Increase timeout values for Docker environments
