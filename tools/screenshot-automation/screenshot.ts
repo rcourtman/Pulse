@@ -209,6 +209,74 @@ class ScreenshotTool {
       logger.warn(`Error waiting for data to load: ${error}`);
     }
     
+    // Execute beforeScreenshot script if provided
+    if (beforeScreenshot) {
+      try {
+        logger.info(`Executing beforeScreenshot script`);
+        await page.evaluate((script) => {
+          // eslint-disable-next-line no-eval
+          return eval(script);
+        }, beforeScreenshot);
+        
+        // Wait a moment for any UI changes to take effect
+        await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 1000)));
+      } catch (error) {
+        logger.warn(`Error executing beforeScreenshot script: ${error}`);
+      }
+    }
+    
+    // Wait for data to load - look for elements that indicate data is loaded
+    try {
+      // Wait for any loading indicators to disappear
+      await page.evaluate(() => {
+        return new Promise((resolve) => {
+          // Check if there are any loading indicators
+          const checkForLoadingIndicators = () => {
+            const loadingElements = document.querySelectorAll('.loading-indicator, [data-loading="true"], .MuiCircularProgress-root');
+            if (loadingElements.length === 0) {
+              resolve(true);
+            } else {
+              setTimeout(checkForLoadingIndicators, 500);
+            }
+          };
+          
+          // Start checking
+          checkForLoadingIndicators();
+          
+          // Resolve anyway after a timeout to prevent hanging
+          setTimeout(() => resolve(true), 5000);
+        });
+      });
+      
+      // Wait for data elements to appear
+      await page.evaluate(() => {
+        return new Promise((resolve) => {
+          // Check if there are data elements
+          const checkForDataElements = () => {
+            // Look for elements that would indicate data is loaded
+            const dataElements = document.querySelectorAll('.resource-card, .vm-card, .container-card, .guest-row, [data-testid="resource-item"]');
+            if (dataElements.length > 0) {
+              console.log(`Found ${dataElements.length} data elements`);
+              resolve(true);
+            } else {
+              setTimeout(checkForDataElements, 500);
+            }
+          };
+          
+          // Start checking
+          checkForDataElements();
+          
+          // Resolve anyway after a timeout to prevent hanging
+          setTimeout(() => {
+            console.log('Timed out waiting for data elements');
+            resolve(true);
+          }, 5000);
+        });
+      });
+    } catch (error) {
+      logger.warn(`Error waiting for data to load: ${error}`);
+    }
+    
     // Check if we should toggle filters or use the saved state
     if (enableFilters) {
       // Check if we have a saved filter state
@@ -265,24 +333,6 @@ class ScreenshotTool {
       }
     }
     
-    // Execute beforeScreenshot script if provided
-    if (beforeScreenshot) {
-      logger.info(`Executing beforeScreenshot script for ${outputName}`);
-      try {
-        await page.evaluate(async (script) => {
-          // Use Function constructor to create an async function from the script
-          const scriptFn = new Function(`return (async () => { ${script} })()`)
-          await scriptFn();
-        }, beforeScreenshot);
-        logger.info(`beforeScreenshot script executed successfully`);
-        
-        // Add a small delay to ensure changes from the script are applied
-        await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 1000)));
-      } catch (error) {
-        logger.error(`Error executing beforeScreenshot script: ${error}`);
-      }
-    }
-    
     // Add a small delay to ensure everything is rendered after theme and filter changes
     await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 2000)));
     
@@ -323,13 +373,11 @@ class ScreenshotTool {
       localStorage.setItem('app_dark_mode', JSON.stringify(true));
       localStorage.setItem('use_mock_data', 'true');
       localStorage.setItem('MOCK_DATA_ENABLED', 'true');
-      localStorage.setItem('mock_enabled', 'true');
-      localStorage.setItem('MOCK_SERVER_URL', 'http://localhost:7656');
       
-      // Also set global variables that might be used
-      (window as any).USE_MOCK_DATA = true;
-      (window as any).MOCK_DATA_ENABLED = true;
-      (window as any).MOCK_SERVER_URL = 'http://localhost:7656';
+      // Remove client-side mock data settings
+      localStorage.removeItem('mock_enabled');
+      localStorage.removeItem('MOCK_SERVER_URL');
+      localStorage.removeItem('MOCK_DATA');
       
       // Apply theme if the function exists
       if (window.applyTheme) {
@@ -784,19 +832,17 @@ class ScreenshotTool {
    * Set up mock data for testing
    */
   private async setupMockData(page: Page): Promise<void> {
-    logger.info('Setting up mock data');
+    logger.info('Setting up server-side mock data');
     
     // Set mock data flags in localStorage before navigation
     await page.evaluateOnNewDocument(() => {
       localStorage.setItem('use_mock_data', 'true');
       localStorage.setItem('MOCK_DATA_ENABLED', 'true');
-      localStorage.setItem('mock_enabled', 'true');
-      localStorage.setItem('MOCK_SERVER_URL', 'http://localhost:7656');
       
-      // Also set global variables that might be used
-      (window as any).USE_MOCK_DATA = true;
-      (window as any).MOCK_DATA_ENABLED = true;
-      (window as any).MOCK_SERVER_URL = 'http://localhost:7656';
+      // Remove client-side mock data settings
+      localStorage.removeItem('mock_enabled');
+      localStorage.removeItem('MOCK_SERVER_URL');
+      localStorage.removeItem('MOCK_DATA');
     });
     
     // Execute any custom setup script from config
