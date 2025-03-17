@@ -47,12 +47,25 @@ while true; do
       # Configure environment for dev-real (with mock data disabled)
       node scripts/configure-env.js dev-real
       
-      echo -e "${GREEN}Configured environment to use real Proxmox data${NC}"
+      # Ensure cluster auto-detection is enabled
+      if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS requires an empty string with sed
+        sed -i '' 's/PROXMOX_AUTO_DETECT_CLUSTER=false/PROXMOX_AUTO_DETECT_CLUSTER=true/' .env
+        sed -i '' 's/PROXMOX_CLUSTER_MODE=true/PROXMOX_CLUSTER_MODE=false/' .env
+      else
+        # Linux version
+        sed -i 's/PROXMOX_AUTO_DETECT_CLUSTER=false/PROXMOX_AUTO_DETECT_CLUSTER=true/' .env
+        sed -i 's/PROXMOX_CLUSTER_MODE=true/PROXMOX_CLUSTER_MODE=false/' .env
+      fi
+      
+      echo -e "${GREEN}Configured environment to use real Proxmox data with automatic cluster detection${NC}"
       
       # Set environment variables directly in the current shell and for any child processes
       export USE_MOCK_DATA=false
       export MOCK_DATA_ENABLED=false
       export NODE_ENV=development
+      export PROXMOX_AUTO_DETECT_CLUSTER=true
+      export PROXMOX_CLUSTER_MODE=false
       
       # Now run with real data - run the start-dev.sh script directly instead of through start.js
       # This ensures our environment variables are passed through properly
