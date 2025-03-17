@@ -25,9 +25,26 @@ const NetworkTableRow = ({
   columnOrder,
   activeFilteredColumns = {},
   thresholdColumn,
-  thresholdValue
+  thresholdValue,
+  sharedGuestIds = {},
+  filters
 }) => {
   const theme = useTheme();
+  
+  // DEBUG: Log the guest data to see what hastate values are coming in
+  // More detailed logging for the first few guests to keep logs manageable
+  const guestIdNum = parseInt(guest?.id?.toString() || '0', 10);
+  if (guestIdNum <= 5) {
+    console.log('Guest details:', { 
+      id: guest.id, 
+      name: guest.name,
+      node: guest.node,
+      status: guest.status,
+      hastate: guest.hastate, 
+      shared: guest.shared,
+      isRunning: guest.status?.toLowerCase() === 'running'
+    });
+  }
   
   // Get search terms for highlighting
   const { searchTerm, activeSearchTerms } = useSearchContext();
@@ -88,6 +105,12 @@ const NetworkTableRow = ({
             term: t,
             isColumnSpecific: false
           });
+        });
+        
+        // Also add the original term in case exact phrase matching is needed
+        processedTerms.push({
+          term: termLower,
+          isColumnSpecific: false
         });
       } else if (termLower.includes('|')) {
         // Handle OR search with pipe character
@@ -151,11 +174,78 @@ const NetworkTableRow = ({
   // Determine if the guest is running
   const isRunning = guest.status?.toLowerCase() === 'running';
   
-  // Determine if this is a shared guest (ID 999 or 888)
-  const isSharedGuest = guest.vmid === 999 || guest.vmid === 888;
+  // Determine if this is a shared guest by checking if it actually exists on multiple nodes
+  // First check if it's in the sharedGuestIds map, otherwise fall back to the ID format check
+  const isSharedGuest = useMemo(() => {
+    // For guests with VMID 999 or 888, show more detailed logging
+    if (guest?.vmid === 999 || guest?.vmid === 888) {
+      console.info('⚠️ Special VMID detected:', { 
+        id: guest?.id, 
+        vmid: guest?.vmid, 
+        name: guest?.name,
+        isInSharedMap: !!(guest?.id && sharedGuestIds[guest.id]),
+        hasColonInId: !!(guest?.id && guest.id.includes(':')),
+        hastate: guest?.hastate
+      });
+    }
+    
+    // Check if the guest has a meaningful HA state (not undefined, not ignored)
+    // Only guests managed by HA or shared across nodes should show in the HA column
+    const hasHaState = guest?.hastate && guest.hastate !== 'ignored';
+    
+    // Is the guest shared across nodes? (exists in sharedGuestIds map or has ':' in id)
+    const isShared = (guest?.id && sharedGuestIds[guest.id]) || 
+                     (guest?.id && guest.id.includes(':')) ||
+                     !!guest?.shared;
+
+    // For debugging: log about 1% of the guests to avoid flooding the console
+    if (Math.random() < 0.01) {
+      console.info('Guest HA Status Check:', { 
+        id: guest?.id,
+        name: guest.name,
+        hastate: guest.hastate,
+        isShared,
+        hasHaState,
+        shouldShowHaStatus: hasHaState || isShared
+      });
+    }
+
+    // Return true if the guest is either HA-managed or shared
+    return hasHaState || isShared;
+  }, [guest?.id, guest?.vmid, guest?.name, guest?.hastate, guest?.shared, sharedGuestIds]);
   
-  // If the guest is running and it's a shared guest, it's on its primary node
-  const isPrimaryNode = isSharedGuest && isRunning;
+  // If the guest is running, it's the primary node for this guest
+  // In development mode, alternate primary/secondary for testing
+  const isPrimaryNode = useMemo(() => {
+    const isDevelopmentMode = localStorage.getItem('NODE_ENV') === 'development' || 
+                            localStorage.getItem('use_mock_data') === 'true';
+    
+    // Use hastate field if available to determine primary status
+    // Specifically for showing visuals, any guest with a hastate that isn't stopped
+    // or disabled should be treated as "PRIMARY" (for the visual only)
+    if (guest?.hastate) {
+      if (guest.hastate === 'stopped' || guest.hastate === 'disabled') {
+        return false;
+      }
+      // For any other state (started, error, fence, etc), show as primary
+      return true;
+    }
+    
+    // No hastate? Just use the running status directly
+    return isRunning;
+    
+    // Previous logic - commented out as it was defaulting most guests to SECONDARY
+    /*
+    if (isDevelopmentMode && isSharedGuest) {
+      // In dev mode, make some guests primary and others secondary for testing
+      const guestIdNumber = parseInt(guest?.id?.split(':')[0] || guest?.id || '0', 10);
+      return guestIdNumber % 2 === 0; // Even IDs are primary, odd are secondary
+    }
+    
+    // Standard logic for production
+    return isSharedGuest && isRunning;
+    */
+  }, [isRunning, guest?.hastate]);
   
   // Get metrics for this guest
   const cpuMetrics = metrics?.cpu?.[guest?.id] || null;
@@ -232,6 +322,7 @@ const NetworkTableRow = ({
       type: '50px',     // Just "VM" or "CT"
       id: '60px',       // Just numeric IDs
       status: '50px',   // Just the status circle
+      role: '100px',    // Primary/Secondary chip
       download: '90px', // Network rates
       upload: '90px',   // Network rates
       uptime: '90px'    // Time display
@@ -276,7 +367,54 @@ const NetworkTableRow = ({
 
   // Function to check if a cell contains content that matches search terms
   const cellHasMatch = (columnId) => {
-    if (!columnId || !allSearchTerms || !allSearchTerms.terms || allSearchTerms.terms.length === 0) {
+    if (!columnId) {
+      return false;
+    }
+
+    // Check if this column has an active threshold filter
+    if (['cpu', 'memory', 'disk', 'download', 'upload'].includes(columnId)) {
+      // Debug log to see what filters are being passed
+      if (columnId === 'cpu') {
+        console.log('CPU Column Check:', { 
+          columnId, 
+          hasFilters: !!filters,
+          filterValue: filters?.[columnId],
+          isActive: filters && filters[columnId] > 0,
+          filtersObj: filters ? {...filters} : null
+        });
+      }
+      
+      // Handle all possible ways to check for active filters
+      // 1. Direct filters object check
+      if (filters && filters[columnId] > 0) {
+        return true;
+      }
+      
+      // 2. Check the activeFilteredColumns object which might have a different structure
+      if (activeFilteredColumns && activeFilteredColumns[columnId]) {
+        return true;
+      }
+      
+      // 3. Check if we have a direct match with the thresholdColumn
+      if (thresholdColumn === columnId && thresholdValue > 0) {
+        return true;
+      }
+      
+      // 4. Check if we have a threshold search term in the search context
+      const hasThresholdSearch = allSearchTerms?.terms?.some(item => 
+        item.isColumnSpecific && 
+        item.columnId === columnId && 
+        item.term.includes('>') && 
+        /\d/.test(item.term)
+      );
+      
+      if (hasThresholdSearch) {
+        return true;
+      }
+    }
+
+    // Continue with regular search term matching if there are search terms
+    if (!allSearchTerms || !allSearchTerms.terms || allSearchTerms.terms.length === 0) {
       return false;
     }
 
@@ -297,6 +435,19 @@ const NetworkTableRow = ({
       case 'node':
         cellText = getNodeName(guest?.node);
         break;
+      case 'role':
+        cellText = isSharedGuest ? 
+          (guest?.hastate === 'started' ? 'primary started' :
+           guest?.hastate === 'stopped' ? 'secondary stopped' :
+           guest?.hastate === 'migrate' ? 'migrating migration' :
+           guest?.hastate === 'relocate' ? 'relocating relocation' :
+           guest?.hastate === 'error' ? 'error' :
+           guest?.hastate === 'fence' ? 'fence fencing' :
+           guest?.hastate === 'recovery' ? 'recovery recovering' :
+           guest?.hastate === 'disabled' ? 'disabled' :
+           isPrimaryNode ? 'primary' : 'secondary') 
+          : (guest?.hastate && guest.hastate !== 'ignored' ? 'ha managed high-availability' : '');
+        break;
       case 'type':
         cellText = isVM ? 'VM virtual machine' : 'CT container';
         break;
@@ -308,6 +459,15 @@ const NetworkTableRow = ({
         break;
       case 'name':
         cellText = guest?.name;
+        break;
+      case 'cpu':
+        cellText = `cpu ${formatPercentage(cpuUsage)}`;
+        break;
+      case 'memory':
+        cellText = `memory ${formatBytesWithUnit(memoryUsed, memoryUnit)} ${formatBytesWithUnit(memoryTotal, memoryUnit)} ${memoryUsage}%`;
+        break;
+      case 'disk':
+        cellText = `disk ${formatBytesWithUnit(diskUsed, diskUnit)} ${formatBytesWithUnit(diskTotal, diskUnit)} ${diskUsage}%`;
         break;
       case 'download':
         cellText = formatNetworkRate(downloadRate);
@@ -334,25 +494,98 @@ const NetworkTableRow = ({
       case 'node':
         return (
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Typography variant="body2" noWrap>
+            <Typography 
+              variant="body2" 
+              noWrap
+              sx={{
+                fontWeight: isPrimaryNode ? 'bold' : 'normal',
+                color: isPrimaryNode ? 'primary.main' : nodeTextColor,
+              }}
+            >
               {getNodeName(guest?.node)}
             </Typography>
-            {isSharedGuest && isPrimaryNode && (
-              <Tooltip title="Primary Node - This node is currently running this shared guest">
-                <Box component="span" sx={{ 
-                  display: 'inline-block',
-                  width: '6px',
-                  height: '6px',
-                  borderRadius: '50%',
-                  backgroundColor: 'primary.main',
-                  opacity: 0.6,
-                  ml: 1,
-                  verticalAlign: 'middle'
-                }} />
-              </Tooltip>
-            )}
           </Box>
         );
+      
+      case 'role':
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {/* Only show HA status chip if one of these conditions is true:
+                1. Guest has a meaningful hastate (not ignored and not undefined)
+                2. Guest is shared among multiple nodes (truly HA-managed)
+            */}
+            {(guest?.hastate && guest.hastate !== 'ignored') || 
+             (guest?.shared === true || (guest?.id && (sharedGuestIds[guest.id] || guest.id.includes(':')))) ? (
+              <Tooltip title={
+                guest?.hastate === 'started' ? "Primary Node - Currently running this shared guest" :
+                guest?.hastate === 'stopped' ? "Secondary Node - This guest is running on another node" :
+                guest?.hastate === 'migrate' ? "Migration in Progress - Guest is being moved to another node" :
+                guest?.hastate === 'relocate' ? "Relocation in Progress - Guest is being cold-migrated" :
+                guest?.hastate === 'error' ? "Error State - High availability issue detected" :
+                guest?.hastate === 'fence' ? "Fencing Required - Node needs to be fenced to recover this guest" :
+                guest?.hastate === 'recovery' ? "Recovery in Progress - Guest is being recovered" :
+                guest?.hastate === 'disabled' ? "HA Disabled - Guest is not actively managed by HA" :
+                guest?.hastate === 'ignored' ? "Not managed by High Availability" :
+                isRunning ? "Primary Node - Currently running this guest" : 
+                "Secondary Node - This guest is not running on this node"
+              }>
+                <Chip
+                  size="small"
+                  label={
+                    guest?.hastate === 'started' ? "PRIMARY" :
+                    guest?.hastate === 'stopped' ? "SECONDARY" :
+                    guest?.hastate === 'migrate' ? "MIGRATING" :
+                    guest?.hastate === 'relocate' ? "RELOCATING" :
+                    guest?.hastate === 'error' ? "ERROR" :
+                    guest?.hastate === 'fence' ? "FENCE" :
+                    guest?.hastate === 'recovery' ? "RECOVERY" :
+                    guest?.hastate === 'disabled' ? "DISABLED" :
+                    guest?.hastate === 'ignored' ? "IGNORED" :
+                    isRunning ? "PRIMARY" : "SECONDARY"
+                  }
+                  sx={{
+                    height: '16px',
+                    fontSize: '0.6rem',
+                    backgroundColor: 
+                      guest?.hastate === 'started' ? alpha(theme.palette.primary.main, 0.2) :
+                      guest?.hastate === 'stopped' ? alpha(theme.palette.text.secondary, 0.1) :
+                      guest?.hastate === 'migrate' ? alpha(theme.palette.info.main, 0.2) :
+                      guest?.hastate === 'relocate' ? alpha(theme.palette.info.main, 0.2) :
+                      guest?.hastate === 'error' ? alpha(theme.palette.error.main, 0.2) :
+                      guest?.hastate === 'fence' ? alpha(theme.palette.warning.main, 0.2) :
+                      guest?.hastate === 'recovery' ? alpha(theme.palette.warning.main, 0.2) :
+                      guest?.hastate === 'disabled' ? alpha(theme.palette.text.disabled, 0.2) :
+                      guest?.hastate === 'ignored' ? alpha(theme.palette.text.disabled, 0.1) :
+                      isRunning ? alpha(theme.palette.primary.main, 0.2) : alpha(theme.palette.text.secondary, 0.1),
+                    color: 
+                      guest?.hastate === 'started' ? theme.palette.primary.main :
+                      guest?.hastate === 'stopped' ? theme.palette.text.secondary :
+                      guest?.hastate === 'migrate' ? theme.palette.info.main :
+                      guest?.hastate === 'relocate' ? theme.palette.info.main :
+                      guest?.hastate === 'error' ? theme.palette.error.main :
+                      guest?.hastate === 'fence' ? theme.palette.warning.main :
+                      guest?.hastate === 'recovery' ? theme.palette.warning.main :
+                      guest?.hastate === 'disabled' ? theme.palette.text.disabled :
+                      guest?.hastate === 'ignored' ? theme.palette.text.disabled :
+                      isRunning ? theme.palette.primary.main : theme.palette.text.secondary,
+                    borderColor: 
+                      guest?.hastate === 'started' ? alpha(theme.palette.primary.main, 0.3) :
+                      guest?.hastate === 'stopped' ? alpha(theme.palette.text.secondary, 0.2) :
+                      guest?.hastate === 'migrate' ? alpha(theme.palette.info.main, 0.3) :
+                      guest?.hastate === 'relocate' ? alpha(theme.palette.info.main, 0.3) :
+                      guest?.hastate === 'error' ? alpha(theme.palette.error.main, 0.3) :
+                      guest?.hastate === 'fence' ? alpha(theme.palette.warning.main, 0.3) :
+                      guest?.hastate === 'recovery' ? alpha(theme.palette.warning.main, 0.3) :
+                      guest?.hastate === 'disabled' ? alpha(theme.palette.text.disabled, 0.3) :
+                      guest?.hastate === 'ignored' ? alpha(theme.palette.text.disabled, 0.2) :
+                      isRunning ? alpha(theme.palette.primary.main, 0.3) : alpha(theme.palette.text.secondary, 0.2),
+                  }}
+                />
+              </Tooltip>
+            ) : null}
+          </Box>
+        );
+        
       case 'type':
         return (
           <Box sx={{ 
@@ -378,7 +611,7 @@ const NetworkTableRow = ({
         );
       case 'id':
         return (
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
             {extractNumericId(guest?.id)}
           </Typography>
         );
@@ -391,11 +624,22 @@ const NetworkTableRow = ({
             width: '100%',
             height: '100%'
           }}>
-            <Tooltip title={isRunning ? 'Running' : 'Stopped'}>
-              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                <StatusIndicator status={isRunning ? 'running' : 'stopped'} />
-              </Box>
-            </Tooltip>
+            {isSharedGuest ? (
+              <Tooltip title={isPrimaryNode 
+                ? `Primary: Running on ${nodeName}` 
+                : `Secondary: Not running on ${nodeName}`
+              }>
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  <StatusIndicator status={isRunning ? 'running' : 'stopped'} />
+                </Box>
+              </Tooltip>
+            ) : (
+              <Tooltip title={isRunning ? 'Running' : 'Stopped'}>
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  <StatusIndicator status={isRunning ? 'running' : 'stopped'} />
+                </Box>
+              </Tooltip>
+            )}
           </Box>
         );
       case 'name':
@@ -467,6 +711,16 @@ const NetworkTableRow = ({
       {/* Render cells based on column order */}
       {Array.isArray(visibleColumns) && visibleColumns.length > 0 ? (
         visibleColumns.map(column => {
+          // Don't skip rendering the role column if user chose to make it visible
+          // Only skip if user hasn't configured it and no cluster detected
+          const roleColumnShouldDisplay = column.id !== 'role' || 
+                                         column.visible === true || 
+                                         localStorage.getItem('CLUSTER_DETECTED') === 'true';
+          
+          if (!roleColumnShouldDisplay) {
+            return null;
+          }
+          
           // Check if this cell has a matching search term
           const hasMatch = cellHasMatch(column.id);
           
@@ -524,6 +778,7 @@ const getMinWidthForColumn = (columnId) => {
     type: 50,      // Very small - just "VM" or "CT"
     id: 60,        // Very small - just numeric IDs
     status: 50,    // Minimal - just an icon
+    role: 100,     // Primary/Secondary chip
     
     // Auto-sized columns
     name: 120,     // Names - minimum width
