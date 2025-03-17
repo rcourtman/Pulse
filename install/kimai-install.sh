@@ -71,12 +71,6 @@ $STD composer install --no-dev --optimize-autoloader --no-interaction
 cp .env.dist .env
 sed -i "/^DATABASE_URL=/c\DATABASE_URL=mysql://$DB_USER:$DB_PASS@127.0.0.1:3306/$DB_NAME?charset=utf8mb4&serverVersion=$MYSQL_VERSION" /opt/kimai/.env
 $STD bin/console kimai:install -n
-chown -R :www-data /opt/*
-chmod -R g+r /opt/*
-chmod -R g+rw /opt/*
-chown -R www-data:www-data /opt/*
-chmod -R 777 /opt/*
-chmod -R 777 /opt/kimai/* 
 $STD expect <<EOF
 set timeout -1
 log_user 0
@@ -126,6 +120,14 @@ $STD a2ensite kimai.conf
 $STD a2dissite 000-default.conf  
 $STD systemctl reload apache2
 msg_ok "Created Service"
+
+msg_info "Setup Permissions"
+chown -R :www-data /opt/*
+chmod -R g+r /opt/*
+chmod -R g+rw /opt/*
+chown -R www-data:www-data /opt/*
+chmod -R 777 /opt/*
+msg_ok "Setup Permissions"
 
 motd_ssh
 customize
