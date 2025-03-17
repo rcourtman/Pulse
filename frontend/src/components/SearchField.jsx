@@ -124,6 +124,7 @@ const SearchField = () => {
       status: [],
       type: [],
       node: [],
+      role: [],
       other: []
     };
 
@@ -134,6 +135,8 @@ const SearchField = () => {
         categories.type.push(term);
       } else if (term.startsWith('node:')) {
         categories.node.push(term);
+      } else if (term.startsWith('role:')) {
+        categories.role.push(term);
       } else {
         categories.other.push(term);
       }
@@ -245,27 +248,34 @@ const SearchField = () => {
       </Box>
 
       {/* Filter bubble button - always shown */}
-      <Tooltip title={hasActiveFilters ? "Active search filters" : "Search tips & filters"}>
-        <Badge
-          badgeContent={hasActiveFilters ? activeSearchTerms.length : 0}
-          color="primary"
-          sx={{ ml: 1 }}
-          invisible={!hasActiveFilters}
+      <Tooltip title="Filter options and tips">
+        <IconButton
+          aria-label="filter options"
+          onClick={handleFilterClick}
+          sx={{ 
+            ml: 0.5,
+            color: (openFilters || activeSearchTerms.length > 0) ? 'primary.main' : 'inherit',
+            opacity: openFilters ? 1 : 0.7,
+            '&:hover': {
+              opacity: 1,
+            }
+          }}
         >
-          <IconButton
-            size="small"
-            aria-label="show active filters"
-            onClick={handleFilterClick}
-            color="inherit"
-            sx={{ 
-              '&:hover': { 
-                bgcolor: alpha(theme.palette.common.white, 0.15) 
+          <Badge 
+            badgeContent={activeSearchTerms.length} 
+            color="primary"
+            sx={{
+              '& .MuiBadge-badge': {
+                fontSize: '0.65rem',
+                height: 16,
+                minWidth: 16,
+                padding: '0 4px'
               }
             }}
           >
-            <FilterListIcon fontSize="small" />
-          </IconButton>
-        </Badge>
+            <FilterListIcon />
+          </Badge>
+        </IconButton>
       </Tooltip>
 
       {/* Filter popover with search terms */}
@@ -377,6 +387,30 @@ const SearchField = () => {
                 </Box>
               )}
 
+              {/* Role filters */}
+              {filteredCategories.role.length > 0 && (
+                <Box sx={{ mb: 1.5 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                    Role Filters:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                    {filteredCategories.role.map((term) => (
+                      <Chip
+                        key={term}
+                        label={term}
+                        size="small"
+                        color="info"
+                        onDelete={() => removeSearchTerm(term)}
+                        sx={{ 
+                          fontSize: '0.75rem',
+                          height: 24
+                        }}
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+
               {/* Text search terms */}
               {filteredCategories.other.length > 0 && (
                 <Box sx={{ mb: 1.5 }}>
@@ -427,28 +461,6 @@ const SearchField = () => {
                 Use filters to quickly find the exact systems you're looking for. Combine multiple filters for more specific results.
               </Typography>
               
-              {/* Filter by node examples */}
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Filter by node location:
-                </Typography>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  <Chip 
-                    label="node:" 
-                    size="small" 
-                    variant="outlined"
-                    color="warning" 
-                    icon={<AddIcon fontSize="small" />}
-                    onClick={() => {
-                      setSearchTerm("node:");
-                      setAddedPrefix(true);
-                      setFilterAnchorEl(null);
-                    }}
-                    sx={exampleChipStyle}
-                  />
-                </Box>
-              </Box>
-              
               {/* Filter by status examples */}
               <Box sx={{ mt: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
@@ -482,6 +494,15 @@ const SearchField = () => {
                     onClick={() => handleExampleClick("status:paused")}
                     sx={exampleChipStyle}
                   />
+                  <Chip 
+                    label="status:suspended" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("status:suspended")}
+                    sx={exampleChipStyle}
+                  />
                 </Box>
               </Box>
               
@@ -509,13 +530,150 @@ const SearchField = () => {
                     onClick={() => handleExampleClick("type:ct")}
                     sx={exampleChipStyle}
                   />
+                  <Chip 
+                    label="type:qemu" 
+                    size="small" 
+                    variant="outlined"
+                    color="success" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("type:qemu")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="type:lxc" 
+                    size="small" 
+                    variant="outlined"
+                    color="success" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("type:lxc")}
+                    sx={exampleChipStyle}
+                  />
                 </Box>
               </Box>
               
+              {/* Filter by node examples */}
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Filter by node location:
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  <Chip 
+                    label="node:" 
+                    size="small" 
+                    variant="outlined"
+                    color="warning" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => {
+                      setSearchTerm("node:");
+                      setAddedPrefix(true);
+                      setFilterAnchorEl(null);
+                    }}
+                    sx={exampleChipStyle}
+                  />
+                </Box>
+              </Box>
+              
+              {/* Filter by role examples */}
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Filter by HA status:
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  <Chip 
+                    label="role:" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => {
+                      setSearchTerm("role:");
+                      setAddedPrefix(true);
+                      setFilterAnchorEl(null);
+                    }}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="role:primary" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("role:primary")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="role:secondary" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("role:secondary")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="role:migrating" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("role:migrating")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="role:error" 
+                    size="small" 
+                    variant="outlined"
+                    color="error" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("role:error")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="role:fence" 
+                    size="small" 
+                    variant="outlined"
+                    color="warning" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("role:fence")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="role:recovery" 
+                    size="small" 
+                    variant="outlined"
+                    color="warning" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("role:recovery")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="role:-" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("role:-")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="role" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("role")}
+                    sx={{
+                      ...exampleChipStyle,
+                      border: `1px dashed ${theme.palette.info.main}`,
+                    }}
+                  />
+                </Box>
+              </Box>
+
               {/* Filter by resources examples */}
               <Box sx={{ mt: 1 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
-                  Filter by resource usage thresholds:
+                  Filter by resource usage:
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
                   <Chip 
@@ -528,6 +686,24 @@ const SearchField = () => {
                     sx={exampleChipStyle}
                   />
                   <Chip 
+                    label="cpu<30" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("cpu<30")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="cpu=50" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("cpu=50")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
                     label="memory>80" 
                     size="small" 
                     variant="outlined"
@@ -537,12 +713,21 @@ const SearchField = () => {
                     sx={exampleChipStyle}
                   />
                   <Chip 
-                    label="disk>90" 
+                    label="memory<=25" 
                     size="small" 
                     variant="outlined"
                     color="info" 
                     icon={<AddIcon fontSize="small" />}
-                    onClick={() => handleExampleClick("disk>90")}
+                    onClick={() => handleExampleClick("memory<=25")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="disk>=90" 
+                    size="small" 
+                    variant="outlined"
+                    color="info" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("disk>=90")}
                     sx={exampleChipStyle}
                   />
                   <Chip 
@@ -554,6 +739,37 @@ const SearchField = () => {
                     onClick={() => handleExampleClick("network>100")}
                     sx={exampleChipStyle}
                   />
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', width: '100%' }}>
+                    <em>Supports {'>'}{'<'} {'>='} {'<='} = operators</em>
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* OR search examples */}
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  OR search (matches either term):
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  <Chip 
+                    label="web database" 
+                    size="small" 
+                    variant="outlined"
+                    color="default" 
+                    onClick={() => handleExampleClick("web database")}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="vm|ct" 
+                    size="small" 
+                    variant="outlined"
+                    color="default" 
+                    onClick={() => handleExampleClick("vm|ct")}
+                    sx={exampleChipStyle}
+                  />
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block', width: '100%' }}>
+                    <em>Use spaces or | for OR logic</em>
+                  </Typography>
                 </Box>
               </Box>
 
@@ -581,12 +797,54 @@ const SearchField = () => {
                     onClick={() => handleExampleClick("database")}
                     sx={exampleChipStyle}
                   />
+                  <Chip 
+                    label="nginx" 
+                    size="small" 
+                    variant="outlined"
+                    color="default" 
+                    icon={<AddIcon fontSize="small" />}
+                    onClick={() => handleExampleClick("nginx")}
+                    sx={exampleChipStyle}
+                  />
+                </Box>
+              </Box>
+              
+              {/* Common combined searches */}
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+                  Common combined searches:
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  <Chip 
+                    label="status:running type:vm" 
+                    size="small" 
+                    variant="outlined"
+                    color="primary" 
+                    onClick={() => {
+                      addSearchTerm("status:running");
+                      addSearchTerm("type:vm");
+                      setFilterAnchorEl(null);
+                    }}
+                    sx={exampleChipStyle}
+                  />
+                  <Chip 
+                    label="role:primary cpu>50" 
+                    size="small" 
+                    variant="outlined"
+                    color="primary" 
+                    onClick={() => {
+                      addSearchTerm("role:primary");
+                      addSearchTerm("cpu>50");
+                      setFilterAnchorEl(null);
+                    }}
+                    sx={exampleChipStyle}
+                  />
                 </Box>
               </Box>
               
               <Box sx={{ mt: 2, pt: 1, borderTop: 1, borderColor: 'divider' }}>
                 <Typography variant="caption" color="text.secondary">
-                  Tip: You can combine multiple filters (e.g., "type:vm status:running cpu{'>'}50").
+                  Tip: Each filter adds AND logic. Add multiple filters for precise results.
                 </Typography>
               </Box>
             </Box>
