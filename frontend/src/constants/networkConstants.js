@@ -73,20 +73,16 @@ export const STORAGE_KEY_GUEST_TYPE_FILTER = 'network_display_guest_type_filter'
 
 // Define default column configuration
 export const DEFAULT_COLUMN_CONFIG = {
+  name: { id: 'name', label: 'Name', visible: true },
   status: { id: 'status', label: 'Status', visible: true },
   node: { id: 'node', label: 'Node', visible: true },
+  role: { id: 'role', label: 'HA Status', visible: true },
   type: { id: 'type', label: 'Type', visible: true },
   id: { id: 'id', label: 'ID', visible: true },
-  name: { id: 'name', label: 'Name', visible: true },
   cpu: { id: 'cpu', label: 'CPU', visible: true },
   memory: { id: 'memory', label: 'Memory', visible: true },
   disk: { id: 'disk', label: 'Disk', visible: true },
   download: { id: 'download', label: 'Download', visible: true },
   upload: { id: 'upload', label: 'Upload', visible: true },
   uptime: { id: 'uptime', label: 'Uptime', visible: true }
-};
-
-// Ensure all columns are visible in the default config
-Object.keys(DEFAULT_COLUMN_CONFIG).forEach(key => {
-  DEFAULT_COLUMN_CONFIG[key].visible = true;
-}); 
+}; 
