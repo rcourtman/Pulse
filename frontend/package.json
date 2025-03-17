@@ -3,6 +3,7 @@
   "version": "1.6.4",
   "private": true,
   "main": "index.js",
+  "type": "module",
   "engines": {
     "node": ">=20.0.0"
   },
