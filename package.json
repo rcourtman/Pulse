@@ -53,6 +53,9 @@
     "winston": "^3.17.0"
   },
   "devDependencies": {
+    "@babel/plugin-transform-modules-commonjs": "^7.26.3",
+    "@babel/preset-env": "^7.26.9",
+    "@babel/register": "^7.25.9",
     "@types/cors": "^2.8.17",
     "concurrently": "^9.1.2",
     "nodemon": "^3.1.9",
