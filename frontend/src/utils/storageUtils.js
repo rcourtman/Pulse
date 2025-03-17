@@ -118,24 +118,30 @@ export const checkAndClearDataIfNeeded = () => {
  * we start with a clean state and respect environment variables
  */
 export const clearMockDataSettings = () => {
-  console.log('Clearing all mock data settings from localStorage');
+  console.log('Cleaning up mock data settings to use server-side only');
   
   try {
-    // Remove all mock data related keys
-    localStorage.removeItem('use_mock_data');
-    localStorage.removeItem('MOCK_DATA_ENABLED');
+    // Remove all client-side mock data related keys
     localStorage.removeItem('mock_enabled');
     localStorage.removeItem('MOCK_SERVER_URL');
+    localStorage.removeItem('MOCK_DATA');
     
-    // Also clear any other mock-related items that might have been added
+    // Also clear any other mock-related items that might be client-side
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.includes('mock')) {
+      if (key && (key.includes('mock') && key !== 'use_mock_data' && key !== 'MOCK_DATA_ENABLED')) {
         localStorage.removeItem(key);
       }
     }
     
-    console.log('Successfully cleared mock data settings');
+    // Clean up any window globals used for client-side mocking
+    if (typeof window !== 'undefined') {
+      if (window.MOCK_DATA) {
+        delete window.MOCK_DATA;
+      }
+    }
+    
+    console.log('Successfully cleaned up mock data settings for server-side only use');
     return true;
   } catch (error) {
     console.error('Error clearing mock data settings:', error);
