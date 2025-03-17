@@ -54,17 +54,20 @@ function update_script() {
         cd /opt/kimai
         $STD composer install --no-dev --optimize-autoloader
         $STD bin/console kimai:update
-        chown -R :www-data .
-        chmod -R g+r .
-        chmod -R g+rw var/
-        chmod -R 777 /opt/kimai/*
-        chown -R www-data:www-data /opt/kimai
         echo "${RELEASE}" >/opt/${APP}_version.txt
         msg_ok "Updated ${APP} to ${RELEASE}"
 
         msg_info "Starting Apache2"
         systemctl start apache2
         msg_ok "Started Apache2"
+
+        msg_info "Setup Permissions"
+        chown -R :www-data /opt/*
+        chmod -R g+r /opt/*
+        chmod -R g+rw /opt/*
+        chown -R www-data:www-data /opt/*
+        chmod -R 777 /opt/*
+        msg_ok "Setup Permissions"
 
         msg_info "Cleaning Up"
         rm -rf ${RELEASE}.zip
