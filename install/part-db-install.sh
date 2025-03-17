@@ -29,6 +29,12 @@ $STD apt-get install -y \
   postgresql
 msg_ok "Installed Dependencies"
 
+msg_info "Setting up PHP"
+PHPVER=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION . "\n";')
+sed -i "s@post_max_size = 8M@post_max_size = 100M@g" /etc/php/${PHPVER}/apache2/php.ini 
+sed -i "s@upload_max_filesize = 2M@upload_max_filesize = 100M@g" /etc/php/${PHPVER}/apache2/php.ini
+msg_ok "Setting up PHP"
+
 msg_info "Setting up PostgreSQL"
 DB_NAME=partdb
 DB_USER=partdb
