@@ -74,7 +74,10 @@ const useActiveFilteredColumns = ({
 function processNodeData(nodeData) {
   const nodeNames = [];
   const nodeIds = [];
-  const nodePatterns = [];
+  const nodePatterns = ['node', 'pve', 'prox', 'cluster', 'host', 'server'];
+  
+  // Add role-related terms to help with highlighting
+  const rolePatterns = ['role', 'primary', 'secondary', 'pri', 'sec', 'shared'];
   
   if (nodeData && Array.isArray(nodeData)) {
     nodeData.forEach(node => {
@@ -102,29 +105,36 @@ function processNodeData(nodeData) {
     });
   }
   
-  return { nodeNames, nodeIds, nodePatterns };
+  return { nodeNames, nodeIds, nodePatterns, rolePatterns };
 }
 
-// Helper function to identify which columns a term should highlight
-// Returns an array of column types for partial matches, or a single string for exact matches
-function identifyColumnTypes(term, nodeInfo) {
-  // The logic is still used for filter icons in the header
-  // For exact resource keywords or expressions
+// Helper function to identify which column a search term applies to
+const identifyColumnTypes = (termLower, nodeInfo = {}) => {
+  // Column-specific prefixes
+  if (termLower.startsWith('status:')) return 'status';
+  if (termLower.startsWith('type:')) return 'type';
+  if (termLower.startsWith('node:')) return 'node';
+  if (termLower.startsWith('role:')) return 'role';
+  if (termLower.startsWith('cpu:')) return 'cpu';
+  if (termLower.startsWith('memory:') || termLower.startsWith('mem:')) return 'memory';
+  if (termLower.startsWith('disk:')) return 'disk';
+  if (termLower.startsWith('download:') || termLower.startsWith('dl:')) return 'download';
+  if (termLower.startsWith('upload:') || termLower.startsWith('ul:')) return 'upload';
   
   // Resource keywords (exact matches)
-  if (['cpu', 'memory', 'mem', 'disk', 'network', 'net'].includes(term)) {
-    if (term === 'network' || term === 'net') {
+  if (['cpu', 'memory', 'mem', 'disk', 'network', 'net'].includes(termLower)) {
+    if (termLower === 'network' || termLower === 'net') {
       return 'network';
     }
-    if (term === 'mem') {
+    if (termLower === 'mem') {
       return 'memory';
     }
-    return term;
+    return termLower;
   }
   
   // Partial resource expressions (e.g., "cpu>")
-  if (/^(cpu|mem(ory)?|disk|network|net)\s*(>|<|>=|<=|=)$/i.test(term)) {
-    const resource = term.match(/^(cpu|mem(ory)?|disk|network|net)/i)[0].toLowerCase();
+  if (/^(cpu|mem(ory)?|disk|network|net)\s*(>|<|>=|<=|=)$/i.test(termLower)) {
+    const resource = termLower.match(/^(cpu|mem(ory)?|disk|network|net)/i)[0].toLowerCase();
     if (resource === 'network' || resource === 'net') {
       return 'network';
     }
@@ -136,7 +146,7 @@ function identifyColumnTypes(term, nodeInfo) {
   
   // Complete resource expressions (e.g., "cpu>50")
   const resourceExpressionRegex = /^(cpu|mem(ory)?|disk|network|net)\s*(>|<|>=|<=|=)\s*(\d+)$/i;
-  const resourceMatch = term.match(resourceExpressionRegex);
+  const resourceMatch = termLower.match(resourceExpressionRegex);
   if (resourceMatch) {
     let resource = resourceMatch[1].toLowerCase();
     if (resource === 'network' || resource === 'net') {
@@ -148,9 +158,17 @@ function identifyColumnTypes(term, nodeInfo) {
     return resource;
   }
   
+  // Direct threshold expressions without column prefix (e.g., ">50")
+  const directThresholdRegex = /^(>|<|>=|<=)(\d+)$/;
+  const directThresholdMatch = termLower.match(directThresholdRegex);
+  if (directThresholdMatch) {
+    // This is likely a CPU filter as it's the most common direct threshold
+    return 'cpu';
+  }
+  
   // Column-specific searches with colon (e.g., "name:ubuntu")
-  if (term.includes(':')) {
-    const [prefix] = term.split(':', 2);
+  if (termLower.includes(':')) {
+    const [prefix] = termLower.split(':', 2);
     const validPrefixes = ['name', 'id', 'node', 'status', 'type', 'cpu', 'memory', 'mem', 'disk', 'network', 'net'];
     
     if (validPrefixes.includes(prefix.trim())) {
@@ -166,7 +184,7 @@ function identifyColumnTypes(term, nodeInfo) {
   }
   
   // For short partial terms (1-2 characters), we'll highlight multiple potential matches
-  if (term.length <= 2) {
+  if (termLower.length <= 2) {
     const matchingColumns = [];
     
     // Check for partial matches in all possible terms
@@ -174,37 +192,37 @@ function identifyColumnTypes(term, nodeInfo) {
     // Resource terms
     const resourceTerms = ['cpu', 'memory', 'disk', 'network', 'net'];
     for (const resource of resourceTerms) {
-      if (resource.startsWith(term)) {
+      if (resource.startsWith(termLower)) {
         matchingColumns.push(resource === 'network' || resource === 'net' ? 'network' : resource);
       }
     }
     
     // Type terms
     const typeTerms = ['ct', 'container', 'vm', 'virtual', 'machine', 'qemu', 'lxc'];
-    if (typeTerms.some(type => type.startsWith(term))) {
+    if (typeTerms.some(type => type.startsWith(termLower))) {
       matchingColumns.push('type');
     }
     
     // Status terms
     const statusTerms = ['running', 'stopped', 'online', 'offline', 'active', 'inactive'];
-    if (statusTerms.some(status => status.startsWith(term))) {
+    if (statusTerms.some(status => status.startsWith(termLower))) {
       matchingColumns.push('status');
     }
     
     // Node terms - check if term matches beginning of any node name/id
     const { nodeNames, nodeIds } = nodeInfo;
-    if (nodeNames.some(name => name.startsWith(term)) || 
-        nodeIds.some(id => id.startsWith(term))) {
+    if (nodeNames.some(name => name.startsWith(termLower)) || 
+        nodeIds.some(id => id.startsWith(termLower))) {
       matchingColumns.push('node');
     }
     
     // For single letters, also include ID and name as potential matches
-    if (term.length === 1) {
+    if (termLower.length === 1) {
       // Always include name for single letter (could be start of any name)
       if (!matchingColumns.includes('name')) matchingColumns.push('name');
       
       // For single digit, include ID
-      if (/^\d$/.test(term) && !matchingColumns.includes('id')) {
+      if (/^\d$/.test(termLower) && !matchingColumns.includes('id')) {
         matchingColumns.push('id');
       }
     }
@@ -216,7 +234,7 @@ function identifyColumnTypes(term, nodeInfo) {
     
     // For 1-2 character alpha terms with no specific matches, 
     // default to highlighting name column as it's the most likely target
-    if (/[a-z]/i.test(term)) {
+    if (/[a-z]/i.test(termLower)) {
       return ['name'];
     }
   }
@@ -224,65 +242,70 @@ function identifyColumnTypes(term, nodeInfo) {
   // Past this point, handle longer terms (3+ chars) with more specific highlighting
   
   // Type-specific terms (exact matches)
-  if (['ct', 'container', 'vm', 'virtual machine', 'qemu', 'lxc'].includes(term)) {
+  if (['ct', 'container', 'vm', 'virtual machine', 'qemu', 'lxc'].includes(termLower)) {
     return 'type';
   }
   
   // Status-specific terms (exact matches)
   const statusTerms = ['running', 'stopped', 'online', 'offline', 'active', 'inactive'];
-  if (statusTerms.includes(term)) {
+  if (statusTerms.includes(termLower)) {
     return 'status';
   }
   
   // Partial status term matches (e.g., "runni" should match "running")
   // This is critical for providing good feedback while typing
-  if (statusTerms.some(status => status.startsWith(term) || term.startsWith(status))) {
+  if (statusTerms.some(status => status.startsWith(termLower) || termLower.startsWith(status))) {
     return 'status';
   }
   
   // Partial type term matches (e.g., "conta" should match "container")
   const typeTerms = ['ct', 'container', 'vm', 'virtual', 'machine', 'qemu', 'lxc'];
-  if (typeTerms.some(type => type.startsWith(term) || term.startsWith(type))) {
+  if (typeTerms.some(type => type.startsWith(termLower) || termLower.startsWith(type))) {
     return 'type';
   }
   
   // ID-specific terms (pure numbers)
-  if (/^\d+$/.test(term)) {
+  if (/^\d+$/.test(termLower)) {
     return 'id';
   }
   
   // Node matching
-  const { nodeNames, nodeIds, nodePatterns } = nodeInfo;
+  const { nodeNames, nodeIds, nodePatterns, rolePatterns } = nodeInfo;
   
   // Exact node name/id match
-  if (nodeNames.includes(term) || nodeIds.includes(term)) {
+  if (nodeNames.includes(termLower) || nodeIds.includes(termLower)) {
     return 'node';
   }
   
   // Node name contains term or term contains node name
-  if (nodeNames.some(name => name.includes(term) || term.includes(name))) {
+  if (nodeNames.some(name => name.includes(termLower) || termLower.includes(name))) {
     return 'node';
   }
   
   // Node id contains term or term contains node id
-  if (nodeIds.some(id => id.includes(term) || term.includes(id))) {
+  if (nodeIds.some(id => id.includes(termLower) || termLower.includes(id))) {
     return 'node';
   }
   
   // Term matches node patterns
-  if (nodePatterns.some(pattern => term.includes(pattern))) {
+  if (nodePatterns.some(pattern => termLower.includes(pattern))) {
     return 'node';
   }
   
+  // Term matches role patterns
+  if (rolePatterns && rolePatterns.some(pattern => termLower.includes(pattern))) {
+    return 'role';
+  }
+  
   // Term is likely a node reference
-  if (term.includes('-') || /^[a-z]{1,3}\d{1,2}$/i.test(term)) {
+  if (termLower.includes('-') || /^[a-z]{1,3}\d{1,2}$/i.test(termLower)) {
     return 'node';
   }
   
   // Default - this is likely a name search
   // Only highlight name if it's likely to be a name search and
   // doesn't match any partial patterns above
-  if (/[a-z]/i.test(term) && term.length > 1) {
+  if (/[a-z]/i.test(termLower) && termLower.length > 1) {
     return 'name';
   }
   
