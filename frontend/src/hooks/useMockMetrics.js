@@ -188,25 +188,76 @@ const useMockMetrics = (guestData) => {
             
             // Update Network with burst patterns
             if (updated.network[guest.id]) {
-              // Network activity often comes in bursts
-              const burstMode = Math.random() < 0.2; // 20% chance of burst activity
+              // Define realistic baseline values (in bytes/sec)
+              const baselineInRate = 20 * 1024; // 20 KB/s baseline
+              const baselineOutRate = 10 * 1024; // 10 KB/s baseline
               
-              // Set new trend for network
-              trend.netIn = burstMode ? 1 : (Math.random() < 0.7 ? -1 : 1);
-              trend.netOut = burstMode ? 1 : (Math.random() < 0.7 ? -1 : 1);
+              // Maximum sustainable values (in bytes/sec)
+              const maxSustainedInRate = 300 * 1024; // 300 KB/s max sustained
+              const maxSustainedOutRate = 150 * 1024; // 150 KB/s max sustained
               
-              // Calculate changes
-              const inChange = burstMode ? 
-                              (Math.random() * 5 + 2) * 1024 * 1024 : // 2-7 MB/s increase in burst mode
-                              (Math.random() * 2 - 1) * 1024 * 1024;  // -1 to 1 MB/s change normally
+              // Current values
+              const currentInRate = updated.network[guest.id].inRate;
+              const currentOutRate = updated.network[guest.id].outRate;
               
-              const outChange = burstMode ? 
-                               (Math.random() * 3 + 1) * 1024 * 1024 : // 1-4 MB/s increase in burst mode
-                               (Math.random() * 1.5 - 0.8) * 1024 * 1024; // -0.8 to 0.7 MB/s change normally
+              // Force strong regression to baseline over time
+              // Reset to baseline every ~30 seconds (1 in 20 chance per 1.5 sec interval)
+              const needsReset = Math.random() < 0.05;
               
-              const newInRate = Math.max(1024, updated.network[guest.id].inRate + inChange);
-              const newOutRate = Math.max(1024, updated.network[guest.id].outRate + outChange);
+              // Determine if we should generate a burst
+              // Reduce burst frequency when rates are already high
+              const ratesAreHigh = currentInRate > 100 * 1024 || currentOutRate > 50 * 1024;
+              const burstProbability = ratesAreHigh ? 0.05 : 0.1; // Reduce burst chance when already high
+              const burstMode = Math.random() < burstProbability;
               
+              // Calculate new rates based on current state
+              let newInRate, newOutRate;
+              
+              if (needsReset) {
+                // Periodic reset to baseline to prevent long-term growth
+                newInRate = baselineInRate + (Math.random() * 10 * 1024); // baseline + small randomness
+                newOutRate = baselineOutRate + (Math.random() * 5 * 1024);  // baseline + small randomness
+              } else if (burstMode) {
+                // Generate a traffic burst
+                const burstInSize = Math.random() * 150 * 1024 + 50 * 1024; // 50-200KB/s increase
+                const burstOutSize = Math.random() * 100 * 1024 + 30 * 1024; // 30-130KB/s increase
+                
+                // Apply burst, but cap at max values
+                newInRate = Math.min(maxSustainedInRate, currentInRate + burstInSize);
+                newOutRate = Math.min(maxSustainedOutRate, currentOutRate + burstOutSize);
+              } else {
+                // Normal regression toward baseline - stronger the further from baseline
+                const inRateDistanceFromBaseline = Math.max(0, currentInRate - baselineInRate);
+                const outRateDistanceFromBaseline = Math.max(0, currentOutRate - baselineOutRate);
+                
+                // Decay rate increases with distance (50-80% decay)
+                const inDecayRate = 0.5 + (inRateDistanceFromBaseline / (maxSustainedInRate * 2));
+                const outDecayRate = 0.5 + (outRateDistanceFromBaseline / (maxSustainedOutRate * 2));
+                
+                // Calculate decay amount (strong regression to baseline)
+                const inDecayAmount = inRateDistanceFromBaseline * Math.min(0.8, inDecayRate);
+                const outDecayAmount = outRateDistanceFromBaseline * Math.min(0.8, outDecayRate);
+                
+                // Add small random fluctuation (-10KB to +5KB)
+                const randomFluctuation = (Math.random() * 15 - 10) * 1024;
+                
+                // Apply decay with fluctuation, ensuring we don't go below baseline
+                newInRate = Math.max(
+                  baselineInRate, 
+                  currentInRate - inDecayAmount + randomFluctuation
+                );
+                
+                newOutRate = Math.max(
+                  baselineOutRate,
+                  currentOutRate - outDecayAmount + (randomFluctuation / 2)
+                );
+              }
+              
+              // Final safety caps
+              newInRate = Math.min(maxSustainedInRate, Math.max(baselineInRate / 2, newInRate));
+              newOutRate = Math.min(maxSustainedOutRate, Math.max(baselineOutRate / 2, newOutRate));
+              
+              // Update the network metrics
               updated.network[guest.id].inRate = newInRate;
               updated.network[guest.id].outRate = newOutRate;
             }
