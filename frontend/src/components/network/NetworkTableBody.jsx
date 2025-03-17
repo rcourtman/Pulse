@@ -33,7 +33,9 @@ const NetworkTableBody = ({
   columnOrder,
   activeFilteredColumns = {},
   thresholdColumn,
-  thresholdValue
+  thresholdValue,
+  sharedGuestIdMap = {},
+  filters = {}
 }) => {
   const theme = useTheme();
   
@@ -204,6 +206,8 @@ const NetworkTableBody = ({
                 activeFilteredColumns={activeFilteredColumns}
                 thresholdColumn={thresholdColumn}
                 thresholdValue={thresholdValue}
+                sharedGuestIdMap={sharedGuestIdMap}
+                filters={filters}
               />
             ))}
           </React.Fragment>

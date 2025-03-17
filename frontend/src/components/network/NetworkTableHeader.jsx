@@ -94,7 +94,7 @@ const NetworkTableHeader = ({
 
   // Define column groups for sizing strategy
   const fixedNarrowColumns = ['type', 'id', 'status']; // Very narrow columns
-  const fixedWidthColumns = ['download', 'upload', 'uptime']; // Fixed width for network stats
+  const fixedWidthColumns = ['role', 'download', 'upload', 'uptime']; // Fixed width for network stats
   const autoSizeColumns = ['name', 'node']; // Auto-size to content
   const flexibleEqualColumns = ['cpu', 'memory', 'disk']; // Equal width with progress bars
   
@@ -121,6 +121,7 @@ const NetworkTableHeader = ({
       type: '50px',     // Just "VM" or "CT"
       id: '60px',       // Just numeric IDs
       status: '50px',   // Just the status circle
+      role: '100px',    // Primary/Secondary chip
       download: '90px', // Network rates
       upload: '90px',   // Network rates
       uptime: '90px'    // Time display
@@ -309,22 +310,19 @@ const NetworkTableHeader = ({
   }, [columnVisibility, forceUpdateCounter]);
 
   const visibleColumns = useMemo(() => {
-    if (!columnOrder || !Array.isArray(columnOrder) || columnOrder.length === 0) {
-      return [];
-    }
+    // Start with the sorted column order
+    const columns = columnOrder
+      // Filter to only include visible columns and ensure they exist in visibility config
+      .filter(id => columnVisibility[id]?.visible)
+      // Map to include additional column metadata
+      .map(id => ({
+        id,
+        ...columnVisibility[id]
+      }));
     
-    const visible = Object.entries(columnVisibility || {})
-      .filter(([_, config]) => config?.visible)
-      .map(([id, config]) => ({ id, ...config }));
-    
-    return columnOrder
-      .filter(id => columnVisibility?.[id]?.visible)
-      .map(id => {
-        const column = visible.find(col => col.id === id);
-        return column || null;
-      })
-      .filter(Boolean);
-  }, [columnVisibility, columnOrder, forceUpdateCounter]);
+    console.log('Generated visible columns:', columns.map(c => c.id));
+    return columns;
+  }, [columnOrder, columnVisibility, forceUpdateCounter]);
 
   const moveColumnUp = (columnId) => {
     const currentIndex = columnOrder.indexOf(columnId);
@@ -648,7 +646,13 @@ const NetworkTableHeader = ({
         width: '100%', 
         display: 'flex', 
         alignItems: 'center',
-        justifyContent: 'space-between'
+        justifyContent: 'space-between',
+        // Add background highlighting for columns with active threshold filters
+        backgroundColor: hasActiveFilter(column.id) 
+          ? alpha(theme.palette.primary.main, 0.15)
+          : 'inherit',
+        borderRadius: '4px',
+        px: 1
       }}>
         <Box 
                 sx={{ 
@@ -684,9 +688,61 @@ const NetworkTableHeader = ({
         );
   };
 
+  // Add a state hook to track whether the role column should be hidden 
+  const [hideRoleColumn, setHideRoleColumn] = useState(false);
+  
+  // Function to get appropriate padding for table headers
+  const getTableHeaderPadding = (isNarrow) => {
+    return isNarrow ? '0px 8px' : '16px 8px';
+  };
+  
+  // Add effect to check cluster status when the component first mounts or when dependencies change
+  useEffect(() => {
+    const isClusterDetected = localStorage.getItem('CLUSTER_DETECTED') === 'true';
+    const isMockData = localStorage.getItem('MOCK_DATA_ENABLED') === 'true' || 
+                      localStorage.getItem('use_mock_data') === 'true' ||
+                      window.location.hostname === 'localhost';
+    
+    // Role column should be hidden if not in mock mode and no cluster detected
+    setHideRoleColumn(!isMockData && !isClusterDetected);
+    
+    console.log('NetworkTableHeader checking cluster status:', {
+      isClusterDetected,
+      isMockData,
+      hideRoleColumn: !isMockData && !isClusterDetected
+    });
+    
+    // Listen for changes to the CLUSTER_DETECTED value in localStorage
+    const handleStorageChange = (e) => {
+      if (e.key === 'CLUSTER_DETECTED') {
+        const newClusterDetected = e.newValue === 'true';
+        setHideRoleColumn(!isMockData && !newClusterDetected);
+      }
+    };
+    
+    // Add event listener
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Clean up event listener
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [forceUpdateCounter]);
+
   return (
     <TableHead>
-      <TableRow>
+      {/* Debug information in a hidden span */}
+      <span style={{ display: 'none' }}>
+        {console.log('NETWORK TABLE HEADER DEBUG:', {
+          visibleColumns: Object.entries(columnVisibility)
+            .filter(([_, config]) => config.visible)
+            .map(([id]) => id),
+          roleColumn: columnVisibility.role,
+          effectiveVisibility: columnVisibility.role?.visible,
+          columnOrder
+        })}
+      </span>
+      <TableRow sx={{ '& th': { borderTop: 0, height: '36px' } }}>
         {!hasVisibleColumns ? (
           <TableCell colSpan={12} align="center">
             <Box sx={{ 
@@ -713,104 +769,50 @@ const NetworkTableHeader = ({
           </TableCell>
         ) : (
           <>
-            {visibleColumns.map(column => (
-              <TableCell 
-                key={column.id}
-                draggable={true}
-                onDragStart={(e) => handleDragStart(e, column.id)}
-                onDragOver={(e) => handleDragOver(e, column.id)}
-                onDrop={(e) => handleDrop(e, column.id)}
-                onDragEnd={handleDragEnd}
-                onClick={(e) => {
-                  // Only handle direct cell clicks - all columns now just sort, no dropdown functionality
-                  if (e.target === e.currentTarget) {
-                    const handleTextClick = (columnId) => {
-                  // For resource columns, default to descending sort first time
-                      const isResourceColumn = ['cpu', 'memory', 'disk', 'download', 'upload'].includes(columnId);
-                      
-                      if (isResourceColumn && (!sortConfig || sortConfig.key !== columnId)) {
-                        console.log(`Resource column ${columnId} clicked - defaulting to DESC sort`);
-                        requestSort(columnId, 'desc');
-                      } else {
-                    // First check if this is the currently sorted column
-                        if (sortConfig && sortConfig.key === columnId) {
-                      // If already sorted, explicitly toggle direction
-                      const newDirection = sortConfig.direction === 'asc' ? 'desc' : 'asc';
-                          console.log(`Column ${columnId} clicked - toggling from ${sortConfig.direction} to ${newDirection}`);
-                          requestSort(columnId, newDirection);
-                    } else {
-                      // New column sort, use default toggle
-                          console.log(`Column ${columnId} clicked - new sort`);
-                          requestSort(columnId);
-                    }
-                      }
-                    };
-                    
-                    // All columns handle sorting the same way
-                    handleTextClick(column.id);
-                  }
-                }}
-                onMouseEnter={handleColumnMouseEnter(column.id)}
-                onMouseLeave={handleColumnMouseLeave}
-                sx={{ 
-                  width: getColumnWidth(column.id),
-                  minWidth: `${getMinWidthForColumn(column.id)}px`,
-                  maxWidth: autoSizeColumns.includes(column.id) ? '300px' : 'none',
-                  padding: fixedNarrowColumns.includes(column.id) ? '0px 8px' : '16px 8px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  // Combined background color logic for all conditions
-                  backgroundColor: draggedColumn === column.id 
-                      ? alpha(theme.palette.primary.main, 0.15) // Use the darker shade from the active state
-                      : hoveredColumn === column.id
-                        ? alpha(theme.palette.primary.light, 0.1)
-                        : dragOverColumn === column.id
-                          ? alpha(theme.palette.primary.main, 0.05)
-                          : alpha(theme.palette.primary.light, 0.05),
-                  borderBottom: '1px solid',
-                  borderBottomColor: 'divider',
-                  borderTop: 'none',
-                  boxShadow: draggedColumn === column.id 
-                      ? `0 0 8px ${alpha(theme.palette.primary.main, 0.5)}` 
-                      : 'none',
-                  ...(fixedNarrowColumns.includes(column.id) && {
-                    textAlign: 'center',
-                    padding: '0px 8px'
-                  }),
-                  cursor: 'grab',
-                  userSelect: 'auto',
-                  position: 'relative',
-                  transition: 'background-color 0.2s, transform 0.1s, box-shadow 0.2s',
-                  
-                  '& .drag-handle': {
-                    visibility: 'visible',
-                    opacity: 0.7
-                  },
-                  '&:active': {
-                    cursor: 'grabbing',
-                    backgroundColor: alpha(theme.palette.primary.main, 0.15)
-                  }
-                }}
-              >
-                <Box sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between',
-                  height: '100%'
-                }}>
-                  <Box sx={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    position: 'relative', 
-                    width: '100%',
-                    height: '100%'
-                  }}>
-                    {renderColumnContent(column)}
-                  </Box>
-                </Box>
-              </TableCell>
-            ))}
+            {visibleColumns.map(column => {
+              // Don't skip rendering the role column if user chose to make it visible
+              // Only skip if user hasn't configured it and no cluster detected
+              const roleColumnShouldDisplay = column.id !== 'role' || 
+                                             column.visible === true || 
+                                             localStorage.getItem('CLUSTER_DETECTED') === 'true';
+              
+              if (!roleColumnShouldDisplay) {
+                return null;
+              }
+              
+              return (
+                <TableCell 
+                  key={column.id}
+                  data-column-id={column.id}
+                  draggable={true}
+                  onDragStart={(e) => handleDragStart(e, column.id)}
+                  onDragOver={(e) => handleDragOver(e, column.id)}
+                  onDrop={(e) => handleDrop(e, column.id)}
+                  onDragEnd={handleDragEnd}
+                  onClick={(e) => {
+                    handleTextClick(e);
+                  }}
+                  sx={{ 
+                    width: getColumnWidth(column.id),
+                    minWidth: getMinWidthForColumn(column.id),
+                    maxWidth: autoSizeColumns.includes(column.id) ? '300px' : 'none',
+                    position: 'relative',
+                    zIndex: 5,
+                    fontWeight: 'bold',
+                    py: 1.5,
+                    ...(fixedNarrowColumns.includes(column.id) && {
+                      textAlign: 'center',
+                      padding: getTableHeaderPadding(true)
+                    }),
+                    ...(!fixedNarrowColumns.includes(column.id) && {
+                      padding: getTableHeaderPadding(false)
+                    })
+                  }}
+                >
+                  {renderColumnContent(column)}
+                </TableCell>
+              );
+            })}
           </>
         )}
         
@@ -1160,9 +1162,11 @@ const NetworkTableHeader = ({
           </Box>
           
           <Box sx={{ maxHeight: '60vh', overflow: 'auto' }}>
-            {displayOrder.map((columnId) => {
+            {columnOrder.map((columnId) => {
               const config = columnVisibility[columnId];
               if (!config) return null;
+              
+              // Always show all columns including HA Status (role) column
               
               return (
                 <MenuItem 
@@ -1171,7 +1175,8 @@ const NetworkTableHeader = ({
                   dense
                   className="column-menu-item"
                   data-column-id={columnId}
-                  draggable={false}
+                  draggable={true}
+                  onDragStart={(e) => handleDragStart(e, columnId)}
                   onDragOver={(e) => {
                     e.preventDefault();
                     handleDragOver(e, columnId);
@@ -1277,6 +1282,7 @@ const getMinWidthForColumn = (columnId) => {
     type: 50,      // Very small - just "VM" or "CT"
     id: 60,        // Very small - just numeric IDs
     status: 50,    // Minimal - just an icon
+    role: 100,     // Primary/Secondary chip
     
     // Auto-sized columns
     name: 120,     // Names - minimum width

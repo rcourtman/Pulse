@@ -160,7 +160,7 @@ const NetworkFilters = ({
       {/* Search Pro Tips */}
       <Box sx={{ px: 2, py: 1 }}>
         <Typography variant="caption" color="text.secondary">
-          <strong>Tips:</strong> Use <strong>status:running</strong> or <strong>status:stopped</strong> to filter by status. Use <strong>type:vm</strong> or <strong>type:ct</strong> for system types.
+          <strong>Tips:</strong> Use <strong>status:running</strong> or <strong>status:stopped</strong> to filter by status. Use <strong>type:vm</strong> or <strong>type:ct</strong> for system types. Use <strong>cpu{'>'}50</strong> to filter by CPU usage, <strong>memory{'>'}80</strong> or <strong>disk{'>'}90</strong> to filter by resource usage. Use <strong>role</strong> to show all HA-managed guests, <strong>role:primary</strong> for primary nodes, <strong>role:secondary</strong> for secondary nodes, <strong>role:migrating</strong> for guests being migrated, <strong>role:error</strong> for guests in error state.
         </Typography>
       </Box>
       
