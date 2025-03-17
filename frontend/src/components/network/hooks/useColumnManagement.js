@@ -6,179 +6,59 @@ import {
 } from '../../../constants/networkConstants';
 
 const useColumnManagement = (showNotification) => {
-  // Column visibility state
+  // Initialize column visibility state from localStorage or defaults
   const [columnVisibility, setColumnVisibility] = useState(() => {
     try {
-      console.log('Initializing column visibility state');
-      const saved = localStorage.getItem(STORAGE_KEY_COLUMN_VISIBILITY);
-      if (saved) {
-        console.log('Found saved column visibility:', saved);
-        const parsed = JSON.parse(saved);
-        // Ensure all columns from DEFAULT_COLUMN_CONFIG exist in the saved config
-        const merged = { ...DEFAULT_COLUMN_CONFIG };
-        Object.keys(parsed).forEach(key => {
-          if (merged[key]) {
-            merged[key].visible = parsed[key].visible;
-          }
-        });
+      // Always enable cluster detection for column visibility
+      localStorage.setItem('CLUSTER_DETECTED', 'true');
+      console.log('Forcing HA Status column to be visible by default');
+      
+      // Get column visibility from localStorage
+      const storedColumnVisibility = localStorage.getItem(STORAGE_KEY_COLUMN_VISIBILITY);
+      
+      let config;
+      
+      // If localStorage has data, use it
+      if (storedColumnVisibility) {
+        config = JSON.parse(storedColumnVisibility);
+      } else {
+        // Use the defaults as defined in DEFAULT_COLUMN_CONFIG
+        config = JSON.parse(JSON.stringify(DEFAULT_COLUMN_CONFIG));
         
-        // Ensure at least one column is visible
-        const hasVisibleColumn = Object.values(merged).some(col => col.visible);
-        if (!hasVisibleColumn) {
-          console.warn('No visible columns in saved config, resetting to defaults');
-          return JSON.parse(JSON.stringify(DEFAULT_COLUMN_CONFIG));
+        // Ensure the 'role' column (HA Status) is always visible by default
+        if (config.role) {
+          config.role.visible = true;
         }
-        
-        console.log('Using merged column visibility:', merged);
-        return merged;
       }
-      console.log('No saved column visibility, using defaults');
-      return JSON.parse(JSON.stringify(DEFAULT_COLUMN_CONFIG));
-    } catch (e) {
-      console.error('Error loading column visibility preferences:', e);
-      return JSON.parse(JSON.stringify(DEFAULT_COLUMN_CONFIG));
+      
+      return config;
+    } catch (error) {
+      console.error('Error initializing column visibility:', error);
+      return DEFAULT_COLUMN_CONFIG;
     }
   });
   
-  // Column order state
+  // Initialize column order from localStorage or defaults
   const [columnOrder, setColumnOrder] = useState(() => {
     try {
-      console.log('Initializing column order state');
-      const defaultOrder = Object.keys(DEFAULT_COLUMN_CONFIG);
-      
-      const saved = localStorage.getItem(STORAGE_KEY_COLUMN_ORDER);
-      if (saved) {
-        console.log('Found saved column order:', saved);
-        try {
-          const parsed = JSON.parse(saved);
-          
-          // Validate the saved order - it should contain all columns from DEFAULT_COLUMN_CONFIG
-          const isValid = 
-            Array.isArray(parsed) && 
-            parsed.length === defaultOrder.length && 
-            defaultOrder.every(col => parsed.includes(col));
-          
-          if (isValid) {
-            console.log('Using saved column order:', parsed);
-            return parsed;
-          } else {
-            console.warn('Invalid saved column order, using default order');
-          }
-        } catch (parseError) {
-          console.error('Error parsing saved column order:', parseError);
-        }
+      const storedOrder = localStorage.getItem(STORAGE_KEY_COLUMN_ORDER);
+      if (storedOrder) {
+        return JSON.parse(storedOrder);
+      } else {
+        return Object.keys(DEFAULT_COLUMN_CONFIG);
       }
-      
-      console.log('Using default column order:', defaultOrder);
-      return defaultOrder;
-    } catch (e) {
-      console.error('Error loading column order preferences:', e);
-      const fallbackOrder = Object.keys(DEFAULT_COLUMN_CONFIG || {});
-      console.log('Using fallback column order:', fallbackOrder);
-      return fallbackOrder;
+    } catch (error) {
+      console.error('Error initializing column order:', error);
+      return Object.keys(DEFAULT_COLUMN_CONFIG);
     }
   });
   
-  // Column settings menu state
+  // Column menu state for the dropdown
   const [columnMenuAnchorEl, setColumnMenuAnchorEl] = useState(null);
   const openColumnMenu = Boolean(columnMenuAnchorEl);
   
-  // State for forcing re-renders
+  // Force update counter for triggering re-renders
   const [forceUpdateCounter, setForceUpdateCounter] = useState(0);
-  
-  // Function to force a re-render
-  const forceUpdate = useCallback(() => {
-    setForceUpdateCounter(prev => prev + 1);
-  }, []);
-  
-  // Toggle column visibility
-  const toggleColumnVisibility = useCallback((columnId) => {
-    try {
-      setColumnVisibility(prev => {
-        if (!prev || !prev[columnId]) {
-          console.error('Invalid column configuration:', prev);
-          return prev;
-        }
-        
-        // Check if this is the last visible column and we're trying to hide it
-        const isLastVisibleColumn = 
-          Object.values(prev).filter(col => col.visible).length === 1 && 
-          prev[columnId].visible;
-        
-        // If this is the last visible column and we're trying to hide it, don't allow it
-        if (isLastVisibleColumn) {
-          // Show a console warning
-          console.warn('Cannot hide the last visible column');
-          // Show a notification to the user
-          setTimeout(() => {
-            showNotification('At least one column must remain visible', 'warning');
-          }, 0);
-          // Return the previous state unchanged
-          return prev;
-        }
-        
-        const updated = {
-          ...prev,
-          [columnId]: {
-            ...prev[columnId],
-            visible: !prev[columnId].visible
-          }
-        };
-        return updated;
-      });
-    } catch (error) {
-      console.error('Error toggling column visibility:', error);
-    }
-  }, [showNotification]);
-  
-  // Reset column visibility to defaults
-  const resetColumnVisibility = useCallback(() => {
-    console.log('Resetting column visibility to defaults');
-    
-    // Create a new configuration with all columns set to visible
-    const allVisibleConfig = {};
-    if (DEFAULT_COLUMN_CONFIG) {
-      Object.keys(DEFAULT_COLUMN_CONFIG).forEach(key => {
-        allVisibleConfig[key] = {
-          ...DEFAULT_COLUMN_CONFIG[key],
-          visible: true // Force all columns to be visible
-        };
-      });
-    }
-    
-    console.log('New config with all columns visible:', allVisibleConfig);
-    
-    // Clear the localStorage entries to ensure a clean state
-    try {
-      localStorage.removeItem(STORAGE_KEY_COLUMN_VISIBILITY);
-      localStorage.removeItem(STORAGE_KEY_COLUMN_ORDER);
-      console.log('Cleared column preferences from localStorage');
-    } catch (error) {
-      console.error('Error clearing column preferences from localStorage:', error);
-    }
-    
-    // Set the state with the new config where all columns are visible
-    setColumnVisibility(allVisibleConfig);
-    
-    // Reset column order to default
-    if (DEFAULT_COLUMN_CONFIG) {
-      setColumnOrder(Object.keys(DEFAULT_COLUMN_CONFIG));
-    }
-    
-    // Force a re-render of the table
-    setTimeout(() => {
-      forceUpdate();
-      console.log('Forced table re-render');
-    }, 50);
-    
-    // Show a notification to confirm the action
-    showNotification('All columns are now visible', 'success');
-    
-    // Close the column menu if it's open
-    if (openColumnMenu) {
-      handleColumnMenuClose();
-    }
-  }, [openColumnMenu, forceUpdate, showNotification]);
   
   // Handle column menu open
   const handleColumnMenuOpen = useCallback((event) => {
@@ -190,11 +70,130 @@ const useColumnManagement = (showNotification) => {
     setColumnMenuAnchorEl(null);
   }, []);
   
+  // Force update function
+  const forceUpdate = useCallback(() => {
+    setForceUpdateCounter(c => c + 1);
+  }, []);
+  
+  // Toggle column visibility
+  const toggleColumnVisibility = useCallback((columnId) => {
+    setColumnVisibility(prev => {
+      const newState = JSON.parse(JSON.stringify(prev));
+      
+      // Verify column exists
+      if (!newState[columnId]) {
+        console.warn(`Attempted to toggle non-existent column: ${columnId}`);
+        return prev;
+      }
+      
+      // Don't allow hiding the last visible column
+      if (newState[columnId].visible && Object.values(newState).filter(col => col.visible).length <= 1) {
+        if (showNotification) {
+          showNotification('At least one column must remain visible');
+        }
+        return prev;
+      }
+      
+      // Toggle visibility
+      newState[columnId].visible = !newState[columnId].visible;
+      
+      // If this is the role column, log it specially
+      if (columnId === 'role') {
+        console.log(`User manually set HA Status column to ${newState[columnId].visible ? 'visible' : 'hidden'}`);
+      }
+      
+      // Save to localStorage
+      localStorage.setItem(STORAGE_KEY_COLUMN_VISIBILITY, JSON.stringify(newState));
+      
+      return newState;
+    });
+  }, [showNotification]);
+  
+  // Reset column visibility to defaults
+  const resetColumnVisibility = useCallback(() => {
+    try {
+      // Make a copy of the default config
+      const defaultConfig = JSON.parse(JSON.stringify(DEFAULT_COLUMN_CONFIG));
+      
+      // Ensure HA Status (role) column is visible
+      if (defaultConfig.role) {
+        defaultConfig.role.visible = true;
+      }
+      
+      // Reset column order to the default order as well
+      const defaultOrder = Object.keys(DEFAULT_COLUMN_CONFIG);
+      
+      // Update state and save to localStorage
+      setColumnVisibility(defaultConfig);
+      setColumnOrder(defaultOrder);
+      
+      // Always enable cluster detection for HA Status column
+      localStorage.setItem('CLUSTER_DETECTED', 'true');
+      
+      // Save both to localStorage
+      localStorage.setItem(STORAGE_KEY_COLUMN_VISIBILITY, JSON.stringify(defaultConfig));
+      localStorage.setItem(STORAGE_KEY_COLUMN_ORDER, JSON.stringify(defaultOrder));
+      
+      // Force UI update
+      setForceUpdateCounter(c => c + 1);
+      
+      // Close the menu if it's open
+      setColumnMenuAnchorEl(null);
+      
+      // Show a notification
+      if (showNotification) {
+        showNotification('Column visibility reset to defaults');
+      }
+      
+      console.log('Column visibility and order reset to defaults');
+    } catch (error) {
+      console.error('Error resetting column visibility:', error);
+      
+      if (showNotification) {
+        showNotification('Error resetting column visibility');
+      }
+    }
+  }, [showNotification, setColumnMenuAnchorEl]);
+  
+  // Update role column visibility
+  const updateRoleColumnVisibility = useCallback((shouldShow) => {
+    // Log what we're doing
+    console.log('updateRoleColumnVisibility called with:', {
+      shouldShow
+    });
+    
+    // Save the cluster detection state to localStorage for persistence
+    localStorage.setItem('CLUSTER_DETECTED', shouldShow ? 'true' : 'false');
+    
+    // Only update column visibility for new users or on explicit calls
+    // This allows the system to set default visibility but lets users override
+    const hasExistingVisibilitySettings = localStorage.getItem(STORAGE_KEY_COLUMN_VISIBILITY);
+    
+    // Only force column visibility if there are no existing user settings
+    if (!hasExistingVisibilitySettings) {
+      setColumnVisibility(prev => {
+        if (!prev.role) return prev;
+        
+        const newState = {
+          ...prev,
+          role: { ...prev.role, visible: shouldShow }
+        };
+        
+        // Save to localStorage
+        localStorage.setItem(STORAGE_KEY_COLUMN_VISIBILITY, JSON.stringify(newState));
+        console.log(`Setting initial HA Status column visibility to ${shouldShow}`);
+        
+        return newState;
+      });
+      
+      // Force UI update
+      setForceUpdateCounter(c => c + 1);
+    }
+  }, []);
+  
   // Save column visibility preferences whenever they change
   useEffect(() => {
     try {
-      console.log('Column visibility changed, saving to localStorage');
-      
       // Check if columnVisibility is valid
       if (!columnVisibility || Object.keys(columnVisibility).length === 0) {
         console.error('Invalid column visibility state, resetting to defaults');
@@ -211,7 +210,6 @@ const useColumnManagement = (showNotification) => {
       
       // Save to localStorage
       localStorage.setItem(STORAGE_KEY_COLUMN_VISIBILITY, JSON.stringify(columnVisibility));
-      console.log('Saved column visibility to localStorage');
     } catch (error) {
       console.error('Error saving column visibility:', error);
     }
@@ -220,8 +218,6 @@ const useColumnManagement = (showNotification) => {
   // Save column order preferences whenever they change
   useEffect(() => {
     try {
-      console.log('Column order changed, saving to localStorage');
-      
       // Check if columnOrder is valid
       if (!columnOrder || !Array.isArray(columnOrder) || columnOrder.length === 0) {
         console.error('Invalid column order state, resetting to defaults');
@@ -231,7 +227,6 @@ const useColumnManagement = (showNotification) => {
       
       // Save to localStorage
       localStorage.setItem(STORAGE_KEY_COLUMN_ORDER, JSON.stringify(columnOrder));
-      console.log('Saved column order to localStorage');
     } catch (error) {
       console.error('Error saving column order:', error);
     }
@@ -243,13 +238,15 @@ const useColumnManagement = (showNotification) => {
     columnOrder,
     setColumnOrder,
     columnMenuAnchorEl,
+    setColumnMenuAnchorEl,
     openColumnMenu,
+    handleColumnMenuOpen,
+    handleColumnMenuClose,
     forceUpdateCounter,
     forceUpdate,
     toggleColumnVisibility,
     resetColumnVisibility,
-    handleColumnMenuOpen,
-    handleColumnMenuClose
+    updateRoleColumnVisibility
   };
 };
 
