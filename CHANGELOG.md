@@ -23,6 +23,7 @@ All LXC instances created using this repository come pre-installed with Midnight
 
   - #### 🐞 Bug Fixes
 
+    - Tandoor: Switch Repo to new Link [@MickLesk](https://github.com/MickLesk) ([#3140](https://github.com/community-scripts/ProxmoxVE/pull/3140))
     - Kimai: Fix Permission Issue on new Timerecords [@MickLesk](https://github.com/MickLesk) ([#3136](https://github.com/community-scripts/ProxmoxVE/pull/3136))
 
 ## 2025-03-16
