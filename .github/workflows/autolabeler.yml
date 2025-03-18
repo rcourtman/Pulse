@@ -67,6 +67,7 @@ jobs:
                 "🐞 **Bug fix**": "bugfix",
                 "✨ **New feature**": "feature",
                 "💥 **Breaking change**": "breaking change",
+                "🔧 **Refactoring / Code Cleanup**": "refactor",
               };
 
               for (const [checkbox, label] of Object.entries(templateLabelMappings)) {
