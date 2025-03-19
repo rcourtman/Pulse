@@ -49,7 +49,7 @@ function update_script() {
     cp -r /opt/snipe-it-backup/storage/private_uploads /opt/snipe-it/storage/private_uploads
     cd /opt/snipe-it/
     export COMPOSER_ALLOW_SUPERUSER=1
-    $STD composer install --no-dev --prefer-source
+    $STD composer install --no-dev --optimize-autoloader --no-interaction
     $STD composer dump-autoload
     $STD php artisan migrate --force
     $STD php artisan config:clear

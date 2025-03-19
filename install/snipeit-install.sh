@@ -58,8 +58,8 @@ sed -i -e "s|^APP_URL=.*|APP_URL=http://$IPADDRESS|" \
 chown -R www-data: /opt/snipe-it
 chmod -R 755 /opt/snipe-it
 export COMPOSER_ALLOW_SUPERUSER=1
-$STD composer update --no-plugins --no-scripts
-$STD composer install --no-dev
+#$STD composer update --no-plugins --no-scripts
+$STD composer install --no-dev --optimize-autoloader --no-interaction
 $STD php artisan key:generate --force
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed SnipeIT"
