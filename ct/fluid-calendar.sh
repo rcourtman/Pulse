@@ -36,7 +36,7 @@ function update_script() {
         msg_ok "Stopped $APP"
 
         msg_info "Creating Backup"
-        $STD tar -czf "/opt/${APP}_backup_$(date +%F).tar.gz" /opt/fluid-calendar
+        tar -czf "/opt/${APP}_backup_$(date +%F).tar.gz" /opt/fluid-calendar
         msg_ok "Backup Created"
 
         msg_info "Updating $APP to v${RELEASE}"
