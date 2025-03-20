@@ -1,5 +1,55 @@
 [
   {
+    "name": "fhem/fhem-mirror",
+    "version": "6.2",
+    "date": "2025-03-20T10:33:53Z"
+  },
+  {
+    "name": "Stirling-Tools/Stirling-PDF",
+    "version": "v0.44.3",
+    "date": "2025-03-20T09:43:56Z"
+  },
+  {
+    "name": "jenkinsci/jenkins",
+    "version": "jenkins-2.502",
+    "date": "2025-03-18T15:02:59Z"
+  },
+  {
+    "name": "clusterzx/paperless-ai",
+    "version": "v2.7.5",
+    "date": "2025-03-20T08:45:10Z"
+  },
+  {
+    "name": "wazuh/wazuh",
+    "version": "coverity-w11-4.12.0",
+    "date": "2025-03-14T20:04:02Z"
+  },
+  {
+    "name": "jupyter/notebook",
+    "version": "@jupyter-notebook/ui-components@7.4.0-beta.2",
+    "date": "2025-03-20T07:41:24Z"
+  },
+  {
+    "name": "evcc-io/evcc",
+    "version": "0.201.1",
+    "date": "2025-03-20T06:59:18Z"
+  },
+  {
+    "name": "Jackett/Jackett",
+    "version": "v0.22.1669",
+    "date": "2025-03-20T05:56:41Z"
+  },
+  {
+    "name": "esphome/esphome",
+    "version": "2025.3.0",
+    "date": "2025-03-20T04:37:16Z"
+  },
+  {
+    "name": "rabbitmq/rabbitmq-server",
+    "version": "v4.0.7",
+    "date": "2025-02-26T19:07:11Z"
+  },
+  {
     "name": "ellite/Wallos",
     "version": "v2.47.1",
     "date": "2025-03-19T23:30:33Z"
@@ -10,14 +60,9 @@
     "date": "2025-03-19T22:25:30Z"
   },
   {
-    "name": "esphome/esphome",
-    "version": "2025.2.2",
-    "date": "2025-03-03T08:23:30Z"
-  },
-  {
-    "name": "fhem/fhem-mirror",
-    "version": "6.2",
-    "date": "2025-03-19T20:32:24Z"
+    "name": "keycloak/keycloak",
+    "version": "26.1.4",
+    "date": "2025-03-13T15:41:42Z"
   },
   {
     "name": "NodeBB/NodeBB",
@@ -60,11 +105,6 @@
     "date": "2025-03-19T07:42:50Z"
   },
   {
-    "name": "Jackett/Jackett",
-    "version": "v0.22.1665",
-    "date": "2025-03-19T05:58:42Z"
-  },
-  {
     "name": "StarFleetCPTN/GoMFT",
     "version": "v0.1.16",
     "date": "2025-03-19T04:30:53Z"
@@ -78,11 +118,6 @@
     "name": "Donkie/Spoolman",
     "version": "v0.22.1",
     "date": "2025-03-18T21:01:22Z"
-  },
-  {
-    "name": "keycloak/keycloak",
-    "version": "26.1.4",
-    "date": "2025-03-13T15:41:42Z"
   },
   {
     "name": "dotnetfactory/fluid-calendar",
@@ -103,11 +138,6 @@
     "name": "syncthing/syncthing",
     "version": "v1.29.3",
     "date": "2025-03-12T11:56:30Z"
-  },
-  {
-    "name": "jenkinsci/jenkins",
-    "version": "jenkins-2.502",
-    "date": "2025-03-18T15:02:59Z"
   },
   {
     "name": "element-hq/synapse",
@@ -153,6 +183,11 @@
     "name": "nzbgetcom/nzbget",
     "version": "v24.8",
     "date": "2025-03-18T07:33:51Z"
+  },
+  {
+    "name": "runtipi/runtipi",
+    "version": "v3.10.0",
+    "date": "2025-03-15T14:38:16Z"
   },
   {
     "name": "authelia/authelia",
@@ -250,11 +285,6 @@
     "date": "2025-03-16T18:39:49Z"
   },
   {
-    "name": "evcc-io/evcc",
-    "version": "0.201.0",
-    "date": "2025-03-16T16:59:18Z"
-  },
-  {
     "name": "BookStackApp/BookStack",
     "version": "v25.02.1",
     "date": "2025-03-16T12:51:00Z"
@@ -310,11 +340,6 @@
     "date": "2025-03-15T17:29:17Z"
   },
   {
-    "name": "runtipi/runtipi",
-    "version": "v3.10.0",
-    "date": "2025-03-15T14:38:16Z"
-  },
-  {
     "name": "msgbyte/tianji",
     "version": "v1.18.22",
     "date": "2025-03-15T13:36:57Z"
@@ -350,11 +375,6 @@
     "date": "2025-03-14T22:04:10Z"
   },
   {
-    "name": "Stirling-Tools/Stirling-PDF",
-    "version": "v0.44.2",
-    "date": "2025-03-14T21:01:11Z"
-  },
-  {
     "name": "ipfs/kubo",
     "version": "v0.33.2",
     "date": "2025-02-14T00:24:56Z"
@@ -365,11 +385,6 @@
     "date": "2025-03-14T18:05:28Z"
   },
   {
-    "name": "wazuh/wazuh",
-    "version": "coverity-w11-4.12.0",
-    "date": "2025-03-14T20:04:02Z"
-  },
-  {
     "name": "homarr-labs/homarr",
     "version": "v1.11.0",
     "date": "2025-03-14T19:14:52Z"
@@ -378,11 +393,6 @@
     "name": "FlowiseAI/Flowise",
     "version": "flowise@2.2.7-patch.1",
     "date": "2025-03-14T14:53:53Z"
-  },
-  {
-    "name": "jupyter/notebook",
-    "version": "v7.3.3",
-    "date": "2025-03-14T13:41:04Z"
   },
   {
     "name": "home-assistant/core",
@@ -493,11 +503,6 @@
     "name": "AlexxIT/go2rtc",
     "version": "v1.9.9",
     "date": "2025-03-10T03:22:11Z"
-  },
-  {
-    "name": "clusterzx/paperless-ai",
-    "version": "v2.7.4",
-    "date": "2025-03-09T19:03:53Z"
   },
   {
     "name": "caddyserver/caddy",
@@ -673,11 +678,6 @@
     "name": "cloudflare/cloudflared",
     "version": "2025.2.1",
     "date": "2025-02-27T11:36:11Z"
-  },
-  {
-    "name": "rabbitmq/rabbitmq-server",
-    "version": "v4.0.7",
-    "date": "2025-02-26T19:07:11Z"
   },
   {
     "name": "cross-seed/cross-seed",
