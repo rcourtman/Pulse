@@ -15,13 +15,14 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-    curl \
-    sudo \
-    mc \
-    sqlite3 \
-    rclone \
-    tzdata \
-    ca-certificates
+  curl \
+  sudo \
+  mc \
+  sqlite3 \
+  rclone \
+  tzdata \
+  ca-certificates \
+  build-essential
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up Golang"
@@ -34,7 +35,7 @@ ln -sf /usr/local/go/bin/go /usr/local/bin/go
 set -o pipefail
 msg_ok "Setup Golang"
 
-msg_info "Setup ${APPLICATION}"
+msg_info "Setup ${APPLICATION} (Patience)"
 temp_file=$(mktemp)
 RELEASE=$(curl -s https://api.github.com/repos/StarFleetCPTN/GoMFT/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
 wget -q "https://github.com/StarFleetCPTN/GoMFT/archive/refs/tags/v${RELEASE}.tar.gz" -O $temp_file
@@ -42,10 +43,12 @@ tar -xzf $temp_file
 mv GoMFT-${RELEASE}/ /opt/gomft
 cd /opt/gomft
 $STD go mod download
-$STD go build -o gomft
-chmod +x gomft
 $STD go install github.com/a-h/templ/cmd/templ@latest
 $STD $HOME/go/bin/templ generate
+export CGO_ENABLED=1
+export GOOS=linux
+$STD go build -o gomft
+chmod +x /opt/gomft/gomft
 JWT_SECRET_KEY=$(openssl rand -base64 24 | tr -d '/+=')
 
 cat <<EOF >/opt/gomft/.env
