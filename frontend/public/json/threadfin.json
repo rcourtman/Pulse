@@ -8,7 +8,7 @@
     "type": "ct",
     "updateable": false,
     "privileged": false,
-    "interface_port": null,
+    "interface_port": 34400,
     "documentation": null,
     "website": "https://github.com/Threadfin/Threadfin",
     "logo": "https://raw.githubusercontent.com/Threadfin/Threadfin/main/html/img/threadfin.png",
