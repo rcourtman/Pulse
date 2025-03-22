@@ -1,8 +1,28 @@
 [
   {
+    "name": "fhem/fhem-mirror",
+    "version": "6.2",
+    "date": "2025-03-22T10:31:21Z"
+  },
+  {
+    "name": "documenso/documenso",
+    "version": "v1.10.0-rc.1",
+    "date": "2025-03-22T06:34:33Z"
+  },
+  {
+    "name": "Jackett/Jackett",
+    "version": "v0.22.1675",
+    "date": "2025-03-22T05:59:21Z"
+  },
+  {
+    "name": "pocketbase/pocketbase",
+    "version": "v0.26.2",
+    "date": "2025-03-22T04:21:44Z"
+  },
+  {
     "name": "ollama/ollama",
-    "version": "v0.6.3-rc0",
-    "date": "2025-03-21T21:47:13Z"
+    "version": "v0.6.2",
+    "date": "2025-03-18T03:11:33Z"
   },
   {
     "name": "netbox-community/netbox",
@@ -15,9 +35,9 @@
     "date": "2024-12-20T13:21:31Z"
   },
   {
-    "name": "fhem/fhem-mirror",
-    "version": "6.2",
-    "date": "2025-03-21T20:27:25Z"
+    "name": "keycloak/keycloak",
+    "version": "26.1.4",
+    "date": "2025-03-13T15:41:42Z"
   },
   {
     "name": "home-assistant/core",
@@ -48,11 +68,6 @@
     "name": "influxdata/influxdb",
     "version": "v1.12.0rc0",
     "date": "2025-03-21T17:24:38Z"
-  },
-  {
-    "name": "documenso/documenso",
-    "version": "v1.10.0-rc.0",
-    "date": "2025-03-21T16:23:23Z"
   },
   {
     "name": "ZoeyVid/NPMplus",
@@ -90,11 +105,6 @@
     "date": "2025-01-01T16:15:52Z"
   },
   {
-    "name": "Jackett/Jackett",
-    "version": "v0.22.1672",
-    "date": "2025-03-21T05:51:00Z"
-  },
-  {
     "name": "StarFleetCPTN/GoMFT",
     "version": "v0.1.18",
     "date": "2025-03-21T04:36:04Z"
@@ -115,11 +125,6 @@
     "date": "2025-03-20T20:38:06Z"
   },
   {
-    "name": "keycloak/keycloak",
-    "version": "26.1.4",
-    "date": "2025-03-13T15:41:42Z"
-  },
-  {
     "name": "stonith404/pingvin-share",
     "version": "v1.10.4",
     "date": "2025-03-20T18:56:10Z"
@@ -131,8 +136,8 @@
   },
   {
     "name": "runtipi/runtipi",
-    "version": "nightly",
-    "date": "2025-03-20T17:49:45Z"
+    "version": "v3.10.0",
+    "date": "2025-03-15T14:38:16Z"
   },
   {
     "name": "ellite/Wallos",
@@ -368,11 +373,6 @@
     "name": "Prowlarr/Prowlarr",
     "version": "v1.32.2.4987",
     "date": "2025-03-16T09:41:37Z"
-  },
-  {
-    "name": "pocketbase/pocketbase",
-    "version": "v0.26.1",
-    "date": "2025-03-16T08:51:41Z"
   },
   {
     "name": "Kozea/Radicale",
