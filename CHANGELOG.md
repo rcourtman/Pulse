@@ -42,6 +42,14 @@ All LXC instances created using this repository come pre-installed with Midnight
 
     - Refactor Changelog Workflow [@michelroegl-brunner](https://github.com/michelroegl-brunner) ([#3371](https://github.com/community-scripts/ProxmoxVE/pull/3371))
 
+### 🌐 Website
+
+  - Update siteConfig.tsx to use new analytics code [@BramSuurdje](https://github.com/BramSuurdje) ([#3389](https://github.com/community-scripts/ProxmoxVE/pull/3389))
+
+  - #### 🐞 Bug Fixes
+
+    - Better Text for Version Date [@michelroegl-brunner](https://github.com/michelroegl-brunner) ([#3388](https://github.com/community-scripts/ProxmoxVE/pull/3388))
+
 ## 2025-03-23
 
 ### 🚀 Updated Scripts
