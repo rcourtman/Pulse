@@ -105,7 +105,7 @@ jobs:
               )
             );
             
-            for (const pr of filteredPRs) {  // ✅ for...of unterstützt await
+            for (const pr of filteredPRs) {
               const prLabels = pr.labels.map(label => label.name.toLowerCase());
               
               let prNote = `- ${pr.title} [@${pr.user.login}](https://github.com/${pr.user.login}) ([#${pr.number}](${pr.html_url}))`;
@@ -118,7 +118,7 @@ jobs:
                       owner: context.repo.owner,
                       repo: "ProxmoxVED", 
                       state: "all",
-                      labels: ["Started Migration To ProxmoxVE"],  // "label" -> "labels"
+                      labels: ["Started Migration To ProxmoxVE"],  
                       per_page: 5
                     });                    
                     const matchingIssue = relatedIssues.find(issue => 
@@ -132,9 +132,10 @@ jobs:
                   } catch (error) {
                     console.error(`Error fetching related issues: ${error}`);
                   }
+                } else {
+                  prNote = `- ${pr.title} ([#${pr.number}](${pr.html_url}))`; // ❗ `const` entfernt, da `prNote` schon oben existiert
                 }
-              }
-            
+
               const updateScriptsCategory = categorizedPRs.find(category =>
                 category.labels.some(label => prLabels.includes(label))
               );
