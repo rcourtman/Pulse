@@ -133,25 +133,25 @@ jobs:
                     console.error(`Error fetching related issues: ${error}`);
                   }
                 } else {
-                  prNote = `- ${pr.title} ([#${pr.number}](${pr.html_url}))`; // ❗ `const` entfernt, da `prNote` schon oben existiert
+                  prNote = `- ${pr.title} ([#${pr.number}](${pr.html_url}))`;
                 }
 
-              const updateScriptsCategory = categorizedPRs.find(category =>
-                category.labels.some(label => prLabels.includes(label))
-              );
-            
-              if (updateScriptsCategory) {
-                const subCategory = updateScriptsCategory.subCategories.find(sub =>
-                  sub.labels.some(label => prLabels.includes(label))
+                const updateScriptsCategory = categorizedPRs.find(category =>
+                  category.labels.some(label => prLabels.includes(label))
                 );
-            
-                if (subCategory) {
-                  subCategory.notes.push(prNote);
-                } else {
-                  updateScriptsCategory.notes.push(prNote);
+
+                if (updateScriptsCategory) {
+                  const subCategory = updateScriptsCategory.subCategories.find(sub =>
+                    sub.labels.some(label => prLabels.includes(label))
+                  );
+
+                  if (subCategory) {
+                    subCategory.notes.push(prNote);
+                  } else {
+                    updateScriptsCategory.notes.push(prNote);
+                  }
                 }
-              }
-            }
+
 
       - name: Update CHANGELOG.md
         uses: actions/github-script@v7
