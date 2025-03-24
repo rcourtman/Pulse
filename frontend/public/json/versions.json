@@ -2,12 +2,67 @@
   {
     "name": "fhem/fhem-mirror",
     "version": "6.2",
-    "date": "2025-03-23T20:28:38Z"
+    "date": "2025-03-24T10:36:10Z"
+  },
+  {
+    "name": "semaphoreui/semaphore",
+    "version": "v2.13.1",
+    "date": "2025-03-24T09:42:32Z"
+  },
+  {
+    "name": "zwave-js/zwave-js-ui",
+    "version": "v10.1.1",
+    "date": "2025-03-24T08:34:47Z"
+  },
+  {
+    "name": "Checkmk/checkmk",
+    "version": "v2.4.0b2-rc1",
+    "date": "2025-03-24T07:20:45Z"
+  },
+  {
+    "name": "cockpit-project/cockpit",
+    "version": "336",
+    "date": "2025-03-24T07:16:02Z"
+  },
+  {
+    "name": "icereed/paperless-gpt",
+    "version": "v0.14.0",
+    "date": "2025-03-24T07:03:24Z"
+  },
+  {
+    "name": "nzbgetcom/nzbget",
+    "version": "v24.8",
+    "date": "2025-03-18T07:33:51Z"
+  },
+  {
+    "name": "Jackett/Jackett",
+    "version": "v0.22.1685",
+    "date": "2025-03-24T05:54:06Z"
+  },
+  {
+    "name": "pocketbase/pocketbase",
+    "version": "v0.26.3",
+    "date": "2025-03-24T04:42:52Z"
+  },
+  {
+    "name": "firefly-iii/firefly-iii",
+    "version": "v6.2.10",
+    "date": "2025-03-22T13:02:26Z"
+  },
+  {
+    "name": "requarks/wiki",
+    "version": "v2.5.307",
+    "date": "2025-03-24T01:33:31Z"
+  },
+  {
+    "name": "moghtech/komodo",
+    "version": "v1.17.0",
+    "date": "2025-03-24T00:46:32Z"
   },
   {
     "name": "runtipi/runtipi",
-    "version": "nightly",
-    "date": "2025-03-23T18:02:12Z"
+    "version": "v3.10.0",
+    "date": "2025-03-15T14:38:16Z"
   },
   {
     "name": "msgbyte/tianji",
@@ -18,6 +73,11 @@
     "name": "dgtlmoon/changedetection.io",
     "version": "0.49.7",
     "date": "2025-03-23T15:51:11Z"
+  },
+  {
+    "name": "keycloak/keycloak",
+    "version": "26.1.4",
+    "date": "2025-03-13T15:41:42Z"
   },
   {
     "name": "Lidarr/Lidarr",
@@ -50,11 +110,6 @@
     "date": "2025-03-16T09:41:37Z"
   },
   {
-    "name": "Jackett/Jackett",
-    "version": "v0.22.1680",
-    "date": "2025-03-23T06:10:41Z"
-  },
-  {
     "name": "morpheus65535/bazarr",
     "version": "v1.5.1",
     "date": "2025-01-01T16:15:52Z"
@@ -85,24 +140,9 @@
     "date": "2025-03-22T17:26:10Z"
   },
   {
-    "name": "keycloak/keycloak",
-    "version": "26.1.4",
-    "date": "2025-03-13T15:41:42Z"
-  },
-  {
-    "name": "firefly-iii/firefly-iii",
-    "version": "v6.2.10",
-    "date": "2025-03-22T13:02:26Z"
-  },
-  {
     "name": "documenso/documenso",
     "version": "v1.10.0-rc.1",
     "date": "2025-03-22T06:34:33Z"
-  },
-  {
-    "name": "pocketbase/pocketbase",
-    "version": "v0.26.2",
-    "date": "2025-03-22T04:21:44Z"
   },
   {
     "name": "ollama/ollama",
@@ -163,11 +203,6 @@
     "name": "openobserve/openobserve",
     "version": "v0.14.5-rc5",
     "date": "2025-03-21T10:50:34Z"
-  },
-  {
-    "name": "zwave-js/zwave-js-ui",
-    "version": "v10.1.0",
-    "date": "2025-03-21T09:17:45Z"
   },
   {
     "name": "StarFleetCPTN/GoMFT",
@@ -270,11 +305,6 @@
     "date": "2025-03-19T09:11:26Z"
   },
   {
-    "name": "Checkmk/checkmk",
-    "version": "v2.3.0p29",
-    "date": "2025-03-19T07:42:50Z"
-  },
-  {
     "name": "Donkie/Spoolman",
     "version": "v0.22.1",
     "date": "2025-03-18T21:01:22Z"
@@ -325,11 +355,6 @@
     "date": "2025-03-18T09:44:59Z"
   },
   {
-    "name": "nzbgetcom/nzbget",
-    "version": "v24.8",
-    "date": "2025-03-18T07:33:51Z"
-  },
-  {
     "name": "authelia/authelia",
     "version": "v4.39.1",
     "date": "2025-03-18T03:57:41Z"
@@ -343,11 +368,6 @@
     "name": "bastienwirtz/homer",
     "version": "v25.03.3",
     "date": "2025-03-17T20:55:37Z"
-  },
-  {
-    "name": "semaphoreui/semaphore",
-    "version": "v2.13.0",
-    "date": "2025-03-17T19:39:10Z"
   },
   {
     "name": "Kareadita/Kavita",
@@ -485,11 +505,6 @@
     "date": "2025-03-13T17:13:47Z"
   },
   {
-    "name": "moghtech/komodo",
-    "version": "v1.16.12",
-    "date": "2024-12-02T08:46:29Z"
-  },
-  {
     "name": "diced/zipline",
     "version": "v4.0.1",
     "date": "2025-03-12T22:41:17Z"
@@ -498,11 +513,6 @@
     "name": "minio/minio",
     "version": "RELEASE.2025-03-12T18-04-18Z",
     "date": "2025-03-12T18:45:21Z"
-  },
-  {
-    "name": "cockpit-project/cockpit",
-    "version": "335",
-    "date": "2025-03-12T13:03:27Z"
   },
   {
     "name": "transmission/transmission",
@@ -543,11 +553,6 @@
     "name": "stackblitz-labs/bolt.diy",
     "version": "v0.0.7-hf1",
     "date": "2025-03-10T20:49:39Z"
-  },
-  {
-    "name": "icereed/paperless-gpt",
-    "version": "v0.13.0",
-    "date": "2025-03-10T10:03:12Z"
   },
   {
     "name": "AlexxIT/go2rtc",
@@ -913,11 +918,6 @@
     "name": "Forceu/Gokapi",
     "version": "v1.9.6",
     "date": "2024-12-18T14:35:37Z"
-  },
-  {
-    "name": "requarks/wiki",
-    "version": "v2.5.306",
-    "date": "2025-02-02T21:19:29Z"
   },
   {
     "name": "PrivateBin/PrivateBin",
