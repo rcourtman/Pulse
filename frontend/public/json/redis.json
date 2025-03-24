@@ -24,6 +24,17 @@
                 "os": "debian",
                 "version": "12"
             }
+        },
+        {
+            "type": "alpine",
+            "script": "ct/alpine-redis.sh",
+            "resources": {
+                "cpu": 1,
+                "ram": 256,
+                "hdd": 1,
+                "os": "alpine",
+                "version": "3.21"
+            }
         }
     ],
     "default_credentials": {
@@ -32,7 +43,7 @@
     },
     "notes": [
         {
-            "text": "Redis Configuration: `nano /etc/redis/redis.conf`",
+            "text": "Redis Configuration: `nano /etc/redis/redis.conf` or in Alpine: `nano /etc/redis.conf`",
             "type": "info"
         }
     ]
