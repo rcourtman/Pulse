@@ -89,7 +89,7 @@ jobs:
 
               const { data: pulls } = await github.rest.pulls.list({
                 owner: context.repo.owner,
-                repo: context.repo.repo,
+                repo: "ProxmoxVE",
                 base: "main",
                 state: "closed",
                 sort: "updated",
@@ -104,24 +104,24 @@ jobs:
                   ["invalid", "wontdo", process.env.AUTOMATED_PR_LABEL].includes(label.name.toLowerCase())
                 )
               );
-              
+
               for (const pr of filteredPRs) {
                 const prLabels = pr.labels.map(label => label.name.toLowerCase());
-                
+
                 let prNote = `- ${pr.title} [@${pr.user.login}](https://github.com/${pr.user.login}) ([#${pr.number}](${pr.html_url}))`;
-              
-                if (pr.user.login === "push-app-to-main") {
+
+
+                if (pr.user.login.includes("push-app-to-main[bot]")) {
                   const scriptName = pr.title;
-                  if (scriptName) {
                     try {
                       const { data: relatedIssues } = await github.rest.issues.listForRepo({
                         owner: context.repo.owner,
-                        repo: "ProxmoxVED", 
+                        repo: "ProxmoxVED",
                         state: "all",
-                        labels: ["Started Migration To ProxmoxVE"],  
+                        labels: ["Started Migration To ProxmoxVE"],
                         per_page: 5
-                      });                    
-                      const matchingIssue = relatedIssues.find(issue => 
+                      });
+                      const matchingIssue = relatedIssues.find(issue =>
                         issue.title.toLowerCase().includes(scriptName.toLowerCase())
                       );
                       if (matchingIssue) {
@@ -131,36 +131,48 @@ jobs:
                       }
                     } catch (error) {
                       console.error(`Error fetching related issues: ${error}`);
+                      prNote = `- ${pr.title} ([#${pr.number}](${pr.html_url}))`;
                     }
-                  } else {
-                    prNote = `- ${pr.title} ([#${pr.number}](${pr.html_url}))`;
-                  }
                 }
-                
-                // Find matching category
-                for (const category of categorizedPRs) {
+
+
+
+                if (prLabels.includes("new script")) {
+                  const newScriptCategory = categorizedPRs.find(category =>
+                  category.title === "New Scripts" || category.labels.includes("new script"));
+                  if (newScriptCategory) {
+                  newScriptCategory.notes.push(prNote);
+                  }
+                } else {
+
+                  let categorized = false;
+                  const priorityCategories = categorizedPRs.slice();
+                  for (const category of priorityCategories) {
+                  if (categorized) break;
                   if (category.labels.some(label => prLabels.includes(label))) {
-                    // Check if PR belongs to a subcategory
                     if (category.subCategories && category.subCategories.length > 0) {
-                      const subCategory = category.subCategories.find(sub => 
-                        sub.labels.some(label => prLabels.includes(label))
-                      );
-                      
-                      if (subCategory) {
-                        subCategory.notes.push(prNote);
-                      } else {
-                        category.notes.push(prNote);
-                      }
+                    const subCategory = category.subCategories.find(sub =>
+                      sub.labels.some(label => prLabels.includes(label))
+                    );
+
+                    if (subCategory) {
+                      subCategory.notes.push(prNote);
                     } else {
                       category.notes.push(prNote);
                     }
+                    } else {
+                    category.notes.push(prNote);
+                    }
+                    categorized = true;
+                  }
                   }
                 }
+
               }
-              
+
               return categorizedPRs;
             }
-            
+
             return await main();
 
       - name: Update CHANGELOG.md
