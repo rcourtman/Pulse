@@ -102,7 +102,7 @@ function ScriptItem({
 
                         )?.version || "No Version information found"
                         }</p>
-                        <p className="text-l text-foreground">Latest changes:</p>
+                        <p className="text-l text-foreground">Latest Version changes(Pulled from newreleases.io):</p>
                         <p className="text-l text-muted-foreground">
                           {(() => {
                             const matchedVersion = versions.find((v) =>
