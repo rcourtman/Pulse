@@ -46,7 +46,7 @@ export const mostPopularScripts = ["post-pve-install", "docker", "homeassistant"
 
 export const analytics = {
   url: "analytics.proxmoxve-scripts.com",
-  token: "b60d3032-1a11-4244-a100-81d26c5c49a7",
+  token: "aefee1b9-2a12-4ac2-9d82-a63113edc62e",
 };
 
 export const AlertColors = {
