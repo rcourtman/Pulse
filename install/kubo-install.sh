@@ -43,6 +43,7 @@ After=syslog.target network.target
 Type=simple
 ExecStart=/usr/local/bin/ipfs daemon
 Restart=on-failure
+Environment=HOME=/root
 [Install]
 WantedBy=multi-user.target
 EOF
