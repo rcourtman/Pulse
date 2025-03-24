@@ -211,6 +211,11 @@ EOF
   $STD apt-get -o Dpkg::Options::="--force-confold" -y dist-upgrade
   rm -rf /usr/lib/python3.*/EXTERNALLY-MANAGED
   msg_ok "Updated Container OS"
+
+  msg_info "Installing core dependencies"
+  $STD apt-get update
+  $STD apt-get install -y sudo curl mc
+  msg_ok "Core dependencies installed"
 }
 
 # This function modifies the message of the day (motd) and SSH settings
