@@ -151,6 +151,7 @@ jobs:
                     updateScriptsCategory.notes.push(prNote);
                   }
                 }
+              }
 
 
       - name: Update CHANGELOG.md
