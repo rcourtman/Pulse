@@ -48,116 +48,120 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs').promises;
-            const path = require('path');
+            async function main() {
+              const fs = require('fs').promises;
+              const path = require('path');
 
-            const configPath = path.resolve(process.env.CONFIG_PATH);
-            const fileContent = await fs.readFile(configPath, 'utf-8');
-            const changelogConfig = JSON.parse(fileContent);
+              const configPath = path.resolve(process.env.CONFIG_PATH);
+              const fileContent = await fs.readFile(configPath, 'utf-8');
+              const changelogConfig = JSON.parse(fileContent);
 
-            const categorizedPRs = changelogConfig.map(obj => ({
-              ...obj,
-              notes: [],
-              subCategories: obj.subCategories ?? (
-                obj.labels.includes("update script") ? [
-                  { title: "🐞 Bug Fixes", labels: ["bugfix"], notes: [] },
-                  { title: "✨ New Features", labels: ["feature"], notes: [] },
-                  { title: "💥 Breaking Changes", labels: ["breaking change"], notes: [] },
-                  { title: "🔧 Refactor", labels: ["refactor"], notes: [] },
-                ] :
-                obj.labels.includes("maintenance") ? [
-                  { title: "🐞 Bug Fixes", labels: ["bugfix"], notes: [] },
-                  { title: "✨ New Features", labels: ["feature"], notes: [] },
-                  { title: "💥 Breaking Changes", labels: ["breaking change"], notes: [] },
-                  { title: "📡 API", labels: ["api"], notes: [] },
-                  { title: "Github", labels: ["github"], notes: [] },
-                  { title: "📝 Documentation", labels: ["documentation"], notes: [] },
-                  { title: "🔧 Refactor", labels: ["refactor"], notes: [] }
-                ] :
-                obj.labels.includes("website") ? [
-                  { title: "🐞 Bug Fixes", labels: ["bugfix"], notes: [] },
-                  { title: "✨ New Features", labels: ["feature"], notes: [] },
-                  { title: "💥 Breaking Changes", labels: ["breaking change"], notes: [] },
-                  { title: "Script Information", labels: ["json"], notes: [] }
-                ] : []
-              )
-            }));
+              const categorizedPRs = changelogConfig.map(obj => ({
+                ...obj,
+                notes: [],
+                subCategories: obj.subCategories ?? (
+                  obj.labels.includes("update script") ? [
+                    { title: "🐞 Bug Fixes", labels: ["bugfix"], notes: [] },
+                    { title: "✨ New Features", labels: ["feature"], notes: [] },
+                    { title: "💥 Breaking Changes", labels: ["breaking change"], notes: [] },
+                    { title: "🔧 Refactor", labels: ["refactor"], notes: [] },
+                  ] :
+                  obj.labels.includes("maintenance") ? [
+                    { title: "🐞 Bug Fixes", labels: ["bugfix"], notes: [] },
+                    { title: "✨ New Features", labels: ["feature"], notes: [] },
+                    { title: "💥 Breaking Changes", labels: ["breaking change"], notes: [] },
+                    { title: "📡 API", labels: ["api"], notes: [] },
+                    { title: "Github", labels: ["github"], notes: [] },
+                    { title: "📝 Documentation", labels: ["documentation"], notes: [] },
+                    { title: "🔧 Refactor", labels: ["refactor"], notes: [] }
+                  ] :
+                  obj.labels.includes("website") ? [
+                    { title: "🐞 Bug Fixes", labels: ["bugfix"], notes: [] },
+                    { title: "✨ New Features", labels: ["feature"], notes: [] },
+                    { title: "💥 Breaking Changes", labels: ["breaking change"], notes: [] },
+                    { title: "Script Information", labels: ["json"], notes: [] }
+                  ] : []
+                )
+              }));
 
-            const latestDateInChangelog = new Date(process.env.LATEST_DATE);
-            latestDateInChangelog.setUTCHours(23, 59, 59, 999);
+              const latestDateInChangelog = new Date(process.env.LATEST_DATE);
+              latestDateInChangelog.setUTCHours(23, 59, 59, 999);
 
-            const { data: pulls } = await github.rest.pulls.list({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              base: "main",
-              state: "closed",
-              sort: "updated",
-              direction: "desc",
-              per_page: 100,
-            });
+              const { data: pulls } = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                base: "main",
+                state: "closed",
+                sort: "updated",
+                direction: "desc",
+                per_page: 100,
+              });
 
-            pulls.filter(pr =>
-            pr.merged_at &&
-            new Date(pr.merged_at) > latestDateInChangelog &&
-            !pr.labels.some(label =>
-              ["invalid", "wontdo", process.env.AUTOMATED_PR_LABEL].includes(label.name.toLowerCase())
-              )
-            ).forEach(pr => {
+              pulls.filter(pr =>
+              pr.merged_at &&
+              new Date(pr.merged_at) > latestDateInChangelog &&
+              !pr.labels.some(label =>
+                ["invalid", "wontdo", process.env.AUTOMATED_PR_LABEL].includes(label.name.toLowerCase())
+                )
+              ).forEach(pr => {
 
-              const prLabels = pr.labels.map(label => label.name.toLowerCase());
-              if (pr.user.login === "push-app-to-main") {
-                const scriptName = pr.title;
-                if (scriptName) {
-                  try {
-                    const { data: relatedIssues } = await github.rest.issues.listForRepo({
-                      owner: context.repo.owner,
-                      repo: "ProxmoxVED", 
-                      state: "all",
-                      label: "Started Migration To ProxmoxVE",
-                      per_page: 5
-                    });                    
-                    const matchingIssue = relatedIssues.find(issue => 
-                      issue.title.toLowerCase().includes(scriptName.toLowerCase())
-                    );
-                    if (matchingIssue) {
-                      const issueAuthor = matchingIssue.user.login;
-                      const issueAuthorUrl = `https://github.com/${issueAuthor}`;
-                      const prNote = `- ${pr.title} [@${issueAuthor}](${issueAuthorUrl}) ([#${pr.number}](${pr.html_url}))`;
-                    } else {
-                      const prNote = `- ${pr.title} ([#${pr.number}](${pr.html_url}))`;
+                const prLabels = pr.labels.map(label => label.name.toLowerCase());
+                if (pr.user.login === "push-app-to-main") {
+                  const scriptName = pr.title;
+                  if (scriptName) {
+                    try {
+                      const { data: relatedIssues } = await github.rest.issues.listForRepo({
+                        owner: context.repo.owner,
+                        repo: "ProxmoxVED", 
+                        state: "all",
+                        label: "Started Migration To ProxmoxVE",
+                        per_page: 5
+                      });                    
+                      const matchingIssue = relatedIssues.find(issue => 
+                        issue.title.toLowerCase().includes(scriptName.toLowerCase())
+                      );
+                      if (matchingIssue) {
+                        const issueAuthor = matchingIssue.user.login;
+                        const issueAuthorUrl = `https://github.com/${issueAuthor}`;
+                        const prNote = `- ${pr.title} [@${issueAuthor}](${issueAuthorUrl}) ([#${pr.number}](${pr.html_url}))`;
+                      } else {
+                        const prNote = `- ${pr.title} ([#${pr.number}](${pr.html_url}))`;
+                      }
+                    } catch (error) {
+                      console.error(`Error fetching related issues: ${error}`);
+                      const prNote = `- ${pr.title}  ([#${pr.number}](${pr.html_url}))`;
                     }
-                  } catch (error) {
-                    console.error(`Error fetching related issues: ${error}`);
-                    const prNote = `- ${pr.title}  ([#${pr.number}](${pr.html_url}))`;
-                  }
-                } else {
-                  const prNote = `- ${pr.title} ([#${pr.number}](${pr.html_url}))`;
+                  } else {
+                    const prNote = `- ${pr.title} ([#${pr.number}](${pr.html_url}))`;
 
-              }else{
-                const prNote = `- ${pr.title} [@${pr.user.login}](https://github.com/${pr.user.login}) ([#${pr.number}](${pr.html_url}))`;
-              }
-              const updateScriptsCategory = categorizedPRs.find(category =>
-                category.labels.some(label => prLabels.includes(label))
-              );
-
-              if (updateScriptsCategory) {
-                
-                const subCategory = updateScriptsCategory.subCategories.find(sub =>
-                  sub.labels.some(label => prLabels.includes(label))
+                }else{
+                  const prNote = `- ${pr.title} [@${pr.user.login}](https://github.com/${pr.user.login}) ([#${pr.number}](${pr.html_url}))`;
+                }
+                const updateScriptsCategory = categorizedPRs.find(category =>
+                  category.labels.some(label => prLabels.includes(label))
                 );
 
-                if (subCategory) {
-                  subCategory.notes.push(prNote);
-                } else {
-                  updateScriptsCategory.notes.push(prNote);
+                if (updateScriptsCategory) {
+                  
+                  const subCategory = updateScriptsCategory.subCategories.find(sub =>
+                    sub.labels.some(label => prLabels.includes(label))
+                  );
+
+                  if (subCategory) {
+                    subCategory.notes.push(prNote);
+                  } else {
+                    updateScriptsCategory.notes.push(prNote);
+                  }
                 }
-              }
+              });
+                  
+              console.log(JSON.stringify(categorizedPRs, null, 2));
+
+              return categorizedPRs;
+            }
+            main().catch(error => {
+              console.error("Error in script:", error);
             });
-            
-            console.log(JSON.stringify(categorizedPRs, null, 2));
-
-            return categorizedPRs;
-
 
       - name: Update CHANGELOG.md
         uses: actions/github-script@v7
