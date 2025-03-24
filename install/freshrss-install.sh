@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/FreshRSS/FreshRSS
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,15 +15,11 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   postgresql \
   apache2 \
   php-{curl,dom,json,ctype,pgsql,gmp,mbstring,iconv,zip} \
   libapache2-mod-php
 msg_ok "Installed Dependencies"
-
 
 msg_info "Setting up PostgreSQL"
 DB_NAME=freshrss
@@ -32,11 +28,11 @@ DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-13)
 $STD sudo -u postgres psql -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASS';"
 $STD sudo -u postgres psql -c "CREATE DATABASE $DB_NAME WITH OWNER $DB_USER TEMPLATE template0;"
 {
-echo "FreshRSS Credentials"
-echo "FreshRSS Database User: $DB_USER"
-echo "FreshRSS Database Password: $DB_PASS"
-echo "FreshRSS Database Name: $DB_NAME"
-} >> ~/freshrss.creds
+  echo "FreshRSS Credentials"
+  echo "FreshRSS Database User: $DB_USER"
+  echo "FreshRSS Database Password: $DB_PASS"
+  echo "FreshRSS Database Name: $DB_NAME"
+} >>~/freshrss.creds
 msg_ok "Set up PostgreSQL"
 
 msg_info "Installing FreshRSS"

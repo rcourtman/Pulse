@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://redis.io/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -21,7 +21,7 @@ $STD apk add \
 	nano \
 	mc \
 	gpg
-	
+
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Redis"

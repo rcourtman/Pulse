@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://phpipam.net/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,14 +15,11 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
-  mariadb-server \
-  apache2 \
-  libapache2-mod-php \
-  php8.2 php8.2-{fpm,curl,cli,mysql,gd,intl,imap,apcu,pspell,tidy,xmlrpc,mbstring,gmp,xml,ldap,common,snmp} \
-  php-pear
+    mariadb-server \
+    apache2 \
+    libapache2-mod-php \
+    php8.2 php8.2-{fpm,curl,cli,mysql,gd,intl,imap,apcu,pspell,tidy,xmlrpc,mbstring,gmp,xml,ldap,common,snmp} \
+    php-pear
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up MariaDB"
@@ -37,7 +34,7 @@ $STD mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH 
     echo "phpIPAM Database User: $DB_USER"
     echo "phpIPAM Database Password: $DB_PASS"
     echo "phpIPAM Database Name: $DB_NAME"
-} >> ~/phpipam.creds
+} >>~/phpipam.creds
 msg_ok "Set up MariaDB"
 
 msg_info "Installing phpIPAM"
@@ -45,13 +42,13 @@ RELEASE=$(curl -s https://api.github.com/repos/phpipam/phpipam/releases/latest |
 cd /opt
 wget -q "https://github.com/phpipam/phpipam/releases/download/v${RELEASE}/phpipam-v${RELEASE}.zip"
 unzip -q "phpipam-v${RELEASE}.zip"
-mysql -u root "${DB_NAME}" < /opt/phpipam/db/SCHEMA.sql
+mysql -u root "${DB_NAME}" </opt/phpipam/db/SCHEMA.sql
 cp /opt/phpipam/config.dist.php /opt/phpipam/config.php
 sed -i -e "s/\(\$disable_installer = \).*/\1true;/" \
-       -e "s/\(\$db\['user'\] = \).*/\1'$DB_USER';/" \
-       -e "s/\(\$db\['pass'\] = \).*/\1'$DB_PASS';/" \
-       -e "s/\(\$db\['name'\] = \).*/\1'$DB_NAME';/" \
-       /opt/phpipam/config.php
+    -e "s/\(\$db\['user'\] = \).*/\1'$DB_USER';/" \
+    -e "s/\(\$db\['pass'\] = \).*/\1'$DB_PASS';/" \
+    -e "s/\(\$db\['name'\] = \).*/\1'$DB_NAME';/" \
+    /opt/phpipam/config.php
 sed -i '/max_execution_time/s/= .*/= 600/' /etc/php/8.2/apache2/php.ini
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed phpIPAM"

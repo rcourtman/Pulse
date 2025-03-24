@@ -15,15 +15,12 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  git \
-  sudo \
-  mc \
-  apache2 \
-  php8.2-{apcu,cli,common,curl,gd,imap,ldap,mysql,xmlrpc,xml,mbstring,bcmath,intl,zip,redis,bz2,soap} \
-  php-cas \
-  libapache2-mod-php \
-  mariadb-server
+    git \
+    apache2 \
+    php8.2-{apcu,cli,common,curl,gd,imap,ldap,mysql,xmlrpc,xml,mbstring,bcmath,intl,zip,redis,bz2,soap} \
+    php-cas \
+    libapache2-mod-php \
+    mariadb-server
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up database"
@@ -40,7 +37,7 @@ mysql -u root -e "GRANT SELECT ON \`mysql\`.\`time_zone_name\` TO '$DB_USER'@'lo
     echo "Database: $DB_NAME"
     echo "Username: $DB_USER"
     echo "Password: $DB_PASS"
-} >> ~/glpi_db.creds
+} >>~/glpi_db.creds
 msg_ok "Set up database"
 
 msg_info "Installing GLPi"
@@ -54,7 +51,7 @@ echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed GLPi"
 
 msg_info "Setting Downstream file"
-cat <<EOF > /opt/glpi/inc/downstream.php
+cat <<EOF >/opt/glpi/inc/downstream.php
 <?php
 define('GLPI_CONFIG_DIR', '/etc/glpi/');
 if (file_exists(GLPI_CONFIG_DIR . '/local_define.php')) {
@@ -66,7 +63,7 @@ mv /opt/glpi/config /etc/glpi
 mv /opt/glpi/files /var/lib/glpi
 mv /var/lib/glpi/_log /var/log/glpi
 
-cat <<EOF > /etc/glpi/local_define.php
+cat <<EOF >/etc/glpi/local_define.php
 <?php
 define('GLPI_VAR_DIR', '/var/lib/glpi');
 define('GLPI_DOC_DIR', GLPI_VAR_DIR);

@@ -6,7 +6,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://about.gitea.com/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -16,9 +16,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y git
-$STD apt-get install -y curl
-$STD apt-get install -y sudo
-$STD apt-get install -y mc
 $STD apt-get install -y sqlite3
 msg_ok "Installed Dependencies"
 
@@ -27,7 +24,7 @@ RELEASE=$(wget -q https://github.com/go-gitea/gitea/releases/latest -O - | grep 
 wget -q https://github.com/go-gitea/gitea/releases/download/v$RELEASE/gitea-$RELEASE-linux-amd64
 mv gitea* /usr/local/bin/gitea
 chmod +x /usr/local/bin/gitea
-adduser --system --group --disabled-password --shell /bin/bash --home /etc/gitea gitea > /dev/null
+adduser --system --group --disabled-password --shell /bin/bash --home /etc/gitea gitea >/dev/null
 mkdir -p /var/lib/gitea/{custom,data,log}
 chown -R gitea:gitea /var/lib/gitea/
 chmod -R 750 /var/lib/gitea/

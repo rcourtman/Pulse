@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/YuukanOO/seelf
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   make \
   gcc
 msg_ok "Installed Dependencies"
@@ -49,15 +46,17 @@ wget -q "https://github.com/YuukanOO/seelf/archive/refs/tags/v${RELEASE}.tar.gz"
 tar -xzf v${RELEASE}.tar.gz
 mv seelf-${RELEASE}/ /opt/seelf
 cd /opt/seelf
-$STD make build 
+$STD make build
 PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c13)
 {
-    echo "ADMIN_EMAIL=admin@example.com"
-    echo "ADMIN_PASSWORD=$PASS"
-} | tee .env ~/seelf.creds > /dev/null
+  echo "ADMIN_EMAIL=admin@example.com"
+  echo "ADMIN_PASSWORD=$PASS"
+} | tee .env ~/seelf.creds >/dev/null
 
 echo "${RELEASE}" >/opt/seelf_version.txt
-SEELF_ADMIN_EMAIL=admin@example.com SEELF_ADMIN_PASSWORD=$PASS ./seelf serve &> /dev/null & sleep 5 ; kill $!
+SEELF_ADMIN_EMAIL=admin@example.com SEELF_ADMIN_PASSWORD=$PASS ./seelf serve &>/dev/null &
+sleep 5
+kill $!
 msg_ok "Done setting up seelf"
 
 msg_info "Creating Service"
@@ -92,4 +91,4 @@ $STD apt-get -y autoclean
 msg_ok "Cleaned"
 
 motd_ssh
-customize 
+customize

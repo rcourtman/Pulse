@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/leiweibau/Pi.Alert/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get -y install \
-  sudo \
-  mc \
-  curl \
   apt-utils \
   avahi-utils \
   lighttpd \
@@ -29,7 +26,6 @@ $STD apt-get -y install \
   nbtscan \
   libwww-perl \
   nmap \
-  zip \
   aria2 \
   wakeonlan
 msg_ok "Installed Dependencies"
@@ -74,7 +70,7 @@ touch /opt/pialert/log/pialert.vendors.log /opt/pialert/log/pialert.IP.log /opt/
 src_dir="/opt/pialert/log"
 dest_dir="/opt/pialert/front/php/server"
 for file in pialert.vendors.log pialert.IP.log pialert.1.log pialert.cleanup.log pialert.webservices.log; do
-    ln -s "$src_dir/$file" "$dest_dir/$file"
+  ln -s "$src_dir/$file" "$dest_dir/$file"
 done
 sed -i 's#PIALERT_PATH\s*=\s*'\''/home/pi/pialert'\''#PIALERT_PATH           = '\''/opt/pialert'\''#' /opt/pialert/config/pialert.conf
 sed -i 's/$HOME/\/opt/g' /opt/pialert/install/pialert.cron

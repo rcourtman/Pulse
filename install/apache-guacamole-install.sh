@@ -14,30 +14,29 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-   build-essential \
-   curl \
-   jq \
-   libcairo2-dev \
-   libturbojpeg0 \
-   libpng-dev \
-   libtool-bin \
-   libossp-uuid-dev \
-   libvncserver-dev \
-   freerdp2-dev \
-   libssh2-1-dev \
-   libtelnet-dev \
-   libwebsockets-dev \
-   libpulse-dev \
-   libvorbis-dev \
-   libwebp-dev \
-   libssl-dev \
-   libpango1.0-dev \
-   libswscale-dev \
-   libavcodec-dev \
-   libavutil-dev \
-   libavformat-dev \
-   mariadb-server \
-   default-jdk
+    build-essential \
+    jq \
+    libcairo2-dev \
+    libturbojpeg0 \
+    libpng-dev \
+    libtool-bin \
+    libossp-uuid-dev \
+    libvncserver-dev \
+    freerdp2-dev \
+    libssh2-1-dev \
+    libtelnet-dev \
+    libwebsockets-dev \
+    libpulse-dev \
+    libvorbis-dev \
+    libwebp-dev \
+    libssl-dev \
+    libpango1.0-dev \
+    libswscale-dev \
+    libavcodec-dev \
+    libavutil-dev \
+    libavformat-dev \
+    mariadb-server \
+    default-jdk
 msg_ok "Installed Dependencies"
 
 msg_info "Setup Apache Tomcat"
@@ -84,7 +83,7 @@ mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVI
     echo "Database User: $DB_USER"
     echo "Database Password: $DB_PASS"
     echo "Database Name: $DB_NAME"
-} >> ~/guacamole.creds
+} >>~/guacamole.creds
 cd guacamole-auth-jdbc-1.5.5/mysql/schema
 cat *.sql | mysql -u root ${DB_NAME}
 {
@@ -94,7 +93,7 @@ cat *.sql | mysql -u root ${DB_NAME}
     echo "mysql-username: $DB_USER"
     echo "mysql-password: $DB_PASS"
 
-} >> /etc/guacamole/guacamole.properties
+} >>/etc/guacamole/guacamole.properties
 msg_ok "Setup Database"
 
 msg_info "Setup Service"
@@ -147,7 +146,7 @@ motd_ssh
 customize
 
 msg_info "Cleaning up"
-rm -rf ~/mysql-connector-java-8.0.26{,.tar.gz} 
+rm -rf ~/mysql-connector-java-8.0.26{,.tar.gz}
 rm -rf ~/guacamole-auth-jdbc-1.5.5{,.tar.gz}
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean

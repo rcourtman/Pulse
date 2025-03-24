@@ -6,7 +6,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://linkwarden.app/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -16,9 +16,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   make \
   git \
   postgresql \
@@ -59,12 +56,12 @@ $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET client_encoding TO 'utf8'
 $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';"
 $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET timezone TO 'UTC';"
 {
-    echo "Linkwarden-Credentials"
-    echo "Linkwarden Database User: $DB_USER"
-    echo "Linkwarden Database Password: $DB_PASS"
-    echo "Linkwarden Database Name: $DB_NAME"
-    echo "Linkwarden Secret: $SECRET_KEY"
-} >> ~/linkwarden.creds
+  echo "Linkwarden-Credentials"
+  echo "Linkwarden Database User: $DB_USER"
+  echo "Linkwarden Database Password: $DB_PASS"
+  echo "Linkwarden Database Name: $DB_NAME"
+  echo "Linkwarden Secret: $SECRET_KEY"
+} >>~/linkwarden.creds
 msg_ok "Set up PostgreSQL DB"
 
 read -r -p "Would you like to add Adminer? <y/N> " prompt
@@ -88,7 +85,7 @@ if [[ "${prompt,,}" =~ ^(y|yes)$ ]]; then
     echo "Adminer Database User: $DB_USER"
     echo "Adminer Database Password: $DB_PASS"
     echo "Adminer Database Name: $DB_NAME"
-} >> ~/linkwarden.creds
+  } >>~/linkwarden.creds
   msg_ok "Installed Adminer"
 fi
 

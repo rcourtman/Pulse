@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/BookStackApp/BookStack
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,16 +15,13 @@ update_os
 
 msg_info "Installing Dependencies (Patience)"
 $STD apt-get install -y \
-  unzip \
-  mariadb-server \
-  apache2 \
-  curl \
-  sudo \
-  php8.2-{mbstring,gd,fpm,curl,intl,ldap,tidy,bz2,mysql,zip,xml} \
-  composer \
-  libapache2-mod-php \
-  make \
-  mc
+    unzip \
+    mariadb-server \
+    apache2 \
+    php8.2-{mbstring,gd,fpm,curl,intl,ldap,tidy,bz2,mysql,zip,xml} \
+    composer \
+    libapache2-mod-php \
+    make
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up Database"
@@ -39,7 +36,7 @@ $STD sudo mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; F
     echo "Bookstack Database User: $DB_USER"
     echo "Bookstack Database Password: $DB_PASS"
     echo "Bookstack Database Name: $DB_NAME"
-} >> ~/bookstack.creds
+} >>~/bookstack.creds
 msg_ok "Set up database"
 
 msg_info "Setup Bookstack (Patience)"
@@ -58,8 +55,8 @@ sudo sed -i "s/DB_PASSWORD=.*/DB_PASSWORD=$DB_PASS/" /opt/bookstack/.env
 $STD composer install --no-dev --no-plugins --no-interaction
 $STD php artisan key:generate --no-interaction --force
 $STD php artisan migrate --no-interaction --force
-chown www-data:www-data -R /opt/bookstack /opt/bookstack/bootstrap/cache /opt/bookstack/public/uploads /opt/bookstack/storage 
-chmod -R 755 /opt/bookstack /opt/bookstack/bootstrap/cache /opt/bookstack/public/uploads /opt/bookstack/storage 
+chown www-data:www-data -R /opt/bookstack /opt/bookstack/bootstrap/cache /opt/bookstack/public/uploads /opt/bookstack/storage
+chmod -R 755 /opt/bookstack /opt/bookstack/bootstrap/cache /opt/bookstack/public/uploads /opt/bookstack/storage
 chmod -R 775 /opt/bookstack/storage /opt/bookstack/bootstrap/cache /opt/bookstack/public/uploads
 chmod -R 640 /opt/bookstack/.env
 $STD a2enmod rewrite
@@ -106,7 +103,7 @@ cat <<EOF >/etc/apache2/sites-available/bookstack.conf
 </VirtualHost>
 EOF
 $STD a2ensite bookstack.conf
-$STD a2dissite 000-default.conf  
+$STD a2dissite 000-default.conf
 $STD systemctl reload apache2
 msg_ok "Created Services"
 

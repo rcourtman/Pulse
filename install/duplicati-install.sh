@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/duplicati/duplicati/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   libice6 \
   libsm6 \
   libfontconfig1
@@ -33,9 +30,9 @@ msg_ok "Finished setting up Duplicati"
 DECRYPTKEY=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c13)
 ADMINPASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c13)
 {
-    echo "Admin password = ${ADMINPASS}"
-    echo "Database encryption key = ${DECRYPTKEY}"
-} >> ~/duplicati.creds
+  echo "Admin password = ${ADMINPASS}"
+  echo "Database encryption key = ${DECRYPTKEY}"
+} >>~/duplicati.creds
 
 msg_info "Creating Service"
 cat <<EOF >/etc/systemd/system/duplicati.service

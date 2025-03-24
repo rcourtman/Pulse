@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/mylar3/mylar3
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -14,12 +14,8 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
-  jq
-echo "deb http://deb.debian.org/debian bookworm non-free non-free-firmware" > /etc/apt/sources.list.d/non-free.list
+$STD apt-get install -y jq
+echo "deb http://deb.debian.org/debian bookworm non-free non-free-firmware" >/etc/apt/sources.list.d/non-free.list
 $STD apt-get update
 $STD apt-get install -y unrar
 rm /etc/apt/sources.list.d/non-free.list
@@ -37,7 +33,7 @@ mkdir -p /opt/mylar3-data
 RELEASE=$(curl -s https://api.github.com/repos/mylar3/mylar3/releases/latest | jq -r '.tag_name')
 wget -qO- https://github.com/mylar3/mylar3/archive/refs/tags/${RELEASE}.tar.gz | tar -xz --strip-components=1 -C /opt/mylar3
 $STD pip install --no-cache-dir -r /opt/mylar3/requirements.txt
-echo "${RELEASE}" > /opt/${APPLICATION}_version.txt
+echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed ${APPLICATION}"
 
 msg_info "Creating Service"

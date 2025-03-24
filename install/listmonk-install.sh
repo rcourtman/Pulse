@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://listmonk.app/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -14,11 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
-  postgresql
+$STD apt-get install -y postgresql
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up PostgreSQL"
@@ -28,11 +24,11 @@ DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-13)
 $STD sudo -u postgres psql -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASS';"
 $STD sudo -u postgres psql -c "CREATE DATABASE $DB_NAME WITH OWNER $DB_USER TEMPLATE template0;"
 {
-echo "listmonk-Credentials"
-echo -e "listmonk Database User: \e[32m$DB_USER\e[0m"
-echo -e "listmonk Database Password: \e[32m$DB_PASS\e[0m"
-echo -e "listmonk Database Name: \e[32m$DB_NAME\e[0m"
-} >> ~/listmonk.creds
+  echo "listmonk-Credentials"
+  echo -e "listmonk Database User: \e[32m$DB_USER\e[0m"
+  echo -e "listmonk Database Password: \e[32m$DB_PASS\e[0m"
+  echo -e "listmonk Database Name: \e[32m$DB_NAME\e[0m"
+} >>~/listmonk.creds
 msg_ok "Set up PostgreSQL"
 
 msg_info "Installing listmonk"

@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-    curl \
-    sudo \
-    mc \
     nginx \
     php8.2-fpm \
     php8.2-{common,cli,gd,mbstring,xml,fpm,curl,zip} \
@@ -101,7 +98,7 @@ systemctl reload nginx
 msg_ok "Nginx Configured"
 
 msg_info "Cleaning up"
-rm -rf /opt/privatebin/${RELEASE}.zip 
+rm -rf /opt/privatebin/${RELEASE}.zip
 rm -rf /opt/privatebin/PrivateBin-${RELEASE}
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean

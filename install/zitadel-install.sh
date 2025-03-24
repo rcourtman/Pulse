@@ -14,12 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Dependencies (Patience)"
-$STD apt-get install -y \
-    curl \
-    sudo \
-    mc \
-    ca-certificates \
-    wget
+$STD apt-get install -y ca-certificates
 msg_ok "Installed Dependecies"
 
 msg_info "Installing Postgresql"
@@ -34,13 +29,13 @@ $STD sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASS';"
 $STD sudo -u postgres psql -c "CREATE USER $DB_ADMIN_USER WITH PASSWORD '$DB_ADMIN_PASS' SUPERUSER;"
 $STD sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_ADMIN_USER;"
 {
-    echo "Application Credentials"
-    echo "DB_NAME: $DB_NAME"
-    echo "DB_USER: $DB_USER"
-    echo "DB_PASS: $DB_PASS"
-    echo "DB_ADMIN_USER: $DB_ADMIN_USER"
-    echo "DB_ADMIN_PASS: $DB_ADMIN_PASS"
-} >> ~/zitadel.creds
+  echo "Application Credentials"
+  echo "DB_NAME: $DB_NAME"
+  echo "DB_USER: $DB_USER"
+  echo "DB_PASS: $DB_PASS"
+  echo "DB_ADMIN_USER: $DB_ADMIN_USER"
+  echo "DB_ADMIN_PASS: $DB_ADMIN_PASS"
+} >>~/zitadel.creds
 msg_ok "Installed PostgreSQL"
 
 msg_info "Installing Zitadel"
@@ -51,12 +46,12 @@ msg_ok "Installed Zitadel"
 
 msg_info "Setting up Zitadel Environments"
 mkdir -p /opt/zitadel
-echo "/opt/zitadel/config.yaml" > "/opt/zitadel/.config"
-head -c 32 < <(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9') > "/opt/zitadel/.masterkey"
+echo "/opt/zitadel/config.yaml" >"/opt/zitadel/.config"
+head -c 32 < <(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9') >"/opt/zitadel/.masterkey"
 {
-    echo "Config location: $(cat "/opt/zitadel/.config")"
-    echo "Masterkey: $(cat "/opt/zitadel/.masterkey")"
-} >> ~/zitadel.creds
+  echo "Config location: $(cat "/opt/zitadel/.config")"
+  echo "Masterkey: $(cat "/opt/zitadel/.masterkey")"
+} >>~/zitadel.creds
 cat <<EOF >/opt/zitadel/config.yaml
 Port: 8080
 ExternalPort: 8080
@@ -133,7 +128,7 @@ msg_info "Set ExternalDomain to current IP and restart Zitadel"
 IP=$(ip a s dev eth0 | awk '/inet / {print $2}' | cut -d/ -f1)
 sed -i "0,/localhost/s/localhost/${IP}/" /opt/zitadel/config.yaml
 systemctl stop -q zitadel.service
-zitadel setup --masterkeyFile /opt/zitadel/.masterkey --config /opt/zitadel/config.yaml &>/dev/null 
+zitadel setup --masterkeyFile /opt/zitadel/.masterkey --config /opt/zitadel/config.yaml &>/dev/null
 systemctl restart -q zitadel.service
 msg_ok "Zitadel restarted with ExternalDomain set to current IP"
 

@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://ghost.org/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -13,12 +13,8 @@ setting_up_container
 network_check
 update_os
 
-
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   nginx \
   mariadb-server \
   ca-certificates \
@@ -34,11 +30,11 @@ mariadb -u root -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
 mariadb -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;"
 
 {
-    echo "Ghost-Credentials"
-    echo "Ghost Database User: $DB_USER"
-    echo "Ghost Database Password: $DB_PASS"
-    echo "Ghost Database Name: $DB_NAME"
-} >> ~/ghost.creds
+  echo "Ghost-Credentials"
+  echo "Ghost Database User: $DB_USER"
+  echo "Ghost Database Password: $DB_PASS"
+  echo "Ghost Database Name: $DB_NAME"
+} >>~/ghost.creds
 msg_ok "Configured MySQL"
 
 msg_info "Setting up Node.js Repository"

@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://netboxlabs.com/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   apache2 \
   redis-server \
   postgresql \
@@ -41,11 +38,11 @@ DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-13)
 $STD sudo -u postgres psql -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASS';"
 $STD sudo -u postgres psql -c "CREATE DATABASE $DB_NAME WITH OWNER $DB_USER TEMPLATE template0;"
 {
-echo "Netbox-Credentials"
-echo -e "Netbox Database User: \e[32m$DB_USER\e[0m"
-echo -e "Netbox Database Password: \e[32m$DB_PASS\e[0m"
-echo -e "Netbox Database Name: \e[32m$DB_NAME\e[0m"
-} >> ~/netbox.creds
+  echo "Netbox-Credentials"
+  echo -e "Netbox Database User: \e[32m$DB_USER\e[0m"
+  echo -e "Netbox Database Password: \e[32m$DB_PASS\e[0m"
+  echo -e "Netbox Database Name: \e[32m$DB_NAME\e[0m"
+} >>~/netbox.creds
 msg_ok "Set up PostgreSQL"
 
 msg_info "Installing NetBox (Patience)"
@@ -85,7 +82,7 @@ systemctl daemon-reload
 systemctl enable -q --now netbox netbox-rq
 
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
-echo -e "Netbox Secret: \e[32m$SECRET_KEY\e[0m" >> ~/netbox.creds
+echo -e "Netbox Secret: \e[32m$SECRET_KEY\e[0m" >>~/netbox.creds
 msg_ok "Installed NetBox"
 
 msg_info "Setting up Django Admin"
@@ -93,7 +90,7 @@ DJANGO_USER=Admin
 DJANGO_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-13)
 
 source /opt/netbox/venv/bin/activate
-$STD python3 /opt/netbox/netbox/manage.py shell << EOF
+$STD python3 /opt/netbox/netbox/manage.py shell <<EOF
 from django.contrib.auth import get_user_model
 UserModel = get_user_model()
 user = UserModel.objects.create_user('$DJANGO_USER', password='$DJANGO_PASS')
@@ -102,11 +99,11 @@ user.is_staff = True
 user.save()
 EOF
 {
-echo ""
-echo "Netbox-Django-Credentials"
-echo -e "Django User: \e[32m$DJANGO_USER\e[0m"
-echo -e "Django Password: \e[32m$DJANGO_PASS\e[0m"
-} >> ~/netbox.creds
+  echo ""
+  echo "Netbox-Django-Credentials"
+  echo -e "Django User: \e[32m$DJANGO_USER\e[0m"
+  echo -e "Django Password: \e[32m$DJANGO_PASS\e[0m"
+} >>~/netbox.creds
 msg_ok "Setup Django Admin"
 
 motd_ssh

@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/searxng/searxng
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -19,17 +19,14 @@ $STD apt-get install -y \
   build-essential \
   libffi-dev \
   libssl-dev \
-  curl \
-  sudo \
-  git \
-  mc
+  git
 msg_ok "Installed Dependencies"
 
-msg_info "Setup Python3" 
+msg_info "Setup Python3"
 $STD apt-get install -y \
   python3 \
-  python3-{pip,venv,yaml,dev} 
-$STD pip install --upgrade pip setuptools wheel 
+  python3-{pip,venv,yaml,dev}
+$STD pip install --upgrade pip setuptools wheel
 $STD pip install pyyaml
 msg_ok "Setup Python3"
 
@@ -41,7 +38,7 @@ $STD git clone https://github.com/searxng/searxng.git /usr/local/searxng/searxng
 cd /usr/local/searxng/
 sudo -u searxng python3 -m venv /usr/local/searxng/searx-pyenv
 source /usr/local/searxng/searx-pyenv/bin/activate
-$STD pip install --upgrade pip setuptools wheel 
+$STD pip install --upgrade pip setuptools wheel
 $STD pip install pyyaml
 $STD pip install -e /usr/local/searxng/searxng-src
 SECRET_KEY=$(openssl rand -hex 32)

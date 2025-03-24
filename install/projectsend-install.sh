@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.projectsend.org/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,13 +15,10 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
-  mariadb-server \
-  apache2 \
-  libapache2-mod-php \
-  php8.2-{pdo,mysql,mbstring,gettext,fileinfo,gd,xml,zip}
+    mariadb-server \
+    apache2 \
+    libapache2-mod-php \
+    php8.2-{pdo,mysql,mbstring,gettext,fileinfo,gd,xml,zip}
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up MariaDB"
@@ -36,7 +33,7 @@ $STD mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH 
     echo "projectsend Database User: $DB_USER"
     echo "projectsend Database Password: $DB_PASS"
     echo "projectsend Database Name: $DB_NAME"
-} >> ~/projectsend.creds
+} >>~/projectsend.creds
 msg_ok "Set up MariaDB"
 
 msg_info "Installing projectsend"
@@ -50,14 +47,14 @@ chown -R www-data:www-data /opt/projectsend
 chmod -R 775 /opt/projectsend
 chmod 644 /opt/projectsend/includes/sys.config.php
 sed -i -e "s/\(define('DB_NAME', \).*/\1'$DB_NAME');/" \
-       -e "s/\(define('DB_USER', \).*/\1'$DB_USER');/" \
-       -e "s/\(define('DB_PASSWORD', \).*/\1'$DB_PASS');/" \
-       /opt/projectsend/includes/sys.config.php
+    -e "s/\(define('DB_USER', \).*/\1'$DB_USER');/" \
+    -e "s/\(define('DB_PASSWORD', \).*/\1'$DB_PASS');/" \
+    /opt/projectsend/includes/sys.config.php
 sed -i -e "s/^\(memory_limit = \).*/\1 256M/" \
-       -e "s/^\(post_max_size = \).*/\1 256M/" \
-       -e "s/^\(upload_max_filesize = \).*/\1 256M/" \
-       -e "s/^\(max_execution_time = \).*/\1 300/" \
-       /etc/php/8.2/apache2/php.ini
+    -e "s/^\(post_max_size = \).*/\1 256M/" \
+    -e "s/^\(upload_max_filesize = \).*/\1 256M/" \
+    -e "s/^\(max_execution_time = \).*/\1 300/" \
+    /etc/php/8.2/apache2/php.ini
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed projectsend"
 

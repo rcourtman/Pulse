@@ -6,7 +6,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/seanmorley15/AdventureLog
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -17,9 +17,6 @@ update_os
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
   gpg \
-  curl \
-  sudo \
-  mc \
   gdal-bin \
   libgdal-dev \
   git \
@@ -57,12 +54,12 @@ $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET client_encoding TO 'utf8'
 $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';"
 $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET timezone TO 'UTC';"
 {
-    echo "AdventureLog-Credentials"
-    echo "AdventureLog Database User: $DB_USER"
-    echo "AdventureLog Database Password: $DB_PASS"
-    echo "AdventureLog Database Name: $DB_NAME"
-    echo "AdventureLog Secret: $SECRET_KEY"
-} >> ~/adventurelog.creds
+  echo "AdventureLog-Credentials"
+  echo "AdventureLog Database User: $DB_USER"
+  echo "AdventureLog Database Password: $DB_PASS"
+  echo "AdventureLog Database Name: $DB_NAME"
+  echo "AdventureLog Secret: $SECRET_KEY"
+} >>~/adventurelog.creds
 msg_ok "Set up PostgreSQL"
 
 msg_info "Installing AdventureLog (Patience)"
@@ -74,7 +71,7 @@ RELEASE=$(curl -s https://api.github.com/repos/seanmorley15/AdventureLog/release
 wget -q "https://github.com/seanmorley15/AdventureLog/archive/refs/tags/v${RELEASE}.zip"
 unzip -q v${RELEASE}.zip
 mv AdventureLog-${RELEASE} /opt/adventurelog
-cat <<EOF > /opt/adventurelog/backend/server/.env
+cat <<EOF >/opt/adventurelog/backend/server/.env
 PGHOST='localhost'
 PGDATABASE='${DB_NAME}'
 PGUSER='${DB_USER}'
@@ -103,7 +100,7 @@ $STD pip install -r requirements.txt
 $STD python3 manage.py collectstatic --noinput
 $STD python3 manage.py migrate
 $STD python3 manage.py download-countries
-cat <<EOF > /opt/adventurelog/frontend/.env
+cat <<EOF >/opt/adventurelog/frontend/.env
 PUBLIC_SERVER_URL=http://$LOCAL_IP:8000
 BODY_SIZE_LIMIT=Infinity
 ORIGIN='http://$LOCAL_IP:3000'
@@ -115,7 +112,7 @@ echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed AdventureLog"
 
 msg_info "Setting up Django Admin"
-$STD python3 /opt/adventurelog/backend/server/manage.py shell << EOF
+$STD python3 /opt/adventurelog/backend/server/manage.py shell <<EOF
 from django.contrib.auth import get_user_model
 UserModel = get_user_model()
 user = UserModel.objects.create_user('$DJANGO_ADMIN_USER', password='$DJANGO_ADMIN_PASS')
@@ -124,11 +121,11 @@ user.is_staff = True
 user.save()
 EOF
 {
-    echo ""
-    echo "Django-Credentials"
-    echo "Django Admin User: $DJANGO_ADMIN_USER"
-    echo "Django Admin Password: $DJANGO_ADMIN_PASS"
-} >> ~/adventurelog.creds
+  echo ""
+  echo "Django-Credentials"
+  echo "Django Admin User: $DJANGO_ADMIN_USER"
+  echo "Django Admin Password: $DJANGO_ADMIN_PASS"
+} >>~/adventurelog.creds
 msg_ok "Setup Django Admin"
 
 msg_info "Creating Service"

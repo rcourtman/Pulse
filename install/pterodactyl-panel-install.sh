@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/pterodactyl/panel
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   lsb-release \
   redis \
   mariadb-server \
@@ -49,11 +46,11 @@ $STD mysql -u root -e "CREATE DATABASE $DB_NAME;"
 $STD mysql -u root -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED WITH mysql_native_password AS PASSWORD('$DB_PASS');"
 $STD mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;"
 {
-    echo "pterodactyl Panel-Credentials"
-    echo "pterodactyl Panel Database User: $DB_USER"
-    echo "pterodactyl Panel Database Password: $DB_PASS"
-    echo "pterodactyl Panel Database Name: $DB_NAME"
-} >> ~/pterodactyl-panel.creds
+  echo "pterodactyl Panel-Credentials"
+  echo "pterodactyl Panel Database User: $DB_USER"
+  echo "pterodactyl Panel Database Password: $DB_PASS"
+  echo "pterodactyl Panel Database Name: $DB_NAME"
+} >>~/pterodactyl-panel.creds
 msg_ok "Set up MariaDB"
 
 read -p "Provide an email address for admin login, this should be a valid email address: " ADMIN_EMAIL
@@ -72,18 +69,18 @@ ADMIN_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c13)
 $STD composer install --no-dev --optimize-autoloader --no-interaction
 $STD php artisan key:generate --force
 $STD php artisan p:environment:setup --no-interaction --author $ADMIN_EMAIL --url "http://$IP"
-$STD php artisan p:environment:database --no-interaction  --database $DB_NAME --username $DB_USER --password $DB_PASS
+$STD php artisan p:environment:database --no-interaction --database $DB_NAME --username $DB_USER --password $DB_PASS
 $STD php artisan migrate --seed --force --no-interaction
 $STD php artisan p:user:make --no-interaction --admin=1 --email "$ADMIN_EMAIL" --password "$ADMIN_PASS" --name-first "$NAME_FIRST" --name-last "$NAME_LAST" --username "admin"
 echo "* * * * * php /opt/pterodactyl-panel/artisan schedule:run >> /dev/null 2>&1" | crontab -u www-data -
 chown -R www-data:www-data /opt/pterodactyl-panel/*
 chmod -R 755 /opt/pterodactyl-panel/storage/* /opt/pterodactyl-panel/bootstrap/cache/
 {
-    echo ""
-    echo "pterodactyl Admin Username: admin"
-    echo "pterodactyl Admin Email: $ADMIN_EMAIL"
-    echo "pterodactyl Admin Password: $ADMIN_PASS"
-} >> ~/pterodactyl-panel.creds
+  echo ""
+  echo "pterodactyl Admin Username: admin"
+  echo "pterodactyl Admin Email: $ADMIN_EMAIL"
+  echo "pterodactyl Admin Password: $ADMIN_PASS"
+} >>~/pterodactyl-panel.creds
 
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed pterodactyl Panel"

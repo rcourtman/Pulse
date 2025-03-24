@@ -17,19 +17,16 @@ update_os
 msg_info "Installing Dependencies"
 $STD apt-get install -y --no-install-recommends \
   build-essential \
-  curl \
   aria2 \
   coreutils \
   gcc \
   g++ \
   musl-dev \
-  sudo \
   ffmpeg \
   git \
   make \
   gnupg \
-  ca-certificates \
-  mc
+  ca-certificates
 msg_ok "Installed Dependencies"
 
 msg_info "Setup Python3"
@@ -59,7 +56,7 @@ $STD node_modules/.bin/ng build
 cd /opt/metube
 $STD pip3 install pipenv
 $STD pipenv install
-mkdir -p /opt/metube_downloads /opt/metube_downloads/.metube /opt/metube_downloads/music /opt/metube_downloads/videos 
+mkdir -p /opt/metube_downloads /opt/metube_downloads/.metube /opt/metube_downloads/music /opt/metube_downloads/videos
 cat <<EOF >/opt/metube/.env
 DOWNLOAD_DIR=/opt/metube_downloads
 STATE_DIR=/opt/metube_downloads/.metube

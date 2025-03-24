@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docs.craftycontrol.com/pages/getting-started/installation/linux/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies (a lot of patience)"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   git \
   sed \
   lsb-release \
@@ -66,7 +63,7 @@ $STD sudo -u crafty bash -c '
 msg_ok "Installed Craft-Controller and dependencies"
 
 msg_info "Setting up Crafty-Controller service"
-cat > /etc/systemd/system/crafty-controller.service << 'EOF'
+cat >/etc/systemd/system/crafty-controller.service <<'EOF'
 [Unit]
 Description=Crafty 4
 After=network.target
@@ -85,10 +82,10 @@ EOF
 $STD systemctl enable -q --now crafty-controller
 sleep 10
 {
-    echo "Crafty-Controller-Credentials"
-    echo "Username: $(grep -oP '(?<="username": ")[^"]*' /opt/crafty-controller/crafty/crafty-4/app/config/default-creds.txt)"
-    echo "Password: $(grep -oP '(?<="password": ")[^"]*' /opt/crafty-controller/crafty/crafty-4/app/config/default-creds.txt)"
-} >> ~/crafty-controller.creds
+  echo "Crafty-Controller-Credentials"
+  echo "Username: $(grep -oP '(?<="username": ")[^"]*' /opt/crafty-controller/crafty/crafty-4/app/config/default-creds.txt)"
+  echo "Password: $(grep -oP '(?<="password": ")[^"]*' /opt/crafty-controller/crafty/crafty-4/app/config/default-creds.txt)"
+} >>~/crafty-controller.creds
 msg_ok "Crafty-Controller service started"
 
 motd_ssh

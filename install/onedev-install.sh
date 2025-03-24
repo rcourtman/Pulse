@@ -15,14 +15,10 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-    curl \
-    mc \
-    sudo \
     default-jdk \
     git \
     git-lfs
 msg_ok "Installed Dependencies"
-
 
 msg_info "Installing OneDev"
 cd /opt

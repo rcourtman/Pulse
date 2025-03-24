@@ -22,10 +22,7 @@ $STD apt-get -qqy install \
   libssl-dev \
   libmariadb-dev-compat \
   libpq-dev \
-  curl \
-  sudo \
-  argon2 \
-  mc
+  argon2
 msg_ok "Installed Dependencies"
 
 WEBVAULT=$(curl -s https://api.github.com/repos/dani-garcia/bw_web_builds/releases/latest |

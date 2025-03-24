@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/Dolibarr/dolibarr/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   php-imap \
   debconf-utils \
   mariadb-server
@@ -27,9 +24,9 @@ msg_info "Setting up Database"
 ROOT_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c13)
 $STD sudo mysql -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password AS PASSWORD('$ROOT_PASS'); flush privileges;"
 {
-    echo "Dolibarr DB Credentials"
-    echo "MariaDB Root Password: $ROOT_PASS"
-} >> ~/dolibarr.creds
+  echo "Dolibarr DB Credentials"
+  echo "MariaDB Root Password: $ROOT_PASS"
+} >>~/dolibarr.creds
 msg_ok "Set up database"
 
 msg_info "Setup Dolibarr"

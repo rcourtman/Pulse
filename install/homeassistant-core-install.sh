@@ -15,10 +15,7 @@ update_os
 
 msg_info "Installing Dependencies (Patience)"
 $STD apt-get install -y \
-  curl \
   git \
-  sudo \
-  mc \
   gnupg \
   ca-certificates \
   bluez \

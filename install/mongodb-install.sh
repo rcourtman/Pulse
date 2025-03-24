@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 
 # Copyright (c) 2021-2025 tteck
@@ -6,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.mongodb.com/de-de
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -16,12 +15,8 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y gnupg
-$STD apt-get install -y curl
-$STD apt-get install -y sudo
-$STD apt-get install -y mc
 msg_ok "Installed Dependencies"
 
-# Abfrage für die MongoDB-Version
 read -p "Do you want to install MongoDB 8.0 instead of 7.0? [y/N]: " install_mongodb_8
 if [[ "$install_mongodb_8" =~ ^[Yy]$ ]]; then
   MONGODB_VERSION="8.0"

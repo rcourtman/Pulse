@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.commafeed.com/#/welcome
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -14,9 +14,6 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y curl
-$STD apt-get install -y sudo
-$STD apt-get install -y mc
 $STD apt-get install -y rsync
 msg_ok "Installed Dependencies"
 
@@ -58,7 +55,7 @@ motd_ssh
 customize
 
 msg_info "Cleaning up"
-rm -rf commafeed-${RELEASE}-h2  commafeed-${RELEASE}-h2-jvm.zip  zulu-repo_1.0.0-3_all.deb
+rm -rf commafeed-${RELEASE}-h2 commafeed-${RELEASE}-h2-jvm.zip zulu-repo_1.0.0-3_all.deb
 $STD apt-get -y autoremove
 $STD apt-get -y autoclean
 msg_ok "Cleaned"

@@ -5,19 +5,13 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://podman.io/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
 setting_up_container
 network_check
 update_os
-
-msg_info "Installing Dependencies"
-$STD apt-get install -y curl
-$STD apt-get install -y sudo
-$STD apt-get install -y mc
-msg_ok "Installed Dependencies"
 
 get_latest_release() {
   curl -sL https://api.github.com/repos/$1/releases/latest | grep '"tag_name":' | cut -d'"' -f4
@@ -26,15 +20,15 @@ get_latest_release() {
 PORTAINER_LATEST_VERSION=$(get_latest_release "portainer/portainer")
 PORTAINER_AGENT_LATEST_VERSION=$(get_latest_release "portainer/agent")
 
-if $STD mount | grep 'on / type zfs' > null && echo "ZFS"; then
-    msg_info "Enabling ZFS support."
-    mkdir -p /etc/containers
-    cat <<'EOF' >/usr/local/bin/overlayzfsmount
+if $STD mount | grep 'on / type zfs' >null && echo "ZFS"; then
+  msg_info "Enabling ZFS support."
+  mkdir -p /etc/containers
+  cat <<'EOF' >/usr/local/bin/overlayzfsmount
 #!/bin/sh
 exec /bin/mount -t overlay overlay "$@"
 EOF
-    chmod +x /usr/local/bin/overlayzfsmount
-    cat <<'EOF' >/etc/containers/storage.conf
+  chmod +x /usr/local/bin/overlayzfsmount
+  cat <<'EOF' >/etc/containers/storage.conf
 [storage]
 driver = "overlay"
 runroot = "/run/containers/storage"
@@ -52,7 +46,7 @@ fi
 msg_info "Installing Podman"
 $STD apt-get -y install podman
 $STD systemctl enable --now podman.socket
-echo -e 'unqualified-search-registries=["docker.io"]' >> /etc/containers/registries.conf
+echo -e 'unqualified-search-registries=["docker.io"]' >>/etc/containers/registries.conf
 msg_ok "Installed Podman"
 
 read -r -p "Would you like to add Portainer? <y/N> " prompt
@@ -84,7 +78,6 @@ else
     msg_ok "Installed Portainer Agent $PORTAINER_AGENT_LATEST_VERSION"
   fi
 fi
-
 
 motd_ssh
 customize

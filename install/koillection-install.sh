@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://koillection.github.io/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,11 +15,7 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
-  gnupg2\
-  postgresql \
+  gnupg2 postgresql \
   apache2 \
   lsb-release
 msg_ok "Installed Dependencies"
@@ -46,11 +42,11 @@ DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-13)
 $STD sudo -u postgres psql -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASS';"
 $STD sudo -u postgres psql -c "CREATE DATABASE $DB_NAME WITH OWNER $DB_USER TEMPLATE template0;"
 {
-echo "Koillection Credentials"
-echo "Koillection Database User: $DB_USER"
-echo "Koillection Database Password: $DB_PASS"
-echo "Koillection Database Name: $DB_NAME"
-} >> ~/koillection.creds
+  echo "Koillection Credentials"
+  echo "Koillection Database User: $DB_USER"
+  echo "Koillection Database Password: $DB_PASS"
+  echo "Koillection Database Name: $DB_NAME"
+} >>~/koillection.creds
 msg_ok "Set up PostgreSQL"
 
 msg_info "Setting up Node.js/Yarn"
@@ -73,19 +69,19 @@ cd /opt/koillection
 cp /opt/koillection/.env /opt/koillection/.env.local
 APP_SECRET=$(openssl rand -base64 32)
 sed -i -e "s|^APP_ENV=.*|APP_ENV=prod|" \
-       -e "s|^APP_DEBUG=.*|APP_DEBUG=0|" \
-       -e "s|^APP_SECRET=.*|APP_SECRET=${APP_SECRET}|" \
-       -e "s|^DB_NAME=.*|DB_NAME=${DB_NAME}|" \
-       -e "s|^DB_USER=.*|DB_USER=${DB_USER}|" \
-       -e "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASS}|" \
-       /opt/koillection/.env.local
+  -e "s|^APP_DEBUG=.*|APP_DEBUG=0|" \
+  -e "s|^APP_SECRET=.*|APP_SECRET=${APP_SECRET}|" \
+  -e "s|^DB_NAME=.*|DB_NAME=${DB_NAME}|" \
+  -e "s|^DB_USER=.*|DB_USER=${DB_USER}|" \
+  -e "s|^DB_PASSWORD=.*|DB_PASSWORD=${DB_PASS}|" \
+  /opt/koillection/.env.local
 export COMPOSER_ALLOW_SUPERUSER=1
 $STD composer install --no-dev -o --no-interaction --classmap-authoritative
 $STD php bin/console doctrine:migrations:migrate --no-interaction
 $STD php bin/console app:translations:dump
 cd assets/
 $STD yarn install
-$STD yarn build 
+$STD yarn build
 chown -R www-data:www-data /opt/koillection/public/uploads
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed Koillection"

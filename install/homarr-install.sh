@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/homarr-labs/homarr
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  sudo \
-  mc \
-  curl \
   redis-server \
   ca-certificates \
   gpg \
@@ -76,7 +73,7 @@ rm /etc/nginx/nginx.conf
 cp /opt/homarr/nginx.conf /etc/nginx/templates/nginx.conf
 mkdir -p /opt/homarr/apps/cli
 cp /opt/homarr/packages/cli/cli.cjs /opt/homarr/apps/cli/cli.cjs
-echo $'#!/bin/bash\ncd /opt/homarr/apps/cli && node ./cli.cjs "$@"' > /usr/bin/homarr
+echo $'#!/bin/bash\ncd /opt/homarr/apps/cli && node ./cli.cjs "$@"' >/usr/bin/homarr
 chmod +x /usr/bin/homarr
 mkdir /opt/homarr/build
 cp ./node_modules/better-sqlite3/build/Release/better_sqlite3.node ./build/better_sqlite3.node

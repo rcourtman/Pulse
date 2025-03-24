@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://ui.com/download/unifi
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -14,9 +14,6 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y curl
-$STD apt-get install -y sudo
-$STD apt-get install -y mc
 $STD apt-get install -y apt-transport-https
 $STD apt-get install -y gnupg
 msg_ok "Installed Dependencies"
@@ -35,7 +32,7 @@ if ! grep -q -m1 'avx[^ ]*' /proc/cpuinfo; then
     wget -q http://security.debian.org/debian-security/pool/updates/main/o/openssl/libssl1.1_1.1.1n-0+deb10u6_amd64.deb
     $STD dpkg -i libssl1.1_1.1.1n-0+deb10u6_amd64.deb
   fi
-  wget -qO- https://www.mongodb.org/static/pgp/server-4.4.asc | gpg --dearmor > /usr/share/keyrings/mongodb-server-4.4.gpg
+  wget -qO- https://www.mongodb.org/static/pgp/server-4.4.asc | gpg --dearmor >/usr/share/keyrings/mongodb-server-4.4.gpg
   echo "deb [signed-by=/usr/share/keyrings/mongodb-server-4.4.gpg] https://repo.mongodb.org/apt/debian buster/mongodb-org/4.4 main" >/etc/apt/sources.list.d/mongodb-org-4.4.list
   $STD apt-get update
   $STD apt-get install -y mongodb-org

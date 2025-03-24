@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-    curl \
-    sudo \
-    mc \
     git \
     software-properties-common \
     apt-transport-https \
@@ -54,7 +51,7 @@ mysql -u root -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost' W
     echo "Database: $DB_NAME"
     echo "Username: $DB_USER"
     echo "Password: $DB_PASS"
-} >> ~/paymenter_db.creds
+} >>~/paymenter_db.creds
 cp .env.example .env
 $STD composer install --no-dev --optimize-autoloader --no-interaction
 $STD php artisan key:generate --force

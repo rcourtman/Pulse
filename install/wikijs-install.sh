@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   git \
   gpg
 msg_ok "Installed Dependencies"
@@ -52,11 +49,11 @@ $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET client_encoding TO 'utf8'
 $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';"
 $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET timezone TO 'UTC';"
 {
-    echo "WikiJS-Credentials"
-    echo "WikiJS Database User: $DB_USER"
-    echo "WikiJS Database Password: $DB_PASS"
-    echo "WikiJS Database Name: $DB_NAME"
-} >> ~/wikijs.creds
+  echo "WikiJS-Credentials"
+  echo "WikiJS Database User: $DB_USER"
+  echo "WikiJS Database Password: $DB_PASS"
+  echo "WikiJS Database Name: $DB_NAME"
+} >>~/wikijs.creds
 msg_ok "Set up PostgreSQL"
 
 msg_info "Setup Wiki.js"

@@ -14,11 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
-    sudo \
-    mc \
-    curl \
-    ffmpeg
+$STD apt-get install -y ffmpeg
 msg_ok "Installed Dependencies"
 
 msg_info "Installing ${APPLICATION}"

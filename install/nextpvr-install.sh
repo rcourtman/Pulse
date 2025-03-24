@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://nextpvr.com/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -18,16 +18,13 @@ $STD apt-get install -y \
   mediainfo \
   libmediainfo-dev \
   libc6 \
-  curl \
-  sudo \
   libgdiplus \
   acl \
   dvb-tools \
   libdvbv5-0 \
   dtv-scan-tables \
   libc6-dev \
-  ffmpeg \
-  mc
+  ffmpeg
 msg_ok "Installed Dependencies"
 
 msg_info "Setup NextPVR (Patience)"

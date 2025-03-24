@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func) 
+source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Copyright (c) 2021-2025 community-scripts ORG
 # Author: fabrice1236
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -25,7 +25,7 @@ function update_script() {
     check_container_resources
     msg_info "Updating ${APP} LXC"
 
-    if command -v ghost &> /dev/null; then
+    if command -v ghost &>/dev/null; then
         current_version=$(ghost version | grep 'Ghost-CLI version' | awk '{print $3}')
         latest_version=$(npm show ghost-cli version)
         if [ "$current_version" != "$latest_version" ]; then

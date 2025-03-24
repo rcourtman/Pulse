@@ -14,15 +14,8 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
-    curl \
-    sudo \
-    wget \
-    mc \
-    zip \
-    jq
+$STD apt-get install -y jq
 msg_ok "Installed Dependencies"
-
 
 msg_info "Installing LubeLogger"
 cd /opt
@@ -34,7 +27,7 @@ wget -q https://github.com/hargata/lubelog/releases/download/v${RELEASE}/LubeLog
 unzip -q LubeLogger_v${RELEASE_TRIMMED}_linux_x64.zip
 chmod 700 /opt/lubelogger/CarCareTracker
 cp /opt/lubelogger/appsettings.json /opt/lubelogger/appsettings_bak.json
-jq '.Kestrel = {"Endpoints": {"Http": {"Url": "http://0.0.0.0:5000"}}}' /opt/lubelogger/appsettings_bak.json > /opt/lubelogger/appsettings.json
+jq '.Kestrel = {"Endpoints": {"Http": {"Url": "http://0.0.0.0:5000"}}}' /opt/lubelogger/appsettings_bak.json >/opt/lubelogger/appsettings.json
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed LubeLogger"
 

@@ -13,13 +13,6 @@ setting_up_container
 network_check
 update_os
 
-msg_info "Installing Dependencies"
-$STD apt-get install -y \
-  mc \
-  curl \
-  sudo 
-msg_ok "Installed Dependencies"
-
 msg_info "Installing ASP.NET Core Runtime"
 wget -q https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb
 $STD dpkg -i packages-microsoft-prod.deb

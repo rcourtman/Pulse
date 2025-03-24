@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://it-tools.tech/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -30,7 +30,7 @@ curl -fsSL -o it-tools.zip "$DOWNLOAD_URL"
 mkdir -p /usr/share/nginx/html
 unzip -q it-tools.zip -d /tmp/it-tools
 cp -r /tmp/it-tools/dist/* /usr/share/nginx/html
-cat <<'EOF' > /etc/nginx/http.d/default.conf
+cat <<'EOF' >/etc/nginx/http.d/default.conf
 server {
   listen 80;
   server_name localhost;

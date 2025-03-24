@@ -14,11 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
-  curl \
-  gpg \
-  wget \
-  mc
+$STD apt-get install -y gpg
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up Node.js Repository"

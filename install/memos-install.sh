@@ -6,7 +6,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/usememos/memos
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -18,10 +18,7 @@ msg_info "Installing Dependencies"
 $STD apt-get install -y \
   build-essential \
   git \
-  curl \
-  sudo \
-  tzdata \
-  mc
+  tzdata
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up Node.js Repository"
@@ -54,7 +51,7 @@ msg_info "Installing Memos (Patience)"
 mkdir -p /opt/memos_data
 export NODE_OPTIONS="--max-old-space-size=2048"
 $STD git clone https://github.com/usememos/memos.git /opt/memos
-cd /opt/memos/web 
+cd /opt/memos/web
 $STD pnpm i --frozen-lockfile
 $STD pnpm build
 cd /opt/memos

@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docmost.com/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -16,11 +16,8 @@ update_os
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
   gpg \
-  curl \
-  sudo \
   redis \
   make \
-  mc \
   postgresql
 msg_ok "Installed Dependencies"
 
@@ -46,11 +43,11 @@ $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET client_encoding TO 'utf8'
 $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET default_transaction_isolation TO 'read committed';"
 $STD sudo -u postgres psql -c "ALTER ROLE $DB_USER SET timezone TO 'UTC'"
 {
-    echo "Docmost-Credentials"
-    echo "Database Name: $DB_NAME"
-    echo "Database User: $DB_USER"
-    echo "Database Password: $DB_PASS"
-} >> ~/docmost.creds
+  echo "Docmost-Credentials"
+  echo "Database Name: $DB_NAME"
+  echo "Database User: $DB_USER"
+  echo "Database Password: $DB_PASS"
+} >>~/docmost.creds
 msg_ok "Set up PostgreSQL"
 
 msg_info "Installing Docmost (Patience)"
@@ -63,9 +60,9 @@ cd /opt/docmost
 mv .env.example .env
 mkdir data
 sed -i -e "s|APP_SECRET=.*|APP_SECRET=$(openssl rand -base64 32 | tr -dc 'a-zA-Z0-9' | cut -c1-32)|" \
-       -e "s|DATABASE_URL=.*|DATABASE_URL=postgres://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME|" \
-       -e "s|FILE_UPLOAD_SIZE_LIMIT=.*|FILE_UPLOAD_SIZE_LIMIT=50mb|" \
-       /opt/docmost/.env
+  -e "s|DATABASE_URL=.*|DATABASE_URL=postgres://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME|" \
+  -e "s|FILE_UPLOAD_SIZE_LIMIT=.*|FILE_UPLOAD_SIZE_LIMIT=50mb|" \
+  /opt/docmost/.env
 export NODE_OPTIONS="--max-old-space-size=2048"
 $STD pnpm install
 $STD pnpm build

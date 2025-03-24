@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docs.part-db.de/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,10 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
-  zip \
   ca-certificates \
   software-properties-common \
   apt-transport-https \
@@ -31,7 +27,7 @@ msg_ok "Installed Dependencies"
 
 msg_info "Setting up PHP"
 PHPVER=$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION . "\n";')
-sed -i "s@post_max_size = 8M@post_max_size = 100M@g" /etc/php/${PHPVER}/apache2/php.ini 
+sed -i "s@post_max_size = 8M@post_max_size = 100M@g" /etc/php/${PHPVER}/apache2/php.ini
 sed -i "s@upload_max_filesize = 2M@upload_max_filesize = 100M@g" /etc/php/${PHPVER}/apache2/php.ini
 msg_ok "Setting up PHP"
 
@@ -42,11 +38,11 @@ DB_PASS=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | cut -c1-13)
 $STD sudo -u postgres psql -c "CREATE ROLE $DB_USER WITH LOGIN PASSWORD '$DB_PASS';"
 $STD sudo -u postgres psql -c "CREATE DATABASE $DB_NAME WITH OWNER $DB_USER TEMPLATE template0;"
 {
-echo "Part-DB Credentials"
-echo "Part-DB Database User: $DB_USER"
-echo "Part-DB Database Password: $DB_PASS"
-echo "Part-DB Database Name: $DB_NAME"
-} >> ~/partdb.creds
+  echo "Part-DB Credentials"
+  echo "Part-DB Database User: $DB_USER"
+  echo "Part-DB Database Password: $DB_PASS"
+  echo "Part-DB Database Name: $DB_NAME"
+} >>~/partdb.creds
 msg_ok "Set up PostgreSQL"
 
 msg_info "Setting up Node.js/Yarn"
@@ -75,14 +71,14 @@ $STD composer install --no-dev -o --no-interaction
 $STD yarn install
 $STD yarn build
 $STD php bin/console cache:clear
-php bin/console doctrine:migrations:migrate -n > ~/database-migration-output
+php bin/console doctrine:migrations:migrate -n >~/database-migration-output
 chown -R www-data:www-data /opt/partdb
 ADMIN_PASS=$(grep -oP 'The initial password for the "admin" user is: \K\w+' ~/database-migration-output)
 {
-echo ""
-echo "Part-DB Admin User: admin"
-echo "Part-DB Admin Password: $ADMIN_PASS"
-} >> ~/partdb.creds
+  echo ""
+  echo "Part-DB Admin User: admin"
+  echo "Part-DB Admin Password: $ADMIN_PASS"
+} >>~/partdb.creds
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed Part-DB"
 

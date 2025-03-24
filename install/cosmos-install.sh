@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-
 #Copyright (c) 2021-2025 community-scripts ORG
 # Author: Michel Roegl-Brunner (michelroegl-brunner)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -16,12 +15,9 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
- curl \
- mc \
- sudo \
- snapraid \
- avahi-daemon \
- fdisk
+    snapraid \
+    avahi-daemon \
+    fdisk
 msg_ok "Installed Dependencies"
 
 msg_info "Install mergerfs"
@@ -37,7 +33,7 @@ $STD sh get-docker.sh
 rm get-docker.sh
 msg_ok "Installed Docker"
 
-msg_info "Install Cosmos" 
+msg_info "Install Cosmos"
 mkdir -p /opt/cosmos
 LATEST_RELEASE=$(curl -s https://api.github.com/repos/azukaar/Cosmos-Server/releases/latest | grep "tag_name" | cut -d '"' -f 4)
 ZIP_FILE="cosmos-cloud-${LATEST_RELEASE#v}-amd64.zip"
@@ -51,7 +47,7 @@ chmod +x /opt/cosmos/cosmos
 msg_ok "Installed Cosmos"
 
 msg_info "Creating Service"
-cat <<EOF > /etc/systemd/system/cosmos.service
+cat <<EOF >/etc/systemd/system/cosmos.service
 [Unit]
 Description=Cosmos Cloud service
 ConditionFileIsExecutable=/opt/cosmos/start.sh

@@ -16,13 +16,10 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  sudo \
   lsb-release \
-  curl \
-  gnupg   \
+  gnupg \
   apt-transport-https \
-  make \
-  mc
+  make
 msg_ok "Installed Dependencies"
 
 msg_info "Adding RabbitMQ signing key"

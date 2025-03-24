@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://archivebox.io/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   git \
   expect \
   libssl-dev \
@@ -48,8 +45,8 @@ $STD apt-get install -y nodejs
 msg_ok "Installed Node.js"
 
 msg_info "Installing Playwright"
-$STD pip install playwright 
-$STD playwright install-deps chromium 
+$STD pip install playwright
+$STD playwright install-deps chromium
 msg_ok "Installed Playwright"
 
 msg_info "Installing Chromium and ArchiveBox"

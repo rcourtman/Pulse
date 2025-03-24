@@ -6,7 +6,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/ellite/wallos
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -16,12 +16,9 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   apache2 \
   libapache2-mod-php \
-  php8.2-{mbstring,gd,curl,intl,imagick,bz2,sqlite3,zip,xml} 
+  php8.2-{mbstring,gd,curl,intl,imagick,bz2,sqlite3,zip,xml}
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Wallos (Patience)"
@@ -52,14 +49,14 @@ cat <<EOF >/etc/apache2/sites-available/wallos.conf
 </VirtualHost>
 EOF
 $STD a2ensite wallos.conf
-$STD a2dissite 000-default.conf  
+$STD a2dissite 000-default.conf
 $STD systemctl reload apache2
 $STD curl http://localhost/endpoints/db/migrate.php
 msg_ok "Installed Wallos"
 
-msg_info "Setting up Crontabs" 
+msg_info "Setting up Crontabs"
 mkdir -p /var/log/cron
-cat <<EOF > /opt/wallos.cron
+cat <<EOF >/opt/wallos.cron
 0 1 * * * php /opt/wallos/endpoints/cronjobs/updatenextpayment.php >> /var/log/cron/updatenextpayment.log 2>&1
 0 2 * * * php /opt/wallos/endpoints/cronjobs/updateexchange.php >> /var/log/cron/updateexchange.log 2>&1
 0 8 * * * php /opt/wallos/endpoints/cronjobs/sendcancellationnotifications.php >> /var/log/cron/sendcancellationnotifications.log 2>&1

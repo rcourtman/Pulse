@@ -15,12 +15,9 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
   make \
   gnupg \
   ca-certificates \
-  mc \
   unzip \
   python3.11-venv
 msg_ok "Installed Dependencies"

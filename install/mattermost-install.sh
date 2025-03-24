@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://mattermost.com/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,11 +15,8 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   gpg \
-  postgresql 
+  postgresql
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up PostgreSQL"
@@ -32,11 +29,11 @@ $STD sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME to $DB_
 $STD sudo -u postgres psql -c "ALTER DATABASE $DB_NAME OWNER TO $DB_USER;"
 $STD sudo -u postgres psql -c "GRANT USAGE, CREATE ON SCHEMA PUBLIC TO $DB_USER;"
 {
-    echo "Mattermost Credentials"
-    echo "Database User: $DB_USER"
-    echo "Database Password: $DB_PASS"
-    echo "Database Name: $DB_NAME"
-} >> ~/mattermost.creds
+  echo "Mattermost Credentials"
+  echo "Database User: $DB_USER"
+  echo "Database Password: $DB_PASS"
+  echo "Database Name: $DB_NAME"
+} >>~/mattermost.creds
 msg_ok "Set up PostgreSQL"
 
 msg_info "Installing Mattermost"
@@ -47,7 +44,7 @@ $STD apt-get update
 $STD apt-get install -y mattermost
 $STD install -C -m 600 -o mattermost -g mattermost /opt/mattermost/config/config.defaults.json /opt/mattermost/config/config.json
 sed -i -e "/DataSource/c\   \"DataSource\": \"postgres://$DB_USER:$DB_PASS@localhost:5432/$DB_NAME?sslmode=disable&connect_timeout=10\"," \
-       -e "/SiteURL/c\   \"SiteURL\": \"http://$IPADDRESS:8065\"," /opt/mattermost/config/config.json
+  -e "/SiteURL/c\   \"SiteURL\": \"http://$IPADDRESS:8065\"," /opt/mattermost/config/config.json
 systemctl enable -q --now mattermost.service
 msg_ok "Installed Mattermost"
 

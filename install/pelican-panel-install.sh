@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/pelican-dev/panel
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   lsb-release \
   mariadb-server \
   mariadb-client \
@@ -48,11 +45,11 @@ $STD mysql -u root -e "CREATE DATABASE $DB_NAME;"
 $STD mysql -u root -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED WITH mysql_native_password AS PASSWORD('$DB_PASS');"
 $STD mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;"
 {
-    echo "Pelican Panel-Credentials"
-    echo "Pelican Panel Database User: $DB_USER"
-    echo "Pelican Panel Database Password: $DB_PASS"
-    echo "Pelican Panel Database Name: $DB_NAME"
-} >> ~/pelican-panel.creds
+  echo "Pelican Panel-Credentials"
+  echo "Pelican Panel Database User: $DB_USER"
+  echo "Pelican Panel Database Password: $DB_PASS"
+  echo "Pelican Panel Database Name: $DB_NAME"
+} >>~/pelican-panel.creds
 msg_ok "Set up MariaDB"
 
 msg_info "Installing Pelican Panel"

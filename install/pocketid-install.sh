@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/pocket-id/pocket-id
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   gpg \
   caddy \
   gcc
@@ -57,7 +54,7 @@ cd /opt/pocket-id/backend
 cp .env.example .env
 sed -i "s/PUBLIC_APP_URL=http:\/\/localhost/PUBLIC_APP_URL=https:\/\/${public_url}/" .env
 cd cmd
-CGO_ENABLED=1 
+CGO_ENABLED=1
 GOOS=linux
 $STD go build -o ../pocket-id-backend
 

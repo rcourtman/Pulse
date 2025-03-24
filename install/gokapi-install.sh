@@ -5,19 +5,13 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/Forceu/Gokapi
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
 setting_up_container
 network_check
 update_os
-
-msg_info "Installing Dependencies"
-$STD apt-get install -y curl
-$STD apt-get install -y sudo
-$STD apt-get install -y mc
-msg_ok "Installed Dependencies"
 
 msg_info "Installing Gokapi"
 LATEST=$(curl -sL https://api.github.com/repos/Forceu/Gokapi/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
@@ -28,7 +22,7 @@ rm gokapi-linux_amd64.zip
 chmod +x /opt/gokapi/gokapi-linux_amd64
 msg_ok "Installed Gokapi"
 
-msg_info "Creating Service" 
+msg_info "Creating Service"
 cat <<EOF >/etc/systemd/system/gokapi.service
 [Unit]
 Description=gokapi

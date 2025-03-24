@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://actualbudget.org/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   tini \
   gpg \
   build-essential
@@ -46,7 +43,7 @@ mkdir -p /opt/actualbudget-data/{server-files,upload,migrate,user-files,migratio
 chown -R root:root /opt/actualbudget-data
 chmod -R 755 /opt/actualbudget-data
 
-cat <<EOF > /opt/actualbudget-data/.env
+cat <<EOF >/opt/actualbudget-data/.env
 ACTUAL_UPLOAD_DIR=/opt/actualbudget-data/upload
 ACTUAL_DATA_DIR=/opt/actualbudget-data
 ACTUAL_SERVER_FILES_DIR=/opt/actualbudget-data/server-files

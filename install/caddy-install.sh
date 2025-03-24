@@ -18,10 +18,7 @@ $STD apt-get install -y \
   debian-keyring \
   debian-archive-keyring \
   apt-transport-https \
-  gpg \
-  curl \
-  sudo \
-  mc
+  gpg
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Caddy"

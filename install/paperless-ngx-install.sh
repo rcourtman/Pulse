@@ -32,12 +32,9 @@ $STD apt-get install -y \
   libtool \
   pkg-config \
   git \
-  curl \
   libtiff-dev \
   libpng-dev \
-  libleptonica-dev \
-  sudo \
-  mc
+  libleptonica-dev
 msg_ok "Installed Dependencies"
 
 msg_info "Setup Python3"
@@ -221,7 +218,7 @@ EOF
 sed -i -e 's/rights="none" pattern="PDF"/rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
 
 systemctl daemon-reload
-$STD systemctl enable -q --now paperless-webserver paperless-scheduler paperless-task-queue paperless-consumer 
+$STD systemctl enable -q --now paperless-webserver paperless-scheduler paperless-task-queue paperless-consumer
 msg_ok "Created Services"
 
 motd_ssh

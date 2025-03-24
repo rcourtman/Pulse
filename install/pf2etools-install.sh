@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  mc \
-  sudo \
   apache2 \
   gpg \
   ca-certificates \
@@ -48,7 +45,7 @@ echo "${RELEASE}" >/opt/Pf2eTools_version.txt
 msg_ok "Set up Pf2eTools"
 
 msg_info "Creating Service"
-cat <<EOF >> /etc/apache2/apache2.conf
+cat <<EOF >>/etc/apache2/apache2.conf
 <Location /server-status>
     SetHandler server-status
     Order deny,allow

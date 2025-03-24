@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://jellyfin.org/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -14,10 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y curl
-$STD apt-get install -y sudo
 $STD apt-get install -y gpg
-$STD apt-get install -y mc
 msg_ok "Installed Dependencies"
 
 msg_info "Setting Up Hardware Acceleration"
@@ -32,10 +29,10 @@ fi
 msg_ok "Set Up Hardware Acceleration"
 
 msg_info "Installing Jellyfin"
-VERSION="$( awk -F'=' '/^VERSION_CODENAME=/{ print $NF }' /etc/os-release )"
+VERSION="$(awk -F'=' '/^VERSION_CODENAME=/{ print $NF }' /etc/os-release)"
 # If the keyring directory is absent, create it
 if [[ ! -d /etc/apt/keyrings ]]; then
-    mkdir -p /etc/apt/keyrings
+  mkdir -p /etc/apt/keyrings
 fi
 # Download the repository signing key and install it to the keyring directory
 curl -fsSL https://repo.jellyfin.org/jellyfin_team.gpg.key | gpg --dearmor --yes --output /etc/apt/keyrings/jellyfin.gpg

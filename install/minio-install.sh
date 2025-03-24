@@ -5,20 +5,13 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/minio/minio
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
 setting_up_container
 network_check
 update_os
-
-msg_info "Installing Dependencies"
-$STD apt-get install -y \
-    curl \
-    sudo \
-    mc
-msg_ok "Installed Dependencies"
 
 msg_info "Setup MinIO"
 RELEASE=$(curl -s https://api.github.com/repos/minio/minio/releases/latest | grep '"tag_name"' | awk -F '"' '{print $4}')
@@ -41,7 +34,7 @@ EOF
     echo "MinIO-Credentials"
     echo "MinIO Admin User: $MINIO_ADMIN_USER"
     echo "MinIO Admin Password: $MINIO_ADMIN_PASSWORD"
-} >> ~/minio.creds
+} >>~/minio.creds
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Setup MinIO"
 

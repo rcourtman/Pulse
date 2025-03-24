@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.stirlingpdf.com/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies (Patience)"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
   git \
   automake \
   autoconf \
@@ -53,7 +50,7 @@ $STD pip3 install \
   opencv-python-headless \
   unoconv \
   pngquant \
-  WeasyPrint 
+  WeasyPrint
 msg_ok "Installed Python Dependencies"
 
 msg_info "Installing Azul Zulu"

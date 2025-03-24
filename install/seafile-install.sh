@@ -14,11 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Dependencies (Patience)"
-$STD apt-get install -y \
-    sudo \
-    mc \
-    wget \
-    expect
+$STD apt-get install -y expect
 msg_ok "Installed Dependencies"
 
 msg_info "Installing MariaDB"
@@ -50,7 +46,7 @@ sudo -u mysql mysql -s -e "GRANT ALL PRIVILEGES ON $SEAHUB_DB.* TO '$DB_USER'@lo
     echo "DB_PASS: $DB_PASS"
     echo "ADMIN_EMAIL: $ADMIN_EMAIL"
     echo "ADMIN_PASS: $ADMIN_PASS"
-} >> ~/seafile.creds
+} >>~/seafile.creds
 msg_ok "MariaDB setup for Seafile"
 
 msg_info "Installing Seafile Python Dependencies"
@@ -187,13 +183,13 @@ msg_ok "Memcached Started"
 msg_info "Adjusting Conf files"
 sed -i "0,/127.0.0.1/s/127.0.0.1/0.0.0.0/" /opt/seafile/conf/gunicorn.conf.py
 sed -i "0,/SERVICE_URL = \"http:\/\/$IP\"/s/SERVICE_URL = \"http:\/\/$IP\"/SERVICE_URL = \"http:\/\/$IP:8000\"/" /opt/seafile/conf/seahub_settings.py
-echo -e "\nFILE_SERVER_ROOT = \"http://$IP:8082\"" >> /opt/seafile/conf/seahub_settings.py
-echo -e "CSRF_TRUSTED_ORIGINS = [\"http://$IP/\"]" >> /opt/seafile/conf/seahub_settings.py
-echo -e "ALLOWED_HOSTS = [\"$IP\"]" >> /opt/seafile/conf/seahub_settings.py
-echo -e "CSRF_TRUSTED_ORIGINS = ['http://$IP/']" >> /opt/seafile/conf/seahub_settings.py
+echo -e "\nFILE_SERVER_ROOT = \"http://$IP:8082\"" >>/opt/seafile/conf/seahub_settings.py
+echo -e "CSRF_TRUSTED_ORIGINS = [\"http://$IP/\"]" >>/opt/seafile/conf/seahub_settings.py
+echo -e "ALLOWED_HOSTS = [\"$IP\"]" >>/opt/seafile/conf/seahub_settings.py
+echo -e "CSRF_TRUSTED_ORIGINS = ['http://$IP/']" >>/opt/seafile/conf/seahub_settings.py
 msg_ok "Conf files adjusted"
 
-msg_info "Setting up Seafile" 
+msg_info "Setting up Seafile"
 $STD su - seafile -c "bash /opt/seafile/seafile-server-latest/seafile.sh start"
 $STD su - seafile -c "expect <<EOF
 spawn bash /opt/seafile/seafile-server-latest/seahub.sh start

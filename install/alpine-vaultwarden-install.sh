@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/dani-garcia/vaultwarden
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -32,7 +32,7 @@ msg_ok "Installed Alpine-Vaultwarden"
 
 msg_info "Installing Web-Vault"
 $STD apk add vaultwarden-web-vault
-msg_ok "Installed Web-Vault" 
+msg_ok "Installed Web-Vault"
 
 msg_info "Starting Alpine-Vaultwarden"
 $STD rc-service vaultwarden start

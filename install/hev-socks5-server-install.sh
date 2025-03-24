@@ -13,13 +13,6 @@ setting_up_container
 network_check
 update_os
 
-msg_info "Installing Dependencies"
-$STD apt-get install -y \
-    curl \
-    sudo \
-    mc 
-msg_ok "Installed Dependencies"
-
 msg_info "Setup ${APPLICATION}"
 RELEASE=$(curl -s https://api.github.com/repos/heiher/${APPLICATION}/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
 curl -L -o "${APPLICATION}" "https://github.com/heiher/${APPLICATION}/releases/download/${RELEASE}/hev-socks5-server-linux-x86_64"
@@ -32,7 +25,7 @@ mkdir -p /etc/${APPLICATION}
 USERNAME="admin"
 PASSWORD=$(openssl rand -base64 16)
 MARK="0"
-echo "$USERNAME $PASSWORD $MARK" > /root/hev.creds
+echo "$USERNAME $PASSWORD $MARK" >/root/hev.creds
 mv main.yml /etc/${APPLICATION}/main.yml
 msg_ok "Setup ${APPLICATION}"
 

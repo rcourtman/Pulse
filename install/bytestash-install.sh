@@ -15,9 +15,6 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-    sudo \
-    curl \
-    mc \
     gnupg
 msg_ok "Installed Dependencies"
 

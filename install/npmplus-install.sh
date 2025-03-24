@@ -23,7 +23,6 @@ $STD apk add \
     gawk \
     yq \
     mc
-
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Docker & Compose"

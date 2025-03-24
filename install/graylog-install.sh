@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://graylog.org/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -14,11 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Dependencies"
-$STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
-  gnupg
+$STD apt-get install -y gnupg
 msg_ok "Installed Dependencies"
 
 msg_info "Setup MongoDB"
@@ -44,10 +40,10 @@ msg_info "Setup ${APPLICATION}"
 $STD apt-get install graylog-server
 ROOT_PASSWORD=$(openssl rand -base64 18 | tr -dc 'a-zA-Z0-9' | head -c16)
 {
-    echo "${APPLICATION} Credentials"
-    echo "Admin User: admin"
-    echo "Admin Password: ${ROOT_PASSWORD}"
-} >> ~/graylog.creds
+  echo "${APPLICATION} Credentials"
+  echo "Admin User: admin"
+  echo "Admin Password: ${ROOT_PASSWORD}"
+} >>~/graylog.creds
 ROOT_PASSWORD=$(echo -n $ROOT_PASSWORD | shasum -a 256 | awk '{print $1}')
 sed -i "s/password_secret =/password_secret = $PASSWORD_SECRET/g" /etc/graylog/server/server.conf
 sed -i "s/root_password_sha2 =/root_password_sha2 = $ROOT_PASSWORD/g" /etc/graylog/server/server.conf

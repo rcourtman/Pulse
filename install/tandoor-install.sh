@@ -6,7 +6,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://tandoor.dev/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -25,11 +25,8 @@ $STD apt-get install -y --no-install-recommends \
   libldap2-dev \
   libssl-dev \
   gpg \
-  curl \
-  sudo \
   git \
   make \
-  mc \
   pkg-config \
   libxmlsec1-dev \
   libxml2-dev \
@@ -72,15 +69,15 @@ DB_TIMEZONE=UTC
 secret_key=$(openssl rand -base64 45 | sed 's/\//\\\//g')
 DB_PASS="$(openssl rand -base64 18 | cut -c1-13)"
 sed -i -e "s|SECRET_KEY=.*|SECRET_KEY=$secret_key|g" \
-       -e "s|POSTGRES_HOST=.*|POSTGRES_HOST=localhost|g" \
-       -e "s|POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$DB_PASS|g" \
-       -e "s|POSTGRES_DB=.*|POSTGRES_DB=$DB_NAME|g" \
-       -e "s|POSTGRES_USER=.*|POSTGRES_USER=$DB_USER|g" \
-       -e "\$a\STATIC_URL=/staticfiles/" /opt/tandoor/.env
+  -e "s|POSTGRES_HOST=.*|POSTGRES_HOST=localhost|g" \
+  -e "s|POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$DB_PASS|g" \
+  -e "s|POSTGRES_DB=.*|POSTGRES_DB=$DB_NAME|g" \
+  -e "s|POSTGRES_USER=.*|POSTGRES_USER=$DB_USER|g" \
+  -e "\$a\STATIC_URL=/staticfiles/" /opt/tandoor/.env
 msg_ok "Installed Tandoor"
 
 msg_info "Install/Set up PostgreSQL Database"
-curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc|gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
 echo "deb https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" >/etc/apt/sources.list.d/pgdg.list
 $STD apt-get update
 $STD apt-get install -y postgresql-16
@@ -93,7 +90,7 @@ echo "" >>~/tandoor.creds
 echo -e "Tandoor Database Name: \e[32m$DB_NAME\e[0m" >>~/tandoor.creds
 echo -e "Tandoor Database User: \e[32m$DB_USER\e[0m" >>~/tandoor.creds
 echo -e "Tandoor Database Password: \e[32m$DB_PASS\e[0m" >>~/tandoor.creds
-export $(cat /opt/tandoor/.env |grep "^[^#]" | xargs)
+export $(cat /opt/tandoor/.env | grep "^[^#]" | xargs)
 /usr/bin/python3 /opt/tandoor/manage.py migrate >/dev/null 2>&1
 /usr/bin/python3 /opt/tandoor/manage.py collectstatic --no-input >/dev/null 2>&1
 /usr/bin/python3 /opt/tandoor/manage.py collectstatic_js_reverse >/dev/null 2>&1
@@ -117,7 +114,7 @@ ExecStart=/usr/local/bin/gunicorn --error-logfile /tmp/gunicorn_err.log --log-le
 WantedBy=multi-user.target
 EOF
 
-cat << 'EOF' >/etc/nginx/conf.d/tandoor.conf
+cat <<'EOF' >/etc/nginx/conf.d/tandoor.conf
 server {
     listen 8002;
     #access_log /var/log/nginx/access.log;

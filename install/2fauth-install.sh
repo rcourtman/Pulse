@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docs.2fauth.app/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,13 +15,10 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  sudo \
-  mc \
-  nginx \
-  composer \
-  php8.2-{bcmath,common,ctype,curl,fileinfo,fpm,gd,mbstring,mysql,xml,cli} \
-  mariadb-server
+        nginx \
+        composer \
+        php8.2-{bcmath,common,ctype,curl,fileinfo,fpm,gd,mbstring,mysql,xml,cli} \
+        mariadb-server
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up Database"
@@ -32,30 +29,30 @@ $STD mysql -u root -e "CREATE DATABASE $DB_NAME;"
 $STD mysql -u root -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED WITH mysql_native_password AS PASSWORD('$DB_PASS');"
 $STD mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;"
 {
-    echo "2FAuth Credentials"
-    echo "Database User: $DB_USER"
-    echo "Database Password: $DB_PASS"
-    echo "Database Name: $DB_NAME"
-} >> ~/2FAuth.creds
+        echo "2FAuth Credentials"
+        echo "Database User: $DB_USER"
+        echo "Database Password: $DB_PASS"
+        echo "Database Name: $DB_NAME"
+} >>~/2FAuth.creds
 msg_ok "Set up Database"
 
 msg_info "Setup 2FAuth"
 RELEASE=$(curl -s https://api.github.com/repos/Bubka/2FAuth/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
 wget -q "https://github.com/Bubka/2FAuth/archive/refs/tags/${RELEASE}.zip"
 unzip -q "${RELEASE}.zip"
-mv "2FAuth-${RELEASE//v}/" /opt/2fauth
+mv "2FAuth-${RELEASE//v/}/" /opt/2fauth
 
 cd "/opt/2fauth" || return
 cp .env.example .env
 IPADDRESS=$(hostname -I | awk '{print $1}')
 
 sed -i -e "s|^APP_URL=.*|APP_URL=http://$IPADDRESS|" \
-       -e "s|^DB_CONNECTION=$|DB_CONNECTION=mysql|" \
-       -e "s|^DB_DATABASE=$|DB_DATABASE=$DB_NAME|" \
-       -e "s|^DB_HOST=$|DB_HOST=127.0.0.1|" \
-       -e "s|^DB_PORT=$|DB_PORT=3306|" \
-       -e "s|^DB_USERNAME=$|DB_USERNAME=$DB_USER|" \
-       -e "s|^DB_PASSWORD=$|DB_PASSWORD=$DB_PASS|" .env
+        -e "s|^DB_CONNECTION=$|DB_CONNECTION=mysql|" \
+        -e "s|^DB_DATABASE=$|DB_DATABASE=$DB_NAME|" \
+        -e "s|^DB_HOST=$|DB_HOST=127.0.0.1|" \
+        -e "s|^DB_PORT=$|DB_PORT=3306|" \
+        -e "s|^DB_USERNAME=$|DB_USERNAME=$DB_USER|" \
+        -e "s|^DB_PASSWORD=$|DB_PASSWORD=$DB_PASS|" .env
 
 export COMPOSER_ALLOW_SUPERUSER=1
 $STD composer update --no-plugins --no-scripts

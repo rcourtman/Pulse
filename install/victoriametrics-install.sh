@@ -13,13 +13,6 @@ setting_up_container
 network_check
 update_os
 
-msg_info "Installing Dependencies"
-$STD apt-get install -y \
-  sudo \
-  curl \
-  mc
-msg_ok "Installed Dependencies"
-
 msg_info "Setup VictoriaMetrics"
 temp_dir=$(mktemp -d)
 cd $temp_dir

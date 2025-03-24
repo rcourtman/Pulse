@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://github.com/wavelog/wavelog
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -15,13 +15,9 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
-  curl \
-  libapache2-mod-php \
-  mariadb-server \
-  mc \
-  php8.2-{curl,mbstring,mysql,xml,zip,gd} \
-  sudo \
-  unzip
+    libapache2-mod-php \
+    mariadb-server \
+    php8.2-{curl,mbstring,mysql,xml,zip,gd}
 msg_ok "Installed Dependencies"
 
 msg_info "Setting up Database"
@@ -36,7 +32,7 @@ $STD mysql -u root -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'localhost'; FLUSH 
     echo "Wavelog Database User: $DB_USER"
     echo "Wavelog Database Password: $DB_PASS"
     echo "Wavelog Database Name: $DB_NAME"
-} >> ~/wavelog.creds
+} >>~/wavelog.creds
 msg_ok "Set up database"
 
 msg_info "Setting up PHP"
@@ -73,7 +69,7 @@ cat <<EOF >/etc/apache2/sites-available/wavelog.conf
 </VirtualHost>
 EOF
 $STD a2ensite wavelog.conf
-$STD a2dissite 000-default.conf  
+$STD a2dissite 000-default.conf
 $STD systemctl reload apache2
 msg_ok "Created Service"
 

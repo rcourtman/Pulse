@@ -5,7 +5,7 @@
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://docs.unmanic.app/
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -14,9 +14,6 @@ network_check
 update_os
 
 msg_info "Installing Dependencies (Patience)"
-$STD apt-get install -y curl
-$STD apt-get install -y sudo
-$STD apt-get install -y mc
 $STD apt-get install -y ffmpeg
 $STD apt-get install -y python3-pip
 msg_ok "Installed Dependencies"
@@ -41,7 +38,7 @@ sed -i -e 's/^sgx:x:104:$/render:x:104:root/' -e 's/^render:x:106:root$/sgx:x:10
 msg_ok "Installed Unmanic"
 
 msg_info "Creating Service"
-cat << EOF >/etc/systemd/system/unmanic.service
+cat <<EOF >/etc/systemd/system/unmanic.service
 [Unit]
 Description=Unmanic - Library Optimiser
 After=network-online.target
