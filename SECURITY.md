@@ -13,7 +13,7 @@ This project currently supports the following versions of Proxmox VE:
 
 ## Reporting a Vulnerability
 
-Security vulnerabilities shouldn’t be reported publicly to prevent potential exploitation. Instead, please report any vulnerabilities privately by reaching out directly to us. You can either join our [Discord server](https://discord.gg/UHrpNWGwkH) and send a direct message to a maintainer or contact us via email at contact@community-scripts.org. Be sure to include a detailed description of the vulnerability and the steps to reproduce it. Thank you for helping us keep our project secure!
+Security vulnerabilities shouldn’t be reported publicly to prevent potential exploitation. Instead, please report any vulnerabilities privately by reaching out directly to us. You can either join our [Discord server](https://discord.gg/jsYVk5JBxq) and send a direct message to a maintainer or contact us via email at contact@community-scripts.org. Be sure to include a detailed description of the vulnerability and the steps to reproduce it. Thank you for helping us keep our project secure!
 
 Once a vulnerability has been reported, the project maintainers will review it and acknowledge the report within 7 business days. We will then work to address the vulnerability and provide a fix as soon as possible. Depending on the severity of the issue, a patch may be released immediately or included in the next scheduled update.
 
