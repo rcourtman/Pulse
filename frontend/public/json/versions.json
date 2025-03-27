@@ -1,8 +1,73 @@
 [
   {
+    "name": "home-assistant/core",
+    "version": "2025.3.4",
+    "date": "2025-03-21T20:22:46Z"
+  },
+  {
+    "name": "element-hq/synapse",
+    "version": "v1.127.1",
+    "date": "2025-03-26T21:44:28Z"
+  },
+  {
+    "name": "duplicati/duplicati",
+    "version": "v2.1.0.112-2.1.0.112_canary_2025-03-26",
+    "date": "2025-03-26T21:04:38Z"
+  },
+  {
+    "name": "ollama/ollama",
+    "version": "v0.6.3-rc1",
+    "date": "2025-03-26T20:39:01Z"
+  },
+  {
     "name": "fhem/fhem-mirror",
     "version": "6.2",
-    "date": "2025-03-26T10:33:41Z"
+    "date": "2025-03-26T20:29:58Z"
+  },
+  {
+    "name": "runtipi/runtipi",
+    "version": "e2e",
+    "date": "2025-03-23T22:08:04Z"
+  },
+  {
+    "name": "glanceapp/glance",
+    "version": "v0.7.8",
+    "date": "2025-03-26T19:59:07Z"
+  },
+  {
+    "name": "tailscale/tailscale",
+    "version": "v1.82.0",
+    "date": "2025-03-26T19:50:59Z"
+  },
+  {
+    "name": "semaphoreui/semaphore",
+    "version": "v2.13.2",
+    "date": "2025-03-26T19:13:48Z"
+  },
+  {
+    "name": "wazuh/wazuh",
+    "version": "coverity-w11-4.12.0",
+    "date": "2025-03-14T20:04:02Z"
+  },
+  {
+    "name": "immich-app/immich",
+    "version": "v1.130.2",
+    "date": "2025-03-26T16:01:25Z"
+  },
+  {
+    "name": "dgtlmoon/changedetection.io",
+    "version": "0.49.9",
+    "date": "2025-03-26T15:31:03Z"
+  },
+  {
+    "name": "prometheus/prometheus",
+    "version": "v0.303.0-rc.0",
+    "date": "2025-03-26T12:48:46Z"
+  },
+  {
+    "name": "n8n-io/n8n",
+    "version": "n8n@1.84.2",
+    "date": "2025-03-26T14:11:45Z"
   },
   {
     "name": "evcc-io/evcc",
@@ -58,16 +123,6 @@
     "name": "grafana/grafana",
     "version": "v11.6.0",
     "date": "2025-03-25T22:10:15Z"
-  },
-  {
-    "name": "dgtlmoon/changedetection.io",
-    "version": "0.49.8",
-    "date": "2025-03-25T22:00:52Z"
-  },
-  {
-    "name": "immich-app/immich",
-    "version": "v1.130.1",
-    "date": "2025-03-25T20:49:15Z"
   },
   {
     "name": "keycloak/keycloak",
@@ -135,24 +190,9 @@
     "date": "2025-03-25T13:33:10Z"
   },
   {
-    "name": "n8n-io/n8n",
-    "version": "n8n@1.85.1",
-    "date": "2025-03-25T09:33:57Z"
-  },
-  {
-    "name": "element-hq/synapse",
-    "version": "v1.127.0",
-    "date": "2025-03-25T12:47:44Z"
-  },
-  {
     "name": "icereed/paperless-gpt",
     "version": "v0.14.1",
     "date": "2025-03-25T10:09:14Z"
-  },
-  {
-    "name": "runtipi/runtipi",
-    "version": "v3.10.0",
-    "date": "2025-03-15T14:38:16Z"
   },
   {
     "name": "VictoriaMetrics/VictoriaMetrics",
@@ -213,11 +253,6 @@
     "name": "wavelog/wavelog",
     "version": "2.0.2",
     "date": "2025-03-24T12:02:08Z"
-  },
-  {
-    "name": "semaphoreui/semaphore",
-    "version": "v2.13.2",
-    "date": "2025-03-24T11:18:10Z"
   },
   {
     "name": "nzbgetcom/nzbget",
@@ -285,11 +320,6 @@
     "date": "2025-03-22T06:34:33Z"
   },
   {
-    "name": "ollama/ollama",
-    "version": "v0.6.2",
-    "date": "2025-03-18T03:11:33Z"
-  },
-  {
     "name": "netbox-community/netbox",
     "version": "v4.2.6",
     "date": "2025-03-21T21:20:29Z"
@@ -298,11 +328,6 @@
     "name": "sabnzbd/sabnzbd",
     "version": "4.4.1",
     "date": "2024-12-20T13:21:31Z"
-  },
-  {
-    "name": "home-assistant/core",
-    "version": "2025.3.4",
-    "date": "2025-03-21T20:22:46Z"
   },
   {
     "name": "leiweibau/Pi.Alert",
@@ -365,11 +390,6 @@
     "date": "2025-03-11T18:16:27Z"
   },
   {
-    "name": "wazuh/wazuh",
-    "version": "coverity-w11-4.12.0",
-    "date": "2025-03-14T20:04:02Z"
-  },
-  {
     "name": "rabbitmq/rabbitmq-server",
     "version": "v4.0.7",
     "date": "2025-02-26T19:07:11Z"
@@ -398,11 +418,6 @@
     "name": "Donkie/Spoolman",
     "version": "v0.22.1",
     "date": "2025-03-18T21:01:22Z"
-  },
-  {
-    "name": "prometheus/prometheus",
-    "version": "v2.53.4",
-    "date": "2025-03-18T15:50:39Z"
   },
   {
     "name": "syncthing/syncthing",
@@ -465,11 +480,6 @@
     "date": "2025-03-17T04:54:50Z"
   },
   {
-    "name": "glanceapp/glance",
-    "version": "v0.7.7",
-    "date": "2025-03-17T02:24:06Z"
-  },
-  {
     "name": "gethomepage/homepage",
     "version": "v1.0.4",
     "date": "2025-03-16T22:19:31Z"
@@ -503,11 +513,6 @@
     "name": "bunkerity/bunkerweb",
     "version": "v1.6.1",
     "date": "2025-03-15T17:29:17Z"
-  },
-  {
-    "name": "duplicati/duplicati",
-    "version": "v2.1.0.111-2.1.0.111_canary_2025-03-15",
-    "date": "2025-03-15T11:06:44Z"
   },
   {
     "name": "henrygd/beszel",
@@ -678,11 +683,6 @@
     "name": "apache/tomcat",
     "version": "10.1.39",
     "date": "2025-03-04T19:05:18Z"
-  },
-  {
-    "name": "tailscale/tailscale",
-    "version": "v1.80.3",
-    "date": "2025-03-04T18:47:25Z"
   },
   {
     "name": "pi-hole/pi-hole",
