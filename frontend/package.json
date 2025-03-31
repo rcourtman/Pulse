@@ -24,7 +24,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
-    "@mui/icons-material": "^6.4.6",
+    "@mui/icons-material": "^7.0.1",
     "@mui/material": "^6.4.6",
     "@mui/x-tree-view": "^7.26.0",
     "@types/react-dom": "^19.0.4",
