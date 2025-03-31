@@ -25,7 +25,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^6.4.6",
-    "@mui/material": "^6.4.6",
+    "@mui/material": "^7.0.1",
     "@mui/x-tree-view": "^7.26.0",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.2.1",
