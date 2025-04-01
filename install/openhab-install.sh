@@ -20,7 +20,7 @@ msg_ok "Installed Dependencies"
 
 msg_info "Installing Azul Zulu21"
 curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0xB1998361219BD9C9" -o "/etc/apt/trusted.gpg.d/zulu-repo.asc"
-curl -fsSL "https://cdn.azul.com/zulu/bin/zulu-repo_1.0.0-3_all.deb" -o $(basename"https://cdn.azul.com/zulu/bin/zulu-repo_1.0.0-3_all.deb")
+curl -fsSL "https://cdn.azul.com/zulu/bin/zulu-repo_1.0.0-3_all.deb" -o $(basename "https://cdn.azul.com/zulu/bin/zulu-repo_1.0.0-3_all.deb")
 $STD dpkg -i zulu-repo_1.0.0-3_all.deb
 $STD apt-get update
 $STD apt-get -y install zulu21-jdk

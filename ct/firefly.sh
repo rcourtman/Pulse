@@ -38,7 +38,7 @@ function update_script() {
     cp /opt/firefly/.env /opt/.env
     cp -r /opt/firefly/storage /opt/storage
     cd /opt
-    curl -fsSL "https://github.com/firefly-iii/firefly-iii/releases/download/v${RELEASE}/FireflyIII-v${RELEASE}.tar.gz" -o $(basename"https://github.com/firefly-iii/firefly-iii/releases/download/v${RELEASE}/FireflyIII-v${RELEASE}.tar.gz")
+    curl -fsSL "https://github.com/firefly-iii/firefly-iii/releases/download/v${RELEASE}/FireflyIII-v${RELEASE}.tar.gz" -o $(basename "https://github.com/firefly-iii/firefly-iii/releases/download/v${RELEASE}/FireflyIII-v${RELEASE}.tar.gz")
     tar -xzf FireflyIII-v${RELEASE}.tar.gz -C /opt/firefly --exclude='storage'
     cp /opt/.env /opt/firefly/.env
     cp -r /opt/storage /opt/firefly/storage

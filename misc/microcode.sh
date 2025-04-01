@@ -72,7 +72,7 @@ intel() {
   }
 
   msg_info "Downloading the Intel Processor Microcode Package $microcode"
-  curl -fsSL "http://ftp.debian.org/debian/pool/non-free-firmware/i/intel-microcode/$microcode" -o $(basename"http://ftp.debian.org/debian/pool/non-free-firmware/i/intel-microcode/$microcode")
+  curl -fsSL "http://ftp.debian.org/debian/pool/non-free-firmware/i/intel-microcode/$microcode" -o $(basename "http://ftp.debian.org/debian/pool/non-free-firmware/i/intel-microcode/$microcode")
   msg_ok "Downloaded the Intel Processor Microcode Package $microcode"
 
   msg_info "Installing $microcode (Patience)"
@@ -116,7 +116,7 @@ amd() {
   }
 
   msg_info "Downloading the AMD Processor Microcode Package $microcode"
-  curl -fsSL "https://ftp.debian.org/debian/pool/non-free-firmware/a/amd64-microcode/$microcode" -o $(basename"https://ftp.debian.org/debian/pool/non-free-firmware/a/amd64-microcode/$microcode")
+  curl -fsSL "https://ftp.debian.org/debian/pool/non-free-firmware/a/amd64-microcode/$microcode" -o $(basename "https://ftp.debian.org/debian/pool/non-free-firmware/a/amd64-microcode/$microcode")
   msg_ok "Downloaded the AMD Processor Microcode Package $microcode"
 
   msg_info "Installing $microcode (Patience)"

@@ -37,7 +37,7 @@ function update_script() {
     msg_info "Updating ${APP} to v${RELEASE}"
     cd /opt
     mv /opt/barcodebuddy/ /opt/barcodebuddy-backup
-    curl -fsSL "https://github.com/Forceu/barcodebuddy/archive/refs/tags/v${RELEASE}.zip" -o $(basename"https://github.com/Forceu/barcodebuddy/archive/refs/tags/v${RELEASE}.zip")
+    curl -fsSL "https://github.com/Forceu/barcodebuddy/archive/refs/tags/v${RELEASE}.zip" -o $(basename "https://github.com/Forceu/barcodebuddy/archive/refs/tags/v${RELEASE}.zip")
     unzip -q "v${RELEASE}.zip"
     mv "/opt/barcodebuddy-${RELEASE}" /opt/barcodebuddy
     cp -r /opt/barcodebuddy-backup/data/. /opt/barcodebuddy/data

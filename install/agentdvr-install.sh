@@ -26,7 +26,7 @@ msg_info "Installing AgentDVR"
 mkdir -p /opt/agentdvr/agent
 RELEASE=$(curl -fsSL "https://www.ispyconnect.com/api/Agent/DownloadLocation4?platform=Linux64&fromVersion=0" | grep -o 'https://.*\.zip')
 cd /opt/agentdvr/agent
-curl -fsSL "$RELEASE" -o $(basename"$RELEASE")
+curl -fsSL "$RELEASE" -o $(basename "$RELEASE")
 $STD unzip Agent_Linux64*.zip
 rm -rf Agent_Linux64*.zip
 chmod +x ./Agent

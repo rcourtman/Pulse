@@ -117,7 +117,7 @@ node apps/nextjs/server.js & PID=$!
 wait $PID
 EOF
     chmod +x /opt/run_homarr.sh
-curl -fsSL "https://github.com/homarr-labs/homarr/archive/refs/tags/v${RELEASE}.zip" -o $(basename"https://github.com/homarr-labs/homarr/archive/refs/tags/v${RELEASE}.zip")
+curl -fsSL "https://github.com/homarr-labs/homarr/archive/refs/tags/v${RELEASE}.zip" -o $(basename "https://github.com/homarr-labs/homarr/archive/refs/tags/v${RELEASE}.zip")
     unzip -q v${RELEASE}.zip
     rm -rf v${RELEASE}.zip
     rm -rf /opt/homarr
