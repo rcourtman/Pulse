@@ -47,12 +47,12 @@ function update_script() {
     /etc/nginx \
     /var/log/nginx \
     /var/lib/nginx \
-    $STD /var/cache/nginx
+    "$STD" /var/cache/nginx
   msg_ok "Cleaned Old Files"
 
   msg_info "Downloading NPM v${RELEASE}"
-curl -fsSL "https://codeload.github.com/NginxProxyManager/nginx-proxy-manager/tar.gz/v${RELEASE}" -o "- | tar -xz"
-  cd nginx-proxy-manager-${RELEASE}
+  curl -fsSL "https://codeload.github.com/NginxProxyManager/nginx-proxy-manager/tar.gz/v${RELEASE}" | tar -xz
+  cd nginx-proxy-manager-"${RELEASE}" || exit
   msg_ok "Downloaded NPM v${RELEASE}"
 
   msg_info "Setting up Enviroment"
@@ -62,8 +62,6 @@ curl -fsSL "https://codeload.github.com/NginxProxyManager/nginx-proxy-manager/ta
   ln -sf /usr/local/openresty/nginx/ /etc/nginx
   sed -i "s|\"version\": \"0.0.0\"|\"version\": \"$RELEASE\"|" backend/package.json
   sed -i "s|\"version\": \"0.0.0\"|\"version\": \"$RELEASE\"|" frontend/package.json
-  sed -i 's|"fork-me": ".*"|"fork-me": "Proxmox VE Helper-Scripts"|' frontend/js/i18n/messages.json
-  sed -i "s|https://github.com.*source=nginx-proxy-manager|https://helper-scripts.com|g" frontend/js/app/ui/footer/main.ejs
   sed -i 's+^daemon+#daemon+g' docker/rootfs/etc/nginx/nginx.conf
   NGINX_CONFS=$(find "$(pwd)" -type f -name "*.conf")
   for NGINX_CONF in $NGINX_CONFS; do
@@ -105,7 +103,7 @@ curl -fsSL "https://codeload.github.com/NginxProxyManager/nginx-proxy-manager/ta
   msg_ok "Setup Enviroment"
 
   msg_info "Building Frontend"
-  cd ./frontend
+  cd ./frontend || exit
   $STD pnpm install
   $STD pnpm upgrade
   $STD pnpm run build
@@ -130,7 +128,7 @@ curl -fsSL "https://codeload.github.com/NginxProxyManager/nginx-proxy-manager/ta
 }
 EOF
   fi
-  cd /app
+  cd /app || exit
   $STD pnpm install
   msg_ok "Initialized Backend"
 
