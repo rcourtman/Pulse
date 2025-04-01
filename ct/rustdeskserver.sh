@@ -37,9 +37,12 @@ function update_script() {
 
         msg_info "Updating $APP to v${RELEASE}"
         TEMPDIR=$(mktemp -d)
-curl -fsSL "https://github.com/rustdesk/rustdesk-server/releases/download/${RELEASE}/rustdesk-server-hbbr_${RELEASE}_amd64.deb" -P $TEMPDIR" -o $(basename "https://github.com/rustdesk/rustdesk-server/releases/download/${RELEASE}/rustdesk-server-hbbr_${RELEASE}_amd64.deb" -P $TEMPDIR")
-curl -fsSL "https://github.com/rustdesk/rustdesk-server/releases/download/${RELEASE}/rustdesk-server-hbbs_${RELEASE}_amd64.deb" -P $TEMPDIR" -o $(basename "https://github.com/rustdesk/rustdesk-server/releases/download/${RELEASE}/rustdesk-server-hbbs_${RELEASE}_amd64.deb" -P $TEMPDIR")
-curl -fsSL "https://github.com/rustdesk/rustdesk-server/releases/download/${RELEASE}/rustdesk-server-utils_${RELEASE}_amd64.deb" -P $TEMPDIR" -o $(basename "https://github.com/rustdesk/rustdesk-server/releases/download/${RELEASE}/rustdesk-server-utils_${RELEASE}_amd64.deb" -P $TEMPDIR")
+        curl -fsSL "https://github.com/rustdesk/rustdesk-server/releases/download/${RELEASE}/rustdesk-server-hbbr_${RELEASE}_amd64.deb" \
+            -o "${TEMPDIR}/rustdesk-server-hbbr_${RELEASE}_amd64.deb"
+        curl -fsSL "https://github.com/rustdesk/rustdesk-server/releases/download/${RELEASE}/rustdesk-server-hbbs_${RELEASE}_amd64.deb" \
+            -o "${TEMPDIR}/rustdesk-server-hbbs_${RELEASE}_amd64.deb"
+        curl -fsSL "https://github.com/rustdesk/rustdesk-server/releases/download/${RELEASE}/rustdesk-server-utils_${RELEASE}_amd64.deb" \
+            -o "${TEMPDIR}/rustdesk-server-utils_${RELEASE}_amd64.deb"
         $STD dpkg -i $TEMPDIR/*.deb
         msg_ok "Updated $APP to v${RELEASE}"
 
