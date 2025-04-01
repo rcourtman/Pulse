@@ -27,7 +27,7 @@ $STD pip install runlike
 msg_ok "Installed runlike"
 
 get_latest_release() {
-  curl -fsSLL https://api.github.com/repos/$1/releases/latest | grep '"tag_name":' | cut -d'"' -f4
+  curl -fsSL https://api.github.com/repos/$1/releases/latest | grep '"tag_name":' | cut -d'"' -f4
 }
 
 DOCKER_LATEST_VERSION=$(get_latest_release "moby/moby")

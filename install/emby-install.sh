@@ -24,7 +24,7 @@ if [[ "$CTTYPE" == "0" ]]; then
 fi
 msg_ok "Set Up Hardware Acceleration"
 
-LATEST=$(curl -fsSLL https://api.github.com/repos/MediaBrowser/Emby.Releases/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
+LATEST=$(curl -fsSL https://api.github.com/repos/MediaBrowser/Emby.Releases/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
 
 msg_info "Installing Emby"
 curl -fsSL "https://github.com/MediaBrowser/Emby.Releases/releases/download/${LATEST}/emby-server-deb_${LATEST}_amd64.deb" -o $(basename "https://github.com/MediaBrowser/Emby.Releases/releases/download/${LATEST}/emby-server-deb_${LATEST}_amd64.deb")

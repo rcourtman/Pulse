@@ -31,7 +31,7 @@ $STD apt-get install -y nut-client
 msg_ok "Installed NUT"
 
 msg_info "Installing Peanut"
-RELEASE=$(curl -fsSLL https://api.github.com/repos/Brandawg93/PeaNUT/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
+RELEASE=$(curl -fsSL https://api.github.com/repos/Brandawg93/PeaNUT/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
 curl -fsSL "https://api.github.com/repos/Brandawg93/PeaNUT/tarball/${RELEASE}" -o "peanut.tar.gz"
 mkdir -p /opt/peanut
 tar -xzf peanut.tar.gz -C /opt/peanut --strip-components 1

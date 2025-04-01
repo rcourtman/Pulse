@@ -27,7 +27,7 @@ function update_script() {
     msg_error "No ${APP} Installation Found!"
     exit
   fi
-  RELEASE=$(curl -fsSLL https://api.github.com/repos/Athou/commafeed/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
+  RELEASE=$(curl -fsSL https://api.github.com/repos/Athou/commafeed/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
   if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
     msg_info "Stopping ${APP}"
     systemctl stop commafeed
@@ -35,9 +35,9 @@ function update_script() {
 
     msg_info "Updating ${APP} to ${RELEASE}"
     curl -fsSL "https://github.com/Athou/commafeed/releases/download/${RELEASE}/commafeed-${RELEASE}-h2-jvm.zip" -o $(basename "https://github.com/Athou/commafeed/releases/download/${RELEASE}/commafeed-${RELEASE}-h2-jvm.zip")
-    unzip -q commafeed-${RELEASE}-h2-jvm.zip
-    rsync -a --exclude 'data/' commafeed-${RELEASE}-h2/ /opt/commafeed/
-    rm -rf commafeed-${RELEASE}-h2 commafeed-${RELEASE}-h2-jvm.zip
+    unzip -q commafeed-"${RELEASE}"-h2-jvm.zip
+    rsync -a --exclude 'data/' commafeed-"${RELEASE}"-h2/ /opt/commafeed/
+    rm -rf commafeed-"${RELEASE}"-h2 commafeed-"${RELEASE}"-h2-jvm.zip
     echo "${RELEASE}" >/opt/${APP}_version.txt
     msg_ok "Updated ${APP} to ${RELEASE}"
 

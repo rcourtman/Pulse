@@ -25,7 +25,7 @@ $STD apt-get update
 $STD apt-get -y install zulu17-jdk
 msg_ok "Installed Azul Zulu"
 
-RELEASE=$(curl -fsSLL https://api.github.com/repos/Athou/commafeed/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
+RELEASE=$(curl -fsSL https://api.github.com/repos/Athou/commafeed/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
 msg_info "Installing CommaFeed ${RELEASE}"
 mkdir /opt/commafeed
 curl -fsSL "https://github.com/Athou/commafeed/releases/download/${RELEASE}/commafeed-${RELEASE}-h2-jvm.zip" -o $(basename "https://github.com/Athou/commafeed/releases/download/${RELEASE}/commafeed-${RELEASE}-h2-jvm.zip")

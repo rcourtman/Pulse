@@ -29,7 +29,7 @@ function update_script() {
     fi
     msg_info "Updating $APP"
     systemctl stop openobserve
-    LATEST=$(curl -fsSLL https://api.github.com/repos/openobserve/openobserve/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
+    LATEST=$(curl -fsSL https://api.github.com/repos/openobserve/openobserve/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
     tar zxvf <(curl -fsSL https://github.com/openobserve/openobserve/releases/download/$LATEST/openobserve-${LATEST}-linux-amd64.tar.gz) -C /opt/openobserve
     systemctl start openobserve
     msg_ok "Updated $APP"

@@ -28,7 +28,7 @@ function update_script() {
     exit
   fi
 
-  RELEASE=$(curl -fsSLL https://api.github.com/repos/Lissy93/dashy/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
+  RELEASE=$(curl -fsSL https://api.github.com/repos/Lissy93/dashy/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
   if [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]] || [[ ! -f /opt/${APP}_version.txt ]]; then
     msg_info "Stopping ${APP}"
     systemctl stop dashy
@@ -46,7 +46,7 @@ function update_script() {
     msg_info "Updating ${APP} to ${RELEASE}"
     rm -rf /opt/dashy
     mkdir -p /opt/dashy
-curl -fsSL "https://github.com/Lissy93/dashy/archive/refs/tags/${RELEASE}.tar.gz" | tar -xz -C /opt/dashy --strip-components=1
+    curl -fsSL "https://github.com/Lissy93/dashy/archive/refs/tags/${RELEASE}.tar.gz" | tar -xz -C /opt/dashy --strip-components=1
     cd /opt/dashy
     npm install
     npm run build

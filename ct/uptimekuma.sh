@@ -34,7 +34,7 @@ function update_script() {
       echo "Installed NPM..."
     fi
   fi
-  LATEST=$(curl -fsSLL https://api.github.com/repos/louislam/uptime-kuma/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
+  LATEST=$(curl -fsSL https://api.github.com/repos/louislam/uptime-kuma/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
   msg_info "Stopping ${APP}"
   $STD sudo systemctl stop uptime-kuma
   msg_ok "Stopped ${APP}"

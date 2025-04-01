@@ -53,7 +53,7 @@ function update_script() {
         echo "Installed NPM..."
       fi
     fi
-    LATEST=$(curl -fsSLL https://api.github.com/repos/jhuckaby/Cronicle/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
+    LATEST=$(curl -fsSL https://api.github.com/repos/jhuckaby/Cronicle/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
     IP=$(hostname -I | awk '{print $1}')
     msg_info "Installing Dependencies"
 

@@ -26,7 +26,7 @@ $STD rc-service docker start
 $STD rc-update add docker default
 
 get_latest_release() {
-    curl -fsSLL https://api.github.com/repos/$1/releases/latest | grep '"tag_name":' | cut -d'"' -f4
+    curl -fsSL https://api.github.com/repos/$1/releases/latest | grep '"tag_name":' | cut -d'"' -f4
 }
 DOCKER_COMPOSE_LATEST_VERSION=$(get_latest_release "docker/compose")
 DOCKER_CONFIG=${DOCKER_CONFIG:-$HOME/.docker}

@@ -27,11 +27,11 @@ function update_script() {
     msg_error "No ${APP} Installation Found!"
     exit
   fi
-  RELEASE=$(curl -fsSLL https://api.github.com/repos/Brandawg93/PeaNUT/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
+  RELEASE=$(curl -fsSL https://api.github.com/repos/Brandawg93/PeaNUT/releases/latest | grep '"tag_name":' | cut -d'"' -f4)
   if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
     msg_info "Updating $APP to ${RELEASE}"
     systemctl stop peanut
-curl -fsSL "https://api.github.com/repos/Brandawg93/PeaNUT/tarball/${RELEASE}" -o "peanut.tar.gz"
+    curl -fsSL "https://api.github.com/repos/Brandawg93/PeaNUT/tarball/${RELEASE}" -o "peanut.tar.gz"
     tar -xzf peanut.tar.gz -C /opt/peanut --strip-components 1
     rm peanut.tar.gz
     cd /opt/peanut
