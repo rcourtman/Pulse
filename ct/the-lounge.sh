@@ -43,7 +43,7 @@ function update_script() {
     msg_info "Updating ${APP} to v${RELEASE}"
     $STD apt-get install --only-upgrade nodejs
     cd /opt
-    curl -fsSL "https://github.com/thelounge/thelounge-deb/releases/download/v${RELEASE}/thelounge_${RELEASE}_all.deb" -O $(basename "https://github.com/thelounge/thelounge-deb/releases/download/v${RELEASE}/thelounge_${RELEASE}_all.deb")
+    curl -fsSL "https://github.com/thelounge/thelounge-deb/releases/download/v${RELEASE}/thelounge_${RELEASE}_all.deb" -o $(basename"https://github.com/thelounge/thelounge-deb/releases/download/v${RELEASE}/thelounge_${RELEASE}_all.deb")
     dpkg -i ./thelounge_${RELEASE}_all.deb
     msg_ok "Updated ${APP} to v${RELEASE}"
 

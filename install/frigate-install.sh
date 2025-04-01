@@ -142,7 +142,7 @@ msg_info "Installing Coral Object Detection Model (Patience)"
 cd /opt/frigate
 export CCACHE_DIR=/root/.ccache
 export CCACHE_MAXSIZE=2G
-curl -fsSL "https://github.com/libusb/libusb/archive/v1.0.26.zip" -O $(basename "https://github.com/libusb/libusb/archive/v1.0.26.zip")
+curl -fsSL "https://github.com/libusb/libusb/archive/v1.0.26.zip" -o $(basename"https://github.com/libusb/libusb/archive/v1.0.26.zip")
 unzip -q v1.0.26.zip
 rm v1.0.26.zip
 cd libusb-1.0.26

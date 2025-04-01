@@ -63,10 +63,10 @@ $STD ldconfig
 RELEASE_CLIENT=$(curl -fsSLL https://api.github.com/repos/apache/guacamole-client/tags | jq -r '.[0].name')
 curl -fsSL "https://downloads.apache.org/guacamole/${RELEASE_CLIENT}/binary/guacamole-${RELEASE_CLIENT}.war" -o "/opt/apache-guacamole/tomcat9/webapps/guacamole.war"
 cd /root
-curl -fsSL "--directory-prefix=/root/ https://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-8.0.26.tar.gz" -O $(basename "--directory-prefix=/root/ https://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-8.0.26.tar.gz")
+curl -fsSL "--directory-prefix=/root/ https://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-8.0.26.tar.gz" -o $(basename"--directory-prefix=/root/ https://dev.mysql.com/get/Downloads/Connector-J/mysql-connector-java-8.0.26.tar.gz")
 $STD tar -xf ~/mysql-connector-java-8.0.26.tar.gz
 mv ~/mysql-connector-java-8.0.26/mysql-connector-java-8.0.26.jar /etc/guacamole/lib/
-curl -fsSL "--directory-prefix=/root/ https://downloads.apache.org/guacamole/1.5.5/binary/guacamole-auth-jdbc-1.5.5.tar.gz" -O $(basename "--directory-prefix=/root/ https://downloads.apache.org/guacamole/1.5.5/binary/guacamole-auth-jdbc-1.5.5.tar.gz")
+curl -fsSL "--directory-prefix=/root/ https://downloads.apache.org/guacamole/1.5.5/binary/guacamole-auth-jdbc-1.5.5.tar.gz" -o $(basename"--directory-prefix=/root/ https://downloads.apache.org/guacamole/1.5.5/binary/guacamole-auth-jdbc-1.5.5.tar.gz")
 $STD tar -xf ~/guacamole-auth-jdbc-1.5.5.tar.gz
 mv ~/guacamole-auth-jdbc-1.5.5/mysql/guacamole-auth-jdbc-mysql-1.5.5.jar /etc/guacamole/extensions/
 msg_ok "Setup Apache Guacamole"

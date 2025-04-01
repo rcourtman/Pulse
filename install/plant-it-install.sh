@@ -50,7 +50,7 @@ msg_ok "Set up MariaDB"
 
 msg_info "Setup Plant-it"
 RELEASE=$(curl -fsSL https://api.github.com/repos/MDeLuise/plant-it/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
-curl -fsSL "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/server.jar" -O $(basename "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/server.jar")
+curl -fsSL "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/server.jar" -o $(basename"https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/server.jar")
 mkdir -p /opt/plant-it/{backend,frontend}
 mkdir -p /opt/plant-it-data
 mv -f server.jar /opt/plant-it/backend/server.jar
@@ -80,7 +80,7 @@ CACHE_PORT=6379
 EOF
 
 cd /opt/plant-it/frontend
-curl -fsSL "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/client.tar.gz" -O $(basename "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/client.tar.gz")
+curl -fsSL "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/client.tar.gz" -o $(basename"https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/client.tar.gz")
 tar -xzf client.tar.gz
 echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Setup Plant-it"

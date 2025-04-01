@@ -52,7 +52,7 @@ function update_script() {
     cd /opt
     cp /opt/tianji/src/server/.env /opt/.env
     mv /opt/tianji /opt/tianji_bak
-    curl -fsSL "https://github.com/msgbyte/tianji/archive/refs/tags/v${RELEASE}.zip" -O $(basename "https://github.com/msgbyte/tianji/archive/refs/tags/v${RELEASE}.zip")
+    curl -fsSL "https://github.com/msgbyte/tianji/archive/refs/tags/v${RELEASE}.zip" -o $(basename"https://github.com/msgbyte/tianji/archive/refs/tags/v${RELEASE}.zip")
     unzip -q v${RELEASE}.zip
     mv tianji-${RELEASE} /opt/tianji
     cd tianji

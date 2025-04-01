@@ -60,7 +60,7 @@ install() {
 
   msg_info "Setting up repository"
   $STD apt-get install -y debian-keyring
-  curl -fsSL "https://repo.netdata.cloud/repos/repoconfig/debian/bookworm/netdata-repo_5-1+debian12_all.deb" -O $(basename "https://repo.netdata.cloud/repos/repoconfig/debian/bookworm/netdata-repo_5-1+debian12_all.deb")
+  curl -fsSL "https://repo.netdata.cloud/repos/repoconfig/debian/bookworm/netdata-repo_5-1+debian12_all.deb" -o $(basename"https://repo.netdata.cloud/repos/repoconfig/debian/bookworm/netdata-repo_5-1+debian12_all.deb")
   $STD dpkg -i netdata-repo_5-1+debian12_all.deb
   rm -rf netdata-repo_5-1+debian12_all.deb
   msg_ok "Set up repository"

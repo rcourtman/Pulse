@@ -36,9 +36,9 @@ function update_script() {
         msg_ok "Stopped $APP"
 
         msg_info "Updating $APP to v${RELEASE}"
-curl -fsSL "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/server.jar" -o "/opt/plant-it/server.jar"
+        curl -fsSL "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/server.jar" -o "/opt/plant-it/server.jar"
         cd /opt/plant-it/frontend
-curl -fsSL "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/client.tar.gz" -O $(basename "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/client.tar.gz")
+        curl -fsSL "https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/client.tar.gz" -o $(basename"https://github.com/MDeLuise/plant-it/releases/download/${RELEASE}/client.tar.gz")
         tar -xzf client.tar.gz
         rm -f client.tar.gz
         echo "${RELEASE}" >/opt/${APP}_version.txt

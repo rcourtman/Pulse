@@ -35,7 +35,7 @@ function update_script() {
 
     msg_info "Updating ${APP} to v${RELEASE}"
     mv /opt/bookstack /opt/bookstack-backup
-curl -fsSL "--directory-prefix=/opt "https://github.com/BookStackApp/BookStack/archive/refs/tags/v${RELEASE}.zip" -O $(basename "--directory-prefix=/opt "https://github.com/BookStackApp/BookStack/archive/refs/tags/v${RELEASE}.zip")
+curl -fsSL "--directory-prefix=/opt "https://github.com/BookStackApp/BookStack/archive/refs/tags/v${RELEASE}.zip" -o $(basename"--directory-prefix=/opt "https://github.com/BookStackApp/BookStack/archive/refs/tags/v${RELEASE}.zip")
     unzip -q /opt/v${RELEASE}.zip -d /opt
     mv /opt/BookStack-${RELEASE} /opt/bookstack
     cp /opt/bookstack-backup/.env /opt/bookstack/.env

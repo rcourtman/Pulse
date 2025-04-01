@@ -44,7 +44,7 @@ curl -fsSL "https://golang.org/dl/"$golang_tarball" -o ""$temp_file""
   msg_info "Setup xCaddy"
   cd /opt
   RELEASE=$(curl -fsSL https://api.github.com/repos/caddyserver/xcaddy/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
-curl -fsSL "https://github.com/caddyserver/xcaddy/releases/download/${RELEASE}/xcaddy_${RELEASE:1}_linux_amd64.deb" -O $(basename "https://github.com/caddyserver/xcaddy/releases/download/${RELEASE}/xcaddy_${RELEASE:1}_linux_amd64.deb")
+curl -fsSL "https://github.com/caddyserver/xcaddy/releases/download/${RELEASE}/xcaddy_${RELEASE:1}_linux_amd64.deb" -o $(basename"https://github.com/caddyserver/xcaddy/releases/download/${RELEASE}/xcaddy_${RELEASE:1}_linux_amd64.deb")
   $STD dpkg -i xcaddy_${RELEASE:1}_linux_amd64.deb
   rm -rf /opt/xcaddy*
   $STD xcaddy build

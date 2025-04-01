@@ -38,7 +38,7 @@ function update_script() {
       if [[ "$(gs --version 2>/dev/null)" != "10.04.0" ]]; then
         msg_info "Updating Ghostscript (Patience)"
         cd /tmp
-curl -fsSL "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10040/ghostscript-10.04.0.tar.gz" -O $(basename "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10040/ghostscript-10.04.0.tar.gz")
+        curl -fsSL "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10040/ghostscript-10.04.0.tar.gz" -o $(basename"https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10040/ghostscript-10.04.0.tar.gz")
         tar -xzf ghostscript-10.04.0.tar.gz
         cd ghostscript-10.04.0
         $STD ./configure
@@ -53,7 +53,7 @@ curl -fsSL "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/downl
 
       msg_info "Updating to ${RELEASE}"
       cd ~
-curl -fsSL "https://github.com/paperless-ngx/paperless-ngx/releases/download/$RELEASE/paperless-ngx-$RELEASE.tar.xz" -O $(basename "https://github.com/paperless-ngx/paperless-ngx/releases/download/$RELEASE/paperless-ngx-$RELEASE.tar.xz")
+      curl -fsSL "https://github.com/paperless-ngx/paperless-ngx/releases/download/$RELEASE/paperless-ngx-$RELEASE.tar.xz" -o $(basename"https://github.com/paperless-ngx/paperless-ngx/releases/download/$RELEASE/paperless-ngx-$RELEASE.tar.xz")
       tar -xf paperless-ngx-$RELEASE.tar.xz
       cp -r /opt/paperless/paperless.conf paperless-ngx/
       cp -r paperless-ngx/* /opt/paperless/
