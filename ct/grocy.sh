@@ -30,7 +30,7 @@ function update_script() {
   php_version=$(php -v | head -n 1 | awk '{print $2}')
   if [[ ! $php_version == "8.3"* ]]; then
     msg_info "Updating PHP"
-    curl -fsSLSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg
+    curl -fsSLo /usr/share/keyrings/deb.sury.org-php.gpg https://packages.sury.org/php/apt.gpg
     echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ bookworm main" >/etc/apt/sources.list.d/php.list
     apt-get update
     apt-get install -y php8.3 php8.3-cli php8.3-{bz2,curl,mbstring,intl,sqlite3,fpm,gd,zip,xml}
