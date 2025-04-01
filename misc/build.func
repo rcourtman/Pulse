@@ -288,21 +288,20 @@ update_motd_ip() {
 
 # Function to download & save header files
 get_header() {
-  local app_name=$(echo ${APP,,} | tr -d ' ')
-  local header_url="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/raw/main/ct/headers/${app_name}"
-  local local_header_path="/usr/local/community-scripts/headers/${app_name}"
+    local app_name=$(echo "${APP,,}" | tr -d ' ')
+    local header_url="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/headers/${app_name}"
+    local local_header_path="/usr/local/community-scripts/headers/${app_name}"
 
-  mkdir -p "/usr/local/community-scripts/headers"
+    mkdir -p "$(dirname "$local_header_path")"
 
-  # Check if local file already present
-  if [ ! -s "$local_header_path" ]; then
-    curl -fsSL "$local_header_path" "$header_url"
-    if [ $? -ne 0 ]; then
-      echo -e "${WARN}${BOLD}${YLW}Failed to download header for ${app_name}. No header will be displayed.${CL}"
-      return 1
+    if [ ! -s "$local_header_path" ]; then
+        if ! curl -fsSL "$header_url" -o "$local_header_path"; then
+            echo -e "${WARN:-}[WARN]${BOLD:-}${YLW:-} Failed to download header for ${app_name}. No header will be displayed.${CL:-}"
+            return 1
+        fi
     fi
-  fi
-  cat "$local_header_path"
+
+    cat "$local_header_path"
 }
 
 # This function sets the APP-Name into an ASCII Header in Slant, figlet needed on proxmox main node.
