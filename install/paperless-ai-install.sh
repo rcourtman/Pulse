@@ -16,9 +16,6 @@ update_os
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
   gpg \
-  make \
-  gcc \
-  g++ \
   build-essential
 msg_ok "Installed Dependencies"
 
@@ -82,7 +79,7 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable -q --now paperless-ai.service
+systemctl enable -q --now paperless-ai
 msg_ok "Created Service"
 
 motd_ssh

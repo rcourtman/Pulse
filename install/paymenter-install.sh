@@ -47,10 +47,10 @@ mysql -u root -e "CREATE DATABASE $DB_NAME;"
 mysql -u root -e "CREATE USER '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';"
 mysql -u root -e "GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost' WITH GRANT OPTION;"
 {
-    echo "Paymenter Database Credentials"
-    echo "Database: $DB_NAME"
-    echo "Username: $DB_USER"
-    echo "Password: $DB_PASS"
+  echo "Paymenter Database Credentials"
+  echo "Database: $DB_NAME"
+  echo "Username: $DB_USER"
+  echo "Password: $DB_PASS"
 } >>~/paymenter_db.creds
 cp .env.example .env
 $STD composer install --no-dev --optimize-autoloader --no-interaction
@@ -125,7 +125,7 @@ RestartSec=5s
 [Install]
 WantedBy=multi-user.target
 EOF
-$STD systemctl enable --now paymenter.service
+$STD systemctl enable --now paymenter
 msg_ok "Setup Service"
 
 msg_info "Cleaning up"
