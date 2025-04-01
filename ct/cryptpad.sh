@@ -37,10 +37,10 @@ function update_script() {
         msg_info "Updating $APP to ${RELEASE}"
         temp_dir=$(mktemp -d)
         cp -f /opt/cryptpad/config/config.js /opt/config.js
-curl -fsSL "https://github.com/cryptpad/cryptpad/archive/refs/tags/${RELEASE}.tar.gz" -P $temp_dir" -o $(basename "https://github.com/cryptpad/cryptpad/archive/refs/tags/${RELEASE}.tar.gz" -P $temp_dir")
-        cd $temp_dir
-        tar zxf $RELEASE.tar.gz
-        cp -rf cryptpad-$RELEASE/* /opt/cryptpad
+        curl -fsSL "https://github.com/cryptpad/cryptpad/archive/refs/tags/${RELEASE}.tar.gz" -o "$temp_dir/cryptpad-${RELEASE}.tar.gz"
+        cd "$temp_dir"
+        tar zxf "cryptpad-${RELEASE}.tar.gz"
+        cp -rf "cryptpad-${RELEASE}"/* /opt/cryptpad
         cd /opt/cryptpad
         $STD npm ci
         $STD npm run install:components

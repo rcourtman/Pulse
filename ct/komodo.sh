@@ -48,11 +48,11 @@ function update_script() {
     }
 
     GITHUB_URL="https://raw.githubusercontent.com/mbecker20/komodo/main/compose/${COMPOSE_FILE}"
-curl -fsSL "$GITHUB_URL" || {" -o ""/opt/komodo/${COMPOSE_FILE}""
+    if ! curl -fsSL "$GITHUB_URL" -o "/opt/komodo/${COMPOSE_FILE}"; then
         msg_error "Failed to download ${COMPOSE_FILE} from GitHub!"
         mv "/opt/komodo/${BACKUP_FILE}" "/opt/komodo/${COMPOSE_FILE}"
         exit 1
-    }
+    fi
 
     $STD docker compose -p komodo -f "/opt/komodo/$COMPOSE_FILE" --env-file /opt/komodo/compose.env up -d
     msg_ok "Updated ${APP}"
