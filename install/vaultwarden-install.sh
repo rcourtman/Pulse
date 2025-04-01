@@ -34,11 +34,11 @@ VAULT=$(curl -fsSL https://api.github.com/repos/dani-garcia/vaultwarden/releases
   awk '{print substr($2, 2, length($2)-3) }')
 
 msg_info "Installing Rust"
-curl -fsSL https://sh.rustup.rs -O
-$STD bash index.html -y --profile minimal
-echo 'export PATH=~/.cargo/bin:$PATH' >>~/.bashrc
-export PATH=~/.cargo/bin:$PATH
-rm index.html
+curl -fsSL https://sh.rustup.rs -o rustup-init.sh
+$STD bash rustup-init.sh -y --profile minimal
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+export PATH="$HOME/.cargo/bin:$PATH"
+rm rustup-init.sh
 msg_ok "Installed Rust"
 
 msg_info "Building Vaultwarden ${VAULT} (Patience)"

@@ -37,11 +37,11 @@ $STD npm install -g yarn
 msg_ok "Installed Node.js/Yarn"
 
 msg_info "Installing Rust"
-curl -fsSL https://sh.rustup.rs -O
-$STD bash index.html -y --profile minimal
-echo 'export PATH=~/.cargo/bin:$PATH' >>~/.bashrc
-export PATH=~/.cargo/bin:$PATH
-rm index.html
+curl -fsSL https://sh.rustup.rs -o rustup-init.sh
+$STD bash rustup-init.sh -y --profile minimal
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+export PATH="$HOME/.cargo/bin:$PATH"
+rm rustup-init.sh
 $STD cargo install monolith
 msg_ok "Installed Rust"
 
