@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-source <(curl -s https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Copyright (c) 2021-2025 tteck
 # Author: MickLesk (Canbiz)
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
@@ -26,7 +26,7 @@ function update_script() {
     msg_error "No ${APP} Installation Found!"
     exit
   fi
-    if command -v node >/dev/null; then
+  if command -v node >/dev/null; then
     NODE_MAJOR=$(/usr/bin/env node -v | grep -oP '^v\K[0-9]+')
     if [[ "$NODE_MAJOR" != "22" ]]; then
       $STD apt-get purge -y nodejs
@@ -42,17 +42,17 @@ function update_script() {
   $STD apt-get update
   $STD apt-get install -y nodejs
   $STD npm install -g pnpm@9.7.1
-  RELEASE=$(curl -s https://api.github.com/repos/msgbyte/tianji/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
+  RELEASE=$(curl -fsSL https://api.github.com/repos/msgbyte/tianji/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
   if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
     msg_info "Stopping ${APP} Service"
     systemctl stop tianji
     msg_ok "Stopped ${APP} Service"
-    
+
     msg_info "Updating ${APP} to v${RELEASE}"
     cd /opt
     cp /opt/tianji/src/server/.env /opt/.env
     mv /opt/tianji /opt/tianji_bak
-    wget -q "https://github.com/msgbyte/tianji/archive/refs/tags/v${RELEASE}.zip"
+    curl -fsSL "https://github.com/msgbyte/tianji/archive/refs/tags/v${RELEASE}.zip" -O $(basename "https://github.com/msgbyte/tianji/archive/refs/tags/v${RELEASE}.zip")
     unzip -q v${RELEASE}.zip
     mv tianji-${RELEASE} /opt/tianji
     cd tianji
@@ -68,11 +68,11 @@ function update_script() {
     $STD pnpm db:migrate:apply
     echo "${RELEASE}" >/opt/${APP}_version.txt
     msg_ok "Updated ${APP} to v${RELEASE}"
-    
+
     msg_info "Starting ${APP}"
     systemctl start tianji
     msg_ok "Started ${APP}"
-    
+
     msg_info "Cleaning up"
     rm -R /opt/v${RELEASE}.zip
     rm -rf /opt/tianji_bak
