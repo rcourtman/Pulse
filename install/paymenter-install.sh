@@ -25,7 +25,7 @@ $STD apt-get install -y \
     mariadb-server \
     nginx \
     redis-server
-$STD curl -fsSLS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+$STD curl -fsSL https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 msg_ok "Installed Dependencies"
 
 msg_info "Installing Paymenter"
