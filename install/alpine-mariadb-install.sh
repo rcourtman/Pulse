@@ -45,10 +45,6 @@ if [[ ${prompt,,} =~ ^(y|yes)$ ]]; then
   $STD rc-update add lighttpd default
   $STD rc-service lighttpd restart
   msg_ok "Lighttpd Started"
-
-  echo -e "Adminer is available at: ${BL}http://$(hostname -I | awk '{print $1}')/adminer${CL}"
-else
-  echo -e "Skipped Adminer Installation..."
 fi
 
 motd_ssh
