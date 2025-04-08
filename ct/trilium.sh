@@ -37,7 +37,7 @@ function update_script() {
 
     msg_info "Updating to ${RELEASE}"
     mkdir -p /opt/trilium_backup
-    mv /opt/trilium/db, /opt/trilium_backup/
+    mv /opt/trilium/db /opt/trilium_backup/
     rm -rf /opt/trilium
     cd /tmp
     curl -fsSL "https://github.com/TriliumNext/Notes/releases/download/v${RELEASE}/TriliumNextNotes-Server-v${RELEASE}-linux-x64.tar.xz" -o $(basename "https://github.com/TriliumNext/Notes/releases/download/v${RELEASE}/TriliumNextNotes-Server-v${RELEASE}-linux-x64.tar.xz")
