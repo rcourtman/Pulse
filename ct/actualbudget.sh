@@ -8,7 +8,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 APP="Actual Budget"
 var_tags="finance"
 var_cpu="2"
-var_ram="8192"
+var_ram="4096"
 var_disk="7"
 var_os="debian"
 var_version="12"
@@ -84,7 +84,7 @@ ACTUAL_HTTPS_CERT=/opt/actualbudget/selfhost.crt
 EOF
     fi
     cd /opt/actualbudget || exit
-    export NODE_OPTIONS="--max_old_space_size=4096"
+    export NODE_OPTIONS="--max_old_space_size=3072"
     $STD yarn install
     $STD yarn run build:server
     #$STD yarn workspaces focus @actual-app/sync-server --production
