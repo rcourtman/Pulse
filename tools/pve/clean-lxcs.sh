@@ -40,7 +40,7 @@ function clean_container() {
   header_info
   name=$(pct exec "$container" hostname)
   echo -e "${BL}[Info]${GN} Cleaning ${name} ${CL} \n"
-  pct exec $container -- bash -c "apt-get -y --purge autoremove && apt-get -y autoclean && bash <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/clean.sh) && rm -rf /var/lib/apt/lists/* && apt-get update"
+  pct exec "$container" -- bash -c "apt-get -y --purge autoremove && apt-get -y autoclean && bash <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/clean.sh) && rm -rf /var/lib/apt/lists/* && apt-get update"
 }
 for container in $(pct list | awk '{if(NR>1) print $1}'); do
   if [[ " ${excluded_containers[@]} " =~ " $container " ]]; then
@@ -56,18 +56,18 @@ for container in $(pct list | awk '{if(NR>1) print $1}'); do
       continue
     fi
 
-    status=$(pct status $container)
-    template=$(pct config $container | grep -q "template:" && echo "true" || echo "false")
+    status=$(pct status "$container")
+    template=$(pct config "$container" | grep -q "template:" && echo "true" || echo "false")
     if [ "$template" == "false" ] && [ "$status" == "status: stopped" ]; then
       echo -e "${BL}[Info]${GN} Starting${BL} $container ${CL} \n"
-      pct start $container
+      pct start "$container"
       echo -e "${BL}[Info]${GN} Waiting For${BL} $container${CL}${GN} To Start ${CL} \n"
       sleep 5
-      clean_container $container
+      clean_container "$container"
       echo -e "${BL}[Info]${GN} Shutting down${BL} $container ${CL} \n"
-      pct shutdown $container &
+      pct shutdown "$container" &
     elif [ "$status" == "status: running" ]; then
-      clean_container $container
+      clean_container "$container"
     fi
   fi
 done

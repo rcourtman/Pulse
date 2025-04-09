@@ -79,15 +79,15 @@ done
 
 # Add autodev settings
 CTID_CONFIG_PATH=/etc/pve/lxc/${CTID}.conf
-sed '/autodev/d' $CTID_CONFIG_PATH >CTID.conf
-cat CTID.conf >$CTID_CONFIG_PATH
+sed '/autodev/d' "$CTID_CONFIG_PATH" >CTID.conf
+cat CTID.conf >"$CTID_CONFIG_PATH"
 
-cat <<EOF >>$CTID_CONFIG_PATH
+cat <<EOF >>"$CTID_CONFIG_PATH"
 lxc.autodev: 1
 lxc.hook.autodev: bash -c '$HOOK_SCRIPT'
 EOF
 echo -e "\e[1;33m \nFinished....Reboot ${CTID} LXC to apply the changes.\n \e[0m"
 
 # In the Proxmox web shell run
-# bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/frigate-support.sh)"
+# bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/tools/pve/frigate-support.sh)"
 # Reboot the LXC to apply the changes
