@@ -11,7 +11,7 @@ if ! command -v pveversion >/dev/null 2>&1; then
   exit
 fi
 while true; do
-  read -p "Use to copy all data from a Home Assistant Core LXC to a Home Assistant Core LXC. Proceed(y/n)?" yn
+  read -p "Use to copy all data from a Home Assistant Core LXC to a Home Assistant Container LXC. Proceed(y/n)?" yn
   case $yn in
   [Yy]*) break ;;
   [Nn]*) exit ;;
@@ -34,6 +34,11 @@ function error_exit() {
   local FLAG="\e[91m[ERROR] \e[93m$EXIT@$LINE"
   msg "$FLAG $REASON"
   exit $EXIT
+}
+function warn() {
+  local REASON="\e[97m$1\e[39m"
+  local FLAG="\e[93m[WARNING]\e[39m"
+  msg "$FLAG $REASON"
 }
 function info() {
   local REASON="$1"
@@ -71,7 +76,7 @@ while [ -z "${CTID_FROM:+x}" ]; do
 done
 while [ -z "${CTID_TO:+x}" ]; do
   CTID_TO=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "$TITLE" --radiolist \
-    "\nWhich HA Core LXC would you like to copy TO?\n" \
+    "\nWhich HA Container LXC would you like to copy TO?\n" \
     16 $(($MSG_MAX_LENGTH + 23)) 6 \
     "${CTID_MENU[@]}" 3>&1 1>&2 2>&3) || exit
 done
@@ -84,26 +89,22 @@ done
 whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "$TITLE" --yesno \
   "Are you sure you want to copy data between the following LXCs?
 $CTID_FROM (${CTID_FROM_HOSTNAME}) -> $CTID_TO (${CTID_TO_HOSTNAME})
-Version: 2022.10.03" 13 50 || exit
+Version: 2022.10.02" 13 50 || exit
 info "Home Assistant Data from '$CTID_FROM' to '$CTID_TO'"
-if [ $(pct status $CTID_FROM | sed 's/.* //') == 'running' ]; then
-  msg "Stopping '$CTID_FROM'..."
-  pct stop $CTID_FROM
-fi
 if [ $(pct status $CTID_TO | sed 's/.* //') == 'running' ]; then
   msg "Stopping '$CTID_TO'..."
   pct stop $CTID_TO
 fi
 msg "Mounting Container Disks..."
+DOCKER_PATH=/var/lib/docker/volumes/hass_config/_data
 CORE_PATH=/root/.homeassistant
-CORE_PATH2=/root/
 CTID_FROM_PATH=$(pct mount $CTID_FROM | sed -n "s/.*'\(.*\)'/\1/p") ||
   die "There was a problem mounting the root disk of LXC '${CTID_FROM}'."
 [ -d "${CTID_FROM_PATH}${CORE_PATH}" ] ||
   die "Home Assistant directories in '$CTID_FROM' not found."
 CTID_TO_PATH=$(pct mount $CTID_TO | sed -n "s/.*'\(.*\)'/\1/p") ||
   die "There was a problem mounting the root disk of LXC '${CTID_TO}'."
-[ -d "${CTID_TO_PATH}${CORE_PATH2}" ] ||
+[ -d "${CTID_TO_PATH}${DOCKER_PATH}" ] ||
   die "Home Assistant directories in '$CTID_TO' not found."
 
 msg "Copying Data..."
@@ -116,11 +117,11 @@ RSYNC_OPTIONS=(
   --info=progress2
 )
 msg "<======== Docker Data ========>"
-rsync ${RSYNC_OPTIONS[*]} ${CTID_FROM_PATH}${CORE_PATH} ${CTID_TO_PATH}${CORE_PATH2}
+rsync ${RSYNC_OPTIONS[*]} ${CTID_FROM_PATH}${CORE_PATH} ${CTID_TO_PATH}${DOCKER_PATH}
 echo -en "\e[1A\e[0K\e[1A\e[0K"
 
 info "Successfully Transferred Data."
 
 # Use to copy all data from a Home Assistant Core LXC to a Home Assistant Container LXC
 # run from the Proxmox Shell
-# bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/copy-data/home-assistant-core-copy-data-home-assistant-core.sh)"
+# bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/mainmain/tools/copy-data//home-assistant-core-copy-data-home-assistant-container.sh)"

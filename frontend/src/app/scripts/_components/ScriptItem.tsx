@@ -14,12 +14,12 @@ import { Suspense } from "react";
 import { ResourceDisplay } from "./ResourceDisplay";
 import { getDisplayValueFromType } from "./ScriptInfoBlocks";
 import Alerts from "./ScriptItems/Alerts";
+import Buttons from "./ScriptItems/Buttons";
 import DefaultPassword from "./ScriptItems/DefaultPassword";
 import Description from "./ScriptItems/Description";
 import InstallCommand from "./ScriptItems/InstallCommand";
-import Tooltips from "./ScriptItems/Tooltips";
 import InterFaces from "./ScriptItems/InterFaces";
-import Buttons from "./ScriptItems/Buttons";
+import Tooltips from "./ScriptItems/Tooltips";
 
 interface ScriptItemProps {
   item: Script;
@@ -142,7 +142,9 @@ export function ScriptItem({ item, setSelectedScript }: ScriptItemProps) {
 
             <div className="mt-4 rounded-lg border shadow-sm">
               <div className="flex gap-3 px-4 py-2 bg-accent/25">
-                <h2 className="text-lg font-semibold">How to {item.type === "misc" ? "use" : "install"}</h2>
+                <h2 className="text-lg font-semibold">
+                  How to {item.type === "pve" ? "use" : item.type === "addon" ? "apply" : "install"}
+                </h2>
                 <Tooltips item={item} />
               </div>
               <Separator />

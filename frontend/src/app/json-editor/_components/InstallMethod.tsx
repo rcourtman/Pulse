@@ -1,12 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OperatingSystems } from "@/config/siteConfig";
 import { PlusCircle, Trash2 } from "lucide-react";
 import { memo, useCallback, useRef } from "react";
@@ -20,21 +14,29 @@ type InstallMethodProps = {
   setZodErrors: (zodErrors: z.ZodError | null) => void;
 };
 
-function InstallMethod({
-  script,
-  setScript,
-  setIsValid,
-  setZodErrors,
-}: InstallMethodProps) {
+function InstallMethod({ script, setScript, setIsValid, setZodErrors }: InstallMethodProps) {
   const cpuRefs = useRef<(HTMLInputElement | null)[]>([]);
   const ramRefs = useRef<(HTMLInputElement | null)[]>([]);
   const hddRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const addInstallMethod = useCallback(() => {
     setScript((prev) => {
+      const { type, slug } = prev;
+      const newMethodType = "default";
+
+      let scriptPath = "";
+
+      if (type === "pve") {
+        scriptPath = `tools/pve/${slug}.sh`;
+      } else if (type === "addon") {
+        scriptPath = `tools/addon/${slug}.sh`;
+      } else {
+        scriptPath = `${type}/${slug}.sh`;
+      }
+
       const method = InstallMethodSchema.parse({
-        type: "default",
-        script: `${prev.type}/${prev.slug}.sh`,
+        type: newMethodType,
+        script: scriptPath,
         resources: {
           cpu: null,
           ram: null,
@@ -43,6 +45,7 @@ function InstallMethod({
           version: null,
         },
       });
+
       return {
         ...prev,
         install_methods: [...prev.install_methods, method],
@@ -63,9 +66,7 @@ function InstallMethod({
 
             if (key === "type") {
               updatedMethod.script =
-                value === "alpine"
-                  ? `${prev.type}/alpine-${prev.slug}.sh`
-                  : `${prev.type}/${prev.slug}.sh`;
+                value === "alpine" ? `${prev.type}/alpine-${prev.slug}.sh` : `${prev.type}/${prev.slug}.sh`;
 
               // Set OS to Alpine and reset version if type is alpine
               if (value === "alpine") {
@@ -112,10 +113,7 @@ function InstallMethod({
       <h3 className="text-xl font-semibold">Install Methods</h3>
       {script.install_methods.map((method, index) => (
         <div key={index} className="space-y-2 border p-4 rounded">
-          <Select
-            value={method.type}
-            onValueChange={(value) => updateInstallMethod(index, "type", value)}
-          >
+          <Select value={method.type} onValueChange={(value) => updateInstallMethod(index, "type", value)}>
             <SelectTrigger>
               <SelectValue placeholder="Type" />
             </SelectTrigger>
@@ -205,9 +203,7 @@ function InstallMethod({
                 <SelectValue placeholder="Version" />
               </SelectTrigger>
               <SelectContent>
-                {OperatingSystems.find(
-                  (os) => os.name === method.resources.os,
-                )?.versions.map((version) => (
+                {OperatingSystems.find((os) => os.name === method.resources.os)?.versions.map((version) => (
                   <SelectItem key={version.slug} value={version.name}>
                     {version.name}
                   </SelectItem>
@@ -215,22 +211,12 @@ function InstallMethod({
               </SelectContent>
             </Select>
           </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            type="button"
-            onClick={() => removeInstallMethod(index)}
-          >
+          <Button variant="destructive" size="sm" type="button" onClick={() => removeInstallMethod(index)}>
             <Trash2 className="mr-2 h-4 w-4" /> Remove Install Method
           </Button>
         </div>
       ))}
-      <Button
-        type="button"
-        size="sm"
-        disabled={script.install_methods.length >= 2}
-        onClick={addInstallMethod}
-      >
+      <Button type="button" size="sm" disabled={script.install_methods.length >= 2} onClick={addInstallMethod}>
         <PlusCircle className="mr-2 h-4 w-4" /> Add Install Method
       </Button>
     </>

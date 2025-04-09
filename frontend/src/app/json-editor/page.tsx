@@ -5,18 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { fetchCategories } from "@/lib/data";
@@ -66,29 +56,37 @@ export default function JSONGenerator() {
       .catch((error) => console.error("Error fetching categories:", error));
   }, []);
 
-  const updateScript = useCallback(
-    (key: keyof Script, value: Script[keyof Script]) => {
-      setScript((prev) => {
-        const updated = { ...prev, [key]: value };
+  const updateScript = useCallback((key: keyof Script, value: Script[keyof Script]) => {
+    setScript((prev) => {
+      const updated = { ...prev, [key]: value };
 
-        if (key === "type" || key === "slug") {
-          updated.install_methods = updated.install_methods.map((method) => ({
+      if (updated.slug && updated.type) {
+        updated.install_methods = updated.install_methods.map((method) => {
+          let scriptPath = "";
+
+          if (updated.type === "pve") {
+            scriptPath = `tools/pve/${updated.slug}.sh`;
+          } else if (updated.type === "addon") {
+            scriptPath = `tools/addon/${updated.slug}.sh`;
+          } else if (method.type === "alpine") {
+            scriptPath = `${updated.type}/alpine-${updated.slug}.sh`;
+          } else {
+            scriptPath = `${updated.type}/${updated.slug}.sh`;
+          }
+
+          return {
             ...method,
-            script:
-              method.type === "alpine"
-                ? `${updated.type}/alpine-${updated.slug}.sh`
-                : `${updated.type}/${updated.slug}.sh`,
-          }));
-        }
+            script: scriptPath,
+          };
+        });
+      }
 
-        const result = ScriptSchema.safeParse(updated);
-        setIsValid(result.success);
-        setZodErrors(result.success ? null : result.error);
-        return updated;
-      });
-    },
-    [],
-  );
+      const result = ScriptSchema.safeParse(updated);
+      setIsValid(result.success);
+      setZodErrors(result.success ? null : result.error);
+      return updated;
+    });
+  }, []);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(JSON.stringify(script, null, 2));
@@ -101,13 +99,13 @@ export default function JSONGenerator() {
     const jsonString = JSON.stringify(script, null, 2);
     const blob = new Blob([jsonString], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-  
+
     const a = document.createElement("a");
     a.href = url;
     a.download = `${script.slug || "script"}.json`;
     document.body.appendChild(a);
     a.click();
-  
+
     URL.revokeObjectURL(url);
     document.body.removeChild(a);
   }, [script]);
@@ -120,16 +118,13 @@ export default function JSONGenerator() {
   );
 
   const formattedDate = useMemo(
-    () =>
-      script.date_created ? format(script.date_created, "PPP") : undefined,
+    () => (script.date_created ? format(script.date_created, "PPP") : undefined),
     [script.date_created],
   );
 
   const validationAlert = useMemo(
     () => (
-      <Alert
-        className={cn("text-black", isValid ? "bg-green-100" : "bg-red-100")}
-      >
+      <Alert className={cn("text-black", isValid ? "bg-green-100" : "bg-red-100")}>
         <AlertTitle>{isValid ? "Valid JSON" : "Invalid JSON"}</AlertTitle>
         <AlertDescription>
           {isValid
@@ -160,21 +155,13 @@ export default function JSONGenerator() {
               <Label>
                 Name <span className="text-red-500">*</span>
               </Label>
-              <Input
-                placeholder="Example"
-                value={script.name}
-                onChange={(e) => updateScript("name", e.target.value)}
-              />
+              <Input placeholder="Example" value={script.name} onChange={(e) => updateScript("name", e.target.value)} />
             </div>
             <div>
               <Label>
                 Slug <span className="text-red-500">*</span>
               </Label>
-              <Input
-                placeholder="example"
-                value={script.slug}
-                onChange={(e) => updateScript("slug", e.target.value)}
-              />
+              <Input placeholder="example" value={script.slug} onChange={(e) => updateScript("slug", e.target.value)} />
             </div>
           </div>
           <div>
@@ -197,11 +184,7 @@ export default function JSONGenerator() {
               onChange={(e) => updateScript("description", e.target.value)}
             />
           </div>
-          <Categories
-            script={script}
-            setScript={setScript}
-            categories={categories}
-          />
+          <Categories script={script} setScript={setScript} categories={categories} />
           <div className="flex gap-2">
             <div className="flex flex-col gap-2 w-full">
               <Label>Date Created</Label>
@@ -209,10 +192,7 @@ export default function JSONGenerator() {
                 <PopoverTrigger asChild className="flex-1">
                   <Button
                     variant={"outline"}
-                    className={cn(
-                      "pl-3 text-left font-normal w-full",
-                      !script.date_created && "text-muted-foreground",
-                    )}
+                    className={cn("pl-3 text-left font-normal w-full", !script.date_created && "text-muted-foreground")}
                   >
                     {formattedDate || <span>Pick a date</span>}
                     <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
@@ -230,38 +210,26 @@ export default function JSONGenerator() {
             </div>
             <div className="flex flex-col gap-2 w-full">
               <Label>Type</Label>
-              <Select
-                value={script.type}
-                onValueChange={(value) => updateScript("type", value)}
-              >
+              <Select value={script.type} onValueChange={(value) => updateScript("type", value)}>
                 <SelectTrigger className="flex-1">
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ct">LXC Container</SelectItem>
                   <SelectItem value="vm">Virtual Machine</SelectItem>
-                  <SelectItem value="misc">Miscellaneous</SelectItem>
+                  <SelectItem value="pve">PVE-Tool</SelectItem>
+                  <SelectItem value="addon">Add-On</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <div className="w-full flex gap-5">
             <div className="flex items-center space-x-2">
-              <Switch
-                checked={script.updateable}
-                onCheckedChange={(checked) =>
-                  updateScript("updateable", checked)
-                }
-              />
+              <Switch checked={script.updateable} onCheckedChange={(checked) => updateScript("updateable", checked)} />
               <label>Updateable</label>
             </div>
             <div className="flex items-center space-x-2">
-              <Switch
-                checked={script.privileged}
-                onCheckedChange={(checked) =>
-                  updateScript("privileged", checked)
-                }
-              />
+              <Switch checked={script.privileged} onCheckedChange={(checked) => updateScript("privileged", checked)} />
               <label>Privileged</label>
             </div>
           </div>
@@ -269,12 +237,7 @@ export default function JSONGenerator() {
             placeholder="Interface Port"
             type="number"
             value={script.interface_port || ""}
-            onChange={(e) =>
-              updateScript(
-                "interface_port",
-                e.target.value ? Number(e.target.value) : null,
-              )
-            }
+            onChange={(e) => updateScript("interface_port", e.target.value ? Number(e.target.value) : null)}
           />
           <div className="flex gap-2">
             <Input
@@ -285,17 +248,10 @@ export default function JSONGenerator() {
             <Input
               placeholder="Documentation URL"
               value={script.documentation || ""}
-              onChange={(e) =>
-                updateScript("documentation", e.target.value || null)
-              }
+              onChange={(e) => updateScript("documentation", e.target.value || null)}
             />
           </div>
-          <InstallMethod
-            script={script}
-            setScript={setScript}
-            setIsValid={setIsValid}
-            setZodErrors={setZodErrors}
-          />
+          <InstallMethod script={script} setScript={setScript} setIsValid={setIsValid} setZodErrors={setZodErrors} />
           <h3 className="text-xl font-semibold">Default Credentials</h3>
           <Input
             placeholder="Username"
@@ -317,34 +273,21 @@ export default function JSONGenerator() {
               })
             }
           />
-          <Note
-            script={script}
-            setScript={setScript}
-            setIsValid={setIsValid}
-            setZodErrors={setZodErrors}
-          />
+          <Note script={script} setScript={setScript} setIsValid={setIsValid} setZodErrors={setZodErrors} />
         </form>
       </div>
       <div className="w-1/2 p-4 bg-background overflow-y-auto">
         {validationAlert}
         <div className="relative">
           <div className="absolute right-2 top-2 flex gap-1">
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={handleCopy}
-            >
+            <Button size="icon" variant="outline" onClick={handleCopy}>
               {isCopied ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
             </Button>
-            <Button
-              size="icon"
-              variant="outline"
-              onClick={handleDownload}
-            >
+            <Button size="icon" variant="outline" onClick={handleDownload}>
               <Download className="h-4 w-4" />
             </Button>
           </div>
-        
+
           <pre className="mt-4 p-4 bg-secondary rounded shadow overflow-x-scroll">
             {JSON.stringify(script, null, 2)}
           </pre>

@@ -5,7 +5,7 @@
 # License: MIT
 # https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 
-# Use to copy all data from one Home Assistant LXC to another
+# Use to copy all data from one Zigbee2MQTT LXC to another
 # run from the Proxmox Shell
 clear
 if ! command -v pveversion >/dev/null 2>&1; then
@@ -13,7 +13,7 @@ if ! command -v pveversion >/dev/null 2>&1; then
   exit
 fi
 while true; do
-  read -p "Use to copy all data from one Home Assistant LXC to another. Proceed(y/n)?" yn
+  read -p "Use to copy all data from one Zigbee2MQTT LXC to another. Proceed(y/n)?" yn
   case $yn in
   [Yy]*) break ;;
   [Nn]*) exit ;;
@@ -60,7 +60,7 @@ function cleanup() {
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
 
-TITLE="Home Assistant LXC Data Copy"
+TITLE="Zigbee2MQTT LXC Data Copy"
 while read -r line; do
   TAG=$(echo "$line" | awk '{print $1}')
   ITEM=$(echo "$line" | awk '{print substr($0,36)}')
@@ -72,13 +72,13 @@ while read -r line; do
 done < <(pct list | awk 'NR>1')
 while [ -z "${CTID_FROM:+x}" ]; do
   CTID_FROM=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "$TITLE" --radiolist \
-    "\nWhich HA LXC would you like to copy FROM?\n" \
+    "\nWhich Zigbee2MQTT LXC would you like to copy FROM?\n" \
     16 $(($MSG_MAX_LENGTH + 23)) 6 \
     "${CTID_MENU[@]}" 3>&1 1>&2 2>&3) || exit
 done
 while [ -z "${CTID_TO:+x}" ]; do
   CTID_TO=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "$TITLE" --radiolist \
-    "\nWhich HA LXC would you like to copy TO?\n" \
+    "\nWhich Zigbee2MQTT LXC would you like to copy TO?\n" \
     16 $(($MSG_MAX_LENGTH + 23)) 6 \
     "${CTID_MENU[@]}" 3>&1 1>&2 2>&3) || exit
 done
@@ -92,24 +92,24 @@ whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "$TITLE" --
   "Are you sure you want to copy data between the following LXCs?
 $CTID_FROM (${CTID_FROM_HOSTNAME}) -> $CTID_TO (${CTID_TO_HOSTNAME})
 Version: 2022.01.23" 13 50 || exit
-info "Home Assistant Data from '$CTID_FROM' to '$CTID_TO'"
+info "Zigbee2MQTT Data from '$CTID_FROM' to '$CTID_TO'"
 if [ $(pct status $CTID_TO | sed 's/.* //') == 'running' ]; then
   msg "Stopping '$CTID_TO'..."
   pct stop $CTID_TO
 fi
 msg "Mounting Container Disks..."
-DOCKER_PATH=/var/lib/docker/volumes/hass_config/
+DATA_PATH=/opt/zigbee2mqtt/data/
 CTID_FROM_PATH=$(pct mount $CTID_FROM | sed -n "s/.*'\(.*\)'/\1/p") ||
   die "There was a problem mounting the root disk of LXC '${CTID_FROM}'."
-[ -d "${CTID_FROM_PATH}${DOCKER_PATH}" ] ||
-  die "Home Assistant directories in '$CTID_FROM' not found."
+[ -d "${CTID_FROM_PATH}${DATA_PATH}" ] ||
+  die "Zigbee2igbee2MQTT directories in '$CTID_FROM' not found."
 CTID_TO_PATH=$(pct mount $CTID_TO | sed -n "s/.*'\(.*\)'/\1/p") ||
   die "There was a problem mounting the root disk of LXC '${CTID_TO}'."
-[ -d "${CTID_TO_PATH}${DOCKER_PATH}" ] ||
-  die "Home Assistant directories in '$CTID_TO' not found."
+[ -d "${CTID_TO_PATH}${DATA_PATH}" ] ||
+  die "Zigbee2MQTT directories in '$CTID_TO' not found."
 
-rm -rf ${CTID_TO_PATH}${DOCKER_PATH}
-mkdir ${CTID_TO_PATH}${DOCKER_PATH}
+#rm -rf ${CTID_TO_PATH}${DATA_PATH}
+#mkdir ${CTID_TO_PATH}${DATA_PATH}
 
 msg "Copying Data Between Containers..."
 RSYNC_OPTIONS=(
@@ -120,12 +120,12 @@ RSYNC_OPTIONS=(
   --no-inc-recursive
   --info=progress2
 )
-msg "<======== Docker Data ========>"
-rsync ${RSYNC_OPTIONS[*]} ${CTID_FROM_PATH}${DOCKER_PATH} ${CTID_TO_PATH}${DOCKER_PATH}
+msg "<======== Zigbee2MQTT Data ========>"
+rsync ${RSYNC_OPTIONS[*]} ${CTID_FROM_PATH}${DATA_PATH} ${CTID_TO_PATH}${DATA_PATH}
 echo -en "\e[1A\e[0K\e[1A\e[0K"
 
 info "Successfully Transferred Data."
 
-# Use to copy all data from one Home Assistant LXC to another
+# Use to copy all data from one Zigbee2MQTT LXC to another
 # run from the Proxmox Shell
-# bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/copy-data/home-assistant-container-copy-data-home-assistant-container.sh)"
+# bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/mainmain/tools/copy-data//z2m-copy-data-z2m.sh)"

@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Category } from "@/lib/types";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useRouter } from "next/navigation";
+import React, { useEffect, useState } from "react";
 
 const defaultLogo = "/default-logo.png"; // Fallback logo path
 const MAX_DESCRIPTION_LENGTH = 100; // Set max length for description
@@ -17,11 +17,11 @@ const formattedBadge = (type: string) => {
     case "vm":
       return <Badge className="text-blue-500/75 border-blue-500/75 badge">VM</Badge>;
     case "ct":
-      return (
-        <Badge className="text-yellow-500/75 border-yellow-500/75 badge">LXC</Badge>
-      );
-    case "misc":
-      return <Badge className="text-green-500/75 border-green-500/75 badge">MISC</Badge>;
+      return <Badge className="text-yellow-500/75 border-yellow-500/75 badge">LXC</Badge>;
+    case "pve":
+      return <Badge className="text-orange-500/75 border-orange-500/75 badge">PVE</Badge>;
+    case "addon":
+      return <Badge className="text-green-500/75 border-green-500/75 badge">ADDON</Badge>;
   }
   return null;
 };
@@ -100,9 +100,7 @@ const CategoryView = () => {
   };
 
   const truncateDescription = (text: string) => {
-    return text.length > MAX_DESCRIPTION_LENGTH
-      ? `${text.slice(0, MAX_DESCRIPTION_LENGTH)}...`
-      : text;
+    return text.length > MAX_DESCRIPTION_LENGTH ? `${text.slice(0, MAX_DESCRIPTION_LENGTH)}...` : text;
   };
 
   const renderResources = (script: any) => {
@@ -111,9 +109,24 @@ const CategoryView = () => {
     const hdd = script.install_methods[0]?.resources.hdd;
 
     const resourceParts = [];
-    if (cpu) resourceParts.push(<span key="cpu"><b>CPU:</b> {cpu}vCPU</span>);
-    if (ram) resourceParts.push(<span key="ram"><b>RAM:</b> {ram}MB</span>);
-    if (hdd) resourceParts.push(<span key="hdd"><b>HDD:</b> {hdd}GB</span>);
+    if (cpu)
+      resourceParts.push(
+        <span key="cpu">
+          <b>CPU:</b> {cpu}vCPU
+        </span>,
+      );
+    if (ram)
+      resourceParts.push(
+        <span key="ram">
+          <b>RAM:</b> {ram}MB
+        </span>,
+      );
+    if (hdd)
+      resourceParts.push(
+        <span key="hdd">
+          <b>HDD:</b> {hdd}GB
+        </span>,
+      );
 
     return resourceParts.length > 0 ? (
       <div className="text-sm text-gray-400">

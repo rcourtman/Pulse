@@ -6,6 +6,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import { basePath } from "@/config/siteConfig";
 import { fetchCategories } from "@/lib/data";
 import { Category } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -15,18 +16,17 @@ import React from "react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { DialogTitle } from "./ui/dialog";
-import { basePath } from "@/config/siteConfig";
 
 export const formattedBadge = (type: string) => {
   switch (type) {
     case "vm":
       return <Badge className="text-blue-500/75 border-blue-500/75">VM</Badge>;
     case "ct":
-      return (
-        <Badge className="text-yellow-500/75 border-yellow-500/75">LXC</Badge>
-      );
-    case "misc":
-      return <Badge className="text-green-500/75 border-green-500/75">MISC</Badge>;
+      return <Badge className="text-yellow-500/75 border-yellow-500/75">LXC</Badge>;
+    case "pve":
+      return <Badge className="text-orange-500/75 border-orange-500/75">PVE</Badge>;
+    case "addon":
+      return <Badge className="text-green-500/75 border-green-500/75">ADDON</Badge>;
   }
   return null;
 };
@@ -84,14 +84,9 @@ export default function CommandMenu() {
         <DialogTitle className="sr-only">Search scripts</DialogTitle>
         <CommandInput placeholder="Search for a script..." />
         <CommandList>
-          <CommandEmpty>
-            {isLoading ? "Loading..." : "No scripts found."}
-          </CommandEmpty>
+          <CommandEmpty>{isLoading ? "Loading..." : "No scripts found."}</CommandEmpty>
           {links.map((category) => (
-            <CommandGroup
-              key={`category:${category.name}`}
-              heading={category.name}
-            >
+            <CommandGroup key={`category:${category.name}`} heading={category.name}>
               {category.scripts.map((script) => (
                 <CommandItem
                   key={`script:${script.slug}`}
@@ -104,10 +99,7 @@ export default function CommandMenu() {
                   <div className="flex gap-2" onClick={() => setOpen(false)}>
                     <Image
                       src={script.logo || `/${basePath}/logo.png`}
-                      onError={(e) =>
-                        ((e.currentTarget as HTMLImageElement).src =
-                          `/${basePath}/logo.png`)
-                      }
+                      onError={(e) => ((e.currentTarget as HTMLImageElement).src = `/${basePath}/logo.png`)}
                       unoptimized
                       width={16}
                       height={16}
