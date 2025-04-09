@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 
 # Copyright (c) 2021-2025 community-scripts ORG
@@ -123,7 +122,7 @@ function check_root() {
 }
 
 function pve_check() {
-  if ! pveversion | grep -Eq "pve-manager/8\.[1-4](\.[0-9]+)*"; then
+  if ! pveversion | grep -Eq "pve-manager/8\.[1-3](\.[0-9]+)*"; then
     msg_error "${CROSS}${RD}This version of Proxmox Virtual Environment is not supported"
     echo -e "Requires Proxmox Virtual Environment Version 8.1 or later."
     echo -e "Exiting..."
