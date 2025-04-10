@@ -7,12 +7,12 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 
 ## App Default Values
 APP="Wordpress"
-var_tags="blog;cms"
-var_disk="5"
-var_cpu="2"
-var_ram="2048"
-var_os="debian"
-var_version="12"
+var_tags="${var_tags:-blog;cms}"
+var_disk="${var_disk:-5}"
+var_cpu="${var_cpu:-2}"
+var_ram="${var_ram:-2048}"
+var_os="${var_os:-debian}"
+var_version="${var_version:-12}"
 
 header_info "$APP"
 variables

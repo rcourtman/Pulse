@@ -6,12 +6,12 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://silverbullet.md
 
 APP="Silverbullet"
-var_tags="notes"
-var_cpu="1"
-var_disk="2"
-var_ram="512"
-var_os="debian"
-var_version="12"
+var_tags="${var_tags:-notes}"
+var_cpu="${var_cpu:-1}"
+var_disk="${var_disk:-2}"
+var_ram="${var_ram:-512}"
+var_os="${var_os:-debian}"
+var_version="${var_version:-12}"
 
 header_info "${APP}"
 variables

@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://frigate.video/
 
 APP="Frigate"
-var_tags="nvr"
-var_cpu="4"
-var_ram="4096"
-var_disk="20"
-var_os="debian"
-var_version="11"
-var_unprivileged="0"
+var_tags="${var_tags:-nvr}"
+var_cpu="${var_cpu:-4}"
+var_ram="${var_ram:-4096}"
+var_disk="${var_disk:-20}"
+var_os="${var_os:-debian}"
+var_version="${var_version:-11}"
+var_unprivileged="${var_unprivileged:-0}"
 
 header_info "$APP"
 variables

@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://nodebb.org/
 
 APP="NodeBB"
-var_tags="forum"
-var_disk="10"
-var_cpu="4"
-var_ram="2048"
-var_os="ubuntu"
-var_version="24.04"
-var_unprivileged="1"
+var_tags="${var_tags:-forum}"
+var_disk="${var_disk:-10}"
+var_cpu="${var_cpu:-4}"
+var_ram="${var_ram:-2048}"
+var_os="${var_os:-ubuntu}"
+var_version="${var_version:-24.04}"
+var_unprivileged="${var_unprivileged:-1}"
 
 # App Output & Base Settings
 header_info "$APP"

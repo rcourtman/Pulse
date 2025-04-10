@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://github.com/ZoeyVid/NPMplus
 
 APP="NPMplus"
-var_tags="proxy;nginx"
-var_cpu="1"
-var_ram="512"
-var_disk="3"
-var_os="alpine"
-var_version="3.21"
-var_unprivileged="1"
+var_tags="${var_tags:-proxy;nginx}"
+var_cpu="${var_cpu:-1}"
+var_ram="${var_ram:-512}"
+var_disk="${var_disk:-3}"
+var_os="${var_os:-alpine}"
+var_version="${var_version:-3.21}"
+var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
 variables

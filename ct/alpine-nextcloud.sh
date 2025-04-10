@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://nextcloud.com/
 
 APP="Alpine-Nextcloud"
-var_tags="alpine;cloud"
-var_cpu="2"
-var_ram="1024"
-var_disk="2"
-var_os="alpine"
-var_version="3.21"
-var_unprivileged="1"
+var_tags="${var_tags:-alpine;cloud}"
+var_cpu="${var_cpu:-2}"
+var_ram="${var_ram:-1024}"
+var_disk="${var_disk:-2}"
+var_os="${var_os:-alpine}"
+var_version="${var_version:-3.21}"
+var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
 variables

@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://www.microsoft.com/en-us/sql-server/sql-server-2022
 
 APP="SQL Server 2022"
-var_tags="sql"
-var_cpu="1"
-var_ram="2048"
-var_disk="10"
-var_os="ubuntu"
-var_version="22.04"
-var_unprivileged="0"
+var_tags="${var_tags:-sql}"
+var_cpu="${var_cpu:-1}"
+var_ram="${var_ram:-2048}"
+var_disk="${var_disk:-10}"
+var_os="${var_os:-ubuntu}"
+var_version="${var_version:-22.04}"
+var_unprivileged="${var_unprivileged:-0}"
 
 header_info "$APP"
 variables

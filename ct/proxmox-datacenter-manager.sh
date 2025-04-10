@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: Proxmox Server Solution GmbH
 
 APP="Proxmox-Datacenter-Manager"
-var_tags="datacenter"
-var_cpu="2"
-var_ram="2048"
-var_disk="10"
-var_os="debian"
-var_version="12"
-var_unprivileged="1"
+var_tags="${var_tags:-datacenter}"
+var_cpu="${var_cpu:-2}"
+var_ram="${var_ram:-2048}"
+var_disk="${var_disk:-10}"
+var_os="${var_os:-debian}"
+var_version="${var_version:-12}"
+var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
 variables

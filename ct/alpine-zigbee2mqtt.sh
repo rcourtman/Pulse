@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://www.zigbee2mqtt.io/
 
 APP="Alpine-Zigbee2MQTT"
-var_tags="alpine;zigbee;mqtt;smarthome"
-var_disk="0.3"
-var_cpu="1"
-var_ram="256"
-var_os="alpine"
-var_version="3.21"
-var_unprivileged="0"
+var_tags="${var_tags:-alpine;zigbee;mqtt;smarthome}"
+var_disk="${var_disk:-0.3}"
+var_cpu="${var_cpu:-1}"
+var_ram="${var_ram:-256}"
+var_os="${var_os:-alpine}"
+var_version="${var_version:-3.21}"
+var_unprivileged="${var_unprivileged:-0}"
 
 header_info "$APP"
 variables

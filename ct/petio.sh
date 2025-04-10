@@ -6,12 +6,12 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://petio.tv/
 
 APP="Petio"
-var_tags="media"
-var_cpu="2"
-var_ram="1024"
-var_disk="4"
-var_os="ubuntu"
-var_version="20.04"
+var_tags="${var_tags:-media}"
+var_cpu="${var_cpu:-2}"
+var_ram="${var_ram:-1024}"
+var_disk="${var_disk:-4}"
+var_os="${var_os:-ubuntu}"
+var_version="${var_version:-20.04}"
 
 header_info "$APP"
 variables

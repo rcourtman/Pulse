@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://www.docker.com/
 
 APP="Alpine-Docker"
-var_tags="docker;alpine"
-var_cpu="1"
-var_ram="1024"
-var_disk="2"
-var_os="alpine"
-var_version="3.21"
-var_unprivileged="1"
+var_tags="${var_tags:-docker;alpine}"
+var_cpu="${var_cpu:-1}"
+var_ram="${var_ram:-1024}"
+var_disk="${var_disk:-2}"
+var_os="${var_os:-alpine}"
+var_version="${var_version:-3.21}"
+var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
 variables

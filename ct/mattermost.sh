@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://mattermost.com/
 
 APP="Mattermost"
-var_tags="collaboration"
-var_cpu="1"
-var_ram="2048"
-var_disk="8"
-var_os="ubuntu"
-var_version="24.04"
-var_unprivileged="1"
+var_tags="${var_tags:-collaboration}"
+var_cpu="${var_cpu:-1}"
+var_ram="${var_ram:-2048}"
+var_disk="${var_disk:-8}"
+var_os="${var_os:-ubuntu}"
+var_version="${var_version:-24.04}"
+var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
 variables

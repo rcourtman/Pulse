@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://shinobi.video/
 
 APP="Shinobi"
-var_tags="nvr"
-var_cpu="2"
-var_ram="2048"
-var_disk="8"
-var_os="ubuntu"
-var_version="22.04"
-var_unprivileged="0"
+var_tags="${var_tags:-nvr}"
+var_cpu="${var_cpu:-2}"
+var_ram="${var_ram:-2048}"
+var_disk="${var_disk:-8}"
+var_os="${var_os:-ubuntu}"
+var_version="${var_version:-22.04}"
+var_unprivileged="${var_unprivileged:-0}"
 
 header_info "$APP"
 variables

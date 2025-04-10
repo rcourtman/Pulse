@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://goauthentik.io/
 
 APP="Authentik"
-var_tags="identity-provider"
-var_disk="12"
-var_cpu="6"
-var_ram="8192"
-var_os="debian"
-var_version="12"
-var_unprivileged="1"
+var_tags="${var_tags:-identity-provider}"
+var_disk="${var_disk:-12}"
+var_cpu="${var_cpu:-6}"
+var_ram="${var_ram:-8192}"
+var_os="${var_os:-debian}"
+var_version="${var_version:-12}"
+var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
 variables

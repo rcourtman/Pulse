@@ -6,13 +6,13 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://www.usememos.com/
 
 APP="Memos"
-var_tags="notes"
-var_cpu="2"
-var_ram="3072"
-var_disk="7"
-var_os="debian"
-var_version="12"
-var_unprivileged="1"
+var_tags="${var_tags:-notes}"
+var_cpu="${var_cpu:-2}"
+var_ram="${var_ram:-3072}"
+var_disk="${var_disk:-7}"
+var_os="${var_os:-debian}"
+var_version="${var_version:-12}"
+var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
 variables
