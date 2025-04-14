@@ -36,7 +36,7 @@ msg_info "Installing PHP"
 $STD apt-get remove -y php8.2*
 $STD apt-get install -y \
     php8.3 \
-    php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,curl,zip,intl,fpm}
+    php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,curl,zip,intl,fpm,redis}
 msg_info "Installed PHP"
 
 msg_info "Installing Composer"
