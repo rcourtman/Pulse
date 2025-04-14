@@ -8,7 +8,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 APP="Omada"
 var_tags="${var_tags:-tp-link;controller}"
 var_cpu="${var_cpu:-2}"
-var_ram="${var_ram:-2048}"
+var_ram="${var_ram:-3072}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-12}"
@@ -53,17 +53,18 @@ function update_script() {
   fi
 
   msg_info "Updating Omada Controller"
-  latest_url=$(curl -fsSL "https://support.omadanetworks.com/en/download/software/omada-controller/" | grep -o 'https://static\.tp-link\.com/upload/software/[^"]*linux_x64[^"]*\.deb' | head -n 1)
-  latest_version=$(basename "$latest_url")
-  if [ -z "${latest_version}" ]; then
-    msg_error "It seems that the server (tp-link.com) might be down. Please try again at a later time."
-    exit
+  OMADA_URL=$(curl -fsSL "https://support.omadanetworks.com/en/download/software/omada-controller/" |
+    grep -o 'https://static\.tp-link\.com/upload/software/[^"]*linux_x64[^"]*\.deb' |
+    head -n1)
+  OMADA_PKG=$(basename "$OMADA_URL")
+  if [ -z "$OMADA_PKG" ]; then
+    msg_error "Could not retrieve Omada package – server may be down."
+    exit 1
   fi
-
-  curl -fsSL "${latest_url}" -O
+  curl -fsSL "$OMADA_URL" -o "$OMADA_PKG"
   export DEBIAN_FRONTEND=noninteractive
-  $STD dpkg -i ${latest_version}
-  rm -rf ${latest_version}
+  $STD dpkg -i "$OMADA_PKG"
+  rm -f "$OMADA_PKG"
   msg_ok "Updated Omada Controller"
 }
 
