@@ -25,18 +25,18 @@ $STD apt-get install -y \
     redis-server
 msg_ok "Installed Dependencies"
 
-msg_info "Adding PHP8.4 Repository"
+msg_info "Adding PHP Repository"
 $STD curl -sSLo /tmp/debsuryorg-archive-keyring.deb https://packages.sury.org/debsuryorg-archive-keyring.deb
 $STD dpkg -i /tmp/debsuryorg-archive-keyring.deb
 $STD sh -c 'echo "deb [signed-by=/usr/share/keyrings/deb.sury.org-php.gpg] https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
 $STD apt-get update
-msg_ok "Added PHP8.4 Repository"
+msg_ok "Added PHP Repository"
 
 msg_info "Installing PHP"
 $STD apt-get remove -y php8.2*
 $STD apt-get install -y \
-    php8.4 \
-    php8.4-{common,cli,gd,mysql,mbstring,bcmath,xml,curl,zip,intl,fpm}
+    php8.3 \
+    php8.3-{common,cli,gd,mysql,mbstring,bcmath,xml,curl,zip,intl,fpm}
 msg_info "Installed PHP"
 
 msg_info "Installing Composer"
@@ -78,13 +78,7 @@ $STD php artisan migrate --force --seed
 msg_ok "Set up database"
 
 msg_info "Creating Admin User"
-$STD php artisan p:user:create <<EOF
-admin@paymenter.org
-paymenter
-admin
-paymenter
-0
-EOF
+$STD php artisan app:user:create paymenter admin admin@paymenter.org paymenter 1 -q
 msg_ok "Created Admin User"
 
 msg_info "Configuring Nginx"
@@ -103,7 +97,7 @@ server {
 
     location ~ \.php\$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include fastcgi_params;
     }
@@ -140,7 +134,8 @@ RestartSec=5s
 [Install]
 WantedBy=multi-user.target
 EOF
-$STD systemctl enable --now paymenter
+systemctl enable --now paymenter
+systemctl enable --now redis-server
 msg_ok "Setup Service"
 
 msg_info "Cleaning up"
