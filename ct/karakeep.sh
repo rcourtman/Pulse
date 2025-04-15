@@ -40,7 +40,7 @@ function update_script() {
     if [[ "${PREV_RELEASE}" < 0.23.0 ]]; then
       $STD apt-get install -y graphicsmagick ghostscript
     fi
-    cd /opt || exit
+    cd /opt
     if [[ -f /opt/karakeep/.env ]] && [[ ! -f /etc/karakeep/karakeep.env ]]; then
       mkdir -p /etc/karakeep
       mv /opt/karakeep/.env /etc/karakeep/karakeep.env
@@ -49,14 +49,14 @@ function update_script() {
     curl -fsSL "https://github.com/karakeep-app/karakeep/archive/refs/tags/v${RELEASE}.zip" -o "v${RELEASE}.zip"
     unzip -q "v${RELEASE}.zip"
     mv karakeep-"${RELEASE}" /opt/karakeep
-    cd /opt/karakeep/apps/web || exit
+    cd /opt/karakeep/apps/web
     $STD pnpm install --frozen-lockfile
     $STD pnpm exec next build --experimental-build-mode compile
     cp -r /opt/karakeep/apps/web/.next/standalone/apps/web/server.js /opt/karakeep/apps/web
-    cd /opt/karakeep/apps/workers || exit
+    cd /opt/karakeep/apps/workers
     $STD pnpm install --frozen-lockfile
     export DATA_DIR=/opt/karakeep_data
-    cd /opt/karakeep/packages/db || exit
+    cd /opt/karakeep/packages/db
     $STD pnpm migrate
     sed -i "s/SERVER_VERSION=${PREV_RELEASE}/SERVER_VERSION=${RELEASE}/" /etc/karakeep/karakeep.env
     msg_ok "Updated ${APP} to v${RELEASE}"

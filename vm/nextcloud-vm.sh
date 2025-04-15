@@ -46,7 +46,7 @@ THIN="discard=on,ssd=1"
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 trap cleanup EXIT
-trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT 
+trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT
 trap 'post_update_to_api "failed" "TERMINATED"' SIGTERM
 function error_handler() {
   local exit_code="$?"
@@ -110,7 +110,7 @@ function pve_check() {
     echo -e "Exiting..."
     sleep 2
     exit
-fi
+  fi
 }
 
 function arch_check() {
@@ -380,7 +380,7 @@ else
     STORAGE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Storage Pools" --radiolist \
       "Which storage pool you would like to use for ${HN}?\nTo make a selection, use the Spacebar.\n" \
       16 $(($MSG_MAX_LENGTH + 23)) 6 \
-      "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3) || exit
+      "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3)
   done
 fi
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."

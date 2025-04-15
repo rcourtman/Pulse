@@ -51,7 +51,7 @@ while [ -z "${CTID:+x}" ]; do
   CTID=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Containers on $NODE" --radiolist \
     "\nSelect a container to add NetBird to:\n" \
     16 $(($MSG_MAX_LENGTH + 23)) 6 \
-    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3) || exit
+    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3)
 done
 
 LXC_STATUS=$(pct status "$CTID" | awk '{print $2}')
@@ -84,7 +84,7 @@ curl -fsSL "https://pkgs.netbird.io/debian/public.key" | gpg --dearmor >/usr/sha
 echo "deb [signed-by=/usr/share/keyrings/netbird-archive-keyring.gpg] https://pkgs.netbird.io/debian stable main" >/etc/apt/sources.list.d/netbird.list
 apt-get update &>/dev/null
 apt-get install -y netbird-ui &>/dev/null
-' || exit
+'
 msg "\e[1;32m ✔ Installed NetBird.\e[0m"
 sleep 2
 msg "\e[1;31m Reboot ${CTID} LXC to apply the changes, then run netbird up in the LXC console\e[0m"

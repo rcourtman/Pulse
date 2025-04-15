@@ -47,7 +47,7 @@ function update_script() {
   if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
     msg_info "Updating ${APP} to ${RELEASE}"
     echo "${RELEASE}" >/opt/${APP}_version.txt
-    cd /opt/paymenter || exit
+    cd /opt/paymenter
     $STD php artisan p:upgrade --no-interaction
     msg_ok "Updated Successfully"
   else

@@ -61,7 +61,7 @@ if [[ "$INSTALL_WGD" =~ ^[Yy]$ ]]; then
   msg_ok "Installed additional dependencies for WGDashboard"
   msg_info "Installing WGDashboard"
   git clone -q https://github.com/donaldzou/WGDashboard.git /etc/wgdashboard
-  cd /etc/wgdashboard/src || exit
+  cd /etc/wgdashboard/src
   chmod u+x wgd.sh
   $STD ./wgd.sh install
   msg_ok "Installed WGDashboard"
@@ -79,7 +79,7 @@ depend() {
 
 start() {
     ebegin "Starting WGDashboard"
-    cd /etc/wgdashboard/src/ || exit 1
+    cd /etc/wgdashboard/src/
     ./wgd.sh start &
     eend $?
 }

@@ -32,7 +32,7 @@ function update_script() {
   msg_info "Updating ${APP}"
   systemctl stop ${APP}
   git clone https://github.com/revenz/Fenrus.git
-  cd Fenrus || exit
+  cd Fenrus
   gitVersionNumber=$(git rev-parse HEAD)
 
   if [[ "${gitVersionNumber}" != "$(cat /opt/${APP}_version.txt)" ]] || [[ ! -f /opt/${APP}_version.txt ]]; then

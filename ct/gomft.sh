@@ -50,7 +50,7 @@ function update_script() {
     curl -fsSL "https://github.com/StarFleetCPTN/GoMFT/archive/refs/tags/v${RELEASE}.tar.gz" -o "$temp_file"
     tar -xzf "$temp_file"
     cp -rf "GoMFT-${RELEASE}"/* /opt/gomft/
-    cd /opt/gomft || exit
+    cd /opt/gomft
     rm -rf /opt/gomft/node_modules
     $STD npm ci
     $STD node build.js

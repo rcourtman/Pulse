@@ -23,7 +23,7 @@ GN=$(echo "\033[1;92m")
 CL=$(echo "\033[m")
 header_info
 echo "Loading..."
-whiptail --backtitle "Proxmox VE Helper Scripts" --title "Proxmox VE LXC Updater" --yesno "This Will Clean logs, cache and update apt lists on selected LXC Containers. Proceed?" 10 58 || exit
+whiptail --backtitle "Proxmox VE Helper Scripts" --title "Proxmox VE LXC Updater" --yesno "This Will Clean logs, cache and update apt lists on selected LXC Containers. Proceed?" 10 58
 NODE=$(hostname)
 EXCLUDE_MENU=()
 MSG_MAX_LENGTH=0
@@ -33,7 +33,7 @@ while read -r TAG ITEM; do
   EXCLUDE_MENU+=("$TAG" "$ITEM " "OFF")
 done < <(pct list | awk 'NR>1')
 excluded_containers=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Containers on $NODE" --checklist "\nSelect containers to skip from cleaning:\n" \
-  16 $((MSG_MAX_LENGTH + 23)) 6 "${EXCLUDE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"') || exit
+  16 $((MSG_MAX_LENGTH + 23)) 6 "${EXCLUDE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"')
 
 function clean_container() {
   container=$1

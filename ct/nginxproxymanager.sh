@@ -52,7 +52,7 @@ function update_script() {
 
   msg_info "Downloading NPM v${RELEASE}"
   curl -fsSL "https://codeload.github.com/NginxProxyManager/nginx-proxy-manager/tar.gz/v${RELEASE}" | tar -xz
-  cd nginx-proxy-manager-"${RELEASE}" || exit
+  cd nginx-proxy-manager-"${RELEASE}"
   msg_ok "Downloaded NPM v${RELEASE}"
 
   msg_info "Setting up Enviroment"
@@ -103,7 +103,7 @@ function update_script() {
   msg_ok "Setup Enviroment"
 
   msg_info "Building Frontend"
-  cd ./frontend || exit
+  cd ./frontend
   $STD pnpm install
   $STD pnpm upgrade
   $STD pnpm run build
@@ -128,7 +128,7 @@ function update_script() {
 }
 EOF
   fi
-  cd /app || exit
+  cd /app
   $STD pnpm install
   msg_ok "Initialized Backend"
 

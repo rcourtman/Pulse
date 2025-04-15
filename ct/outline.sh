@@ -40,7 +40,7 @@ function update_script() {
     curl -fsSL "https://github.com/outline/outline/archive/refs/tags/v${RELEASE}.tar.gz" -o "$temp_file"
     tar zxf "$temp_file"
     mv outline-"${RELEASE}" /opt/outline
-    cd /opt/outline || exit
+    cd /opt/outline
     export NODE_ENV=development
     export NODE_OPTIONS="--max-old-space-size=3584"
     $STD yarn install --frozen-lockfile

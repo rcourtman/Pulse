@@ -40,7 +40,7 @@ function update_script() {
     if [[ "${PREV_RELEASE}" < 0.23.0 ]]; then
       $STD apt-get install -y graphicsmagick ghostscript
     fi
-    cd /opt || exit
+    cd /opt
     if [[ -f /opt/hoarder/.env ]] && [[ ! -f /etc/hoarder/hoarder.env ]]; then
       mkdir -p /etc/hoarder
       mv /opt/hoarder/.env /etc/hoarder/hoarder.env
@@ -49,14 +49,14 @@ function update_script() {
     curl -fsSL "https://github.com/hoarder-app/hoarder/archive/refs/tags/v${RELEASE}.zip" -o "v${RELEASE}.zip"
     unzip -q v"${RELEASE}".zip
     mv karakeep-"${RELEASE}" /opt/hoarder
-    cd /opt/hoarder/apps/web || exit
+    cd /opt/hoarder/apps/web
     $STD pnpm install --frozen-lockfile
     $STD pnpm exec next build --experimental-build-mode compile
     cp -r /opt/hoarder/apps/web/.next/standalone/apps/web/server.js /opt/hoarder/apps/web
-    cd /opt/hoarder/apps/workers || exit
+    cd /opt/hoarder/apps/workers
     $STD pnpm install --frozen-lockfile
     export DATA_DIR=/opt/hoarder_data
-    cd /opt/hoarder/packages/db || exit
+    cd /opt/hoarder/packages/db
     $STD pnpm migrate
     sed -i "s/SERVER_VERSION=${PREV_RELEASE}/SERVER_VERSION=${RELEASE}/" /etc/hoarder/hoarder.env
     msg_ok "Updated ${APP} to v${RELEASE}"

@@ -60,7 +60,7 @@ read -p "Enter your Last Name: " NAME_LAST
 msg_info "Installing pterodactyl Panel"
 RELEASE=$(curl -fsSL https://api.github.com/repos/pterodactyl/panel/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
 mkdir /opt/pterodactyl-panel
-cd /opt/pterodactyl-panel || exit
+cd /opt/pterodactyl-panel
 curl -fsSL "https://github.com/pterodactyl/panel/releases/download/v${RELEASE}/panel.tar.gz" -o $(basename "https://github.com/pterodactyl/panel/releases/download/v${RELEASE}/panel.tar.gz")
 tar -xzf "panel.tar.gz"
 cp .env.example .env

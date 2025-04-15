@@ -15,7 +15,7 @@ header_info() {
 EOF
 }
 header_info
-whiptail --backtitle "Proxmox VE Helper Scripts" --title "CPU Scaling Governors" --yesno "View/Change CPU Scaling Governors. Proceed?" 10 58 || exit
+whiptail --backtitle "Proxmox VE Helper Scripts" --title "CPU Scaling Governors" --yesno "View/Change CPU Scaling Governors. Proceed?" 10 58
 current_governor=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor)
 GOVERNORS_MENU=()
 MSG_MAX_LENGTH=0
@@ -24,7 +24,7 @@ while read -r TAG ITEM; do
   ((${#ITEM} + OFFSET > MSG_MAX_LENGTH)) && MSG_MAX_LENGTH=${#ITEM}+OFFSET
   GOVERNORS_MENU+=("$TAG" "$ITEM " "OFF")
 done < <(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors | tr ' ' '\n' | grep -v "$current_governor")
-scaling_governor=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Current CPU Scaling Governor is set to $current_governor" --checklist "\nSelect the Scaling Governor to use:\n" 16 $((MSG_MAX_LENGTH + 58)) 6 "${GOVERNORS_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"') || exit
+scaling_governor=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Current CPU Scaling Governor is set to $current_governor" --checklist "\nSelect the Scaling Governor to use:\n" 16 $((MSG_MAX_LENGTH + 58)) 6 "${GOVERNORS_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"')
 [ -z "$scaling_governor" ] && {
   whiptail --backtitle "Proxmox VE Helper Scripts" --title "No CPU Scaling Governor Selected" --msgbox "It appears that no CPU Scaling Governor was selected" 10 68
   clear

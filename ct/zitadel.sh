@@ -34,7 +34,7 @@ function update_script() {
     msg_ok "Stopped $APP"
 
     msg_info "Updating $APP to ${RELEASE}"
-    cd /tmp || exit
+    cd /tmp
     curl -fsSL "https://github.com/zitadel/zitadel/releases/download/v$RELEASE/zitadel-linux-amd64.tar.gz" | tar -xz
     mv zitadel-linux-amd64/zitadel /usr/local/bin
     $STD zitadel setup --masterkeyFile /opt/zitadel/.masterkey --config /opt/zitadel/config.yaml --init-projections=true

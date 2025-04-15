@@ -74,7 +74,7 @@ while [ -z "${CTID:+x}" ]; do
   CTID=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Containers on $NODE" --radiolist \
     "\nSelect a container to add support:\n" \
     16 $(($MSG_MAX_LENGTH + 23)) 6 \
-    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3) || exit
+    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3)
 done
 
 # Add autodev settings

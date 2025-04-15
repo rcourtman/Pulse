@@ -78,7 +78,7 @@ intel() {
   microcode=$(whiptail --backtitle "Proxmox Backup Server Helper Scripts" \
     --title "Current Microcode Revision: ${current_microcode}" \
     --radiolist "\nSelect a microcode package to install:\n" \
-    16 $((MSG_MAX_LENGTH + 58)) 6 "${MICROCODE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"') || exit
+    16 $((MSG_MAX_LENGTH + 58)) 6 "${MICROCODE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"')
 
   [ -z "$microcode" ] && {
     whiptail --backtitle "Proxmox Backup Server Helper Scripts" --title "No Microcode Selected" --msgbox "No microcode package was selected." 10 68
@@ -125,7 +125,7 @@ amd() {
   microcode=$(whiptail --backtitle "Proxmox Backup Server Helper Scripts" \
     --title "Current Microcode Revision: ${current_microcode}" \
     --radiolist "\nSelect a microcode package to install:\n" \
-    16 $((MSG_MAX_LENGTH + 58)) 6 "${MICROCODE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"') || exit
+    16 $((MSG_MAX_LENGTH + 58)) 6 "${MICROCODE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"')
 
   [ -z "$microcode" ] && {
     whiptail --backtitle "Proxmox Backup Server Helper Scripts" --title "No Microcode Selected" --msgbox "No microcode package was selected." 10 68
@@ -158,7 +158,7 @@ fi
 
 whiptail --backtitle "Proxmox Backup Server Helper Scripts" \
   --title "Proxmox Backup Server Processor Microcode" \
-  --yesno "This script searches for CPU microcode packages and offers the option to install them.\nProceed?" 10 68 || exit
+  --yesno "This script searches for CPU microcode packages and offers the option to install them.\nProceed?" 10 68
 
 msg_info "Checking CPU vendor"
 cpu=$(lscpu | grep -oP 'Vendor ID:\s*\K\S+' | head -n 1)

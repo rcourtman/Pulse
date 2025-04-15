@@ -40,7 +40,7 @@ CM="${TAB}✔️${TAB}${CL}"
 
 header_info
 echo "Loading..."
-whiptail --backtitle "Proxmox VE Helper Scripts" --title "Proxmox VE LXC Deletion" --yesno "This will delete LXC containers. Proceed?" 10 58 || exit
+whiptail --backtitle "Proxmox VE Helper Scripts" --title "Proxmox VE LXC Deletion" --yesno "This will delete LXC containers. Proceed?" 10 58
 
 NODE=$(hostname)
 containers=$(pct list | tail -n +2 | awk '{print $0 " " $4}')

@@ -58,10 +58,10 @@ $STD apt-get install -y \
   tesseract-ocr \
   tesseract-ocr-eng
 
-cd /tmp || exit
+cd /tmp
 curl -fsSL "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10040/ghostscript-10.04.0.tar.gz" -o $(basename "https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs10040/ghostscript-10.04.0.tar.gz")
 $STD tar -xzf ghostscript-10.04.0.tar.gz
-cd ghostscript-10.04.0 || exit
+cd ghostscript-10.04.0
 $STD ./configure
 $STD make
 $STD sudo make install
@@ -69,7 +69,7 @@ msg_ok "Installed OCR Dependencies"
 
 msg_info "Installing JBIG2"
 $STD git clone https://github.com/ie13/jbig2enc /opt/jbig2enc
-cd /opt/jbig2enc || exit
+cd /opt/jbig2enc
 $STD bash ./autogen.sh
 $STD bash ./configure
 $STD make
@@ -79,12 +79,12 @@ msg_ok "Installed JBIG2"
 
 msg_info "Installing Paperless-ngx (Patience)"
 Paperlessngx=$(curl -fsSL "https://github.com/paperless-ngx/paperless-ngx/releases/latest" | grep "title>Release" | cut -d " " -f 5)
-cd /opt || exit
+cd /opt
 $STD curl -fsSL "https://github.com/paperless-ngx/paperless-ngx/releases/download/$Paperlessngx/paperless-ngx-$Paperlessngx.tar.xz" -o "paperless-ngx-$Paperlessngx.tar.xz"
 $STD tar -xf "paperless-ngx-$Paperlessngx.tar.xz" -C /opt/
 mv paperless-ngx paperless
 rm "paperless-ngx-$Paperlessngx.tar.xz"
-cd /opt/paperless || exit
+cd /opt/paperless
 $STD pip install --upgrade pip
 $STD pip install -r requirements.txt
 curl -fsSL "https://raw.githubusercontent.com/paperless-ngx/paperless-ngx/main/paperless.conf.example" -o /opt/paperless/paperless.conf
@@ -121,7 +121,7 @@ sed -i -e "s|#PAPERLESS_DBNAME=paperless|PAPERLESS_DBNAME=$DB_NAME|" /opt/paperl
 sed -i -e "s|#PAPERLESS_DBUSER=paperless|PAPERLESS_DBUSER=$DB_USER|" /opt/paperless/paperless.conf
 sed -i -e "s|#PAPERLESS_DBPASS=paperless|PAPERLESS_DBPASS=$DB_PASS|" /opt/paperless/paperless.conf
 sed -i -e "s|#PAPERLESS_SECRET_KEY=change-me|PAPERLESS_SECRET_KEY=$SECRET_KEY|" /opt/paperless/paperless.conf
-cd /opt/paperless/src || exit
+cd /opt/paperless/src
 $STD python3 manage.py migrate
 msg_ok "Set up PostgreSQL database"
 

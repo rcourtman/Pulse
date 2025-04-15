@@ -28,26 +28,25 @@ function update_script() {
     header_info "$APP"
 
     case "$UPD" in
-        "1")
-            msg_info "Updating Alpine OS"
-            apk update && apk upgrade
-            msg_ok "System updated"
-            exit
-            ;;
-        "2")
-            msg_info "Updating NPMplus Container"
-            cd /opt || exit 1
-            msg_info "Pulling latest container image"
-            $STD docker compose pull
-            msg_info "Recreating container"
-            $STD docker compose up -d
-            msg_ok "NPMplus container updated"
-            exit
-            ;;
+    "1")
+        msg_info "Updating Alpine OS"
+        apk update && apk upgrade
+        msg_ok "System updated"
+        exit
+        ;;
+    "2")
+        msg_info "Updating NPMplus Container"
+        cd /opt 1
+        msg_info "Pulling latest container image"
+        $STD docker compose pull
+        msg_info "Recreating container"
+        $STD docker compose up -d
+        msg_ok "NPMplus container updated"
+        exit
+        ;;
     esac
     exit 0
 }
-
 
 start
 build_container

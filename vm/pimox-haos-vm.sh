@@ -58,7 +58,7 @@ shopt -s expand_aliases
 alias die='EXIT=$? LINE=$LINENO error_exit'
 trap die ERR
 trap cleanup EXIT
-trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT 
+trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT
 trap 'post_update_to_api "failed" "TERMINATED"' SIGTERM
 function error_exit() {
   trap - ERR
@@ -84,10 +84,10 @@ function cleanup() {
 }
 TEMP_DIR=$(mktemp -d)
 pushd $TEMP_DIR >/dev/null
-if ! command -v whiptail &> /dev/null; then
-    echo "Installing whiptail..."
-    apt-get update &>/dev/null
-    apt-get install -y whiptail &>/dev/null
+if ! command -v whiptail &>/dev/null; then
+  echo "Installing whiptail..."
+  apt-get update &>/dev/null
+  apt-get install -y whiptail &>/dev/null
 fi
 if (whiptail --backtitle "Proxmox VE Helper Scripts" --title "PiMox HAOS VM" --yesno "This will create a New PiMox HAOS VM. Proceed?" 10 58); then
   echo "User selected Yes"
@@ -287,7 +287,7 @@ else
     STORAGE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Storage Pools" --radiolist \
       "Which storage pool you would like to use for the HAOS VM?\n\n" \
       16 $(($MSG_MAX_LENGTH + 23)) 6 \
-      "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3) || exit
+      "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3)
   done
 fi
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."

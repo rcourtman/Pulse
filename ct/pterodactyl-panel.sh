@@ -47,7 +47,7 @@ function update_script() {
   RELEASE=$(curl -fsSL https://api.github.com/repos/pterodactyl/panel/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
   if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
     msg_info "Stopping Service"
-    cd /opt/pterodactyl-panel || exit
+    cd /opt/pterodactyl-panel
     $STD php artisan down
     msg_ok "Stopped Service"
 

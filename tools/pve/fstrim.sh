@@ -34,7 +34,7 @@ if [ "$ROOT_FS" != "ext4" ]; then
 fi
 whiptail --backtitle "Proxmox VE Helper Scripts" \
   --title "Proxmox VE LXC Filesystem Trim" \
-  --yesno "The LXC containers will undergo the fstrim command. Proceed?" 10 58 || exit
+  --yesno "The LXC containers will undergo the fstrim command. Proceed?" 10 58
 
 NODE=$(hostname)
 EXCLUDE_MENU=()

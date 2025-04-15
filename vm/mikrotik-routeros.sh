@@ -7,7 +7,6 @@
 
 source /dev/stdin <<<$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
 
-
 function header_info {
   cat <<"EOF"
     __  ____ __              __  _ __      ____              __            ____  _____    ________  ______
@@ -50,7 +49,7 @@ shopt -s expand_aliases
 alias die='EXIT=$? LINE=$LINENO error_exit'
 trap die ERR
 trap cleanup EXIT
-trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT 
+trap 'post_update_to_api "failed" "INTERRUPTED"' SIGINT
 trap 'post_update_to_api "failed" "TERMINATED"' SIGTERM
 function error_exit() {
   trap - ERR
@@ -244,7 +243,7 @@ else
     STORAGE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Storage Pools" --radiolist \
       "Which storage pool you would like to use for the Mikrotik RouterOS CHR VM?\n\n" \
       16 $(($MSG_MAX_LENGTH + 23)) 6 \
-      "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3) || exit
+      "${STORAGE_MENU[@]}" 3>&1 1>&2 2>&3)
   done
 fi
 msg_ok "Using ${CL}${BL}$STORAGE${CL} ${GN}for Storage Location."

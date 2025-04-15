@@ -31,7 +31,7 @@ function update_script() {
 
   if [[ -d /etc/wgdashboard/src ]]; then
     msg_info "update WGDashboard"
-    cd /etc/wgdashboard/src || exit
+    cd /etc/wgdashboard/src
     $STD echo "y" | ./wgd.sh update
     $STD ./wgd.sh start
     msg_ok "WGDashboard updated"

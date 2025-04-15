@@ -27,7 +27,7 @@ tar xzf "${RELEASE}".tar.gz
 VER=$(curl -fsSL https://api.github.com/repos/linuxserver/Heimdall/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
 rm -rf "${RELEASE}".tar.gz
 mv Heimdall-"${VER}" /opt/Heimdall
-cd /opt/Heimdall || exit
+cd /opt/Heimdall
 cp .env.example .env
 $STD php artisan key:generate
 msg_ok "Installed Heimdall Dashboard ${RELEASE}"

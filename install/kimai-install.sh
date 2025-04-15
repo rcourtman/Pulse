@@ -60,7 +60,7 @@ RELEASE=$(curl -fsSL https://api.github.com/repos/kimai/kimai/releases/latest | 
 curl -fsSL "https://github.com/kimai/kimai/archive/refs/tags/${RELEASE}.zip" -o $(basename "https://github.com/kimai/kimai/archive/refs/tags/${RELEASE}.zip")
 unzip -q "${RELEASE}".zip
 mv kimai-"${RELEASE}" /opt/kimai
-cd /opt/kimai || exit
+cd /opt/kimai
 echo "export COMPOSER_ALLOW_SUPERUSER=1" >>~/.bashrc
 source ~/.bashrc
 $STD composer install --no-dev --optimize-autoloader --no-interaction

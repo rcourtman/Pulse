@@ -21,7 +21,7 @@ msg_info "Installing Prowlarr"
 temp_file="$(mktemp)"
 mkdir -p /var/lib/prowlarr/
 chmod 775 /var/lib/prowlarr/
-cd /var/lib/prowlarr/ || exit
+cd /var/lib/prowlarr/
 RELEASE=$(curl -fsSL https://api.github.com/repos/Prowlarr/Prowlarr/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
 curl -fsSL "https://github.com/Prowlarr/Prowlarr/releases/download/v${RELEASE}/Prowlarr.master.${RELEASE}.linux-core-x64.tar.gz" -o "$temp_file"
 $STD tar -xvzf "$temp_file"

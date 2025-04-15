@@ -66,7 +66,7 @@ function update_script() {
     [ -f "$BACKUP_DIR/.env" ] && cp "$BACKUP_DIR/.env" /opt/kimai/
     [ -f "$BACKUP_DIR/local.yaml" ] && cp "$BACKUP_DIR/local.yaml" /opt/kimai/config/packages/
     rm -rf "$BACKUP_DIR"
-    cd /opt/kimai || exit
+    cd /opt/kimai
     $STD composer install --no-dev --optimize-autoloader
     $STD bin/console kimai:update
     echo "${RELEASE}" >/opt/${APP}_version.txt

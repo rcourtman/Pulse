@@ -42,7 +42,7 @@ function update_script() {
     cp -r /opt/bookstack-backup/public/uploads/* /opt/bookstack/public/uploads/ || true
     cp -r /opt/bookstack-backup/storage/uploads/* /opt/bookstack/storage/uploads/ || true
     cp -r /opt/bookstack-backup/themes/* /opt/bookstack/themes/ || true
-    cd /opt/bookstack || exit
+    cd /opt/bookstack
     export COMPOSER_ALLOW_SUPERUSER=1
     $STD composer install --no-dev
     $STD php artisan migrate --force

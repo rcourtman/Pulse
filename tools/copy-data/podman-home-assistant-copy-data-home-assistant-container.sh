@@ -74,13 +74,13 @@ while [ -z "${CTID_FROM:+x}" ]; do
   CTID_FROM=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "$TITLE" --radiolist \
     "\nWhich HA Podman LXC would you like to copy FROM?\n" \
     16 $(($MSG_MAX_LENGTH + 23)) 6 \
-    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3) || exit
+    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3)
 done
 while [ -z "${CTID_TO:+x}" ]; do
   CTID_TO=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "$TITLE" --radiolist \
     "\nWhich HA LXC would you like to copy TO?\n" \
     16 $(($MSG_MAX_LENGTH + 23)) 6 \
-    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3) || exit
+    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3)
 done
 for i in ${!CTID_MENU[@]}; do
   [ "${CTID_MENU[$i]}" == "$CTID_FROM" ] &&
@@ -91,7 +91,7 @@ done
 whiptail --backtitle "Proxmox VE Helper Scripts" --defaultno --title "$TITLE" --yesno \
   "Are you sure you want to copy data between the following LXCs?
 $CTID_FROM (${CTID_FROM_HOSTNAME}) -> $CTID_TO (${CTID_TO_HOSTNAME})
-Version: 2022.03.31" 13 50 || exit
+Version: 2022.03.31" 13 50
 info "Home Assistant Data from '$CTID_FROM' to '$CTID_TO'"
 if [ $(pct status $CTID_TO | sed 's/.* //') == 'running' ]; then
   msg "Stopping '$CTID_TO'..."

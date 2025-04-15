@@ -14,7 +14,7 @@ network_check
 update_os
 
 msg_info "Installing Zabbix"
-cd /tmp || exit
+cd /tmp
 curl -fsSL "$(curl -fsSL https://repo.zabbix.com/zabbix/ |
   grep -oP '(?<=href=")[0-9]+\.[0-9]+(?=/")' | sort -V | tail -n1 |
   xargs -I{} echo "https://repo.zabbix.com/zabbix/{}/release/debian/pool/main/z/zabbix-release/zabbix-release_latest+debian12_all.deb")" \

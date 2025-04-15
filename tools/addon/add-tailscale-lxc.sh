@@ -49,7 +49,7 @@ while [ -z "${CTID:+x}" ]; do
   CTID=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Containers on $NODE" --radiolist \
     "\nSelect a container to add Tailscale to:\n" \
     16 $(($MSG_MAX_LENGTH + 23)) 6 \
-    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3) || exit
+    "${CTID_MENU[@]}" 3>&1 1>&2 2>&3)
 done
 
 CTID_CONFIG_PATH=/etc/pve/lxc/${CTID}.conf
@@ -66,7 +66,7 @@ curl -fsSL https://pkgs.tailscale.com/stable/$ID/$VER.noarmor.gpg | tee /usr/sha
 echo "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/$ID $VER main" >/etc/apt/sources.list.d/tailscale.list
 apt-get update &>/dev/null
 apt-get install -y tailscale &>/dev/null
-' || exit
+'
 TAGS=$(awk -F': ' '/^tags:/ {print $2}' /etc/pve/lxc/${CTID}.conf)
 TAGS="${TAGS:+$TAGS; }tailscale"
 pct set "$CTID" -tags "${TAGS}"

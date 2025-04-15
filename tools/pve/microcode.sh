@@ -61,7 +61,7 @@ intel() {
     MICROCODE_MENU+=("$TAG" "$ITEM " "OFF")
   done < <(echo "$intel_microcode")
 
-  microcode=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Current Microcode revision:${current_microcode}" --radiolist "\nSelect a microcode package to install:\n" 16 $((MSG_MAX_LENGTH + 58)) 6 "${MICROCODE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"') || exit
+  microcode=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Current Microcode revision:${current_microcode}" --radiolist "\nSelect a microcode package to install:\n" 16 $((MSG_MAX_LENGTH + 58)) 6 "${MICROCODE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"')
 
   [ -z "$microcode" ] && {
     whiptail --backtitle "Proxmox VE Helper Scripts" --title "No Microcode Selected" --msgbox "It appears that no microcode packages were selected" 10 68
@@ -105,7 +105,7 @@ amd() {
     MICROCODE_MENU+=("$TAG" "$ITEM " "OFF")
   done < <(echo "$amd_microcode")
 
-  microcode=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Current Microcode revision:${current_microcode}" --radiolist "\nSelect a microcode package to install:\n" 16 $((MSG_MAX_LENGTH + 58)) 6 "${MICROCODE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"') || exit
+  microcode=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "Current Microcode revision:${current_microcode}" --radiolist "\nSelect a microcode package to install:\n" 16 $((MSG_MAX_LENGTH + 58)) 6 "${MICROCODE_MENU[@]}" 3>&1 1>&2 2>&3 | tr -d '"')
 
   [ -z "$microcode" ] && {
     whiptail --backtitle "Proxmox VE Helper Scripts" --title "No Microcode Selected" --msgbox "It appears that no microcode packages were selected" 10 68
@@ -135,7 +135,7 @@ if ! command -v pveversion >/dev/null 2>&1; then
   exit
 fi
 
-whiptail --backtitle "Proxmox VE Helper Scripts" --title "Proxmox VE Processor Microcode" --yesno "This will check for CPU microcode packages with the option to install. Proceed?" 10 58 || exit
+whiptail --backtitle "Proxmox VE Helper Scripts" --title "Proxmox VE Processor Microcode" --yesno "This will check for CPU microcode packages with the option to install. Proceed?" 10 58
 
 msg_info "Checking CPU Vendor"
 cpu=$(lscpu | grep -oP 'Vendor ID:\s*\K\S+' | head -n 1)
