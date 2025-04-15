@@ -1,8 +1,7 @@
-<!--🛑 New scripts must first be submitted to [ProxmoxVED](https://github.com/community-scripts/ProxmoxVED) for testing.
-PRs for new scripts that skip this process will be closed. -->  
-
+<!--🛑 New scripts must be submitted to [ProxmoxVED](https://github.com/community-scripts/ProxmoxVED) for testing.  
+PRs without prior testing will be closed. -->
 ## ✍️ Description  
-<!-- Briefly describe your changes. -->  
+
 
 
 ## 🔗 Related PR / Issue  
@@ -13,7 +12,6 @@ Link: #
 
 - [ ] **Self-review completed** – Code follows project standards.  
 - [ ] **Tested thoroughly** – Changes work as expected.  
-- [ ] **No breaking changes** – Existing functionality remains intact.  
 - [ ] **No security risks** – No hardcoded secrets, unnecessary privilege escalations, or permission issues.  
 
 ---
@@ -27,13 +25,3 @@ Link: #
 - [ ] 🌍 **Website update** – Changes to website-related JSON files or metadata.  
 - [ ] 🔧 **Refactoring / Code Cleanup** – Improves readability or maintainability without changing functionality.  
 - [ ] 📝 **Documentation update** – Changes to `README`, `AppName.md`, `CONTRIBUTING.md`, or other docs.  
-
----
-
-## 🔍 Code & Security Review  (**X** in brackets) 
-
-- [ ] **Follows `Code_Audit.md` & `CONTRIBUTING.md` guidelines**
-
-
-## 📋 Additional Information (optional)  
-<!-- Add any extra context, screenshots, or references. -->  
