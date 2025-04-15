@@ -18,6 +18,8 @@ All LXC instances created using this repository come pre-installed with Midnight
 
 ### 🚀 Updated Scripts
 
+  - [core] remove unneeded vars from shellcheck [@MickLesk](https://github.com/MickLesk) ([#3899](https://github.com/community-scripts/ProxmoxVE/pull/3899))
+
   - #### 🐞 Bug Fixes
 
     - Outline: Installation and update fixes [@tremor021](https://github.com/tremor021) ([#3895](https://github.com/community-scripts/ProxmoxVE/pull/3895))
