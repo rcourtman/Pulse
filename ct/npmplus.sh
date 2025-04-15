@@ -36,7 +36,7 @@ function update_script() {
         ;;
     "2")
         msg_info "Updating NPMplus Container"
-        cd /opt 1
+        cd /opt
         msg_info "Pulling latest container image"
         $STD docker compose pull
         msg_info "Recreating container"
