@@ -1,13 +1,128 @@
 [
   {
+    "name": "fhem/fhem-mirror",
+    "version": "6.2",
+    "date": "2025-04-15T10:34:54Z"
+  },
+  {
+    "name": "n8n-io/n8n",
+    "version": "n8n@1.86.1",
+    "date": "2025-04-09T09:20:55Z"
+  },
+  {
+    "name": "wazuh/wazuh",
+    "version": "coverity-w16-4.12.0",
+    "date": "2025-04-15T08:25:08Z"
+  },
+  {
+    "name": "mattermost/mattermost",
+    "version": "v10.6.2",
+    "date": "2025-04-15T08:14:23Z"
+  },
+  {
+    "name": "Jackett/Jackett",
+    "version": "v0.22.1778",
+    "date": "2025-04-15T06:26:21Z"
+  },
+  {
+    "name": "slskd/slskd",
+    "version": "0.22.5",
+    "date": "2025-04-15T02:52:26Z"
+  },
+  {
+    "name": "blakeblackshear/frigate",
+    "version": "v0.14.1",
+    "date": "2024-08-29T22:32:51Z"
+  },
+  {
+    "name": "esphome/esphome",
+    "version": "2025.3.3",
+    "date": "2025-03-31T22:07:05Z"
+  },
+  {
+    "name": "moghtech/komodo",
+    "version": "v1.17.1",
+    "date": "2025-04-14T22:35:13Z"
+  },
+  {
+    "name": "influxdata/influxdb",
+    "version": "v3.0.0",
+    "date": "2025-04-14T22:16:28Z"
+  },
+  {
+    "name": "Kareadita/Kavita",
+    "version": "v0.8.6",
+    "date": "2025-04-14T22:09:30Z"
+  },
+  {
+    "name": "keycloak/keycloak",
+    "version": "26.2.0",
+    "date": "2025-04-11T12:48:27Z"
+  },
+  {
+    "name": "paperless-ngx/paperless-ngx",
+    "version": "v2.15.2",
+    "date": "2025-04-14T20:48:52Z"
+  },
+  {
+    "name": "semaphoreui/semaphore",
+    "version": "v2.13.13",
+    "date": "2025-04-11T10:15:13Z"
+  },
+  {
+    "name": "netbox-community/netbox",
+    "version": "v4.2.7",
+    "date": "2025-04-10T20:08:13Z"
+  },
+  {
+    "name": "duplicati/duplicati",
+    "version": "v2.1.0.115-2.1.0.115_canary_2025-04-14",
+    "date": "2025-04-14T18:03:36Z"
+  },
+  {
+    "name": "OliveTin/OliveTin",
+    "version": "2025.4.14",
+    "date": "2025-04-14T16:53:53Z"
+  },
+  {
+    "name": "msgbyte/tianji",
+    "version": "v1.20.0",
+    "date": "2025-04-14T16:19:23Z"
+  },
+  {
+    "name": "home-assistant/operating-system",
+    "version": "15.2",
+    "date": "2025-04-14T15:37:12Z"
+  },
+  {
+    "name": "Checkmk/checkmk",
+    "version": "v2.4.0b5-rc1",
+    "date": "2025-04-14T15:29:21Z"
+  },
+  {
+    "name": "stackblitz-labs/bolt.diy",
+    "version": "v0.0.7-hf1",
+    "date": "2025-03-10T20:49:39Z"
+  },
+  {
+    "name": "zabbix/zabbix",
+    "version": "7.2.6rc1",
+    "date": "2025-04-14T15:00:15Z"
+  },
+  {
+    "name": "rabbitmq/rabbitmq-server",
+    "version": "v4.0.9",
+    "date": "2025-04-14T14:40:34Z"
+  },
+  {
+    "name": "AdguardTeam/AdGuardHome",
+    "version": "v0.107.60",
+    "date": "2025-04-14T11:46:19Z"
+  },
+  {
     "name": "Graylog2/graylog2-server",
     "version": "6.2.0-rc.1",
     "date": "2025-04-14T11:26:18Z"
-  },
-  {
-    "name": "fhem/fhem-mirror",
-    "version": "6.2",
-    "date": "2025-04-14T10:36:18Z"
   },
   {
     "name": "bluenviron/mediamtx",
@@ -30,16 +145,6 @@
     "date": "2025-04-14T08:53:44Z"
   },
   {
-    "name": "zabbix/zabbix",
-    "version": "6.0.40rc1",
-    "date": "2025-04-14T08:45:46Z"
-  },
-  {
-    "name": "duplicati/duplicati",
-    "version": "v2.1.0.114-2.1.0.114_canary_2025-04-14",
-    "date": "2025-04-14T07:54:21Z"
-  },
-  {
     "name": "evcc-io/evcc",
     "version": "0.203.1",
     "date": "2025-04-14T07:23:02Z"
@@ -48,11 +153,6 @@
     "name": "morpheus65535/bazarr",
     "version": "v1.5.1",
     "date": "2025-01-01T16:15:52Z"
-  },
-  {
-    "name": "Jackett/Jackett",
-    "version": "v0.22.1775",
-    "date": "2025-04-14T05:59:53Z"
   },
   {
     "name": "firefly-iii/firefly-iii",
@@ -95,11 +195,6 @@
     "date": "2025-03-15T14:38:16Z"
   },
   {
-    "name": "keycloak/keycloak",
-    "version": "26.2.0",
-    "date": "2025-04-11T12:48:27Z"
-  },
-  {
     "name": "karakeep-app/karakeep",
     "version": "mcp/v0.23.4",
     "date": "2025-04-13T14:09:19Z"
@@ -135,11 +230,6 @@
     "date": "2025-03-24T15:52:12Z"
   },
   {
-    "name": "slskd/slskd",
-    "version": "0.22.4",
-    "date": "2025-04-13T00:14:13Z"
-  },
-  {
     "name": "Tautulli/Tautulli",
     "version": "v2.15.2",
     "date": "2025-04-12T23:27:51Z"
@@ -148,11 +238,6 @@
     "name": "StarFleetCPTN/GoMFT",
     "version": "v0.2.11",
     "date": "2025-04-12T21:13:08Z"
-  },
-  {
-    "name": "semaphoreui/semaphore",
-    "version": "v2.14.0-beta1",
-    "date": "2025-04-12T20:14:09Z"
   },
   {
     "name": "MediaBrowser/Emby.Releases",
@@ -178,11 +263,6 @@
     "name": "homarr-labs/homarr",
     "version": "v1.16.0",
     "date": "2025-04-11T19:15:24Z"
-  },
-  {
-    "name": "rabbitmq/rabbitmq-server",
-    "version": "v4.0.8",
-    "date": "2025-04-03T05:11:15Z"
   },
   {
     "name": "tailscale/tailscale",
@@ -225,11 +305,6 @@
     "date": "2025-04-11T09:57:47Z"
   },
   {
-    "name": "home-assistant/operating-system",
-    "version": "15.1",
-    "date": "2025-03-31T13:42:20Z"
-  },
-  {
     "name": "outline/outline",
     "version": "v0.83.0",
     "date": "2025-04-11T03:53:10Z"
@@ -243,11 +318,6 @@
     "name": "Luligu/matterbridge",
     "version": "2.2.8",
     "date": "2025-04-10T20:30:49Z"
-  },
-  {
-    "name": "netbox-community/netbox",
-    "version": "v4.2.7",
-    "date": "2025-04-10T20:08:13Z"
   },
   {
     "name": "gristlabs/grist-core",
@@ -280,19 +350,9 @@
     "date": "2025-04-10T13:45:22Z"
   },
   {
-    "name": "n8n-io/n8n",
-    "version": "n8n@1.86.1",
-    "date": "2025-04-09T09:20:55Z"
-  },
-  {
     "name": "mongodb/mongo",
     "version": "r8.0.5-rc2",
     "date": "2025-04-09T22:37:52Z"
-  },
-  {
-    "name": "paperless-ngx/paperless-ngx",
-    "version": "v2.15.1",
-    "date": "2025-04-09T22:26:39Z"
   },
   {
     "name": "jupyter/notebook",
@@ -325,16 +385,6 @@
     "date": "2025-04-09T10:09:00Z"
   },
   {
-    "name": "esphome/esphome",
-    "version": "2025.3.3",
-    "date": "2025-03-31T22:07:05Z"
-  },
-  {
-    "name": "OliveTin/OliveTin",
-    "version": "2025.4.8",
-    "date": "2025-04-08T22:02:50Z"
-  },
-  {
     "name": "minio/minio",
     "version": "RELEASE.2025-04-08T15-41-24Z",
     "date": "2025-04-08T19:51:06Z"
@@ -345,19 +395,9 @@
     "date": "2025-04-08T18:39:57Z"
   },
   {
-    "name": "influxdata/influxdb",
-    "version": "v1.12.0rc1",
-    "date": "2025-04-08T17:35:21Z"
-  },
-  {
     "name": "jenkinsci/jenkins",
     "version": "jenkins-2.505",
     "date": "2025-04-08T15:46:42Z"
-  },
-  {
-    "name": "AdguardTeam/AdGuardHome",
-    "version": "v0.107.59",
-    "date": "2025-03-21T11:11:39Z"
   },
   {
     "name": "element-hq/synapse",
@@ -395,16 +435,6 @@
     "date": "2025-04-07T19:27:52Z"
   },
   {
-    "name": "Checkmk/checkmk",
-    "version": "v2.4.0b4",
-    "date": "2025-04-07T19:14:53Z"
-  },
-  {
-    "name": "wazuh/wazuh",
-    "version": "coverity-w15-4.12.0",
-    "date": "2025-04-07T17:50:14Z"
-  },
-  {
     "name": "thomiceli/opengist",
     "version": "v1.10.0",
     "date": "2025-04-07T14:32:15Z"
@@ -425,11 +455,6 @@
     "date": "2025-03-18T07:33:51Z"
   },
   {
-    "name": "mattermost/mattermost",
-    "version": "server/public/v0.1.11",
-    "date": "2025-03-28T14:04:31Z"
-  },
-  {
     "name": "Dolibarr/dolibarr",
     "version": "21.0.1",
     "date": "2025-04-06T19:22:59Z"
@@ -448,16 +473,6 @@
     "name": "TandoorRecipes/recipes",
     "version": "1.5.34",
     "date": "2025-03-27T16:17:38Z"
-  },
-  {
-    "name": "stackblitz-labs/bolt.diy",
-    "version": "v0.0.7-hf1",
-    "date": "2025-03-10T20:49:39Z"
-  },
-  {
-    "name": "msgbyte/tianji",
-    "version": "v1.19.7",
-    "date": "2025-04-06T14:22:44Z"
   },
   {
     "name": "TechnitiumSoftware/DnsServer",
@@ -730,11 +745,6 @@
     "date": "2025-03-24T01:33:31Z"
   },
   {
-    "name": "moghtech/komodo",
-    "version": "v1.17.0",
-    "date": "2025-03-24T00:46:32Z"
-  },
-  {
     "name": "nicolargo/glances",
     "version": "v4.3.1",
     "date": "2025-03-23T09:02:54Z"
@@ -788,11 +798,6 @@
     "name": "advplyr/audiobookshelf",
     "version": "v2.20.0",
     "date": "2025-03-17T22:44:56Z"
-  },
-  {
-    "name": "Kareadita/Kavita",
-    "version": "v0.8.5.11",
-    "date": "2025-03-17T19:25:25Z"
   },
   {
     "name": "Sonarr/Sonarr",
@@ -1003,11 +1008,6 @@
     "name": "dani-garcia/vaultwarden",
     "version": "1.33.2",
     "date": "2025-02-09T17:54:59Z"
-  },
-  {
-    "name": "blakeblackshear/frigate",
-    "version": "v0.15.0",
-    "date": "2025-02-08T18:45:30Z"
   },
   {
     "name": "apache/tika",
