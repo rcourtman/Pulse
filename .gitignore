@@ -74,3 +74,4 @@ json/.vscode/
 # Ignore repository metadata or Git itself
 .git/
 .gitignore
+.vscode/settings.json
