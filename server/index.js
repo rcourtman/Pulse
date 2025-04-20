@@ -144,8 +144,8 @@ const io = new Server(server, {
   }
 });
 
-// Variables to track connected clients
-let connectedClients = 0;
+// Variables to track connected clients - REMOVED as we use io.engine.clientsCount
+// let connectedClients = 0;
 let initialNodesLogged = false; // Flag to log node count only once
 
 // Helper function to get raw Proxmox data
@@ -318,8 +318,8 @@ async function fetchRawProxmoxData() {
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  connectedClients++;
-  // console.log(`Client connected. Total clients: ${connectedClients}`);
+  // connectedClients++; - REMOVED
+  console.log(`[socket] Client connected. Total clients: ${io.engine.clientsCount}`);
   
   // Fetch and send initial data, log node count on first successful fetch
   fetchRawProxmoxData().then(data => {
@@ -344,21 +344,28 @@ io.on('connection', (socket) => {
   
   // Handle disconnect
   socket.on('disconnect', () => {
-    connectedClients--;
-    // console.log(`Client disconnected. Total clients: ${connectedClients}`);
+    // connectedClients--; - REMOVED
+    // Use timeout to log count *after* socket.io updates internal count
+    setTimeout(() => {
+        console.log(`[socket] Client disconnected. Total clients: ${io.engine.clientsCount}`);
+    }, 100);
   });
 });
 
 // Periodic update interval for all connected clients
 const updateInterval = setInterval(async () => {
-  if (connectedClients > 0) {
+  // Only poll if clients are connected
+  if (io.engine.clientsCount > 0) {
     try {
-      // console.log(`Updating raw data for ${connectedClients} client(s)...`);
+      console.log(`[interval] Updating raw data for ${io.engine.clientsCount} client(s)...`);
       const data = await fetchRawProxmoxData();
       io.emit('rawData', data);
     } catch (error) {
-      console.error(`Error in update interval: ${error.message}`);
+      console.error(`[interval] Error during update: ${error.message}`);
     }
+  } else {
+    // Optional: Log that polling is skipped
+    // console.log('[interval] No clients connected, skipping Proxmox API poll.');
   }
 }, UPDATE_INTERVAL);
 
