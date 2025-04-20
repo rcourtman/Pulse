@@ -117,7 +117,10 @@ gather_lxc_config() {
     # --- OS Template ---
     print_info "Checking for OS Templates on storage '$CT_STORAGE'..."
     local template_options
-    template_options=$(pvesm list "$CT_STORAGE" --content vztmpl --output-format=json | jq -r '.[] | .volid | sub("$CT_STORAGE:vztmpl/", "")')
+    # Parse standard output of pvesm list (doesn't support json)
+    # Expected format: <storage>:<type>/<filename> ...
+    # We want just the <filename> part
+    template_options=$(pvesm list "$CT_STORAGE" --content vztmpl | awk -v storage="$CT_STORAGE" 'NR>1 {sub(storage ":vztmpl/", "", $1); print $1}')
 
     if [ -z "$template_options" ]; then
         print_warning "No OS templates found on storage '$CT_STORAGE'. Attempting to download one."
@@ -128,8 +131,8 @@ gather_lxc_config() {
         fi
         print_info "Fetching available templates (this may take a moment)..."
         local downloadable_templates
-        # Get system templates, parse filename from the first column
-        downloadable_templates=$(pveam available --section system | awk 'NR>1 {print $1}')
+        # Get system templates, parse filename (usually the second column after 'system')
+        downloadable_templates=$(pveam available --section system | awk 'NR>1 {print $2}')
 
         if [ -z "$downloadable_templates" ]; then
              print_error "Could not retrieve list of downloadable templates."
