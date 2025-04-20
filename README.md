@@ -1,4 +1,4 @@
-# <img src="public/logos/pulse-logo-256x256.png" alt="Pulse Logo" width="32" height="32" style="vertical-align: middle"> Pulse for Proxmox VE (Simplified)
+# <img src="public/logos/pulse-logo-256x256.png" alt="Pulse Logo" width="32" height="32" style="vertical-align: middle"> Pulse for Proxmox VE
 
 A lightweight monitoring application for Proxmox VE that displays real-time status for VMs and containers via a simple web interface.
 
