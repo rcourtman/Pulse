@@ -155,8 +155,10 @@ docker compose down
 ## ✨ Features
 
 - Lightweight monitoring for Proxmox VE nodes.
-- Displays real-time status for VMs and Containers.
-- Simple web interface.
+- Displays real-time status for VMs and Containers via WebSocket updates.
+- Simple, responsive web interface.
+- Efficient polling: Only queries the Proxmox API when a user is actively viewing the UI, reducing load on the Proxmox server(s).
+- Docker support for easy deployment.
 
 ## 💻 System Requirements
 
