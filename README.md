@@ -15,6 +15,7 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 - [Running the Application](#-running-the-application)
 - [Running the Application (Node.js)](#️-running-the-application-nodejs)
 - [Running with Docker Compose](#-running-with-docker-compose)
+- [Running with LXC Installation Script](#-running-with-lxc-installation-script)
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
 - [Contributing](#-contributing)
@@ -151,6 +152,46 @@ docker compose down
 ```
 
 *Note: If you modify the `server/.env` file after the container is already running, you may need to restart the container for the changes to take effect. You can do this by running `docker compose down` followed by `docker compose up -d`, or by using `docker compose up -d --force-recreate`.*
+
+## 🚀 Running with LXC Installation Script (Recommended for Proxmox)
+
+For users running Proxmox VE, a convenient installation script is provided to set up Pulse inside an LXC container (Debian/Ubuntu based). This script automates dependency installation, configuration, and setting up a systemd service.
+
+**Prerequisites:**
+- A running Proxmox VE environment.
+- A Debian or Ubuntu based LXC container created in Proxmox.
+- Network connectivity from the LXC to your Proxmox server.
+- You will need your Proxmox API Token details ([See Creating a Proxmox API Token](#creating-a-proxmox-api-token)).
+
+**Steps:**
+
+1.  **Access LXC Console:** Log in to the console of your newly created LXC container (e.g., via the Proxmox web UI or SSH).
+
+2.  **Download and Run the Script:** Execute the following command in the LXC console. This downloads the script and runs it with `sudo`:
+    ```bash
+    bash -c "$(wget -qLO - https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh)" --
+    ```
+    *   Alternatively, you can download it first and then run it:
+        ```bash
+        wget https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh
+        chmod +x install-pulse.sh
+        sudo ./install-pulse.sh
+        ```
+
+3.  **Follow Prompts:** The script will guide you through the installation process:
+    *   It will update the container and install necessary packages (`git`, `curl`, `nodejs`, `npm`).
+    *   It will ask for your Proxmox Host URL, API Token ID, and API Token Secret.
+    *   It will ask about allowing self-signed certificates and optionally setting a custom port.
+    *   It will configure Pulse and set it up as a `systemd` service (`pulse-proxmox.service`) to run automatically.
+
+4.  **Access Pulse:** Once the script finishes, it will display the URL (using the LXC's IP address) where you can access the Pulse dashboard (e.g., `http://<LXC-IP-ADDRESS>:7655`).
+
+**Managing the Service:**
+
+- **Check Status:** `sudo systemctl status pulse-proxmox.service`
+- **Stop Service:** `sudo systemctl stop pulse-proxmox.service`
+- **Start Service:** `sudo systemctl start pulse-proxmox.service`
+- **View Logs:** `sudo journalctl -u pulse-proxmox.service -f`
 
 ## ✨ Features
 
