@@ -131,11 +131,11 @@ Using Docker Compose is the recommended way to run the application in a containe
 
 1.  **Configure Environment:** Ensure you have created and configured your `server/.env` file as described in the [Environment Variables](#environment-variables) section above.
 
-2.  **Build and Run:** Navigate to the project root directory in your terminal and run:
+2.  **Run:** Navigate to the project root directory in your terminal and run:
     ```bash
-    docker compose up --build -d
+    docker compose up -d
     ```
-    - `--build`: Builds the Docker image based on the `Dockerfile` if it doesn't exist or if the `Dockerfile` has changed.
+    - This command will download the pre-built `rcourtman/pulse:latest` image from Docker Hub (if not already present) and start the container.
     - `-d`: Runs the container in detached mode (in the background).
 
 3.  **Access:** The application should now be running. Access it via `http://<your-host-ip>:7655` (or the host port you mapped in `docker-compose.yml`).
