@@ -117,6 +117,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Allow iframe embedding
+app.use((req, res, next) => {
+  res.removeHeader('X-Frame-Options'); // Remove default Express header if present
+  res.setHeader('Content-Security-Policy', "frame-ancestors *"); // Allow embedding from any origin
+  next();
+});
+
 // --- Add API endpoint for version ---
 let appVersion = 'unknown';
 try {
