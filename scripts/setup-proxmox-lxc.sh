@@ -111,11 +111,11 @@ gather_lxc_config() {
         # Fallback without jq (less robust, might fail on complex setups)
         print_warning "\'jq\' command not found. Storage detection might be less reliable."
         print_warning "Please install jq ('apt update && apt install jq') for the best experience."
-        # Basic grep/awk approach - less accurate for template support
+        # Simpler fallback using pvesm status - only gets disk storage, cannot check template support
         local disk_storage
-        disk_storage=$(pvesh get /storage --output-format json | grep -B 1 -E '(\"content\":.*\"rootdir\"|\"content\":.*\"images\")\' | grep \'\"storage\":\' | awk -F\'\"\' '{print $4}')
+        disk_storage=$(pvesm status --content rootdir,images | awk 'NR>1 {print $1}')
         for id in $disk_storage; do
-             storage_options_display+=(\"$id Template support unknown\") # Cannot reliably check template support here - Removed parentheses
+             storage_options_display+=(\"$id Template support unknown\") # Mark as unknown
              storage_ids+=(\"$id\")
              storage_template_support+=(\"unknown\") # Mark as unknown
         done
