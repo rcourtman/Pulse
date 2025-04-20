@@ -1,64 +1,15 @@
 {
-  "name": "pulse",
-  "version": "1.6.4",
-  "main": "dist/server.js",
-  "engines": {
-    "node": ">=20.0.0"
-  },
+  "name": "proxmox-simplified",
+  "version": "1.0.0",
+  "description": "Simplified monitor for Proxmox",
   "scripts": {
-    "start": "node dist/server.js",
-    "build": "tsc",
-    "dev": "node scripts/configure-env.js dev && NODE_ENV=development node scripts/start.js dev",
-    "dev:docker": "[ -f .env ] || cp .env.example .env && node scripts/configure-env.js dev && docker compose up --build",
-    "dev:screenshots": "rm -rf docs/images/* && concurrently --kill-others-on-fail \"npm run dev\" \"sleep 10 && cd tools/screenshot-automation && npm run build && npm start\"",
-    "prod": "node scripts/configure-env.js prod && node scripts/check-config.js && node scripts/start.js prod",
-    "prod:docker": "[ -f .env ] || cp .env.example .env && node scripts/configure-env.js prod && node scripts/check-config.js && docker compose up --build",
-    "stop": "docker compose stop",
-    "cleanup": "docker compose down --rmi all --volumes --remove-orphans"
+    "dev": "NODE_ENV=development cd server && node index.js",
+    "start": "cd server && node index.js"
   },
-  "keywords": [
-    "proxmox",
-    "monitoring",
-    "dashboard",
-    "real-time",
-    "metrics",
-    "virtualization"
-  ],
-  "author": "Richard Courtman",
-  "license": "MIT",
-  "description": "A lightweight, responsive monitoring application for Proxmox VE that displays real-time metrics for CPU, memory, network, and disk usage across multiple nodes.",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/rcourtman/pulse.git"
-  },
-  "bugs": {
-    "url": "https://github.com/rcourtman/pulse/issues"
-  },
-  "homepage": "https://github.com/rcourtman/pulse#readme",
   "dependencies": {
-    "@types/express": "^5.0.0",
-    "@types/node": "^22.13.5",
-    "@types/socket.io": "^3.0.2",
-    "@types/uuid": "^10.0.0",
-    "axios": "^1.8.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "node-fetch": "^3.3.2",
-    "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.7.3",
-    "uuid": "^11.1.0",
-    "winston": "^3.17.0"
+    "dotenv": "^16.0.0"
   },
   "devDependencies": {
-    "@babel/plugin-transform-modules-commonjs": "^7.26.3",
-    "@babel/preset-env": "^7.26.9",
-    "@babel/register": "^7.25.9",
-    "@types/cors": "^2.8.17",
-    "concurrently": "^9.1.2",
-    "nodemon": "^3.1.9",
-    "ts-node-dev": "^2.0.0"
+    "tailwindcss": "^4.1.4"
   }
 }
