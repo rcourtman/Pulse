@@ -96,11 +96,11 @@ gather_lxc_config() {
             # Check if it supports disks (rootdir or images)
             if [[ $content == *\"rootdir\"* || $content == *\"images\"* ]]; then
                 local supports_templates=\"false\"
-                local display_suffix=\"(Disk Only)\"
+                local display_suffix=\"\(Disk Only\)\"
                 # Check if it ALSO supports templates (vztmpl)
                 if [[ $content == *\"vztmpl\"* ]]; then
                     supports_templates=\"true\"
-                    display_suffix=\"(Templates OK)\"
+                    display_suffix=\"\(Templates OK\)\"
                 fi
                 storage_options_display+=(\"$id $display_suffix\")
                 storage_ids+=(\"$id\")
