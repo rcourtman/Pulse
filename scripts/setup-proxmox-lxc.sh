@@ -115,25 +115,67 @@ gather_lxc_config() {
     print_info "Using Storage: $CT_STORAGE"
 
     # --- OS Template ---
-    print_info "Available OS Templates (on $CT_STORAGE):"
-    # Ensure we look for templates on the selected storage
+    print_info "Checking for OS Templates on storage '$CT_STORAGE'..."
     local template_options
-    template_options=$(pvesm list "$CT_STORAGE" --content vztmpl | awk 'NR>1 {print $1}')
+    template_options=$(pvesm list "$CT_STORAGE" --content vztmpl --output-format=json | jq -r '.[] | .volid | sub("$CT_STORAGE:vztmpl/", "")')
+
     if [ -z "$template_options" ]; then
-        print_error "No OS templates found on storage '$CT_STORAGE'."
-        print_error "Please download an LXC template first (e.g., Debian or Ubuntu)."
-        exit 1
-    fi
-    PS3="Select OS template: "
-    select template in $template_options; do
-         if [[ -n $template ]]; then
-            # Format template name for pct create (storage:vztmpl/template.tar.gz)
-            CT_OSTMPL="$CT_STORAGE:vztmpl/$template"
-            break
-        else
-            print_warning "Invalid selection. Please choose a number from the list."
+        print_warning "No OS templates found on storage '$CT_STORAGE'. Attempting to download one."
+        print_info "Updating available template list..."
+        if ! pveam update > /dev/null; then
+            print_error "Failed to update template list. Please check network connectivity or run 'pveam update' manually."
+            exit 1
         fi
-    done
+        print_info "Fetching available templates (this may take a moment)..."
+        local downloadable_templates
+        # Get system templates, parse filename from the first column
+        downloadable_templates=$(pveam available --section system | awk 'NR>1 {print $1}')
+
+        if [ -z "$downloadable_templates" ]; then
+             print_error "Could not retrieve list of downloadable templates."
+             exit 1
+        fi
+
+        echo "Available templates to download:"
+        PS3="Select a template to download to '$CT_STORAGE': "
+        select template_to_download in $downloadable_templates; do
+            if [[ -n $template_to_download ]]; then
+                print_info "Attempting to download '$template_to_download' to '$CT_STORAGE'..."
+                # Show download progress
+                if pveam download "$CT_STORAGE" "$template_to_download"; then
+                    print_success "Template '$template_to_download' downloaded successfully."
+                    # Set the template path for container creation
+                    CT_OSTMPL="$CT_STORAGE:vztmpl/$template_to_download"
+                    break # Exit the select loop
+                else
+                    print_error "Failed to download template '$template_to_download'."
+                    print_warning "Please check disk space on '$CT_STORAGE', network connectivity, and Proxmox task logs."
+                    # Optionally loop back or exit? Exiting for now.
+                    exit 1
+                fi
+            else
+                print_warning "Invalid selection. Please choose a number from the list."
+            fi
+        done
+        # Check if CT_OSTMPL was set (i.e., download was attempted and potentially successful)
+        if [ -z "$CT_OSTMPL" ]; then
+             print_error "Template selection or download failed. Exiting."
+             exit 1
+        fi
+    else
+        # Templates exist, let user choose
+        print_info "Available OS Templates found on '$CT_STORAGE': "
+        PS3="Select OS template: "
+        select existing_template in $template_options; do
+             if [[ -n $existing_template ]]; then
+                # Format template name for pct create
+                CT_OSTMPL="$CT_STORAGE:vztmpl/$existing_template"
+                break
+            else
+                print_warning "Invalid selection. Please choose a number from the list."
+            fi
+        done
+    fi
      print_info "Using OS Template: $CT_OSTMPL"
 
     # --- Disk Size ---
