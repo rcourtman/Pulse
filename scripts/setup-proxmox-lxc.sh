@@ -152,25 +152,24 @@ gather_lxc_config() {
     template_options=$(pvesm list "$CT_STORAGE" --content vztmpl | awk -v storage="$CT_STORAGE" 'NR>1 {sub(storage ":vztmpl/", "", $1); print $1}')
 
     if [ -z "$template_options" ]; then
-        # No templates found, check if download is possible
+        # No templates found, check if download is possible using the reliable boolean check
+        # (Ignore the display suffix which might be from a cached script version)
         if [[ "$CT_STORAGE_SUPPORTS_TEMPLATES" == "false" ]]; then
              print_error "No existing OS templates found on selected storage '$CT_STORAGE',"
              print_error "and this storage location does not support template downloads (missing 'vztmpl' content type)."
              print_error "Please either enable 'vztmpl' content for '$CT_STORAGE' in the Proxmox UI,"
              print_error "or restart the script and choose storage marked as '(Templates OK)'."
              exit 1
-        elif [[ "$CT_STORAGE_SUPPORTS_TEMPLATES" == "unknown" ]]; then
-             print_warning "No existing OS templates found on '$CT_STORAGE'."
-             print_error "Cannot confirm if template downloads are supported because 'jq' is not installed."
-             print_error "Please install jq (`apt update && apt install jq`) and restart the script,"
-             print_error "or manually ensure '$CT_STORAGE' supports the 'vztmpl' content type before proceeding."
-             exit 1 # Do not attempt download if support is unknown
-        else
+        elif [[ "$CT_STORAGE_SUPPORTS_TEMPLATES" == "true" ]]; then # Explicitly check for true
              print_warning "No OS templates found on storage '$CT_STORAGE'. Attempting to download one."
              # Fall through to download logic
+        else # Should only be reachable if CT_STORAGE_SUPPORTS_TEMPLATES is still 'unknown'
+             # This case was handled above by exiting if unknown
+             print_error "Internal logic error determining template support. Exiting." # Safety net
+             exit 1
         fi
 
-        # --- Download Logic (Only reached if templates not found AND storage support is true or unknown) ---
+        # --- Download Logic (Only reached if templates not found AND storage support is true) ---
         print_info "Updating available template list..."
         if ! pveam update > /dev/null; then
             print_error "Failed to update template list. Please check network connectivity or run 'pveam update' manually."
