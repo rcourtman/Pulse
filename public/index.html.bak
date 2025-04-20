@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulse</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Configure Tailwind CSS
+    tailwind.config = {
+      darkMode: 'class', // Use 'dark-mode' class on body for toggling
+      theme: {
+        extend: {
+          // Map CSS variables to Tailwind colors or add custom ones if needed
+          // Example: You might map --highlight-color here if used frequently
+          // colors: {
+          //   highlight: {
+          //     DEFAULT: 'var(--highlight-color)', // Reference existing CSS vars
+          //     text: 'var(--highlight-text)'
+          //   },
+          //   error: {
+          //     DEFAULT: 'var(--error-color)',
+          //     text: 'var(--error-text)'
+          //   },
+          //   // ... add others as needed
+          // }
+          // For simplicity now, we'll rely on Tailwind defaults + direct variable usage where simple
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Remove all old CSS rules. Keep the style tag empty or remove it entirely */
+    /* Tailwind utilities will handle styling */
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans transition-colors duration-300">
+  <div class="container max-w-[95%] mx-auto">
+    <div class="header flex justify-between items-center mb-2">
+      <h1 class="text-2xl font-semibold text-gray-800 dark:text-gray-200">Pulse</h1>
+      <div class="header-controls flex items-center gap-4">
+        <div class="flex items-center">
+          <span class="theme-label text-sm mr-2">Dark Mode</span>
+          <label class="theme-switch relative inline-block w-[60px] h-[28px]">
+            <input type="checkbox" id="theme-toggle" class="peer opacity-0 w-0 h-0">
+            <!-- Use Tailwind classes for the slider -->
+            <span class="slider absolute cursor-pointer top-0 left-0 right-0 bottom-0 bg-gray-300 dark:bg-gray-600 peer-checked:bg-blue-600 dark:peer-checked:bg-blue-700 transition duration-400 rounded-full"></span>
+            <span class="slider-knob absolute content-[''] h-[20px] w-[20px] left-[4px] bottom-[4px] bg-white transition duration-400 rounded-full peer-checked:translate-x-[32px]"></span>
+          </label>
+        </div>
+        <div id="connection-status" class="status disconnected text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Disconnected</div>
+        <!-- JS will need to toggle classes like 'bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300' for disconnected -->
+        <!-- and 'bg-green-100 dark:bg-green-800/30 text-green-700 dark:text-green-300' for connected -->
+      </div>
+    </div>
+
+    <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700">
+      <!-- Add Tailwind classes, JS will toggle active classes -->
+      <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px" data-tab="main">Main</div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="nodes">Nodes</div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="vms">VMs</div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="containers">Containers</div>
+    </div>
+
+    <!-- Removed outer .section wrapper, apply styles directly to tab content where needed -->
+    <!-- Apply base styles to all tab contents, JS toggles 'block'/'hidden' -->
+    <div id="nodes" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
+      <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Nodes</h2>
+      <div class="overflow-x-auto">
+        <table id="nodes-table" class="w-full border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-gray-300 dark:border-gray-700">
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="id">ID</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="status">Status</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="cpu">CPU</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="memused">Memory Used</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="memtotal">Memory Total</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="uptime">Uptime</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="ip">IP</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tr>
+              <td colspan="7" class="p-2 text-center text-gray-500">Loading data...</td>
+            </tr>
+            <!-- Rows added by JS -->
+          </tbody>
+        </table>
+      </div>
+      </div>
+
+    <div id="vms" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
+      <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Virtual Machines</h2>
+      <div class="overflow-x-auto">
+        <table id="vms-table" class="w-full border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-gray-300 dark:border-gray-700">
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="id">ID</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="name">Name</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="node">Node</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="status">Status</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="cpu">CPU</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="memory">Memory</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="disk">Disk</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="uptime">Uptime</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tr>
+              <td colspan="8" class="p-2 text-center text-gray-500">Loading data...</td>
+            </tr>
+            <!-- Rows added by JS -->
+          </tbody>
+        </table>
+      </div>
+      </div>
+
+    <div id="containers" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
+      <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Containers</h2>
+      <div class="overflow-x-auto">
+        <table id="containers-table" class="w-full border-collapse text-sm">
+          <thead>
+            <tr class="border-b border-gray-300 dark:border-gray-700">
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="id">ID</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="name">Name</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="node">Node</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="status">Status</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="cpu">CPU</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="memory">Memory</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="disk">Disk</th>
+              <th class="sortable text-left p-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="uptime">Uptime</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tr>
+              <td colspan="8" class="p-2 text-center text-gray-500">Loading data...</td>
+            </tr>
+            <!-- Rows added by JS -->
+          </tbody>
+        </table>
+      </div>
+      </div>
+
+    <div id="main" class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
+        <!-- --- Dashboard Filter Bar --- -->
+      <div class="dashboard-filter flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+        <div class="dashboard-filter-controls flex-grow flex items-center gap-2">
+          <input type="text" id="dashboard-search" placeholder="Search (use ',' for OR)" class="flex-grow p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+          </div>
+          <!-- Combined Toggle Wrapper -->
+        <div class="filter-toggles-wrapper flex items-center gap-4 flex-wrap">
+            <!-- View Toggle -->
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-gray-600 dark:text-gray-400">View:</span>
+            <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+              <input type="radio" id="group-grouped" name="group-filter" value="grouped" class="hidden peer/grouped" checked>
+              <label for="group-grouped" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/grouped:bg-blue-100 dark:peer-checked/grouped:bg-blue-800/50 peer-checked/grouped:text-blue-700 dark:peer-checked/grouped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors select-none">Grouped</label>
+              <input type="radio" id="group-list" name="group-filter" value="list" class="hidden peer/list">
+              <label for="group-list" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/list:bg-blue-100 dark:peer-checked/list:bg-blue-800/50 peer-checked/list:text-blue-700 dark:peer-checked/list:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors select-none">List</label>
+            </div>
+            </div>
+            <!-- Show Toggle -->
+          <div class="flex items-center gap-2 pl-4 border-l border-gray-300 dark:border-gray-600">
+            <span class="text-sm text-gray-600 dark:text-gray-400">Show:</span>
+            <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+              <input type="radio" id="filter-all" name="type-filter" value="all" class="hidden peer/all" checked>
+              <label for="filter-all" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-green-100 dark:peer-checked/all:bg-green-800/50 peer-checked/all:text-green-700 dark:peer-checked/all:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors select-none">All</label>
+              <input type="radio" id="filter-vm" name="type-filter" value="vm" class="hidden peer/vm">
+              <label for="filter-vm" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/vm:bg-green-100 dark:peer-checked/vm:bg-green-800/50 peer-checked/vm:text-green-700 dark:peer-checked/vm:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors select-none">VMs</label>
+              <input type="radio" id="filter-lxc" name="type-filter" value="ct" class="hidden peer/lxc">
+              <label for="filter-lxc" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors select-none">LXCs</label>
+            </div>
+          </div>
+        </div>
+      </div>
+        <!-- --- Table Container --- -->
+      <div class="table-container max-h-[80vh] overflow-y-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+        <table id="main-table" class="w-full table-fixed text-sm">
+            <colgroup>
+            <!-- Define col widths using style attribute for Tailwind compatibility -->
+            <col class="name-col" style="width: var(--name-col-width, 150px);">
+              <col class="type-col" style="width: 50px;">
+              <col class="id-col" style="width: 50px;">
+            <col class="uptime-col" style="width: var(--uptime-col-width, 80px);">
+              <col class="usage-col" style="width: 70px;"> <!-- CPU -->
+              <col class="usage-col" style="width: 70px;"> <!-- Mem -->
+              <col class="usage-col" style="width: 70px;"> <!-- Disk -->
+              <col class="net-disk-col" style="width: 80px;">
+              <col class="net-disk-col" style="width: 80px;">
+              <col class="net-disk-col" style="width: 80px;">
+              <col class="net-disk-col" style="width: 80px;">
+            </colgroup>
+          <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
+            <!-- Apply sticky header styles -->
+            <tr class="border-b border-gray-300 dark:border-gray-700">
+              <!-- Header cells with Tailwind classes -->
+              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="name">Name</th>
+              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="type">Type</th>
+              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="id">ID</th>
+              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="uptime">Uptime</th>
+              <th class="sortable text-center p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="cpu">CPU</th>
+              <th class="sortable text-center p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="memory">Mem</th>
+              <th class="sortable text-center p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="disk">Disk</th>
+              <th class="sortable text-right p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="diskread">Disk Read</th>
+              <th class="sortable text-right p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="diskwrite">Disk Write</th>
+              <th class="sortable text-right p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="netin">Net In</th>
+              <th class="sortable text-right p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="netout">Net Out</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <tr>
+              <td colspan="11" class="p-4 text-center text-gray-500">Loading data...</td>
+            </tr>
+            <!-- Rows added by JS, JS needs to add Tailwind classes for hover, etc. -->
+            <!-- Node header row added by JS needs Tailwind classes: bg-gray-100 dark:bg-gray-700 font-bold px-2 py-1 text-xs -->
+            <!-- Type icons need Tailwind classes added by JS -->
+            <!-- Progress bars need Tailwind classes added by JS -->
+            <!-- Usage text needs Tailwind classes added by JS -->
+          </tbody>
+        </table>
+        </div>
+      <span id="dashboard-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading dashboard data...</span>
+    </div>
+  </div>
+  
+  <!-- Custom Tooltip Element - Styled with Tailwind -->
+  <div id="custom-tooltip" class="custom-tooltip absolute hidden z-50 px-2 py-1 text-xs text-white bg-gray-900/90 rounded shadow-lg pointer-events-none transition-opacity duration-100"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js" defer></script>
+</body>
+</html> 

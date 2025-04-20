@@ -1,66 +1,26 @@
+version: '3.8'
+
 services:
-  app:
-    build:
-      context: .
-      dockerfile: ${DOCKERFILE:-docker/Dockerfile}
-      args:
-        - NODE_ENV=${NODE_ENV:-production}
-    container_name: ${CONTAINER_NAME:-pulse}
+  pulse-server:
+    # Build context commented out - using pre-built image from Docker Hub
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    image: rcourtman/pulse:latest # Use the pre-built image from Docker Hub
+    container_name: pulse_server_simplified
+    restart: unless-stopped
     ports:
-      - "7654:7654"  # Backend API
-      - "3000:3000"  # Frontend dev server
-      - "7656:7656"  # Mock data server (only used in dev mode)
-    volumes:
-      - ./logs:/app/logs
-      # Development mode mounts - only used when DEV_*_MOUNT variables are set in .env
-      - ${DEV_SRC_MOUNT:-./null-volume:/app/null-volume}
-      - ${DEV_FRONTEND_SRC_MOUNT:-./null-volume:/app/null-volume}
-      - ${DEV_FRONTEND_PUBLIC_MOUNT:-./null-volume:/app/null-volume}
-      - ${DEV_FRONTEND_INDEX_MOUNT:-./null-volume:/app/null-volume}
-      - ${DEV_FRONTEND_CONFIG_MOUNT:-./null-volume:/app/null-volume}
-      - ${DEV_SCRIPTS_MOUNT:-./null-volume:/app/null-volume}
-      - ${DEV_ENV_MOUNT:-./null-volume:/app/null-volume}
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - DOCKER_CONTAINER=true
-      - USE_MOCK_DATA=${USE_MOCK_DATA:-false}
-      - MOCK_DATA_ENABLED=${MOCK_DATA_ENABLED:-false}
-      - MOCK_SERVER_PORT=${MOCK_SERVER_PORT:-7656}
-      - DRY_RUN=${DRY_RUN:-false}
-      # Performance tuning settings to reduce server load
-      - NODE_POLLING_INTERVAL_MS=${NODE_POLLING_INTERVAL_MS:-15000}
-      - EVENT_POLLING_INTERVAL_MS=${EVENT_POLLING_INTERVAL_MS:-5000}
-      - METRICS_HISTORY_MINUTES=${METRICS_HISTORY_MINUTES:-30}
-      - API_RATE_LIMIT_MS=${API_RATE_LIMIT_MS:-2000}
-      - API_TIMEOUT_MS=${API_TIMEOUT_MS:-90000}
-      - API_RETRY_DELAY_MS=${API_RETRY_DELAY_MS:-10000}
-      # Proxmox configuration - Node 1
-      - PROXMOX_NODE_1_NAME=${PROXMOX_NODE_1_NAME:-}
-      - PROXMOX_NODE_1_HOST=${PROXMOX_NODE_1_HOST:-}
-      - PROXMOX_NODE_1_TOKEN_ID=${PROXMOX_NODE_1_TOKEN_ID:-}
-      - PROXMOX_NODE_1_TOKEN_SECRET=${PROXMOX_NODE_1_TOKEN_SECRET:-}
-      # Proxmox configuration - Node 2 (optional)
-      - PROXMOX_NODE_2_NAME=${PROXMOX_NODE_2_NAME:-}
-      - PROXMOX_NODE_2_HOST=${PROXMOX_NODE_2_HOST:-}
-      - PROXMOX_NODE_2_TOKEN_ID=${PROXMOX_NODE_2_TOKEN_ID:-}
-      - PROXMOX_NODE_2_TOKEN_SECRET=${PROXMOX_NODE_2_TOKEN_SECRET:-}
-      # Proxmox configuration - Node 3 (optional)
-      - PROXMOX_NODE_3_NAME=${PROXMOX_NODE_3_NAME:-}
-      - PROXMOX_NODE_3_HOST=${PROXMOX_NODE_3_HOST:-}
-      - PROXMOX_NODE_3_TOKEN_ID=${PROXMOX_NODE_3_TOKEN_ID:-}
-      - PROXMOX_NODE_3_TOKEN_SECRET=${PROXMOX_NODE_3_TOKEN_SECRET:-}
-      # SSL verification settings
-      - IGNORE_SSL_ERRORS=${IGNORE_SSL_ERRORS:-false}
-      - NODE_TLS_REJECT_UNAUTHORIZED=${NODE_TLS_REJECT_UNAUTHORIZED:-}
-      - PROXMOX_REJECT_UNAUTHORIZED=${PROXMOX_REJECT_UNAUTHORIZED:-}
-      - HTTPS_REJECT_UNAUTHORIZED=${HTTPS_REJECT_UNAUTHORIZED:-}
-      - PROXMOX_INSECURE=${PROXMOX_INSECURE:-}
-      - PROXMOX_VERIFY_SSL=${PROXMOX_VERIFY_SSL:-}
-    restart: ${RESTART_POLICY:-unless-stopped}
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7654/api/status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 20s 
+      # Map container port 7655 to host port 7655
+      # You can change the host port (left side) if 7655 is already in use on your host
+      - "7655:7655"
+    env_file:
+      # Load environment variables from the .env file located in the server directory
+      - ./server/.env
+    # Optional: Define networks if needed, otherwise uses default bridge network
+    # networks:
+    #   - pulse_network
+
+# Optional: Define a network
+# networks:
+#   pulse_network:
+#     driver: bridge 
