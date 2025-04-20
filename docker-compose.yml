@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   pulse-server:
     # Build context commented out - using pre-built image from Docker Hub
@@ -14,8 +12,9 @@ services:
       # You can change the host port (left side) if 7655 is already in use on your host
       - "7655:7655"
     env_file:
-      # Load environment variables from the .env file located in the server directory
-      - ./server/.env
+      # Load environment variables, prioritizing the one in the server directory
+      - ./server/.env # Primary location
+      - ./.env        # Fallback location (if server/.env is missing)
     # Optional: Define networks if needed, otherwise uses default bridge network
     # networks:
     #   - pulse_network

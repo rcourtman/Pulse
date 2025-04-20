@@ -1,5 +1,44 @@
 require('dotenv').config(); // Load environment variables from .env file
 
+// --- BEGIN Environment Variable Validation ---
+const requiredEnvVars = [
+  'PROXMOX_HOST',
+  'PROXMOX_TOKEN_ID',
+  'PROXMOX_TOKEN_SECRET'
+];
+const placeholderValues = [
+  'your-proxmox-ip-or-hostname',
+  'your-api-token-id@pam!your-token-name',
+  'your-api-token-secret-uuid',
+  'your-password' // Added just in case password fallback is used without token
+];
+
+let missingVars = [];
+let placeholderVars = [];
+
+requiredEnvVars.forEach(varName => {
+  const value = process.env[varName];
+  if (!value) {
+    missingVars.push(varName);
+  } else if (placeholderValues.some(placeholder => value.includes(placeholder))) {
+    placeholderVars.push(varName);
+  }
+});
+
+if (missingVars.length > 0 || placeholderVars.length > 0) {
+  console.error('\n--- Configuration Error ---');
+  if (missingVars.length > 0) {
+    console.error(`Missing required environment variables in server/.env: ${missingVars.join(', ')}`);
+  }
+  if (placeholderVars.length > 0) {
+    console.error(`Environment variables seem to contain placeholder values in server/.env: ${placeholderVars.join(', ')}`);
+  }
+  console.error('Please ensure server/.env exists and contains valid Proxmox connection details.');
+  console.error('Refer to server/.env.example for the required format.\n');
+  process.exit(1); // Exit if configuration is invalid
+}
+// --- END Environment Variable Validation ---
+
 const express = require('express');
 const http = require('http');
 const path = require('path');

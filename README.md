@@ -148,6 +148,8 @@ To stop the container(s) defined in the `docker-compose.yml` file, run:
 docker compose down
 ```
 
+*Note: If you modify the `server/.env` file after the container is already running, you may need to restart the container for the changes to take effect. You can do this by running `docker compose down` followed by `docker compose up -d`, or by using `docker compose up -d --force-recreate`.*
+
 ## ✨ Features
 
 - Lightweight monitoring for Proxmox VE nodes.
