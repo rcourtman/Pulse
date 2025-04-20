@@ -115,7 +115,7 @@ gather_lxc_config() {
         local disk_storage
         disk_storage=$(pvesh get /storage --output-format json | grep -B 1 -E '(\"content\":.*\"rootdir\"|\"content\":.*\"images\")\' | grep \'\"storage\":\' | awk -F\'\"\' '{print $4}')
         for id in $disk_storage; do
-             storage_options_display+=(\"$id (Template support unknown)\") # Cannot reliably check template support here
+             storage_options_display+=(\"$id Template support unknown\") # Cannot reliably check template support here - Removed parentheses
              storage_ids+=(\"$id\")
              storage_template_support+=(\"unknown\") # Mark as unknown
         done
