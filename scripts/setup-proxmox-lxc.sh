@@ -161,8 +161,10 @@ gather_lxc_config() {
              exit 1
         elif [[ "$CT_STORAGE_SUPPORTS_TEMPLATES" == "unknown" ]]; then
              print_warning "No existing OS templates found on '$CT_STORAGE'."
-             print_warning "Cannot confirm if template downloads are supported (jq not installed). Proceeding with download attempt..."
-             # Fall through to download logic
+             print_error "Cannot confirm if template downloads are supported because 'jq' is not installed."
+             print_error "Please install jq (`apt update && apt install jq`) and restart the script,"
+             print_error "or manually ensure '$CT_STORAGE' supports the 'vztmpl' content type before proceeding."
+             exit 1 # Do not attempt download if support is unknown
         else
              print_warning "No OS templates found on storage '$CT_STORAGE'. Attempting to download one."
              # Fall through to download logic
