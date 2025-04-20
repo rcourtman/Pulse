@@ -2,9 +2,11 @@ version: '3.8'
 
 services:
   pulse-server:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Build context commented out - using pre-built image from Docker Hub
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    image: rcourtman/pulse:latest # Use the pre-built image from Docker Hub
     container_name: pulse_server_simplified
     restart: unless-stopped
     ports:
