@@ -2,6 +2,8 @@
 
 A lightweight monitoring application for Proxmox VE that displays real-time status for VMs and containers via a simple web interface.
 
+![Pulse Dashboard](docs/images/dashboard-screenshot.png)
+
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 ## 📋 Table of Contents
