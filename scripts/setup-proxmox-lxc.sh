@@ -86,7 +86,7 @@ gather_lxc_config() {
     # --- Storage ---
     print_info "Available storage locations:"
     local storage_options
-    storage_options=$(pvesm status --content rootdir,images - P | awk 'NR>1 {print $1}')
+    storage_options=$(pvesm status --content rootdir,images | awk 'NR>1 {print $1}')
     # Check if any storage found
     if [ -z "$storage_options" ]; then
         print_error "No suitable storage locations found for LXC containers (content type 'rootdir' or 'images')."
