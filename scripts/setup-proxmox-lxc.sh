@@ -84,9 +84,19 @@ gather_lxc_config() {
     print_info "Password set."
 
     # --- Storage ---
-    print_info "Available storage locations:"
+    print_info "Attempting to list suitable storage locations..."
     local storage_options
-    storage_options=$(pvesm status --content rootdir,images | awk 'NR>1 {print $1}')
+    # Try using pvesh get storage + jq (requires jq to be installed)
+    if command -v jq &> /dev/null; then
+        # Get storage IDs where content includes rootdir or images
+        storage_options=$(pvesh get /storage --output-format json | jq -r '.[] | select(.content | contains("rootdir") or contains("images")) | .storage')
+    else
+        print_warning "'jq' command not found. Attempting fallback method for storage detection."
+        print_warning "Please install jq (`apt update && apt install jq`) for more reliable storage detection."
+        # Fallback using grep/awk on json output (less robust)
+        storage_options=$(pvesh get /storage --output-format json | grep -B 1 -E '("content":.*"rootdir"|\"content\":.*"images")' | grep '"storage":' | awk -F'"' '{print $4}')
+    fi
+
     # Check if any storage found
     if [ -z "$storage_options" ]; then
         print_error "No suitable storage locations found for LXC containers (content type 'rootdir' or 'images')."
