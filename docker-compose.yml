@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  pulse-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pulse_server_simplified
+    restart: unless-stopped
+    ports:
+      # Map container port 7655 to host port 7655
+      # You can change the host port (left side) if 7655 is already in use on your host
+      - "7655:7655"
+    env_file:
+      # Load environment variables from the .env file located in the server directory
+      - ./server/.env
+    # Optional: Define networks if needed, otherwise uses default bridge network
+    # networks:
+    #   - pulse_network
+
+# Optional: Define a network
+# networks:
+#   pulse_network:
+#     driver: bridge 
