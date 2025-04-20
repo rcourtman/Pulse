@@ -85,34 +85,63 @@ gather_lxc_config() {
 
     # --- Storage ---
     print_info "Attempting to list suitable storage locations..."
-    local storage_options
-    # Try using pvesh get storage + jq (requires jq to be installed)
+    local storage_options_display=() # Array for select prompt display
+    local storage_ids=() # Array for actual storage IDs
+    local storage_template_support=() # Array to track template support (true/false)
+
+    # Use jq if available for reliable parsing
     if command -v jq &> /dev/null; then
-        # Get storage IDs where content includes rootdir or images
-        storage_options=$(pvesh get /storage --output-format json | jq -r '.[] | select(.content | contains("rootdir") or contains("images")) | .storage')
+        # Process each storage entry from pvesh output
+        while IFS=$'\t' read -r id content; do
+            # Check if it supports disks (rootdir or images)
+            if [[ $content == *\"rootdir\"* || $content == *\"images\"* ]]; then
+                local supports_templates=\"false\"
+                local display_suffix=\"(Disk Only)\"
+                # Check if it ALSO supports templates (vztmpl)
+                if [[ $content == *\"vztmpl\"* ]]; then
+                    supports_templates=\"true\"
+                    display_suffix=\"(Templates OK)\"
+                fi
+                storage_options_display+=(\"$id $display_suffix\")
+                storage_ids+=(\"$id\")
+                storage_template_support+=(\"$supports_templates\")
+            fi
+        done < <(pvesh get /storage --output-format json | jq -r '.[] | [.storage, .content] | @tsv')
     else
-        print_warning "'jq' command not found. Attempting fallback method for storage detection."
-        print_warning "Please install jq (`apt update && apt install jq`) for more reliable storage detection."
-        # Fallback using grep/awk on json output (less robust)
-        storage_options=$(pvesh get /storage --output-format json | grep -B 1 -E '("content":.*"rootdir"|\"content\":.*"images")' | grep '"storage":' | awk -F'"' '{print $4}')
+        # Fallback without jq (less robust, might fail on complex setups)
+        print_warning "'jq' command not found. Storage detection might be less reliable."
+        print_warning "Please install jq (`apt update && apt install jq`) for the best experience."
+        # Basic grep/awk approach - less accurate for template support
+        local disk_storage
+        disk_storage=$(pvesh get /storage --output-format json | grep -B 1 -E '(\"content\":.*\"rootdir\"|\"content\":.*\"images\")\' | grep \'\"storage\":\' | awk -F\'\"\' '{print $4}')
+        for id in $disk_storage; do
+             storage_options_display+=(\"$id (Template support unknown)\") # Cannot reliably check template support here
+             storage_ids+=(\"$id\")
+             storage_template_support+=(\"unknown\") # Mark as unknown
+        done
     fi
 
-    # Check if any storage found
-    if [ -z "$storage_options" ]; then
-        print_error "No suitable storage locations found for LXC containers (content type 'rootdir' or 'images')."
-        print_error "Please configure storage in Proxmox first."
+    # Check if any suitable storage found
+    if [ ${#storage_ids[@]} -eq 0 ]; then
+        print_error "No storage locations found suitable for LXC disks (content type 'rootdir' or 'images')."
+        print_error "Please configure storage content types in the Proxmox UI first."
         exit 1
     fi
-    PS3="Select storage for root disk: "
-    select storage in $storage_options; do
-        if [[ -n $storage ]]; then
-            CT_STORAGE=$storage
+
+    print_info "Select storage for the container's root disk:"
+    PS3="Select storage number: "
+    select display_option in "${storage_options_display[@]}"; do
+        # $REPLY is the index chosen by the user
+        if [[ "$REPLY" =~ ^[0-9]+$ ]] && [ "$REPLY" -ge 1 ] && [ "$REPLY" -le ${#storage_ids[@]} ]; then
+            local chosen_index=$((REPLY - 1))
+            CT_STORAGE=${storage_ids[$chosen_index]}
+            CT_STORAGE_SUPPORTS_TEMPLATES=${storage_template_support[$chosen_index]}
+            print_info "Using Storage: $CT_STORAGE (Supports Templates: $CT_STORAGE_SUPPORTS_TEMPLATES)"
             break
         else
             print_warning "Invalid selection. Please choose a number from the list."
         fi
     done
-    print_info "Using Storage: $CT_STORAGE"
 
     # --- OS Template ---
     print_info "Checking for OS Templates on storage '$CT_STORAGE'..."
@@ -123,7 +152,23 @@ gather_lxc_config() {
     template_options=$(pvesm list "$CT_STORAGE" --content vztmpl | awk -v storage="$CT_STORAGE" 'NR>1 {sub(storage ":vztmpl/", "", $1); print $1}')
 
     if [ -z "$template_options" ]; then
-        print_warning "No OS templates found on storage '$CT_STORAGE'. Attempting to download one."
+        # No templates found, check if download is possible
+        if [[ "$CT_STORAGE_SUPPORTS_TEMPLATES" == "false" ]]; then
+             print_error "No existing OS templates found on selected storage '$CT_STORAGE',"
+             print_error "and this storage location does not support template downloads (missing 'vztmpl' content type)."
+             print_error "Please either enable 'vztmpl' content for '$CT_STORAGE' in the Proxmox UI,"
+             print_error "or restart the script and choose storage marked as '(Templates OK)'."
+             exit 1
+        elif [[ "$CT_STORAGE_SUPPORTS_TEMPLATES" == "unknown" ]]; then
+             print_warning "No existing OS templates found on '$CT_STORAGE'."
+             print_warning "Cannot confirm if template downloads are supported (jq not installed). Proceeding with download attempt..."
+             # Fall through to download logic
+        else
+             print_warning "No OS templates found on storage '$CT_STORAGE'. Attempting to download one."
+             # Fall through to download logic
+        fi
+
+        # --- Download Logic (Only reached if templates not found AND storage support is true or unknown) ---
         print_info "Updating available template list..."
         if ! pveam update > /dev/null; then
             print_error "Failed to update template list. Please check network connectivity or run 'pveam update' manually."
