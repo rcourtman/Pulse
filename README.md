@@ -11,6 +11,8 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
   - [Required Permissions](#required-permissions)
 - [Installation](#-installation)
 - [Running the Application](#-running-the-application)
+- [Running the Application (Node.js)](#️-running-the-application-nodejs)
+- [Running with Docker Compose](#-running-with-docker-compose)
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
 - [Contributing](#-contributing)
@@ -95,7 +97,9 @@ npm install
 cd ..
 ```
 
-## ▶️ Running the Application
+## ▶️ Running the Application (Node.js)
+
+These instructions are for running the application directly using Node.js.
 
 ### Development Mode
 
@@ -115,6 +119,35 @@ npm run start
 ```
 This command starts the server using `node`. Access the application via the configured host and port.
 
+## 🐳 Running with Docker Compose
+
+Using Docker Compose is the recommended way to run the application in a containerized environment.
+
+**Prerequisites:**
+- Docker ([Install Docker](https://docs.docker.com/engine/install/))
+- Docker Compose ([Install Docker Compose](https://docs.docker.com/compose/install/))
+
+**Steps:**
+
+1.  **Configure Environment:** Ensure you have created and configured your `server/.env` file as described in the [Environment Variables](#environment-variables) section above.
+
+2.  **Build and Run:** Navigate to the project root directory in your terminal and run:
+    ```bash
+    docker compose up --build -d
+    ```
+    - `--build`: Builds the Docker image based on the `Dockerfile` if it doesn't exist or if the `Dockerfile` has changed.
+    - `-d`: Runs the container in detached mode (in the background).
+
+3.  **Access:** The application should now be running. Access it via `http://<your-host-ip>:7655` (or the host port you mapped in `docker-compose.yml`).
+
+**Stopping the Application:**
+
+To stop the container(s) defined in the `docker-compose.yml` file, run:
+
+```bash
+docker compose down
+```
+
 ## ✨ Features
 
 - Lightweight monitoring for Proxmox VE nodes.
@@ -123,30 +156,13 @@ This command starts the server using `node`. Access the application via the conf
 
 ## 💻 System Requirements
 
-- **Node.js**: Version 16.x or higher recommended (check `package.json` engines for specifics).
+- **Node.js** (for local development/running): Version 16.x or higher recommended.
+- **Docker & Docker Compose** (for containerized deployment): Recent versions recommended.
 - **Network**: Connectivity between the Pulse server and your Proxmox server(s).
-- **Proxmox**: A running Proxmox VE instance with API access enabled.
 
 ## 👥 Contributing
 
 Contributions are welcome! Please follow standard fork-and-pull-request workflow. Refer to the main repository's contributing guidelines if available.
 
 1.  **Fork the repository**
-2.  **Create a feature branch**: `git checkout -b feature/your-feature`
-3.  **Commit your changes**: `git commit -m 'Add your feature'`
-4.  **Push to the branch**: `git push origin feature/your-feature`
-5.  **Open a Pull Request**
-
-## 📄 License
-
-Specify the license under which this project is distributed (e.g., MIT License). *(Consider adding the actual license file if missing)*
-
-## Trademark Notice
-
-Proxmox® and Proxmox VE® are registered trademarks of Proxmox Server Solutions GmbH. Pulse for Proxmox VE is an independent project and is not affiliated with, endorsed by, or sponsored by Proxmox Server Solutions GmbH.
-
-## ❤️ Support
-
-If you find Pulse helpful, please consider supporting its development through Ko-fi. Your support helps keep this project maintained and free for everyone!
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman) 
+2.  **Create a feature branch**: `
