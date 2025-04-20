@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const tooltipElement = document.getElementById('custom-tooltip');
   const searchInput = document.getElementById('dashboard-search');
   const statusElement = document.getElementById('dashboard-status-text');
+  const versionSpan = document.getElementById('app-version'); // Get version span
 
   if (!connectionStatus) {
       console.error('Critical element #connection-status not found!');
@@ -841,5 +842,21 @@ document.addEventListener('DOMContentLoaded', function() {
   // --- Initial Setup Calls ---
   updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]'));
   // Data is requested on socket 'connect' event
+
+  // --- Fetch and display version ---
+  fetch('/api/version')
+      .then(response => response.json())
+      .then(data => {
+          if (versionSpan && data.version) {
+              versionSpan.textContent = data.version;
+          }
+      })
+      .catch(error => {
+          console.error('Error fetching version:', error);
+          if (versionSpan) {
+              versionSpan.textContent = 'error';
+          }
+      });
+  // --- End fetch version ---
 
 }); // End DOMContentLoaded

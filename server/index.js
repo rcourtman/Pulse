@@ -39,6 +39,7 @@ if (missingVars.length > 0 || placeholderVars.length > 0) {
 }
 // --- END Environment Variable Validation ---
 
+const fs = require('fs'); // Add fs module
 const express = require('express');
 const http = require('http');
 const path = require('path');
@@ -115,6 +116,22 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
+
+// --- Add API endpoint for version ---
+let appVersion = 'unknown';
+try {
+  const packageJsonPath = path.join(__dirname, '../package.json');
+  const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
+  const packageJson = JSON.parse(packageJsonContent);
+  appVersion = packageJson.version || 'unknown';
+} catch (error) {
+  console.error('Error reading version from package.json:', error.message);
+}
+
+app.get('/api/version', (req, res) => {
+  res.json({ version: appVersion });
+});
+// --- End API endpoint ---
 
 // Create HTTP server
 const server = http.createServer(app);
