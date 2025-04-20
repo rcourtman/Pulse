@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Enable version updates for npm in the root directory
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    target-branch: "main"
+    # Optional: Add labels to Dependabot PRs
+    labels:
+      - "dependencies"
+      - "dependabot"
+
+  # Enable version updates for npm in the server directory
+  - package-ecosystem: "npm"
+    directory: "/server"
+    schedule:
+      interval: "daily"
+    target-branch: "main"
+    labels:
+      - "dependencies"
+      - "dependabot" 
