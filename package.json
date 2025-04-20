@@ -1,7 +1,7 @@
 {
-  "name": "proxmox-simplified",
+  "name": "pulse",
   "version": "2.0.0",
-  "description": "Simplified monitor for Proxmox",
+  "description": "Lightweight monitor for Proxmox",
   "scripts": {
     "dev": "NODE_ENV=development cd server && node index.js",
     "start": "cd server && node index.js"
