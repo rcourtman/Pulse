@@ -10,6 +10,7 @@ PULSE_USER="pulse" # Dedicated user to run Pulse
 SERVICE_NAME="pulse-proxmox.service"
 SCRIPT_NAME="install-pulse.sh" # Used for cron job identification
 LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
+SCRIPT_ABS_PATH="" # Store absolute path of the script here
 
 # --- Flags ---
 MODE_UPDATE=false # Flag to run in non-interactive update mode
@@ -572,24 +573,17 @@ EOF
 setup_cron_update() {
     local cron_schedule=""
     local cron_command=""
-    local script_path # Absolute path to this script
+    # Use the pre-calculated absolute path
+    local script_path="$SCRIPT_ABS_PATH"
 
-    # Attempt to get the absolute path of the script
-    # This assumes the script is run directly, not piped.
-    # A more robust solution might involve installing the script to a fixed location.
-    if [[ "$0" == /* ]]; then
-        script_path="$0" # Already absolute
-    else
-        script_path="$(pwd)/$0" # Relative path, make absolute
-    fi
-
-    if [ ! -f "$script_path" ]; then
+    if [ -z "$script_path" ] || [ ! -f "$script_path" ]; then
          print_warning "Could not reliably determine script path for cron job. Skipping auto-update setup."
          return 1
     fi
-    # Escape path for use in sed/grep
+    # Escape path for use in sed/grep (already handled by pre-calculation? Check this)
+    # Re-calculate escaped path just in case
     local escaped_script_path
-    escaped_script_path=$(sed 's/[&/\]/\\&/g' <<< "$script_path")
+    escaped_script_path=$(sed 's/[&/\\]/\\\&/g' <<< "$script_path")
 
 
     print_info "Choose update frequency:"
@@ -694,6 +688,23 @@ final_instructions() {
 
 # --- Main Execution ---
 check_root
+
+# Determine absolute path of the script early
+if command -v readlink &> /dev/null && readlink -f "$0" &> /dev/null; then
+    SCRIPT_ABS_PATH=$(readlink -f "$0")
+else
+    # Basic fallback if readlink -f is not available or fails
+     if [[ "$0" == /* ]]; then
+        SCRIPT_ABS_PATH="$0"
+     else
+        SCRIPT_ABS_PATH="$(pwd)/$0"
+     fi
+     # Verify the fallback path
+     if [ ! -f "$SCRIPT_ABS_PATH" ]; then
+          print_warning "Warning: Could not reliably determine absolute script path using fallback."
+          SCRIPT_ABS_PATH="" # Clear path if unsure
+     fi
+fi
 
 # Execute main functions
 apt_update_upgrade
