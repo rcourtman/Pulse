@@ -94,6 +94,7 @@
       <!-- Add Tailwind classes, JS will toggle active classes -->
       <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px" data-tab="main">Main</div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="nodes">Nodes</div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="storage">Storage</div>
     </div>
 
     <!-- Removed outer .section wrapper, apply styles directly to tab content where needed -->
@@ -101,34 +102,34 @@
     <div id="nodes" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
       <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Nodes</h2>
       <div class="overflow-x-auto">
-        <table id="nodes-table" class="w-full border-collapse text-sm">
-          <thead>
-            <tr class="border-b border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
-              <th class="sortable text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="id">ID</th>
-              <th class="sortable text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="status">Status</th>
-              <th class="sortable text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none w-1/6" data-sort="cpu">CPU Usage</th>
-              <th class="sortable text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none w-1/6" data-sort="mem">Mem Usage</th>
-              <th class="sortable text-right p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="maxmem">Mem Total</th>
-              <th class="sortable text-right p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="uptime">Uptime</th>
-              <th class="sortable text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none" data-sort="ip">IP</th>
+        <table id="nodes-table" class="min-w-full divide-y divide-gray-700 table-fixed">
+          <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10">
+            <tr>
+              <th scope="col" class="sortable px-6 py-3 w-2/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="status">Status</th>
+              <th scope="col" class="sortable px-6 py-3 w-4/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="node">Node Name</th>
+              <th scope="col" class="sortable px-6 py-3 w-2/12 text-right font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="cpu">CPU</th>
+              <th scope="col" class="sortable px-6 py-3 w-2/12 text-right font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="memory">Mem</th>
+              <th scope="col" class="sortable px-6 py-3 w-2/12 text-right font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="disk">Disk</th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-            <tr>
-              <td colspan="7" class="p-3 text-center text-gray-500 dark:text-gray-400">Loading data...</td>
-            </tr>
-            <!-- Rows added by JS -->
+          <tbody id="nodes-table-body" class="divide-y divide-gray-200 dark:divide-gray-700">
+            <!-- Node rows will be inserted here -->
+            <tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">Loading node data...</td></tr>
           </tbody>
         </table>
       </div>
-      </div>
+    </div>
 
     <div id="main" class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
         <!-- --- Dashboard Filter Bar --- -->
       <div class="dashboard-filter flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
         <div class="dashboard-filter-controls flex-grow flex items-center gap-2">
           <input type="text" id="dashboard-search" placeholder="Search (use ',' for OR)" class="flex-grow p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-          </div>
+          <!-- Reset Button -->
+          <button id="reset-filters-button" title="Reset Filters & Sort (Esc)" class="p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg> <!-- RotateLeft icon -->
+          </button>
+        </div>
           <!-- Combined Toggle Wrapper -->
         <div class="filter-toggles-wrapper flex items-center gap-4 flex-wrap">
             <!-- View Toggle -->
@@ -173,9 +174,9 @@
               <col class="type-col" style="width: 50px;">
               <col class="id-col" style="width: 50px;">
             <col class="uptime-col" style="width: var(--uptime-col-width, 80px);">
-              <col class="usage-col" style="width: 70px;"> <!-- CPU -->
-              <col class="usage-col" style="width: 70px;"> <!-- Mem -->
-              <col class="usage-col" style="width: 70px;"> <!-- Disk -->
+              <col class="usage-col">
+              <col class="usage-col">
+              <col class="usage-col">
               <col class="net-disk-col" style="width: 80px;">
               <col class="net-disk-col" style="width: 80px;">
               <col class="net-disk-col" style="width: 80px;">
@@ -211,6 +212,17 @@
         </table>
         </div>
       <span id="dashboard-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading dashboard data...</span>
+    </div>
+
+    <div id="storage" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
+      <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Storage Information</h2>
+      <!-- Add table container wrapper similar to main dashboard -->
+      <div class="table-container max-h-[80vh] overflow-y-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+          <div id="storage-info-content">
+            <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading storage data...</p> <!-- Keep placeholder -->
+            <!-- Storage table will be populated here by JS -->
+          </div>
+      </div>
     </div>
   </div>
   

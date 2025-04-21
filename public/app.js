@@ -130,9 +130,46 @@ document.addEventListener('DOMContentLoaded', function() {
   let groupByNode = true; // Default view
   let filterGuestType = 'all'; // Default filter
   const AVERAGING_WINDOW_SIZE = 5;
-  const dashboardHistory = {};
+  const dashboardHistory = {}; // Re-add this line
   let filterStatus = 'all'; // New state variable for status filter
   let initialDataReceived = false; // Flag to control initial rendering
+  let storageData = {}; // Add state for storage data
+
+  // --- Global Helper for Text Progress Bar ---
+  const createProgressTextBarHTML = (percent, text, colorClass) => {
+      const numericPercent = isNaN(parseInt(percent)) ? 0 : parseInt(percent);
+      const textColorClass = 'text-gray-700 dark:text-gray-200';
+
+       return `
+        <!-- Outer container with lighter background - REMOVED title attribute -->
+        <div 
+            class=\"w-full rounded h-4 relative overflow-hidden bg-gray-100 dark:bg-gray-700/50\" 
+        >
+          <!-- Inner div represents the actual progress, with opacity -->
+          <div 
+            class=\"absolute top-0 left-0 h-full rounded ${colorClass} opacity-50\" 
+            style="width: ${numericPercent}%;"
+          >
+          </div>
+          <!-- Text is centered within the outer container -->
+          <span class="absolute inset-0 flex items-center justify-center text-xs font-medium ${textColorClass} px-1 truncate">
+            ${text}
+          </span>
+        </div>
+      `;
+  };
+  // --- End Global Helper ---
+
+  // --- Global Helper for Usage Color ---
+  const getUsageColor = (percent) => {
+      if (isNaN(percent) || percent === 'N/A') return 'bg-gray-400 dark:bg-gray-600';
+      const numericPercentage = parseInt(percent);
+      // Using thresholds consistent across tables now
+      if (numericPercentage > 85) return 'bg-red-500'; 
+      if (numericPercentage > 70) return 'bg-yellow-500';
+      return 'bg-green-500';
+  };
+  // --- End Global Helper ---
 
   // --- WebSocket Connection ---
   const socket = io();
@@ -274,18 +311,31 @@ document.addEventListener('DOMContentLoaded', function() {
       const getValue = (item, col) => {
           if (!item) return type === 'string' ? '' : 0; // Default value based on expected type
           let val = item[col];
+          
+          // Special Handling for Percentage Columns (Main and Nodes tables)
+          if ((type === 'main' || type === 'nodes') && (col === 'cpu' || col === 'memory' || col === 'disk')) {
+            // Treat N/A string as -1 for sorting purposes
+            if (val === 'N/A') return -1;
+            // Convert numeric percentage values (or numeric strings) to numbers
+            const numericVal = parseFloat(val);
+            return isNaN(numericVal) ? 0 : numericVal; // Default to 0 if parsing fails unexpectedly
+          }
+          // --- End Special Handling ---
+
           // Handle specific column logic if needed
           if (type === 'main' && col === 'id') val = parseInt(item.vmid || item.id || 0);
           else if (type === 'nodes' && col === 'id') val = item.node;
           // ... other specific cases ...
+          
+          // Fallback for other types or columns
           return val ?? (type === 'string' ? '' : 0); // Use default if null/undefined
       };
 
       valueA = getValue(a, column);
       valueB = getValue(b, column);
 
-      // Determine type for comparison (simple check)
-      const compareType = (typeof valueA === 'string' || typeof valueB === 'string') ? 'string' : 'number';
+      // Determine type for comparison (Now should favor number for percentage columns)
+      const compareType = (typeof valueA === 'number' && typeof valueB === 'number') ? 'number' : 'string';
 
       // Comparison logic
       if (compareType === 'string') {
@@ -303,68 +353,79 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // --- Data Update/Display Functions ---
   function updateNodesTable(nodes, skipSorting = false) {
-    const tbody = document.querySelector('#nodes-table tbody');
-    if (!tbody) return; // Guard
-    tbody.innerHTML = '';
+    // Corrected selector to target the tbody directly by its ID
+    const tbody = document.getElementById('nodes-table-body');
+    if (!tbody) {
+      console.error('Critical element #nodes-table-body not found for nodes table update!');
+      return; 
+    }
+    tbody.innerHTML = ''; // Clear existing content
 
     const dataToDisplay = skipSorting ? (nodes || []) : sortData(nodes, sortState.nodes.column, sortState.nodes.direction, 'nodes');
 
     if (dataToDisplay.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found</td></tr>';
+      // Corrected colspan to match the actual number of columns (5)
+      tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found or data unavailable</td></tr>'; 
       return;
     }
 
     dataToDisplay.forEach(node => {
       const row = document.createElement('tr');
-      row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700/60 transition-colors duration-150 ease-in-out';
+      // Use same hover/transition classes as main dashboard rows
+      row.className = 'transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px'; 
 
-      const statusColor = node.status === 'online' ? 'bg-green-500' : 'bg-red-500'; // Use red for non-online, consider gray/yellow for others if needed
-      const cpuPercent = (node.cpu || 0) * 100;
-      const memPercent = node.maxmem > 0 ? ((node.mem || 0) / node.maxmem) * 100 : 0;
+      // --- Determine Status (Inferring 'online' if we have data from /status endpoint) ---
+      // Proxmox API /nodes/{node}/status usually only returns data for online nodes.
+      // A more robust check might involve looking at node.uptime or specific error fallbacks from the backend.
+      const isOnline = node && node.uptime > 0; // Simple inference based on uptime
+      const statusText = isOnline ? 'online' : (node.status || 'unknown'); // Use synthesized status if available, else unknown
+      const statusColor = isOnline 
+        ? 'bg-green-500 dark:bg-green-400' 
+        : 'bg-red-500 dark:bg-red-400'; // Red for inferred offline/unknown
 
-      // Determine color based on percentage
-      const getUsageColor = (percent) => {
-        if (percent > 85) return 'bg-red-500';
-        if (percent > 65) return 'bg-yellow-500';
-        return 'bg-green-500'; // Default to green
-      };
+      // Calculate percentages safely using the correct data structure
+      const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
+      // Use node.memory object
+      const memUsed = node.memory?.used || 0;
+      const memTotal = node.memory?.total || 0;
+      const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
+      // Use node.rootfs object for disk
+      const diskUsed = node.rootfs?.used || 0;
+      const diskTotal = node.rootfs?.total || 0;
+      const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0; 
 
+      // Get color classes for bars
       const cpuColorClass = getUsageColor(cpuPercent);
       const memColorClass = getUsageColor(memPercent);
+      const diskColorClass = getUsageColor(diskPercent);
 
+      // Create tooltips and bar HTML using correct fields
+      const cpuTooltipText = `${cpuPercent.toFixed(1)}%`;
+      const memTooltipText = `${formatBytes(memUsed)} / ${formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
+      const diskTooltipText = `${formatBytes(diskUsed)} / ${formatBytes(diskTotal)} (${diskPercent.toFixed(1)}%)`;
+      
+      const cpuBarHTML = createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
+      const memoryBarHTML = createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
+      const diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+
+      // Correctly generate the 5 columns matching the updated header order
+      // Use styling consistent with main dashboard (p-1 px-2, etc.)
       row.innerHTML = `
-        <td class="p-2 px-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">${node.node || 'N/A'}</td>
-        <td class="p-2 px-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
-          <span class="flex items-center">
-            <span class="h-2.5 w-2.5 rounded-full ${statusColor} mr-2"></span>
-            ${node.status || 'N/A'}
+        <td class=\"p-1 px-2 whitespace-nowrap\">
+          <span class=\"flex items-center\">
+            <span class=\"h-2.5 w-2.5 rounded-full ${statusColor} mr-2 flex-shrink-0\"></span>
+            <span class=\"capitalize\">${statusText}</span>
           </span>
         </td>
-        <td class="p-2 px-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
-          <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 group relative">
-            <div class="${cpuColorClass} h-2.5 rounded-full" style="width: ${cpuPercent.toFixed(1)}%"></div>
-            <span class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 hidden group-hover:block px-2 py-1 text-xs text-white bg-gray-900 rounded shadow-lg whitespace-nowrap">
-              ${cpuPercent.toFixed(1)}%
-            </span>
-          </div>
-        </td>
-        <td class="p-2 px-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
-          <div class="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-2.5 group relative">
-            <div class="${memColorClass} h-2.5 rounded-full" style="width: ${memPercent.toFixed(1)}%"></div>
-             <span class="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1 hidden group-hover:block px-2 py-1 text-xs text-white bg-gray-900 rounded shadow-lg whitespace-nowrap">
-              ${formatBytes(node.mem)} / ${formatBytes(node.maxmem)} (${memPercent.toFixed(1)}%)
-            </span>
-          </div>
-        </td>
-        <td class="p-2 px-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 text-right">${formatBytes(node.maxmem)}</td>
-        <td class="p-2 px-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 text-right">${formatUptime(node.uptime)}</td>
-        <td class="p-2 px-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">${node.ip || 'N/A'}</td>
+        <td class=\"p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100\" title=\"${node.node || 'N/A'}\">${node.node || 'N/A'}</td>
+        <!-- Add metric-tooltip-trigger and data-tooltip for custom tooltip -->
+        <td class=\"p-1 px-2 text-right\">${cpuBarHTML}</td>
+        <td class=\"p-1 px-2 text-right\">${memoryBarHTML}</td>
+        <td class=\"p-1 px-2 text-right\">${diskBarHTML}</td>
       `;
+      
       tbody.appendChild(row);
     });
-
-    // Re-enable tooltips if the library/method exists (assuming a simple CSS hover tooltip here)
-    // This example uses group-hover, so no extra JS needed for *these* tooltips.
   }
 
   function updateVmsTable(vms, skipSorting = false) {
@@ -474,6 +535,264 @@ document.addEventListener('DOMContentLoaded', function() {
       if (bytesPerSecond < 1) return '0 B/s';
       return `${formatBytesInt(bytesPerSecond)}/s`;
   }
+
+  // --- Storage Data Display Function ---
+  function updateStorageInfo(storage) {
+    const contentDiv = document.getElementById('storage-info-content');
+    if (!contentDiv) return;
+    contentDiv.innerHTML = ''; // Clear previous content
+    // Remove container styling, as it's now handled by the parent div in HTML
+    contentDiv.className = ''; 
+
+    // Check for global error first
+    if (storage && storage.globalError) {
+        // Error message styling - remove card styles, just use text/padding
+        contentDiv.innerHTML = `<p class="p-4 text-red-700 dark:text-red-300">Error: ${storage.globalError}</p>`;
+        return;
+    }
+
+    if (!storage || Object.keys(storage).length === 0) {
+      // Empty message styling - remove card styles, just use text/padding
+      contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data available or failed to load for any node.</p>';
+      return;
+    }
+
+    // --- Helper function for Storage Icons ---
+    function getStorageTypeIcon(type) {
+        // Simple icons using Tailwind/SVG - can be expanded
+        switch(type) {
+            case 'dir': 
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-yellow-600 dark:text-yellow-400"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>'; // Folder
+            case 'lvm':
+            case 'lvmthin':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-purple-600 dark:text-purple-400"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>'; // Database (representing logical volume)
+            case 'zfs':
+            case 'zfspool':
+                 return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-red-600 dark:text-red-400"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>'; // Activity (representing ZFS complexity/features)
+            case 'nfs':
+            case 'cifs':
+                 return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-blue-600 dark:text-blue-400"><path d="M16 17l5-5-5-5"></path><path d="M8 17l-5-5 5-5"></path></svg>'; // Share-2
+            case 'cephfs':
+            case 'rbd':
+                 return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-indigo-600 dark:text-indigo-400"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>'; // Server (representing distributed storage)
+            default:
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-gray-500"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>'; // HelpCircle (unknown)
+        }
+    }
+    // --- End Helper ---
+
+    // --- Updated Helper for Content Badge Details (Class + Tooltip) ---
+    function getContentBadgeDetails(contentType) {
+        let details = {
+            badgeClass: 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300', // Default style
+            tooltip: `Content type: ${contentType}` // Default tooltip
+        };
+
+        switch(contentType) {
+            case 'iso': 
+                details.badgeClass = 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300';
+                details.tooltip = 'ISO images (e.g., for OS installation)';
+                break;
+            case 'vztmpl':
+                details.badgeClass = 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300';
+                details.tooltip = 'Container templates';
+                break;
+            case 'backup':
+                details.badgeClass = 'bg-orange-100 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300';
+                details.tooltip = 'VM/Container backup files (vzdump)';
+                break;
+            case 'images':
+                details.badgeClass = 'bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300';
+                details.tooltip = 'VM disk images (qcow2, raw, etc.)';
+                break;
+            case 'rootdir':
+                 details.badgeClass = 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300';
+                 details.tooltip = 'Storage for container root filesystems';
+                 break;
+             case 'snippets':
+                 details.badgeClass = 'bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300';
+                 details.tooltip = 'Snippet files (e.g., cloud-init configs)';
+                 break;
+            // Add more cases as needed
+        }
+        return details;
+    }
+    // --- End Helper ---
+
+    // --- Helper: Sort storage array --- 
+    function sortNodeStorageData(storageArray) {
+        if (!storageArray || !Array.isArray(storageArray)) return [];
+        // Create a shallow copy to avoid modifying the original
+        const sortedArray = [...storageArray];
+        sortedArray.sort((a, b) => {
+            const nameA = String(a.storage || '').toLowerCase();
+            const nameB = String(b.storage || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+        return sortedArray;
+    }
+    // --- End Helper ---
+
+    // Create ONE table for all nodes
+    const table = document.createElement('table');
+    table.className = 'w-full text-sm border-collapse table-fixed';
+
+    const thead = document.createElement('thead');
+    // Define widths for most columns, leave Usage column without width
+    thead.innerHTML = `
+        <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 sticky top-0 z-10"> 
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-3/12">Storage</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-2/12">Content</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Type</th>
+          <th class="text-center p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-[80px]">Shared</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Usage</th>
+          <th class="text-right p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Avail</th>
+          <th class="text-right p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Total</th>
+        </tr>
+      `;
+    table.appendChild(thead);
+
+    const tbody = document.createElement('tbody');
+    tbody.className = 'divide-y divide-gray-200 dark:divide-gray-600';
+
+    // --- Sort nodes alphabetically before processing ---
+    const sortedNodeNames = Object.keys(storage).sort((a, b) => a.localeCompare(b));
+    // --- End Node Sorting ---
+
+    // Iterate through the *sorted* node names
+    sortedNodeNames.forEach(nodeName => {
+      const nodeStorageData = storage[nodeName]; 
+
+      // Add Node Header Row - Colspan needs to match data columns (7)
+      const nodeHeaderRow = document.createElement('tr');
+      nodeHeaderRow.className = 'bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs node-storage-header'; 
+      nodeHeaderRow.innerHTML = `
+        <td colspan="7" class="p-1.5 px-3">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+          Node: ${nodeName}
+        </td>`;
+      tbody.appendChild(nodeHeaderRow);
+
+      // Handle errors or empty data for this specific node
+      if (nodeStorageData.error) {
+        const errorRow = document.createElement('tr');
+        errorRow.innerHTML = `<td colspan="7" class="p-2 px-3 text-sm text-red-600 dark:text-red-400 italic">Error loading storage: ${nodeStorageData.error}</td>`;
+        tbody.appendChild(errorRow);
+        return; // Skip to next node
+      }
+
+      if (!Array.isArray(nodeStorageData) || nodeStorageData.length === 0) {
+        const noDataRow = document.createElement('tr');
+        noDataRow.innerHTML = `<td colspan="7" class="p-2 px-3 text-sm text-gray-500 dark:text-gray-400 italic">No storage configured or found for this node.</td>`;
+        tbody.appendChild(noDataRow);
+        return; // Skip to next node
+      }
+
+      // Sort storage data within this node
+      const sortedNodeStorageData = sortNodeStorageData(nodeStorageData);
+      
+      // Add Storage Data Rows for this node using the sorted storage data
+      sortedNodeStorageData.forEach(store => { 
+        const row = document.createElement('tr');
+        const isDisabled = store.enabled === 0 || store.active === 0;
+        row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700/60 hover:shadow-md hover:-translate-y-px ${isDisabled ? 'opacity-50 grayscale-[50%]' : ''}`;
+        
+        const usagePercent = store.total > 0 ? (store.used / store.total) * 100 : 0;
+        const usageTooltipText = `${formatBytes(store.used)} / ${formatBytes(store.total)} (${usagePercent.toFixed(1)}%)`;
+        
+        const usageColorClass = getUsageColor(usagePercent);
+        const sharedIconTooltip = store.shared === 1 ? 'Shared across cluster' : 'Local to node';
+        const sharedIcon = store.shared === 1 ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block text-green-600 dark:text-green-400"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>` 
+            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block text-gray-400 dark:text-gray-500 opacity-50"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>`;
+        
+        const contentTypes = (store.content || '').split(',').map(ct => ct.trim()).filter(ct => ct);
+        contentTypes.sort(); 
+        const contentBadges = contentTypes.map(ct => {
+            const details = getContentBadgeDetails(ct); // Use the updated helper
+            // Re-add data-tooltip with the purpose, add trigger class and cursor
+            return `<span data-tooltip="${details.tooltip}" class="storage-tooltip-trigger inline-block ${details.badgeClass} rounded px-1.5 py-0.5 text-xs font-medium mr-1 mb-1 cursor-default">${ct}</span>`;
+        }).join('');
+
+        const usageBarHTML = createProgressTextBarHTML(usagePercent, usageTooltipText, usageColorClass);
+
+        row.innerHTML = `
+            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-900 dark:text-gray-100 font-medium">${store.storage || 'N/A'}</td>
+            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${contentBadges || '-'}</td>
+            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300">${store.type || 'N/A'}</td>
+            <td class="p-2 px-3 py-1 whitespace-nowrap text-center storage-tooltip-trigger cursor-default" data-tooltip="${sharedIconTooltip}">${sharedIcon}</td>
+            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300">${usageBarHTML}</td>
+            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300 text-right">${formatBytes(store.avail)}</td>
+            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300 text-right">${formatBytes(store.total)}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }); // End looping through nodes
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    contentDiv.appendChild(table);
+
+    // --- Tooltip Listener Setup (Moved outside updateStorageInfo) ---
+    if (tooltipElement) { 
+        const storageTbody = table.querySelector('tbody'); // Get the tbody we just created
+        if (storageTbody) {
+           // Remove these listeners from here
+        } // End if storageTbody
+    } // End if tooltipElement
+    // --- End Tooltip Listener Setup ---
+
+  }
+
+  // --- Consolidated Tooltip Logic (Attached to Document Body) ---
+  if (tooltipElement) { 
+      // Set faster duration (already done, kept for clarity)
+      tooltipElement.classList.remove('duration-100'); 
+      tooltipElement.classList.add('duration-50');
+
+      document.body.addEventListener('mouseover', (event) => {
+          // Look for either trigger class
+          const target = event.target.closest('.metric-tooltip-trigger, .storage-tooltip-trigger'); 
+          if (target) {
+              const tooltipText = target.getAttribute('data-tooltip');
+              if (tooltipText) {
+                  tooltipElement.textContent = tooltipText;
+                  const offsetX = 10;
+                  const offsetY = 15;
+                  tooltipElement.style.left = `${event.pageX + offsetX}px`;
+                  tooltipElement.style.top = `${event.pageY + offsetY}px`;
+                  tooltipElement.classList.remove('hidden', 'opacity-0');
+                  tooltipElement.classList.add('opacity-100');
+              }
+          }
+      });
+
+      document.body.addEventListener('mouseout', (event) => {
+          // Look for either trigger class
+          const target = event.target.closest('.metric-tooltip-trigger, .storage-tooltip-trigger');
+          if (target) {
+              tooltipElement.classList.add('hidden', 'opacity-0');
+              tooltipElement.classList.remove('opacity-100');
+          }
+      });
+
+       document.body.addEventListener('mousemove', (event) => {
+           // Look for either trigger class
+           const target = event.target.closest('.metric-tooltip-trigger, .storage-tooltip-trigger');
+           if (!tooltipElement.classList.contains('hidden') && target) {
+               const offsetX = 10;
+               const offsetY = 15;
+               tooltipElement.style.left = `${event.pageX + offsetX}px`;
+               tooltipElement.style.top = `${event.pageY + offsetY}px`;
+           } else if (!tooltipElement.classList.contains('hidden') && !target) {
+               // Optional: hide if mouse moves off trigger onto non-trigger area
+               // This might be less desirable with body-level listener, could hide unexpectedly.
+           }
+       });
+
+  } else {
+      console.warn('Tooltip element not found, custom tooltips disabled.');
+  }
+  // --- End Consolidated Tooltip Logic ---
 
   // --- Dashboard Data Processing & Display ---
   function refreshDashboardData() {
@@ -686,60 +1005,41 @@ document.addEventListener('DOMContentLoaded', function() {
       row.setAttribute('data-node', guest.node.toLowerCase());
       row.setAttribute('data-id', guest.id);
 
-      const memoryPercent = guest.memory; // Already calculated, possibly 'N/A'
-      const diskPercent = guest.disk;     // Already calculated, possibly 'N/A'
       const cpuPercent = Math.round(guest.cpu * 100);
+      const memoryPercent = guest.memory; 
+      const diskPercent = guest.disk;
 
-      const cpuAbsolute = guest.cpus ? `(${(guest.cpu * guest.cpus).toFixed(1)}/${guest.cpus} cores)` : '';
-      const memoryAbsolute = guest.memoryTotal ? `(${formatBytesInt(guest.memoryCurrent)} / ${formatBytesInt(guest.memoryTotal)})` : '';
-      const diskAbsolute = guest.diskTotal ? `(${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)})` : '';
-
-      const cpuUsageText = createUsageText(cpuPercent, cpuAbsolute);
-      const memoryUsageText = createUsageText(memoryPercent, memoryAbsolute);
-      const diskUsageText = createUsageText(diskPercent, diskAbsolute);
+      const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus).toFixed(1)}/${guest.cpus} cores)` : ''}`;
+      const memoryTooltipText = guest.memoryTotal ? `${formatBytesInt(guest.memoryCurrent)} / ${formatBytesInt(guest.memoryTotal)} (${memoryPercent}%)` : `${memoryPercent}%`;
+      const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
+      
+      const cpuColorClass = getUsageColor(cpuPercent);
+      const memColorClass = getUsageColor(memoryPercent);
+      const diskColorClass = getUsageColor(diskPercent);
+      
+      const cpuBarHTML = createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
+      const memoryBarHTML = createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
+      const diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
 
       const typeIconClass = guest.type === 'VM'
-          ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
-          : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700';
-      const typeIcon = `<span class="type-icon inline-block w-5 h-5 leading-5 text-center rounded text-[10px] font-bold align-middle ${typeIconClass}">${guest.type}</span>`;
+          ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium' 
+          : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
+      const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guest.type}</span>`;
 
       row.innerHTML = `
         <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
         <td class="p-1 px-1 text-center">${typeIcon}</td>
         <td class="p-1 px-2 text-center">${guest.id}</td>
         <td class="p-1 px-2 whitespace-nowrap">${formatUptime(guest.uptime)}</td>
-        <td class="p-1 px-2 text-center">${cpuUsageText}</td>
-        <td class="p-1 px-2 text-center">${memoryUsageText}</td>
-        <td class="p-1 px-2 text-center">${diskUsageText}</td>
+        <td class="p-1 px-2">${cpuBarHTML}</td>
+        <td class="p-1 px-2">${memoryBarHTML}</td>
+        <td class="p-1 px-2">${diskBarHTML}</td>
         <td class="p-1 px-2 text-right whitespace-nowrap">${formatSpeedInt(guest.diskread)}</td>
         <td class="p-1 px-2 text-right whitespace-nowrap">${formatSpeedInt(guest.diskwrite)}</td>
         <td class="p-1 px-2 text-right whitespace-nowrap">${formatSpeedInt(guest.netin)}</td>
         <td class="p-1 px-2 text-right whitespace-nowrap">${formatSpeedInt(guest.netout)}</td>
       `;
       return row;
-  }
-
-  function createUsageText(percentage, tooltipText = '') {
-      // console.log(`[createUsageText] Received percentage: ${percentage}, tooltip: ${tooltipText}`);
-      let colorClass = '';
-      let displayPercentage = percentage;
-
-      if (percentage === 'N/A' || isNaN(percentage)) {
-         displayPercentage = 'N/A';
-         colorClass = 'text-gray-400 dark:text-gray-500';
-      } else {
-         const numericPercentage = parseInt(percentage);
-         displayPercentage = `${numericPercentage}%`;
-         if (numericPercentage > 85) {
-             colorClass = 'text-red-600 dark:text-red-400 font-medium';
-         } else if (numericPercentage > 65) {
-             colorClass = 'text-yellow-600 dark:text-yellow-400';
-         } else {
-             colorClass = 'text-green-600 dark:text-green-400';
-         }
-      }
-      const safeTooltipText = tooltipText.replace(/"/g, '&quot;');
-      return `<span class="${colorClass} metric-tooltip-trigger cursor-default" data-tooltip="${safeTooltipText}">${displayPercentage}</span>`;
   }
 
   // --- WebSocket Message Handling ---
@@ -791,44 +1091,27 @@ document.addEventListener('DOMContentLoaded', function() {
       }
   }
 
-  // --- Tooltip Logic ---
-  if (mainTableBody && tooltipElement) {
-      mainTableBody.addEventListener('mouseover', (event) => {
-          const target = event.target.closest('.metric-tooltip-trigger');
-          if (target) {
-              const tooltipText = target.getAttribute('data-tooltip');
-              if (tooltipText) {
-                  tooltipElement.textContent = tooltipText;
-                  const offsetX = 10;
-                  const offsetY = 15;
-                  tooltipElement.style.left = `${event.pageX + offsetX}px`;
-                  tooltipElement.style.top = `${event.pageY + offsetY}px`;
-                  tooltipElement.classList.remove('hidden', 'opacity-0');
-                  tooltipElement.classList.add('opacity-100');
-              }
-          }
-      });
-      mainTableBody.addEventListener('mouseout', (event) => {
-          const target = event.target.closest('.metric-tooltip-trigger');
-          if (target) {
-              tooltipElement.classList.add('hidden', 'opacity-0');
-              tooltipElement.classList.remove('opacity-100');
-          }
-      });
-       mainTableBody.addEventListener('mousemove', (event) => {
-           const target = event.target.closest('.metric-tooltip-trigger');
-           if (!tooltipElement.classList.contains('hidden') && target) {
-               // Update position while moving over the trigger
-               const offsetX = 10;
-               const offsetY = 15;
-               tooltipElement.style.left = `${event.pageX + offsetX}px`;
-               tooltipElement.style.top = `${event.pageY + offsetY}px`;
-           } else if (!tooltipElement.classList.contains('hidden') && !target) {
-              // Optional: hide if mouse moves off trigger onto non-trigger area
-              // tooltipElement.classList.add('hidden', 'opacity-0');
-              // tooltipElement.classList.remove('opacity-100');
-           }
-       });
+  // --- Function to Reset Dashboard Filters/Sort ---
+  function resetDashboardView() {
+      console.log('Resetting dashboard view...');
+      if (searchInput) searchInput.value = '';
+      sortState.main = { column: 'id', direction: 'asc' }; 
+      updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]'));
+      
+      const groupGroupedRadio = document.getElementById('group-grouped');
+      if(groupGroupedRadio) groupGroupedRadio.checked = true;
+      groupByNode = true;
+      
+      const filterAllRadio = document.getElementById('filter-all');
+      if(filterAllRadio) filterAllRadio.checked = true;
+      filterGuestType = 'all';
+      
+      const statusAllRadio = document.getElementById('filter-status-all');
+      if(statusAllRadio) statusAllRadio.checked = true;
+      filterStatus = 'all';
+      
+      updateDashboardTable();
+      if (searchInput) searchInput.blur(); // Blur search input after reset
   }
 
   // --- Reset Filters/Sort Listener ---
@@ -838,19 +1121,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const isGeneralInputElement = !isSearchInputFocused && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.isContentEditable);
 
     if (event.key === 'Escape') {
-      if (searchInput) searchInput.value = '';
-      sortState.main = { column: 'id', direction: 'asc' };
-      updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]'));
-      const groupGroupedRadio = document.getElementById('group-grouped');
-      if(groupGroupedRadio) groupGroupedRadio.checked = true;
-      groupByNode = true;
-      const filterAllRadio = document.getElementById('filter-all');
-      if(filterAllRadio) filterAllRadio.checked = true;
-      filterGuestType = 'all';
-      filterStatus = 'all';
-      updateDashboardTable();
-      if (searchInput) searchInput.blur(); // Blur on Escape as well
-
+        resetDashboardView(); // Call the reset function
     } else if (isSearchInputFocused && event.key === 'Enter') {
       searchInput.blur();
       event.preventDefault(); // Prevent any default Enter key behavior
@@ -871,6 +1142,14 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
+  // Add listener for the new Reset button
+  const resetButton = document.getElementById('reset-filters-button');
+  if (resetButton) {
+      resetButton.addEventListener('click', resetDashboardView); // Call the same reset function
+  } else {
+      console.warn('Reset button #reset-filters-button not found.');
+  }
+
   // --- Initial Setup Calls ---
   updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]'));
   // Data is requested on socket 'connect' event
@@ -882,6 +1161,30 @@ document.addEventListener('DOMContentLoaded', function() {
     updateVmsTable(vmsData);
     updateContainersTable(containersData);
     refreshDashboardData(); // Process and update the main dashboard
+    updateStorageInfo(storageData); // Update storage info tab
+  }
+
+  // Add a separate fetch for storage data, maybe less frequent?
+  async function fetchStorageData() {
+    try {
+      const response = await fetch('/api/storage');
+      // Removed the response.ok check here, as we want to parse the JSON even for 500 errors
+      // to check for the globalError property.
+      storageData = await response.json();
+      // console.log('[Storage Fetch] Fetched storage data:', storageData);
+      
+      // If the server responded with an error status but *didn't* include our globalError JSON,
+      // synthesize an error state for the UI.
+      if (!response.ok && !storageData.globalError) {
+          console.error('Error fetching storage data: Server returned status', response.status, 'but no globalError field.');
+          storageData = { globalError: `Failed to load storage data (Status: ${response.status})` };
+      } 
+    } catch (error) {
+      console.error('Error fetching or parsing storage data:', error);
+      // Network error or JSON parsing error
+      storageData = { globalError: 'Failed to load storage data due to a network or parsing error.' }; 
+    }
+    // We don't call updateStorageInfo here anymore, the main interval handles it.
   }
 
   setInterval(() => {
@@ -890,6 +1193,11 @@ document.addEventListener('DOMContentLoaded', function() {
       updateAllUITables();
     }
   }, 2000); // Update UI every 2 seconds
+
+  // Fetch storage data periodically (e.g., every 10 seconds)
+  setInterval(fetchStorageData, 10000);
+  fetchStorageData(); // Initial fetch on load
+
   // --- End Frontend Render Interval ---
 
   // --- Fetch and display version ---
