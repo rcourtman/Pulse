@@ -220,20 +220,16 @@ configure_environment() {
     print_info "You need a Proxmox API Token. You can create one via the Proxmox Web UI,"
     print_info "or run the following commands on your Proxmox host shell:"
     echo "----------------------------------------------------------------------"
-    echo '  # 1. Choose a username (default: pulse-monitor) and token name (default: pulse)'
-    echo '  USERNAME="pulse-monitor"'
-    echo '  TOKEN_NAME="pulse"'
+    echo '  # 1. Create user 'pulse-monitor' (enter password when prompted):'
+    echo "  pveum useradd pulse-monitor@pam -comment \"API user for Pulse monitoring\""
     echo '  '
-    echo '  # 2. Create the user (enter password when prompted):'
-    echo "  pveum useradd \${USERNAME}@pam -comment \"API user for Pulse monitoring\""
+    echo '  # 2. Create API token 'pulse' for user (COPY THE SECRET VALUE!):'
+    echo "  pveum user token add pulse-monitor@pam pulse --privsep=1"
     echo '  '
-    echo '  # 3. Create the API token (COPY THE SECRET VALUE!):'
-    echo "  pveum user token add \${USERNAME}@pam \${TOKEN_NAME} --privsep=1"
-    echo '  '
-    echo '  # 4. Assign PVEAuditor role:'
-    echo "  pveum acl modify / -user \${USERNAME}@pam -role PVEAuditor"
+    echo '  # 3. Assign PVEAuditor role to user:'
+    echo "  pveum acl modify / -user pulse-monitor@pam -role PVEAuditor"
     echo "----------------------------------------------------------------------"
-    echo "After running the token add command, copy the Token ID and Secret Value"
+    echo "After running the 'token add' command, copy the Token ID and Secret Value"
     echo "and paste them below."
     echo ""
     # --- End Token Generation Info ---
