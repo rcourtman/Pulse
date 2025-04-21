@@ -833,8 +833,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // --- Reset Filters/Sort Listener ---
   document.addEventListener('keydown', function(event) {
+    const activeElement = document.activeElement;
+    const isSearchInputFocused = activeElement === searchInput;
+    const isGeneralInputElement = !isSearchInputFocused && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.isContentEditable);
+
     if (event.key === 'Escape') {
-      if(searchInput) searchInput.value = '';
+      if (searchInput) searchInput.value = '';
       sortState.main = { column: 'id', direction: 'asc' };
       updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]'));
       const groupGroupedRadio = document.getElementById('group-grouped');
@@ -845,6 +849,25 @@ document.addEventListener('DOMContentLoaded', function() {
       filterGuestType = 'all';
       filterStatus = 'all';
       updateDashboardTable();
+      if (searchInput) searchInput.blur(); // Blur on Escape as well
+
+    } else if (isSearchInputFocused && event.key === 'Enter') {
+      searchInput.blur();
+      event.preventDefault(); // Prevent any default Enter key behavior
+
+    } else if (
+        !isSearchInputFocused &&
+        !isGeneralInputElement && // Don't hijack typing in other inputs
+        !event.metaKey &&   // Ignore Cmd key (Mac)
+        !event.ctrlKey &&  // Ignore Ctrl key
+        !event.altKey &&   // Ignore Alt key
+        event.key.length === 1 && // Check if it's a character key
+        event.key !== ' ' // Ignore spacebar unless focusing is desired
+    ) {
+        if (searchInput) {
+            searchInput.focus();
+            // We let the subsequent keypress event populate the input
+        }
     }
   });
 
