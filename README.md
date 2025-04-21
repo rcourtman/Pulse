@@ -164,7 +164,7 @@ For installation within a Proxmox VE LXC container, a convenient script is provi
 - A Debian or Ubuntu based LXC container already created in Proxmox.
     - *Tip: Creating a suitable LXC container is easy using helper scripts. For example, the [Community Scripts](https://community-scripts.github.io/ProxmoxVE/scripts?id=debian) collection offers a Debian script you can run directly on your Proxmox host:*
       ```bash
-      bash -c \"$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/debian.sh)\"
+      bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/debian.sh)"
       ```
 - Network connectivity from the LXC to your Proxmox server.
 
