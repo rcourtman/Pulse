@@ -157,7 +157,7 @@ docker compose down
 
 ## 🚀 Running with LXC Installation Script
 
-For users running Proxmox VE, a convenient installation script is provided to set up Pulse inside an **existing** LXC container (Debian/Ubuntu based). This script automates dependency installation, configuration, and setting up a systemd service.
+For installation within a Proxmox VE LXC container, a convenient script is provided to set up Pulse inside an **existing** LXC container (Debian/Ubuntu based). This script automates dependency installation, configuration, and setting up a systemd service.
 
 **Prerequisites:**
 - A running Proxmox VE environment.
