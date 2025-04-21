@@ -170,28 +170,51 @@ For installation within a Proxmox VE LXC container, a convenient script is provi
 
 **Steps:**
 
-1.  **Access LXC Console:** Log in to the console of your existing LXC container (e.g., via the Proxmox web UI or SSH).
+1.  **Access LXC Console:** Log in to the console of your existing LXC container (e.g., via the Proxmox web UI or SSH). You should typically be logged in as `root`.
 
-2.  **Download and Run the Script:** Execute the following command in the LXC console. This downloads the `install-pulse.sh` script and runs it with `sudo` (if sudo is installed) or directly as root:
+2.  **Download and Run the Script:** The recommended way is to download the script first, make it executable, and then run it. This allows interaction with prompts for configuration and optional features like automatic updates.
     ```bash
-    bash -c \"$(wget -qLO - https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh)\" --
+    # Ensure you are in a suitable directory, like /root or /tmp
+    curl -sLO https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh
+    chmod +x install-pulse.sh
+    ./install-pulse.sh
     ```
-    *The script will guide you through the necessary setup steps, including API token creation.*
-    *   Alternatively, you can download it first and then run it:
-        ```bash
-        wget https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh
-        chmod +x install-pulse.sh
-        sudo ./install-pulse.sh # Or just ./install-pulse.sh if already root
-        ```
+    *(The older method of piping directly to `bash` using `wget` or `curl` might still work for initial installs but will skip interactive prompts like the automatic update setup.)*
 
 3.  **Follow Prompts:** The script will guide you through the installation process:
-    *   It will update the container and install necessary packages (`git`, `curl`, `nodejs`, `npm`, `gpg`).
-    *   It will guide you through creating the required Proxmox API Token, providing easy-to-use commands for your Proxmox host.
-    *   It will ask for your Proxmox Host URL, API Token ID, and API Token Secret (obtained from the previous step).
+    *   It will update the container and install necessary packages (`git`, `curl`, `nodejs`, `npm`, `gpg`, `sudo`).
+    *   It will guide you through creating the required Proxmox API Token if needed.
+    *   It will ask for your Proxmox Host URL, API Token ID, and API Token Secret.
     *   It will ask about allowing self-signed certificates and optionally setting a custom port.
     *   It will configure Pulse and set it up as a `systemd` service (`pulse-proxmox.service`) to run automatically.
+    *   **Automatic Updates (Optional):** After a successful installation or update, the script will ask if you want to enable automatic updates (Daily, Weekly, or Monthly) via a cron job.
 
 4.  **Access Pulse:** Once the script finishes, it will display the URL (using the LXC's IP address) where you can access the Pulse dashboard (e.g., `http://<LXC-IP-ADDRESS>:7655`).
+
+**Updating Pulse:**
+
+To update Pulse to the latest version, simply re-run the script from the same directory where you downloaded it:
+
+```bash
+./install-pulse.sh
+```
+The script will detect the existing installation and offer to update it.
+
+**Non-Interactive Updates:**
+
+You can also run the update non-interactively using the `--update` flag. This is useful for scripting or if used in the cron job for automatic updates:
+
+```bash
+./install-pulse.sh --update
+```
+
+**Automatic Update Details:**
+
+If you enable automatic updates via the script prompt:
+- A cron job is added to the `root` user's crontab.
+- The job runs `./install-pulse.sh --update` according to the chosen schedule (Daily, Weekly, Monthly).
+- Output (including any errors) from the update process is logged to `/var/log/pulse_update.log`.
+- You can view the root crontab using `sudo crontab -l -u root` and edit it using `sudo crontab -e -u root`.
 
 **Managing the Service (inside LXC):**
 
