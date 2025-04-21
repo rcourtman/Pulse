@@ -287,10 +287,11 @@ clone_repository() {
             case $user_choice in
                 1) 
                     if perform_update; then
-                        # Update was successful, exit script cleanly
-                        exit 0
+                        # Update was successful, allow script to continue to prompt for cron etc.
+                        print_success "Interactive update completed. Continuing script..."
                     else
                         # Update failed, exit script with error
+                        print_error "Interactive update failed."
                         exit 1
                     fi
                     ;;
