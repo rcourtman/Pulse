@@ -215,6 +215,29 @@ configure_environment() {
         read -p " -> Proxmox Host URL (e.g., https://192.168.1.100:8006): " proxmox_host
     done
 
+    # --- Display Token Generation Info ---
+    echo ""
+    print_info "You need a Proxmox API Token. You can create one via the Proxmox Web UI,"
+    print_info "or run the following commands on your Proxmox host shell:"
+    echo "----------------------------------------------------------------------"
+    echo '  # 1. Choose a username (default: pulse-monitor) and token name (default: pulse)'
+    echo '  USERNAME="pulse-monitor"'
+    echo '  TOKEN_NAME="pulse"'
+    echo '  '
+    echo '  # 2. Create the user (enter password when prompted):'
+    echo "  pveum useradd \${USERNAME}@pam -comment \"API user for Pulse monitoring\""
+    echo '  '
+    echo '  # 3. Create the API token (COPY THE SECRET VALUE!):'
+    echo "  pveum user token add \${USERNAME}@pam \${TOKEN_NAME} --privsep=1"
+    echo '  '
+    echo '  # 4. Assign PVEAuditor role:'
+    echo "  pveum acl modify / -user \${USERNAME}@pam -role PVEAuditor"
+    echo "----------------------------------------------------------------------"
+    echo "After running the token add command, copy the Token ID and Secret Value"
+    echo "and paste them below."
+    echo ""
+    # --- End Token Generation Info ---
+
     read -p " -> Proxmox API Token ID (e.g., user@pam!tokenid): " proxmox_token_id
      while [ -z "$proxmox_token_id" ]; do
         print_warning "Proxmox Token ID cannot be empty."
