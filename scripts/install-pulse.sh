@@ -132,12 +132,35 @@ perform_update() {
     print_info "Attempting to update Pulse..."
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
+    # Add safe directory config for root user, in case it's needed for stash/other ops
+    # Might not be strictly necessary if only pulse user runs git, but adds robustness
+    git config --global --add safe.directory "$PULSE_DIR" > /dev/null 2>&1 || print_warning "Could not configure safe.directory for root user."
+
+    print_info "Stashing potential local changes..."
+    # Stash changes as the pulse user to avoid ownership issues with the stash itself
+    if ! sudo -u "$PULSE_USER" git stash push -m "Auto-stash before update"; then
+        print_warning "Failed to stash local changes. Update might fail if conflicts exist."
+        # Decide if this should be fatal or just a warning
+    fi
+
     print_info "Fetching latest changes from git (running as user $PULSE_USER)..."
     # Run git pull as the pulse user to avoid ownership issues
     if ! sudo -u "$PULSE_USER" git pull origin main; then
         print_error "Failed to pull latest changes from git."
+        # Attempt to restore stashed changes on failure
+        sudo -u "$PULSE_USER" git stash pop > /dev/null 2>&1 || true # Ignore pop errors if stash failed/empty
         cd ..
         return 1
+    fi
+
+    # Attempt to pop stashed changes after successful pull
+    # This might cause conflicts if the stashed changes conflict with pulled changes
+    # Alternatively, could just drop the stash: git stash drop
+    print_info "Attempting to restore stashed changes..."
+    if ! sudo -u "$PULSE_USER" git stash pop > /dev/null 2>&1; then
+        print_warning "Could not automatically restore stashed changes. Manual check might be needed if you had local modifications."
+    else
+        print_success "Stashed changes restored (if any)."
     fi
 
     print_info "Re-installing npm dependencies (root)..."
