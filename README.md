@@ -175,8 +175,9 @@ For installation within a Proxmox VE LXC container, a convenient script is provi
 
 2.  **Download and Run the Script:** Execute the following command in the LXC console. This downloads the `install-pulse.sh` script and runs it with `sudo` (if sudo is installed) or directly as root:
     ```bash
-    bash -c "$(wget -qLO - https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh)" --
+    bash -c \"$(wget -qLO - https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh)\" --
     ```
+    *The script will guide you through the necessary setup steps, including API token creation.*
     *   Alternatively, you can download it first and then run it:
         ```bash
         wget https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh
@@ -185,8 +186,9 @@ For installation within a Proxmox VE LXC container, a convenient script is provi
         ```
 
 3.  **Follow Prompts:** The script will guide you through the installation process:
-    *   It will update the container and install necessary packages (`git`, `curl`, `nodejs`, `npm`).
-    *   It will ask for your Proxmox Host URL, API Token ID, and API Token Secret.
+    *   It will update the container and install necessary packages (`git`, `curl`, `nodejs`, `npm`, `gpg`).
+    *   It will guide you through creating the required Proxmox API Token, providing easy-to-use commands for your Proxmox host.
+    *   It will ask for your Proxmox Host URL, API Token ID, and API Token Secret (obtained from the previous step).
     *   It will ask about allowing self-signed certificates and optionally setting a custom port.
     *   It will configure Pulse and set it up as a `systemd` service (`pulse-proxmox.service`) to run automatically.
 
