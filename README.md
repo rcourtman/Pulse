@@ -43,6 +43,8 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
     - `PORT`: (Optional) Port for the Pulse server to listen on. Defaults to `7655`.
     - `PROXMOX_USERNAME`, `PROXMOX_PASSWORD`, `PROXMOX_REALM`: (Optional) Fallback credentials if API token is not provided.
 
+    ***Note:** Even if you have a Proxmox cluster, you only need to provide the connection details (`PROXMOX_HOST`, token, etc.) for **one** node in the cluster. Pulse will automatically discover and fetch data from the other nodes.*\n
+
 ### Creating a Proxmox API Token
 
 An API token is recommended for connecting Pulse to Proxmox.
@@ -202,7 +204,7 @@ For users running Proxmox VE, a convenient installation script is provided to se
 - Lightweight monitoring for Proxmox VE nodes.
 - Displays real-time status for VMs and Containers via WebSocket updates.
 - Simple, responsive web interface.
-- Efficient polling: Only queries the Proxmox API when a user is actively viewing the UI, reducing load on the Proxmox server(s).
+- Efficient polling: Stops polling the Proxmox API when no clients (browsers) are connected, reducing load.
 - Docker support for easy deployment.
 
 ## 💻 System Requirements
