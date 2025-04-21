@@ -131,8 +131,9 @@ perform_update() {
     print_info "Attempting to update Pulse..."
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
-    print_info "Fetching latest changes from git..."
-    if ! git pull origin main; then
+    print_info "Fetching latest changes from git (running as user $PULSE_USER)..."
+    # Run git pull as the pulse user to avoid ownership issues
+    if ! sudo -u "$PULSE_USER" git pull origin main; then
         print_error "Failed to pull latest changes from git."
         cd ..
         return 1
