@@ -73,6 +73,7 @@ setup_node() {
     if [ ! -d "$KEYRING_DIR" ]; then
         mkdir -p "$KEYRING_DIR" || { print_error "Failed to create $KEYRING_DIR"; exit 1; }
     fi
+    print_info "Downloading/refreshing NodeSource GPG key..."
     curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o "$KEYRING_FILE"
     if [ $? -ne 0 ]; then
         print_error "Failed to download or process NodeSource GPG key."
