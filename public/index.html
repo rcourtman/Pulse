@@ -57,10 +57,12 @@
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
   <div class="container max-w-[95%] mx-auto">
-    <!-- Header with bottom border and padding -->
-    <div class="header flex justify-between items-center pb-2 border-b border-gray-300 dark:border-gray-700 mb-2">
-      <!-- Logo and Title Container (Aligned Left) -->
-      <div class="flex items-center gap-1">
+    <!-- Header - removed bottom border and padding -->
+    <div class="header flex justify-between items-center mb-2">
+      <!-- Empty div for spacing, allows logo to center -->
+      <div class="flex-1"></div>
+      <!-- Logo and Title Container (Centered) -->
+      <div class="flex items-center gap-1 flex-none">
           <!-- Pulse Logo SVG -->
           <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="pulse-logo">
             <title>Pulse Logo</title>
@@ -70,7 +72,7 @@
           <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
         </div>
       <!-- Header Controls (Aligned Right) -->
-      <div class="header-controls flex items-center gap-4">
+      <div class="header-controls flex flex-1 justify-end items-center gap-4">
         <!-- Replaced toggle switch with icon button - removed focus ring -->
         <button id="theme-toggle-button" type="button" class="p-1 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none" aria-label="Toggle theme">
           <!-- Sun icon (visible in light mode) -->
@@ -88,7 +90,7 @@
       </div>
     </div>
 
-    <div class="tabs flex mt-2 mb-2 border-b border-gray-300 dark:border-gray-700">
+    <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700">
       <!-- Add Tailwind classes, JS will toggle active classes -->
       <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px" data-tab="main">Main</div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="nodes">Nodes</div>
