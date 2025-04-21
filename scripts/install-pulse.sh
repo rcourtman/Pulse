@@ -8,6 +8,20 @@ NODE_MAJOR_VERSION=20 # Specify the desired Node.js major version (e.g., 18, 20)
 PULSE_DIR="/opt/pulse-proxmox"
 PULSE_USER="pulse" # Dedicated user to run Pulse
 SERVICE_NAME="pulse-proxmox.service"
+SCRIPT_NAME="install-pulse.sh" # Used for cron job identification
+LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
+
+# --- Flags ---
+MODE_UPDATE=false # Flag to run in non-interactive update mode
+
+# --- Argument Parsing ---
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --update) MODE_UPDATE=true ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
 
 # --- Helper Functions ---
 print_info() {
@@ -242,6 +256,19 @@ clone_repository() {
     if [ -d "$PULSE_DIR" ]; then
         # Check if it's a git repository
         if [ -d "$PULSE_DIR/.git" ]; then
+            # If --update flag is set, run update directly and exit
+            if [ "$MODE_UPDATE" = true ]; then
+                print_info "Running in non-interactive update mode..."
+                if perform_update; then
+                    print_success "Non-interactive update completed successfully."
+                    exit 0
+                else
+                    print_error "Non-interactive update failed."
+                    exit 1
+                fi
+            fi
+
+            # Otherwise, show interactive menu
             print_warning "Pulse seems to be already installed in $PULSE_DIR."
             echo "Choose an action:"
             echo "  1) Update Pulse to the latest version"
@@ -532,6 +559,99 @@ EOF
     fi
 }
 
+# --- Function to set up automatic updates via cron ---
+setup_cron_update() {
+    local cron_schedule=""
+    local cron_command=""
+    local script_path # Absolute path to this script
+
+    # Attempt to get the absolute path of the script
+    # This assumes the script is run directly, not piped.
+    # A more robust solution might involve installing the script to a fixed location.
+    if [[ "$0" == /* ]]; then
+        script_path="$0" # Already absolute
+    else
+        script_path="$(pwd)/$0" # Relative path, make absolute
+    fi
+
+    if [ ! -f "$script_path" ]; then
+         print_warning "Could not reliably determine script path for cron job. Skipping auto-update setup."
+         return 1
+    fi
+    # Escape path for use in sed/grep
+    local escaped_script_path
+    escaped_script_path=$(sed 's/[&/\]/\\&/g' <<< "$script_path")
+
+
+    print_info "Choose update frequency:"
+    echo "  1) Daily"
+    echo "  2) Weekly"
+    echo "  3) Monthly"
+    echo "  4) Never (Cancel)"
+    read -p "Enter your choice (1-4): " freq_choice
+
+    case $freq_choice in
+        1) cron_schedule="@daily" ;;
+        2) cron_schedule="@weekly" ;;
+        3) cron_schedule="@monthly" ;;
+        4) print_info "Automatic updates setup cancelled."; return 0 ;;
+        *) print_error "Invalid choice. Skipping auto-update setup."; return 1 ;;
+    esac
+
+    # Construct the cron command
+    # Runs as root, uses absolute path to bash and the script, redirects output
+    cron_command="$cron_schedule /usr/bin/bash $script_path --update >> $LOG_FILE 2>&1"
+    local cron_identifier="# Pulse-Auto-Update ($SCRIPT_NAME)" # Identifier comment
+
+    # Check if cron job already exists for this script
+    if crontab -l -u root 2>/dev/null | grep -q "$cron_identifier"; then
+        print_warning "An automatic update cron job for Pulse already seems to exist."
+        read -p "Overwrite existing schedule? (y/N): " overwrite_cron
+        if [[ ! "$overwrite_cron" =~ ^[Yy]$ ]]; then
+            print_info "Skipping cron job modification."
+            return 0
+        fi
+        # Remove existing job before adding the new one
+         (crontab -l -u root 2>/dev/null | grep -v "$cron_identifier") | crontab -u root -
+         if [ $? -ne 0 ]; then
+             print_error "Failed to remove existing cron job."
+             return 1
+         fi
+         print_info "Existing cron job removed."
+    fi
+
+    # Add the new cron job
+    print_info "Adding cron job with schedule: $cron_schedule"
+    # Add identifier comment and the command
+    (crontab -l -u root 2>/dev/null; echo "$cron_identifier"; echo "$cron_command") | crontab -u root -
+    if [ $? -eq 0 ]; then
+        print_success "Cron job for automatic updates added successfully."
+        print_info "Update logs will be written to $LOG_FILE"
+        # Ensure log file exists and is writable (optional, cron might create it)
+        touch "$LOG_FILE" || print_warning "Could not touch log file $LOG_FILE"
+        chmod 644 "$LOG_FILE" || print_warning "Could not chmod log file $LOG_FILE"
+
+    else
+        print_error "Failed to add cron job. Please check crontab configuration."
+        return 1
+    fi
+    return 0
+}
+
+# --- Function to prompt user about setting up cron ---
+prompt_for_cron_setup() {
+    # Only prompt if not running in update mode
+    if [ "$MODE_UPDATE" = false ]; then
+        echo "" # Add spacing
+        read -p "Do you want to set up automatic updates for Pulse? (y/N): " setup_cron_confirm
+        if [[ "$setup_cron_confirm" =~ ^[Yy]$ ]]; then
+            setup_cron_update
+        else
+            print_info "Skipping automatic update setup."
+        fi
+    fi
+}
+
 final_instructions() {
     # Try to get the IP address of the container
     local ip_address
@@ -565,26 +685,26 @@ final_instructions() {
 
 # --- Main Execution ---
 check_root
+
+# Execute main functions
 apt_update_upgrade
 install_dependencies
 setup_node
 create_pulse_user
-clone_repository
+clone_repository # This function now handles the update flag or interactive menu
+
+# The following steps are skipped if clone_repository exits due to update/remove/cancel
 install_npm_deps
 set_permissions
-configure_environment
+configure_environment # Might be skipped if user chooses not to overwrite existing .env
 setup_systemd_service
 final_instructions
 
+# Ask about setting up cron job at the end
+prompt_for_cron_setup
+
 print_info "Script finished."
 
-# --- Placeholder for next steps ---
-# 1. Create dedicated user
-# 2. Clone repository
-# 3. Install npm dependencies
-# 4. Configure .env
-# 5. Setup systemd service
-# 6. Final instructions
-
-echo ""
-print_success "Script execution will continue..." # Placeholder 
+# Remove placeholder lines
+# echo ""
+# print_success "Script execution will continue..." # Placeholder 
