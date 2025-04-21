@@ -78,8 +78,13 @@ const proxmoxConfig = {
 
 // Server configuration
 const DEBUG_METRICS = false; // Set to true to show detailed metrics logs
-const UPDATE_INTERVAL = 2000; // 2 seconds for updates
 const PORT = 7655; // Using a different port from the main server
+
+// --- Define Update Intervals ---
+// How often to fetch dynamic metrics (CPU, Mem, IO) for running guests
+const METRIC_UPDATE_INTERVAL = 2000; // Default: 2 seconds
+// How often to fetch structural data (node list, guest lists, node status)
+const DISCOVERY_UPDATE_INTERVAL = 30000; // Default: 30 seconds
 
 // Create Proxmox API client
 const proxmoxApi = axios.create({
@@ -140,6 +145,86 @@ app.get('/api/version', (req, res) => {
 });
 // --- End API endpoint ---
 
+// --- Add API endpoint for Storage ---
+app.get('/api/storage', async (req, res) => {
+  const storageData = {};
+  let nodesToQuery = [];
+  let discoveryFailed = false; // Flag for discovery failure
+
+  try {
+    // Reuse the node discovery logic from fetchRawProxmoxData
+    const nodesResponse = await proxmoxApi.get('/nodes');
+    const basicNodeInfo = nodesResponse.data.data || [];
+    nodesToQuery = basicNodeInfo.map(n => n.node); // Get just the names for further queries
+
+    if (nodesToQuery.length === 0) {
+       console.warn('/api/storage: Proxmox API returned 0 nodes from /nodes. Attempting single node discovery.');
+       try {
+         const versionResponse = await proxmoxApi.get('/version');
+         const discoveredNodeName = versionResponse.data.data.node;
+         if (discoveredNodeName) {
+           nodesToQuery = [discoveredNodeName];
+         } else {
+            throw new Error("Could not determine node name from /version.");
+         }
+       } catch (discoveryError) {
+           console.error(`/api/storage: Single node discovery failed: ${discoveryError.message}`);
+           discoveryFailed = true; // Mark discovery as failed
+       }
+    } else {
+      // console.log(`/api/storage: Found ${nodesToQuery.length} nodes.`); // Reduced verbosity
+    }
+  } catch (error) {
+    console.warn(`/api/storage: Failed to fetch /nodes (${error.message}). Attempting single node discovery.`);
+     try {
+       const versionResponse = await proxmoxApi.get('/version');
+       const discoveredNodeName = versionResponse.data.data.node;
+       if (discoveredNodeName) {
+         nodesToQuery = [discoveredNodeName];
+         console.log(`/api/storage: Discovered single node: ${discoveredNodeName}`);
+       } else {
+         throw new Error("Could not determine node name from /version.");
+       }
+     } catch (discoveryError) {
+        console.error(`/api/storage: Single node discovery failed after /nodes error: ${discoveryError.message}`);
+        discoveryFailed = true; // Mark discovery as failed
+     }
+  }
+
+  // If discovery failed entirely, return a specific error structure
+  if (discoveryFailed) {
+    return res.status(500).json({ globalError: 'Failed to discover any Proxmox nodes to query for storage.' });
+  }
+
+  // Fetch storage for each node in parallel
+  const storagePromises = nodesToQuery.map(async (nodeName) => {
+    if (!nodeName) {
+      console.warn('/api/storage: Skipping node with missing name:', nodeName);
+      return; // Skip if node name is missing
+    }
+    try {
+      const response = await proxmoxApi.get(`/nodes/${nodeName}/storage`);
+      storageData[nodeName] = response.data.data || []; // Store storage info per node
+      // console.log(`/api/storage: Successfully fetched storage for node ${nodeName}`); // Reduced verbosity
+    } catch (err) {
+      console.error(`/api/storage: Error fetching storage for node ${nodeName}: ${err.message}`);
+      storageData[nodeName] = { error: `Failed to fetch storage: ${err.message}` }; // Indicate error for this node
+    }
+  });
+
+  await Promise.allSettled(storagePromises);
+
+  if (Object.keys(storageData).length === 0 && nodesToQuery.length > 0) {
+    // This case might happen if all parallel fetches failed for discovered nodes
+    // We still return the object, but it might contain only node names with error objects.
+    console.warn('/api/storage: Failed to fetch storage for any discovered node.');
+  }
+  
+  // console.log(`/api/storage: Returning data for ${Object.keys(storageData).length} nodes.`); // Reduced verbosity
+  res.json(storageData); // Return the potentially mixed success/error data per node
+});
+// --- End Storage API endpoint ---
+
 // Create HTTP server
 const server = http.createServer(app);
 
@@ -151,9 +236,17 @@ const io = new Server(server, {
   }
 });
 
-// Variables to track connected clients - REMOVED as we use io.engine.clientsCount
-// let connectedClients = 0;
-let initialNodesLogged = false; // Flag to log node count only once
+// --- Global State Variables ---
+// These will hold the latest fetched data
+let currentNodes = [];
+let currentVms = [];
+let currentContainers = [];
+let currentMetrics = [];
+let isDiscoveryRunning = false; // Prevent concurrent discovery runs
+let isMetricsRunning = false;   // Prevent concurrent metric runs
+let discoveryTimeoutId = null;
+let metricTimeoutId = null;
+// --- End Global State ---
 
 // Helper function to fetch data for a single node
 async function fetchDataForNode(nodeName) {
@@ -247,197 +340,318 @@ async function fetchDataForNode(nodeName) {
   return nodeData; // Return collected data for this node
 }
 
-// Helper function to get raw Proxmox data
-async function fetchRawProxmoxData() {
-  const rawData = {
+// --- Refactored Data Fetching Logic ---
+
+/**
+ * Fetches structural data: node list, node statuses, VM list, Container list.
+ */
+async function fetchDiscoveryData() {
+  console.log('[Discovery Cycle] Starting fetch...');
+  const discoveryResult = {
     nodes: [],
     vms: [],
-    containers: [],
-    metrics: []
+    containers: []
   };
-
   let nodesToQuery = [];
-  let discoveredNodeName = null;
+  let basicNodeInfo = []; // Store basic info separately
 
+  // --- Step 1: Fetch Node List and Basic Info --- 
   try {
-    // Attempt to fetch cluster nodes
     const nodesResponse = await proxmoxApi.get('/nodes');
-    nodesToQuery = nodesResponse.data.data || [];
-    rawData.nodes = nodesToQuery;
+    basicNodeInfo = nodesResponse.data.data || [];
+    nodesToQuery = basicNodeInfo.map(n => n.node).filter(Boolean);
 
     if (nodesToQuery.length === 0) {
-      console.warn('Proxmox API returned 0 nodes from /nodes endpoint. Attempting single node discovery.');
-      // If /nodes returns empty, still try to discover the single node via /version
+      console.warn('[Discovery Cycle] /nodes returned 0 nodes. Attempting single node discovery.');
       try {
         const versionResponse = await proxmoxApi.get('/version');
-        discoveredNodeName = versionResponse.data.data.node;
-        if (!discoveredNodeName) {
-            throw new Error("Could not determine node name from /version endpoint.");
-        }
-        console.log(`Discovered single node name: ${discoveredNodeName}`);
-        nodesToQuery = [{ node: discoveredNodeName }]; // Use the discovered name
-
-        // Optionally, try to get status for the single node
-        try {
-            const statusResponse = await proxmoxApi.get(`/nodes/${discoveredNodeName}/status`);
-            rawData.nodes = [statusResponse.data.data]; // Use actual status if available
-        } catch (statusError) {
-             console.warn(`Could not fetch status for discovered single node ${discoveredNodeName}: ${statusError.message}`);
-             rawData.nodes = [{ node: discoveredNodeName, status: 'unknown' }]; // Fallback to discovered name
+        const discoveredNodeName = versionResponse.data.data.node;
+        if (discoveredNodeName) {
+          nodesToQuery = [discoveredNodeName];
+          // We need some basic info for the single node if /nodes failed
+          basicNodeInfo = [{ node: discoveredNodeName, ip: 'unknown', status: 'unknown' }]; 
+        } else {
+          throw new Error("Could not determine node name from /version.");
         }
       } catch (discoveryError) {
-          console.error(`Single node discovery failed: ${discoveryError.message}. Cannot proceed.`);
-          // Return empty data if we can't even discover the node name
-          return { nodes: [], vms: [], containers: [], metrics: [] };
+        console.error(`[Discovery Cycle] Single node discovery failed: ${discoveryError.message}. Cannot proceed.`);
+        return discoveryResult; // Return empty structure on fatal discovery error
       }
     }
   } catch (error) {
-    console.warn(`Failed to fetch /nodes (attempting single node discovery): ${error.message}`);
-    // Assume single node mode if /nodes fails, try discovery via /version
+    console.warn(`[Discovery Cycle] Failed to fetch /nodes (${error.message}). Attempting single node discovery.`);
     try {
       const versionResponse = await proxmoxApi.get('/version');
-      discoveredNodeName = versionResponse.data.data.node;
-       if (!discoveredNodeName) {
-            throw new Error("Could not determine node name from /version endpoint.");
-        }
-      console.log(`Discovered single node name: ${discoveredNodeName}`);
-      nodesToQuery = [{ node: discoveredNodeName }]; // Use the discovered name
-
-      // Optionally, try to get status for the single node
-      try {
-          const statusResponse = await proxmoxApi.get(`/nodes/${discoveredNodeName}/status`);
-          rawData.nodes = [statusResponse.data.data]; // Use actual status if available
-      } catch (statusError) {
-          console.warn(`Could not fetch status for discovered single node ${discoveredNodeName}: ${statusError.message}`);
-          rawData.nodes = [{ node: discoveredNodeName, status: 'unknown' }]; // Fallback to discovered name
+      const discoveredNodeName = versionResponse.data.data.node;
+      if (discoveredNodeName) {
+          nodesToQuery = [discoveredNodeName];
+          basicNodeInfo = [{ node: discoveredNodeName, ip: 'unknown', status: 'unknown' }];
+      } else {
+          throw new Error("Could not determine node name from /version.");
       }
     } catch (discoveryError) {
-        console.error(`Single node discovery failed after /nodes error: ${discoveryError.message}. Cannot proceed.`);
-         // Return empty data if discovery fails
-         return { nodes: [], vms: [], containers: [], metrics: [] };
+        console.error(`[Discovery Cycle] Single node discovery failed after /nodes error: ${discoveryError.message}. Cannot proceed.`);
+        return discoveryResult;
     }
   }
 
-   // --- Start Parallel Fetching ---
-   const nodeDataPromises = nodesToQuery.map(node => {
-       const nodeName = node.node;
-       if (!nodeName) {
-           console.error("Node object missing 'node' property:", node);
-           return Promise.resolve(null); // Resolve immediately for invalid node objects
-       }
-       return fetchDataForNode(nodeName);
-   });
-
-   const results = await Promise.allSettled(nodeDataPromises);
-
-   results.forEach((result, index) => {
-       const nodeName = nodesToQuery[index]?.node; // Get corresponding node name
-       if (result.status === 'fulfilled' && result.value) {
-           // Aggregate successful results
-           const nodeData = result.value;
-           rawData.vms.push(...nodeData.vms);
-           rawData.containers.push(...nodeData.containers);
-           rawData.metrics.push(...nodeData.metrics);
-       } else if (result.status === 'rejected') {
-           console.error(`Failed to fetch data for node ${nodeName || 'UNKNOWN'}: ${result.reason}`);
-           // Optionally add placeholder data or mark node as errored in rawData.nodes if needed
-       }
-   });
-   // --- End Parallel Fetching ---
-
-  // console.log(`Collected raw data: ${rawData.nodes.length} nodes, ${rawData.vms.length} VMs, ${rawData.containers.length} containers, ${rawData.metrics.length} metric sets`);
-  return rawData;
-}
-
-// Socket.io connection handling
-io.on('connection', (socket) => {
-  // connectedClients++; - REMOVED
-  console.log(`[socket] Client connected. Total clients: ${io.engine.clientsCount}`);
-  
-  // Fetch and send initial data, log node count on first successful fetch
-  fetchRawProxmoxData().then(data => {
-    socket.emit('rawData', data);
-    if (!initialNodesLogged && data && data.nodes && data.nodes.length > 0) {
-      console.log(`Initial connection successful. Found ${data.nodes.length} Proxmox node(s).`);
-      initialNodesLogged = true;
-    } else if (!initialNodesLogged && data && data.nodes && data.nodes.length === 0) {
-      console.log('Initial connection successful. Found 0 Proxmox nodes.');
-      initialNodesLogged = true;
-    } else if (!initialNodesLogged) {
-      // Log if initial fetch failed but connection handler still ran
-      console.warn('Initial Proxmox data fetch failed or returned no nodes.');
-      initialNodesLogged = true; // Prevent repeated warnings
-    }
-  }).catch(error => {
-    console.error('Error fetching initial Proxmox data for client:', error.message);
-    if (!initialNodesLogged) {
-        initialNodesLogged = true; // Prevent repeated warnings even on error
+  // --- Step 2: Fetch Detailed Status for Each Node (and merge IP) ---
+  const nodeStatusPromises = nodesToQuery.map(async (nodeName) => {
+    if (!nodeName) return null; 
+    try {
+        const statusResponse = await proxmoxApi.get(`/nodes/${nodeName}/status`);
+        const statusData = statusResponse.data.data;
+        const basicInfo = basicNodeInfo.find(n => n.node === nodeName);
+        if (statusData) {
+            if (!statusData.node) { statusData.node = nodeName; }
+            statusData.ip = basicInfo?.ip || 'fetch_error';
+        } else {
+             return { node: nodeName, status: 'unknown', ip: basicInfo?.ip || 'fetch_error' };
+        }
+        return statusData;
+    } catch (statusError) {
+         console.warn(`[Discovery Cycle] Could not fetch status for node ${nodeName}: ${statusError.message}`);
+         const basicInfo = basicNodeInfo.find(n => n.node === nodeName);
+         return basicInfo
+                ? { ...basicInfo, status: 'offline', ip: basicInfo.ip || 'fetch_error' }
+                : { node: nodeName, status: 'offline', ip: 'fetch_error' };
     }
   });
+  const detailedNodeResults = await Promise.allSettled(nodeStatusPromises);
+  discoveryResult.nodes = detailedNodeResults
+                      .filter(result => result.status === 'fulfilled' && result.value)
+                      .map(result => result.value);
+  // Fallback if all status calls failed
+  if (discoveryResult.nodes.length === 0 && basicNodeInfo.length > 0) {
+      console.warn("[Discovery Cycle] All node status fetches failed. Falling back to basic node info from /nodes.");
+      discoveryResult.nodes = basicNodeInfo.map(node => ({ ...node, ip: node.ip || 'unknown' }));
+  }
+  
+  // --- Step 3: Fetch VM/Container Lists for Each Node --- 
+  const finalNodeNames = discoveryResult.nodes.map(n => n.node).filter(Boolean);
+  const guestListPromises = finalNodeNames.map(async (nodeName) => {
+    let vms = [];
+    let containers = [];
+    try {
+        const vmsResponse = await proxmoxApi.get(`/nodes/${nodeName}/qemu`);
+        if (vmsResponse.data.data && Array.isArray(vmsResponse.data.data)) {
+           vms = vmsResponse.data.data.map(vm => ({ ...vm, node: nodeName }));
+        }
+    } catch (err) { console.error(`[Discovery Cycle] Error fetching VMs from ${nodeName}: ${err.message}`); }
+    try {
+        const ctsResponse = await proxmoxApi.get(`/nodes/${nodeName}/lxc`);
+        if (ctsResponse.data.data && Array.isArray(ctsResponse.data.data)) {
+           containers = ctsResponse.data.data.map(ct => ({ ...ct, node: nodeName }));
+        }
+    } catch (err) { console.error(`[Discovery Cycle] Error fetching containers from ${nodeName}: ${err.message}`); }
+    return { vms, containers };
+  });
+
+  const guestListResults = await Promise.allSettled(guestListPromises);
+  guestListResults.forEach(result => {
+      if (result.status === 'fulfilled' && result.value) {
+          discoveryResult.vms.push(...result.value.vms);
+          discoveryResult.containers.push(...result.value.containers);
+      }
+  });
+
+  console.log(`[Discovery Cycle] Completed. Found: ${discoveryResult.nodes.length} nodes, ${discoveryResult.vms.length} VMs, ${discoveryResult.containers.length} containers.`);
+  return discoveryResult;
+}
+
+/**
+ * Fetches dynamic metric data ONLY for currently known running VMs and Containers.
+ */
+async function fetchMetricsData(runningVms, runningContainers) {
+  // console.log(`[Metrics Cycle] Starting fetch for ${runningVms.length} VMs, ${runningContainers.length} CTs...`); // Reduced verbosity
+  let metrics = [];
+
+  // --- Fetch VM Metrics --- 
+  const vmMetricPromises = runningVms.map(async (vm) => {
+    try {
+      const [rrdData, currentData] = await Promise.all([
+        proxmoxApi.get(`/nodes/${vm.node}/qemu/${vm.vmid}/rrddata`, { params: { timeframe: 'hour', cf: 'AVERAGE' } }),
+        proxmoxApi.get(`/nodes/${vm.node}/qemu/${vm.vmid}/status/current`)
+      ]);
+      let metricData = {
+        id: vm.vmid, name: vm.name, node: vm.node, type: 'qemu', data: [],
+        current: currentData?.data?.data || null
+      };
+      if (rrdData?.data?.data?.length > 0) metricData.data = rrdData.data.data;
+      return metricData;
+    } catch (err) {
+      // Log less verbosely for metrics errors
+      // console.error(`[Metrics Cycle] Failed metrics for VM ${vm.vmid} on ${vm.node}: ${err.message}`);
+      return null; // Return null on error for this specific VM
+    }
+  });
+
+  // --- Fetch Container Metrics --- 
+  const ctMetricPromises = runningContainers.map(async (ct) => {
+    try {
+      const [rrdData, currentData] = await Promise.all([
+         proxmoxApi.get(`/nodes/${ct.node}/lxc/${ct.vmid}/rrddata`, { params: { timeframe: 'hour', cf: 'AVERAGE' } }),
+         proxmoxApi.get(`/nodes/${ct.node}/lxc/${ct.vmid}/status/current`)
+      ]);
+      let metricData = {
+        id: ct.vmid, name: ct.name, node: ct.node, type: 'lxc', data: [],
+        current: currentData?.data?.data || null
+      };
+      if (rrdData?.data?.data?.length > 0) metricData.data = rrdData.data.data;
+       return metricData;
+    } catch (err) {
+      // console.error(`[Metrics Cycle] Failed metrics for CT ${ct.vmid} on ${ct.node}: ${err.message}`);
+      return null; // Return null on error for this specific container
+    }
+  });
+
+  // --- Combine Results --- 
+  const allPromises = [...vmMetricPromises, ...ctMetricPromises];
+  const metricResults = await Promise.allSettled(allPromises);
+  metricResults.forEach(result => {
+       if (result.status === 'fulfilled' && result.value) {
+          metrics.push(result.value);
+      }
+  });
+  // console.log(`[Metrics Cycle] Completed. Fetched ${metrics.length} metric sets.`); // Reduced verbosity
+  return metrics;
+}
+
+// --- Socket.io connection handling (Initial data fetch needs update) ---
+io.on('connection', (socket) => {
+  console.log(`[socket] Client connected. Total clients: ${io.engine.clientsCount}`);
+  
+  // Send initial data immediately if available
+  if (currentNodes.length > 0 || currentVms.length > 0 || currentContainers.length > 0) {
+    console.log('[socket] Sending existing data to new client.');
+    socket.emit('rawData', {
+        nodes: currentNodes,
+        vms: currentVms,
+        containers: currentContainers,
+        metrics: currentMetrics
+    });
+  } else {
+    // If no data yet, trigger a discovery cycle (if not already running)
+    console.log('[socket] No data yet, triggering initial discovery for new client...');
+    if (!isDiscoveryRunning) {
+        runDiscoveryCycle(); 
+    }
+  }
   
   // Handle disconnect
   socket.on('disconnect', () => {
-    // connectedClients--; - REMOVED
-    // Use timeout to log count *after* socket.io updates internal count
     setTimeout(() => {
         console.log(`[socket] Client disconnected. Total clients: ${io.engine.clientsCount}`);
+        // Optional: Stop polling if client count drops to 0? (Handled in run cycles)
     }, 100);
   });
 });
 
-// --- Use recursive setTimeout for reliable interval after async operations ---
-let updateTimeoutId = null; // To potentially clear timeout if needed
+// --- New Update Cycle Logic ---
 
-async function runUpdateCycle() {
-  // Clear previous timeout ID if somehow it was still set (belt-and-suspenders)
-  if (updateTimeoutId) clearTimeout(updateTimeoutId);
-  updateTimeoutId = null;
-
-  // Only poll if clients are connected
-  if (io.engine.clientsCount > 0) {
-    try {
-      console.log(`[interval] Updating raw data for ${io.engine.clientsCount} client(s)...`);
-      const data = await fetchRawProxmoxData();
-      io.emit('rawData', data);
-    } catch (error) {
-      console.error(`[interval] Error during update: ${error.message}`);
-    }
-  } else {
-    // console.log('[interval] No clients connected, skipping Proxmox API poll.');
+// Discovery Cycle Runner
+async function runDiscoveryCycle() {
+  if (isDiscoveryRunning) {
+    // console.log('[Discovery Cycle] Already running, skipping.');
+    return;
   }
+  isDiscoveryRunning = true;
 
-  // Schedule the next update cycle regardless of errors or client count
-  // This ensures polling resumes when clients reconnect
-  scheduleNextUpdate();
+  try {
+    const discoveryData = await fetchDiscoveryData();
+    // Update global state
+    currentNodes = discoveryData.nodes;
+    currentVms = discoveryData.vms;
+    currentContainers = discoveryData.containers;
+
+    // Emit combined data only if clients are connected
+  if (io.engine.clientsCount > 0) {
+      console.log('[Discovery Cycle] Emitting updated structural data.');
+      io.emit('rawData', {
+          nodes: currentNodes,
+          vms: currentVms,
+          containers: currentContainers,
+          metrics: currentMetrics // Include latest metrics
+      });
+      // Trigger metrics immediately after discovery if needed?
+      // if (!isMetricsRunning) runMetricCycle(); 
+    }
+  } catch (error) {
+      console.error(`[Discovery Cycle] Error during execution: ${error.message}`);
+  } finally {
+      isDiscoveryRunning = false;
+      // Schedule the next discovery cycle
+      scheduleNextDiscovery();
+  }
 }
 
-function scheduleNextUpdate() {
-  // Schedule the next run after UPDATE_INTERVAL milliseconds
-  updateTimeoutId = setTimeout(runUpdateCycle, UPDATE_INTERVAL);
+// Metric Cycle Runner
+async function runMetricCycle() {
+  if (isMetricsRunning) {
+    // console.log('[Metrics Cycle] Already running, skipping.');
+    return;
+  }
+  // Only run if clients are connected
+  if (io.engine.clientsCount === 0) {
+    // console.log('[Metrics Cycle] No clients connected, skipping fetch.');
+    scheduleNextMetric(); // Still schedule next check
+    return;
+  }
+  
+  isMetricsRunning = true;
+
+  try {
+    // Filter for running guests based on current state
+    const runningVms = currentVms.filter(vm => vm.status === 'running');
+    const runningContainers = currentContainers.filter(ct => ct.status === 'running');
+
+    if (runningVms.length > 0 || runningContainers.length > 0) {
+        currentMetrics = await fetchMetricsData(runningVms, runningContainers);
+        // Emit combined data
+        // console.log('[Metrics Cycle] Emitting updated metrics data.'); // Reduced verbosity
+        io.emit('rawData', {
+            nodes: currentNodes,
+            vms: currentVms,
+            containers: currentContainers,
+            metrics: currentMetrics
+        });
+    } else {
+        // console.log('[Metrics Cycle] No running guests found, skipping metric fetch.');
+        currentMetrics = []; // Clear metrics if no guests running
+         // Optionally emit state if metrics were cleared?
+        io.emit('rawData', {
+            nodes: currentNodes, vms: currentVms,
+            containers: currentContainers, metrics: currentMetrics
+        });
+    }
+
+  } catch (error) {
+      console.error(`[Metrics Cycle] Error during execution: ${error.message}`);
+  } finally {
+      isMetricsRunning = false;
+      // Schedule the next metric cycle
+      scheduleNextMetric();
+  }
 }
 
-// Start the first update cycle
-scheduleNextUpdate();
-// --- End recursive setTimeout implementation ---
+// Schedulers using setTimeout
+function scheduleNextDiscovery() {
+  if (discoveryTimeoutId) clearTimeout(discoveryTimeoutId);
+  discoveryTimeoutId = setTimeout(runDiscoveryCycle, DISCOVERY_UPDATE_INTERVAL);
+}
 
-// Periodic update interval for all connected clients - REMOVED
-/*
-const updateInterval = setInterval(async () => {
-  // Only poll if clients are connected
-  if (io.engine.clientsCount > 0) {
-    try {
-      console.log(`[interval] Updating raw data for ${io.engine.clientsCount} client(s)...`);
-      const data = await fetchRawProxmoxData();
-      io.emit('rawData', data);
-    } catch (error) {
-      console.error(`[interval] Error during update: ${error.message}`);
-    }
-  } else {
-    // Optional: Log that polling is skipped
-    // console.log('[interval] No clients connected, skipping Proxmox API poll.');
-  }
-}, UPDATE_INTERVAL);
-*/
+function scheduleNextMetric() {
+  if (metricTimeoutId) clearTimeout(metricTimeoutId);
+  metricTimeoutId = setTimeout(runMetricCycle, METRIC_UPDATE_INTERVAL);
+}
+
+// Start the initial cycles
+console.log('Starting initial data fetch cycles...');
+runDiscoveryCycle(); // Run discovery first
+// Metrics will be triggered after discovery or by its own timer if clients connect later
+scheduleNextMetric(); // Start scheduling metrics right away
+
+// --- End New Update Cycle Logic ---
 
 // Start the server
 server.listen(PORT, () => {
