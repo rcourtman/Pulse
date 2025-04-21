@@ -212,4 +212,51 @@ For users running Proxmox VE, a convenient installation script is provided to se
 Contributions are welcome! Please follow standard fork-and-pull-request workflow. Refer to the main repository's contributing guidelines if available.
 
 1.  **Fork the repository**
-2.  **Create a feature branch**: `
+2.  **Create a feature branch**:
+```bash
+git checkout -b feature/YourFeatureName
+```
+3.  **Make your changes**
+4.  **Commit your changes**: `git commit -m 'Add some feature'`
+5.  **Push to the branch**: `git push origin feature/YourFeatureName`
+6.  **Open a Pull Request**
+
+## 📜 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details (if one exists) or refer to the standard MIT License text below:
+
+```
+MIT License
+
+Copyright (c) 2024 R Courtman
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+## ™️ Trademark Notice
+
+Proxmox® and Proxmox VE® are registered trademarks of Proxmox Server Solutions GmbH. This project is not affiliated with or endorsed by Proxmox Server Solutions GmbH.
+
+## ❤️ Support
+
+If you encounter any issues or have questions, please file an issue on the [GitHub repository](https://github.com/rcourtman/Pulse/issues).
+
+If you find this project useful, consider supporting its development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
