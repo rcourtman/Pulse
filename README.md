@@ -160,7 +160,7 @@ For users running Proxmox VE, a convenient installation script is provided to se
 **Prerequisites:**
 - A running Proxmox VE environment.
 - A Debian or Ubuntu based LXC container already created in Proxmox.
-    - *Tip: Creating a suitable LXC container is easy using helper scripts. For example, the [Community Scripts](https://github.com/community-scripts/ProxmoxVE) collection offers a Debian script you can run directly on your Proxmox host:*\n      ```bash\n      bash -c \"$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/debian.sh)\"\n      ```
+    - *Tip: Creating a suitable LXC container is easy using helper scripts. For example, the [Community Scripts](https://community-scripts.github.io/ProxmoxVE/scripts?id=debian) collection offers a Debian script you can run directly on your Proxmox host:*\n      ```bash\n      bash -c \"$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/debian.sh)\"\n      ```
 - Network connectivity from the LXC to your Proxmox server.
 - You will need your Proxmox API Token details ([See Creating a Proxmox API Token](#creating-a-proxmox-api-token)).
 
