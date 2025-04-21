@@ -155,9 +155,100 @@ const io = new Server(server, {
 // let connectedClients = 0;
 let initialNodesLogged = false; // Flag to log node count only once
 
+// Helper function to fetch data for a single node
+async function fetchDataForNode(nodeName) {
+  const nodeData = {
+    vms: [],
+    containers: [],
+    metrics: []
+  };
+
+  try {
+    // Fetch VMs
+    const vmsResponse = await proxmoxApi.get(`/nodes/${nodeName}/qemu`);
+    if (vmsResponse.data.data && Array.isArray(vmsResponse.data.data)) {
+      nodeData.vms = vmsResponse.data.data.map(vm => ({ ...vm, node: nodeName }));
+
+      // Collect metrics for running VMs in parallel
+      const vmMetricPromises = nodeData.vms
+        .filter(vm => vm.status === 'running')
+        .map(async (vm) => {
+          try {
+            const [rrdData, currentData] = await Promise.all([
+              proxmoxApi.get(`/nodes/${nodeName}/qemu/${vm.vmid}/rrddata`, { params: { timeframe: 'hour', cf: 'AVERAGE' } }),
+              proxmoxApi.get(`/nodes/${nodeName}/qemu/${vm.vmid}/status/current`)
+            ]);
+
+            let metricData = {
+              id: vm.vmid, name: vm.name, node: nodeName, type: 'qemu', data: [],
+              current: currentData?.data?.data || null
+            };
+            if (rrdData?.data?.data?.length > 0) metricData.data = rrdData.data.data;
+            return metricData; // Return successful metric data
+          } catch (err) {
+            console.error(`Failed to get metrics for VM ${vm.vmid} on node ${nodeName}: ${err.message}`);
+            return null; // Return null on error for this specific VM
+          }
+        });
+      const vmMetricsResults = await Promise.allSettled(vmMetricPromises);
+      vmMetricsResults.forEach(result => {
+          if (result.status === 'fulfilled' && result.value) {
+              nodeData.metrics.push(result.value);
+          }
+          // Optionally log rejected promises if needed:
+          // else if (result.status === 'rejected') { console.error(...) }
+      });
+    }
+  } catch (err) {
+    console.error(`Error fetching VMs from ${nodeName}: ${err.message}`);
+    // Continue to fetch containers even if VMs fail
+  }
+
+  try {
+    // Fetch containers
+    const ctsResponse = await proxmoxApi.get(`/nodes/${nodeName}/lxc`);
+    if (ctsResponse.data.data && Array.isArray(ctsResponse.data.data)) {
+      nodeData.containers = ctsResponse.data.data.map(ct => ({ ...ct, node: nodeName }));
+
+      // Collect metrics for running containers in parallel
+      const ctMetricPromises = nodeData.containers
+        .filter(ct => ct.status === 'running')
+        .map(async (ct) => {
+          try {
+            const [rrdData, currentData] = await Promise.all([
+               proxmoxApi.get(`/nodes/${nodeName}/lxc/${ct.vmid}/rrddata`, { params: { timeframe: 'hour', cf: 'AVERAGE' } }),
+               proxmoxApi.get(`/nodes/${nodeName}/lxc/${ct.vmid}/status/current`)
+            ]);
+
+            let metricData = {
+              id: ct.vmid, name: ct.name, node: nodeName, type: 'lxc', data: [],
+              current: currentData?.data?.data || null
+            };
+            if (rrdData?.data?.data?.length > 0) metricData.data = rrdData.data.data;
+             return metricData; // Return successful metric data
+          } catch (err) {
+            console.error(`Failed to get metrics for container ${ct.vmid} on node ${nodeName}: ${err.message}`);
+            return null; // Return null on error for this specific container
+          }
+        });
+
+       const ctMetricsResults = await Promise.allSettled(ctMetricPromises);
+        ctMetricsResults.forEach(result => {
+            if (result.status === 'fulfilled' && result.value) {
+                nodeData.metrics.push(result.value);
+            }
+             // Optionally log rejected promises if needed
+        });
+    }
+  } catch (err) {
+    console.error(`Error fetching containers from ${nodeName}: ${err.message}`);
+  }
+
+  return nodeData; // Return collected data for this node
+}
+
 // Helper function to get raw Proxmox data
 async function fetchRawProxmoxData() {
-  // const configuredNodeName = proxmoxConfig.node1.name; // No longer needed for API calls
   const rawData = {
     nodes: [],
     vms: [],
@@ -166,13 +257,13 @@ async function fetchRawProxmoxData() {
   };
 
   let nodesToQuery = [];
-  let discoveredNodeName = null; // To store the node name discovered via /version
+  let discoveredNodeName = null;
 
   try {
     // Attempt to fetch cluster nodes
     const nodesResponse = await proxmoxApi.get('/nodes');
     nodesToQuery = nodesResponse.data.data || [];
-    rawData.nodes = nodesToQuery; // Store the nodes list if successful
+    rawData.nodes = nodesToQuery;
 
     if (nodesToQuery.length === 0) {
       console.warn('Proxmox API returned 0 nodes from /nodes endpoint. Attempting single node discovery.');
@@ -227,97 +318,32 @@ async function fetchRawProxmoxData() {
     }
   }
 
-  // For each node (either from /nodes or the single discovered node), fetch guests and metrics
-  for (const node of nodesToQuery) {
-    const nodeName = node.node; // Use the node name from the list (discovered or from /nodes)
-    if (!nodeName) {
-        console.error("Node object missing 'node' property:", node);
-        continue; // Skip if node name is missing
-    }
-    try {
-      // Fetch VMs
-      const vmsResponse = await proxmoxApi.get(`/nodes/${nodeName}/qemu`);
-      if (vmsResponse.data.data && Array.isArray(vmsResponse.data.data)) {
-        rawData.vms.push(...vmsResponse.data.data.map(vm => ({
-          ...vm,
-          node: nodeName // Ensure node name is correctly assigned
-        })));
+   // --- Start Parallel Fetching ---
+   const nodeDataPromises = nodesToQuery.map(node => {
+       const nodeName = node.node;
+       if (!nodeName) {
+           console.error("Node object missing 'node' property:", node);
+           return Promise.resolve(null); // Resolve immediately for invalid node objects
+       }
+       return fetchDataForNode(nodeName);
+   });
 
-        // Collect metrics for running VMs
-        for (const vm of vmsResponse.data.data.filter(vm => vm.status === 'running')) {
-          try {
-            // Get traditional RRD data
-            const rrdData = await proxmoxApi.get(`/nodes/${nodeName}/qemu/${vm.vmid}/rrddata`, {
-              params: { timeframe: 'hour', cf: 'AVERAGE' }
-            });
+   const results = await Promise.allSettled(nodeDataPromises);
 
-            // Try to get real-time "current" values
-            const currentData = await proxmoxApi.get(`/nodes/${nodeName}/qemu/${vm.vmid}/status/current`);
-
-            let metricData = {
-              id: vm.vmid, name: vm.name, node: nodeName, type: 'qemu', data: [],
-              current: currentData?.data?.data || null
-            };
-            if (rrdData?.data?.data?.length > 0) metricData.data = rrdData.data.data;
-            rawData.metrics.push(metricData);
-
-            if (rrdData?.data?.data?.length > 1 && DEBUG_METRICS) {
-              const newest = rrdData.data.data[rrdData.data.data.length - 1].time;
-              const secondNewest = rrdData.data.data[rrdData.data.data.length - 2].time;
-              console.log(`VM ${vm.name || vm.vmid} metrics update interval: ${newest - secondNewest} seconds`);
-              if (currentData?.data?.data) console.log(`VM ${vm.name || vm.vmid} current metrics: CPU=${currentData.data.data.cpu}, Memory=${currentData.data.data.mem}`, `[RRD last update: ${new Date(newest * 1000).toISOString()}]`);
-            }
-          } catch (err) {
-            console.error(`Failed to get metrics for VM ${vm.vmid} on node ${nodeName}: ${err.message}`);
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`Error fetching VMs from ${nodeName}: ${err.message}`);
-    }
-
-    try {
-      // Fetch containers
-      const ctsResponse = await proxmoxApi.get(`/nodes/${nodeName}/lxc`);
-      if (ctsResponse.data.data && Array.isArray(ctsResponse.data.data)) {
-        rawData.containers.push(...ctsResponse.data.data.map(ct => ({
-          ...ct,
-          node: nodeName // Ensure node name is correctly assigned
-        })));
-
-        // Collect metrics for running containers
-        for (const ct of ctsResponse.data.data.filter(ct => ct.status === 'running')) {
-          try {
-            // Get traditional RRD data
-            const rrdData = await proxmoxApi.get(`/nodes/${nodeName}/lxc/${ct.vmid}/rrddata`, {
-              params: { timeframe: 'hour', cf: 'AVERAGE' }
-            });
-
-            // Try to get real-time "current" values
-            const currentData = await proxmoxApi.get(`/nodes/${nodeName}/lxc/${ct.vmid}/status/current`);
-
-            let metricData = {
-              id: ct.vmid, name: ct.name, node: nodeName, type: 'lxc', data: [],
-              current: currentData?.data?.data || null
-            };
-            if (rrdData?.data?.data?.length > 0) metricData.data = rrdData.data.data;
-            rawData.metrics.push(metricData);
-
-             if (rrdData?.data?.data?.length > 1 && DEBUG_METRICS) {
-              const newest = rrdData.data.data[rrdData.data.data.length - 1].time;
-              const secondNewest = rrdData.data.data[rrdData.data.data.length - 2].time;
-               console.log(`Container ${ct.name || ct.vmid} metrics update interval: ${newest - secondNewest} seconds`);
-               if (currentData?.data?.data) console.log(`Container ${ct.name || ct.vmid} current metrics: CPU=${currentData.data.data.cpu}, Memory=${currentData.data.data.mem}`, `[RRD last update: ${new Date(newest * 1000).toISOString()}]`);
-            }
-          } catch (err) {
-            console.error(`Failed to get metrics for container ${ct.vmid} on node ${nodeName}: ${err.message}`);
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`Error fetching containers from ${nodeName}: ${err.message}`);
-    }
-  } // End loop through nodesToQuery
+   results.forEach((result, index) => {
+       const nodeName = nodesToQuery[index]?.node; // Get corresponding node name
+       if (result.status === 'fulfilled' && result.value) {
+           // Aggregate successful results
+           const nodeData = result.value;
+           rawData.vms.push(...nodeData.vms);
+           rawData.containers.push(...nodeData.containers);
+           rawData.metrics.push(...nodeData.metrics);
+       } else if (result.status === 'rejected') {
+           console.error(`Failed to fetch data for node ${nodeName || 'UNKNOWN'}: ${result.reason}`);
+           // Optionally add placeholder data or mark node as errored in rawData.nodes if needed
+       }
+   });
+   // --- End Parallel Fetching ---
 
   // console.log(`Collected raw data: ${rawData.nodes.length} nodes, ${rawData.vms.length} VMs, ${rawData.containers.length} containers, ${rawData.metrics.length} metric sets`);
   return rawData;
@@ -359,7 +385,43 @@ io.on('connection', (socket) => {
   });
 });
 
-// Periodic update interval for all connected clients
+// --- Use recursive setTimeout for reliable interval after async operations ---
+let updateTimeoutId = null; // To potentially clear timeout if needed
+
+async function runUpdateCycle() {
+  // Clear previous timeout ID if somehow it was still set (belt-and-suspenders)
+  if (updateTimeoutId) clearTimeout(updateTimeoutId);
+  updateTimeoutId = null;
+
+  // Only poll if clients are connected
+  if (io.engine.clientsCount > 0) {
+    try {
+      console.log(`[interval] Updating raw data for ${io.engine.clientsCount} client(s)...`);
+      const data = await fetchRawProxmoxData();
+      io.emit('rawData', data);
+    } catch (error) {
+      console.error(`[interval] Error during update: ${error.message}`);
+    }
+  } else {
+    // console.log('[interval] No clients connected, skipping Proxmox API poll.');
+  }
+
+  // Schedule the next update cycle regardless of errors or client count
+  // This ensures polling resumes when clients reconnect
+  scheduleNextUpdate();
+}
+
+function scheduleNextUpdate() {
+  // Schedule the next run after UPDATE_INTERVAL milliseconds
+  updateTimeoutId = setTimeout(runUpdateCycle, UPDATE_INTERVAL);
+}
+
+// Start the first update cycle
+scheduleNextUpdate();
+// --- End recursive setTimeout implementation ---
+
+// Periodic update interval for all connected clients - REMOVED
+/*
 const updateInterval = setInterval(async () => {
   // Only poll if clients are connected
   if (io.engine.clientsCount > 0) {
@@ -375,6 +437,7 @@ const updateInterval = setInterval(async () => {
     // console.log('[interval] No clients connected, skipping Proxmox API poll.');
   }
 }, UPDATE_INTERVAL);
+*/
 
 // Start the server
 server.listen(PORT, () => {

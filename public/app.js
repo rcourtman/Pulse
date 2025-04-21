@@ -132,6 +132,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const AVERAGING_WINDOW_SIZE = 5;
   const dashboardHistory = {};
   let filterStatus = 'all'; // New state variable for status filter
+  let initialDataReceived = false; // Flag to control initial rendering
 
   // --- WebSocket Connection ---
   const socket = io();
@@ -759,14 +760,22 @@ document.addEventListener('DOMContentLoaded', function() {
         vmsData = data.vms || [];
         containersData = data.containers || [];
         metricsData = data.metrics || [];
-        console.log('[socket.on("rawData")] Parsed data');
+        console.log('[socket.on("rawData")] Parsed data and updated stores');
 
-        // Update UI tables
-        updateNodesTable(nodesData);
-        updateVmsTable(vmsData);
-        updateContainersTable(containersData);
-        refreshDashboardData(); // Process and update the main dashboard
-        console.log('[socket.on("rawData")] Processed data and updated UI');
+        // Set flag after first successful data parse
+        if (!initialDataReceived) {
+          initialDataReceived = true;
+          console.log('[socket.on("rawData")] Initial data received, enabling UI updates.');
+          // Optional: Trigger immediate first render instead of waiting for interval
+          // updateAllUITables(); 
+        }
+
+        // --- REMOVED UI update calls from here ---
+        // updateNodesTable(nodesData);
+        // updateVmsTable(vmsData);
+        // updateContainersTable(containersData);
+        // refreshDashboardData(); 
+        // console.log('[socket.on("rawData")] Processed data and updated UI');
 
     } catch (e) {
         console.error('Error processing received rawData:', e, jsonData);
@@ -842,6 +851,23 @@ document.addEventListener('DOMContentLoaded', function() {
   // --- Initial Setup Calls ---
   updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]'));
   // Data is requested on socket 'connect' event
+
+  // --- Frontend Render Interval ---
+  function updateAllUITables() {
+    // Update UI tables using the currently stored data
+    updateNodesTable(nodesData);
+    updateVmsTable(vmsData);
+    updateContainersTable(containersData);
+    refreshDashboardData(); // Process and update the main dashboard
+  }
+
+  setInterval(() => {
+    if (initialDataReceived) {
+      // console.log('[UI Interval] Updating UI tables...');
+      updateAllUITables();
+    }
+  }, 2000); // Update UI every 2 seconds
+  // --- End Frontend Render Interval ---
 
   // --- Fetch and display version ---
   fetch('/api/version')
