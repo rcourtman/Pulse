@@ -126,13 +126,141 @@ create_pulse_user() {
     fi
 }
 
-clone_repository() {
-    print_info "Cloning Pulse repository into $PULSE_DIR..."
-    if [ -d "$PULSE_DIR" ]; then
-        print_warning "Directory $PULSE_DIR already exists. Assuming repo is already cloned or manually placed."
-        # Optionally, add logic here to pull latest changes if desired
-        # cd "$PULSE_DIR" && git pull origin main
+# --- Function to perform update ---
+perform_update() {
+    print_info "Attempting to update Pulse..."
+    cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
+
+    print_info "Fetching latest changes from git..."
+    if ! git pull origin main; then
+        print_error "Failed to pull latest changes from git."
+        cd ..
+        return 1
+    fi
+
+    print_info "Re-installing npm dependencies (root)..."
+    if ! npm install --omit=dev --unsafe-perm > /dev/null 2>&1; then
+        print_warning "Failed to install root npm dependencies during update. Continuing..."
+        # Decide if this is fatal or just a warning
     else
+        print_success "Root dependencies updated."
+    fi
+
+    print_info "Re-installing server dependencies..."
+    cd server || { print_error "Failed to change directory to $PULSE_DIR/server"; cd ..; return 1; }
+     if ! npm install --omit=dev --unsafe-perm > /dev/null 2>&1; then
+        print_warning "Failed to install server npm dependencies during update. Continuing..."
+        # Decide if this is fatal or just a warning
+    else
+        print_success "Server dependencies updated."
+    fi
+    cd .. # Back to PULSE_DIR
+
+    set_permissions # Ensure permissions are correct after update
+
+    print_info "Restarting Pulse service ($SERVICE_NAME)..."
+    if systemctl restart "$SERVICE_NAME"; then
+        print_success "Pulse service restarted."
+    else
+        print_error "Failed to restart Pulse service. Check service status manually: systemctl status $SERVICE_NAME"
+        return 1
+    fi
+
+    print_success "Pulse updated successfully!"
+    return 0
+}
+
+# --- Function to perform removal ---
+perform_remove() {
+    print_warning "This will stop and disable the Pulse service and remove the installation directory ($PULSE_DIR)."
+    read -p "Are you sure you want to remove Pulse? (y/N): " remove_confirm
+    if [[ ! "$remove_confirm" =~ ^[Yy]$ ]]; then
+        print_info "Removal cancelled."
+        return 1 # Indicate cancellation
+    fi
+
+    print_info "Stopping Pulse service ($SERVICE_NAME)..."
+    systemctl stop "$SERVICE_NAME" > /dev/null 2>&1 # Ignore errors if already stopped
+
+    print_info "Disabling Pulse service ($SERVICE_NAME)..."
+    systemctl disable "$SERVICE_NAME" > /dev/null 2>&1 # Ignore errors if already disabled
+
+    local service_file_path="/etc/systemd/system/$SERVICE_NAME"
+    print_info "Removing systemd service file ($service_file_path)..."
+    if [ -f "$service_file_path" ]; then
+        rm -f "$service_file_path"
+        if [ $? -eq 0 ]; then
+            print_success "Service file removed."
+            # Reload systemd daemon
+            systemctl daemon-reload
+        else
+            print_warning "Failed to remove service file $service_file_path. Please remove it manually."
+        fi
+    else
+        print_warning "Service file $service_file_path not found."
+    fi
+
+    print_info "Removing Pulse installation directory ($PULSE_DIR)..."
+    if rm -rf "$PULSE_DIR"; then
+        print_success "Installation directory removed."
+    else
+        print_error "Failed to remove installation directory $PULSE_DIR. Please remove it manually."
+        return 1 # Indicate error
+    fi
+
+    print_success "Pulse removed successfully."
+    return 0
+}
+
+clone_repository() {
+    print_info "Checking Pulse installation directory $PULSE_DIR..."
+    if [ -d "$PULSE_DIR" ]; then
+        # Check if it's a git repository
+        if [ -d "$PULSE_DIR/.git" ]; then
+            print_warning "Pulse seems to be already installed in $PULSE_DIR."
+            echo "Choose an action:"
+            echo "  1) Update Pulse to the latest version"
+            echo "  2) Remove Pulse"
+            echo "  3) Cancel installation"
+            read -p "Enter your choice (1-3): " user_choice
+
+            case $user_choice in
+                1) 
+                    if perform_update; then
+                        # Update was successful, exit script cleanly
+                        exit 0
+                    else
+                        # Update failed, exit script with error
+                        exit 1
+                    fi
+                    ;;
+                2)
+                    if perform_remove; then
+                        # Removal was successful, exit script cleanly
+                        exit 0
+                    else
+                        # Removal failed or cancelled, exit script with error/cancel code
+                        exit 1
+                    fi
+                    ;;
+                3)
+                    print_info "Installation cancelled by user."
+                    exit 0
+                    ;;
+                *)
+                    print_error "Invalid choice. Exiting."
+                    exit 1
+                    ;;
+            esac
+        else
+            # Directory exists but doesn't seem to be a git repository
+            print_error "Directory $PULSE_DIR exists but does not appear to be a valid Pulse git repository."
+            print_error "Please remove this directory manually or choose a different installation path and re-run the script."
+            exit 1
+        fi
+    else
+        # Directory doesn't exist, proceed with cloning
+        print_info "Cloning Pulse repository into $PULSE_DIR..."
         # Clone the main branch. Consider adding --depth 1 for faster clone if history isn't needed.
         if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
              print_success "Repository cloned successfully."
