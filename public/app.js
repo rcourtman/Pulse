@@ -33,7 +33,7 @@
 
 document.addEventListener('DOMContentLoaded', function() {
   // Guard clauses to ensure essential elements exist before proceeding
-  const themeToggle = document.getElementById('theme-toggle');
+  const themeToggleButton = document.getElementById('theme-toggle-button');
   const connectionStatus = document.getElementById('connection-status');
   const mainTableBody = document.querySelector('#main-table tbody');
   const tooltipElement = document.getElementById('custom-tooltip');
@@ -59,30 +59,30 @@ document.addEventListener('DOMContentLoaded', function() {
   const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
   const savedTheme = localStorage.getItem('theme');
 
+  // Function to apply the theme (no longer needs to set checkbox state)
   function applyTheme(theme) {
-    if (!themeToggle) return; // Guard against missing toggle
     if (theme === 'dark') {
       htmlElement.classList.add('dark');
-      themeToggle.checked = true;
       localStorage.setItem('theme', 'dark');
     } else {
       htmlElement.classList.remove('dark');
-      themeToggle.checked = false;
       localStorage.setItem('theme', 'light');
     }
   }
 
-  // Apply initial theme only if toggle exists
-  if (themeToggle) {
-      applyTheme(savedTheme || (prefersDarkScheme.matches ? 'dark' : 'light'));
+  // Determine initial theme
+  const initialTheme = savedTheme || (prefersDarkScheme.matches ? 'dark' : 'light');
+  applyTheme(initialTheme);
 
-      themeToggle.addEventListener('change', function() {
-        applyTheme(this.checked ? 'dark' : 'light');
-      });
+  // Add event listener to the button
+  if (themeToggleButton) {
+    themeToggleButton.addEventListener('click', function() {
+      // Toggle theme based on current state
+      const currentIsDark = htmlElement.classList.contains('dark');
+      applyTheme(currentIsDark ? 'light' : 'dark');
+    });
   } else {
-      console.warn('Element #theme-toggle not found - theme switching disabled.');
-      // Apply system preference without saving/using toggle state
-      applyTheme(prefersDarkScheme.matches ? 'dark' : 'light');
+    console.warn('Element #theme-toggle-button not found - theme switching disabled.');
   }
 
   // --- Tab Functionality ---
