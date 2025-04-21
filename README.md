@@ -167,7 +167,6 @@ For installation within a Proxmox VE LXC container, a convenient script is provi
       bash -c \"$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/debian.sh)\"
       ```
 - Network connectivity from the LXC to your Proxmox server.
-- You will need your Proxmox API Token details ([See Creating a Proxmox API Token](#creating-a-proxmox-api-token)).
 
 **Steps:**
 
