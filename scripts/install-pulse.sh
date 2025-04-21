@@ -150,8 +150,16 @@ perform_update() {
     # Might not be strictly necessary if only pulse user runs git, but adds robustness
     git config --global --add safe.directory "$PULSE_DIR" > /dev/null 2>&1 || print_warning "Could not configure safe.directory for root user."
 
-    print_info "Stashing potential local changes..."
+    print_info "Ensuring clean repository state before update..."
+    # Reset any potential lingering conflicts or local changes as the pulse user
+    if ! sudo -u "$PULSE_USER" git reset --hard HEAD > /dev/null 2>&1; then
+        print_warning "Failed to reset repository HEAD. Update might fail."
+        # Continue anyway, maybe stash/pull will work
+    fi
+
+    print_info "Stashing potential local changes (e.g., generated files)..."
     # Stash changes as the pulse user to avoid ownership issues with the stash itself
+    # This is mainly for files not tracked or generated artifacts; conflicts were reset above.
     if ! sudo -u "$PULSE_USER" git stash push -m "Auto-stash before update"; then
         print_warning "Failed to stash local changes. Update might fail if conflicts exist."
         # Decide if this should be fatal or just a warning
