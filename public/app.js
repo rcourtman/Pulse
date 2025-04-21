@@ -640,7 +640,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const thead = document.createElement('thead');
     // Define widths for most columns, leave Usage column without width
     thead.innerHTML = `
-        <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 sticky top-0 z-10"> 
+        <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0 z-10"> 
           <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-3/12">Storage</th>
           <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-2/12">Content</th>
           <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Type</th>
