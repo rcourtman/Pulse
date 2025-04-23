@@ -11,6 +11,7 @@ SERVICE_NAME="pulse-proxmox.service"
 SCRIPT_NAME="install-pulse.sh" # Used for cron job identification
 LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
 SCRIPT_ABS_PATH="" # Store absolute path of the script here
+CRON_IDENTIFIER="# Pulse-Auto-Update ($SCRIPT_NAME)" # Identifier comment for cron job
 
 # --- Flags ---
 MODE_UPDATE=false # Flag to run in non-interactive update mode
@@ -569,6 +570,20 @@ EOF
     fi
 }
 
+# --- Function to remove the automatic update cron job ---
+remove_cron_update() {
+    print_info "Removing existing automatic update cron job..."
+    # Use grep -v to filter out the identifier and the line above it (the schedule)
+    # This is safer than just removing the identifier line if the schedule is separate
+    (crontab -l -u root 2>/dev/null | grep -v -e "$CRON_IDENTIFIER" -e ".*$SCRIPT_NAME --update.*") | crontab -u root -
+    if [ $? -ne 0 ]; then
+        print_error "Failed to remove existing cron job. You may need to remove it manually (crontab -e -u root)."
+        return 1
+    fi
+    print_success "Automatic update cron job removed."
+    return 0
+}
+
 # --- Function to set up automatic updates via cron ---
 setup_cron_update() {
     local cron_schedule=""
@@ -590,50 +605,40 @@ setup_cron_update() {
     echo "  1) Daily"
     echo "  2) Weekly"
     echo "  3) Monthly"
-    echo "  4) Never (Cancel)"
-    read -p "Enter your choice (1-4): " freq_choice
+    # No cancel option here, cancellation is handled before calling this function
+    read -p "Enter your choice (1-3): " freq_choice
 
     case $freq_choice in
         1) cron_schedule="@daily" ;;
         2) cron_schedule="@weekly" ;;
         3) cron_schedule="@monthly" ;;
-        4) print_info "Automatic updates setup cancelled."; return 0 ;;
-        *) print_error "Invalid choice. Skipping auto-update setup."; return 1 ;;
+        *) print_error "Invalid choice. Aborting auto-update setup."; return 1 ;;
     esac
 
     # Construct the cron command
     # Runs as root, uses absolute path to bash and the script, redirects output
     cron_command="$cron_schedule /usr/bin/bash $script_path --update >> $LOG_FILE 2>&1"
-    local cron_identifier="# Pulse-Auto-Update ($SCRIPT_NAME)" # Identifier comment
+    # Use the globally defined identifier
 
-    # Check if cron job already exists for this script
-    if crontab -l -u root 2>/dev/null | grep -q "$cron_identifier"; then
-        print_warning "An automatic update cron job for Pulse already seems to exist."
-        read -p "Overwrite existing schedule? (y/N): " overwrite_cron
-        if [[ ! "$overwrite_cron" =~ ^[Yy]$ ]]; then
-            print_info "Skipping cron job modification."
-            return 0
-        fi
-        # Remove existing job before adding the new one
-         (crontab -l -u root 2>/dev/null | grep -v "$cron_identifier") | crontab -u root -
-         if [ $? -ne 0 ]; then
-             print_error "Failed to remove existing cron job."
-             return 1
-         fi
-         print_info "Existing cron job removed."
-    fi
+    # Remove potentially existing job first (ensure clean state before adding)
+    print_info "Removing any previous Pulse cron schedule..."
+     # Use grep -v to filter out the identifier and the line above it (the schedule)
+    (crontab -l -u root 2>/dev/null | grep -v -e "$CRON_IDENTIFIER" -e ".*$SCRIPT_NAME --update.*") | crontab -u root -
+     if [ $? -ne 0 ]; then
+         print_warning "Could not remove existing cron job (maybe none existed). Proceeding..."
+         # Continue even if removal fails, maybe crontab was empty
+     fi
 
     # Add the new cron job
     print_info "Adding cron job with schedule: $cron_schedule"
     # Add identifier comment and the command
-    (crontab -l -u root 2>/dev/null; echo "$cron_identifier"; echo "$cron_command") | crontab -u root -
+    (crontab -l -u root 2>/dev/null; echo "$CRON_IDENTIFIER"; echo "$cron_command") | crontab -u root -
     if [ $? -eq 0 ]; then
-        print_success "Cron job for automatic updates added successfully."
+        print_success "Cron job for automatic updates configured successfully."
         print_info "Update logs will be written to $LOG_FILE"
         # Ensure log file exists and is writable (optional, cron might create it)
         touch "$LOG_FILE" || print_warning "Could not touch log file $LOG_FILE"
         chmod 644 "$LOG_FILE" || print_warning "Could not chmod log file $LOG_FILE"
-
     else
         print_error "Failed to add cron job. Please check crontab configuration."
         return 1
@@ -644,8 +649,45 @@ setup_cron_update() {
 # --- Function to prompt user about setting up cron ---
 prompt_for_cron_setup() {
     # Only prompt if not running in update mode
-    if [ "$MODE_UPDATE" = false ]; then
-        echo "" # Add spacing
+    if [ "$MODE_UPDATE" = true ]; then
+        return 0
+    fi
+
+    echo "" # Add spacing
+
+    # Check for existing cron job
+    local existing_schedule
+    # Get the line *before* the identifier comment, which should be the schedule
+    existing_schedule=$(crontab -l -u root 2>/dev/null | grep "$CRON_IDENTIFIER" -B 1 | head -n 1 | awk '{print $1}')
+
+    if [ -n "$existing_schedule" ]; then
+        # Attempt to normalize schedule display
+        local display_schedule="$existing_schedule"
+        case "$existing_schedule" in
+            "@daily") display_schedule="Daily" ;;
+            "@weekly") display_schedule="Weekly" ;;
+            "@monthly") display_schedule="Monthly" ;;
+            # Add more cases if needed for specific cron times
+        esac
+
+        print_info "Automatic updates are currently configured to run: $display_schedule"
+        read -p "Do you want to change the schedule, remove it, or keep it? (change/remove/keep): " change_cron_confirm
+        case "$change_cron_confirm" in
+            [Cc]|[Cc]hange)
+                setup_cron_update
+                ;;
+            [Rr]|[Rr]emove)
+                remove_cron_update
+                ;;
+            [Kk]|[Kk]eep)
+                print_info "Keeping existing automatic update schedule."
+                ;;
+            *)
+                print_info "Invalid choice. Keeping existing automatic update schedule."
+                ;;
+        esac
+    else
+        # No existing job found
         read -p "Do you want to set up automatic updates for Pulse? (y/N): " setup_cron_confirm
         if [[ "$setup_cron_confirm" =~ ^[Yy]$ ]]; then
             setup_cron_update
