@@ -45,6 +45,18 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
     ***Note:** Even if you have a Proxmox cluster, you only need to provide the connection details (`PROXMOX_HOST`, token, etc.) for **one** node in the cluster. Pulse will automatically discover and fetch data from the other nodes.*\n
 
+    **Monitoring Multiple Proxmox Environments (Optional):**
+
+    To monitor multiple, separate Proxmox environments (e.g., different clusters or standalone nodes at different sites) within the same Pulse interface, you can define additional endpoints using numbered environment variables. Pulse will automatically detect and connect to these if they are configured:
+
+    - `PROXMOX_HOST_2`, `PROXMOX_TOKEN_ID_2`, `PROXMOX_TOKEN_SECRET_2`: Connection details for the second environment.
+    - `PROXMOX_HOST_3`, `PROXMOX_TOKEN_ID_3`, `PROXMOX_TOKEN_SECRET_3`: Connection details for the third environment.
+    - ...and so on.
+
+    You can also use the corresponding optional variables for each numbered endpoint (e.g., `PROXMOX_ALLOW_SELF_SIGNED_CERTS_2`, `PROXMOX_PORT_2`, `PROXMOX_NODE_NAME_2`, `PROXMOX_USERNAME_2`, `PROXMOX_PASSWORD_2`, `PROXMOX_REALM_2`).
+
+    If you only need to monitor a single Proxmox cluster or node, you only need to set the primary variables (`PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`).
+
 ### Creating a Proxmox API Token
 
 An API token is recommended for connecting Pulse to Proxmox.

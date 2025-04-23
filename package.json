@@ -1,21 +1,31 @@
 {
   "name": "pulse",
-  "version": "2.4.0",
-  "description": "Lightweight monitor for Proxmox",
+  "version": "2.5.0",
+  "description": "A lightweight monitoring application for Proxmox VE.",
+  "main": "server/index.js",
   "scripts": {
-    "dev": "concurrently \"npm:dev:server\" \"npm:dev:css\"",
-    "dev:server": "NODE_ENV=development cd server && node index.js",
     "start": "cd server && node index.js",
+    "dev:server": "NODE_ENV=development cd server && node index.js",
+    "dev:css": "tailwindcss -i ./src/index.css -o ./public/output.css --watch",
     "build:css": "tailwindcss -i ./src/index.css -o ./public/output.css --minify",
-    "dev:css": "tailwindcss -i ./src/index.css -o ./public/output.css --watch"
+    "dev": "concurrently \"npm:dev:server\" \"npm:dev:css\"",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "keywords": [
+    "proxmox",
+    "monitoring",
+    "dashboard",
+    "nodejs",
+    "vuejs"
+  ],
+  "author": "Richard Courtman",
+  "license": "MIT",
   "dependencies": {
-    "dotenv": "^16.0.0"
+    "concurrently": "^8.2.2",
+    "tailwindcss": "^3.4.3"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
-    "concurrently": "^9.1.2",
-    "postcss": "^8.5.3",
-    "tailwindcss": "^3.4.4"
+    "postcss": "^8.5.3"
   }
 }
