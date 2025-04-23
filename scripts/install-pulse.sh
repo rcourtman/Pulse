@@ -704,6 +704,8 @@ configure_environment
 setup_systemd_service
 health_check
 final_instructions
+
+echo "DEBUG: About to prompt for cron setup"
 prompt_for_cron_setup
 
 print_info "Script finished." 
