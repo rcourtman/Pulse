@@ -521,6 +521,9 @@ User=$PULSE_USER
 Group=$PULSE_USER
 WorkingDirectory=$PULSE_DIR
 
+# Load environment variables from .env file in the working directory
+EnvironmentFile=%W/.env
+
 # Start command using absolute paths found earlier
 ExecStart=$node_path $npm_path run start
 
