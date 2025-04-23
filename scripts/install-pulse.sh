@@ -24,19 +24,26 @@ MODE_HELP=false
 
 # --- Centralized Prompt Functions ---
 prompt_yes_no() {
-  local prompt="$1"
-  local default="$2"
-  if $MODE_YES; then
-    [[ "$default" =~ ^[Yy]$ ]] && return 0 || return 1
-  fi
-  if [[ "$default" == "Y" ]]; then
-    prompt="$prompt [Y/n]: "
+  local question=$1
+  local default=${2:-Y} # Default to Y if not provided
+  local answer
+
+  if [ "$default" = "Y" ] || [ "$default" = "y" ]; then
+    prompt_suffix="[Y/n]"
   else
-    prompt="$prompt [y/N]: "
+    prompt_suffix="[y/N]"
   fi
-  read -r -p "$prompt" response
-  response="${response:-$default}"
-  [[ "$response" =~ ^[Yy]$ ]]
+
+  while true; do
+    echo "DEBUG: Inside prompt_yes_no, before read"
+    read -p "$question $prompt_suffix: " answer
+    answer=${answer:-$default} # Use default if user just presses Enter
+    case "$answer" in
+      [Yy]|[Yy][Ee][Ss] ) return 0;; # Return success (true in shell)
+      [Nn]|[Nn][Oo]     ) return 1;; # Return failure (false in shell)
+      * ) echo "Please answer yes or no.";;
+    esac
+  done
 }
 
 prompt_value() {
