@@ -124,10 +124,10 @@ document.addEventListener('DOMContentLoaded', function() {
   // Load saved sort state from localStorage or use defaults
   const savedSortState = JSON.parse(localStorage.getItem('pulseSortState')) || {};
   const sortState = {
-    nodes: { column: null, direction: 'asc', ...savedSortState.nodes },
-    vms: { column: null, direction: 'asc', ...savedSortState.vms },
-    containers: { column: null, direction: 'asc', ...savedSortState.containers },
-    main: { column: 'id', direction: 'asc', ...savedSortState.main }
+    nodes: { column: null, direction: 'asc', ...(savedSortState.nodes || {}) },
+    // vms: { column: null, direction: 'asc', ...savedSortState.vms }, // Removed
+    // containers: { column: null, direction: 'asc', ...savedSortState.containers }, // Removed
+    main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) } // Load main, provide default if missing
   };
   let groupByNode = true; // Default view
   let filterGuestType = 'all'; // Default filter
@@ -235,8 +235,12 @@ document.addEventListener('DOMContentLoaded', function() {
             sortState[tableType].direction = 'asc';
           }
 
-          // Save updated sort state to localStorage
-          localStorage.setItem('pulseSortState', JSON.stringify(sortState));
+          // Save updated sort state to localStorage (Only relevant keys)
+          const stateToSave = {
+            nodes: sortState.nodes,
+            main: sortState.main
+          };
+          localStorage.setItem('pulseSortState', JSON.stringify(stateToSave));
 
           // Trigger the correct update function based on table type
           switch(tableType) {
