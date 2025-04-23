@@ -213,6 +213,7 @@ create_pulse_user() {
 
 # --- Function to perform update (atomic) ---
 perform_update() {
+  echo "DEBUG: Entered perform_update function."
   print_info "Attempting to update Pulse..."
   backup_dir "$PULSE_DIR"
   local tmp_dir
@@ -232,14 +233,18 @@ perform_update() {
   rsync -a --delete "$tmp_dir/" "$PULSE_DIR/"
   rm -rf "$tmp_dir"
   set_permissions
-  print_info "Restarting Pulse service ($SERVICE_NAME)..."
-  if systemctl restart "$SERVICE_NAME"; then
-    print_success "Pulse service restarted."
+  echo "DEBUG: Just before calling setup_systemd_service in perform_update."
+  print_info "Setting up/refreshing Pulse service ($SERVICE_NAME)..."
+  if setup_systemd_service; then
+      echo "DEBUG: setup_systemd_service returned success."
+      print_success "Pulse service configured and started."
   else
-    print_error "Failed to restart Pulse service. Check service status manually: systemctl status $SERVICE_NAME"
-    return 1
+      echo "DEBUG: setup_systemd_service returned failure."
+      print_error "Failed to configure or start Pulse service after update."
+      return 1 # Propagate the error if setup failed
   fi
   print_success "Pulse updated successfully!"
+  echo "DEBUG: Exiting perform_update successfully."
   return 0
 }
 
