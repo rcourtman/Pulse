@@ -7,9 +7,9 @@ set -euo pipefail
 
 # --- Configuration ---
 NODE_MAJOR_VERSION=${NODE_MAJOR_VERSION:-20}
-PULSE_DIR="${PULSE_DIR:-/opt/pulse-proxmox}"
+PULSE_DIR="${PULSE_DIR:-/opt/pulse-monitor}"
 PULSE_USER="${PULSE_USER:-pulse}"
-SERVICE_NAME="${SERVICE_NAME:-pulse-proxmox.service}"
+SERVICE_NAME="${SERVICE_NAME:-pulse-monitor.service}"
 SCRIPT_NAME="install-pulse.sh"
 LOG_FILE="/var/log/pulse_update.log"
 CRON_IDENTIFIER="# Pulse-Auto-Update ($SCRIPT_NAME)"
@@ -489,7 +489,7 @@ setup_systemd_service() {
   print_info "Creating service file at $service_file..."
   cat << EOF > "$service_file"
 [Unit]
-Description=Pulse for Proxmox VE Monitoring Application
+Description=Pulse Monitoring Application
 After=network.target
 
 [Service]
@@ -666,7 +666,7 @@ final_instructions() {
     port_value="7655"
   fi
   echo ""
-  print_success "Pulse for Proxmox VE installation and setup complete!"
+  print_success "Pulse installation and setup complete!"
   echo "-------------------------------------------------------------"
   print_info "You should be able to access the Pulse dashboard at:"
   if [ -n "$ip_address" ]; then

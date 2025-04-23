@@ -186,7 +186,7 @@ For installation within a Proxmox VE LXC container, a convenient script is provi
     *   It will guide you through creating the required Proxmox API Token if needed.
     *   It will ask for your Proxmox Host URL, API Token ID, and API Token Secret.
     *   It will ask about allowing self-signed certificates and optionally setting a custom port.
-    *   It will configure Pulse and set it up as a `systemd` service (`pulse-proxmox.service`) to run automatically.
+    *   It will configure Pulse and set it up as a `systemd` service (`pulse-monitor.service`) to run automatically.
     *   **Automatic Updates (Optional):** After a successful installation or update, the script will ask if you want to enable automatic updates (Daily, Weekly, or Monthly) via a cron job.
 
 4.  **Access Pulse:** Once the script finishes, it will display the URL (using the LXC's IP address) where you can access the Pulse dashboard (e.g., `http://<LXC-IP-ADDRESS>:7655`).
@@ -216,12 +216,16 @@ If you enable automatic updates via the script prompt:
 - Output (including any errors) from the update process is logged to `/var/log/pulse_update.log`.
 - You can view the root crontab using `sudo crontab -l -u root` and edit it using `sudo crontab -e -u root`.
 
-**Managing the Service (inside LXC):**
+**Managing the Pulse Service**
 
-- **Check Status:** `sudo systemctl status pulse-proxmox.service`
-- **Stop Service:** `sudo systemctl stop pulse-proxmox.service`
-- **Start Service:** `sudo systemctl start pulse-proxmox.service`
-- **View Logs:** `sudo journalctl -u pulse-proxmox.service -f`
+Once installed, the Pulse application runs as a `systemd` service. You can manage it using standard `systemctl` commands:
+
+*   **Check Status:** `sudo systemctl status pulse-monitor.service`
+*   **Stop Service:** `sudo systemctl stop pulse-monitor.service`
+*   **Start Service:** `sudo systemctl start pulse-monitor.service`
+*   **View Logs:** `sudo journalctl -u pulse-monitor.service -f`
+*   **Enable on Boot (usually done by script):** `sudo systemctl enable pulse-monitor.service`
+*   **Disable on Boot:** `sudo systemctl disable pulse-monitor.service`
 
 ## ✨ Features
 
