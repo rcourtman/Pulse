@@ -592,7 +592,7 @@ prompt_for_cron_setup() {
   # Always get the full crontab, even if empty
   local crontab_content
   crontab_content=$(crontab -l -u root 2>/dev/null || true)
-  existing_cron=$(echo "$crontab_content" | grep -A 1 "$CRON_IDENTIFIER")
+  existing_cron=$(echo "$crontab_content" | grep -A 1 "$CRON_IDENTIFIER" || true)
   if [ -n "$existing_cron" ]; then
     comment_line=$(echo "$existing_cron" | head -n 1)
     cron_command_line=$(echo "$existing_cron" | tail -n 1)
