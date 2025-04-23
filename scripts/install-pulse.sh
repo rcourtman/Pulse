@@ -167,8 +167,8 @@ perform_update() {
 
     print_info "Cleaning repository (removing untracked files)..."
     # Remove untracked files and directories to ensure a clean state
-    # Use with caution if user might store custom untracked files in the directory
-    if ! sudo -u "$PULSE_USER" git clean -fdx; then
+    # Use -f for files, -d for directories. Do NOT use -x which removes ignored files like .env
+    if ! sudo -u "$PULSE_USER" git clean -fd; then
         print_warning "Failed to clean untracked files from the repository."
         # Continue anyway, as the core update (reset) succeeded
     fi
