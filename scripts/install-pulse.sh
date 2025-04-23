@@ -377,11 +377,21 @@ configure_environment() {
   fi
   if [ -f "$env_path" ]; then
     print_warning "Configuration file $env_path already exists."
-    if prompt_yes_no "Backup existing configuration before overwrite?" "Y"; then
+    print_info "If you overwrite, your current settings will be replaced with a fresh template and you will lose any custom values."
+    if prompt_yes_no "Do you want to back up your existing .env before making any changes?" "Y"; then
       backup_file "$env_path"
     fi
-    if ! prompt_yes_no "Overwrite existing configuration?" "N"; then
-      print_info "Skipping environment configuration."
+
+    # Show a preview of the diff (if 'diff' is available)
+    if command -v diff &> /dev/null; then
+      print_info "Showing differences between your current .env and the template (.env.example):"
+      diff -u "$env_path" "$env_example_path" || true
+    else
+      print_info "'diff' command not available. Skipping diff preview."
+    fi
+
+    if ! prompt_yes_no "Are you SURE you want to OVERWRITE your existing .env with a fresh template? (This will ERASE your current settings!)" "N"; then
+      print_info "Keeping your existing .env. No changes made."
       return 0
     fi
     print_info "Proceeding to overwrite existing configuration..."
