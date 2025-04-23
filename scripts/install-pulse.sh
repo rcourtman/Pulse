@@ -376,26 +376,21 @@ configure_environment() {
     exit 1
   fi
   if [ -f "$env_path" ]; then
-    print_warning "================================================================================"
-    print_warning "!!  WARNING: You are about to OVERWRITE your existing .env configuration file.  !!"
-    print_warning "================================================================================"
-    print_info "If you continue, your current settings will be replaced with a fresh template and you will lose any custom values."
-    print_info "A backup will be created if you choose."
-    echo
-    if prompt_yes_no "Do you want to back up your existing .env before making any changes?" "Y"; then
+    print_info "A configuration file ($env_path) already exists."
+    print_info "You can:"
+    print_info "  - Keep your current settings (recommended for most users)"
+    print_info "  - Overwrite with a fresh template (advanced: erases your current settings)"
+    if ! prompt_yes_no "Do you want to overwrite your existing .env with a fresh template? (This will ERASE your current settings!)" "N"; then
+      print_info "Keeping your existing .env. No changes made."
+      return 0
+    fi
+    if prompt_yes_no "Do you want to back up your existing .env before overwriting?" "Y"; then
       backup_file "$env_path"
     fi
     if command -v diff &> /dev/null; then
       print_info "----- DIFF: Your .env vs Template (.env.example) -----"
       diff -u "$env_path" "$env_example_path" || true
       print_info "-----------------------------------------------------"
-    else
-      print_info "'diff' command not available. Skipping diff preview."
-    fi
-    print_info "If you answer 'yes', your .env will be replaced. If you answer 'no', your current .env will be kept."
-    if ! prompt_yes_no "Are you SURE you want to OVERWRITE your existing .env with a fresh template? (This will ERASE your current settings!)" "N"; then
-      print_info "Keeping your existing .env. No changes made."
-      return 0
     fi
     print_info "Proceeding to overwrite existing configuration..."
   fi
