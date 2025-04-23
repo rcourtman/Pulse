@@ -405,6 +405,13 @@ configure_environment() {
         read -p " -> Proxmox Host URL (e.g., https://192.168.1.100:8006): " proxmox_host
     done
 
+    # Validate and potentially prepend https://
+    if [[ ! "$proxmox_host" =~ ^https?:// ]]; then
+        print_warning "URL does not start with http:// or https://. Prepending https://."
+        proxmox_host="https://$proxmox_host"
+        print_info "Using Proxmox Host URL: $proxmox_host"
+    fi
+
     # --- Display Token Generation Info ---
     echo ""
     print_info "You need a Proxmox API Token. You can create one via the Proxmox Web UI,"
@@ -440,10 +447,10 @@ configure_environment() {
     done
 
     # --- Optional Settings ---
-    read -p "Allow self-signed certificates for Proxmox? (y/N): " allow_self_signed
-    local self_signed_value="false"
-    if [[ "$allow_self_signed" =~ ^[Yy]$ ]]; then
-        self_signed_value="true"
+    read -p "Allow self-signed certificates for Proxmox? (Y/n): " allow_self_signed
+    local self_signed_value="true" # Default changed to true
+    if [[ "$allow_self_signed" =~ ^[Nn]$ ]]; then # Check for 'N' or 'n' to set false
+        self_signed_value="false"
     fi
 
     read -p "Port for Pulse server (leave blank for default 7655): " pulse_port
@@ -646,8 +653,8 @@ prompt_for_cron_setup() {
     # Only prompt if not running in update mode
     if [ "$MODE_UPDATE" = false ]; then
         echo "" # Add spacing
-        read -p "Do you want to set up automatic updates for Pulse? (y/N): " setup_cron_confirm
-        if [[ "$setup_cron_confirm" =~ ^[Yy]$ ]]; then
+        read -p "Do you want to set up automatic updates for Pulse? (Y/n): " setup_cron_confirm
+        if [[ ! "$setup_cron_confirm" =~ ^[Nn]$ ]]; then # Proceed if not 'N' or 'n' (Default Yes)
             setup_cron_update
         else
             print_info "Skipping automatic update setup."
