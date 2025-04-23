@@ -376,20 +376,23 @@ configure_environment() {
     exit 1
   fi
   if [ -f "$env_path" ]; then
-    print_warning "Configuration file $env_path already exists."
-    print_info "If you overwrite, your current settings will be replaced with a fresh template and you will lose any custom values."
+    print_warning "================================================================================"
+    print_warning "!!  WARNING: You are about to OVERWRITE your existing .env configuration file.  !!"
+    print_warning "================================================================================"
+    print_info "If you continue, your current settings will be replaced with a fresh template and you will lose any custom values."
+    print_info "A backup will be created if you choose."
+    echo
     if prompt_yes_no "Do you want to back up your existing .env before making any changes?" "Y"; then
       backup_file "$env_path"
     fi
-
-    # Show a preview of the diff (if 'diff' is available)
     if command -v diff &> /dev/null; then
-      print_info "Showing differences between your current .env and the template (.env.example):"
+      print_info "----- DIFF: Your .env vs Template (.env.example) -----"
       diff -u "$env_path" "$env_example_path" || true
+      print_info "-----------------------------------------------------"
     else
       print_info "'diff' command not available. Skipping diff preview."
     fi
-
+    print_info "If you answer 'yes', your .env will be replaced. If you answer 'no', your current .env will be kept."
     if ! prompt_yes_no "Are you SURE you want to OVERWRITE your existing .env with a fresh template? (This will ERASE your current settings!)" "N"; then
       print_info "Keeping your existing .env. No changes made."
       return 0
@@ -583,16 +586,19 @@ prompt_for_cron_setup() {
     return 0
   fi
   echo ""
-  local existing_schedule
-  existing_schedule=$(crontab -l -u root 2>/dev/null | grep "$CRON_IDENTIFIER" -B 1 | head -n 1 | awk '{print $1}')
-  if [ -n "$existing_schedule" ]; then
-    local display_schedule="$existing_schedule"
-    case "$existing_schedule" in
-      "@daily") display_schedule="Daily" ;;
-      "@weekly") display_schedule="Weekly" ;;
-      "@monthly") display_schedule="Monthly" ;;
+  local existing_cron existing_schedule schedule_line
+  existing_cron=$(crontab -l -u root 2>/dev/null | grep -B 1 "$CRON_IDENTIFIER")
+  if [ -n "$existing_cron" ]; then
+    schedule_line=$(echo "$existing_cron" | head -n 1)
+    print_info "Automatic updates are currently configured with this cron schedule:"
+    echo "    $schedule_line"
+    case "$schedule_line" in
+      "@daily"*) print_info "This means: Daily" ;;
+      "@weekly"*) print_info "This means: Weekly" ;;
+      "@monthly"*) print_info "This means: Monthly" ;;
+      *) print_info "(Custom cron schedule)" ;;
     esac
-    print_info "Automatic updates are currently configured to run: $display_schedule"
+    echo
     read -p "Do you want to change the schedule, remove it, or keep it? (change/remove/keep): " change_cron_confirm
     case "$change_cron_confirm" in
       [Cc]|[Cc]hange)
