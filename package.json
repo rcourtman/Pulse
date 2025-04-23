@@ -1,6 +1,6 @@
 {
   "name": "pulse",
-  "version": "2.3.4",
+  "version": "2.4.0",
   "description": "Lightweight monitor for Proxmox",
   "scripts": {
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:css\"",
