@@ -843,7 +843,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (guest.status === 'running' && metrics && metrics.current) {
             // Only process metrics history for running guests with current metrics
-            console.log(`[dbg ${guest.vmid}] metrics.current:`, JSON.stringify(metrics.current)); // DEBUG: Log raw current metrics
+            // console.log(`[dbg ${guest.vmid}] metrics.current:`, JSON.stringify(metrics.current)); // DEBUG: Keep commented for potential future use
             if (!dashboardHistory[guest.vmid]) dashboardHistory[guest.vmid] = [];
             const history = dashboardHistory[guest.vmid];
             const currentDataPoint = { timestamp: Date.now(), ...metrics.current };
@@ -859,8 +859,8 @@ document.addEventListener('DOMContentLoaded', function() {
             avgNetOutRate = calculateAverageRate(history, 'netout') ?? 0;
             avgMemoryPercent = (guest.maxmem > 0) ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
             avgDiskPercent = (guest.maxdisk > 0) ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
-            console.log(`[dbg ${guest.vmid}] Rates (B/s): netin=${avgNetInRate?.toFixed(0)}, netout=${avgNetOutRate?.toFixed(0)}, diskread=${avgDiskReadRate?.toFixed(0)}, diskwrite=${avgDiskWriteRate?.toFixed(0)}`); // DEBUG: Log calculated rates
-             // console.log(`[refreshDashboardData] ${type} ${guest.vmid} Calculated Percentages: Mem%=${avgMemoryPercent}, Disk%=${avgDiskPercent}`);
+            // console.log(`[dbg ${guest.vmid}] Rates (B/s): netin=${avgNetInRate?.toFixed(0)}, netout=${avgNetOutRate?.toFixed(0)}, diskread=${avgDiskReadRate?.toFixed(0)}, diskwrite=${avgDiskWriteRate?.toFixed(0)}`); // DEBUG: Keep commented
+            // console.log(`[refreshDashboardData] ${type} ${guest.vmid} Calculated Percentages: Mem%=${avgMemoryPercent}, Disk%=${avgDiskPercent}`);
         } else if (guest.status === 'stopped') {
             // Clear history for stopped guests
             if (dashboardHistory[guest.vmid]) {
@@ -1050,7 +1050,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // --- WebSocket Message Handling ---
   // Add a generic listener to catch *any* events from the server
   socket.onAny((eventName, ...args) => {
-    console.log(`[socket.onAny] Received event: ${eventName}`, args);
+    // console.log(`[socket.onAny] Received event: ${eventName}`, args); // DEBUG: Keep commented
   });
 
   // Listener for the 'rawData' event from the server
@@ -1156,7 +1156,16 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // --- Initial Setup Calls ---
-  updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]'));
+  // Update the UI to reflect the currently loaded sort state for the main table
+  const initialMainSortColumn = sortState.main.column;
+  const initialMainHeader = document.querySelector(`#main-table th[data-sort="${initialMainSortColumn}"]`);
+  if (initialMainHeader) {
+    updateSortUI('main-table', initialMainHeader);
+  } else {
+      // Fallback or log if the saved column header isn't found (e.g., after code changes)
+      console.warn(`Initial sort header for column '${initialMainSortColumn}' not found in main table.`);
+      updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]')); // Fallback to ID visual
+  }
   // Data is requested on socket 'connect' event
 
   // --- Frontend Render Interval ---
