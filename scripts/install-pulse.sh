@@ -193,6 +193,14 @@ perform_update() {
 
     set_permissions # Ensure permissions are correct after update
 
+    # Ensure the systemd service is configured correctly before restarting
+    print_info "Ensuring systemd service ($SERVICE_NAME) is configured..."
+    if ! setup_systemd_service; then
+        print_error "Failed to configure systemd service during update."
+        # Decide if this should be fatal, likely yes as restart will fail
+        return 1
+    fi
+
     print_info "Restarting Pulse service ($SERVICE_NAME)..."
     if systemctl restart "$SERVICE_NAME"; then
         print_success "Pulse service restarted."
