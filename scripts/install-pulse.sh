@@ -373,8 +373,8 @@ set_permissions() {
 
 configure_environment() {
     print_info "Configuring Pulse environment..."
-    local env_example_path="$PULSE_DIR/server/.env.example"
-    local env_path="$PULSE_DIR/server/.env"
+    local env_example_path="$PULSE_DIR/.env.example"
+    local env_path="$PULSE_DIR/.env"
 
     if [ ! -f "$env_example_path" ]; then
         print_error "Environment example file not found at $env_example_path. Cannot configure."
