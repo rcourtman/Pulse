@@ -3,13 +3,19 @@
   "version": "2.3.4",
   "description": "Lightweight monitor for Proxmox",
   "scripts": {
-    "dev": "NODE_ENV=development cd server && node index.js",
-    "start": "cd server && node index.js"
+    "dev": "concurrently \"npm:dev:server\" \"npm:dev:css\"",
+    "dev:server": "NODE_ENV=development cd server && node index.js",
+    "start": "cd server && node index.js",
+    "build:css": "tailwindcss -i ./src/index.css -o ./public/output.css --minify",
+    "dev:css": "tailwindcss -i ./src/index.css -o ./public/output.css --watch"
   },
   "dependencies": {
     "dotenv": "^16.0.0"
   },
   "devDependencies": {
-    "tailwindcss": "^4.1.4"
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "postcss": "^8.5.3",
+    "tailwindcss": "^3.4.4"
   }
 }
