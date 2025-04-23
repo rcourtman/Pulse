@@ -7,7 +7,7 @@
 NODE_MAJOR_VERSION=20 # Specify the desired Node.js major version (e.g., 18, 20)
 PULSE_DIR="/opt/pulse-proxmox"
 PULSE_USER="pulse" # Dedicated user to run Pulse
-SERVICE_NAME="pulse-proxmox.service"
+SERVICE_NAME="pulse-monitor.service"
 SCRIPT_NAME="install-pulse.sh" # Used for cron job identification
 LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
 SCRIPT_ABS_PATH="" # Store absolute path of the script here
