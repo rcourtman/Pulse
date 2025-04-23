@@ -147,43 +147,30 @@ perform_update() {
     print_info "Attempting to update Pulse..."
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
-    # Add safe directory config for root user, in case it's needed for stash/other ops
-    # Might not be strictly necessary if only pulse user runs git, but adds robustness
+    # Add safe directory config for root user, just in case
     git config --global --add safe.directory "$PULSE_DIR" > /dev/null 2>&1 || print_warning "Could not configure safe.directory for root user."
 
-    print_info "Ensuring clean repository state before update..."
-    # Reset any potential lingering conflicts or local changes as the pulse user
-    if ! sudo -u "$PULSE_USER" git reset --hard HEAD > /dev/null 2>&1; then
-        print_warning "Failed to reset repository HEAD. Update might fail."
-        # Continue anyway, maybe stash/pull will work
-    fi
-
-    print_info "Stashing potential local changes (e.g., generated files)..."
-    # Stash changes as the pulse user to avoid ownership issues with the stash itself
-    # This is mainly for files not tracked or generated artifacts; conflicts were reset above.
-    if ! sudo -u "$PULSE_USER" git stash push -m "Auto-stash before update"; then
-        print_warning "Failed to stash local changes. Update might fail if conflicts exist."
-        # Decide if this should be fatal or just a warning
-    fi
-
     print_info "Fetching latest changes from git (running as user $PULSE_USER)..."
-    # Run git pull as the pulse user to avoid ownership issues
-    if ! sudo -u "$PULSE_USER" git pull origin main; then
-        print_error "Failed to pull latest changes from git."
-        # Attempt to restore stashed changes on failure
-        sudo -u "$PULSE_USER" git stash pop > /dev/null 2>&1 || true # Ignore pop errors if stash failed/empty
+    if ! sudo -u "$PULSE_USER" git fetch origin; then
+        print_error "Failed to fetch latest changes from git."
         cd ..
         return 1
     fi
 
-    # Attempt to pop stashed changes after successful pull
-    # This might cause conflicts if the stashed changes conflict with pulled changes
-    # Alternatively, could just drop the stash: git stash drop
-    print_info "Attempting to restore stashed changes..."
-    if ! sudo -u "$PULSE_USER" git stash pop > /dev/null 2>&1; then
-        print_warning "Could not automatically restore stashed changes. Manual check might be needed if you had local modifications."
-    else
-        print_success "Stashed changes restored (if any)."
+    print_info "Resetting local repository to match remote 'main' branch..."
+    # Reset local main to exactly match the fetched origin/main, discarding local changes/commits
+    if ! sudo -u "$PULSE_USER" git reset --hard origin/main; then
+        print_error "Failed to reset local repository to origin/main."
+        cd ..
+        return 1
+    fi
+
+    print_info "Cleaning repository (removing untracked files)..."
+    # Remove untracked files and directories to ensure a clean state
+    # Use with caution if user might store custom untracked files in the directory
+    if ! sudo -u "$PULSE_USER" git clean -fdx; then
+        print_warning "Failed to clean untracked files from the repository."
+        # Continue anyway, as the core update (reset) succeeded
     fi
 
     print_info "Re-installing npm dependencies (root)..."
