@@ -146,8 +146,8 @@ apt_update_upgrade() {
 }
 
 install_dependencies() {
-  print_info "Installing necessary dependencies (git, curl, sudo, gpg)..."
-  if apt-get install -y git curl sudo gpg > /dev/null; then
+  print_info "Installing necessary dependencies (git, curl, sudo, gpg, rsync)..."
+  if apt-get install -y git curl sudo gpg rsync > /dev/null; then
     print_success "Dependencies installed."
   else
     print_error "Failed to install dependencies."
