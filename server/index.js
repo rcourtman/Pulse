@@ -47,6 +47,7 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 const axios = require('axios');
 const https = require('https');
+const axiosRetry = require('axios-retry').default; // Import axios-retry
 
 // Development specific dependencies
 let chokidar;
@@ -112,6 +113,23 @@ proxmoxApi.interceptors.request.use(config => {
   }
   
   return config;
+});
+
+// Apply retry logic to the axios instance
+axiosRetry(proxmoxApi, {
+  retries: 3, // Number of retries
+  retryDelay: (retryCount, error) => {
+    console.warn(`Retrying API request (attempt ${retryCount}) due to error: ${error.message}`);
+    return axiosRetry.exponentialDelay(retryCount); // Exponential backoff
+  },
+  retryCondition: (error) => {
+    // Retry on network errors or specific status codes
+    return (
+      axiosRetry.isNetworkError(error) || 
+      axiosRetry.isRetryableError(error) || // Includes 5xx errors by default
+      error.response?.status === 596 // Specifically retry on 596
+    );
+  },
 });
 
 // Create Express app
