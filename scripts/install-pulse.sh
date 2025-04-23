@@ -215,32 +215,58 @@ perform_update() {
 
 # --- Function to perform removal ---
 perform_remove() {
-    print_warning "This will stop and disable the Pulse service and remove the installation directory ($PULSE_DIR)."
+    print_warning "This will stop and disable the Pulse service(s) and remove the installation directory ($PULSE_DIR)."
     read -p "Are you sure you want to remove Pulse? (y/N): " remove_confirm
     if [[ ! "$remove_confirm" =~ ^[Yy]$ ]]; then
         print_info "Removal cancelled."
         return 1 # Indicate cancellation
     fi
 
-    print_info "Stopping Pulse service ($SERVICE_NAME)..."
-    systemctl stop "$SERVICE_NAME" > /dev/null 2>&1 # Ignore errors if already stopped
+    # List of potential service names to remove
+    local potential_services=("pulse-monitor.service" "pulse-proxmox.service")
+    local service_removed=false
 
-    print_info "Disabling Pulse service ($SERVICE_NAME)..."
-    systemctl disable "$SERVICE_NAME" > /dev/null 2>&1 # Ignore errors if already disabled
+    for service_name in "${potential_services[@]}"; do
+        local service_file_path="/etc/systemd/system/$service_name"
+        if systemctl list-units --full -all | grep -q "$service_name"; then
+            print_info "Stopping service ($service_name)..."
+            systemctl stop "$service_name" > /dev/null 2>&1 # Ignore errors if already stopped
 
-    local service_file_path="/etc/systemd/system/$SERVICE_NAME"
-    print_info "Removing systemd service file ($service_file_path)..."
-    if [ -f "$service_file_path" ]; then
-        rm -f "$service_file_path"
-        if [ $? -eq 0 ]; then
-            print_success "Service file removed."
-            # Reload systemd daemon
-            systemctl daemon-reload
+            print_info "Disabling service ($service_name)..."
+            systemctl disable "$service_name" > /dev/null 2>&1 # Ignore errors if already disabled
+
+            if [ -f "$service_file_path" ]; then
+                print_info "Removing systemd service file ($service_file_path)..."
+                rm -f "$service_file_path"
+                if [ $? -eq 0 ]; then
+                    print_success "Service file $service_file_path removed."
+                    service_removed=true
+                else
+                    print_warning "Failed to remove service file $service_file_path. Please remove it manually."
+                fi
+            else
+                 print_info "Service file $service_file_path not found, skipping removal."
+            fi
         else
-            print_warning "Failed to remove service file $service_file_path. Please remove it manually."
+             print_info "Service $service_name not found, skipping stop/disable."
+             # Also check if the file exists even if service isn't loaded
+             if [ -f "$service_file_path" ]; then
+                 print_info "Removing orphaned systemd service file ($service_file_path)..."
+                 rm -f "$service_file_path"
+                 if [ $? -eq 0 ]; then
+                     print_success "Orphaned service file $service_file_path removed."
+                     service_removed=true
+                 else
+                     print_warning "Failed to remove orphaned service file $service_file_path. Please remove it manually."
+                 fi
+             fi
         fi
-    else
-        print_warning "Service file $service_file_path not found."
+    done
+
+    # Reload systemd daemon if any service file was removed
+    if [ "$service_removed" = true ]; then
+        print_info "Reloading systemd daemon..."
+        systemctl daemon-reload
     fi
 
     print_info "Removing Pulse installation directory ($PULSE_DIR)..."
@@ -687,7 +713,7 @@ final_instructions() {
     print_info "The Pulse service ($SERVICE_NAME) is running and enabled on boot."
     print_info "To check the status: sudo systemctl status $SERVICE_NAME"
     print_info "To view logs: sudo journalctl -u $SERVICE_NAME -f"
-    print_info "Configuration file: $PULSE_DIR/server/.env"
+    print_info "Configuration file: $PULSE_DIR/.env"
     echo "-------------------------------------------------------------"
 }
 
