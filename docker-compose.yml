@@ -12,8 +12,8 @@ services:
       # You can change the host port (left side) if 7655 is already in use on your host
       - "7655:7655"
     env_file:
-      # Load environment variables from the .env file located in the server directory
-      - ./server/.env # Primary location
+      # Load environment variables from a .env file in the same directory as this compose file
+      - .env # Standard location
     # Optional: Define networks if needed, otherwise uses default bridge network
     # networks:
     #   - pulse_network

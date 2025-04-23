@@ -5,7 +5,7 @@
   "main": "server/index.js",
   "scripts": {
     "start": "cd server && node index.js",
-    "dev:server": "NODE_ENV=development cd server && node index.js",
+    "dev:server": "NODE_ENV=development node -r dotenv/config --env-file=.env server/index.js",
     "dev:css": "tailwindcss -i ./src/index.css -o ./public/output.css --watch",
     "build:css": "tailwindcss -i ./src/index.css -o ./public/output.css --minify",
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:css\"",

@@ -1,4 +1,4 @@
-require('dotenv').config(); // Load environment variables from .env file
+// require('dotenv').config(); // Load environment variables from .env file
 
 // --- BEGIN Environment Variable Validation ---
 const primaryRequiredEnvVars = [
@@ -29,13 +29,13 @@ primaryRequiredEnvVars.forEach(varName => {
 if (missingVars.length > 0 || placeholderVars.length > 0) {
   console.error('\n--- Configuration Error (Primary Endpoint) ---');
   if (missingVars.length > 0) {
-    console.error(`Missing required environment variables in server/.env for the primary endpoint: ${missingVars.join(', ')}`);
+    console.error(`Missing required environment variables: ${missingVars.join(', ')}. These are typically set via docker-compose.yml or a .env file.`);
   }
   if (placeholderVars.length > 0) {
-    console.error(`Primary environment variables seem to contain placeholder values in server/.env: ${placeholderVars.join(', ')}`);
+    console.error(`The following primary environment variables seem to contain placeholder values: ${placeholderVars.join(', ')}.`);
   }
-  console.error('Please ensure server/.env exists and contains valid Proxmox connection details for the primary endpoint.');
-  console.error('Refer to server/.env.example for the required format.\n');
+  console.error('Please ensure valid Proxmox connection details are provided via environment variables.');
+  console.error('Refer to server/.env.example for the required variable names and format.\n');
   process.exit(1); // Exit if primary configuration is invalid
 }
 
