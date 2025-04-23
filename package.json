@@ -1,6 +1,6 @@
 {
   "name": "pulse",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "description": "Lightweight monitor for Proxmox",
   "scripts": {
     "dev": "NODE_ENV=development cd server && node index.js",
