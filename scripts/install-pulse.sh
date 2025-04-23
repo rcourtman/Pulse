@@ -14,6 +14,7 @@ SCRIPT_ABS_PATH="" # Store absolute path of the script here
 
 # --- Flags ---
 MODE_UPDATE=false # Flag to run in non-interactive update mode
+INSTALL_MODE=""   # Stores the determined action: install, update, remove, cancel, error
 
 # --- Argument Parsing ---
 while [[ "$#" -gt 0 ]]; do
@@ -48,6 +49,48 @@ check_root() {
   fi
 }
 
+# --- Installation Status Check --- Function moved up
+check_installation_status() {
+    print_info "Checking Pulse installation directory $PULSE_DIR..."
+    if [ -d "$PULSE_DIR" ]; then
+        # Check if it's a git repository
+        if [ -d "$PULSE_DIR/.git" ]; then
+            # If --update flag is set, determine mode is 'update'
+            if [ "$MODE_UPDATE" = true ]; then
+                print_info "Running in non-interactive update mode..."
+                INSTALL_MODE="update"
+                return 0 # Continue to main update logic
+            fi
+
+            # Otherwise, show interactive menu
+            print_warning "Pulse seems to be already installed in $PULSE_DIR."
+            echo "Choose an action:"
+            echo "  1) Update Pulse to the latest version"
+            echo "  2) Remove Pulse"
+            echo "  3) Cancel installation"
+            read -p "Enter your choice (1-3): " user_choice
+
+            case $user_choice in
+                1) INSTALL_MODE="update" ;;
+                2) INSTALL_MODE="remove" ;;
+                3) INSTALL_MODE="cancel" ;;
+                *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+            esac
+        else
+            # Directory exists but doesn't seem to be a git repository
+            print_error "Directory $PULSE_DIR exists but does not appear to be a valid Pulse git repository."
+            print_error "Please remove this directory manually or choose a different installation path and re-run the script."
+            INSTALL_MODE="error"
+        fi
+    else
+        # Directory doesn't exist, proceed with cloning
+        INSTALL_MODE="install"
+    fi
+    return 0 # Return success, INSTALL_MODE holds the result
+}
+
+# --- System Setup Functions --- (apt_update_upgrade, install_dependencies, setup_node, create_pulse_user)
+# ... (These functions remain unchanged, but are called later) ...
 apt_update_upgrade() {
     print_info "Updating package lists and upgrading packages..."
     if apt-get update > /dev/null && apt-get upgrade -y > /dev/null; then
@@ -142,7 +185,8 @@ create_pulse_user() {
     fi
 }
 
-# --- Function to perform update ---
+# --- Core Action Functions --- (perform_update, perform_remove)
+# ... (These functions remain mostly unchanged) ...
 perform_update() {
     print_info "Attempting to update Pulse..."
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
@@ -187,7 +231,7 @@ perform_update() {
         print_success "Server dependencies updated."
     else
         print_error "Failed to install server npm dependencies."
-        exit 1
+        exit 1 # Exit if server deps fail
     fi
     cd .. # Back to PULSE_DIR
 
@@ -195,7 +239,7 @@ perform_update() {
 
     # Ensure the systemd service is configured correctly before restarting
     print_info "Ensuring systemd service ($SERVICE_NAME) is configured..."
-    if ! setup_systemd_service; then
+    if ! setup_systemd_service true; then # Pass true to indicate update mode (skip start/enable)
         print_error "Failed to configure systemd service during update."
         # Decide if this should be fatal, likely yes as restart will fail
         return 1
@@ -213,13 +257,19 @@ perform_update() {
     return 0
 }
 
-# --- Function to perform removal ---
 perform_remove() {
     print_warning "This will stop and disable the Pulse service(s) and remove the installation directory ($PULSE_DIR)."
-    read -p "Are you sure you want to remove Pulse? (y/N): " remove_confirm
-    if [[ ! "$remove_confirm" =~ ^[Yy]$ ]]; then
-        print_info "Removal cancelled."
-        return 1 # Indicate cancellation
+    # Allow non-interactive removal if called directly with logic before
+    # For now, keep interactive confirmation here
+    local remove_confirm=""
+    if [ -t 0 ]; then # Check if stdin is a terminal for interactive prompt
+      read -p "Are you sure you want to remove Pulse? (y/N): " remove_confirm
+      if [[ ! "$remove_confirm" =~ ^[Yy]$ ]]; then
+          print_info "Removal cancelled."
+          return 1 # Indicate cancellation
+      fi
+    else
+        print_warning "Running non-interactively. Proceeding with removal..."
     fi
 
     # List of potential service names to remove
@@ -281,87 +331,17 @@ perform_remove() {
     return 0
 }
 
-clone_repository() {
-    print_info "Checking Pulse installation directory $PULSE_DIR..."
-    if [ -d "$PULSE_DIR" ]; then
-        # Check if it's a git repository
-        if [ -d "$PULSE_DIR/.git" ]; then
-            # If --update flag is set, run update directly and exit
-            if [ "$MODE_UPDATE" = true ]; then
-                print_info "Running in non-interactive update mode..."
-                if perform_update; then
-                    print_success "Non-interactive update completed successfully."
-                    exit 0
-                else
-                    print_error "Non-interactive update failed."
-                    exit 1
-                fi
-            fi
-
-            # Otherwise, show interactive menu
-            print_warning "Pulse seems to be already installed in $PULSE_DIR."
-            echo "Choose an action:"
-            echo "  1) Update Pulse to the latest version"
-            echo "  2) Remove Pulse"
-            echo "  3) Cancel installation"
-            read -p "Enter your choice (1-3): " user_choice
-
-            case $user_choice in
-                1)
-                    if perform_update; then
-                        # Update was successful, allow script to continue to prompt for cron etc.
-                        print_success "Interactive update completed. Continuing script..."
-                    else
-                        # Update failed, exit script with error
-                        print_error "Interactive update failed."
-                        exit 1
-                    fi
-                    ;;
-                2)
-                    if perform_remove; then
-                        # Removal was successful, exit script cleanly
-                        exit 0
-                    else
-                        # Removal failed or cancelled, exit script with error/cancel code
-                        exit 1
-                    fi
-                    ;;
-                3)
-                    print_info "Installation cancelled by user."
-                    exit 0
-                    ;;
-                *)
-                    print_error "Invalid choice. Exiting."
-                    exit 1
-                    ;;
-            esac
-        else
-            # Directory exists but doesn't seem to be a git repository
-            print_error "Directory $PULSE_DIR exists but does not appear to be a valid Pulse git repository."
-            print_error "Please remove this directory manually or choose a different installation path and re-run the script."
-            exit 1
-        fi
-    else
-        # Directory doesn't exist, proceed with cloning
-        print_info "Cloning Pulse repository into $PULSE_DIR..."
-        # Clone the main branch. Consider adding --depth 1 for faster clone if history isn't needed.
-        if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
-             print_success "Repository cloned successfully."
-        else
-            print_error "Failed to clone repository."
-            exit 1
-        fi
-    fi
-}
-
+# --- Installation Step Functions --- (install_npm_deps, set_permissions, configure_environment, setup_systemd_service)
+# ... (These functions remain mostly unchanged, but setup_systemd_service might need slight modification) ...
 install_npm_deps() {
     print_info "Installing npm dependencies..."
     if [ ! -d "$PULSE_DIR" ]; then
         print_error "Pulse directory $PULSE_DIR not found. Cannot install dependencies."
-        exit 1
+        # This shouldn't happen if called in the right flow, but check anyway
+        return 1
     fi
 
-    cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; exit 1; }
+    cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
     print_info "Installing root dependencies..."
     # Use --unsafe-perm if running npm install as root, which might be necessary for some packages
@@ -370,30 +350,34 @@ install_npm_deps() {
         print_success "Root dependencies installed."
     else
         print_error "Failed to install root npm dependencies."
-        exit 1
+        return 1
     fi
 
     print_info "Installing server dependencies..."
-    cd server || { print_error "Failed to change directory to $PULSE_DIR/server"; exit 1; }
+    cd server || { print_error "Failed to change directory to $PULSE_DIR/server"; cd ..; return 1; }
      if npm install --omit=dev --unsafe-perm > /dev/null 2>&1; then
         print_success "Server dependencies installed."
     else
         print_error "Failed to install server npm dependencies."
-        exit 1
+        cd .. # Go back before returning error
+        return 1
     fi
 
     # Return to script execution directory or root, if needed
     cd ..
+    return 0
 }
 
 set_permissions() {
     print_info "Setting permissions for $PULSE_DIR..."
     if chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR"; then
         print_success "Permissions set correctly."
+        return 0
     else
         print_error "Failed to set permissions for $PULSE_DIR."
         # This might not be fatal, but could cause runtime issues. Log warning?
         print_warning "Check ownership and permissions for $PULSE_DIR."
+        return 1 # Indicate potential problem
     fi
 }
 
@@ -404,80 +388,99 @@ configure_environment() {
 
     if [ ! -f "$env_example_path" ]; then
         print_error "Environment example file not found at $env_example_path. Cannot configure."
-        exit 1
+        return 1
     fi
 
     # Check if .env already exists
     if [ -f "$env_path" ]; then
         print_warning "Configuration file $env_path already exists."
-        read -p "Overwrite existing configuration? (y/N): " overwrite_confirm
-        if [[ ! "$overwrite_confirm" =~ ^[Yy]$ ]]; then
-            print_info "Skipping environment configuration."
-            return 0 # Exit the function successfully without configuring
+        # Only prompt if interactive
+        if [ -t 0 ]; then
+            read -p "Overwrite existing configuration? (y/N): " overwrite_confirm
+            if [[ ! "$overwrite_confirm" =~ ^[Yy]$ ]]; then
+                print_info "Skipping environment configuration."
+                return 0 # Exit the function successfully without configuring
+            fi
+            print_info "Proceeding to overwrite existing configuration..."
+        else
+            print_info "Running non-interactively, skipping environment configuration as file exists."
+            return 0
         fi
-        print_info "Proceeding to overwrite existing configuration..."
     fi
 
-    # --- Gather Proxmox Details ---
-    echo "Please provide your Proxmox connection details:"
-    read -p " -> Proxmox Host URL (e.g., https://192.168.1.100:8006): " proxmox_host
-    while [ -z "$proxmox_host" ]; do
-        print_warning "Proxmox Host URL cannot be empty."
+    # --- Gather Proxmox Details (Only if interactive) ---
+    local proxmox_host=""
+    local proxmox_token_id=""
+    local proxmox_token_secret=""
+    local allow_self_signed="y"
+    local pulse_port=""
+
+    if [ -t 0 ]; then
+        echo "Please provide your Proxmox connection details:"
         read -p " -> Proxmox Host URL (e.g., https://192.168.1.100:8006): " proxmox_host
-    done
+        while [ -z "$proxmox_host" ]; do
+            print_warning "Proxmox Host URL cannot be empty."
+            read -p " -> Proxmox Host URL (e.g., https://192.168.1.100:8006): " proxmox_host
+        done
 
-    # Validate and potentially prepend https://
-    if [[ ! "$proxmox_host" =~ ^https?:// ]]; then
-        print_warning "URL does not start with http:// or https://. Prepending https://."
-        proxmox_host="https://$proxmox_host"
-        print_info "Using Proxmox Host URL: $proxmox_host"
-    fi
+        # Validate and potentially prepend https://
+        if [[ ! "$proxmox_host" =~ ^https?:// ]]; then
+            print_warning "URL does not start with http:// or https://. Prepending https://."
+            proxmox_host="https://$proxmox_host"
+            print_info "Using Proxmox Host URL: $proxmox_host"
+        fi
 
-    # --- Display Token Generation Info ---
-    echo ""
-    print_info "You need a Proxmox API Token. You can create one via the Proxmox Web UI,"
-    print_info "or run the following commands on your Proxmox host shell:"
-    echo "----------------------------------------------------------------------"
-    echo '  # 1. Create user 'pulse-monitor' (enter password when prompted):'
-    echo "  pveum useradd pulse-monitor@pam -comment "API user for Pulse monitoring""
-    echo '  '
-    echo '  # 2. Create API token 'pulse' for user (COPY THE SECRET VALUE!):'
-    echo "  pveum user token add pulse-monitor@pam pulse --privsep=1"
-    echo '  '
-    echo '  # 3. Assign PVEAuditor role to user:'
-    echo "  pveum acl modify / -user pulse-monitor@pam -role PVEAuditor"
-    echo "----------------------------------------------------------------------"
-    echo "After running the 'token add' command, copy the Token ID and Secret Value"
-    echo "and paste them below."
-    echo ""
-    # --- End Token Generation Info ---
+        # --- Display Token Generation Info --- (Remains the same)
+        # ... (token info display code) ...
+        echo ""
+        print_info "You need a Proxmox API Token. You can create one via the Proxmox Web UI,"
+        print_info "or run the following commands on your Proxmox host shell:"
+        echo "----------------------------------------------------------------------"
+        echo '  # 1. Create user 'pulse-monitor' (enter password when prompted):'
+        echo "  pveum useradd pulse-monitor@pam -comment "API user for Pulse monitoring""
+        echo '  '
+        echo '  # 2. Create API token 'pulse' for user (COPY THE SECRET VALUE!):'
+        echo "  pveum user token add pulse-monitor@pam pulse --privsep=1"
+        echo '  '
+        echo '  # 3. Assign PVEAuditor role to user:'
+        echo "  pveum acl modify / -user pulse-monitor@pam -role PVEAuditor"
+        echo "----------------------------------------------------------------------"
+        echo "After running the 'token add' command, copy the Token ID and Secret Value"
+        echo "and paste them below."
+        echo ""
 
-    read -p " -> Proxmox API Token ID (e.g., user@pam!tokenid): " proxmox_token_id
-     while [ -z "$proxmox_token_id" ]; do
-        print_warning "Proxmox Token ID cannot be empty."
         read -p " -> Proxmox API Token ID (e.g., user@pam!tokenid): " proxmox_token_id
-    done
+        while [ -z "$proxmox_token_id" ]; do
+            print_warning "Proxmox Token ID cannot be empty."
+            read -p " -> Proxmox API Token ID (e.g., user@pam!tokenid): " proxmox_token_id
+        done
 
-    # Use -s for silent input for the secret
-    read -sp " -> Proxmox API Token Secret: " proxmox_token_secret
-    echo # Add a newline after secret input
-     while [ -z "$proxmox_token_secret" ]; do
-        print_warning "Proxmox Token Secret cannot be empty."
         read -sp " -> Proxmox API Token Secret: " proxmox_token_secret
         echo
-    done
+        while [ -z "$proxmox_token_secret" ]; do
+            print_warning "Proxmox Token Secret cannot be empty."
+            read -sp " -> Proxmox API Token Secret: " proxmox_token_secret
+            echo
+        done
 
-    # --- Optional Settings ---
-    read -p "Allow self-signed certificates for Proxmox? (Y/n): " allow_self_signed
-    local self_signed_value="true" # Default changed to true
-    if [[ "$allow_self_signed" =~ ^[Nn]$ ]]; then # Check for 'N' or 'n' to set false
-        self_signed_value="false"
+        # --- Optional Settings --- (Remains the same)
+        read -p "Allow self-signed certificates for Proxmox? (Y/n): " allow_self_signed
+        read -p "Port for Pulse server (leave blank for default 7655): " pulse_port
+    else
+        print_warning "Running non-interactively. Cannot prompt for environment details."
+        print_warning "Ensure $env_path is configured manually or exists from a previous run."
+        # Use defaults or skip creation if running non-interactively?
+        # For now, just skip the interactive part and proceed to copy/sed if file doesn't exist
+        # or if overwrite was forced (though non-interactive won't force)
+        if [ -f "$env_path" ]; then return 0; fi # Skip if file exists and non-interactive
     fi
 
-    read -p "Port for Pulse server (leave blank for default 7655): " pulse_port
+    # Determine values (use defaults if not set interactively)
+    local self_signed_value="true"
+    if [[ "$allow_self_signed" =~ ^[Nn]$ ]]; then self_signed_value="false"; fi
+
     local port_value="7655"
     if [ -n "$pulse_port" ]; then
-        # Basic validation: check if it's a number (optional)
         if [[ "$pulse_port" =~ ^[0-9]+$ ]] && [ "$pulse_port" -ge 1 ] && [ "$pulse_port" -le 65535 ]; then
             port_value="$pulse_port"
         else
@@ -485,28 +488,37 @@ configure_environment() {
         fi
     fi
 
-    # --- Create .env file ---
+    # --- Create .env file --- (Handle case where variables might be empty if non-interactive)
     print_info "Creating $env_path from example..."
     if cp "$env_example_path" "$env_path"; then
-        # Use sed to replace placeholders. Use a different delimiter for sed if URLs contain slashes
-        sed -i "s|^PROXMOX_HOST=.*|PROXMOX_HOST=$proxmox_host|" "$env_path"
-        sed -i "s|^PROXMOX_TOKEN_ID=.*|PROXMOX_TOKEN_ID=$proxmox_token_id|" "$env_path"
-        sed -i "s|^PROXMOX_TOKEN_SECRET=.*|PROXMOX_TOKEN_SECRET=$proxmox_token_secret|" "$env_path"
-        sed -i "s|^PROXMOX_ALLOW_SELF_SIGNED_CERTS=.*|PROXMOX_ALLOW_SELF_SIGNED_CERTS=$self_signed_value|" "$env_path"
-        sed -i "s|^PORT=.*|PORT=$port_value|" "$env_path"
+        # Only run sed if variables were set (i.e., interactive mode ran)
+        if [ -n "$proxmox_host" ]; then
+             sed -i "s|^PROXMOX_HOST=.*|PROXMOX_HOST=$proxmox_host|" "$env_path"
+             sed -i "s|^PROXMOX_TOKEN_ID=.*|PROXMOX_TOKEN_ID=$proxmox_token_id|" "$env_path"
+             sed -i "s|^PROXMOX_TOKEN_SECRET=.*|PROXMOX_TOKEN_SECRET=$proxmox_token_secret|" "$env_path"
+             sed -i "s|^PROXMOX_ALLOW_SELF_SIGNED_CERTS=.*|PROXMOX_ALLOW_SELF_SIGNED_CERTS=$self_signed_value|" "$env_path"
+             sed -i "s|^PORT=.*|PORT=$port_value|" "$env_path"
+        else
+            print_warning "Skipping variable substitution in .env as no values were provided (non-interactive?)."
+            print_warning "Please edit $env_path manually."
+        fi
 
-        # Set ownership
+        # Set ownership & permissions regardless
         chown "$PULSE_USER":"$PULSE_USER" "$env_path"
-        chmod 600 "$env_path" # Restrict permissions for security
+        chmod 600 "$env_path"
 
-        print_success "Environment configured successfully in $env_path."
+        print_success "Environment file created/updated in $env_path."
+        return 0
     else
         print_error "Failed to copy $env_example_path to $env_path."
-        exit 1
+        return 1
     fi
 }
 
 setup_systemd_service() {
+    # Add optional argument to skip start/enable during updates
+    local update_mode=${1:-false} # Default to false if no argument passed
+
     print_info "Setting up systemd service ($SERVICE_NAME)..."
     local service_file="/etc/systemd/system/$SERVICE_NAME"
 
@@ -515,7 +527,7 @@ setup_systemd_service() {
     node_path=$(command -v node)
     if [ -z "$node_path" ]; then
         print_error "Could not find Node.js executable path. Cannot create service."
-        exit 1
+        return 1
     fi
     # Find npm path (needed for systemd ExecStart)
     local npm_path
@@ -529,12 +541,12 @@ setup_systemd_service() {
         npm_path="$node_dir/npm" # Adjust if npm is installed elsewhere
          if ! command -v "$npm_path" &> /dev/null; then
              print_error "Could not reliably find npm executable path. Cannot create service."
-             exit 1
+             return 1
          fi
          print_info "Found npm at $npm_path"
     fi
 
-    print_info "Creating service file at $service_file..."
+    print_info "Creating/Updating service file at $service_file..."
     # Use a HEREDOC to write the service file contents
     cat << EOF > "$service_file"
 [Unit]
@@ -571,7 +583,7 @@ EOF
 
     if [ $? -ne 0 ]; then
         print_error "Failed to create systemd service file $service_file."
-        exit 1
+        return 1
     fi
 
     # Set permissions for the service file
@@ -580,6 +592,12 @@ EOF
     print_info "Reloading systemd daemon..."
     systemctl daemon-reload
 
+    # Skip enable/start if in update mode
+    if [ "$update_mode" = true ]; then
+        print_info "(Update mode: Skipping service enable/start)"
+        return 0
+    fi
+
     print_info "Enabling $SERVICE_NAME to start on boot..."
     if systemctl enable "$SERVICE_NAME" > /dev/null 2>&1; then
         print_success "Service enabled successfully."
@@ -587,7 +605,7 @@ EOF
         print_error "Failed to enable systemd service."
         # Attempt cleanup of service file?
         # rm -f "$service_file"
-        exit 1
+        return 1
     fi
 
     print_info "Starting $SERVICE_NAME..."
@@ -598,10 +616,13 @@ EOF
         print_warning "Please check the service status using: systemctl status $SERVICE_NAME"
         print_warning "And check the logs using: journalctl -u $SERVICE_NAME"
         # Don't necessarily exit, user might be able to fix it.
+        return 1 # Indicate start failure
     fi
+    return 0
 }
 
-# --- Function to set up automatic updates via cron ---
+# --- Final Steps Functions --- (setup_cron_update, prompt_for_cron_setup, final_instructions)
+# ... (These functions remain mostly unchanged) ...
 setup_cron_update() {
     local cron_schedule=""
     local cron_command=""
@@ -673,7 +694,6 @@ setup_cron_update() {
     return 0
 }
 
-# --- Function to prompt user about setting up cron ---
 prompt_for_cron_setup() {
     # Only prompt if not running in update mode
     if [ "$MODE_UPDATE" = false ]; then
@@ -693,7 +713,7 @@ final_instructions() {
     ip_address=$(hostname -I | awk '{print $1}') # Get the first IP address
     local port_value
     # Read the port from the .env file, fallback to default if not found/readable
-    local env_path="$PULSE_DIR/server/.env"
+    local env_path="$PULSE_DIR/.env"
     if [ -f "$env_path" ] && grep -q '^PORT=' "$env_path"; then
         port_value=$(grep '^PORT=' "$env_path" | cut -d'=' -f2)
     else
@@ -701,7 +721,7 @@ final_instructions() {
     fi
 
     echo ""
-    print_success "Pulse for Proxmox VE installation and setup complete!"
+    print_success "Pulse for Proxmox VE installation/update complete!"
     echo "-------------------------------------------------------------"
     print_info "You should be able to access the Pulse dashboard at:"
     if [ -n "$ip_address" ]; then
@@ -718,7 +738,8 @@ final_instructions() {
     echo "-------------------------------------------------------------"
 }
 
-# --- Main Execution ---
+
+# --- Main Execution --- Refactored
 check_root
 
 # Determine absolute path of the script early
@@ -738,21 +759,67 @@ else
      fi
 fi
 
-# Execute main functions
-apt_update_upgrade
-install_dependencies
-setup_node
-create_pulse_user
-clone_repository # This function now handles the update flag or interactive menu
+# Check installation status and user intent first
+check_installation_status # Sets the INSTALL_MODE variable
 
-# The following steps are skipped if clone_repository exits due to update/remove/cancel
-install_npm_deps
-set_permissions
-configure_environment # Might be skipped if user chooses not to overwrite existing .env
-setup_systemd_service
-final_instructions
+case "$INSTALL_MODE" in
+    "remove")
+        perform_remove
+        exit $?
+        ;;
+    "cancel")
+        print_info "Installation cancelled by user."
+        exit 0
+        ;;
+    "error")
+        # Error message already printed by check_installation_status
+        exit 1
+        ;;
+    "install" | "update")
+        # Proceed with common setup steps
+        print_info "Starting installation/update process..."
+        apt_update_upgrade || exit 1
+        install_dependencies || exit 1
+        setup_node || exit 1
+        create_pulse_user || exit 1
 
-# Ask about setting up cron job at the end
-prompt_for_cron_setup
+        if [ "$INSTALL_MODE" = "install" ]; then
+            # --- Installation specific steps ---
+            print_info "Cloning Pulse repository into $PULSE_DIR..."
+            # Clone the main branch. Consider adding --depth 1 for faster clone if history isn't needed.
+            if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
+                print_success "Repository cloned successfully."
+            else
+                print_error "Failed to clone repository."
+                exit 1
+            fi
+
+            install_npm_deps || exit 1
+            set_permissions || exit 1
+            configure_environment || exit 1 # Prompt user for details
+            setup_systemd_service || exit 1 # Create, enable, start service
+            final_instructions
+            prompt_for_cron_setup # Ask about cron on fresh install
+
+        else # Update mode
+            # --- Update specific steps ---
+            print_success "Proceeding with update..."
+            if perform_update; then
+                # Don't re-run configure_environment on update unless specifically requested
+                # Display final instructions, but maybe tailor message slightly?
+                print_success "Pulse update completed successfully."
+                final_instructions
+                prompt_for_cron_setup # Ask about cron even on update?
+            else
+                print_error "Pulse update failed."
+                exit 1
+            fi
+        fi
+        ;;
+    *)
+        print_error "Internal script error: Unknown mode '$INSTALL_MODE'"
+        exit 1
+        ;;
+esac
 
 print_info "Script finished." 
