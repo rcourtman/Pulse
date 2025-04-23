@@ -254,8 +254,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Setup sorting for all tables
   setupTableSorting('nodes-table');
-  setupTableSorting('vms-table');
-  setupTableSorting('containers-table');
+  // setupTableSorting('vms-table'); // Removed - Table doesn't exist in base HTML
+  // setupTableSorting('containers-table'); // Removed - Table doesn't exist in base HTML
   setupTableSorting('main-table');
 
   // --- Filtering Logic ---
