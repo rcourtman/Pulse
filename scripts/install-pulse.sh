@@ -587,7 +587,10 @@ prompt_for_cron_setup() {
   fi
   echo ""
   local existing_cron comment_line cron_command_line schedule_word
-  existing_cron=$(crontab -l -u root 2>/dev/null | grep -A 1 "$CRON_IDENTIFIER")
+  # Always get the full crontab, even if empty
+  local crontab_content
+  crontab_content=$(crontab -l -u root 2>/dev/null || true)
+  existing_cron=$(echo "$crontab_content" | grep -A 1 "$CRON_IDENTIFIER")
   if [ -n "$existing_cron" ]; then
     comment_line=$(echo "$existing_cron" | head -n 1)
     cron_command_line=$(echo "$existing_cron" | tail -n 1)
@@ -618,6 +621,7 @@ prompt_for_cron_setup() {
         ;;
     esac
   else
+    # Always prompt if no job is found, even if crontab is empty
     if prompt_yes_no "Do you want to set up automatic updates for Pulse?" "N"; then
       setup_cron_update
     else
