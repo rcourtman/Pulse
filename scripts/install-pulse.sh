@@ -586,17 +586,20 @@ prompt_for_cron_setup() {
     return 0
   fi
   echo ""
-  local existing_cron existing_schedule schedule_line
-  existing_cron=$(crontab -l -u root 2>/dev/null | grep -B 1 "$CRON_IDENTIFIER")
+  local existing_cron comment_line cron_command_line schedule_word
+  existing_cron=$(crontab -l -u root 2>/dev/null | grep -A 1 "$CRON_IDENTIFIER")
   if [ -n "$existing_cron" ]; then
-    schedule_line=$(echo "$existing_cron" | head -n 1)
+    comment_line=$(echo "$existing_cron" | head -n 1)
+    cron_command_line=$(echo "$existing_cron" | tail -n 1)
     print_info "Automatic updates are currently configured with this cron schedule:"
-    echo "    $schedule_line"
-    case "$schedule_line" in
-      "@daily"*) print_info "This means: Daily" ;;
-      "@weekly"*) print_info "This means: Weekly" ;;
-      "@monthly"*) print_info "This means: Monthly" ;;
-      *) print_info "(Custom cron schedule)" ;;
+    echo "    $comment_line"
+    echo "    $cron_command_line"
+    schedule_word=$(echo "$cron_command_line" | awk '{print $1}')
+    case "$schedule_word" in
+      "@daily") print_info "This means: Daily" ;;
+      "@weekly") print_info "This means: Weekly" ;;
+      "@monthly") print_info "This means: Monthly" ;;
+      *) print_info "(Custom cron schedule: $schedule_word)" ;;
     esac
     echo
     read -p "Do you want to change the schedule, remove it, or keep it? (change/remove/keep): " change_cron_confirm
