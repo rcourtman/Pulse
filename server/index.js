@@ -445,176 +445,91 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Serve static files FIRST
-app.use(express.static(path.join(__dirname, '../src/public')));
+// Define the public directory path
+const publicDir = path.join(__dirname, '../src/public');
 
-// Handle SPA routing: always serve index.html for non-API GET requests
-// This should come AFTER static middleware
-app.get(/^(?!\/api).*/, (req, res) => {
-  res.sendFile(path.join(__dirname, '../src/public', 'index.html'));
-});
+// Serve static files (CSS, JS, images) from the public directory
+app.use(express.static(publicDir));
 
-// Allow iframe embedding
-app.use((req, res, next) => {
-  res.removeHeader('X-Frame-Options'); // Remove default Express header if present
-  res.setHeader('Content-Security-Policy', "frame-ancestors *"); // Allow embedding from any origin
-  next();
-});
-
-// --- Add API endpoint for version ---
-let appVersion = 'unknown';
-try {
-  const packageJsonPath = path.join(__dirname, '../package.json');
-  const packageJsonContent = fs.readFileSync(packageJsonPath, 'utf8');
-  const packageJson = JSON.parse(packageJsonContent);
-  appVersion = packageJson.version || 'unknown';
-} catch (error) {
-  console.error('Error reading version from package.json:', error.message);
-}
-
-app.get('/api/version', (req, res) => {
-  res.json({ version: appVersion });
-});
-// --- End API endpoint ---
-
-// --- Add API endpoint for Storage ---
-app.get('/api/storage', async (req, res) => {
-  // Refactored to query all configured endpoints
-  const aggregatedStorageData = {};
-  let hasDataFromAnyEndpoint = false;
-
-  const endpointIds = Object.keys(apiClients);
-  if (endpointIds.length === 0) {
-    console.warn('/api/storage: No API clients configured.');
-    return res.json({}); // Return empty if no clients
-  }
-
-  // Process each endpoint concurrently
-  const endpointPromises = endpointIds.map(async (endpointId) => {
-    const { client: apiClient, config: endpointConfig } = apiClients[endpointId];
-    const endpointName = endpointConfig.name || endpointId; // For logging
-    const endpointStorageData = {}; // Storage data specifically for this endpoint
-    let nodesToQuery = [];
-    let discoveryFailed = false;
-
-    // --- Step 1: Discover nodes for this endpoint ---
-    try {
-      const nodesResponse = await apiClient.get('/nodes');
-      const basicNodeInfo = nodesResponse.data.data || [];
-      nodesToQuery = basicNodeInfo.map(n => n.node).filter(Boolean);
-
-      if (nodesToQuery.length === 0) {
-        console.warn(`/api/storage (${endpointName}): /nodes returned 0 nodes. Attempting single node discovery.`);
-        try {
-          const versionResponse = await apiClient.get('/version');
-          const discoveredNodeName = versionResponse.data.data.node;
-          if (discoveredNodeName) {
-            nodesToQuery = [discoveredNodeName];
-          } else {
-            throw new Error("Could not determine node name from /version.");
-          }
-        } catch (discoveryError) {
-          console.error(`/api/storage (${endpointName}): Single node discovery failed: ${discoveryError.message}`);
-          discoveryFailed = true;
-        }
-      }
-    } catch (error) {
-      console.warn(`/api/storage (${endpointName}): Failed to fetch /nodes (${error.message}). Attempting single node discovery.`);
-      try {
-        const versionResponse = await apiClient.get('/version');
-        const discoveredNodeName = versionResponse.data.data.node;
-        if (discoveredNodeName) {
-          nodesToQuery = [discoveredNodeName];
-          console.log(`/api/storage (${endpointName}): Discovered single node via /version: ${discoveredNodeName}`);
-        } else {
-          throw new Error("Could not determine node name from /version.");
-        }
-      } catch (discoveryError) {
-        console.error(`/api/storage (${endpointName}): Single node discovery failed after /nodes error: ${discoveryError.message}`);
-        discoveryFailed = true;
-      }
+// Route to serve the main HTML file for the root path
+app.get('/', (req, res) => {
+  const indexPath = path.join(publicDir, 'index.html');
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error(`Error sending index.html: ${err.message}`);
+      // Avoid sending error details to the client for security
+      res.status(err.status || 500).send('Internal Server Error loading page.');
     }
-
-    // If discovery failed for this endpoint, log and skip to the next endpoint
-    if (discoveryFailed) {
-      console.error(`/api/storage (${endpointName}): Failed to discover any nodes. Skipping storage fetch for this endpoint.`);
-      return null; // Indicate failure for this endpoint
-    }
-
-    // --- Step 2: Fetch storage for discovered nodes in this endpoint --- 
-    const storagePromises = nodesToQuery.map(async (nodeName) => {
-      if (!nodeName) {
-        console.warn(`/api/storage (${endpointName}): Skipping node with missing name.`);
-        return; // Skip if node name is somehow invalid
-      }
-      try {
-        const response = await apiClient.get(`/nodes/${nodeName}/storage`);
-        // Add the fetched storage data under the nodeName key
-        // Note: If node names collide across endpoints, the last one processed will overwrite previous ones.
-        endpointStorageData[nodeName] = response.data.data || [];
-      } catch (err) {
-        console.error(`/api/storage (${endpointName}): Error fetching storage for node ${nodeName}: ${err.message}`);
-        // Store an error object instead of data for this node
-        endpointStorageData[nodeName] = { 
-            error: `Failed to fetch storage: ${err.message}`, 
-            endpointId: endpointId, 
-            endpointName: endpointName 
-        };
-      }
-    });
-
-    await Promise.allSettled(storagePromises);
-
-    // If we got any data (even errors) for nodes in this endpoint, return it
-    if (Object.keys(endpointStorageData).length > 0) {
-      // console.log(`/api/storage (${endpointName}): Fetched storage data for ${Object.keys(endpointStorageData).length} nodes.`);
-      return endpointStorageData;
-    } else if (nodesToQuery.length > 0) {
-      console.warn(`/api/storage (${endpointName}): Discovered ${nodesToQuery.length} nodes but failed to fetch storage for any of them.`);
-      return null; // Indicate failure if discovery worked but storage fetch failed completely
-    } else {
-      // Should only happen if discovery found 0 nodes initially
-      console.log(`/api/storage (${endpointName}): No nodes discovered, no storage data fetched.`);
-      return null; 
-    }
-  }); // End map over endpointIds
-
-  // Process results from all endpoints
-  const allEndpointResults = await Promise.allSettled(endpointPromises);
-
-  allEndpointResults.forEach(endpointOutcome => {
-    if (endpointOutcome.status === 'fulfilled' && endpointOutcome.value) {
-      // Merge the storage data from this endpoint into the aggregated result
-      Object.assign(aggregatedStorageData, endpointOutcome.value);
-      hasDataFromAnyEndpoint = true; // Mark that we got some data
-    } else if (endpointOutcome.status === 'rejected') {
-      // Log errors from processing an endpoint promise itself (less likely)
-      console.error(`/api/storage: Error processing endpoint storage fetch promise: ${endpointOutcome.reason}`);
-    }
-    // We already logged errors for endpoints where value is null inside the map
   });
-
-  if (hasDataFromAnyEndpoint) {
-     if (DEBUG_METRICS) {
-        console.log(`/api/storage: Returning aggregated storage data for ${Object.keys(aggregatedStorageData).length} nodes across all endpoints.`);
-     }
-  } else {
-     console.warn(`/api/storage: Failed to fetch any storage data from any configured endpoint.`);
-  }
-  
-  res.json(aggregatedStorageData); // Return the aggregated data (or empty object if all failed)
 });
-// --- End Storage API endpoint ---
 
-// Create HTTP server
-const server = http.createServer(app);
+// --- API Routes ---
+// Example API Route (Add your actual API routes here)
+app.get('/api/version', (req, res) => {
+    try {
+        const packageJson = require('../package.json');
+        res.json({ version: packageJson.version || 'N/A' });
+    } catch (error) {
+         console.error("Error reading package.json for version:", error);
+         res.status(500).json({ error: "Could not retrieve version" });
+    }
+});
 
-// Create Socket.IO server with CORS configuration
+app.get('/api/storage', async (req, res) => {
+    try {
+        // Reuse the fetchStorageDetailsForAllNodes logic or similar
+        // This might need adjustment based on where fetchStorageDetailsForAllNodes is defined/refactored
+        // For now, assuming it returns the expected structure or throws an error
+        const storageData = await fetchStorageDetailsForAllNodes(endpoints); // Pass configured endpoints
+        res.json(storageData);
+    } catch (error) {
+        console.error("Error in /api/storage:", error);
+        res.status(500).json({ globalError: error.message || "Failed to fetch storage details." });
+    }
+});
+
+// --- WebSocket Setup ---
 const io = new Server(server, {
+  // Optional: Configure CORS for Socket.IO if needed, separate from Express CORS
   cors: {
-    origin: "*",
+    origin: "*", // Allow all origins for Socket.IO, adjust as needed for security
     methods: ["GET", "POST"]
   }
+});
+
+io.on('connection', (socket) => {
+  console.log('Client connected');
+  // Immediately send current data if available
+  // if (cachedDiscoveryData) {
+  //   socket.emit('rawData', cachedDiscoveryData);
+  // }
+
+  // Send initial PBS status if available
+  if (globalPbsStatus.length > 0) {
+      socket.emit('pbsInitialStatus', globalPbsStatus);
+  }
+
+  socket.on('requestData', async () => {
+    console.log('Client requested data');
+    try {
+      // Send cached data immediately
+      if (globalApiCache) {
+          socket.emit('rawData', globalApiCache);
+      } else {
+         console.log('No cached data available on request, waiting for next cycle.');
+         // Optionally trigger an immediate discovery/metric cycle?
+         // await runDiscoveryCycle(); // Be careful with triggering cycles on demand
+         // if (globalApiCache) socket.emit('rawData', globalApiCache);
+      }
+    } catch (error) {
+      console.error('Error fetching data on client request:', error);
+      // Notify client of error?
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected');
+  });
 });
 
 // --- Global State Variables ---
