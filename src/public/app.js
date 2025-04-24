@@ -31,6 +31,9 @@
 
 })();
 
+// Helper function to sanitize strings for use in HTML IDs
+const sanitizeForId = (str) => str.replace(/[^a-zA-Z0-9-]/g, '-');
+
 document.addEventListener('DOMContentLoaded', function() {
   // Guard clauses to ensure essential elements exist before proceeding
   const themeToggleButton = document.getElementById('theme-toggle-button');
@@ -144,6 +147,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // ---> REMOVE: pbsConfigured flag is less relevant now
   // let pbsConfigured = false; // Flag to track if PBS is configured
   // <--- END REMOVE
+
+  // Define initial limit for PBS task tables
+  const INITIAL_PBS_TASK_LIMIT = 5;
 
   // --- Global Helper for Text Progress Bar ---
   const createProgressTextBarHTML = (percent, text, colorClass) => {
@@ -1475,13 +1481,18 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   const getPbsGcStatusText = (gcStatus) => {
-    if (!gcStatus || gcStatus === 'unknown') return '<span class="text-xs text-gray-400">Unknown</span>';
+    // Handle falsy values, 'unknown', or literal 'N/A' string
+    if (!gcStatus || gcStatus === 'unknown' || gcStatus === 'N/A') { 
+      return '<span class="text-xs text-gray-400">Unknown</span>';
+    }
+    // Determine color based on known status keywords
     let colorClass = 'text-gray-600 dark:text-gray-400';
     if (gcStatus.includes('error') || gcStatus.includes('failed')) {
         colorClass = 'text-red-500 dark:text-red-400';
     } else if (gcStatus === 'OK') {
         colorClass = 'text-green-500 dark:text-green-400';
     }
+    // Return the original status text with appropriate color
     return `<span class="text-xs ${colorClass}">${gcStatus}</span>`;
   };
 
@@ -1521,36 +1532,78 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // --- NEW Function to Populate a PBS Task Table --- // MOVED UP & MODIFIED
-  function populatePbsTaskTable(tbodyId, tasks) { // Remove sortColumn, sortDirection
-    const tbody = document.getElementById(tbodyId);
-    if (!tbody) {
-        console.error(`PBS Task Table Body #${tbodyId} not found!`);
+  function populatePbsTaskTable(parentSectionElement, fullTasksArray) {
+    if (!parentSectionElement) {
+        console.error("Parent section element not provided to populatePbsTaskTable.");
         return;
     }
+    // Find elements relative to the parent section
+    const tbody = parentSectionElement.querySelector('.pbs-task-tbody'); 
+    const buttonContainer = parentSectionElement.querySelector('.pbs-toggle-button-container');
+
+    if (!tbody || !buttonContainer) {
+        // If elements aren't found *within the parent*, log an error
+        console.error(`Required child elements (.pbs-task-tbody or .pbs-toggle-button-container) not found within provided parent section.`, parentSectionElement);
+        return;
+    }
+
+    // Ensure tbody has an ID if it doesn't (needed for button linking)
+    if (!tbody.id) {
+        const table = parentSectionElement.querySelector('table');
+        tbody.id = table && table.id ? table.id.replace('-table-', '-tbody-') : `pbs-tbody-${Date.now()}-${Math.random()}`; 
+        console.warn(`Assigned dynamic ID to tbody: ${tbody.id}`);
+    }
+
     tbody.innerHTML = ''; // Clear previous content
+    buttonContainer.innerHTML = ''; // Clear previous button
 
-    // ---> REMOVE SORTING <---
-    // const sortedTasks = sortPbsTasks(tasks, sortColumn, sortDirection); // Assumes sortPbsTasks is moved up
-    const tasksToDisplay = tasks || []; // Use raw tasks or empty array
-    // ---> END REMOVE <---
+    const tasks = fullTasksArray || []; // Ensure tasks is an array
+    const totalTasks = tasks.length;
+    const limit = INITIAL_PBS_TASK_LIMIT;
+    const isCurrentlyExpanded = tbody.dataset.isExpanded === 'true'; // Check current state 
 
-    if (!tasksToDisplay || tasksToDisplay.length === 0) { // Use tasksToDisplay
+    const tasksToDisplay = isCurrentlyExpanded ? tasks : tasks.slice(0, limit);
+
+    // Store full data and state on the tbody
+    tbody.dataset.fullTasks = JSON.stringify(tasks); // Store all tasks
+    tbody.dataset.initialLimit = limit;
+    tbody.dataset.isExpanded = isCurrentlyExpanded ? 'true' : 'false'; 
+
+    if (tasksToDisplay.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">No recent tasks found (last 7 days).</td></tr>`;
-        return;
+    } else {
+        tasksToDisplay.forEach(task => {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
+            row.innerHTML = `
+                <td class="px-4 py-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${task.id || 'N/A'}</td>
+                <td class="px-4 py-2 text-center">${getPbsStatusIcon(task.status)}</td>
+                <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatPbsTimestamp(task.startTime)}</td>
+                <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatDuration(task.duration)}</td>
+                <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-400 dark:text-gray-500 font-mono truncate" title="${task.upid || 'N/A'}">${task.upid || 'N/A'}</td>
+            `;
+            tbody.appendChild(row);
+        });
     }
 
-    tasksToDisplay.forEach(task => { // Use tasksToDisplay
-        const row = document.createElement('tr');
-        row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
-        row.innerHTML = `
-            <td class="px-4 py-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${task.id || 'N/A'}</td>
-            <td class="px-4 py-2 text-center">${getPbsStatusIcon(task.status)}</td>
-            <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatPbsTimestamp(task.startTime)}</td>
-            <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatDuration(task.duration)}</td>
-            <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-400 dark:text-gray-500 font-mono truncate" title="${task.upid || 'N/A'}">${task.upid || 'N/A'}</td>
-        `;
-        tbody.appendChild(row);
-    });
+    // Add Show More/Less button if needed
+    if (totalTasks > limit) {
+        const button = document.createElement('button');
+        const isExpanded = tbody.dataset.isExpanded === 'true';
+        const buttonText = isExpanded ? 'Show Less' : `Show More (${totalTasks - limit} older)`;
+        const iconSvg = isExpanded 
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-1 h-3 w-3"><polyline points="18 15 12 9 6 15"></polyline></svg>' 
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-1 h-3 w-3"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+
+        button.innerHTML = buttonText + iconSvg;
+        button.type = 'button';
+        // Updated classes for button styling
+        button.className = 'pbs-toggle-button text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500';
+        button.dataset.targetTbodyId = tbody.id; // Use the actual ID of the tbody we found/assigned
+        buttonContainer.appendChild(button);
+    } else {
+        tbody.dataset.isExpanded = 'false'; 
+    }
   }
   // --- END NEW Function ---
 
@@ -1595,7 +1648,10 @@ document.addEventListener('DOMContentLoaded', function() {
         return card; // Return the element
     };
 
-     const createTaskTableHTML = (tableId, title, idColumnHeader) => `
+     const createTaskTableHTML = (tableId, title, idColumnHeader) => {
+        const tbodyId = tableId.replace('-table-', '-tbody-');
+        const toggleButtonContainerId = tableId.replace('-table', '-toggle-container');
+        return `
         <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Recent ${title} Tasks</h4>
         <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
             <table id="${tableId}" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
@@ -1608,11 +1664,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         <th scope="col" class="px-4 py-2 text-left font-semibold">UPID</th>
                     </tr>
                 </thead>
-                <tbody id="${tableId.replace('-table-', '-tbody-')}" class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody id="${tbodyId}" class="pbs-task-tbody divide-y divide-gray-200 dark:divide-gray-700">
                      <!-- Populated by JS -->
                 </tbody>
             </table>
-        </div>`;
+        </div>
+        <div id="${toggleButtonContainerId}" class="pbs-toggle-button-container pt-1 text-right"></div>
+        `;
+    };
 
     // ---> REMOVE: setupPbsSortListener function definition <---
     /*
@@ -1624,7 +1683,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Create/Update content for each PBS instance
     pbsArray.forEach((pbsInstance, index) => {
-      const instanceId = pbsInstance.pbsEndpointId || `instance-${index}`;
+      const rawInstanceId = pbsInstance.pbsEndpointId || `instance-${index}`;
+      const instanceId = sanitizeForId(rawInstanceId); // Use sanitized ID for elements
       const instanceName = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
       const instanceElementId = `pbs-instance-${instanceId}`;
       currentInstanceIds.add(instanceElementId); 
@@ -1638,16 +1698,19 @@ document.addEventListener('DOMContentLoaded', function() {
       let statusColorClass = 'text-gray-600 dark:text-gray-400';
       switch (pbsInstance.status) {
           case 'configured':
-              statusText = `Configured (${pbsInstance.nodeName || '...'}), attempting connection...`;
+              // statusText = `Configured (${pbsInstance.nodeName || '...'}), attempting connection...`; // Original
+              statusText = `Configured, attempting connection...`; // Simplified
               statusColorClass = 'text-gray-600 dark:text-gray-400';
               break;
           case 'ok':
-              statusText = `Status: OK (${pbsInstance.nodeName || 'Unknown Node'})`;
+              // statusText = `Status: OK (${pbsInstance.nodeName || 'Unknown Node'})`; // Original
+              statusText = `Status: OK`; // Simplified
               statusColorClass = 'text-green-600 dark:text-green-400';
               showDetails = true;
               break;
           case 'error':
-              statusText = `Error connecting (${pbsInstance.errorMessage || 'Check Pulse logs.'})`; // Try to show specific error
+              // statusText = `Error connecting (${pbsInstance.errorMessage || 'Check Pulse logs.'})`; // Original
+              statusText = `Error: ${pbsInstance.errorMessage || 'Connection failed'}`; // Simplified
               statusColorClass = 'text-red-600 dark:text-red-400';
               break;
           // 'unconfigured' is handled by the empty array check earlier
@@ -1708,18 +1771,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
                // Update Task Tables
               if (showDetails) {
-                  // ---> REMOVE: Sorting parameters <---
-                  populatePbsTaskTable(`pbs-recent-backup-tasks-tbody-${instanceId}`, pbsInstance.backupTasks?.recentTasks);
-                  populatePbsTaskTable(`pbs-recent-verify-tasks-tbody-${instanceId}`, pbsInstance.verificationTasks?.recentTasks);
-                  populatePbsTaskTable(`pbs-recent-sync-tasks-tbody-${instanceId}`, pbsInstance.syncTasks?.recentTasks);
-                  populatePbsTaskTable(`pbs-recent-prunegc-tasks-tbody-${instanceId}`, pbsInstance.pruneTasks?.recentTasks);
-                  // ---> END REMOVE <---
-                  // ---> REMOVE: Sort listener setup calls <---
-                  // setupPbsSortListener(`pbs-recent-backup-tasks-table-${instanceId}`, 'pbsBackup', pbsInstance);
-                  // setupPbsSortListener(`pbs-recent-verify-tasks-table-${instanceId}`, 'pbsVerify', pbsInstance);
-                  // setupPbsSortListener(`pbs-recent-sync-tasks-table-${instanceId}`, 'pbsSync', pbsInstance);
-                  // setupPbsSortListener(`pbs-recent-prunegc-tasks-table-${instanceId}`, 'pbsPruneGc', pbsInstance);
-                  // ---> END REMOVE <---
+                  const backupSection = detailsContainer.querySelector('.pbs-task-section[data-task-type="backup"]');
+                  if (backupSection) populatePbsTaskTable(backupSection, pbsInstance.backupTasks?.recentTasks);
+                  
+                  const verifySection = detailsContainer.querySelector('.pbs-task-section[data-task-type="verify"]');
+                  if (verifySection) populatePbsTaskTable(verifySection, pbsInstance.verificationTasks?.recentTasks);
+                  
+                  const syncSection = detailsContainer.querySelector('.pbs-task-section[data-task-type="sync"]');
+                  if (syncSection) populatePbsTaskTable(syncSection, pbsInstance.syncTasks?.recentTasks);
+                  
+                  const pruneGcSection = detailsContainer.querySelector('.pbs-task-section[data-task-type="prunegc"]');
+                  if (pruneGcSection) populatePbsTaskTable(pruneGcSection, pbsInstance.pruneTasks?.recentTasks);
+
               } else {
                    // If details are hidden, ensure tables show the status message
                   const backupTbody = document.getElementById(`pbs-recent-backup-tasks-tbody-${instanceId}`);
@@ -1768,7 +1831,17 @@ document.addEventListener('DOMContentLoaded', function() {
               <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Datastores</h4>
               <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
                   <table id="pbs-ds-table-${instanceId}" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                       <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700/50"> <tr> <th scope="col" class="px-4 py-2 text-left font-semibold">Name</th> <th scope="col" class="px-4 py-2 text-left font-semibold">Path</th> <th scope="col" class="px-4 py-2 text-right font-semibold">Used</th> <th scope="col" class="px-4 py-2 text-right font-semibold">Available</th> <th scope="col" class="px-4 py-2 text-right font-semibold">Total</th> <th scope="col" class="px-4 py-2 text-center font-semibold">Usage</th> <th scope="col" class="px-4 py-2 text-center font-semibold">GC Status</th> </tr> </thead>
+                       <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-100 dark:bg-gray-700/50"> 
+                           <tr> 
+                               <th scope="col" class="px-4 py-2 text-left font-semibold dark:text-gray-300">Name</th> 
+                               <th scope="col" class="px-4 py-2 text-left font-semibold dark:text-gray-300">Path</th> 
+                               <th scope="col" class="px-4 py-2 text-right font-semibold dark:text-gray-300">Used</th> 
+                               <th scope="col" class="px-4 py-2 text-right font-semibold dark:text-gray-300">Available</th> 
+                               <th scope="col" class="px-4 py-2 text-right font-semibold dark:text-gray-300">Total</th> 
+                               <th scope="col" class="px-4 py-2 text-center font-semibold dark:text-gray-300">Usage</th> 
+                               <th scope="col" class="px-4 py-2 text-center font-semibold dark:text-gray-300">GC Status</th> 
+                           </tr> 
+                       </thead>
                       <tbody id="pbs-ds-tbody-${instanceId}" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
                   </table>
               </div>`;
@@ -1786,15 +1859,26 @@ document.addEventListener('DOMContentLoaded', function() {
 
           // Create Task Sections
            const recentBackupTasksSection = document.createElement('div');
+           recentBackupTasksSection.className = 'pbs-task-section'; // Add class
+           recentBackupTasksSection.dataset.taskType = 'backup'; // Add data attribute
            recentBackupTasksSection.innerHTML = createTaskTableHTML(`pbs-recent-backup-tasks-table-${instanceId}`, 'Backup', 'Guest');
            detailsContainer.appendChild(recentBackupTasksSection);
+           
            const recentVerifyTasksSection = document.createElement('div');
+           recentVerifyTasksSection.className = 'pbs-task-section'; // Add class
+           recentVerifyTasksSection.dataset.taskType = 'verify'; // Add data attribute
            recentVerifyTasksSection.innerHTML = createTaskTableHTML(`pbs-recent-verify-tasks-table-${instanceId}`, 'Verification', 'Guest/Group');
            detailsContainer.appendChild(recentVerifyTasksSection);
+           
            const recentSyncTasksSection = document.createElement('div');
+           recentSyncTasksSection.className = 'pbs-task-section'; // Add class
+           recentSyncTasksSection.dataset.taskType = 'sync'; // Add data attribute
            recentSyncTasksSection.innerHTML = createTaskTableHTML(`pbs-recent-sync-tasks-table-${instanceId}`, 'Sync', 'Job ID');
            detailsContainer.appendChild(recentSyncTasksSection);
+           
            const recentPruneGcTasksSection = document.createElement('div');
+           recentPruneGcTasksSection.className = 'pbs-task-section'; // Add class
+           recentPruneGcTasksSection.dataset.taskType = 'prunegc'; // Add data attribute
            recentPruneGcTasksSection.innerHTML = createTaskTableHTML(`pbs-recent-prunegc-tasks-table-${instanceId}`, 'Prune/GC', 'Datastore/Group');
            detailsContainer.appendChild(recentPruneGcTasksSection);
 
@@ -1826,19 +1910,29 @@ document.addEventListener('DOMContentLoaded', function() {
            }
 
            if (showDetails) {
-              populatePbsTaskTable(`pbs-recent-backup-tasks-tbody-${instanceId}`, pbsInstance.backupTasks?.recentTasks);
-              populatePbsTaskTable(`pbs-recent-verify-tasks-tbody-${instanceId}`, pbsInstance.verificationTasks?.recentTasks);
-              populatePbsTaskTable(`pbs-recent-sync-tasks-tbody-${instanceId}`, pbsInstance.syncTasks?.recentTasks);
-              populatePbsTaskTable(`pbs-recent-prunegc-tasks-tbody-${instanceId}`, pbsInstance.pruneTasks?.recentTasks);
+              const backupSection = detailsContainer.querySelector('.pbs-task-section[data-task-type="backup"]');
+              if (backupSection) populatePbsTaskTable(backupSection, pbsInstance.backupTasks?.recentTasks);
+              
+              const verifySection = detailsContainer.querySelector('.pbs-task-section[data-task-type="verify"]');
+              if (verifySection) populatePbsTaskTable(verifySection, pbsInstance.verificationTasks?.recentTasks);
+              
+              const syncSection = detailsContainer.querySelector('.pbs-task-section[data-task-type="sync"]');
+              if (syncSection) populatePbsTaskTable(syncSection, pbsInstance.syncTasks?.recentTasks);
+              
+              const pruneGcSection = detailsContainer.querySelector('.pbs-task-section[data-task-type="prunegc"]');
+              if (pruneGcSection) populatePbsTaskTable(pruneGcSection, pbsInstance.pruneTasks?.recentTasks);
 
-              // ---> REMOVE: Sort listener setup calls <---
-           } else {
-               // Ensure initial status message is present if details start hidden
-               const backupTbody = document.getElementById(`pbs-recent-backup-tasks-tbody-${instanceId}`); if (backupTbody) backupTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
-               const verifyTbody = document.getElementById(`pbs-recent-verify-tasks-tbody-${instanceId}`); if (verifyTbody) verifyTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
-               const syncTbody = document.getElementById(`pbs-recent-sync-tasks-tbody-${instanceId}`); if (syncTbody) syncTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
-               const pruneTbody = document.getElementById(`pbs-recent-prunegc-tasks-tbody-${instanceId}`); if (pruneTbody) pruneTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
-           }
+          } else {
+               // If details are hidden, ensure tables show the status message
+              const backupTbody = document.getElementById(`pbs-recent-backup-tasks-tbody-${instanceId}`);
+              if (backupTbody) backupTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+              const verifyTbody = document.getElementById(`pbs-recent-verify-tasks-tbody-${instanceId}`);
+              if (verifyTbody) verifyTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+              const syncTbody = document.getElementById(`pbs-recent-sync-tasks-tbody-${instanceId}`);
+              if (syncTbody) syncTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+              const pruneTbody = document.getElementById(`pbs-recent-prunegc-tasks-tbody-${instanceId}`);
+              if (pruneTbody) pruneTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+          }
 
       } // End Upsert Logic
 
@@ -1854,5 +1948,40 @@ document.addEventListener('DOMContentLoaded', function() {
 
 }
 // --- End Update PBS Info Function ---
+
+  // --- PBS Task Table Toggle Listener ---
+  const pbsInstancesContainer = document.getElementById('pbs-instances-container');
+  if (pbsInstancesContainer) {
+      pbsInstancesContainer.addEventListener('click', (event) => {
+          const button = event.target.closest('.pbs-toggle-button');
+          if (!button) return; // Click wasn't on a toggle button
+
+          const targetTbodyId = button.dataset.targetTbodyId;
+          const tbody = document.getElementById(targetTbodyId);
+          if (!tbody) {
+              console.error("Target tbody not found for toggle button:", targetTbodyId);
+              return;
+          }
+
+          // Find the parent section containing this tbody
+          const parentSection = tbody.closest('.pbs-task-section');
+          if (!parentSection) {
+              console.error("Parent task section (.pbs-task-section) not found for tbody:", targetTbodyId);
+              return;
+          }
+
+          const isCurrentlyExpanded = tbody.dataset.isExpanded === 'true';
+          const fullTasks = JSON.parse(tbody.dataset.fullTasks || '[]');
+
+          // Toggle the expanded state *before* re-populating
+          tbody.dataset.isExpanded = isCurrentlyExpanded ? 'false' : 'true';
+
+          // Re-populate the table using the parent section and full task list
+          populatePbsTaskTable(parentSection, fullTasks);
+      });
+  } else {
+      console.warn("PBS instances container not found, toggle functionality will not work.");
+  }
+  // --- End PBS Task Table Toggle Listener ---
 
 }); // End DOMContentLoaded
