@@ -851,9 +851,6 @@ async function fetchDiscoveryData() {
                           // Merge node status if available
                           if (result.value.nodeStatus) {
                             const statusData = result.value.nodeStatus;
-                            // ---- START DEBUG LOG ----
-                            console.log(`[Discovery Cycle - ${endpointName}] Merging status for node ${correspondingNodeName}. MaxCPU from API:`, statusData.maxcpu);
-                            // ---- END DEBUG LOG ----
                             // Merge specific fields we care about
                             endpointNodes[targetNodeIndex].cpu = statusData.cpu;
                             endpointNodes[targetNodeIndex].maxcpu = statusData.maxcpu; // Added maxcpu
