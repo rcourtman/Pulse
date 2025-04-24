@@ -1091,6 +1091,10 @@ document.addEventListener('DOMContentLoaded', function() {
           : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
       const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guest.type}</span>`;
 
+      // ---> ADDED: Log guest.diskread before formatting <---
+      console.log(`[createGuestRow - ${guest.id}] Received guest.diskread: ${guest.diskread}`);
+      // ---> END ADDED SECTION <---
+
       row.innerHTML = `
         <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
         <td class="p-1 px-1 text-center">${typeIcon}</td>
