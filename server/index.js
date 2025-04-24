@@ -629,21 +629,22 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
     vms: [],
     containers: [],
     metrics: [],
-    nodeStatus: null // Added to store node status
+    nodeStatus: null // Initialize node status object
   };
 
-  // Fetch node status first
+  // Fetch node status ONLY (removed concurrent /cpu fetch)
   try {
-    const statusResponse = await apiClient.get(`/nodes/${nodeName}/status`);
-    if (statusResponse.data && statusResponse.data.data) {
-      nodeData.nodeStatus = statusResponse.data.data;
+    const statusResult = await apiClient.get(`/nodes/${nodeName}/status`);
+    if (statusResult.data && statusResult.data.data) {
+      nodeData.nodeStatus = statusResult.data.data;
     } else {
       console.warn(`[Discovery] Node status for ${nodeName} (Endpoint: ${endpointId}) was empty or malformed.`);
+      nodeData.nodeStatus = {}; // Ensure nodeStatus is an object even on failure
     }
   } catch (err) {
     const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
     console.error(`[Discovery] Error fetching status for node ${nodeName} (Endpoint: ${endpointId})${status}: ${err.message}`);
-    // Proceed even if node status fails, maybe the node is down
+    nodeData.nodeStatus = {}; // Ensure nodeStatus is an object even on failure
   }
 
   try {
@@ -814,11 +815,11 @@ async function fetchDiscoveryData() {
                           ...nodeInfo,
                           endpointId: endpointName, // Add endpointId/name
                           id: `${endpointName}-${nodeInfo.node}`, // Create unique ID
-                          // Initialize status fields to null or defaults
+                          // Initialize status fields, using maxcpu from nodeInfo if available
                           cpu: null,
-                          maxcpu: null,
+                          maxcpu: nodeInfo.maxcpu || null, // <-- Use maxcpu from initial call
                           mem: null,
-                          maxmem: null,
+                          maxmem: nodeInfo.maxmem || null, // <-- Also use maxmem from initial call
                           disk: null,
                           maxdisk: null,
                           uptime: 0, // Default uptime to 0
@@ -851,15 +852,12 @@ async function fetchDiscoveryData() {
                           // Merge node status if available
                           if (result.value.nodeStatus) {
                             const statusData = result.value.nodeStatus;
-                            // ---- START DEBUG LOG ----
-                            console.log(`[Discovery Cycle - ${endpointName}] Merging status for node ${correspondingNodeName}. MaxCPU from API:`, statusData.maxcpu);
-                            // ---- END DEBUG LOG ----
-                            // Merge specific fields we care about
+                            // Merge specific fields we care about, BUT DO NOT overwrite maxcpu/maxmem
                             endpointNodes[targetNodeIndex].cpu = statusData.cpu;
-                            endpointNodes[targetNodeIndex].maxcpu = statusData.maxcpu; // Added maxcpu
-                            endpointNodes[targetNodeIndex].mem = statusData.memory?.used || statusData.mem; // Prioritize memory obj if exists
-                            endpointNodes[targetNodeIndex].maxmem = statusData.memory?.total || statusData.maxmem;
-                            endpointNodes[targetNodeIndex].disk = statusData.rootfs?.used || statusData.disk; // Prioritize rootfs obj if exists
+                            // endpointNodes[targetNodeIndex].maxcpu = statusData.maxcpu; // Already set from nodeInfo
+                            endpointNodes[targetNodeIndex].mem = statusData.memory?.used || statusData.mem;
+                            // endpointNodes[targetNodeIndex].maxmem = statusData.memory?.total || statusData.maxmem; // Already set from nodeInfo
+                            endpointNodes[targetNodeIndex].disk = statusData.rootfs?.used || statusData.disk;
                             endpointNodes[targetNodeIndex].maxdisk = statusData.rootfs?.total || statusData.maxdisk;
                             endpointNodes[targetNodeIndex].uptime = statusData.uptime;
                             endpointNodes[targetNodeIndex].loadavg = statusData.loadavg; // Add loadavg
