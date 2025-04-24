@@ -39,7 +39,7 @@ print_warning() {
 }
 
 print_error() {
-  echo -e "\033[1;31m[ERROR]\033[0m $1" >&2
+  echo -e "\033[1;31m[ERROR]\033[0m $1 >&2
 }
 
 check_root() {
@@ -49,48 +49,57 @@ check_root() {
   fi
 }
 
-# --- Installation Status Check --- Function moved up
-check_installation_status() {
-    print_info "Checking Pulse installation directory $PULSE_DIR..."
-    if [ -d "$PULSE_DIR" ]; then
-        # Check if it's a git repository
-        if [ -d "$PULSE_DIR/.git" ]; then
-            # If --update flag is set, determine mode is 'update'
-            if [ "$MODE_UPDATE" = true ]; then
-                print_info "Running in non-interactive update mode..."
-                INSTALL_MODE="update"
-                return 0 # Continue to main update logic
-            fi
+# --- Installation Status Check & Action Determination --- 
+check_installation_status_and_determine_action() {
+    # Remove --update flag check for now, handle interactively
+    # if [ "$MODE_UPDATE" = true ]; then
+    #     print_info "Running in non-interactive update mode..."
+    #     INSTALL_MODE="update"
+    #     return 0 # Continue to main update logic
+    # fi
 
-            # Otherwise, show interactive menu
-            print_warning "Pulse seems to be already installed in $PULSE_DIR."
+    print_info "Checking Pulse installation at $PULSE_DIR..."
+    if [ -d "$PULSE_DIR" ]; then
+        # Directory exists
+        if [ -d "$PULSE_DIR/.git" ]; then
+            # It's a git repository - Offer Update/Remove/Cancel
+            print_warning "Pulse seems to be already installed."
             echo "Choose an action:"
             echo "  1) Update Pulse to the latest version"
             echo "  2) Remove Pulse"
-            echo "  3) Cancel installation"
+            echo "  3) Cancel"
             read -p "Enter your choice (1-3): " user_choice
 
             case $user_choice in
-                1) INSTALL_MODE="update" ;;
-                2) INSTALL_MODE="remove" ;;
-                3) INSTALL_MODE="cancel" ;;
-                *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+                1) INSTALL_MODE="update" ;; 
+                2) INSTALL_MODE="remove" ;; 
+                3) INSTALL_MODE="cancel" ;; 
+                *) print_error "Invalid choice."; INSTALL_MODE="error" ;; 
             esac
         else
-            # Directory exists but doesn't seem to be a git repository
+            # Directory exists but isn't a git repository
             print_error "Directory $PULSE_DIR exists but does not appear to be a valid Pulse git repository."
-            print_error "Please remove this directory manually or choose a different installation path and re-run the script."
+            print_error "Please remove this directory manually ($PULSE_DIR) or choose a different installation path and re-run the script."
             INSTALL_MODE="error"
         fi
     else
-        # Directory doesn't exist, proceed with cloning
-        INSTALL_MODE="install"
+        # Directory doesn't exist - Offer Install/Cancel
+        print_info "Pulse is not currently installed."
+        echo "Choose an action:"
+        echo "  1) Install Pulse"
+        echo "  2) Cancel"
+        read -p "Enter your choice (1-2): " user_choice
+
+        case $user_choice in
+            1) INSTALL_MODE="install" ;; 
+            2) INSTALL_MODE="cancel" ;; 
+            *) print_error "Invalid choice."; INSTALL_MODE="error" ;; 
+        esac
     fi
-    return 0 # Return success, INSTALL_MODE holds the result
+    # We don't return here, INSTALL_MODE is now set globally for the main logic
 }
 
 # --- System Setup Functions --- (apt_update_upgrade, install_dependencies, setup_node, create_pulse_user)
-# ... (These functions remain unchanged, but are called later) ...
 apt_update_upgrade() {
     print_info "Updating package lists and upgrading packages..."
     if apt-get update > /dev/null && apt-get upgrade -y > /dev/null; then
@@ -186,7 +195,6 @@ create_pulse_user() {
 }
 
 # --- Core Action Functions --- (perform_update, perform_remove)
-# ... (These functions remain mostly unchanged) ...
 perform_update() {
     print_info "Attempting to update Pulse..."
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
@@ -358,7 +366,6 @@ perform_remove() {
 }
 
 # --- Installation Step Functions --- (install_npm_deps, set_permissions, configure_environment, setup_systemd_service)
-# ... (These functions remain mostly unchanged, but setup_systemd_service might need slight modification) ...
 install_npm_deps() {
     print_info "Installing npm dependencies..."
     if [ ! -d "$PULSE_DIR" ]; then
@@ -648,7 +655,6 @@ EOF
 }
 
 # --- Final Steps Functions --- (setup_cron_update, prompt_for_cron_setup, final_instructions)
-# ... (These functions remain mostly unchanged) ...
 setup_cron_update() {
     local cron_schedule=""
     local cron_command=""
@@ -785,34 +791,39 @@ else
      fi
 fi
 
-# Check installation status and user intent first
-check_installation_status # Sets the INSTALL_MODE variable
+# Check installation status and determine user's desired action first
+check_installation_status_and_determine_action # Sets the INSTALL_MODE variable
 
+# --- Execute Action Based on INSTALL_MODE --- 
 case "$INSTALL_MODE" in
     "remove")
+        print_info "Proceeding with removal..."
         perform_remove
         exit $?
         ;;
     "cancel")
-        print_info "Installation cancelled by user."
+        print_info "Operation cancelled by user."
         exit 0
         ;;
     "error")
-        # Error message already printed by check_installation_status
+        # Error message already printed
+        print_error "Exiting due to error."
         exit 1
         ;;
     "install" | "update")
-        # Proceed with common setup steps
-        print_info "Starting installation/update process..."
+        # Only install dependencies if installing or updating
+        print_info "Proceeding with install/update. Installing prerequisites..."
         apt_update_upgrade || exit 1
         install_dependencies || exit 1
         setup_node || exit 1
         create_pulse_user || exit 1
+        print_success "Prerequisites installed."
 
+        # Now perform the specific action
         if [ "$INSTALL_MODE" = "install" ]; then
-            # --- Installation specific steps ---
+            print_info "Starting installation..."
+            # --- Installation specific steps --- 
             print_info "Cloning Pulse repository into $PULSE_DIR..."
-            # Clone the main branch. Consider adding --depth 1 for faster clone if history isn't needed.
             if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
                 print_success "Repository cloned successfully."
             else
@@ -820,30 +831,29 @@ case "$INSTALL_MODE" in
                 exit 1
             fi
 
-            install_npm_deps || exit 1
+            install_npm_deps || exit 1 # Installs root (omit dev) and server (omit dev)
+            
             # Explicitly install tailwindcss cli required for build
             print_info "Installing Tailwind CSS CLI for build..."
-            # Need to cd first
             cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before installing CLI"; exit 1; }
-            if ! npm install @tailwindcss/cli --no-save > /dev/null 2>&1; then # --no-save avoids modifying package-lock.json unnecessarily
+            if ! npm install @tailwindcss/cli --no-save > /dev/null 2>&1; then
                 print_error "Failed to install @tailwindcss/cli."
-                cd .. # Go back if error
+                # cd .. # No need to cd back here if exiting
                 exit 1
             fi
-            cd .. # Go back to previous directory
+            # Don't cd back yet, stay for build
 
             # Build CSS after dependencies
             print_info "Building CSS assets..."
-            cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before building CSS"; exit 1; }
+            # Already in $PULSE_DIR
             if ! npm run build:css > /dev/null 2>&1; then
                 print_error "Failed to build CSS assets."
-                # Potentially exit 1 here if CSS build failure is critical
-                cd ..
                 exit 1
             else
                 print_success "CSS assets built."
             fi
-             cd .. # Go back to previous directory
+             # Now cd back if needed, though subsequent steps might need PULSE_DIR
+             # cd .. 
 
             set_permissions || exit 1 # Set permissions AFTER building css
             configure_environment || exit 1 # Prompt user for details
@@ -852,14 +862,12 @@ case "$INSTALL_MODE" in
             prompt_for_cron_setup # Ask about cron on fresh install
 
         else # Update mode
-            # --- Update specific steps ---
-            print_success "Proceeding with update..."
+            print_info "Starting update..."
+            # --- Update specific steps --- 
             if perform_update; then
-                # Don't re-run configure_environment on update unless specifically requested
-                # Display final instructions, but maybe tailor message slightly?
                 print_success "Pulse update completed successfully."
                 final_instructions
-                prompt_for_cron_setup # Ask about cron even on update?
+                prompt_for_cron_setup
             else
                 print_error "Pulse update failed."
                 exit 1
@@ -867,7 +875,7 @@ case "$INSTALL_MODE" in
         fi
         ;;
     *)
-        print_error "Internal script error: Unknown mode '$INSTALL_MODE'"
+        print_error "Internal script error: Unknown INSTALL_MODE '$INSTALL_MODE'"
         exit 1
         ;;
 esac
