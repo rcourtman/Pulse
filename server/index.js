@@ -932,13 +932,6 @@ async function fetchMetricsData(runningVms, runningContainers) {
                                 apiClient.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/status/current`)
                             ]);
 
-                            // ---> ADDED: Log raw disk values from API <---
-                            const rawCurrentData = currentData?.data?.data || null;
-                            if (rawCurrentData) {
-                                console.log(`[Metrics Fetch - ${endpointName}/${nodeName}/${type}/${vmid}] Raw API current status: diskread=${rawCurrentData.diskread}, diskwrite=${rawCurrentData.diskwrite}`);
-                            }
-                            // ---> END ADDED SECTION <---
-
                             const metricData = {
                                 id: vmid,
                                 guestName: guestName, // Keep guest name
