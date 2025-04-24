@@ -21,7 +21,7 @@ RUN cd server && npm install
 # Copy server code first
 COPY server/ ./server/
 # Copy public directory if it's used by the server (adjust if needed)
-COPY public/ ./public/
+COPY src/public/ ./public/
 
 # Application listens on port 7655 by default (as per .env.example)
 EXPOSE 7655
