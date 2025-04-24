@@ -28,4 +28,4 @@ EXPOSE 7655
 
 # Define the command to run the app using the start script from root package.json
 # This script should handle changing into the server directory
-CMD [ "npm", "run", "start" ] 
+CMD [ "npm", "run", "start" ]

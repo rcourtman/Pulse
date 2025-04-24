@@ -444,7 +444,15 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../src/public')));
+
+// Serve static files FIRST
+app.use(express.static(path.join(__dirname, '../public')));
+
+// Handle SPA routing: always serve index.html for non-API GET requests
+// This should come AFTER static middleware
+app.get(/^(?!\/api).*/, (req, res) => {
+  res.sendFile(path.join(__dirname, '../public', 'index.html'));
+});
 
 // Allow iframe embedding
 app.use((req, res, next) => {
