@@ -350,7 +350,9 @@ app.get('/api/storage', async (req, res) => {
   });
 
   if (hasDataFromAnyEndpoint) {
-     console.log(`/api/storage: Returning aggregated storage data for ${Object.keys(aggregatedStorageData).length} nodes across all endpoints.`);
+     if (DEBUG_METRICS) {
+        console.log(`/api/storage: Returning aggregated storage data for ${Object.keys(aggregatedStorageData).length} nodes across all endpoints.`);
+     }
   } else {
      console.warn(`/api/storage: Failed to fetch any storage data from any configured endpoint.`);
   }
@@ -425,7 +427,9 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
             if (rrdData?.data?.data?.length > 0) metricData.data = rrdData.data.data;
             return metricData; // Return successful metric data
           } catch (err) {
-            console.error(`[Metrics] Failed to get metrics for VM ${vm.vmid} on node ${nodeName} (Endpoint: ${endpointId}): ${err.message}`);
+            // Add status code to error log
+            const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
+            console.error(`[Metrics] Failed to get metrics for VM ${vm.vmid} on node ${nodeName} (Endpoint: ${endpointId})${status}: ${err.message}`);
             return null; // Return null on error for this specific VM
           }
         });
@@ -439,7 +443,9 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
       });
     }
   } catch (err) {
-    console.error(`[Discovery] Error fetching VMs from node ${nodeName} (Endpoint: ${endpointId}): ${err.message}`);
+    // Add status code to error log
+    const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
+    console.error(`[Discovery] Error fetching VMs from node ${nodeName} (Endpoint: ${endpointId})${status}: ${err.message}`);
     // Continue to fetch containers even if VMs fail
   }
 
@@ -477,7 +483,9 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
             if (rrdData?.data?.data?.length > 0) metricData.data = rrdData.data.data;
              return metricData; // Return successful metric data
           } catch (err) {
-            console.error(`[Metrics] Failed to get metrics for container ${ct.vmid} on node ${nodeName} (Endpoint: ${endpointId}): ${err.message}`);
+            // Add status code to error log
+            const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
+            console.error(`[Metrics] Failed to get metrics for container ${ct.vmid} on node ${nodeName} (Endpoint: ${endpointId})${status}: ${err.message}`);
             return null; // Return null on error for this specific container
           }
         });
@@ -491,7 +499,9 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
         });
     }
   } catch (err) {
-    console.error(`[Discovery] Error fetching containers from node ${nodeName} (Endpoint: ${endpointId}): ${err.message}`);
+    // Add status code to error log
+    const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
+    console.error(`[Discovery] Error fetching containers from node ${nodeName} (Endpoint: ${endpointId})${status}: ${err.message}`);
   }
 
   // Return collected data (VMs, Containers) for this node from this endpoint
@@ -552,12 +562,16 @@ async function fetchDiscoveryData() {
             throw new Error("Could not determine node name from /version.");
           }
         } catch (discoveryError) {
-          console.error(`[Discovery Cycle - ${endpointName}] Single node discovery failed: ${discoveryError.message}. Cannot proceed for this endpoint.`);
+          // Add status code to error log
+          const status = discoveryError.response?.status ? ` (Status: ${discoveryError.response.status})` : '';
+          console.error(`[Discovery Cycle - ${endpointName}] Single node discovery failed${status}: ${discoveryError.message}. Cannot proceed for this endpoint.`);
           return { status: 'rejected', value: null, endpointId: endpointId, reason: discoveryError }; // Indicate failure for this endpoint
         }
       }
     } catch (error) {
-      console.warn(`[Discovery Cycle - ${endpointName}] Failed to fetch /nodes (${error.message}). Attempting single node discovery.`);
+      // Add status code to error log
+      const status = error.response?.status ? ` (Status: ${error.response.status})` : '';
+      console.warn(`[Discovery Cycle - ${endpointName}] Failed to fetch /nodes${status} (${error.message}). Attempting single node discovery.`);
       try {
         const versionResponse = await apiClient.get('/version');
         const discoveredNodeName = versionResponse.data.data.node;
@@ -568,7 +582,9 @@ async function fetchDiscoveryData() {
             throw new Error("Could not determine node name from /version.");
         }
       } catch (discoveryError) {
-          console.error(`[Discovery Cycle - ${endpointName}] Single node discovery failed after /nodes error: ${discoveryError.message}. Cannot proceed for this endpoint.`);
+          // Add status code to error log
+          const status = discoveryError.response?.status ? ` (Status: ${discoveryError.response.status})` : '';
+          console.error(`[Discovery Cycle - ${endpointName}] Single node discovery failed after /nodes error${status}: ${discoveryError.message}. Cannot proceed for this endpoint.`);
            return { status: 'rejected', value: null, endpointId: endpointId, reason: discoveryError }; // Indicate failure for this endpoint
       }
     }
@@ -592,7 +608,9 @@ async function fetchDiscoveryData() {
           return statusData;
 
       } catch (statusError) {
-           console.warn(`[Discovery Cycle - ${endpointName}] Could not fetch status for node ${nodeName}: ${statusError.message}`);
+           // Add status code to error log
+           const status = statusError.response?.status ? ` (Status: ${statusError.response.status})` : '';
+           console.warn(`[Discovery Cycle - ${endpointName}] Could not fetch status for node ${nodeName}${status}: ${statusError.message}`);
            const basicInfo = basicNodeInfo.find(n => n.node === nodeName);
            // Return a synthesized offline status object
            return {
@@ -643,7 +661,9 @@ async function fetchDiscoveryData() {
          // Simplified return, type/endpointId added in fetchDataForNode
          return nodeGuestData; 
       } catch (guestError) {
-          console.error(`[Discovery Cycle - ${endpointName}] Error fetching guest data for node ${nodeName}: ${guestError.message}`);
+          // Add status code to error log
+          const status = guestError.response?.status ? ` (Status: ${guestError.response.status})` : '';
+          console.error(`[Discovery Cycle - ${endpointName}] Error fetching guest data for node ${nodeName}${status}: ${guestError.message}`);
           return { vms: [], containers: [] }; // Return empty on error for this node
       }
     });
@@ -681,7 +701,9 @@ async function fetchDiscoveryData() {
       }
   });
 
-  console.log(`[Discovery Cycle] Aggregated results. Total: ${aggregatedResult.nodes.length} nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} containers across ${endpointIds.length} configured endpoints.`);
+  if (DEBUG_METRICS) {
+    console.log(`[Discovery Cycle] Aggregated results. Total: ${aggregatedResult.nodes.length} nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} containers across ${endpointIds.length} configured endpoints.`);
+  }
   return aggregatedResult;
 }
 
@@ -752,11 +774,13 @@ async function fetchMetricsData(runningVms, runningContainers) {
                             return metricData;
                         } catch (err) {
                             // Log error but don't crash the whole cycle
+                             // Add status code to error log
+                            const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
                             // Check if error is due to guest being stopped (400 Bad Request often indicates this for status/current)
                             if (err.response && err.response.status === 400) {
-                                console.warn(`[Metrics Cycle - ${endpointName}] Guest ${type} ${vmid} (${guestName}) on node ${nodeName} might be stopped or inaccessible. Skipping metrics.`);
+                                console.warn(`[Metrics Cycle - ${endpointName}] Guest ${type} ${vmid} (${guestName}) on node ${nodeName} might be stopped or inaccessible (Status: 400). Skipping metrics.`);
                             } else {
-                                console.error(`[Metrics Cycle - ${endpointName}] Failed to get metrics for ${type} ${vmid} (${guestName}) on node ${nodeName}: ${err.message}`);
+                                console.error(`[Metrics Cycle - ${endpointName}] Failed to get metrics for ${type} ${vmid} (${guestName}) on node ${nodeName}${status}: ${err.message}`);
                             }
                             return null; // Return null on error for this specific guest
                         }
@@ -777,7 +801,9 @@ async function fetchMetricsData(runningVms, runningContainers) {
         // else if (result.status === 'rejected') { console.error(...) }
     });
 
-    console.log(`[Metrics Cycle] Completed. Fetched metrics for ${allMetrics.length} running guests.`);
+    if (DEBUG_METRICS) {
+        console.log(`[Metrics Cycle] Completed. Fetched metrics for ${allMetrics.length} running guests.`);
+    }
     return allMetrics;
 }
 
@@ -827,21 +853,18 @@ async function runDiscoveryCycle() {
     currentNodes = discoveryData.nodes;
     currentVms = discoveryData.vms;
     currentContainers = discoveryData.containers;
-    // Reset metrics here, let the metric cycle fetch them based on new guest list
-    currentMetrics = []; // Clear metrics, let metric cycle populate
 
     // Emit combined data only if clients are connected
     if (io.engine.clientsCount > 0) {
-        console.log('[Discovery Cycle] Emitting updated structural data.');
+        if (DEBUG_METRICS) {
+             console.log('[Discovery Cycle] Emitting updated structural data.');
+        }
         io.emit('rawData', {
             nodes: currentNodes,
             vms: currentVms,
             containers: currentContainers,
             metrics: currentMetrics // Send latest (potentially empty) metrics
         });
-        // Trigger metrics immediately after discovery if needed?
-        // We should let the scheduled metric cycle run instead to avoid races
-        // if (!isMetricsRunning) runMetricCycle(); 
     }
   } catch (error) {
       console.error(`[Discovery Cycle] Error during execution: ${error.message}`, error.stack);
