@@ -222,9 +222,9 @@ perform_update() {
     fi
 
     print_info "Re-installing npm dependencies (root)..."
-    if ! npm install --omit=dev --unsafe-perm > /dev/null 2>&1; then
+    # Keep --omit=dev here, we'll install cli separately
+    if ! npm install --omit=dev --unsafe-perm > /dev/null 2>&1; then 
         print_warning "Failed to install root npm dependencies during update. Continuing..."
-        # Decide if this is fatal or just a warning
     else
         print_success "Root dependencies updated."
     fi
@@ -239,7 +239,24 @@ perform_update() {
     fi
     cd .. # Back to PULSE_DIR
 
-    set_permissions # Ensure permissions are correct after update
+    # Explicitly install tailwindcss cli required for build
+    print_info "Installing Tailwind CSS CLI for build..."
+    if ! npm install @tailwindcss/cli --no-save > /dev/null 2>&1; then # --no-save avoids modifying package-lock.json unnecessarily
+        print_error "Failed to install @tailwindcss/cli."
+        return 1
+    fi
+
+    # Build CSS after dependencies
+    print_info "Building CSS assets..."
+    if ! npm run build:css > /dev/null 2>&1; then
+        print_error "Failed to build CSS assets."
+        # Potentially return 1 here if CSS build failure is critical
+        return 1
+    else
+        print_success "CSS assets built."
+    fi
+
+    set_permissions # Ensure permissions are correct after update and build
 
     # Ensure the systemd service is configured correctly before restarting
     print_info "Ensuring systemd service ($SERVICE_NAME) is configured..."
@@ -804,7 +821,31 @@ case "$INSTALL_MODE" in
             fi
 
             install_npm_deps || exit 1
-            set_permissions || exit 1
+            # Explicitly install tailwindcss cli required for build
+            print_info "Installing Tailwind CSS CLI for build..."
+            # Need to cd first
+            cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before installing CLI"; exit 1; }
+            if ! npm install @tailwindcss/cli --no-save > /dev/null 2>&1; then # --no-save avoids modifying package-lock.json unnecessarily
+                print_error "Failed to install @tailwindcss/cli."
+                cd .. # Go back if error
+                exit 1
+            fi
+            cd .. # Go back to previous directory
+
+            # Build CSS after dependencies
+            print_info "Building CSS assets..."
+            cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before building CSS"; exit 1; }
+            if ! npm run build:css > /dev/null 2>&1; then
+                print_error "Failed to build CSS assets."
+                # Potentially exit 1 here if CSS build failure is critical
+                cd ..
+                exit 1
+            else
+                print_success "CSS assets built."
+            fi
+             cd .. # Go back to previous directory
+
+            set_permissions || exit 1 # Set permissions AFTER building css
             configure_environment || exit 1 # Prompt user for details
             setup_systemd_service || exit 1 # Create, enable, start service
             final_instructions
