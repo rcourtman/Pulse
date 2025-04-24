@@ -171,6 +171,49 @@ docker compose down
 
 *Note: If you modify the `server/.env` file after the container is already running, you may need to restart the container for the changes to take effect. You can do this by running `docker compose down` followed by `docker compose up -d`, or by using `docker compose up -d --force-recreate`.*
 
+### Alternative: Quick Start with Inline Variables
+
+If you prefer not to use a separate `.env` file, you can define the environment variables directly within a `docker-compose.yml` file. This is useful for a quick test or simple deployments.
+
+1.  Save the following content as `docker-compose.yml`.
+2.  **Replace the placeholder values** for `PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, and `PROXMOX_TOKEN_SECRET` with your actual Proxmox credentials.
+3.  Run `docker compose up -d` in the same directory as the file.
+4.  Access the dashboard at `http://<your-host-ip>:7655`.
+
+```yaml
+version: '3.8'
+
+services:
+  pulse:
+    image: rcourtman/pulse:latest
+    container_name: pulse_monitor
+    restart: unless-stopped
+    ports:
+      - "7655:7655" # Map container port 7655 to host port 7655
+    environment:
+      # --- Required Proxmox Connection Details ---
+      # Replace placeholders with your actual values
+      PROXMOX_HOST: "https://your-proxmox-ip-or-hostname:8006"
+      PROXMOX_TOKEN_ID: "your-user@pam!your-token-name"
+      PROXMOX_TOKEN_SECRET: "your-api-token-secret-uuid"
+
+      # --- Optional Settings ---
+      # Set to "true" if your Proxmox uses self-signed SSL certificates
+      PROXMOX_ALLOW_SELF_SIGNED_CERTS: "false"
+      # Define additional endpoints if needed (PROXMOX_HOST_2, etc.)
+      # PROXMOX_HOST_2: "https://other-proxmox-ip:8006"
+      # PROXMOX_TOKEN_ID_2: "user2@pam!token2"
+      # PROXMOX_TOKEN_SECRET_2: "secret-uuid-2"
+
+    # Optional: Mount a local directory for potential future config needs
+    # volumes:
+    #   - ./pulse_config:/config
+
+networks:
+  default:
+    driver: bridge
+```
+
 ## 🚀 Running with LXC Installation Script
 
 For installation within a Proxmox VE LXC container, a convenient script is provided to set up Pulse inside an **existing** LXC container (Debian/Ubuntu based). This script automates dependency installation, configuration, and setting up a systemd service.
