@@ -767,10 +767,10 @@ document.addEventListener('DOMContentLoaded', function() {
           <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-3/12">Storage</th>
           <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-2/12">Content</th>
           <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Type</th>
-          <th class="text-center p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-[80px]">Shared</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-[80px]">Shared</th>
           <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-[150px]">Usage</th>
-          <th class="text-right p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Avail</th>
-          <th class="text-right p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Total</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Avail</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Total</th>
         </tr>
       `;
     table.appendChild(thead);
@@ -1724,7 +1724,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-100 dark:bg-gray-700/50 sticky top-0"> 
                     <tr>
                         <th scope="col" class="px-4 py-2 text-left font-semibold">${idColumnHeader}</th>
-                        <th scope="col" class="px-4 py-2 text-center font-semibold">Status</th>
+                        <th scope="col" class="px-4 py-2 text-left font-semibold">Status</th>
                         <th scope="col" class="px-4 py-2 text-left font-semibold">Start Time</th>
                         <th scope="col" class="px-4 py-2 text-left font-semibold">Duration</th>
                         <th scope="col" class="px-4 py-2 text-left font-semibold">UPID</th>
