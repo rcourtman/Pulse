@@ -450,7 +450,7 @@ app.use(express.json());
 const publicDir = path.join(__dirname, '../src/public');
 
 // Serve static files (CSS, JS, images) from the public directory
-app.use(express.static(publicDir));
+app.use(express.static(publicDir, { index: false }));
 
 // Route to serve the main HTML file for the root path
 app.get('/', (req, res) => {
