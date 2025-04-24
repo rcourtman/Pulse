@@ -841,13 +841,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper: Calculates rate, returns null if invalid/insufficient data
     function calculateAverageRate(historyArray, key) {
       if (!historyArray || historyArray.length < 2) return null;
-      const validHistory = historyArray.filter(entry =>
-          typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
-          typeof entry[key] === 'number' && !isNaN(entry[key])
-      );
-      // ---> ADDED: Log the filtered history <---\
-      console.log(`[calculateAverageRate - ${key}] Filtered validHistory (${validHistory.length} entries):`, validHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
-      // ---> END ADDED SECTION <---\
+      // ---> MODIFIED: Log raw input array and skip filtering for now <---
+      const validHistory = historyArray; // Use the raw array directly
+      console.log(`[calculateAverageRate - ${key}] Received historyArray (${historyArray.length} entries):`, historyArray.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
+      // ---> END MODIFIED SECTION <---
+      // ---> REMOVED previous filtering logic and associated log <---
+      // const validHistory = historyArray.filter(entry =>
+      //     typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
+      //     typeof entry[key] === 'number' && !isNaN(entry[key])
+      // );
+      // console.log(`[calculateAverageRate - ${key}] Filtered validHistory (${validHistory.length} entries):`, validHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
+      // ---> END REMOVED SECTION <---
       if (validHistory.length < 2) return null;
       const oldest = validHistory[0];
       const newest = validHistory[validHistory.length - 1];
@@ -1360,7 +1364,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // console.log('[UI Interval] Updating UI tables...');
       updateAllUITables();
     }
-  }, 2000); // Update UI every 2 seconds
+  }, 2500); // Update UI every 2.5 seconds (was 2000)
 
   // Fetch storage data periodically (e.g., every 10 seconds)
   setInterval(fetchStorageData, 10000);
