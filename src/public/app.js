@@ -1597,18 +1597,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
      const createTaskTableHTML = (tableId, title, idColumnHeader) => `
         <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Recent ${title} Tasks</h4>
-        // ---> REMOVE: max-h and overflow <---
         <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
-        // ---> END REMOVE <---
             <table id="${tableId}" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
                 <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-100 dark:bg-gray-700/50 sticky top-0"> 
                     <tr>
-                        // ---> REMOVE: sortable classes <---
                         <th scope="col" class="px-4 py-2 text-left font-semibold">${idColumnHeader}</th>
                         <th scope="col" class="px-4 py-2 text-center font-semibold">Status</th>
                         <th scope="col" class="px-4 py-2 text-left font-semibold">Start Time</th>
                         <th scope="col" class="px-4 py-2 text-left font-semibold">Duration</th>
-                        // ---> END REMOVE <---
                         <th scope="col" class="px-4 py-2 text-left font-semibold">UPID</th>
                     </tr>
                 </thead>
