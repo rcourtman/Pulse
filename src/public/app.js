@@ -207,18 +207,14 @@ document.addEventListener('DOMContentLoaded', function() {
       if (!tableElement) return; // Guard against missing table
 
       // ---> CHANGE: Get sort state key from tableId <---
-      // const table = tableId.split('-')[0]; // Old way, assumes simple pattern
       let tableKey;
       if (tableId.startsWith('pbs-')) {
-          // Extract the specific PBS key (e.g., 'pbsBackup', 'pbsVerify')
-           // Match pbs-recent-<type>-tasks-table-<instanceId>
           const match = tableId.match(/pbs-recent-(backup|verify|sync|prunegc)-tasks-table-/);
           if (match && match[1]) {
-              // Construct key like 'pbsBackup', 'pbsVerify', etc.
               tableKey = `pbs${match[1].charAt(0).toUpperCase() + match[1].slice(1)}`; 
           } else {
               console.error(`[updateSortUI] Could not extract PBS key from tableId: ${tableId}`);
-              return; // Cannot proceed without key
+              return; 
           }
       } else if (tableId.startsWith('nodes-')) {
           tableKey = 'nodes';
@@ -226,32 +222,32 @@ document.addEventListener('DOMContentLoaded', function() {
           tableKey = 'main';
       } else {
            console.error(`[updateSortUI] Unknown table type for tableId: ${tableId}`);
-           return; // Cannot proceed without key
+           return; 
       }
-      // console.log(`[updateSortUI] Determined tableKey: '${tableKey}' for tableId: '${tableId}'`); // Optional Debug log
       // ---> END CHANGE <---
 
+      // ---> FIX: Move headers declaration up <---
       const headers = tableElement.querySelectorAll('th.sortable');
-      // ---> CHANGE: Use the derived tableKey <---
-      const currentSort = sortState[tableKey]; 
-      // ---> END CHANGE <---
+      // ---> END FIX <---
 
-      // ---> ADD GUARD: Check if currentSort is defined before accessing properties
+      const currentSort = sortState[tableKey]; 
+
+      // ---> REMOVE DEBUG LOG <---
+      // console.log(`[updateSortUI - Check] tableKey='${tableKey}', typeof sortState[tableKey]=${typeof sortState[tableKey]}, value=`, sortState[tableKey]);
+      // ---> END REMOVE DEBUG LOG <---
+
       if (!currentSort) {
           console.error(`[updateSortUI] No sort state found for key: '${tableKey}' (derived from tableId: ${tableId})`);
-          console.log('[updateSortUI] Current sortState:', JSON.stringify(sortState)); // Log the state for debugging
-          return; // Cannot proceed if sort state doesn't exist
+          console.log('[updateSortUI] Current sortState:', JSON.stringify(sortState)); 
+          return; 
       }
-      // ---> END GUARD <---
 
       headers.forEach(header => {
           header.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
           const arrow = header.querySelector('.sort-arrow');
           if (arrow) arrow.remove();
 
-          // The error occurred here because currentSort was undefined
-          // Now currentSort is guaranteed to exist due to the guard above.
-          if (header === clickedHeader && currentSort.column) { // Only highlight/arrow if a sort is active for this key
+          if (header === clickedHeader && currentSort.column) { 
               header.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
               const arrowSpan = document.createElement('span');
               arrowSpan.className = 'sort-arrow ml-1';
@@ -1474,7 +1470,6 @@ document.addEventListener('DOMContentLoaded', function() {
   const formatPbsTimestamp = (ts) => {
       if (!ts) return 'Never';
       try {
-          // Use Intl for locale-aware, shorter format
           return new Intl.DateTimeFormat(undefined, { 
               year: 'numeric', month: 'numeric', day: 'numeric',
               hour: 'numeric', minute: 'numeric'
@@ -1497,19 +1492,18 @@ document.addEventListener('DOMContentLoaded', function() {
       if (d > 0) parts.push(d + 'd');
       if (h > 0) parts.push(h + 'h');
       if (m > 0) parts.push(m + 'm');
-      if (s > 0 || parts.length === 0) parts.push(s + 's'); // Show seconds if duration is < 1m
+      if (s > 0 || parts.length === 0) parts.push(s + 's'); 
       
-      return parts.slice(0, 2).join(''); // Show max 2 units (e.g., 1d2h, 3h5m, 45m10s, 3s)
+      return parts.slice(0, 2).join(''); 
   };
 
   const getPbsStatusIcon = (status) => {
       if (status === 'OK') {
-          return '<span class="text-green-500 dark:text-green-400" title="OK">✓</span>'; // Checkmark
+          return '<span class="text-green-500 dark:text-green-400" title="OK">✓</span>'; 
       } else if (status === 'running') {
-           // Simple spinner (could be replaced with SVG)
           return '<span class="inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-blue-500" title="Running"></span>'; 
       } else if (status) {
-          return `<span class="text-red-500 dark:text-red-400 font-bold" title="${status}">✗</span>`; // Cross mark for errors
+          return `<span class="text-red-500 dark:text-red-400 font-bold" title="${status}">✗</span>`; 
       } else {
           return '<span class="text-gray-400" title="Unknown">?</span>';
       }
@@ -1517,7 +1511,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   const getPbsGcStatusText = (gcStatus) => {
     if (!gcStatus || gcStatus === 'unknown') return '<span class="text-xs text-gray-400">Unknown</span>';
-    // Basic coloring, can be enhanced
     let colorClass = 'text-gray-600 dark:text-gray-400';
     if (gcStatus.includes('error') || gcStatus.includes('failed')) {
         colorClass = 'text-red-500 dark:text-red-400';
@@ -1571,7 +1564,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     tbody.innerHTML = ''; // Clear previous content
 
-    const sortedTasks = sortPbsTasks(tasks, sortColumn, sortDirection);
+    const sortedTasks = sortPbsTasks(tasks, sortColumn, sortDirection); // Assumes sortPbsTasks is moved up
 
     if (!sortedTasks || sortedTasks.length === 0) {
         tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">No recent tasks found (last 7 days).</td></tr>`;
