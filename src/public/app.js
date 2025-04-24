@@ -846,12 +846,23 @@ document.addEventListener('DOMContentLoaded', function() {
           // Try to find the LATEST metric value directly from global scope
           // Note: This assumes processGuest has already found the base guest object
           // This is NOT a rate, just testing access to the current value
-          const currentMetric = (metricsData || []).find(m => historyArray && historyArray.length > 0 && m.id === historyArray[0]?.guestId_temp); // Need a way to get guest ID here
+          
+          // ---> REFINED: Debugging guestId access <---
+          let guestId = undefined;
+          if (historyArray && historyArray.length > 0 && historyArray[0]) {
+              console.log(`[calculateAverageRate - diskread DEBUG] historyArray[0]:`, historyArray[0]);
+              guestId = historyArray[0].guestId_temp;
+          } else {
+              console.log(`[calculateAverageRate - diskread DEBUG] historyArray or historyArray[0] is missing/empty.`);
+          }
+          // ---> END REFINED SECTION <---
+
+          const currentMetric = (metricsData || []).find(m => m.id === guestId); // Use refined guestId
           
           // HACK: Temporarily add guestId to history entries in processGuest
           // TODO: Remove this hack later
           const currentDiskRead = currentMetric?.current?.diskread;
-          console.log(`[calculateAverageRate - diskread DEBUG] Found currentMetric for ID ${historyArray[0]?.guestId_temp}:`, currentMetric);
+          console.log(`[calculateAverageRate - diskread DEBUG] Found currentMetric for ID ${guestId}:`, currentMetric);
           console.log(`[calculateAverageRate - diskread DEBUG] Returning current value: ${currentDiskRead ?? 'N/A'}`);
           return typeof currentDiskRead === 'number' && !isNaN(currentDiskRead) ? currentDiskRead : 0; // Return current value, not rate
       }
