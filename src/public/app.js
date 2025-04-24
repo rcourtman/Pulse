@@ -137,6 +137,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let filterStatus = 'all'; // New state variable for status filter
   let initialDataReceived = false; // Flag to control initial rendering
   let storageData = {}; // Add state for storage data
+  let pbsConfigured = false; // Flag to track if PBS is configured
 
   // --- Global Helper for Text Progress Bar ---
   const createProgressTextBarHTML = (percent, text, colorClass) => {
@@ -395,14 +396,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Calculate percentages safely using the correct data structure
       const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
-      // Use node.memory object
-      const memUsed = node.memory?.used || 0;
-      const memTotal = node.memory?.total || 0;
+      // ---> Use correct top-level properties for memory and disk <---
+      const memUsed = node.mem || 0;       // Use node.mem
+      const memTotal = node.maxmem || 0;     // Use node.maxmem
       const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
-      // Use node.rootfs object for disk
-      const diskUsed = node.rootfs?.used || 0;
-      const diskTotal = node.rootfs?.total || 0;
+      // ---> Use node.rootfs object for disk
+      const diskUsed = node.disk || 0;       // Use node.disk
+      const diskTotal = node.maxdisk || 0;   // Use node.maxdisk
       const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0; 
+      // ---> END MODIFICATION <---
 
       // Get color classes for bars
       const cpuColorClass = getUsageColor(cpuPercent);
@@ -551,7 +553,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const contentDiv = document.getElementById('storage-info-content');
     if (!contentDiv) return;
     contentDiv.innerHTML = ''; // Clear previous content
-    // Remove container styling, as it's now handled by the parent div in HTML
     contentDiv.className = ''; 
 
     // Check for global error first
@@ -561,11 +562,27 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    if (!storage || Object.keys(storage).length === 0) {
-      // Empty message styling - remove card styles, just use text/padding
-      contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data available or failed to load for any node.</p>';
+    // ---> REFINED CHECK for empty or all-error state <---
+    const nodeKeys = storage ? Object.keys(storage) : [];
+    const hasValidNodeData = nodeKeys.length > 0 && nodeKeys.some(key => Array.isArray(storage[key]));
+    const allNodesAreErrors = nodeKeys.length > 0 && nodeKeys.every(key => storage[key] && storage[key].error);
+
+    if (nodeKeys.length === 0) {
+      // Truly empty or null/undefined
+      contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data received from server.</p>';
+      return;
+    } else if (allNodesAreErrors) {
+      // All nodes reported fetch errors
+      contentDiv.innerHTML = '<p class="text-red-600 dark:text-red-400 p-4 text-center">Failed to load storage data for all nodes. Check server logs.</p>';
+      return;
+    } else if (!hasValidNodeData) {
+      // Contains keys, but none have valid array data (maybe unexpected format?)
+      contentDiv.innerHTML = '<p class="text-yellow-600 dark:text-yellow-400 p-4 text-center">Received unexpected storage data format from server.</p>';
       return;
     }
+    // ---> END REFINED CHECK <---
+
+    // If we reach here, there's at least one node with potentially valid (even if empty) storage data array.
 
     // --- Helper function for Storage Icons ---
     function getStorageTypeIcon(type) {
@@ -1069,15 +1086,42 @@ document.addEventListener('DOMContentLoaded', function() {
         nodesData = data.nodes || [];
         vmsData = data.vms || [];
         containersData = data.containers || [];
-        metricsData = data.metrics || [];
+        // ---> REMOVED incorrect update to storageData <---
+        // storageData = data.storage || {}; // DO NOT UPDATE storage here
+        // ---> END REMOVAL <---
+
+        // ---> MODIFIED: Only update metrics if present in data <---
+        if (data.hasOwnProperty('metrics')) {
+             metricsData = data.metrics || [];
+             if (data.metrics && data.metrics.length > 0) {
+                 console.log(`[socket.on("rawData")] Updated metricsData (${metricsData.length} entries).`);
+             }
+        } else {
+            // If metrics key is missing (e.g., from discovery cycle), DO NOT update metricsData
+             // ---> REMOVED DEBUG_METRICS check <---
+            // console.log('[socket.on("rawData")] Metrics key missing, preserving existing metricsData.');
+        }
+        // ---> END MODIFICATION <---
+
+        let pbsStatusReceived = false; // Track if we got PBS status in *this* update
         // Only update pbsData if it exists in the incoming data
         if (data.hasOwnProperty('pbs')) {
           pbsData = data.pbs;
+          pbsStatusReceived = true;
+          // Determine configuration status based on the *first* received status
+          if (!initialDataReceived) {
+             pbsConfigured = pbsData.status !== 'unconfigured';
+          }
         } else {
             // If pbs field is missing, KEEP the existing pbsData state.
+            // If this is the *very first* data load and pbs is missing, assume unconfigured
+            if (!initialDataReceived && !pbsStatusReceived) {
+                pbsConfigured = false;
+                pbsData = { status: 'unconfigured' }; // Set a default state
+            }
             // We could optionally default it only if pbsData is currently null/undefined,
             // but preserving the last known state is safer.
-            // pbsData = pbsData || { status: 'unconfigured' }; 
+            // pbsData = pbsData || { status: 'unconfigured' };
         }
         console.log('[socket.on("rawData")] Parsed data and updated stores');
 
@@ -1085,8 +1129,9 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!initialDataReceived) {
           initialDataReceived = true;
           console.log('[socket.on("rawData")] Initial data received, enabling UI updates.');
+
           // Optional: Trigger immediate first render instead of waiting for interval
-          // updateAllUITables(); 
+          // updateAllUITables();
         }
 
         // --- REMOVED UI update calls from here ---
@@ -1100,6 +1145,19 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('Error processing received rawData:', e, jsonData);
     }
   });
+
+  // ---> NEW: Listener for initial PBS status <---
+  socket.on('pbsInitialStatus', (data) => {
+      console.log('[socket] Received pbsInitialStatus:', data);
+      if (data && data.status) {
+          // Update the UI immediately with the basic configuration status
+          // We pass a minimal object because full data isn't available yet
+          updatePbsInfo({ status: data.status }); 
+          // Optionally update pbsConfigured flag if still needed elsewhere
+          pbsConfigured = data.status !== 'unconfigured';
+      }
+  });
+  // ---> END NEW LISTENER <---
 
   function requestFullData() {
       console.log("Requesting full data...");
@@ -1197,23 +1255,53 @@ document.addEventListener('DOMContentLoaded', function() {
   async function fetchStorageData() {
     try {
       const response = await fetch('/api/storage');
-      // Removed the response.ok check here, as we want to parse the JSON even for 500 errors
-      // to check for the globalError property.
-      storageData = await response.json();
-      // console.log('[Storage Fetch] Fetched storage data:', storageData);
-      
-      // If the server responded with an error status but *didn't* include our globalError JSON,
-      // synthesize an error state for the UI.
-      if (!response.ok && !storageData.globalError) {
-          console.error('Error fetching storage data: Server returned status', response.status, 'but no globalError field.');
-          storageData = { globalError: `Failed to load storage data (Status: ${response.status})` };
-      } 
-    } catch (error) {
-      console.error('Error fetching or parsing storage data:', error);
-      // Network error or JSON parsing error
-      storageData = { globalError: 'Failed to load storage data due to a network or parsing error.' }; 
+      // Check if the response was successful (status code 200-299)
+      if (!response.ok) {
+          // Try to parse error json from server if possible, otherwise use status text
+          let serverErrorMsg = `Server responded with status: ${response.status} ${response.statusText}`;
+          try {
+              const errorJson = await response.json();
+              if (errorJson && errorJson.globalError) {
+                  serverErrorMsg = errorJson.globalError;
+              } else if (errorJson) {
+                   serverErrorMsg += ` | Body: ${JSON.stringify(errorJson)}`;
+              }
+          } catch (parseError) {
+              // Ignore parsing error if response is not JSON
+          }
+          throw new Error(serverErrorMsg); // Throw error to be caught below
+      }
+
+      // Only parse and update global storageData if response.ok
+      const fetchedData = await response.json();
+      // ---> MODIFIED: Only update global state on success <---
+      // ---> ADDED: Log successfully fetched data <---
+      console.log('[Storage Fetch] Successfully fetched and parsed data:', fetchedData);
+      // ---> END ADDED SECTION <---
+      storageData = fetchedData; // Update the global variable
+      // console.log('[Storage Fetch] Successfully updated storageData.'); // Optional debug log
+      // ---> END MODIFICATION <---
+
+    } catch (error) { // Catches fetch errors (network) and the thrown error above
+      // ---> MODIFIED: Improved error logging (No change to logic here, just logging) <---
+      let finalErrorMessage = 'Failed to load storage data due to an unknown error.';
+      if (error instanceof TypeError) {
+        // Likely a network error (failed fetch)
+        finalErrorMessage = `Failed to load storage data due to a network error: ${error.message}`;
+        console.error('Network error during storage fetch:', error);
+      } else {
+        // Likely an error thrown from the !response.ok block or JSON parsing error
+        finalErrorMessage = error.message;
+        console.error('Error processing storage response:', error);
+      }
+      // ---> MODIFIED: Don't update global storageData on error <---
+      // storageData = { globalError: finalErrorMessage }; 
+      // Just log the error, don't update the global state which would clear the UI
+      console.error(`Storage fetch failed, preserving previous data. Error: ${finalErrorMessage}`);
+      // ---> END MODIFICATION <---
     }
-    // We don't call updateStorageInfo here anymore, the main interval handles it.
+    // Update UI in the main interval now
+    // updateStorageInfo(storageData);
   }
 
   setInterval(() => {
@@ -1261,7 +1349,15 @@ document.addEventListener('DOMContentLoaded', function() {
     // Update Connection Status
     let statusText = 'Loading...';
     statusElement.className = 'mb-3 text-sm'; // Reset classes
-    if (pbs.status === 'ok') {
+    // ---> ADDED 'configured' state handling <---
+    if (pbs.status === 'configured') {
+        statusText = `PBS Configured, attempting connection...`;
+        statusElement.classList.add('text-gray-600', 'dark:text-gray-400');
+        // Keep sections hidden until actual 'ok' or 'error' status arrives
+        dsSection.classList.add('hidden');
+        tasksSection.classList.add('hidden');
+    } else if (pbs.status === 'ok') {
+    // ---> END ADDED SECTION <---
         statusText = `Connected to PBS: ${pbs.nodeName || 'Unknown Node'}`;
         statusElement.classList.add('text-green-600', 'dark:text-green-400');
         dsSection.classList.remove('hidden');

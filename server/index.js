@@ -541,6 +541,9 @@ app.get('/api/storage', async (req, res) => {
      console.warn(`/api/storage: Failed to fetch any storage data from any configured endpoint.`);
   }
   
+  // ---> ADDED: Log the final aggregated data before sending <---
+  console.log(`[/api/storage] Sending response with ${Object.keys(aggregatedStorageData).length} node keys. Data:`, JSON.stringify(aggregatedStorageData, null, 2));
+  // ---> END ADDED SECTION <---
   res.json(aggregatedStorageData); // Return the aggregated data (or empty object if all failed)
 });
 // --- End Storage API endpoint ---
@@ -981,24 +984,44 @@ async function fetchMetricsData(runningVms, runningContainers) {
 // --- Socket.io connection handling (Initial data fetch needs update) ---
 io.on('connection', (socket) => {
   console.log(`[socket] Client connected. Total clients: ${io.engine.clientsCount}`);
-  
-  // Send initial data immediately if available
+
+  // ---> NEW: Send initial PBS status immediately <---
+  let initialPbsStatus = 'unconfigured';
+  if (pbsConfig) {
+      initialPbsStatus = 'configured'; // Assume configured if ENV vars are set
+      // We don't know the *actual* connection status yet, 
+      // discovery cycle will provide 'ok' or 'error' later.
+  }
+  console.log(`[socket] Sending initial PBS status to new client: ${initialPbsStatus}`);
+  socket.emit('pbsInitialStatus', { status: initialPbsStatus });
+  // ---> END NEW SECTION <---
+
+  // Send initial PVE/Metric data immediately if available
   if (currentNodes.length > 0 || currentVms.length > 0 || currentContainers.length > 0) {
-    console.log('[socket] Sending existing data to new client.');
+    console.log('[socket] Sending existing PVE/Metric data to new client.');
+    // Send existing data but ensure pbs status reflects the initial one sent above,
+    // as the global pbsData might not be initialized or might be stale if discovery hasn't run.
+    let pbsToSend = pbsData || { tasks: {}, datastores: [], nodeName: null, status: initialPbsStatus };
+    // Make sure the status aligns with what we just sent in pbsInitialStatus if global state is uninit
+    if (pbsToSend.status === 'initializing') {
+        pbsToSend.status = initialPbsStatus;
+    }
+
     socket.emit('rawData', {
         nodes: currentNodes,
         vms: currentVms,
         containers: currentContainers,
-        metrics: currentMetrics
+        metrics: currentMetrics,
+        pbs: pbsToSend // Send current global PBS state or initial status
     });
   } else {
     // If no data yet, trigger a discovery cycle (if not already running)
-    console.log('[socket] No data yet, triggering initial discovery for new client...');
+    console.log('[socket] No PVE data yet, triggering initial discovery for new client...');
     if (!isDiscoveryRunning) {
-        runDiscoveryCycle(); 
+        runDiscoveryCycle();
     }
   }
-  
+
   // Handle disconnect
   socket.on('disconnect', () => {
     setTimeout(() => {
@@ -1042,7 +1065,6 @@ async function runDiscoveryCycle() {
             nodes: currentNodes,
             vms: currentVms,
             containers: currentContainers,
-            metrics: currentMetrics, // Use the current global metrics state
             pbs: pbsData          // Use the updated global pbs state
         });
     }
@@ -1078,22 +1100,38 @@ async function runMetricCycle() {
     if (runningVms.length > 0 || runningContainers.length > 0) {
         // Fetch metrics using the dedicated function
         const fetchedMetrics = await fetchMetricsData(runningVms, runningContainers);
-        currentMetrics = fetchedMetrics; // Update global metrics state
-        // Emit combined data
-        // console.log('[Metrics Cycle] Emitting updated metrics data.'); // Reduced verbosity
+
+        // ---> MODIFIED: Avoid clearing metrics on transient fetch failure <---
+        if (fetchedMetrics && fetchedMetrics.length > 0) {
+            // Success: Update metrics if data was actually returned
+            currentMetrics = fetchedMetrics; 
+             console.log(`[Metrics Cycle] Successfully updated metrics for ${currentMetrics.length} guests.`);
+        } else if (fetchedMetrics && fetchedMetrics.length === 0) {
+            // Fetch likely failed temporarily, keep previous metrics
+            console.warn('[Metrics Cycle] fetchMetricsData returned empty array despite running guests. Preserving previous metrics state.');
+            // Do NOT update currentMetrics = [] here
+        } else {
+            // Handle unexpected null/undefined return from fetchMetricsData (shouldn't happen)
+             console.error('[Metrics Cycle] fetchMetricsData returned unexpected value. Preserving previous metrics state.', fetchedMetrics);
+        }
+        // ---> END MODIFICATION <---
+
+        // Emit combined data (always emit, even if metrics weren't updated this cycle)
         io.emit('rawData', {
             nodes: currentNodes, // Send current nodes/vms/cts state
             vms: currentVms,
             containers: currentContainers,
+            pbs: pbsData,          // ADDED: Include current PBS state
             metrics: currentMetrics // Send the newly fetched metrics
         });
     } else {
         // console.log('[Metrics Cycle] No running guests found, skipping metric fetch.');
-        currentMetrics = []; // Clear metrics if no guests running
+        currentMetrics = []; // Clear metrics if no guests running - THIS IS CORRECT
          // Emit state update even if metrics were cleared
         io.emit('rawData', {
             nodes: currentNodes, vms: currentVms,
-            containers: currentContainers, metrics: currentMetrics
+            containers: currentContainers, metrics: currentMetrics,
+            pbs: pbsData // ADDED: Include current PBS state
         });
     }
 
