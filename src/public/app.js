@@ -840,6 +840,23 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Helper: Calculates rate, returns null if invalid/insufficient data
     function calculateAverageRate(historyArray, key) {
+
+      // ---> MODIFIED: Special handling for diskread debugging <---
+      if (key === 'diskread') {
+          // Try to find the LATEST metric value directly from global scope
+          // Note: This assumes processGuest has already found the base guest object
+          // This is NOT a rate, just testing access to the current value
+          const currentMetric = (metricsData || []).find(m => historyArray && historyArray.length > 0 && m.id === historyArray[0]?.guestId_temp); // Need a way to get guest ID here
+          
+          // HACK: Temporarily add guestId to history entries in processGuest
+          // TODO: Remove this hack later
+          const currentDiskRead = currentMetric?.current?.diskread;
+          console.log(`[calculateAverageRate - diskread DEBUG] Found currentMetric for ID ${historyArray[0]?.guestId_temp}:`, currentMetric);
+          console.log(`[calculateAverageRate - diskread DEBUG] Returning current value: ${currentDiskRead ?? 'N/A'}`);
+          return typeof currentDiskRead === 'number' && !isNaN(currentDiskRead) ? currentDiskRead : 0; // Return current value, not rate
+      }
+      // ---> END MODIFIED SECTION <---
+
       if (!historyArray || historyArray.length < 2) return null;
       // ---> RESTORED: Filtering logic <---
       const validHistory = historyArray.filter(entry =>
