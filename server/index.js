@@ -541,9 +541,6 @@ app.get('/api/storage', async (req, res) => {
      console.warn(`/api/storage: Failed to fetch any storage data from any configured endpoint.`);
   }
   
-  // ---> ADDED: Log the final aggregated data before sending <---
-  console.log(`[/api/storage] Sending response with ${Object.keys(aggregatedStorageData).length} node keys. Data:`, JSON.stringify(aggregatedStorageData, null, 2));
-  // ---> END ADDED SECTION <---
   res.json(aggregatedStorageData); // Return the aggregated data (or empty object if all failed)
 });
 // --- End Storage API endpoint ---
@@ -934,6 +931,13 @@ async function fetchMetricsData(runningVms, runningContainers) {
                                 apiClient.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { params: { timeframe: 'hour', cf: 'AVERAGE' } }),
                                 apiClient.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/status/current`)
                             ]);
+
+                            // ---> ADDED: Log raw disk values from API <---
+                            const rawCurrentData = currentData?.data?.data || null;
+                            if (rawCurrentData) {
+                                console.log(`[Metrics Fetch - ${endpointName}/${nodeName}/${type}/${vmid}] Raw API current status: diskread=${rawCurrentData.diskread}, diskwrite=${rawCurrentData.diskwrite}`);
+                            }
+                            // ---> END ADDED SECTION <---
 
                             const metricData = {
                                 id: vmid,

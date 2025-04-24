@@ -850,6 +850,16 @@ document.addEventListener('DOMContentLoaded', function() {
       const newest = validHistory[validHistory.length - 1];
       const valueDiff = newest[key] - oldest[key];
       const timeDiff = (newest.timestamp - oldest.timestamp) / 1000;
+      // ---> ADDED: Log history details for diskread <---
+      if (key === 'diskread' || key === 'diskwrite') { // Log for both disk keys
+           // Log only a sample if history is long, to avoid flooding console
+           const sampleHistory = validHistory.length > 10 ? validHistory.slice(-10) : validHistory;
+           console.log(`[calculateAverageRate - ${key}] Valid history (${validHistory.length} entries):`, sampleHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
+      }
+      // ---> END ADDED SECTION <---
+      // ---> ADDED: Log rate calculation details <---
+      console.log(`[calculateAverageRate - ${key}] oldest=${oldest[key]}, newest=${newest[key]}, timeDiff=${timeDiff.toFixed(2)}s, valueDiff=${valueDiff}, rate=${timeDiff > 0 ? (valueDiff / timeDiff).toFixed(0) : 'N/A'}`);
+      // ---> END ADDED SECTION <---
       if (timeDiff <= 0) return 0;
       return valueDiff / timeDiff;
     }
@@ -866,9 +876,37 @@ document.addEventListener('DOMContentLoaded', function() {
         if (guest.status === 'running' && metrics && metrics.current) {
             // Only process metrics history for running guests with current metrics
             // console.log(`[dbg ${guest.vmid}] metrics.current:`, JSON.stringify(metrics.current)); // DEBUG: Keep commented for potential future use
+            
+            // ---> ADDED: Log metrics.current values just before use <---
+            console.log(`[processGuest - ${guest.vmid}] Using metrics.current: diskread=${metrics.current.diskread}, diskwrite=${metrics.current.diskwrite}`);
+            // ---> END ADDED SECTION <---
+            
             if (!dashboardHistory[guest.vmid]) dashboardHistory[guest.vmid] = [];
             const history = dashboardHistory[guest.vmid];
-            const currentDataPoint = { timestamp: Date.now(), ...metrics.current };
+            // ---> MODIFIED: Use explicit copy instead of spread <---
+            // const currentDataPoint = { timestamp: Date.now(), ...metrics.current };
+            const currentDataPoint = {
+                timestamp: Date.now(),
+                cpu: metrics.current.cpu,
+                mem: metrics.current.mem,
+                // mem_total: metrics.current.mem_total, // Optional, might not exist
+                disk: metrics.current.disk,
+                diskread: metrics.current.diskread, // Explicit copy
+                diskwrite: metrics.current.diskwrite, // Explicit copy
+                netin: metrics.current.netin,
+                netout: metrics.current.netout
+                // Add other necessary properties from metrics.current if needed for history
+            };
+            // ---> END MODIFICATION <---
+            // ---> ADDED: Log the created object's disk values <---
+            console.log(`[processGuest - ${guest.vmid}] Created currentDataPoint: diskread=${currentDataPoint.diskread}, diskwrite=${currentDataPoint.diskwrite}`);
+            // ---> END ADDED SECTION <---
+
+            // ---> REMOVED redundant metrics.current check and log <---
+            // if (metrics.current) {
+            //      console.log(`[refreshDashboardData - ${guest.vmid}] Current metrics received: diskread=${metrics.current.diskread}, diskwrite=${metrics.current.diskwrite}`);
+            // }
+            // ---> END REMOVED SECTION <---
             history.push(currentDataPoint);
             if (history.length > AVERAGING_WINDOW_SIZE) history.shift();
 
@@ -1275,9 +1313,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // Only parse and update global storageData if response.ok
       const fetchedData = await response.json();
       // ---> MODIFIED: Only update global state on success <---
-      // ---> ADDED: Log successfully fetched data <---
-      console.log('[Storage Fetch] Successfully fetched and parsed data:', fetchedData);
-      // ---> END ADDED SECTION <---
+      // ---> REMOVED: Log successfully fetched data <---
+      // console.log('[Storage Fetch] Successfully fetched and parsed data:', fetchedData);
+      // ---> END REMOVED SECTION <---
       storageData = fetchedData; // Update the global variable
       // console.log('[Storage Fetch] Successfully updated storageData.'); // Optional debug log
       // ---> END MODIFICATION <---
