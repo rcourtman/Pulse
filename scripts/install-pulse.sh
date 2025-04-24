@@ -195,7 +195,7 @@ perform_update() {
     git config --global --add safe.directory "$PULSE_DIR" > /dev/null 2>&1 || print_warning "Could not configure safe.directory for root user."
 
     print_info "Fetching latest changes from git (running as user $PULSE_USER)..."
-    if ! sudo -u "$PULSE_USER" git fetch origin; then
+    if ! sudo -u "$PULSE_USER" git fetch origin --tags; then # Ensure tags are fetched
         print_error "Failed to fetch latest changes from git."
         cd ..
         return 1
@@ -208,6 +208,10 @@ perform_update() {
         cd ..
         return 1
     fi
+
+    # Get the latest tag pointing to the current HEAD
+    local latest_tag
+    latest_tag=$(sudo -u "$PULSE_USER" git describe --tags --abbrev=0 HEAD 2>/dev/null)
 
     print_info "Cleaning repository (removing untracked files)..."
     # Remove untracked files and directories to ensure a clean state
@@ -253,7 +257,12 @@ perform_update() {
         return 1
     fi
 
-    print_success "Pulse updated successfully!"
+    # Use the detected tag in the success message
+    if [ -n "$latest_tag" ]; then
+      print_success "Pulse updated successfully to version $latest_tag!"
+    else
+      print_success "Pulse updated successfully!" # Fallback if tag detection failed
+    fi
     return 0
 }
 
