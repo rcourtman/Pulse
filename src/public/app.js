@@ -1070,7 +1070,15 @@ document.addEventListener('DOMContentLoaded', function() {
         vmsData = data.vms || [];
         containersData = data.containers || [];
         metricsData = data.metrics || [];
-        pbsData = data.pbs || { status: 'unconfigured' }; // Store PBS data, default if missing
+        // Only update pbsData if it exists in the incoming data
+        if (data.hasOwnProperty('pbs')) {
+          pbsData = data.pbs;
+        } else {
+            // If pbs field is missing, KEEP the existing pbsData state.
+            // We could optionally default it only if pbsData is currently null/undefined,
+            // but preserving the last known state is safer.
+            // pbsData = pbsData || { status: 'unconfigured' }; 
+        }
         console.log('[socket.on("rawData")] Parsed data and updated stores');
 
         // Set flag after first successful data parse
