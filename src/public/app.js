@@ -885,7 +885,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             // ---> Keep Ensure history exists check <---
             if (!dashboardHistory[guest.vmid] || !Array.isArray(dashboardHistory[guest.vmid])) {
-                console.log(`[processGuest - ${guest.vmid}] Initializing/Resetting history array.`);
+                // console.log(`[processGuest - ${guest.vmid}] Initializing/Resetting history array.`); // REMOVED THIS LOG
                 dashboardHistory[guest.vmid] = [];
             }
             // ---> END SECTION <---
