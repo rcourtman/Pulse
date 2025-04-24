@@ -841,138 +841,116 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper: Calculates rate, returns null if invalid/insufficient data
     function calculateAverageRate(historyArray, key) {
 
-      // ---> MODIFIED: Special handling for diskread debugging <---
-      if (key === 'diskread') {
-          // Try to find the LATEST metric value directly from global scope
-          // Note: This assumes processGuest has already found the base guest object
-          // This is NOT a rate, just testing access to the current value
-          
-          // ---> REFINED: Debugging guestId access <---
-          let guestId = undefined;
-          if (historyArray && historyArray.length > 0 && historyArray[0]) {
-              console.log(`[calculateAverageRate - diskread DEBUG] historyArray[0]:`, historyArray[0]);
-              guestId = historyArray[0].guestId_temp;
-          } else {
-              console.log(`[calculateAverageRate - diskread DEBUG] historyArray or historyArray[0] is missing/empty.`);
-          }
-          // ---> END REFINED SECTION <---
-
-          const currentMetric = (metricsData || []).find(m => m.id === guestId); // Use refined guestId
-          
-          // HACK: Temporarily add guestId to history entries in processGuest
-          // TODO: Remove this hack later
-          const currentDiskRead = currentMetric?.current?.diskread;
-          console.log(`[calculateAverageRate - diskread DEBUG] Found currentMetric for ID ${guestId}:`, currentMetric);
-          console.log(`[calculateAverageRate - diskread DEBUG] Returning current value: ${currentDiskRead ?? 'N/A'}`);
-          return typeof currentDiskRead === 'number' && !isNaN(currentDiskRead) ? currentDiskRead : 0; // Return current value, not rate
-      }
-      // ---> END MODIFIED SECTION <---
+      // ---> REMOVED: Special handling for diskread debugging <---
+      // if (key === 'diskread') { ... debug logic ... }
+      // ---> END REMOVED SECTION <---
 
       if (!historyArray || historyArray.length < 2) return null;
-      // ---> RESTORED: Filtering logic <---
+      // ---> Keep filtering logic <---
       const validHistory = historyArray.filter(entry =>
           typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
           typeof entry[key] === 'number' && !isNaN(entry[key])
       );
-      // ---> RESTORED: Log filtered history <---
+      // ---> Keep log for filtered history <---
       console.log(`[calculateAverageRate - ${key}] Filtered validHistory (${validHistory.length} entries):`, validHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
-      // ---> END RESTORED SECTION <---
-      // ---> REMOVED: Logging of raw array <---
-      // const validHistory = historyArray; // Use the raw array directly
-      // console.log(`[calculateAverageRate - ${key}] Received historyArray (${historyArray.length} entries):`, historyArray.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
+      // ---> END SECTION <---
+
+      // ---> REMOVED: Redundant log (was same as above) <---
+      // console.log(`[calculateAverageRate - ${key}] Valid history (${validHistory.length} entries):`, validHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
       // ---> END REMOVED SECTION <---
+
       if (validHistory.length < 2) return null;
       const oldest = validHistory[0];
       const newest = validHistory[validHistory.length - 1];
       const valueDiff = newest[key] - oldest[key];
       const timeDiff = (newest.timestamp - oldest.timestamp) / 1000;
-      // ---> ADDED: Log history details for diskread <---
-      if (key === 'diskread' || key === 'diskwrite') { // Log for both disk keys
-           // Log only a sample if history is long, to avoid flooding console
-           const sampleHistory = validHistory.length > 10 ? validHistory.slice(-10) : validHistory;
-           console.log(`[calculateAverageRate - ${key}] Valid history (${validHistory.length} entries):`, sampleHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
-      }
-      // ---> END ADDED SECTION <---
-      // ---> ADDED: Log rate calculation details <---
+
+      // ---> REMOVED: Duplicate history log <---
+      // if (key === 'diskread' || key === 'diskwrite') { ... log sample history ... }
+      // ---> END REMOVED SECTION <---
+
+      // ---> Keep log for rate calculation details <---
       console.log(`[calculateAverageRate - ${key}] oldest=${oldest[key]}, newest=${newest[key]}, timeDiff=${timeDiff.toFixed(2)}s, valueDiff=${valueDiff}, rate=${timeDiff > 0 ? (valueDiff / timeDiff).toFixed(0) : 'N/A'}`);
-      // ---> END ADDED SECTION <---
+      // ---> END SECTION <---
       if (timeDiff <= 0) return 0;
       return valueDiff / timeDiff;
     }
 
     // Process VMs and Containers
     const processGuest = (guest, type) => {
-        const metrics = (metricsData || []).find(m => m.id === guest.vmid && m.type === type);
         // console.log(`[refreshDashboardData] Processing ${type} ${guest.vmid} (${guest.name}). Found metrics:`, metrics);
-
         let avgCpu = 0, avgMem = 0, avgDisk = 0;
         let avgDiskReadRate = 0, avgDiskWriteRate = 0, avgNetInRate = 0, avgNetOutRate = 0;
         let avgMemoryPercent = 'N/A', avgDiskPercent = 'N/A';
 
-        if (guest.status === 'running' && metrics && metrics.current) {
-            // Only process metrics history for running guests with current metrics
-            // console.log(`[dbg ${guest.vmid}] metrics.current:`, JSON.stringify(metrics.current)); // DEBUG: Keep commented for potential future use
-            
-            // ---> ADDED: Log metrics.current values just before use <---
-            console.log(`[processGuest - ${guest.vmid}] Using metrics.current: diskread=${metrics.current.diskread}, diskwrite=${metrics.current.diskwrite}`);
-            // ---> END ADDED SECTION <---
-            
-            if (!dashboardHistory[guest.vmid]) dashboardHistory[guest.vmid] = [];
-            const history = dashboardHistory[guest.vmid];
-            // ---> MODIFIED: Use deep copy instead of explicit copy/spread <---
-            const currentDataPoint = { 
-                timestamp: Date.now(), 
-                // guestId_temp: guest.vmid, // Moved inside deep copy
-                // Deep copy relevant properties from metrics.current
-                ...JSON.parse(JSON.stringify({ 
-                    guestId_temp: guest.vmid, // Add guest ID temporarily INSIDE deep copy
-                    cpu: metrics.current.cpu,
-                    mem: metrics.current.mem,
-                    disk: metrics.current.disk,
-                    diskread: metrics.current.diskread,
-                    diskwrite: metrics.current.diskwrite,
-                    netin: metrics.current.netin,
-                    netout: metrics.current.netout
-                 }))
-            };
-            // ---> END MODIFICATION <---
-            // ---> ADDED: Log the created object's disk values <---
-            console.log(`[processGuest - ${guest.vmid}] Created currentDataPoint (deep copy): diskread=${currentDataPoint.diskread}, diskwrite=${currentDataPoint.diskwrite}`);
-            // ---> END ADDED SECTION <---
+        if (guest.status === 'running') { // Only process running guests
 
-            // ---> REMOVED redundant metrics.current check and log <---
-            // if (metrics.current) {
-            //      console.log(`[refreshDashboardData - ${guest.vmid}] Current metrics received: diskread=${metrics.current.diskread}, diskwrite=${metrics.current.diskwrite}`);
-            // }
-            // ---> END REMOVED SECTION <---
-            history.push(currentDataPoint);
-            if (history.length > AVERAGING_WINDOW_SIZE) history.shift();
-
-            avgCpu = calculateAverage(history, 'cpu') ?? 0;
-            avgMem = calculateAverage(history, 'mem') ?? 0;
-            avgDisk = calculateAverage(history, 'disk') ?? 0;
-            avgDiskReadRate = calculateAverageRate(history, 'diskread') ?? 0;
-            avgDiskWriteRate = calculateAverageRate(history, 'diskwrite') ?? 0;
-            // ---> ADDED: Log calculated rate before assignment <---
-            console.log(`[processGuest - ${guest.vmid}] Calculated avgDiskReadRate: ${avgDiskReadRate}`);
-            // ---> END ADDED SECTION <---
-            avgNetInRate = calculateAverageRate(history, 'netin') ?? 0;
-            avgNetOutRate = calculateAverageRate(history, 'netout') ?? 0;
-            // ---> ADDED: Log history content before calculation <---\
-            console.log(`[processGuest - ${guest.vmid}] History before rate calc:`, history.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), dr: e.diskread, dw: e.diskwrite })));
-            // ---> END ADDED SECTION <---\
-            avgMemoryPercent = (guest.maxmem > 0) ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
-            avgDiskPercent = (guest.maxdisk > 0) ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
-            // console.log(`[dbg ${guest.vmid}] Rates (B/s): netin=${avgNetInRate?.toFixed(0)}, netout=${avgNetOutRate?.toFixed(0)}, diskread=${avgDiskReadRate?.toFixed(0)}, diskwrite=${avgDiskWriteRate?.toFixed(0)}`); // DEBUG: Keep commented
-            // console.log(`[refreshDashboardData] ${type} ${guest.vmid} Calculated Percentages: Mem%=${avgMemoryPercent}, Disk%=${avgDiskPercent}`);
-        } else if (guest.status === 'stopped') {
-            // Clear history for stopped guests
-            if (dashboardHistory[guest.vmid]) {
-                delete dashboardHistory[guest.vmid];
+            // ---> ADDED: Ensure history exists and is an array, reset if not <---
+            if (!dashboardHistory[guest.vmid] || !Array.isArray(dashboardHistory[guest.vmid])) {
+                console.log(`[processGuest - ${guest.vmid}] Initializing/Resetting history array.`);
+                dashboardHistory[guest.vmid] = [];
             }
-            // Metrics remain at default 0 / N/A for stopped guests
+            // ---> END ADDED SECTION <---
+
+            const history = dashboardHistory[guest.vmid];
+            const metrics = (metricsData || []).find(m => m.id === guest.vmid && m.type === type);
+
+            if (metrics && metrics.current) {
+                // console.log(`[dbg ${guest.vmid}] metrics.current:`, JSON.stringify(metrics.current));
+
+                // ---> REMOVED: guestId_temp hack <--
+                const currentDataPoint = {
+                    timestamp: Date.now(),
+                    // guestId_temp: guest.vmid, // REMOVED HACK
+                    // Deep copy relevant properties from metrics.current
+                    ...JSON.parse(JSON.stringify({
+                        cpu: metrics.current.cpu,
+                        mem: metrics.current.mem,
+                        disk: metrics.current.disk,
+                        diskread: metrics.current.diskread,
+                        diskwrite: metrics.current.diskwrite,
+                        netin: metrics.current.netin,
+                        netout: metrics.current.netout
+                     }))
+                };
+                // ---> END REMOVED SECTION <---
+
+                // ---> REMOVED: Debug log for deep copy <---
+                // console.log(`[processGuest - ${guest.vmid}] Created currentDataPoint (deep copy): ...`);
+                // ---> END REMOVED SECTION <---
+
+                history.push(currentDataPoint);
+                if (history.length > AVERAGING_WINDOW_SIZE) history.shift();
+
+                // Calculate averages (rest of the block remains the same)
+                avgCpu = calculateAverage(history, 'cpu') ?? 0;
+                avgMem = calculateAverage(history, 'mem') ?? 0;
+                avgDisk = calculateAverage(history, 'disk') ?? 0;
+                avgDiskReadRate = calculateAverageRate(history, 'diskread') ?? 0;
+                avgDiskWriteRate = calculateAverageRate(history, 'diskwrite') ?? 0;
+                // ---> REMOVED: Redundant log (already have calc log) <---
+                // console.log(`[processGuest - ${guest.vmid}] Calculated avgDiskReadRate: ${avgDiskReadRate}`);
+                // ---> END REMOVED SECTION <---
+                avgNetInRate = calculateAverageRate(history, 'netin') ?? 0;
+                avgNetOutRate = calculateAverageRate(history, 'netout') ?? 0;
+                // ---> REMOVED: Redundant log (already have calc log) <---
+                // console.log(`[processGuest - ${guest.vmid}] History before rate calc:`, ...);
+                // ---> END REMOVED SECTION <---
+                avgMemoryPercent = (guest.maxmem > 0) ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
+                avgDiskPercent = (guest.maxdisk > 0) ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
+
+            } // End if metrics && metrics.current
+
+        } else { // Guest is stopped or unknown
+             // Clear history for non-running guests
+             if (dashboardHistory[guest.vmid]) {
+                 console.log(`[processGuest - ${guest.vmid}] Clearing history for non-running guest.`);
+                 delete dashboardHistory[guest.vmid];
+             }
+             // Metrics remain at default 0 / N/A
         }
 
+        // Update dashboardData entry (rest of processGuest remains the same)
         const name = guest.name || `${type === 'qemu' ? 'VM' : 'CT'} ${guest.vmid}`;
         const uptimeFormatted = formatUptime(guest.uptime);
         if (name.length > maxNameLength) maxNameLength = name.length;
