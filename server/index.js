@@ -368,7 +368,7 @@ async function initializeAllPbsClients() {
             if (config.authMethod === 'userpass') {
                 clientData = await getPbsAuthTicketAndSetupClient(config);
                 if (clientData) {
-                    console.log(`INFO: Initialized API client for PBS (User/Password Auth): ${config.name} (${config.host})`);
+                    console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (User/Password Auth)`);
                 } else {
                     console.error(`ERROR: Failed to initialize PBS client (User/Password) for: ${config.name} (${config.host})`);
                 }
@@ -403,7 +403,7 @@ async function initializeAllPbsClients() {
                 });
 
                 clientData = { client: pbsAxiosInstance, config: config };
-                console.log(`INFO: Initialized API client for PBS (Token Auth): ${config.name} (${config.host})`);
+                 console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)`);
             } else {
                  console.error(`ERROR: Unknown authMethod '${config.authMethod}' for PBS config: ${config.name}`);
             }
@@ -417,7 +417,7 @@ async function initializeAllPbsClients() {
     });
 
     await Promise.allSettled(initPromises);
-    console.log(`INFO: Finished initializing PBS API clients. ${Object.keys(pbsApiClients).length} clients successfully initialized.`);
+    console.log(`INFO: [PBS Init] Finished initialization. ${Object.keys(pbsApiClients).length} / ${pbsConfigs.length} PBS clients initialized successfully.`);
 }
 
 if (Object.keys(apiClients).length === 0 && pbsConfigs.length === 0) {
@@ -890,6 +890,8 @@ async function fetchDiscoveryData() {
           }; 
 
           try {
+              console.log(`INFO: [PBS Discovery - ${instanceName}] Starting detailed data fetch...`);
+
               // Ensure client is valid (redundant check, should be caught in init)
               if (!pbsClientInstance) {
                   throw new Error(`Client not initialized for PBS instance: ${instanceName}`);
@@ -928,14 +930,14 @@ async function fetchDiscoveryData() {
                   instanceData.syncTasks = syncTasksResult;
                   instanceData.pruneTasks = pruneTasksResult;
                   instanceData.status = 'ok'; // Mark as OK if all fetches succeeded
-                  console.log(`INFO: Finished fetching PBS discovery data successfully for: ${instanceName}`);
+                  console.log(`INFO: [PBS Discovery - ${instanceName}] Successfully fetched and processed data (Node: ${instanceData.nodeName}).`);
               } else {
                   console.error(`ERROR: Could not determine node name for PBS instance ${instanceName}, cannot fetch task data.`);
                   instanceData.status = 'error'; // Keep status as error
               }
 
           } catch (pbsError) {
-              console.error(`ERROR: Failed fetching PBS data for instance ${instanceName}: ${pbsError.message}`);
+              console.error(`ERROR: [PBS Discovery - ${instanceName}] Fetch failed: ${pbsError.message}`);
               instanceData.status = 'error'; // Ensure status is error on any failure
               if (pbsError.response?.status === 401) {
                   console.error(`ERROR: PBS API Authentication Expired/Invalid (401) for ${instanceName}.`);
