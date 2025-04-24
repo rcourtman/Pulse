@@ -202,52 +202,50 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // --- Sorting Logic ---
-  function updateSortUI(tableId, clickedHeader) {
+  function updateSortUI(tableId, clickedHeader, explicitKey = null) { // Accept explicitKey
       const tableElement = document.getElementById(tableId);
-      if (!tableElement) return; // Guard against missing table
+      if (!tableElement) return;
 
-      // ---> CHANGE: Get sort state key from tableId <---
-      let tableKey;
-      if (tableId.startsWith('pbs-')) {
-          const match = tableId.match(/pbs-recent-(backup|verify|sync|prunegc)-tasks-table-/);
-          if (match && match[1]) {
-              tableKey = `pbs${match[1].charAt(0).toUpperCase() + match[1].slice(1)}`; 
-          } else {
-              console.error(`[updateSortUI] Could not extract PBS key from tableId: ${tableId}`);
-              return; 
-          }
-      } else if (tableId.startsWith('nodes-')) {
-          tableKey = 'nodes';
-      } else if (tableId.startsWith('main-')) {
-          tableKey = 'main';
-      } else {
-           console.error(`[updateSortUI] Unknown table type for tableId: ${tableId}`);
-           return; 
+      // Derive key for logging/comparison ONLY
+      let derivedKey;
+       if (tableId.startsWith('pbs-')) {
+           const match = tableId.match(/pbs-recent-(backup|verify|sync|prunegc)-tasks-table-/);
+           derivedKey = match && match[1] ? `pbs${match[1].charAt(0).toUpperCase() + match[1].slice(1)}` : null;
+       } else if (tableId.startsWith('nodes-')) {
+           derivedKey = 'nodes';
+       } else if (tableId.startsWith('main-')) {
+           derivedKey = 'main';
+       } else {
+           derivedKey = null;
+       }
+
+      // ---> FIX: Use the explicitly passed key primarily <---
+      const tableKey = explicitKey || derivedKey; // Use explicitKey if provided, otherwise fallback to derived (for non-PBS calls)
+      if (!tableKey) {
+          console.error(`[updateSortUI] Could not determine sort key for tableId: ${tableId}`);
+          return;
       }
-      // ---> END CHANGE <---
-
-      // ---> FIX: Move headers declaration up <---
-      const headers = tableElement.querySelectorAll('th.sortable');
       // ---> END FIX <---
 
-      const currentSort = sortState[tableKey]; 
+      const currentSort = sortState[tableKey];
 
-      // ---> REMOVE DEBUG LOG <---
-      // console.log(`[updateSortUI - Check] tableKey='${tableKey}', typeof sortState[tableKey]=${typeof sortState[tableKey]}, value=`, sortState[tableKey]);
-      // ---> END REMOVE DEBUG LOG <---
+      // Keep log for comparison
+      console.log(`[updateSortUI - Check] tableId='${tableId}', explicitKey='${explicitKey}', derivedKey='${derivedKey}', finalKey='${tableKey}', typeof sortState[tableKey]=${typeof sortState[tableKey]}, value=`, currentSort);
 
       if (!currentSort) {
-          console.error(`[updateSortUI] No sort state found for key: '${tableKey}' (derived from tableId: ${tableId})`);
-          console.log('[updateSortUI] Current sortState:', JSON.stringify(sortState)); 
-          return; 
+          console.error(`[updateSortUI] No sort state found for finalKey: '${tableKey}'`);
+          console.log('[updateSortUI] Current sortState:', JSON.stringify(sortState));
+          return;
       }
+
+      const headers = tableElement.querySelectorAll('th.sortable'); // Moved back up
 
       headers.forEach(header => {
           header.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
           const arrow = header.querySelector('.sort-arrow');
           if (arrow) arrow.remove();
 
-          if (header === clickedHeader && currentSort.column) { 
+          if (header === clickedHeader && currentSort.column) {
               header.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
               const arrowSpan = document.createElement('span');
               arrowSpan.className = 'sort-arrow ml-1';
@@ -1661,7 +1659,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     currentSort.column = column;
                     currentSort.direction = 'asc';
                 }
-                // Get the correct task list based on sortStateKey
                  let tasks;
                  switch (sortStateKey) {
                      case 'pbsBackup': tasks = pbsInstance.backupTasks?.recentTasks; break;
@@ -1673,18 +1670,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 const tbodyId = tableId.replace('-table-', '-tbody-');
                 populatePbsTaskTable(tbodyId, tasks, currentSort.column, currentSort.direction);
-                updateSortUI(tableId, th, sortStateKey);
+                updateSortUI(tableId, th, sortStateKey); // Pass key on click
             });
             th.dataset.listenerAttached = 'true';
         });
 
+        // Call for initial UI state:
         const currentSortConfig = sortState[sortStateKey];
          if (!currentSortConfig || !currentSortConfig.column) {
              console.warn(`Initial sort column not found for state key '${sortStateKey}'. Skipping initial sort UI update for table ${tableId}.`);
              return;
          }
         const initialHeader = tableElement.querySelector(`th[data-sort="${currentSortConfig.column}"]`);
+        // ---> CONFIRM: Pass the sortStateKey explicitly <---
         if (initialHeader) updateSortUI(tableId, initialHeader, sortStateKey);
+        // ---> END CONFIRM <---
     };
 
 
