@@ -478,11 +478,9 @@ app.get('/api/version', (req, res) => {
 
 app.get('/api/storage', async (req, res) => {
     try {
-        // Reuse the fetchStorageDetailsForAllNodes logic or similar
-        // This might need adjustment based on where fetchStorageDetailsForAllNodes is defined/refactored
-        // For now, assuming it returns the expected structure or throws an error
-        const storageData = await fetchStorageDetailsForAllNodes(endpoints); // Pass configured endpoints
-        res.json(storageData);
+        // Return the current node data which includes storage information
+        // TODO: Consider filtering/transforming this data specifically for storage endpoint if needed
+        res.json({ nodes: currentNodes }); // Return current node state
     } catch (error) {
         console.error("Error in /api/storage:", error);
         res.status(500).json({ globalError: error.message || "Failed to fetch storage details." });
@@ -508,14 +506,19 @@ io.on('connection', (socket) => {
   socket.on('requestData', async () => {
     console.log('Client requested data');
     try {
-      // Send cached data immediately
-      if (globalApiCache) {
-          socket.emit('rawData', globalApiCache);
+      // Send the current known state immediately
+      if (currentNodes.length > 0 || currentVms.length > 0 || currentContainers.length > 0 || pbsDataArray.length > 0) {
+          socket.emit('rawData', {
+              nodes: currentNodes,
+              vms: currentVms,
+              containers: currentContainers,
+              metrics: currentMetrics,
+              pbs: pbsDataArray
+          });
       } else {
-         console.log('No cached data available on request, waiting for next cycle.');
-         // Optionally trigger an immediate discovery/metric cycle?
-         // await runDiscoveryCycle(); // Be careful with triggering cycles on demand
-         // if (globalApiCache) socket.emit('rawData', globalApiCache);
+         console.log('No data available yet on request, waiting for next cycle.');
+         // Optionally trigger an immediate discovery cycle?
+         // runDiscoveryCycle(); // Be careful with triggering cycles on demand
       }
     } catch (error) {
       console.error('Error fetching data on client request:', error);
