@@ -385,10 +385,24 @@ document.addEventListener('DOMContentLoaded', function() {
           return val ?? (type === 'string' ? '' : 0); // Use default if null/undefined
       };
 
-      valueA = getValue(a, column);
-      valueB = getValue(b, column);
+      // Handle specific sorting logic for nodes
+      if (type === 'nodes') {
+          if (column === 'uptime') {
+              valueA = a ? a.uptime || 0 : 0;
+              valueB = b ? b.uptime || 0 : 0;
+          } else if (column === 'loadavg') {
+              valueA = a && a.loadavg && a.loadavg.length > 0 ? parseFloat(a.loadavg[0]) : -1; // Sort N/A (-1) lowest
+              valueB = b && b.loadavg && b.loadavg.length > 0 ? parseFloat(b.loadavg[0]) : -1;
+          } else {
+              valueA = getValue(a, column);
+              valueB = getValue(b, column);
+          }
+      } else {
+        valueA = getValue(a, column);
+        valueB = getValue(b, column);
+      }
 
-      // Determine type for comparison (Now should favor number for percentage columns)
+      // Determine type for comparison (Now should favor number for percentage/uptime/loadavg columns)
       const compareType = (typeof valueA === 'number' && typeof valueB === 'number') ? 'number' : 'string';
 
       // Comparison logic
@@ -426,8 +440,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const dataToDisplay = skipSorting ? (nodes || []) : sortData(nodes, sortState.nodes.column, sortState.nodes.direction, 'nodes');
 
     if (dataToDisplay.length === 0) {
-      // Corrected colspan to match the actual number of columns (5)
-      tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found or data unavailable</td></tr>'; 
+      // Corrected colspan to match the actual number of columns (7)
+      tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found or data unavailable</td></tr>'; 
       return;
     }
 
@@ -471,20 +485,35 @@ document.addEventListener('DOMContentLoaded', function() {
       const memoryBarHTML = createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
       const diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
 
-      // Correctly generate the 5 columns matching the updated header order
+      // Format Uptime and Load Average
+      const uptimeFormatted = formatUptime(node.uptime || 0);
+      let loadAvgFormatted = 'N/A';
+      if (node.loadavg && node.loadavg.length > 0) {
+          const load1m = parseFloat(node.loadavg[0]);
+          if (!isNaN(load1m)) {
+              loadAvgFormatted = load1m.toFixed(2);
+          } else {
+              // Temporary Log: What value are we getting that isn't parsing?
+              console.warn(`[updateNodesTable] Node '${node.node}' has non-numeric loadavg[0]:`, node.loadavg[0]);
+          }
+      }
+
+      // Correctly generate the 7 columns matching the updated header order
       // Use styling consistent with main dashboard (p-1 px-2, etc.)
       row.innerHTML = `
-        <td class=\"p-1 px-2 whitespace-nowrap\">
-          <span class=\"flex items-center\">
-            <span class=\"h-2.5 w-2.5 rounded-full ${statusColor} mr-2 flex-shrink-0\"></span>
-            <span class=\"capitalize\">${statusText}</span>
+        <td class="p-1 px-2 whitespace-nowrap">
+          <span class="flex items-center">
+            <span class="h-2.5 w-2.5 rounded-full ${statusColor} mr-2 flex-shrink-0"></span>
+            <span class="capitalize">${statusText}</span>
           </span>
         </td>
-        <td class=\"p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100\" title=\"${node.node || 'N/A'}\">${node.node || 'N/A'}</td>
+        <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${node.node || 'N/A'}">${node.node || 'N/A'}</td>
         <!-- Add metric-tooltip-trigger and data-tooltip for custom tooltip -->
-        <td class=\"p-1 px-2 text-right\">${cpuBarHTML}</td>
-        <td class=\"p-1 px-2 text-right\">${memoryBarHTML}</td>
-        <td class=\"p-1 px-2 text-right\">${diskBarHTML}</td>
+        <td class="p-1 px-2 text-right">${cpuBarHTML}</td>
+        <td class="p-1 px-2 text-right">${memoryBarHTML}</td>
+        <td class="p-1 px-2 text-right">${diskBarHTML}</td>
+        <td class="p-1 px-2 text-right whitespace-nowrap">${uptimeFormatted}</td>
+        <td class="p-1 px-2 text-right whitespace-nowrap">${loadAvgFormatted}</td>
       `;
       
       tbody.appendChild(row);

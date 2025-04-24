@@ -628,8 +628,23 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
   const nodeData = {
     vms: [],
     containers: [],
-    metrics: []
+    metrics: [],
+    nodeStatus: null // Added to store node status
   };
+
+  // Fetch node status first
+  try {
+    const statusResponse = await apiClient.get(`/nodes/${nodeName}/status`);
+    if (statusResponse.data && statusResponse.data.data) {
+      nodeData.nodeStatus = statusResponse.data.data;
+    } else {
+      console.warn(`[Discovery] Node status for ${nodeName} (Endpoint: ${endpointId}) was empty or malformed.`);
+    }
+  } catch (err) {
+    const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
+    console.error(`[Discovery] Error fetching status for node ${nodeName} (Endpoint: ${endpointId})${status}: ${err.message}`);
+    // Proceed even if node status fails, maybe the node is down
+  }
 
   try {
     // Fetch VMs
@@ -742,11 +757,12 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
     console.error(`[Discovery] Error fetching containers from node ${nodeName} (Endpoint: ${endpointId})${status}: ${err.message}`);
   }
 
-  // Return collected data (VMs, Containers) for this node from this endpoint
-  // Metrics are handled separately in fetchMetricsData
+  // Return collected data (VMs, Containers, Node Status) for this node
+  // Metrics are handled separately
   return {
       vms: nodeData.vms,
-      containers: nodeData.containers
+      containers: nodeData.containers,
+      nodeStatus: nodeData.nodeStatus // Return node status
   };
 }
 
@@ -792,18 +808,33 @@ async function fetchDiscoveryData() {
                   let endpointVms = [];
                   let endpointContainers = [];
 
-                  // Process node info first
+                  // Process node info first, merging status later
                    nodes.forEach(nodeInfo => {
                       endpointNodes.push({
                           ...nodeInfo,
                           endpointId: endpointName, // Add endpointId/name
-                          id: `${endpointName}-${nodeInfo.node}` // Create unique ID
+                          id: `${endpointName}-${nodeInfo.node}`, // Create unique ID
+                          // Initialize status fields to null or defaults
+                          cpu: null,
+                          maxcpu: null,
+                          mem: null,
+                          maxmem: null,
+                          disk: null,
+                          maxdisk: null,
+                          uptime: 0, // Default uptime to 0
+                          loadavg: null,
+                          status: nodeInfo.status || 'unknown' // Use API status or default
                       });
                   });
 
+                  // Process results for Guests and Node Status
+                  guestResults.forEach((result, index) => {
+                      const correspondingNodeName = nodes[index]?.node; // Get node name for matching
+                      if (!correspondingNodeName) return; // Skip if node info is missing
 
-                  // Process results for VMs and Containers
-                  guestResults.forEach(result => {
+                      const targetNodeIndex = endpointNodes.findIndex(n => n.node === correspondingNodeName);
+                      if (targetNodeIndex === -1) return; // Skip if node not found in our list
+
                       if (result.status === 'fulfilled' && result.value) {
                            // Add endpointId to each vm and container
                            result.value.vms.forEach(vm => {
@@ -816,6 +847,26 @@ async function fetchDiscoveryData() {
                            });
                           endpointVms.push(...result.value.vms);
                           endpointContainers.push(...result.value.containers);
+
+                          // Merge node status if available
+                          if (result.value.nodeStatus) {
+                            const statusData = result.value.nodeStatus;
+                            // ---- START DEBUG LOG ----
+                            console.log(`[Discovery Cycle - ${endpointName}] Merging status for node ${correspondingNodeName}:`, JSON.stringify(statusData));
+                            // ---- END DEBUG LOG ----
+                            // Merge specific fields we care about
+                            endpointNodes[targetNodeIndex].cpu = statusData.cpu;
+                            endpointNodes[targetNodeIndex].maxcpu = statusData.maxcpu; // Added maxcpu
+                            endpointNodes[targetNodeIndex].mem = statusData.memory?.used || statusData.mem; // Prioritize memory obj if exists
+                            endpointNodes[targetNodeIndex].maxmem = statusData.memory?.total || statusData.maxmem;
+                            endpointNodes[targetNodeIndex].disk = statusData.rootfs?.used || statusData.disk; // Prioritize rootfs obj if exists
+                            endpointNodes[targetNodeIndex].maxdisk = statusData.rootfs?.total || statusData.maxdisk;
+                            endpointNodes[targetNodeIndex].uptime = statusData.uptime;
+                            endpointNodes[targetNodeIndex].loadavg = statusData.loadavg; // Add loadavg
+                            // Update status if uptime indicates online, otherwise keep original list status
+                            endpointNodes[targetNodeIndex].status = statusData.uptime > 0 ? 'online' : endpointNodes[targetNodeIndex].status;
+                          }
+
                       } else if (result.status === 'rejected') {
                           // Log node-specific failure if needed, but continue processing others
                           console.error(`[Discovery Cycle - ${endpointName}] Failed fetching guest data for a node: ${result.reason?.message || result.reason}`);

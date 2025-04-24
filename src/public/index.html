@@ -95,16 +95,18 @@
         <table id="nodes-table" class="min-w-full divide-y divide-gray-700 table-fixed">
           <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10">
             <tr>
-              <th scope="col" class="sortable px-6 py-3 w-2/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="status">Status</th>
-              <th scope="col" class="sortable px-6 py-3 w-4/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="node">Node Name</th>
+              <th scope="col" class="sortable px-6 py-3 w-1/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="status">Status</th>
+              <th scope="col" class="sortable px-6 py-3 w-3/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="node">Node Name</th>
               <th scope="col" class="sortable px-6 py-3 w-2/12 text-right font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="cpu">CPU</th>
               <th scope="col" class="sortable px-6 py-3 w-2/12 text-right font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="memory">Mem</th>
               <th scope="col" class="sortable px-6 py-3 w-2/12 text-right font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="disk">Disk</th>
+              <th scope="col" class="sortable px-6 py-3 w-1/12 text-right font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="uptime">Uptime</th>
+              <th scope="col" class="sortable px-6 py-3 w-1/12 text-right font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="loadavg">Load (1m)</th>
             </tr>
           </thead>
           <tbody id="nodes-table-body" class="divide-y divide-gray-200 dark:divide-gray-700">
             <!-- Node rows will be inserted here -->
-            <tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">Loading node data...</td></tr>
+            <tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">Loading node data...</td></tr>
           </tbody>
         </table>
       </div>
