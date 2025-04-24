@@ -25,3 +25,6 @@ RELEASE_PROCEDURE.md
 
 # Cursor IDE configuration/rules
 .cursor/ 
+
+# macOS
+.DS_Store 
