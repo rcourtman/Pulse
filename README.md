@@ -1,5 +1,9 @@
 # <img src="public/logos/pulse-logo-256x256.png" alt="Pulse Logo" width="32" height="32" style="vertical-align: middle"> Pulse for Proxmox VE
 
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/rcourtman/Pulse)](https://github.com/rcourtman/Pulse/releases/latest)
+[![License](https://img.shields.io/github/license/rcourtman/Pulse)](LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/rcourtman/pulse)](https://hub.docker.com/r/rcourtman/pulse)
+
 A lightweight monitoring application for Proxmox VE that displays real-time status for VMs and containers via a simple web interface.
 
 ![Pulse Dashboard](docs/images/dashboard-screenshot.png)
@@ -246,26 +250,20 @@ Once installed, the Pulse application runs as a `systemd` service. You can manag
 - Simple, responsive web interface.
 - Efficient polling: Stops polling the Proxmox API when no clients (browsers) are connected, reducing load.
 - Docker support for easy deployment.
+- Support for monitoring multiple distinct Proxmox environments.
+- LXC installation script for easy setup.
 
 ## 💻 System Requirements
 
-- **Node.js** (for local development/running): Version 16.x or higher recommended.
-- **Docker & Docker Compose** (for containerized deployment): Recent versions recommended.
-- **Network**: Connectivity between the Pulse server and your Proxmox server(s).
+- **Node.js:** Version 18.x or later recommended.
+- **NPM:** Compatible version with Node.js.
+- **Docker & Docker Compose:** Latest stable versions recommended if using container deployment.
+- **Proxmox VE:** Version 7.x or 8.x recommended (tested primarily on 8.x).
+- **Web Browser:** Modern evergreen browser (Chrome, Firefox, Edge, Safari).
 
-## 👥 Contributing
+## 👋 Contributing
 
-Contributions are welcome! Please follow standard fork-and-pull-request workflow. Refer to the main repository's contributing guidelines if available.
-
-1.  **Fork the repository**
-2.  **Create a feature branch**:
-```bash
-git checkout -b feature/YourFeatureName
-```
-3.  **Make your changes**
-4.  **Commit your changes**: `git commit -m 'Add some feature'`
-5.  **Push to the branch**: `git push origin feature/YourFeatureName`
-6.  **Open a Pull Request**
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests or opening issues.
 
 ## 📜 License
 
