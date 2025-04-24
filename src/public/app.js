@@ -922,8 +922,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // ---> MODIFIED: Use deep copy instead of explicit copy/spread <---
             const currentDataPoint = { 
                 timestamp: Date.now(), 
+                // guestId_temp: guest.vmid, // Moved inside deep copy
                 // Deep copy relevant properties from metrics.current
                 ...JSON.parse(JSON.stringify({ 
+                    guestId_temp: guest.vmid, // Add guest ID temporarily INSIDE deep copy
                     cpu: metrics.current.cpu,
                     mem: metrics.current.mem,
                     disk: metrics.current.disk,
