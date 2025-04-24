@@ -16,6 +16,7 @@ lerna-debug.log*
 # Build outputs
 build/
 dist/
+src/public/output.css
 
 # Optional files
 .DS_Store
