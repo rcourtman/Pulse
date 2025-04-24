@@ -22,3 +22,6 @@ dist/
 
 # Local Documentation (Not for Repo)
 RELEASE_PROCEDURE.md 
+
+# Cursor IDE configuration/rules
+.cursor/ 
