@@ -1672,7 +1672,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </svg>
             <div>
                 <p class="font-semibold mb-1">Proxmox Backup Server Not Configured</p>
-                <p class="text-xs opacity-90">PBS connection details (e.g., <code>PROXMOX_HOST_2</code>, <code>PROXMOX_TOKEN_ID_2</code>) need to be set in your <code>.env</code> file to enable PBS monitoring.</p>
+                <p class="text-xs opacity-90">Please ensure Proxmox Backup Server is configured in your environment (<code>.env</code> file) to enable monitoring.</p>
             </div>
         `;
         container.appendChild(placeholder);

@@ -294,6 +294,7 @@ Once installed, the Pulse application runs as a `systemd` service. You can manag
 - Efficient polling: Stops polling the Proxmox API when no clients (browsers) are connected, reducing load.
 - Docker support for easy deployment.
 - Support for monitoring multiple distinct Proxmox environments.
+- Monitoring support for Proxmox Backup Server (PBS) instances (configured as additional endpoints).
 - LXC installation script for easy setup.
 
 ## 💻 System Requirements
