@@ -390,9 +390,16 @@ document.addEventListener('DOMContentLoaded', function() {
           if (column === 'uptime') {
               valueA = a ? a.uptime || 0 : 0;
               valueB = b ? b.uptime || 0 : 0;
-          } else if (column === 'loadavg') {
-              valueA = a && a.loadavg && a.loadavg.length > 0 ? parseFloat(a.loadavg[0]) : -1; // Sort N/A (-1) lowest
-              valueB = b && b.loadavg && b.loadavg.length > 0 ? parseFloat(b.loadavg[0]) : -1;
+          } else if (column === 'loadnorm') { // <-- Changed from 'loadavg'
+              // Calculate normalized load for comparison, default to -1 for sorting invalid/missing data low
+              const normA = (a && a.loadavg && a.loadavg.length > 0 && a.maxcpu > 0) 
+                  ? (parseFloat(a.loadavg[0]) / a.maxcpu) 
+                  : -1;
+              const normB = (b && b.loadavg && b.loadavg.length > 0 && b.maxcpu > 0) 
+                  ? (parseFloat(b.loadavg[0]) / b.maxcpu) 
+                  : -1;
+              valueA = isNaN(normA) ? -1 : normA;
+              valueB = isNaN(normB) ? -1 : normB;
           } else {
               valueA = getValue(a, column);
               valueB = getValue(b, column);
@@ -450,6 +457,10 @@ document.addEventListener('DOMContentLoaded', function() {
       // Use same hover/transition classes as main dashboard rows
       row.className = 'transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px'; 
 
+      // ---- START DEBUG LOG ----
+      console.log(`[updateNodesTable] Processing node data:`, node);
+      // ---- END DEBUG LOG ----
+
       // --- Determine Status (Inferring 'online' if we have data from /status endpoint) ---
       // Proxmox API /nodes/{node}/status usually only returns data for online nodes.
       // A more robust check might involve looking at node.uptime or specific error fallbacks from the backend.
@@ -485,18 +496,23 @@ document.addEventListener('DOMContentLoaded', function() {
       const memoryBarHTML = createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
       const diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
 
-      // Format Uptime and Load Average
+      // Format Uptime and Normalized Load Average
       const uptimeFormatted = formatUptime(node.uptime || 0);
-      let loadAvgFormatted = 'N/A';
-      if (node.loadavg && node.loadavg.length > 0) {
+      let normalizedLoadFormatted = 'N/A';
+      // Calculate normalized load if possible
+      if (node.loadavg && node.loadavg.length > 0 && node.maxcpu && node.maxcpu > 0) {
           const load1m = parseFloat(node.loadavg[0]);
           if (!isNaN(load1m)) {
-              loadAvgFormatted = load1m.toFixed(2);
+              const normalizedLoad = load1m / node.maxcpu;
+              normalizedLoadFormatted = normalizedLoad.toFixed(2);
           } else {
-              // Temporary Log: What value are we getting that isn't parsing?
+              // Log if loadavg[0] is not a number
               console.warn(`[updateNodesTable] Node '${node.node}' has non-numeric loadavg[0]:`, node.loadavg[0]);
           }
-      }
+      } else if (node.loadavg && node.maxcpu <= 0) {
+           // Log if maxcpu is invalid
+           console.warn(`[updateNodesTable] Node '${node.node}' has invalid maxcpu (${node.maxcpu}) for load normalization.`);
+      } // Implicit else: loadavg missing or empty, keep 'N/A'
 
       // Correctly generate the 7 columns matching the updated header order
       // Use styling consistent with main dashboard (p-1 px-2, etc.)
@@ -513,7 +529,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <td class="p-1 px-2 text-right">${memoryBarHTML}</td>
         <td class="p-1 px-2 text-right">${diskBarHTML}</td>
         <td class="p-1 px-2 text-right whitespace-nowrap">${uptimeFormatted}</td>
-        <td class="p-1 px-2 text-right whitespace-nowrap">${loadAvgFormatted}</td>
+        <td class="p-1 px-2 text-right whitespace-nowrap">${normalizedLoadFormatted}</td>
       `;
       
       tbody.appendChild(row);
