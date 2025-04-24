@@ -440,6 +440,7 @@ console.log(`INFO: Using Discovery Update Interval: ${DISCOVERY_UPDATE_INTERVAL}
 
 // Create Express app
 const app = express();
+const server = http.createServer(app); // Create HTTP server instance
 
 // Middleware
 app.use(cors());
