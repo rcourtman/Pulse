@@ -896,22 +896,12 @@ document.addEventListener('DOMContentLoaded', function() {
             if (metrics && metrics.current) {
                 // console.log(`[dbg ${guest.vmid}] metrics.current:`, JSON.stringify(metrics.current));
 
-                // ---> REMOVED: guestId_temp hack <--
-                const currentDataPoint = {
-                    timestamp: Date.now(),
-                    // guestId_temp: guest.vmid, // REMOVED HACK
-                    // Deep copy relevant properties from metrics.current
-                    ...JSON.parse(JSON.stringify({
-                        cpu: metrics.current.cpu,
-                        mem: metrics.current.mem,
-                        disk: metrics.current.disk,
-                        diskread: metrics.current.diskread,
-                        diskwrite: metrics.current.diskwrite,
-                        netin: metrics.current.netin,
-                        netout: metrics.current.netout
-                     }))
+                // ---> REVERTED: Back to spread syntax <---
+                const currentDataPoint = { 
+                    timestamp: Date.now(), 
+                    ...metrics.current // Use spread syntax
                 };
-                // ---> END REMOVED SECTION <---
+                // ---> END REVERTED SECTION <---
 
                 // ---> REMOVED: Debug log for deep copy <---
                 // console.log(`[processGuest - ${guest.vmid}] Created currentDataPoint (deep copy): ...`);
@@ -1367,7 +1357,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // console.log('[UI Interval] Updating UI tables...');
       updateAllUITables();
     }
-  }, 2500); // Update UI every 2.5 seconds (was 2000)
+  }, 2000); // Update UI every 2 seconds (was 2500)
 
   // Fetch storage data periodically (e.g., every 10 seconds)
   setInterval(fetchStorageData, 10000);
