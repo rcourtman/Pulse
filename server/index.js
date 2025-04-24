@@ -505,11 +505,6 @@ io.on('connection', (socket) => {
   //   socket.emit('rawData', cachedDiscoveryData);
   // }
 
-  // Send initial PBS status if available
-  if (globalPbsStatus.length > 0) {
-      socket.emit('pbsInitialStatus', globalPbsStatus);
-  }
-
   socket.on('requestData', async () => {
     console.log('Client requested data');
     try {
