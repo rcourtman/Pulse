@@ -841,16 +841,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper: Calculates rate, returns null if invalid/insufficient data
     function calculateAverageRate(historyArray, key) {
       if (!historyArray || historyArray.length < 2) return null;
-      // ---> MODIFIED: Log raw input array and skip filtering for now <---
-      const validHistory = historyArray; // Use the raw array directly
-      console.log(`[calculateAverageRate - ${key}] Received historyArray (${historyArray.length} entries):`, historyArray.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
-      // ---> END MODIFIED SECTION <---
-      // ---> REMOVED previous filtering logic and associated log <---
-      // const validHistory = historyArray.filter(entry =>
-      //     typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
-      //     typeof entry[key] === 'number' && !isNaN(entry[key])
-      // );
-      // console.log(`[calculateAverageRate - ${key}] Filtered validHistory (${validHistory.length} entries):`, validHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
+      // ---> RESTORED: Filtering logic <---
+      const validHistory = historyArray.filter(entry =>
+          typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
+          typeof entry[key] === 'number' && !isNaN(entry[key])
+      );
+      // ---> RESTORED: Log filtered history <---
+      console.log(`[calculateAverageRate - ${key}] Filtered validHistory (${validHistory.length} entries):`, validHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
+      // ---> END RESTORED SECTION <---
+      // ---> REMOVED: Logging of raw array <---
+      // const validHistory = historyArray; // Use the raw array directly
+      // console.log(`[calculateAverageRate - ${key}] Received historyArray (${historyArray.length} entries):`, historyArray.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
       // ---> END REMOVED SECTION <---
       if (validHistory.length < 2) return null;
       const oldest = validHistory[0];
@@ -890,23 +891,23 @@ document.addEventListener('DOMContentLoaded', function() {
             
             if (!dashboardHistory[guest.vmid]) dashboardHistory[guest.vmid] = [];
             const history = dashboardHistory[guest.vmid];
-            // ---> MODIFIED: Use explicit copy instead of spread <---
-            // const currentDataPoint = { timestamp: Date.now(), ...metrics.current };
-            const currentDataPoint = {
-                timestamp: Date.now(),
-                cpu: metrics.current.cpu,
-                mem: metrics.current.mem,
-                // mem_total: metrics.current.mem_total, // Optional, might not exist
-                disk: metrics.current.disk,
-                diskread: metrics.current.diskread, // Explicit copy
-                diskwrite: metrics.current.diskwrite, // Explicit copy
-                netin: metrics.current.netin,
-                netout: metrics.current.netout
-                // Add other necessary properties from metrics.current if needed for history
+            // ---> MODIFIED: Use deep copy instead of explicit copy/spread <---
+            const currentDataPoint = { 
+                timestamp: Date.now(), 
+                // Deep copy relevant properties from metrics.current
+                ...JSON.parse(JSON.stringify({ 
+                    cpu: metrics.current.cpu,
+                    mem: metrics.current.mem,
+                    disk: metrics.current.disk,
+                    diskread: metrics.current.diskread,
+                    diskwrite: metrics.current.diskwrite,
+                    netin: metrics.current.netin,
+                    netout: metrics.current.netout
+                 }))
             };
             // ---> END MODIFICATION <---
             // ---> ADDED: Log the created object's disk values <---
-            console.log(`[processGuest - ${guest.vmid}] Created currentDataPoint: diskread=${currentDataPoint.diskread}, diskwrite=${currentDataPoint.diskwrite}`);
+            console.log(`[processGuest - ${guest.vmid}] Created currentDataPoint (deep copy): diskread=${currentDataPoint.diskread}, diskwrite=${currentDataPoint.diskwrite}`);
             // ---> END ADDED SECTION <---
 
             // ---> REMOVED redundant metrics.current check and log <---
