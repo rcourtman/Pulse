@@ -1592,6 +1592,13 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
+    // ---> FIX: Remove initial loading message if it exists <---
+    const loadingMessage = document.getElementById('pbs-loading-message');
+    if (loadingMessage) {
+        loadingMessage.remove();
+    }
+    // ---> END FIX <---
+
     console.log('[updatePbsInfo] Processing PBS array:', pbsArray); // Keep this log
 
     const currentInstanceIds = new Set(); // Keep track of instances processed in this run
