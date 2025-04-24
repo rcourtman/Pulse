@@ -915,6 +915,9 @@ document.addEventListener('DOMContentLoaded', function() {
             avgDisk = calculateAverage(history, 'disk') ?? 0;
             avgDiskReadRate = calculateAverageRate(history, 'diskread') ?? 0;
             avgDiskWriteRate = calculateAverageRate(history, 'diskwrite') ?? 0;
+            // ---> ADDED: Log calculated rate before assignment <---
+            console.log(`[processGuest - ${guest.vmid}] Calculated avgDiskReadRate: ${avgDiskReadRate}`);
+            // ---> END ADDED SECTION <---
             avgNetInRate = calculateAverageRate(history, 'netin') ?? 0;
             avgNetOutRate = calculateAverageRate(history, 'netout') ?? 0;
             avgMemoryPercent = (guest.maxmem > 0) ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
