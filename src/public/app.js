@@ -5,14 +5,14 @@
 
   // Listen for hotReload event from server
   socket.on('hotReload', function() {
-    console.log('Hot reload triggered, refreshing page...');
+    // console.log('Hot reload triggered, refreshing page...');
     window.location.reload();
   });
 
   // Fallback: Check for server disconnects/reconnects as trigger for reload
   let wasConnected = false;
   socket.on('connect', function() {
-    console.log('Connected to server');
+    // console.log('Connected to server');
     if (wasConnected) {
       console.log('Reconnected - refreshing page');
       // Slight delay to ensure server is ready after reconnect
@@ -24,7 +24,7 @@
 
   // Optional: Log disconnects
   socket.on('disconnect', function(reason) {
-    console.log('Disconnected from server:', reason);
+    // console.log('Disconnected from server:', reason);
     wasConnected = false; // Reset connection status
     // UI update for disconnect handled in DOMContentLoaded listener
   });
@@ -191,7 +191,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const socket = io();
 
   socket.on('connect', function() {
-    console.log('[socket] Connected');
+    // console.log('[socket] Connected');
     connectionStatus.textContent = 'Connected';
     connectionStatus.classList.remove('disconnected', 'bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300');
     connectionStatus.classList.add('connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300');
@@ -199,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   socket.on('disconnect', function(reason) {
-    console.log('[socket] Disconnected:', reason);
+    // console.log('[socket] Disconnected:', reason);
     connectionStatus.textContent = 'Disconnected';
     connectionStatus.classList.remove('connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300');
     connectionStatus.classList.add('disconnected', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300');
@@ -234,11 +234,11 @@ document.addEventListener('DOMContentLoaded', function() {
       const currentSort = sortState[tableKey];
 
       // Keep log for comparison
-      console.log(`[updateSortUI - Check] tableId='${tableId}', explicitKey='${explicitKey}', derivedKey='${derivedKey}', finalKey='${tableKey}', typeof sortState[tableKey]=${typeof sortState[tableKey]}, value=`, currentSort);
+      // console.log(`[updateSortUI - Check] tableId='${tableId}', explicitKey='${explicitKey}', derivedKey='${derivedKey}', finalKey='${tableKey}', typeof sortState[tableKey]=${typeof sortState[tableKey]}, value=`, currentSort);
 
       if (!currentSort) {
           console.error(`[updateSortUI] No sort state found for finalKey: '${tableKey}'`);
-          console.log('[updateSortUI] Current sortState:', JSON.stringify(sortState));
+          // console.log('[updateSortUI] Current sortState:', JSON.stringify(sortState));
           return;
       }
 
@@ -458,7 +458,7 @@ document.addEventListener('DOMContentLoaded', function() {
       row.className = 'transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px'; 
 
       // ---- START DEBUG LOG ----
-      console.log(`[updateNodesTable] Processing node data:`, node);
+      // console.log(`[updateNodesTable] Processing node data:`, node);
       // ---- END DEBUG LOG ----
 
       // --- Determine Status (Inferring 'online' if we have data from /status endpoint) ---
@@ -920,7 +920,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // --- Dashboard Data Processing & Display ---
   function refreshDashboardData() {
     dashboardData = [];
-    console.log('[refreshDashboardData] Starting refresh...');
+    // console.log('[refreshDashboardData] Starting refresh...');
 
     let maxNameLength = 0;
     let maxUptimeLength = 0;
@@ -964,7 +964,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // ---> END REMOVED SECTION <---
 
       // ---> Keep log for rate calculation details <---
-      console.log(`[calculateAverageRate - ${key}] oldest=${oldest[key]}, newest=${newest[key]}, timeDiff=${timeDiff.toFixed(2)}s, valueDiff=${valueDiff}, rate=${timeDiff > 0 ? (valueDiff / timeDiff).toFixed(0) : 'N/A'}`);
+      // console.log(`[calculateAverageRate - ${key}] oldest=${oldest[key]}, newest=${newest[key]}, timeDiff=${timeDiff.toFixed(2)}s, valueDiff=${valueDiff}, rate=${timeDiff > 0 ? (valueDiff / timeDiff).toFixed(0) : 'N/A'}`);
       // ---> END SECTION <---
       if (timeDiff <= 0) return 0;
       return valueDiff / timeDiff;
@@ -1028,7 +1028,7 @@ document.addEventListener('DOMContentLoaded', function() {
         } else { // Guest is stopped or unknown
              // Clear history for non-running guests
              if (dashboardHistory[guest.vmid]) {
-                 console.log(`[processGuest - ${guest.vmid}] Clearing history for non-running guest.`);
+                 // console.log(`[processGuest - ${guest.vmid}] Clearing history for non-running guest.`);
                  delete dashboardHistory[guest.vmid];
              }
              // Metrics remain at default 0 / N/A
@@ -1221,7 +1221,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Listener for the 'rawData' event from the server
   socket.on('rawData', (jsonData) => {
-    console.log('[socket.on("rawData")] Received data event');
+    // console.log('[socket.on("rawData")] Received data event');
     try {
         // Assuming server sends data as a JSON string
         const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
@@ -1238,7 +1238,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.hasOwnProperty('metrics')) {
              metricsData = data.metrics || [];
              if (data.metrics && data.metrics.length > 0) {
-                 console.log(`[socket.on("rawData")] Updated metricsData (${metricsData.length} entries).`);
+                 // console.log(`[socket.on("rawData")] Updated metricsData (${metricsData.length} entries).`);
              }
         } else {
             // If metrics key is missing (e.g., from discovery cycle), DO NOT update metricsData
@@ -1251,19 +1251,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.hasOwnProperty('pbs')) {
             // Expecting an array now
             pbsDataArray = Array.isArray(data.pbs) ? data.pbs : []; 
-            console.log(`[socket.on("rawData")] Updated pbsDataArray with ${pbsDataArray.length} instance(s).`);
+            // console.log(`[socket.on("rawData")] Updated pbsDataArray with ${pbsDataArray.length} instance(s).`);
         } else {
             // If pbs key is missing, preserve the existing array
-            console.log('[socket.on("rawData")] PBS key missing in rawData, preserving existing pbsDataArray.');
+            // console.log('[socket.on("rawData")] PBS key missing in rawData, preserving existing pbsDataArray.');
         }
         // <--- END CHANGE
 
-        console.log('[socket.on("rawData")] Parsed data and updated stores');
+        // console.log('[socket.on("rawData")] Parsed data and updated stores');
 
         // Set flag after first successful data parse
         if (!initialDataReceived) {
           initialDataReceived = true;
-          console.log('[socket.on("rawData")] Initial data received, enabling UI updates.');
+          // console.log('[socket.on("rawData")] Initial data received, enabling UI updates.');
 
           // Optional: Trigger immediate first render instead of waiting for interval
           // updateAllUITables();
@@ -1283,7 +1283,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // ---> CHANGE: Handle initial PBS status array
   socket.on('pbsInitialStatus', (pbsStatusArray) => {
-      console.log('[socket] Received pbsInitialStatus array:', pbsStatusArray);
+      // console.log('[socket] Received pbsInitialStatus array:', pbsStatusArray);
       if (Array.isArray(pbsStatusArray)) {
           // Update the global pbsDataArray with these initial statuses
           // This ensures the UI shows something before the first full discovery
@@ -1306,7 +1306,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // ---> END CHANGE
 
   function requestFullData() {
-      console.log("Requesting full data...");
+      // console.log("Requesting full data...");
       if (socket.connected) {
         socket.emit('requestData'); // Standard emit
       } else {
@@ -1316,7 +1316,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // --- Function to Reset Dashboard Filters/Sort ---
   function resetDashboardView() {
-      console.log('Resetting dashboard view...');
+      // console.log('Resetting dashboard view...');
       if (searchInput) searchInput.value = '';
       sortState.main = { column: 'id', direction: 'asc' }; 
       updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]'));
@@ -1687,7 +1687,7 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingMessage.remove();
     }
     
-    console.log('[updatePbsInfo] Processing PBS array:', pbsArray); 
+    // console.log('[updatePbsInfo] Processing PBS array:', pbsArray); 
 
     const currentInstanceIds = new Set(); 
 
@@ -2007,7 +2007,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // --- Remove Orphaned Instances ---
   container.querySelectorAll('.pbs-instance-section').forEach(el => {
       if (!currentInstanceIds.has(el.id)) {
-          console.log(`Removing orphaned PBS instance element: ${el.id}`);
+          // console.log(`Removing orphaned PBS instance element: ${el.id}`);
           el.remove();
       }
   });
