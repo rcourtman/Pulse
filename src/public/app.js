@@ -851,8 +851,6 @@ document.addEventListener('DOMContentLoaded', function() {
           typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
           typeof entry[key] === 'number' && !isNaN(entry[key])
       );
-      // ---> Keep log for filtered history <---
-      console.log(`[calculateAverageRate - ${key}] Filtered validHistory (${validHistory.length} entries):`, validHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
       // ---> END SECTION <---
 
       // ---> REMOVED: Redundant log (was same as above) <---
@@ -885,12 +883,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (guest.status === 'running') { // Only process running guests
 
-            // ---> ADDED: Ensure history exists and is an array, reset if not <---
+            // ---> Keep Ensure history exists check <---
             if (!dashboardHistory[guest.vmid] || !Array.isArray(dashboardHistory[guest.vmid])) {
                 console.log(`[processGuest - ${guest.vmid}] Initializing/Resetting history array.`);
                 dashboardHistory[guest.vmid] = [];
             }
-            // ---> END ADDED SECTION <---
+            // ---> END SECTION <---
 
             const history = dashboardHistory[guest.vmid];
             const metrics = (metricsData || []).find(m => m.id === guest.vmid && m.type === type);
@@ -1112,10 +1110,6 @@ document.addEventListener('DOMContentLoaded', function() {
           ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium' 
           : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
       const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guest.type}</span>`;
-
-      // ---> ADDED: Log guest.diskread before formatting <---
-      console.log(`[createGuestRow - ${guest.id}] Received guest.diskread: ${guest.diskread}`);
-      // ---> END ADDED SECTION <---
 
       row.innerHTML = `
         <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
