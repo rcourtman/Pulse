@@ -1835,10 +1835,7 @@ document.addEventListener('DOMContentLoaded', function() {
               populatePbsTaskTable(`pbs-recent-sync-tasks-tbody-${instanceId}`, pbsInstance.syncTasks?.recentTasks);
               populatePbsTaskTable(`pbs-recent-prunegc-tasks-tbody-${instanceId}`, pbsInstance.pruneTasks?.recentTasks);
 
-              setupPbsSortListener(`pbs-recent-backup-tasks-table-${instanceId}`, 'pbsBackup', pbsInstance);
-              setupPbsSortListener(`pbs-recent-verify-tasks-table-${instanceId}`, 'pbsVerify', pbsInstance);
-              setupPbsSortListener(`pbs-recent-sync-tasks-table-${instanceId}`, 'pbsSync', pbsInstance);
-              setupPbsSortListener(`pbs-recent-prunegc-tasks-table-${instanceId}`, 'pbsPruneGc', pbsInstance);
+              // ---> REMOVE: Sort listener setup calls <---
            } else {
                // Ensure initial status message is present if details start hidden
                const backupTbody = document.getElementById(`pbs-recent-backup-tasks-tbody-${instanceId}`); if (backupTbody) backupTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
