@@ -431,11 +431,12 @@ if (Object.keys(apiClients).length === 0 && pbsConfigs.length === 0) {
 const DEBUG_METRICS = false; // Set to true to show detailed metrics logs
 const PORT = 7655; // Using a different port from the main server
 
-// --- Define Update Intervals ---
-// How often to fetch dynamic metrics (CPU, Mem, IO) for running guests
-const METRIC_UPDATE_INTERVAL = 2000; // Default: 2 seconds
-// How often to fetch structural data (node list, guest lists, node status)
-const DISCOVERY_UPDATE_INTERVAL = 30000; // Default: 30 seconds
+// --- Define Update Intervals (Configurable via Env Vars) ---
+const METRIC_UPDATE_INTERVAL = parseInt(process.env.PULSE_METRIC_INTERVAL_MS, 10) || 2000; // Default: 2 seconds
+const DISCOVERY_UPDATE_INTERVAL = parseInt(process.env.PULSE_DISCOVERY_INTERVAL_MS, 10) || 30000; // Default: 30 seconds
+
+console.log(`INFO: Using Metric Update Interval: ${METRIC_UPDATE_INTERVAL}ms`);
+console.log(`INFO: Using Discovery Update Interval: ${DISCOVERY_UPDATE_INTERVAL}ms`);
 
 // Create Express app
 const app = express();
@@ -908,28 +909,27 @@ async function fetchDiscoveryData() {
 
               // Only proceed if we have a node name
               if (instanceData.nodeName) {
-                  // Fetch all data concurrently for this instance
-                  const [
-                      backupTasksResult,
-                      datastoresResult,
-                      verificationTasksResult,
-                      syncTasksResult,
-                      pruneTasksResult
-                  ] = await Promise.all([
-                      fetchPbsTaskData({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName),
+                  // Fetch datastores and the consolidated task list concurrently
+                  const [datastoresResult, allTasksResult] = await Promise.all([
                       fetchPbsDatastoreData({ client: pbsClientInstance, config: pbsInstanceConfig }),
-                      fetchPbsTaskSummaryByType({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName, ['verify']),
-                      fetchPbsTaskSummaryByType({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName, ['sync']),
-                      fetchPbsTaskSummaryByType({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName, ['garbage_collection', 'prune'])
+                      fetchAllPbsTasksForProcessing({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName) // New function call
                   ]);
 
-                  // Assign results to the instanceData object
-                  instanceData.backupTasks = backupTasksResult;
+                  // Assign datastore results
                   instanceData.datastores = datastoresResult;
-                  instanceData.verificationTasks = verificationTasksResult;
-                  instanceData.syncTasks = syncTasksResult;
-                  instanceData.pruneTasks = pruneTasksResult;
-                  instanceData.status = 'ok'; // Mark as OK if all fetches succeeded
+
+                  // Process the single task list for all summaries and details
+                  if (allTasksResult && allTasksResult.tasks) {
+                      const processedTasks = processPbsTasks(allTasksResult.tasks);
+                      instanceData.backupTasks = processedTasks.backupTasks;
+                      instanceData.verificationTasks = processedTasks.verificationTasks;
+                      instanceData.syncTasks = processedTasks.syncTasks;
+                      instanceData.pruneTasks = processedTasks.pruneTasks;
+                  }
+
+                  // If tasks failed to fetch (allTasksResult.error is true), summaries will remain default/empty
+
+                  instanceData.status = 'ok'; // Mark as OK if datastores fetch succeeded (tasks handled separately)
                   console.log(`INFO: [PBS Discovery - ${instanceName}] Successfully fetched and processed data (Node: ${instanceData.nodeName}).`);
               } else {
                   console.error(`ERROR: Could not determine node name for PBS instance ${instanceName}, cannot fetch task data.`);
@@ -1282,153 +1282,158 @@ async function fetchPbsNodeName(pbsClient) {
 }
 
 // Modified fetchPbsTaskData to include more details and handle backup tasks specifically
+/*
 async function fetchPbsTaskData(pbsClient, nodeName) {
-    console.log(`INFO: Fetching PBS backup task data for node ${nodeName}...`);
+    // ... (keep original function body commented out or remove) ...
+}
+*/
+
+// NEW function to fetch the full task list once for processing
+async function fetchAllPbsTasksForProcessing(pbsClient, nodeName) {
+    console.log(`INFO: Fetching all relevant PBS tasks (7 days) for node ${nodeName}...`);
     if (!nodeName) {
-        console.warn("WARN: Cannot fetch PBS backup task data without node name.");
-        return { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } };
+        console.warn("WARN: Cannot fetch PBS task data without node name.");
+        return { tasks: null, error: true };
     }
     try {
         const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
         const response = await pbsClient.client.get(`/nodes/${nodeName}/tasks`, {
             params: {
                 since: sinceTimestamp,
-                limit: 200, // Fetch a decent number for analysis
+                limit: 1000, // Fetch a larger number to cover 7 days of various tasks
                 errors: 1,
-                // Do not filter by type here, filter after fetching
             }
         });
-
         const allTasks = response.data?.data ?? [];
+        console.log(`INFO: Fetched ${allTasks.length} tasks from PBS for processing.`);
+        return { tasks: allTasks, error: false };
+    } catch (error) {
+        console.error(`ERROR: Failed to fetch PBS task list for node ${nodeName}: ${error.message}`);
+        if (error.response?.status === 401) console.error("ERROR: PBS API authentication failed (401).");
+        else if (error.response?.status === 403) console.error("ERROR: PBS API authorization failed (403).");
+        return { tasks: null, error: true };
+    }
+}
 
-        // Filter specifically for backup tasks (adjust types if needed based on actual API)
-        const backupTasks = allTasks.filter(task =>
-            task.worker_type === 'backup' || task.type === 'backup'
-        );
+// NEW function to process the fetched task list into required structures
+function processPbsTasks(allTasks) {
+    if (!allTasks) return { // Return default structure if tasks are null
+        backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+        verificationTasks: { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+        syncTasks: { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+        pruneTasks: { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } }
+    };
 
-        let okCount = 0;
-        let failedCount = 0;
-        let lastOkTimestamp = 0;
-        let lastFailedTimestamp = 0;
+    const taskResults = {
+        backup: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 },
+        verify: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 },
+        sync: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 },
+        pruneGc: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 } // Combined prune/gc
+    };
 
-        const detailedTasks = backupTasks.map(task => {
-            // Simplify status and count
+    // Define type mappings
+    const taskTypeMap = {
+        backup: 'backup',
+        verify: 'verify',
+        sync: 'sync',
+        garbage_collection: 'pruneGc',
+        prune: 'pruneGc'
+    };
+
+    allTasks.forEach(task => {
+        const taskType = task.worker_type || task.type;
+        const categoryKey = taskTypeMap[taskType];
+
+        if (categoryKey) {
+            const category = taskResults[categoryKey];
+            category.list.push(task); // Add raw task for potential future use
+
             const isOk = task.status === 'OK';
             const isFailed = task.status && task.status !== 'OK' && task.status !== 'running';
 
             if (isOk) {
-                okCount++;
-                if (task.endtime > lastOkTimestamp) lastOkTimestamp = task.endtime;
+                category.ok++;
+                if (task.endtime > category.lastOk) category.lastOk = task.endtime;
             } else if (isFailed) {
-                failedCount++;
-                if (task.endtime > lastFailedTimestamp) lastFailedTimestamp = task.endtime;
+                category.failed++;
+                if (task.endtime > category.lastFailed) category.lastFailed = task.endtime;
             }
+        }
+    });
 
-            // Extract relevant details (add more as needed from API response)
-            return {
-                upid: task.upid,
-                node: task.node,
-                type: task.worker_type || task.type,
-                id: task.worker_id || task.id, // Guest ID (e.g., 'vm/100')
-                status: task.status,
-                startTime: task.starttime,
-                endTime: task.endtime,
-                duration: task.endtime && task.starttime ? task.endtime - task.starttime : null,
-                // Add size/performance details if available in the task object
-                // size: task.size, // Example placeholder
-                // performance: task.performance, // Example placeholder
-            };
-        }).sort((a, b) => (b.startTime || 0) - (a.startTime || 0)); // Sort by start time descending
+    // Helper to create detailed task object
+    const createDetailedTask = (task) => ({
+        upid: task.upid,
+        node: task.node,
+        type: task.worker_type || task.type,
+        id: task.worker_id || task.id,
+        status: task.status,
+        startTime: task.starttime,
+        endTime: task.endtime,
+        duration: task.endtime && task.starttime ? task.endtime - task.starttime : null,
+    });
 
-        console.log(`INFO: Processed ${backupTasks.length} PBS backup tasks. OK: ${okCount}, Failed: ${failedCount}`);
+    // Process and sort recent tasks for each category
+    const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
 
-        return {
-            // Return latest 20 detailed tasks for UI display
-            recentTasks: detailedTasks.slice(0, 20),
+    const recentBackupTasks = taskResults.backup.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
+    const recentVerifyTasks = taskResults.verify.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
+    const recentSyncTasks = taskResults.sync.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
+    const recentPruneGcTasks = taskResults.pruneGc.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
+
+    console.log(`INFO: Processed PBS Tasks - Backup: ${taskResults.backup.list.length} (OK: ${taskResults.backup.ok}, Fail: ${taskResults.backup.failed}), Verify: ${taskResults.verify.list.length} (OK: ${taskResults.verify.ok}, Fail: ${taskResults.verify.failed}), Sync: ${taskResults.sync.list.length} (OK: ${taskResults.sync.ok}, Fail: ${taskResults.sync.failed}), Prune/GC: ${taskResults.pruneGc.list.length} (OK: ${taskResults.pruneGc.ok}, Fail: ${taskResults.pruneGc.failed})`);
+
+    // Return the structured data expected by fetchDiscoveryData
+    return {
+        backupTasks: {
+            recentTasks: recentBackupTasks,
             summary: {
-                ok: okCount,
-                failed: failedCount,
-                total: backupTasks.length,
-                lastOk: lastOkTimestamp || null,
-                lastFailed: lastFailedTimestamp || null,
+                ok: taskResults.backup.ok,
+                failed: taskResults.backup.failed,
+                total: taskResults.backup.list.length,
+                lastOk: taskResults.backup.lastOk || null,
+                lastFailed: taskResults.backup.lastFailed || null,
             }
-        };
-
-    } catch (error) {
-        console.error(`ERROR: Failed to fetch PBS backup task data for node ${nodeName}: ${error.message}`);
-        // Handle specific errors like 401/403
-        if (error.response?.status === 401) console.error("ERROR: PBS API authentication failed (401).");
-        else if (error.response?.status === 403) console.error("ERROR: PBS API authorization failed (403).");
-        // Return empty data on error
-        return { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } };
-    }
+        },
+        verificationTasks: {
+            recentTasks: recentVerifyTasks,
+            summary: {
+                ok: taskResults.verify.ok,
+                failed: taskResults.verify.failed,
+                total: taskResults.verify.list.length,
+                lastOk: taskResults.verify.lastOk || null,
+                lastFailed: taskResults.verify.lastFailed || null,
+            }
+        },
+        syncTasks: {
+            recentTasks: recentSyncTasks,
+            summary: {
+                ok: taskResults.sync.ok,
+                failed: taskResults.sync.failed,
+                total: taskResults.sync.list.length,
+                lastOk: taskResults.sync.lastOk || null,
+                lastFailed: taskResults.sync.lastFailed || null,
+            }
+        },
+        pruneTasks: {
+            recentTasks: recentPruneGcTasks,
+            summary: {
+                ok: taskResults.pruneGc.ok,
+                failed: taskResults.pruneGc.failed,
+                total: taskResults.pruneGc.list.length,
+                lastOk: taskResults.pruneGc.lastOk || null,
+                lastFailed: taskResults.pruneGc.lastFailed || null,
+            }
+        }
+    };
 }
 
-// NEW Helper function to fetch and summarize tasks by type(s)
+// DEPRECATED: Helper function to fetch and summarize tasks by type(s)
+/*
 async function fetchPbsTaskSummaryByType(pbsClient, nodeName, taskTypes) {
-    const typeString = taskTypes.join('/');
-    console.log(`INFO: Fetching PBS ${typeString} task summary for node ${nodeName}...`);
-     if (!nodeName) {
-        console.warn(`WARN: Cannot fetch PBS ${typeString} task data without node name.`);
-        return { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } };
-    }
-    try {
-        const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
-        const response = await pbsClient.client.get(`/nodes/${nodeName}/tasks`, {
-            params: {
-                since: sinceTimestamp,
-                limit: 500, // Fetch enough to get recent summaries
-                errors: 1,
-                // Consider filtering by type if API supports it reliably, otherwise filter below
-                // typefilter: taskTypes.join(','), // Might work depending on API version
-            }
-        });
-
-        const allTasks = response.data?.data ?? [];
-
-        // Filter for the specified task types
-        const relevantTasks = allTasks.filter(task =>
-            taskTypes.includes(task.worker_type) || taskTypes.includes(task.type)
-        );
-
-        let okCount = 0;
-        let failedCount = 0;
-        let lastOkTimestamp = 0;
-        let lastFailedTimestamp = 0;
-
-        relevantTasks.forEach(task => {
-            const isOk = task.status === 'OK';
-            const isFailed = task.status && task.status !== 'OK' && task.status !== 'running';
-
-            if (isOk) {
-                okCount++;
-                if (task.endtime > lastOkTimestamp) lastOkTimestamp = task.endtime;
-            } else if (isFailed) {
-                failedCount++;
-                if (task.endtime > lastFailedTimestamp) lastFailedTimestamp = task.endtime;
-            }
-        });
-
-        console.log(`INFO: Processed ${relevantTasks.length} PBS ${typeString} tasks. OK: ${okCount}, Failed: ${failedCount}`);
-
-        return {
-            summary: {
-                ok: okCount,
-                failed: failedCount,
-                total: relevantTasks.length,
-                lastOk: lastOkTimestamp || null,
-                lastFailed: lastFailedTimestamp || null,
-            }
-        };
-
-    } catch (error) {
-        console.error(`ERROR: Failed to fetch PBS ${typeString} task summary for node ${nodeName}: ${error.message}`);
-        if (error.response?.status === 401) console.error("ERROR: PBS API authentication failed (401).");
-        else if (error.response?.status === 403) console.error("ERROR: PBS API authorization failed (403).");
-        return { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } };
-    }
+    // ... (keep original function body commented out or remove) ...
 }
-
+*/
 
 async function fetchPbsDatastoreData(pbsClient) {
     // Fetches datastore usage details from PBS using the /status/datastore-usage endpoint

@@ -129,9 +129,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const savedSortState = JSON.parse(localStorage.getItem('pulseSortState')) || {};
   const sortState = {
     nodes: { column: null, direction: 'asc', ...(savedSortState.nodes || {}) },
-    // vms: { column: null, direction: 'asc', ...savedSortState.vms }, // Removed
-    // containers: { column: null, direction: 'asc', ...savedSortState.containers }, // Removed
-    main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) } // Load main, provide default if missing
+    main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) },
+    // Add default sort states for PBS task tables
+    pbsBackup: { column: 'startTime', direction: 'desc', ...(savedSortState.pbsBackup || {}) },
+    pbsVerify: { column: 'startTime', direction: 'desc', ...(savedSortState.pbsVerify || {}) },
+    pbsSync: { column: 'startTime', direction: 'desc', ...(savedSortState.pbsSync || {}) },
+    pbsPruneGc: { column: 'startTime', direction: 'desc', ...(savedSortState.pbsPruneGc || {}) }
   };
   let groupByNode = true; // Default view
   let filterGuestType = 'all'; // Default filter
@@ -203,16 +206,52 @@ document.addEventListener('DOMContentLoaded', function() {
       const tableElement = document.getElementById(tableId);
       if (!tableElement) return; // Guard against missing table
 
-      const table = tableId.split('-')[0];
+      // ---> CHANGE: Get sort state key from tableId <---
+      // const table = tableId.split('-')[0]; // Old way, assumes simple pattern
+      let tableKey;
+      if (tableId.startsWith('pbs-')) {
+          // Extract the specific PBS key (e.g., 'pbsBackup', 'pbsVerify')
+           // Match pbs-recent-<type>-tasks-table-<instanceId>
+          const match = tableId.match(/pbs-recent-(backup|verify|sync|prunegc)-tasks-table-/);
+          if (match && match[1]) {
+              // Construct key like 'pbsBackup', 'pbsVerify', etc.
+              tableKey = `pbs${match[1].charAt(0).toUpperCase() + match[1].slice(1)}`; 
+          } else {
+              console.error(`[updateSortUI] Could not extract PBS key from tableId: ${tableId}`);
+              return; // Cannot proceed without key
+          }
+      } else if (tableId.startsWith('nodes-')) {
+          tableKey = 'nodes';
+      } else if (tableId.startsWith('main-')) {
+          tableKey = 'main';
+      } else {
+           console.error(`[updateSortUI] Unknown table type for tableId: ${tableId}`);
+           return; // Cannot proceed without key
+      }
+      // console.log(`[updateSortUI] Determined tableKey: '${tableKey}' for tableId: '${tableId}'`); // Optional Debug log
+      // ---> END CHANGE <---
+
       const headers = tableElement.querySelectorAll('th.sortable');
-      const currentSort = sortState[table];
+      // ---> CHANGE: Use the derived tableKey <---
+      const currentSort = sortState[tableKey]; 
+      // ---> END CHANGE <---
+
+      // ---> ADD GUARD: Check if currentSort is defined before accessing properties
+      if (!currentSort) {
+          console.error(`[updateSortUI] No sort state found for key: '${tableKey}' (derived from tableId: ${tableId})`);
+          console.log('[updateSortUI] Current sortState:', JSON.stringify(sortState)); // Log the state for debugging
+          return; // Cannot proceed if sort state doesn't exist
+      }
+      // ---> END GUARD <---
 
       headers.forEach(header => {
           header.classList.remove('bg-blue-50', 'dark:bg-blue-900/20');
           const arrow = header.querySelector('.sort-arrow');
           if (arrow) arrow.remove();
 
-          if (header === clickedHeader && currentSort.column) { // Only highlight/arrow if a sort is active
+          // The error occurred here because currentSort was undefined
+          // Now currentSort is guaranteed to exist due to the guard above.
+          if (header === clickedHeader && currentSort.column) { // Only highlight/arrow if a sort is active for this key
               header.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
               const arrowSpan = document.createElement('span');
               arrowSpan.className = 'sort-arrow ml-1';
@@ -246,6 +285,7 @@ document.addEventListener('DOMContentLoaded', function() {
           const stateToSave = {
             nodes: sortState.nodes,
             main: sortState.main
+            // Note: PBS sort state is not saved to localStorage currently
           };
           localStorage.setItem('pulseSortState', JSON.stringify(stateToSave));
 
@@ -366,6 +406,45 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   }
+
+  // --- NEW PBS Task Sorting Function ---
+  function sortPbsTasks(data, column, direction) {
+      if (!column || !data) return data || [];
+      const dataToSort = [...data];
+
+      return dataToSort.sort((a, b) => {
+          let valueA = a ? a[column] : null;
+          let valueB = b ? b[column] : null;
+
+          // Handle specific types for comparison
+          if (column === 'startTime' || column === 'endTime' || column === 'duration') {
+              valueA = Number(valueA) || 0;
+              valueB = Number(valueB) || 0;
+              return direction === 'asc' ? valueA - valueB : valueB - valueA;
+          } else if (column === 'id') { // Guest ID/Job ID/Datastore
+              valueA = String(valueA || '').toLowerCase();
+              valueB = String(valueB || '').toLowerCase();
+              return direction === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
+          } else if (column === 'status') {
+              // Simple status sort (OK > running > Error/Other > null/undefined)
+              const getStatusValue = (status) => {
+                  if (status === 'OK') return 0;
+                  if (status === 'running') return 1;
+                  if (!status) return 3;
+                  return 2; // Other error statuses
+              };
+              valueA = getStatusValue(a?.status);
+              valueB = getStatusValue(b?.status);
+              return direction === 'asc' ? valueA - valueB : valueB - valueA;
+          } else {
+              // Default string comparison
+              valueA = String(valueA || '').toLowerCase();
+              valueB = String(valueB || '').toLowerCase();
+              return direction === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
+          }
+      });
+  }
+  // --- END NEW PBS Task Sorting Function ---
 
   // --- Data Update/Display Functions ---
   function updateNodesTable(nodes, skipSorting = false) {
@@ -1370,7 +1449,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 2000); // Update UI every 2 seconds (was 2500)
 
   // Fetch storage data periodically (e.g., every 10 seconds)
-  setInterval(fetchStorageData, 10000);
+  setInterval(fetchStorageData, 30000); // Changed to 30 seconds
   fetchStorageData(); // Initial fetch on load
 
   // --- End Frontend Render Interval ---
@@ -1483,237 +1562,368 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // --- Updated Function: Update PBS Info Section ---
+  // --- NEW Function to Populate a PBS Task Table ---
+  function populatePbsTaskTable(tbodyId, tasks, sortColumn, sortDirection) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) {
+        console.error(`PBS Task Table Body #${tbodyId} not found!`);
+        return;
+    }
+    tbody.innerHTML = ''; // Clear previous content
+
+    const sortedTasks = sortPbsTasks(tasks, sortColumn, sortDirection);
+
+    if (!sortedTasks || sortedTasks.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">No recent tasks found (last 7 days).</td></tr>`;
+        return;
+    }
+
+    sortedTasks.forEach(task => {
+        const row = document.createElement('tr');
+        row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
+        row.innerHTML = `
+            <td class="px-4 py-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${task.id || 'N/A'}</td>
+            <td class="px-4 py-2 text-center">${getPbsStatusIcon(task.status)}</td>
+            <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatPbsTimestamp(task.startTime)}</td>
+            <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatDuration(task.duration)}</td>
+            <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-400 dark:text-gray-500 font-mono truncate" title="${task.upid || 'N/A'}">${task.upid || 'N/A'}</td>
+        `;
+        tbody.appendChild(row);
+    });
+  }
+  // --- END NEW Function ---
+
+  // --- Updated Function: Update PBS Info Section (Upsert Logic) ---
   function updatePbsInfo(pbsArray) {
     const container = document.getElementById('pbs-instances-container');
     if (!container) {
         console.error("PBS container element #pbs-instances-container not found!");
         return;
     }
-    container.innerHTML = ''; // Clear previous content
 
-    // Log the array being processed
-    console.log('[updatePbsInfo] Processing PBS array:', pbsArray);
+    console.log('[updatePbsInfo] Processing PBS array:', pbsArray); // Keep this log
 
-    if (!Array.isArray(pbsArray) || pbsArray.length === 0) {
-        container.innerHTML = '<p class="text-gray-500 dark:text-gray-400">No PBS instances configured or data available.</p>';
-        return;
-    }
+    const currentInstanceIds = new Set(); // Keep track of instances processed in this run
 
-    // Create content for each PBS instance
+    // Helper functions defined here or accessible in scope
+    const createSummaryCard = (type, title, summaryData) => {
+        const card = document.createElement('div');
+        card.className = 'border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-100/50 dark:bg-gray-700/50';
+        const summary = summaryData?.summary || {};
+        const ok = summary.ok ?? '-';
+        const failed = summary.failed ?? '-';
+        const total = summary.total ?? '-';
+        const lastOk = formatPbsTimestamp(summary.lastOk);
+        const lastFailed = formatPbsTimestamp(summary.lastFailed);
+        const failedStyle = (failed > 0) ? 'font-bold text-red-600 dark:text-red-400' : 'text-red-600 dark:text-red-400 font-semibold';
+        card.innerHTML = `
+            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">${title} (7d)</h4>
+            <div class="space-y-1 text-sm">
+                <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span class="ml-1 text-green-600 dark:text-green-400 font-semibold">${ok}</span></div>
+                <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span class="ml-1 ${failedStyle}">${failed}</span></div>
+                <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">${total}</span></div>
+                <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span class="ml-1 text-gray-600 dark:text-gray-400 text-xs">${lastOk}</span></div>
+                <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span class="ml-1 text-gray-600 dark:text-gray-400 text-xs">${lastFailed}</span></div>
+            </div>`;
+        return card; // Return the element
+    };
+
+     const createTaskTableHTML = (tableId, title, idColumnHeader) => `
+        <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Recent ${title} Tasks</h4>
+        <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded max-h-60 overflow-y-auto">
+            <table id="${tableId}" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700/50 sticky top-0">
+                    <tr>
+                        <th scope="col" class="sortable px-4 py-2 text-left font-semibold cursor-pointer select-none" data-sort="id">${idColumnHeader}</th>
+                        <th scope="col" class="sortable px-4 py-2 text-center font-semibold cursor-pointer select-none" data-sort="status">Status</th>
+                        <th scope="col" class="sortable px-4 py-2 text-left font-semibold cursor-pointer select-none" data-sort="startTime">Start Time</th>
+                        <th scope="col" class="sortable px-4 py-2 text-left font-semibold cursor-pointer select-none" data-sort="duration">Duration</th>
+                        <th scope="col" class="px-4 py-2 text-left font-semibold">UPID</th>
+                    </tr>
+                </thead>
+                <tbody id="${tableId.replace('-table-', '-tbody-')}" class="divide-y divide-gray-200 dark:divide-gray-700">
+                     <!-- Populated by JS -->
+                </tbody>
+            </table>
+        </div>`;
+
+     const setupPbsSortListener = (tableId, sortStateKey, pbsInstance) => { // Pass pbsInstance here
+        const tableElement = document.getElementById(tableId);
+        if (!tableElement) {
+            console.error(`PBS Task Table #${tableId} not found for sort listener setup!`);
+            return;
+        }
+
+        tableElement.querySelectorAll('th.sortable').forEach(th => {
+            if (th.dataset.listenerAttached === 'true') return;
+
+            th.addEventListener('click', () => {
+                const column = th.getAttribute('data-sort');
+                if (!column) return;
+
+                const currentSort = sortState[sortStateKey];
+                if (currentSort.column === column) {
+                    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort.column = column;
+                    currentSort.direction = 'asc';
+                }
+                // Get the correct task list based on sortStateKey
+                 let tasks;
+                 switch (sortStateKey) {
+                     case 'pbsBackup': tasks = pbsInstance.backupTasks?.recentTasks; break;
+                     case 'pbsVerify': tasks = pbsInstance.verificationTasks?.recentTasks; break;
+                     case 'pbsSync': tasks = pbsInstance.syncTasks?.recentTasks; break;
+                     case 'pbsPruneGc': tasks = pbsInstance.pruneTasks?.recentTasks; break;
+                     default: tasks = [];
+                 }
+
+                const tbodyId = tableId.replace('-table-', '-tbody-');
+                populatePbsTaskTable(tbodyId, tasks, currentSort.column, currentSort.direction);
+                updateSortUI(tableId, th, sortStateKey);
+            });
+            th.dataset.listenerAttached = 'true';
+        });
+
+        const currentSortConfig = sortState[sortStateKey];
+         if (!currentSortConfig || !currentSortConfig.column) {
+             console.warn(`Initial sort column not found for state key '${sortStateKey}'. Skipping initial sort UI update for table ${tableId}.`);
+             return;
+         }
+        const initialHeader = tableElement.querySelector(`th[data-sort="${currentSortConfig.column}"]`);
+        if (initialHeader) updateSortUI(tableId, initialHeader, sortStateKey);
+    };
+
+
+    // --- Create/Update content for each PBS instance ---
     pbsArray.forEach((pbsInstance, index) => {
-        const instanceId = pbsInstance.pbsEndpointId || `instance-${index}`; // Use ID from backend or generate one
+        const instanceId = pbsInstance.pbsEndpointId || `instance-${index}`;
         const instanceName = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
+        const instanceElementId = `pbs-instance-${instanceId}`;
+        currentInstanceIds.add(instanceElementId); // Track this ID
 
-        // --- Create Wrapper Div for this instance ---
-        const instanceWrapper = document.createElement('div');
-        instanceWrapper.className = 'pbs-instance-section border border-gray-200 dark:border-gray-700 rounded p-4 bg-gray-50/30 dark:bg-gray-800/30';
-        instanceWrapper.id = `pbs-instance-${instanceId}`;
+        let instanceWrapper = document.getElementById(instanceElementId);
+        let detailsContainer, dsTableBody, statusElement;
 
-        // --- Instance Header (Name and Status) ---
-        const headerDiv = document.createElement('div');
-        headerDiv.className = 'flex justify-between items-center mb-3';
-        
-        const instanceTitle = document.createElement('h3');
-        instanceTitle.className = 'text-lg font-semibold text-gray-800 dark:text-gray-200';
-        instanceTitle.textContent = instanceName;
-        
-        const statusElement = document.createElement('div');
-        statusElement.className = 'text-sm'; // Base class
-        statusElement.id = `pbs-status-${instanceId}`;
-
-        headerDiv.appendChild(instanceTitle);
-        headerDiv.appendChild(statusElement);
-        instanceWrapper.appendChild(headerDiv);
-
-        // --- Determine Status Text and Detail Visibility ---
+        // Determine Status Text and Detail Visibility
         let statusText = 'Loading...';
         let showDetails = false;
         let statusColorClass = 'text-gray-600 dark:text-gray-400';
-
         switch (pbsInstance.status) {
             case 'configured':
                 statusText = `Configured (${pbsInstance.nodeName || '...'}), attempting connection...`;
                 statusColorClass = 'text-gray-600 dark:text-gray-400';
-                showDetails = false;
                 break;
             case 'ok':
-                // ---> CHANGE: Simplify the 'ok' status text
-                // statusText = `Connected: ${pbsInstance.nodeName || 'Unknown Node'}`;
-                statusText = `Status: OK (${pbsInstance.nodeName || 'Unknown Node'})`; // Show Node Name in status
-                // <--- END CHANGE
+                statusText = `Status: OK (${pbsInstance.nodeName || 'Unknown Node'})`;
                 statusColorClass = 'text-green-600 dark:text-green-400';
                 showDetails = true;
                 break;
             case 'error':
-                statusText = `Error connecting. Check Pulse logs.`;
+                statusText = `Error connecting (${pbsInstance.errorMessage || 'Check Pulse logs.'})`; // Try to show specific error
                 statusColorClass = 'text-red-600 dark:text-red-400';
-                showDetails = false;
                 break;
-            case 'unconfigured':
-                statusText = 'Not configured.';
-                statusColorClass = 'text-gray-600 dark:text-gray-400';
-                showDetails = false;
-                break;
+            // 'unconfigured' is handled by the empty array check earlier
             default:
                 statusText = `Status: ${pbsInstance.status || 'Unknown'}`;
-                statusColorClass = 'text-gray-600 dark:text-gray-400';
-                showDetails = false;
                 break;
         }
-        statusElement.textContent = statusText;
-        statusElement.classList.add(...statusColorClass.split(' '));
 
-        // --- Create Containers for Details (Datastores, Summaries, Tasks) ---
-        const detailsContainer = document.createElement('div');
-        detailsContainer.className = `pbs-instance-details space-y-4 ${showDetails ? '' : 'hidden'}`;
-        detailsContainer.id = `pbs-details-${instanceId}`;
+        if (instanceWrapper) {
+            // --- Instance Exists: Update ---
+            statusElement = instanceWrapper.querySelector(`#pbs-status-${instanceId}`);
+            detailsContainer = instanceWrapper.querySelector(`#pbs-details-${instanceId}`);
 
-        // --- Datastores Section --- 
-        const dsSection = document.createElement('div');
-        dsSection.id = `pbs-ds-section-${instanceId}`;
-        dsSection.innerHTML = `
-            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Datastores</h4>
-            <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
-                <table id="pbs-ds-table-${instanceId}" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                    <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700/50">
-                        <tr>
-                            <th scope="col" class="px-4 py-2 text-left font-semibold">Name</th>
-                            <th scope="col" class="px-4 py-2 text-left font-semibold">Path</th>
-                            <th scope="col" class="px-4 py-2 text-right font-semibold">Used</th>
-                            <th scope="col" class="px-4 py-2 text-right font-semibold">Available</th>
-                            <th scope="col" class="px-4 py-2 text-right font-semibold">Total</th>
-                            <th scope="col" class="px-4 py-2 text-center font-semibold">Usage</th>
-                            <th scope="col" class="px-4 py-2 text-center font-semibold">GC Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pbs-ds-tbody-${instanceId}" class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <!-- JS fills this -->
-                    </tbody>
-                </table>
-            </div>`;
-        detailsContainer.appendChild(dsSection);
-        
-        // Populate Datastore Table Body
-        const dsTableBody = dsSection.querySelector(`#pbs-ds-tbody-${instanceId}`);
-        if (showDetails && pbsInstance.datastores) {
-             if (pbsInstance.datastores.length === 0) {
-                 dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">No PBS datastores found or accessible.</td></tr>`;
-             } else {
-                 pbsInstance.datastores.forEach(ds => {
-                    const totalBytes = ds.total || 0;
-                    const usedBytes = ds.used || 0;
-                    const availableBytes = (ds.available !== null && ds.available !== undefined) ? ds.available : (totalBytes > 0 ? totalBytes - usedBytes : 0);
-                    const usagePercent = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
-                    const usageColor = getUsageColor(usagePercent);
-                    const usageText = totalBytes > 0 ? `${usagePercent}% (${formatBytes(usedBytes)} of ${formatBytes(totalBytes)})` : 'N/A';
-                    const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
-                    const row = document.createElement('tr');
-                    row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
-                    row.innerHTML = `
-                        <td class="px-4 py-2 whitespace-nowrap">${ds.name || 'N/A'}</td>
-                        <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${ds.path || 'N/A'}</td>
-                        <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(usedBytes)}</td>
-                        <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(availableBytes)}</td>
-                        <td class="px-4 py-2 text-right whitespace-nowrap">${totalBytes > 0 ? formatBytes(totalBytes) : 'N/A'}</td>
-                        <td class="px-4 py-2 text-center min-w-[150px]">${totalBytes > 0 ? createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-'}</td>
-                        <td class="px-4 py-2 text-center whitespace-nowrap">${gcStatusHtml}</td>
-                    `;
-                    dsTableBody.appendChild(row);
-                 });
-             }
-        } else if (!showDetails) {
-             dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
-        }
-
-        // --- Task Summaries Section --- 
-        const summariesSection = document.createElement('div');
-        summariesSection.id = `pbs-summaries-section-${instanceId}`;
-        summariesSection.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4';
-        
-        // Helper to create a summary card
-        const createSummaryCard = (type, title, summaryData) => {
-            const card = document.createElement('div');
-            card.className = 'border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-100/50 dark:bg-gray-700/50';
-            const summary = summaryData?.summary || {}; // Default to empty if data missing
-            const ok = summary.ok ?? '-';
-            const failed = summary.failed ?? '-';
-            const total = summary.total ?? '-';
-            const lastOk = formatPbsTimestamp(summary.lastOk);
-            const lastFailed = formatPbsTimestamp(summary.lastFailed);
-            const failedStyle = (failed > 0) ? 'font-bold text-red-600 dark:text-red-400' : 'text-red-600 dark:text-red-400 font-semibold';
-
-            card.innerHTML = `
-                <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">${title} (7d)</h4>
-                <div class="space-y-1 text-sm">
-                    <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span class="ml-1 text-green-600 dark:text-green-400 font-semibold">${ok}</span></div>
-                    <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span class="ml-1 ${failedStyle}">${failed}</span></div>
-                    <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">${total}</span></div>
-                    <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span class="ml-1 text-gray-600 dark:text-gray-400 text-xs">${lastOk}</span></div>
-                    <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span class="ml-1 text-gray-600 dark:text-gray-400 text-xs">${lastFailed}</span></div>
-                </div>`;
-            return card;
-        };
-
-        summariesSection.appendChild(createSummaryCard('backup', 'Backups', pbsInstance.backupTasks));
-        summariesSection.appendChild(createSummaryCard('verify', 'Verification', pbsInstance.verificationTasks));
-        summariesSection.appendChild(createSummaryCard('sync', 'Sync', pbsInstance.syncTasks));
-        summariesSection.appendChild(createSummaryCard('prune', 'Prune/GC', pbsInstance.pruneTasks));
-        detailsContainer.appendChild(summariesSection);
-
-        // --- Recent Backup Tasks Section --- 
-        const recentTasksSection = document.createElement('div');
-        recentTasksSection.id = `pbs-recent-tasks-section-${instanceId}`;
-        recentTasksSection.innerHTML = `
-            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Recent Backup Tasks</h4>
-            <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded max-h-96 overflow-y-auto">
-                <table id="pbs-recent-tasks-table-${instanceId}" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                    <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700/50 sticky top-0">
-                        <tr>
-                            <th scope="col" class="px-4 py-2 text-left font-semibold">Guest</th>
-                            <th scope="col" class="px-4 py-2 text-center font-semibold">Status</th>
-                            <th scope="col" class="px-4 py-2 text-left font-semibold">Start Time</th>
-                            <th scope="col" class="px-4 py-2 text-left font-semibold">Duration</th>
-                            <th scope="col" class="px-4 py-2 text-left font-semibold">UPID</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pbs-recent-tasks-tbody-${instanceId}" class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <!-- JS fills this -->
-                    </tbody>
-                </table>
-            </div>`;
-        detailsContainer.appendChild(recentTasksSection);
-
-        // Populate Recent Tasks Table Body
-        const recentTasksTbody = recentTasksSection.querySelector(`#pbs-recent-tasks-tbody-${instanceId}`);
-        if (showDetails && pbsInstance.backupTasks && pbsInstance.backupTasks.recentTasks) {
-            const recentTasks = pbsInstance.backupTasks.recentTasks;
-            if (recentTasks.length === 0) {
-                recentTasksTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">No recent backup tasks found (last 7 days).</td></tr>`;
-            } else {
-                recentTasks.forEach(task => {
-                    const row = document.createElement('tr');
-                    row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
-                    row.innerHTML = `
-                        <td class="px-4 py-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${task.id || 'N/A'}</td>
-                        <td class="px-4 py-2 text-center">${getPbsStatusIcon(task.status)}</td>
-                        <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatPbsTimestamp(task.startTime)}</td>
-                        <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatDuration(task.duration)}</td>
-                        <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-400 dark:text-gray-500 font-mono truncate" title="${task.upid || 'N/A'}">${task.upid || 'N/A'}</td>
-                    `;
-                    recentTasksTbody.appendChild(row);
-                });
+            // Update status text and color
+            if (statusElement) {
+                statusElement.textContent = statusText;
+                statusElement.className = `text-sm ${statusColorClass}`; // Update classes
             }
-        } else if (!showDetails) {
-            recentTasksTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
-        }
 
-        // Append details container (conditionally hidden) to the main wrapper
-        instanceWrapper.appendChild(detailsContainer);
+            if (detailsContainer) {
+                 // Update Datastore Table Body
+                 dsTableBody = detailsContainer.querySelector(`#pbs-ds-tbody-${instanceId}`);
+                 if (dsTableBody) {
+                     dsTableBody.innerHTML = ''; // Clear existing rows
+                     if (showDetails && pbsInstance.datastores) {
+                         if (pbsInstance.datastores.length === 0) {
+                             dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">No PBS datastores found or accessible.</td></tr>`;
+                         } else {
+                             pbsInstance.datastores.forEach(ds => {
+                                const totalBytes = ds.total || 0;
+                                const usedBytes = ds.used || 0;
+                                const availableBytes = (ds.available !== null && ds.available !== undefined) ? ds.available : (totalBytes > 0 ? totalBytes - usedBytes : 0);
+                                const usagePercent = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
+                                const usageColor = getUsageColor(usagePercent);
+                                const usageText = totalBytes > 0 ? `${usagePercent}% (${formatBytes(usedBytes)} of ${formatBytes(totalBytes)})` : 'N/A';
+                                const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
+                                const row = document.createElement('tr');
+                                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
+                                row.innerHTML = `<td class="px-4 py-2 whitespace-nowrap">${ds.name || 'N/A'}</td> <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${ds.path || 'N/A'}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(usedBytes)}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(availableBytes)}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${totalBytes > 0 ? formatBytes(totalBytes) : 'N/A'}</td> <td class="px-4 py-2 text-center min-w-[150px]">${totalBytes > 0 ? createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-'}</td> <td class="px-4 py-2 text-center whitespace-nowrap">${gcStatusHtml}</td>`;
+                                dsTableBody.appendChild(row);
+                             });
+                         }
+                    } else { // Not OK status, show status text in table
+                         dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+                    }
+                 }
 
-        // Append the wrapper for this instance to the main container
-        container.appendChild(instanceWrapper);
+                 // Update Task Summary Cards
+                 const summariesSection = detailsContainer.querySelector(`#pbs-summaries-section-${instanceId}`);
+                 if (summariesSection) {
+                     summariesSection.innerHTML = ''; // Clear existing cards
+                     summariesSection.appendChild(createSummaryCard('backup', 'Backups', pbsInstance.backupTasks));
+                     summariesSection.appendChild(createSummaryCard('verify', 'Verification', pbsInstance.verificationTasks));
+                     summariesSection.appendChild(createSummaryCard('sync', 'Sync', pbsInstance.syncTasks));
+                     summariesSection.appendChild(createSummaryCard('prune', 'Prune/GC', pbsInstance.pruneTasks));
+                 }
+
+                 // Update Task Tables
+                if (showDetails) {
+                    populatePbsTaskTable(`pbs-recent-backup-tasks-tbody-${instanceId}`, pbsInstance.backupTasks?.recentTasks, sortState.pbsBackup.column, sortState.pbsBackup.direction);
+                    populatePbsTaskTable(`pbs-recent-verify-tasks-tbody-${instanceId}`, pbsInstance.verificationTasks?.recentTasks, sortState.pbsVerify.column, sortState.pbsVerify.direction);
+                    populatePbsTaskTable(`pbs-recent-sync-tasks-tbody-${instanceId}`, pbsInstance.syncTasks?.recentTasks, sortState.pbsSync.column, sortState.pbsSync.direction);
+                    populatePbsTaskTable(`pbs-recent-prunegc-tasks-tbody-${instanceId}`, pbsInstance.pruneTasks?.recentTasks, sortState.pbsPruneGc.column, sortState.pbsPruneGc.direction);
+                    // Re-apply/Ensure sort listeners exist
+                    setupPbsSortListener(`pbs-recent-backup-tasks-table-${instanceId}`, 'pbsBackup', pbsInstance);
+                    setupPbsSortListener(`pbs-recent-verify-tasks-table-${instanceId}`, 'pbsVerify', pbsInstance);
+                    setupPbsSortListener(`pbs-recent-sync-tasks-table-${instanceId}`, 'pbsSync', pbsInstance);
+                    setupPbsSortListener(`pbs-recent-prunegc-tasks-table-${instanceId}`, 'pbsPruneGc', pbsInstance);
+                } else {
+                     // If details are hidden, ensure tables show the status message
+                    const backupTbody = document.getElementById(`pbs-recent-backup-tasks-tbody-${instanceId}`);
+                    if (backupTbody) backupTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+                    const verifyTbody = document.getElementById(`pbs-recent-verify-tasks-tbody-${instanceId}`);
+                    if (verifyTbody) verifyTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+                    const syncTbody = document.getElementById(`pbs-recent-sync-tasks-tbody-${instanceId}`);
+                    if (syncTbody) syncTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+                    const pruneTbody = document.getElementById(`pbs-recent-prunegc-tasks-tbody-${instanceId}`);
+                    if (pruneTbody) pruneTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+                }
+
+                // Set visibility of the details container
+                detailsContainer.classList.toggle('hidden', !showDetails);
+            } // end if(detailsContainer)
+
+        } else {
+            // --- Instance Doesn't Exist: Create ---
+            instanceWrapper = document.createElement('div');
+            instanceWrapper.className = 'pbs-instance-section border border-gray-200 dark:border-gray-700 rounded p-4 mb-4 bg-gray-50/30 dark:bg-gray-800/30';
+            instanceWrapper.id = instanceElementId;
+
+            // Header
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'flex justify-between items-center mb-3';
+            const instanceTitle = document.createElement('h3');
+            instanceTitle.className = 'text-lg font-semibold text-gray-800 dark:text-gray-200';
+            instanceTitle.textContent = instanceName;
+            statusElement = document.createElement('div');
+            statusElement.className = `text-sm ${statusColorClass}`;
+            statusElement.id = `pbs-status-${instanceId}`;
+            statusElement.textContent = statusText;
+            headerDiv.appendChild(instanceTitle);
+            headerDiv.appendChild(statusElement);
+            instanceWrapper.appendChild(headerDiv);
+
+            // Details Container
+            detailsContainer = document.createElement('div');
+            detailsContainer.className = `pbs-instance-details space-y-4 ${showDetails ? '' : 'hidden'}`;
+            detailsContainer.id = `pbs-details-${instanceId}`;
+
+            // Datastores Section
+            const dsSection = document.createElement('div');
+            dsSection.id = `pbs-ds-section-${instanceId}`;
+            dsSection.innerHTML = `
+                <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Datastores</h4>
+                <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
+                    <table id="pbs-ds-table-${instanceId}" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                         <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700/50"> <tr> <th scope="col" class="px-4 py-2 text-left font-semibold">Name</th> <th scope="col" class="px-4 py-2 text-left font-semibold">Path</th> <th scope="col" class="px-4 py-2 text-right font-semibold">Used</th> <th scope="col" class="px-4 py-2 text-right font-semibold">Available</th> <th scope="col" class="px-4 py-2 text-right font-semibold">Total</th> <th scope="col" class="px-4 py-2 text-center font-semibold">Usage</th> <th scope="col" class="px-4 py-2 text-center font-semibold">GC Status</th> </tr> </thead>
+                        <tbody id="pbs-ds-tbody-${instanceId}" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+                    </table>
+                </div>`;
+            detailsContainer.appendChild(dsSection);
+
+            // Task Summaries Section
+            const summariesSection = document.createElement('div');
+            summariesSection.id = `pbs-summaries-section-${instanceId}`;
+            summariesSection.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4';
+            summariesSection.appendChild(createSummaryCard('backup', 'Backups', pbsInstance.backupTasks));
+            summariesSection.appendChild(createSummaryCard('verify', 'Verification', pbsInstance.verificationTasks));
+            summariesSection.appendChild(createSummaryCard('sync', 'Sync', pbsInstance.syncTasks));
+            summariesSection.appendChild(createSummaryCard('prune', 'Prune/GC', pbsInstance.pruneTasks));
+            detailsContainer.appendChild(summariesSection);
+
+            // Create Task Sections
+             const recentBackupTasksSection = document.createElement('div');
+             recentBackupTasksSection.innerHTML = createTaskTableHTML(`pbs-recent-backup-tasks-table-${instanceId}`, 'Backup', 'Guest');
+             detailsContainer.appendChild(recentBackupTasksSection);
+             const recentVerifyTasksSection = document.createElement('div');
+             recentVerifyTasksSection.innerHTML = createTaskTableHTML(`pbs-recent-verify-tasks-table-${instanceId}`, 'Verification', 'Guest/Group');
+             detailsContainer.appendChild(recentVerifyTasksSection);
+             const recentSyncTasksSection = document.createElement('div');
+             recentSyncTasksSection.innerHTML = createTaskTableHTML(`pbs-recent-sync-tasks-table-${instanceId}`, 'Sync', 'Job ID');
+             detailsContainer.appendChild(recentSyncTasksSection);
+             const recentPruneGcTasksSection = document.createElement('div');
+             recentPruneGcTasksSection.innerHTML = createTaskTableHTML(`pbs-recent-prunegc-tasks-table-${instanceId}`, 'Prune/GC', 'Datastore/Group');
+             detailsContainer.appendChild(recentPruneGcTasksSection);
+
+            instanceWrapper.appendChild(detailsContainer);
+            container.appendChild(instanceWrapper); // Append new instance to DOM
+
+            // Populate tables and attach listeners AFTER appending
+            dsTableBody = instanceWrapper.querySelector(`#pbs-ds-tbody-${instanceId}`); // Find the newly created body
+             if (dsTableBody) {
+                 if (showDetails && pbsInstance.datastores) {
+                      if (pbsInstance.datastores.length === 0) { dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">No PBS datastores found or accessible.</td></tr>`; }
+                      else { 
+                          // Populate rows
+                          pbsInstance.datastores.forEach(ds => { 
+                            const totalBytes = ds.total || 0; 
+                            const usedBytes = ds.used || 0; 
+                            const availableBytes = (ds.available !== null && ds.available !== undefined) ? ds.available : (totalBytes > 0 ? totalBytes - usedBytes : 0); 
+                            const usagePercent = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0; 
+                            const usageColor = getUsageColor(usagePercent); 
+                            const usageText = totalBytes > 0 ? `${usagePercent}% (${formatBytes(usedBytes)} of ${formatBytes(totalBytes)})` : 'N/A'; 
+                            const gcStatusHtml = getPbsGcStatusText(ds.gcStatus); 
+                            const row = document.createElement('tr'); 
+                            row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50'; 
+                            row.innerHTML = `<td class="px-4 py-2 whitespace-nowrap">${ds.name || 'N/A'}</td> <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${ds.path || 'N/A'}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(usedBytes)}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(availableBytes)}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${totalBytes > 0 ? formatBytes(totalBytes) : 'N/A'}</td> <td class="px-4 py-2 text-center min-w-[150px]">${totalBytes > 0 ? createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-'}</td> <td class="px-4 py-2 text-center whitespace-nowrap">${gcStatusHtml}</td>`; 
+                            dsTableBody.appendChild(row);
+                          });
+                      }
+                 } else { dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`; }
+             }
+
+             if (showDetails) {
+                populatePbsTaskTable(`pbs-recent-backup-tasks-tbody-${instanceId}`, pbsInstance.backupTasks?.recentTasks, sortState.pbsBackup.column, sortState.pbsBackup.direction);
+                populatePbsTaskTable(`pbs-recent-verify-tasks-tbody-${instanceId}`, pbsInstance.verificationTasks?.recentTasks, sortState.pbsVerify.column, sortState.pbsVerify.direction);
+                populatePbsTaskTable(`pbs-recent-sync-tasks-tbody-${instanceId}`, pbsInstance.syncTasks?.recentTasks, sortState.pbsSync.column, sortState.pbsSync.direction);
+                populatePbsTaskTable(`pbs-recent-prunegc-tasks-tbody-${instanceId}`, pbsInstance.pruneTasks?.recentTasks, sortState.pbsPruneGc.column, sortState.pbsPruneGc.direction);
+
+                setupPbsSortListener(`pbs-recent-backup-tasks-table-${instanceId}`, 'pbsBackup', pbsInstance);
+                setupPbsSortListener(`pbs-recent-verify-tasks-table-${instanceId}`, 'pbsVerify', pbsInstance);
+                setupPbsSortListener(`pbs-recent-sync-tasks-table-${instanceId}`, 'pbsSync', pbsInstance);
+                setupPbsSortListener(`pbs-recent-prunegc-tasks-table-${instanceId}`, 'pbsPruneGc', pbsInstance);
+             } else {
+                 // Ensure initial status message is present if details start hidden
+                 const backupTbody = document.getElementById(`pbs-recent-backup-tasks-tbody-${instanceId}`); if (backupTbody) backupTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+                 const verifyTbody = document.getElementById(`pbs-recent-verify-tasks-tbody-${instanceId}`); if (verifyTbody) verifyTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+                 const syncTbody = document.getElementById(`pbs-recent-sync-tasks-tbody-${instanceId}`); if (syncTbody) syncTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+                 const pruneTbody = document.getElementById(`pbs-recent-prunegc-tasks-tbody-${instanceId}`); if (pruneTbody) pruneTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+             }
+
+        } // End Upsert Logic
+
     }); // End forEach pbsInstance
+
+    // --- Remove Orphaned Instances ---
+    container.querySelectorAll('.pbs-instance-section').forEach(el => {
+        if (!currentInstanceIds.has(el.id)) {
+            console.log(`Removing orphaned PBS instance element: ${el.id}`);
+            el.remove();
+        }
+    });
+
   }
   // --- End Update PBS Info Function ---
 

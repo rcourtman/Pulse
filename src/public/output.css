@@ -685,6 +685,10 @@ video {
   margin-right: 0.5rem;
 }
 
+.mb-4 {
+  margin-bottom: 1rem;
+}
+
 .block {
   display: block;
 }
@@ -745,8 +749,8 @@ video {
   height: 100%;
 }
 
-.max-h-96 {
-  max-height: 24rem;
+.max-h-60 {
+  max-height: 15rem;
 }
 
 .max-h-\[80vh\] {
