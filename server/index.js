@@ -124,71 +124,108 @@ if (process.env.NODE_ENV === 'development') {
 
 // --- Create API Clients for Each Endpoint ---
 const apiClients = {}; // Use an object to store clients, keyed by endpoint.id
-let pbsApiClient = null; // Initialize PBS client as null
-let pbsConfig = null; // Initialize PBS config as null
+const pbsConfigs = []; // Array to hold all parsed PBS configurations
+const pbsApiClients = {}; // Object to hold initialized clients, keyed by pbsConfig.id
 
 // --- Load PBS Configuration (if provided) ---
-// Check for User/Password first
-if (process.env.PBS_HOST && process.env.PBS_USER && process.env.PBS_PASSWORD) {
-    const pbsHost = process.env.PBS_HOST;
-    const pbsUser = process.env.PBS_USER;
-    const pbsPassword = process.env.PBS_PASSWORD;
-    const pbsRealm = process.env.PBS_REALM || 'pbs'; // Default realm 'pbs'
+function loadPbsConfig(index = null) {
+    const suffix = index ? `_${index}` : '';
+    const hostVar = `PBS_HOST${suffix}`;
+    const userVar = `PBS_USER${suffix}`;
+    const passVar = `PBS_PASSWORD${suffix}`;
+    const realmVar = `PBS_REALM${suffix}`;
+    const tokenIdVar = `PBS_TOKEN_ID${suffix}`;
+    const tokenSecretVar = `PBS_TOKEN_SECRET${suffix}`;
+    const nodeNameVar = `PBS_NODE_NAME${suffix}`;
+    const portVar = `PBS_PORT${suffix}`;
+    const selfSignedVar = `PBS_ALLOW_SELF_SIGNED_CERTS${suffix}`;
 
-    // Basic placeholder check for PBS user/pass vars
-    const pbsPlaceholders = placeholderValues.filter(p =>
-        pbsHost.includes(p) || pbsUser.includes(p) || pbsPassword.includes(p)
-    );
-
-    if (pbsPlaceholders.length > 0) {
-        console.warn(`WARN: Skipping PBS configuration. The following variables seem to contain placeholder values: ${pbsPlaceholders.join(', ')}`);
-    } else {
-        pbsConfig = {
-            id: 'pbs_primary_userpass',
-            authMethod: 'userpass', // Indicate auth method
-            name: process.env.PBS_NODE_NAME || pbsHost,
-            host: pbsHost,
-            port: process.env.PBS_PORT || '8007',
-            user: pbsUser,
-            password: pbsPassword,
-            realm: pbsRealm,
-            nodeName: process.env.PBS_NODE_NAME,
-            allowSelfSignedCerts: process.env.PBS_ALLOW_SELF_SIGNED_CERTS !== 'false',
-            enabled: true
-        };
-        console.log(`INFO: Found PBS configuration (User/Password): ${pbsConfig.name} (${pbsConfig.host})`);
+    const pbsHost = process.env[hostVar];
+    if (!pbsHost) {
+        // No more PBS configs if PBS_HOST is missing
+        return false; // Indicate no more configs found
     }
-// Check for Token second (fallback)
-} else if (process.env.PBS_HOST && process.env.PBS_TOKEN_ID && process.env.PBS_TOKEN_SECRET) {
-    const pbsHost = process.env.PBS_HOST;
-    const pbsTokenId = process.env.PBS_TOKEN_ID;
-    const pbsTokenSecret = process.env.PBS_TOKEN_SECRET;
 
-    // Basic placeholder check for PBS token vars
-    const pbsPlaceholders = placeholderValues.filter(p =>
-        pbsHost.includes(p) || pbsTokenId.includes(p) || pbsTokenSecret.includes(p)
-    );
+    const pbsUser = process.env[userVar];
+    const pbsPassword = process.env[passVar];
+    const pbsTokenId = process.env[tokenIdVar];
+    const pbsTokenSecret = process.env[tokenSecretVar];
 
-    if (pbsPlaceholders.length > 0) {
-        console.warn(`WARN: Skipping PBS configuration (Token). The following variables seem to contain placeholder values: ${pbsPlaceholders.join(', ')}`);
-    } else {
-        pbsConfig = {
-            id: 'pbs_primary_token',
-            authMethod: 'token', // Indicate auth method
-            name: process.env.PBS_NODE_NAME || pbsHost,
-            host: pbsHost,
-            port: process.env.PBS_PORT || '8007',
-            tokenId: pbsTokenId,
-            tokenSecret: pbsTokenSecret,
-            nodeName: process.env.PBS_NODE_NAME,
-            allowSelfSignedCerts: process.env.PBS_ALLOW_SELF_SIGNED_CERTS !== 'false',
-            enabled: true
-        };
-        console.log(`INFO: Found PBS configuration (API Token): ${pbsConfig.name} (${pbsConfig.host})`);
+    let config = null;
+    let idPrefix = index ? `pbs_endpoint_${index}` : 'pbs_primary';
+
+    // Check User/Password first
+    if (pbsUser && pbsPassword) {
+        const pbsPlaceholders = placeholderValues.filter(p =>
+            pbsHost.includes(p) || pbsUser.includes(p) || pbsPassword.includes(p)
+        );
+        if (pbsPlaceholders.length > 0) {
+            console.warn(`WARN: Skipping PBS configuration ${index || 'primary'} (User/Pass). Placeholder values detected for: ${pbsPlaceholders.join(', ')}`);
+        } else {
+            config = {
+                id: `${idPrefix}_userpass`,
+                authMethod: 'userpass',
+                name: process.env[nodeNameVar] || pbsHost, // User-defined name or host
+                host: pbsHost,
+                port: process.env[portVar] || '8007',
+                user: pbsUser,
+                password: pbsPassword,
+                realm: process.env[realmVar] || 'pbs',
+                nodeName: process.env[nodeNameVar], // Store explicitly set node name
+                allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
+                enabled: true // Assuming enabled if configured
+            };
+            console.log(`INFO: Found PBS configuration ${index || 'primary'} (User/Password): ${config.name} (${config.host})`);
+        }
+    } 
+    // Check Token second
+    else if (pbsTokenId && pbsTokenSecret) {
+        const pbsPlaceholders = placeholderValues.filter(p =>
+            pbsHost.includes(p) || pbsTokenId.includes(p) || pbsTokenSecret.includes(p)
+        );
+        if (pbsPlaceholders.length > 0) {
+            console.warn(`WARN: Skipping PBS configuration ${index || 'primary'} (Token). Placeholder values detected for: ${pbsPlaceholders.join(', ')}`);
+        } else {
+            config = {
+                id: `${idPrefix}_token`,
+                authMethod: 'token',
+                name: process.env[nodeNameVar] || pbsHost,
+                host: pbsHost,
+                port: process.env[portVar] || '8007',
+                tokenId: pbsTokenId,
+                tokenSecret: pbsTokenSecret,
+                nodeName: process.env[nodeNameVar],
+                allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
+                enabled: true
+            };
+             console.log(`INFO: Found PBS configuration ${index || 'primary'} (API Token): ${config.name} (${config.host})`);
+        }
+    } 
+    // Warn if host is set but auth is incomplete
+    else {
+         console.warn(`WARN: Partial PBS configuration found for ${hostVar}. Please set either (${userVar} + ${passVar}) or (${tokenIdVar} + ${tokenSecretVar}) along with ${hostVar}.`);
     }
-} else if (process.env.PBS_HOST || process.env.PBS_TOKEN_ID || process.env.PBS_TOKEN_SECRET || process.env.PBS_USER || process.env.PBS_PASSWORD) {
-    // Warn if some but not all required PBS vars are set
-    console.warn("WARN: Partial PBS configuration found. Please set PBS_HOST and either (PBS_TOKEN_ID + PBS_TOKEN_SECRET) or (PBS_USER + PBS_PASSWORD) to enable PBS monitoring.");
+
+    if (config) {
+        pbsConfigs.push(config);
+        return true; // Indicate a config was found and added
+    }
+    return true; // Indicate we should check the next index even if this one was partial/invalid
+}
+
+// Load primary PBS config (index=null)
+loadPbsConfig();
+
+// Load additional PBS configs (index=2, 3, ...)
+let pbsIndex = 2;
+while (loadPbsConfig(pbsIndex)) {
+    pbsIndex++;
+}
+
+if (pbsConfigs.length > 0) {
+    console.log(`INFO: Loaded configuration for ${pbsConfigs.length} PBS instances.`);
+} else {
+     console.log("INFO: No PBS instances configured.");
 }
 // --- End PBS Configuration Loading ---
 
@@ -321,54 +358,69 @@ async function getPbsAuthTicketAndSetupClient(config) {
     }
 }
 
-async function initializePbsClient() {
-    if (pbsConfig) {
-        if (pbsConfig.authMethod === 'userpass') {
-            pbsApiClient = await getPbsAuthTicketAndSetupClient(pbsConfig);
-            if (pbsApiClient) {
-                console.log(`INFO: Initialized API client for PBS (User/Password Auth): ${pbsConfig.name} (${pbsConfig.host})`);
-            } else {
-                console.error("ERROR: Failed to initialize PBS client using User/Password.");
-            }
-        } else if (pbsConfig.authMethod === 'token') {
-            // Original Token Auth Logic
-            const pbsBaseURL = pbsConfig.host.includes('://')
-                ? `${pbsConfig.host}/api2/json`
-                : `https://${pbsConfig.host}:${pbsConfig.port}/api2/json`;
+async function initializeAllPbsClients() {
+    if (pbsConfigs.length === 0) return;
 
-            const pbsAxiosInstance = axios.create({
-                baseURL: pbsBaseURL,
-                httpsAgent: new https.Agent({
-                    rejectUnauthorized: !pbsConfig.allowSelfSignedCerts
-                }),
-                headers: {
-                    'Content-Type': 'application/json'
+    console.log(`INFO: Initializing API clients for ${pbsConfigs.length} PBS instances...`);
+    const initPromises = pbsConfigs.map(async (config) => {
+        let clientData = null;
+        try {
+            if (config.authMethod === 'userpass') {
+                clientData = await getPbsAuthTicketAndSetupClient(config);
+                if (clientData) {
+                    console.log(`INFO: Initialized API client for PBS (User/Password Auth): ${config.name} (${config.host})`);
+                } else {
+                    console.error(`ERROR: Failed to initialize PBS client (User/Password) for: ${config.name} (${config.host})`);
                 }
-            });
+            } else if (config.authMethod === 'token') {
+                // Token Auth Logic (adapted from old initializePbsClient)
+                const pbsBaseURL = config.host.includes('://')
+                    ? `${config.host}/api2/json`
+                    : `https://${config.host}:${config.port}/api2/json`;
 
-            pbsAxiosInstance.interceptors.request.use(config => {
-                config.headers.Authorization = `PBSAPIToken ${pbsConfig.tokenId}:${pbsConfig.tokenSecret}`;
-                return config;
-            });
+                const pbsAxiosInstance = axios.create({
+                    baseURL: pbsBaseURL,
+                    httpsAgent: new https.Agent({
+                        rejectUnauthorized: !config.allowSelfSignedCerts
+                    }),
+                    headers: { 'Content-Type': 'application/json' }
+                });
 
-            axiosRetry(pbsAxiosInstance, {
-                retries: 3,
-                retryDelay: (retryCount, error) => {
-                    console.warn(`Retrying PBS API request (Token Auth - attempt ${retryCount}) due to error: ${error.message}`);
-                    return axiosRetry.exponentialDelay(retryCount);
-                },
-                retryCondition: (error) => {
-                    return axiosRetry.isNetworkError(error) || axiosRetry.isRetryableError(error);
-                },
-            });
+                pbsAxiosInstance.interceptors.request.use(reqConfig => {
+                    reqConfig.headers.Authorization = `PBSAPIToken ${config.tokenId}:${config.tokenSecret}`;
+                    return reqConfig;
+                });
 
-            pbsApiClient = { client: pbsAxiosInstance, config: pbsConfig };
-            console.log(`INFO: Initialized API client for PBS (Token Auth): ${pbsConfig.name} (${pbsConfig.host})`);
+                axiosRetry(pbsAxiosInstance, {
+                    retries: 3,
+                    retryDelay: (retryCount, error) => {
+                        console.warn(`Retrying PBS API request for ${config.name} (Token Auth - attempt ${retryCount}) due to error: ${error.message}`);
+                        return axiosRetry.exponentialDelay(retryCount);
+                    },
+                    retryCondition: (error) => {
+                        return axiosRetry.isNetworkError(error) || axiosRetry.isRetryableError(error);
+                    },
+                });
+
+                clientData = { client: pbsAxiosInstance, config: config };
+                console.log(`INFO: Initialized API client for PBS (Token Auth): ${config.name} (${config.host})`);
+            } else {
+                 console.error(`ERROR: Unknown authMethod '${config.authMethod}' for PBS config: ${config.name}`);
+            }
+
+            if (clientData) {
+                pbsApiClients[config.id] = clientData; // Store successful client keyed by config ID
+            }
+        } catch (error) {
+             console.error(`ERROR: Unhandled exception during PBS client initialization for ${config.name}: ${error.message}`);
         }
-    }
+    });
+
+    await Promise.allSettled(initPromises);
+    console.log(`INFO: Finished initializing PBS API clients. ${Object.keys(pbsApiClients).length} clients successfully initialized.`);
 }
 
-if (Object.keys(apiClients).length === 0 && !pbsApiClient) {
+if (Object.keys(apiClients).length === 0 && pbsConfigs.length === 0) {
     console.error("\n--- Configuration Error ---");
     console.error("No enabled Proxmox VE or PBS endpoints could be configured. Please check your .env file and environment variables.");
     process.exit(1);
@@ -562,7 +614,7 @@ let currentNodes = [];
 let currentVms = [];
 let currentContainers = [];
 let currentMetrics = [];
-let pbsData = { status: 'initializing' }; // Initial status
+let pbsDataArray = []; // Array to hold data for each PBS instance
 let isDiscoveryRunning = false; // Prevent concurrent discovery runs
 let isMetricsRunning = false;   // Prevent concurrent metric runs
 let discoveryTimeoutId = null;
@@ -705,8 +757,7 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
  */
 async function fetchDiscoveryData() {
   console.log("[Discovery Cycle] Starting fetch across all endpoints...");
-  // Initialize with the *current* pbsData state to preserve status between fetches if a fetch fails
-  let aggregatedResult = { nodes: [], vms: [], containers: [], pbs: pbsData || { status: 'initializing' } };
+  let aggregatedResult = { nodes: [], vms: [], containers: [], pbs: [] }; // pbs is now an array
 
   // --- PVE Data Fetching ---
   const pveEndpointIds = Object.keys(apiClients).filter(id => !apiClients[id].isPbs); // Exclude PBS client if present
@@ -818,111 +869,113 @@ async function fetchDiscoveryData() {
   }
 
   // --- Fetch PBS Data (if configured) ---
-  let pbsFetchStatus = 'unconfigured'; // Default status if not configured
-  let fetchedPbsData = null; // Store successfully fetched data
+  const pbsClientIds = Object.keys(pbsApiClients);
+  const pbsDataResults = []; // Array to hold results for each PBS instance
 
-  if (pbsApiClient) {
-      console.log("INFO: Fetching PBS discovery data...");
-      let pbsNodeName = pbsApiClient.config.nodeName; // Use configured name if available
+  if (pbsClientIds.length > 0) {
+      console.log(`INFO: Fetching discovery data for ${pbsClientIds.length} PBS instances...`);
+      const pbsPromises = pbsClientIds.map(async (pbsClientId) => {
+          const { client: pbsClientInstance, config: pbsInstanceConfig } = pbsApiClients[pbsClientId];
+          const instanceName = pbsInstanceConfig.name; // Use the configured name
+          let instanceData = { 
+              pbsEndpointId: pbsClientId, // Identifier for this PBS instance
+              pbsInstanceName: instanceName, // Human-readable name
+              status: 'error', // Default to error
+              nodeName: pbsInstanceConfig.nodeName, // Start with configured node name
+              backupTasks: { recentTasks: [], summary: {} },
+              datastores: [],
+              verificationTasks: { summary: {} },
+              syncTasks: { summary: {} },
+              pruneTasks: { summary: {} }
+          }; 
 
-      if (!pbsApiClient.client) {
-          console.error("ERROR: pbsApiClient.client is not initialized!");
-          pbsFetchStatus = 'error'; // Set status to error if client isn't ready
-      } else {
-          if (!pbsNodeName) {
-              pbsNodeName = await fetchPbsNodeName(pbsApiClient);
-              if (pbsNodeName && pbsNodeName !== 'localhost') {
-                  pbsApiClient.config.nodeName = pbsNodeName;
+          try {
+              // Ensure client is valid (redundant check, should be caught in init)
+              if (!pbsClientInstance) {
+                  throw new Error(`Client not initialized for PBS instance: ${instanceName}`);
               }
-          }
 
-          // Only proceed if we have a node name (or fallback 'localhost')
-          if (pbsNodeName) {
-              try {
-                  // Fetch all data concurrently
+              // Determine node name if not pre-configured
+              if (!instanceData.nodeName) {
+                  instanceData.nodeName = await fetchPbsNodeName({ client: pbsClientInstance, config: pbsInstanceConfig }); // Pass the object
+                  // Store detected name back in config for future use (within this run cycle)
+                  if (instanceData.nodeName && instanceData.nodeName !== 'localhost') {
+                      pbsInstanceConfig.nodeName = instanceData.nodeName; // Update the config object directly
+                  }
+              }
+
+              // Only proceed if we have a node name
+              if (instanceData.nodeName) {
+                  // Fetch all data concurrently for this instance
                   const [
-                      backupTasks, // Now includes detailed recent tasks
-                      datastores,
-                      verificationTasks,
-                      syncTasks,
-                      pruneTasks
+                      backupTasksResult,
+                      datastoresResult,
+                      verificationTasksResult,
+                      syncTasksResult,
+                      pruneTasksResult
                   ] = await Promise.all([
-                      fetchPbsTaskData(pbsApiClient, pbsNodeName), // Enhanced function
-                      fetchPbsDatastoreData(pbsApiClient),
-                      fetchPbsTaskSummaryByType(pbsApiClient, pbsNodeName, ['verify']), // Fetch verification tasks
-                      fetchPbsTaskSummaryByType(pbsApiClient, pbsNodeName, ['sync']),   // Fetch sync tasks
-                      fetchPbsTaskSummaryByType(pbsApiClient, pbsNodeName, ['garbage_collection', 'prune']) // Fetch GC/Prune tasks
+                      fetchPbsTaskData({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName),
+                      fetchPbsDatastoreData({ client: pbsClientInstance, config: pbsInstanceConfig }),
+                      fetchPbsTaskSummaryByType({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName, ['verify']),
+                      fetchPbsTaskSummaryByType({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName, ['sync']),
+                      fetchPbsTaskSummaryByType({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName, ['garbage_collection', 'prune'])
                   ]);
 
-                  // Combine fetched data *only on success*
-                  fetchedPbsData = {
-                      backupTasks: backupTasks, // Contains { recentTasks: [], summary: {...} }
-                      datastores: datastores, // Contains GC status per datastore
-                      verificationTasks: verificationTasks, // Contains summary: {...}
-                      syncTasks: syncTasks,             // Contains summary: {...}
-                      pruneTasks: pruneTasks,           // Contains summary: {...} for GC/Prune
-                      nodeName: pbsNodeName,
-                      status: 'ok' // Overall status is OK if all fetches succeed
-                  };
-                  pbsFetchStatus = 'ok'; // Update status on successful fetch
-                  console.log("INFO: Finished fetching PBS discovery data successfully.");
-
-              } catch (pbsError) {
-                  console.error(`ERROR: Failed fetching PBS data during discovery cycle: ${pbsError.message}`);
-                  pbsFetchStatus = 'error'; // Set status to error on fetch failure
-                  if (pbsError.response?.status === 401) {
-                      console.error("ERROR: PBS API Authentication Expired or Invalid (401). Re-login needed.");
-                  }
-                  // Keep fetchedPbsData as null
+                  // Assign results to the instanceData object
+                  instanceData.backupTasks = backupTasksResult;
+                  instanceData.datastores = datastoresResult;
+                  instanceData.verificationTasks = verificationTasksResult;
+                  instanceData.syncTasks = syncTasksResult;
+                  instanceData.pruneTasks = pruneTasksResult;
+                  instanceData.status = 'ok'; // Mark as OK if all fetches succeeded
+                  console.log(`INFO: Finished fetching PBS discovery data successfully for: ${instanceName}`);
+              } else {
+                  console.error(`ERROR: Could not determine node name for PBS instance ${instanceName}, cannot fetch task data.`);
+                  instanceData.status = 'error'; // Keep status as error
               }
-          } else {
-              console.error("ERROR: Could not determine PBS node name, cannot fetch PBS task data.");
-              pbsFetchStatus = 'error'; // Error if node name is missing
+
+          } catch (pbsError) {
+              console.error(`ERROR: Failed fetching PBS data for instance ${instanceName}: ${pbsError.message}`);
+              instanceData.status = 'error'; // Ensure status is error on any failure
+              if (pbsError.response?.status === 401) {
+                  console.error(`ERROR: PBS API Authentication Expired/Invalid (401) for ${instanceName}.`);
+              }
+              // instanceData already defaults to error state with empty data structures
           }
-      }
+          return instanceData; // Return the data object for this instance (ok or error state)
+      }); // End map over pbsClientIds
+
+      const settledPbsResults = await Promise.allSettled(pbsPromises);
+      settledPbsResults.forEach(result => {
+          if (result.status === 'fulfilled') {
+              pbsDataResults.push(result.value); // Add the instance data (ok or error)
+          } else {
+              // This should ideally not happen if errors are caught within the promise
+              console.error(`ERROR: Unhandled rejection fetching PBS data: ${result.reason}`);
+              // Could push a generic error object here if needed
+          }
+      });
+
   } else {
-       console.log("[Discovery Cycle] No PBS client configured.");
-       pbsFetchStatus = 'unconfigured';
-       // Ensure a default structure for unconfigured state
-       fetchedPbsData = {
-           backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-           datastores: [],
-           verificationTasks: { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-           syncTasks: { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-           pruneTasks: { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-           nodeName: null,
-           status: 'unconfigured'
-       };
+      console.log("[Discovery Cycle] No PBS instances configured or initialized.");
+      // pbsDataResults remains empty
   }
   // --- End Fetch PBS Data ---
 
   // --- Update Global State ---
-  // Update pbsData only if the fetch was successful OR if it's the first time and status is unconfigured
-  if (fetchedPbsData && (pbsFetchStatus === 'ok' || (pbsFetchStatus === 'unconfigured' && pbsData.status === 'initializing'))) {
-        pbsData = fetchedPbsData;
-  } else if (pbsFetchStatus === 'error') {
-      // If fetch failed, update only the status field in the global pbsData
-      // Preserve the last known good data for other fields
-      pbsData = {
-          ...(pbsData || {}), // Keep existing data
-          status: 'error', // Update status to error
-          nodeName: pbsApiClient?.config?.nodeName || pbsData?.nodeName || null // Preserve node name if possible
-      };
-      // Ensure essential structures exist if pbsData was previously null/empty
-       pbsData.backupTasks = pbsData.backupTasks || { recentTasks: [], summary: {} };
-       pbsData.datastores = pbsData.datastores || [];
-       pbsData.verificationTasks = pbsData.verificationTasks || { summary: {} };
-       pbsData.syncTasks = pbsData.syncTasks || { summary: {} };
-       pbsData.pruneTasks = pbsData.pruneTasks || { summary: {} };
-  }
+  // ---> CHANGE: Update pbsDataArray (the global state)
+  pbsDataArray = pbsDataResults; // Replace the global state with the newly fetched array
+  // <--- END CHANGE
 
   // Always update PVE data
   aggregatedResult.nodes = tempNodes;
   aggregatedResult.vms = tempVms;
   aggregatedResult.containers = tempContainers;
 
-  // Add the final, potentially updated pbsData state to the result
-  aggregatedResult.pbs = pbsData;
+  // ---> CHANGE: Add the final pbsDataArray state to the result
+  // aggregatedResult.pbs = pbsData;
+  aggregatedResult.pbs = pbsDataArray;
+  // <--- END CHANGE
 
   if (DEBUG_METRICS) {
     console.log(`[Discovery Cycle] Aggregated PVE results. Total: ${aggregatedResult.nodes.length} nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} containers across ${pveEndpointIds.length} configured PVE endpoints.`);
@@ -1035,34 +1088,32 @@ async function fetchMetricsData(runningVms, runningContainers) {
 io.on('connection', (socket) => {
   console.log(`[socket] Client connected. Total clients: ${io.engine.clientsCount}`);
 
-  // ---> NEW: Send initial PBS status immediately <---
-  let initialPbsStatus = 'unconfigured';
-  if (pbsConfig) {
-      initialPbsStatus = 'configured'; // Assume configured if ENV vars are set
-      // We don't know the *actual* connection status yet, 
-      // discovery cycle will provide 'ok' or 'error' later.
+  // ---> CHANGE: Send initial status based on pbsConfigs array
+  let initialPbsStatuses = pbsConfigs.map(conf => ({ 
+      pbsEndpointId: conf.id,
+      pbsInstanceName: conf.name,
+      status: 'configured' // Assume configured initially
+  }));
+  if (initialPbsStatuses.length === 0) {
+      initialPbsStatuses.push({ pbsEndpointId: 'none', pbsInstanceName: 'None', status: 'unconfigured' });
   }
-  console.log(`[socket] Sending initial PBS status to new client: ${initialPbsStatus}`);
-  socket.emit('pbsInitialStatus', { status: initialPbsStatus });
-  // ---> END NEW SECTION <---
+  console.log(`[socket] Sending initial PBS status array to new client:`, initialPbsStatuses);
+  socket.emit('pbsInitialStatus', initialPbsStatuses); // Send the array
+  // ---> END CHANGE <---
 
-  // Send initial PVE/Metric data immediately if available
+  // ---> CHANGE: Send initial data using pbsDataArray
   if (currentNodes.length > 0 || currentVms.length > 0 || currentContainers.length > 0) {
     console.log('[socket] Sending existing PVE/Metric data to new client.');
-    // Send existing data but ensure pbs status reflects the initial one sent above,
-    // as the global pbsData might not be initialized or might be stale if discovery hasn't run.
-    let pbsToSend = pbsData || { tasks: {}, datastores: [], nodeName: null, status: initialPbsStatus };
-    // Make sure the status aligns with what we just sent in pbsInitialStatus if global state is uninit
-    if (pbsToSend.status === 'initializing') {
-        pbsToSend.status = initialPbsStatus;
-    }
+
+    // If pbsDataArray is empty but configs exist, send the initial configured statuses
+    let pbsToSend = (pbsDataArray && pbsDataArray.length > 0) ? pbsDataArray : initialPbsStatuses.map(s => ({ ...s })); // Use copy
 
     socket.emit('rawData', {
         nodes: currentNodes,
         vms: currentVms,
         containers: currentContainers,
         metrics: currentMetrics,
-        pbs: pbsToSend // Send current global PBS state or initial status
+        pbs: pbsToSend // Send the array of PBS data/statuses
     });
   } else {
     // If no data yet, trigger a discovery cycle (if not already running)
@@ -1092,21 +1143,17 @@ async function runDiscoveryCycle() {
   isDiscoveryRunning = true;
 
   try {
-    const discoveryData = await fetchDiscoveryData(); // This now returns {nodes, vms, containers, pbs}
+    const discoveryData = await fetchDiscoveryData(); // Returns {nodes, vms, containers, pbs: pbsDataArray}
     
-    // Update global state variables from the returned data
-    currentNodes = discoveryData.nodes || []; // Use fallback for safety
+    // Update global state variables
+    currentNodes = discoveryData.nodes || [];
     currentVms = discoveryData.vms || [];
     currentContainers = discoveryData.containers || [];
-    // Only update pbsData if it's present in the result (handles initial state)
-    if (discoveryData.pbs) { 
-      pbsData = discoveryData.pbs; 
-    } else {
-      // If fetchDiscoveryData somehow didn't return pbs, keep old state or default
-      pbsData = pbsData || { tasks: {}, datastores: [], nodeName: null, status: 'error' }; 
-    }
+    // ---> CHANGE: Update pbsDataArray
+    pbsDataArray = discoveryData.pbs || []; // Update the global array
+    // <--- END CHANGE
 
-    // Emit combined data using the updated global variables
+    // Emit combined data
     if (io.engine.clientsCount > 0) {
         if (DEBUG_METRICS) {
              console.log('[Discovery Cycle] Emitting updated structural data including PBS.');
@@ -1115,7 +1162,7 @@ async function runDiscoveryCycle() {
             nodes: currentNodes,
             vms: currentVms,
             containers: currentContainers,
-            pbs: pbsData          // Use the updated global pbs state
+            pbs: pbsDataArray
         });
     }
   } catch (error) {
@@ -1168,11 +1215,11 @@ async function runMetricCycle() {
 
         // Emit combined data (always emit, even if metrics weren't updated this cycle)
         io.emit('rawData', {
-            nodes: currentNodes, // Send current nodes/vms/cts state
+            nodes: currentNodes,
             vms: currentVms,
             containers: currentContainers,
-            pbs: pbsData,          // ADDED: Include current PBS state
-            metrics: currentMetrics // Send the newly fetched metrics
+            pbs: pbsDataArray,
+            metrics: currentMetrics
         });
     } else {
         // console.log('[Metrics Cycle] No running guests found, skipping metric fetch.');
@@ -1181,7 +1228,7 @@ async function runMetricCycle() {
         io.emit('rawData', {
             nodes: currentNodes, vms: currentVms,
             containers: currentContainers, metrics: currentMetrics,
-            pbs: pbsData // ADDED: Include current PBS state
+            pbs: pbsDataArray
         });
     }
 
@@ -1210,8 +1257,6 @@ console.log('Starting initial data fetch cycles...');
 runDiscoveryCycle(); // Run discovery first
 // Metrics will be triggered after discovery or by its own timer if clients connect later
 scheduleNextMetric(); // Start scheduling metrics right away
-
-// --- End New Update Cycle Logic ---
 
 // --- PBS Data Fetching Functions ---
 
@@ -1446,7 +1491,7 @@ async function fetchPbsDatastoreData(pbsClient) {
 
 // Start the server
 async function startServer() {
-    await initializePbsClient(); // Initialize PBS client (might fail)
+    await initializeAllPbsClients();
 
     server.listen(PORT, () => {
         console.log(`Server listening on port ${PORT}`);

@@ -218,100 +218,11 @@
     <!-- Add PBS Tab Content -->
     <div id="pbs" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
       <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Proxmox Backup Server Status</h2>
-      <div id="pbs-connection-status" class="mb-3 text-sm text-gray-600 dark:text-gray-400">Loading PBS status...</div>
-
-      <!-- Datastore Summary -->
-      <div id="pbs-datastores-section" class="mb-4 hidden">
-          <h3 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Datastores</h3>
-          <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
-            <table id="pbs-datastores-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-              <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                <tr>
-                  <th scope="col" class="px-4 py-2 text-left font-semibold">Name</th>
-                  <th scope="col" class="px-4 py-2 text-left font-semibold">Path</th>
-                  <th scope="col" class="px-4 py-2 text-right font-semibold">Used</th>
-                  <th scope="col" class="px-4 py-2 text-right font-semibold">Available</th>
-                  <th scope="col" class="px-4 py-2 text-right font-semibold">Total</th>
-                  <th scope="col" class="px-4 py-2 text-center font-semibold">Usage</th>
-                  <th scope="col" class="px-4 py-2 text-center font-semibold">GC Status</th>
-                </tr>
-              </thead>
-              <tbody id="pbs-datastores-table-body" class="divide-y divide-gray-200 dark:divide-gray-700">
-                <!-- Datastore rows will be inserted here -->
-                <tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">Loading datastore data...</td></tr>
-              </tbody>
-            </table>
-          </div>
-      </div>
-
-      <!-- Task Summaries (Grid Layout) -->
-      <div id="pbs-tasks-summaries-section" class="mb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 hidden">
-        <!-- Backup Task Summary -->
-        <div id="pbs-backup-summary-card" class="border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-50/50 dark:bg-gray-700/30">
-            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Backups (7d)</h4>
-            <div class="space-y-1 text-sm">
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span id="pbs-tasks-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span id="pbs-tasks-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span id="pbs-tasks-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span id="pbs-tasks-last-ok" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span id="pbs-tasks-last-failed" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
-            </div>
-        </div>
-        <!-- Verification Task Summary -->
-        <div id="pbs-verify-summary-card" class="border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-50/50 dark:bg-gray-700/30">
-            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Verification (7d)</h4>
-            <div class="space-y-1 text-sm">
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span id="pbs-verify-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span id="pbs-verify-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span id="pbs-verify-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span id="pbs-verify-last-ok" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span id="pbs-verify-last-failed" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
-            </div>
-        </div>
-        <!-- Sync Task Summary -->
-        <div id="pbs-sync-summary-card" class="border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-50/50 dark:bg-gray-700/30">
-            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Sync (7d)</h4>
-            <div class="space-y-1 text-sm">
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span id="pbs-sync-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span id="pbs-sync-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span id="pbs-sync-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span id="pbs-sync-last-ok" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span id="pbs-sync-last-failed" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
-            </div>
-        </div>
-        <!-- Prune/GC Task Summary -->
-        <div id="pbs-prune-summary-card" class="border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-50/50 dark:bg-gray-700/30">
-            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Prune/GC (7d)</h4>
-            <div class="space-y-1 text-sm">
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span id="pbs-prune-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span id="pbs-prune-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span id="pbs-prune-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span id="pbs-prune-last-ok" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
-              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span id="pbs-prune-last-failed" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
-            </div>
-        </div>
-      </div>
-
-      <!-- Detailed Recent Backup Task List -->
-      <div id="pbs-recent-tasks-section" class="mb-4 hidden">
-          <h3 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Recent Backup Tasks</h3>
-          <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded max-h-96 overflow-y-auto">
-            <table id="pbs-recent-tasks-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-              <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0">
-                <tr>
-                  <th scope="col" class="px-4 py-2 text-left font-semibold">Guest</th>
-                  <th scope="col" class="px-4 py-2 text-left font-semibold">Status</th>
-                  <th scope="col" class="px-4 py-2 text-left font-semibold">Start Time</th>
-                  <th scope="col" class="px-4 py-2 text-left font-semibold">Duration</th>
-                  <th scope="col" class="px-4 py-2 text-left font-semibold">UPID</th>
-                </tr>
-              </thead>
-              <tbody id="pbs-recent-tasks-table-body" class="divide-y divide-gray-200 dark:divide-gray-700">
-                <!-- Recent task rows will be inserted here -->
-                <tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">Loading recent task data...</td></tr>
-              </tbody>
-            </table>
-          </div>
+      
+      <!-- Container for dynamically generated PBS instance data -->
+      <div id="pbs-instances-container" class="space-y-6"> 
+          <!-- Loading message while JS populates -->
+          <p class="text-gray-500 dark:text-gray-400">Loading PBS data...</p>
       </div>
 
     </div>
