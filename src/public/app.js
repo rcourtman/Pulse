@@ -1381,66 +1381,183 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   // --- End fetch version ---
 
-  // --- New Function: Update PBS Info Section ---
+  // --- Helper Functions for PBS Tab ---
+  const formatPbsTimestamp = (ts) => {
+      if (!ts) return 'Never';
+      try {
+          // Use Intl for locale-aware, shorter format
+          return new Intl.DateTimeFormat(undefined, { 
+              year: 'numeric', month: 'numeric', day: 'numeric',
+              hour: 'numeric', minute: 'numeric'
+          }).format(new Date(ts * 1000));
+      } catch (e) {
+          console.warn("Error formatting PBS timestamp:", ts, e);
+          return 'Invalid Date';
+      }
+  };
+
+  const formatDuration = (seconds) => {
+      if (seconds === null || seconds === undefined || seconds < 0) return 'N/A';
+      if (seconds === 0) return '0s';
+      const d = Math.floor(seconds / (3600*24));
+      const h = Math.floor(seconds % (3600*24) / 3600);
+      const m = Math.floor(seconds % 3600 / 60);
+      const s = Math.floor(seconds % 60);
+      
+      let parts = [];
+      if (d > 0) parts.push(d + 'd');
+      if (h > 0) parts.push(h + 'h');
+      if (m > 0) parts.push(m + 'm');
+      if (s > 0 || parts.length === 0) parts.push(s + 's'); // Show seconds if duration is < 1m
+      
+      return parts.slice(0, 2).join(''); // Show max 2 units (e.g., 1d2h, 3h5m, 45m10s, 3s)
+  };
+
+  const getPbsStatusIcon = (status) => {
+      if (status === 'OK') {
+          return '<span class="text-green-500 dark:text-green-400" title="OK">✓</span>'; // Checkmark
+      } else if (status === 'running') {
+           // Simple spinner (could be replaced with SVG)
+          return '<span class="inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-blue-500" title="Running"></span>'; 
+      } else if (status) {
+          return `<span class="text-red-500 dark:text-red-400 font-bold" title="${status}">✗</span>`; // Cross mark for errors
+      } else {
+          return '<span class="text-gray-400" title="Unknown">?</span>';
+      }
+  };
+
+  const getPbsGcStatusText = (gcStatus) => {
+    if (!gcStatus || gcStatus === 'unknown') return '<span class="text-xs text-gray-400">Unknown</span>';
+    // Basic coloring, can be enhanced
+    let colorClass = 'text-gray-600 dark:text-gray-400';
+    if (gcStatus.includes('error') || gcStatus.includes('failed')) {
+        colorClass = 'text-red-500 dark:text-red-400';
+    } else if (gcStatus === 'OK') {
+        colorClass = 'text-green-500 dark:text-green-400';
+    }
+    return `<span class="text-xs ${colorClass}">${gcStatus}</span>`;
+  };
+
+
+  // --- Function to Update Specific Task Summary Card ---
+  function updatePbsTaskSummaryCard(prefix, summaryData) {
+    const okEl = document.getElementById(`pbs-${prefix}-ok`);
+    const failedEl = document.getElementById(`pbs-${prefix}-failed`);
+    const totalEl = document.getElementById(`pbs-${prefix}-total`);
+    const lastOkEl = document.getElementById(`pbs-${prefix}-last-ok`);
+    const lastFailedEl = document.getElementById(`pbs-${prefix}-last-failed`);
+
+    if (!okEl || !failedEl || !totalEl || !lastOkEl || !lastFailedEl) {
+      console.warn(`UI elements for PBS task summary '${prefix}' not found.`);
+      return;
+    }
+
+    if (summaryData && summaryData.summary) {
+      const summary = summaryData.summary;
+      okEl.textContent = summary.ok ?? '-';
+      failedEl.textContent = summary.failed ?? '-';
+      totalEl.textContent = summary.total ?? '-';
+      lastOkEl.textContent = formatPbsTimestamp(summary.lastOk);
+      lastFailedEl.textContent = formatPbsTimestamp(summary.lastFailed);
+
+      // Add warning style if failures exist
+      failedEl.classList.toggle('font-bold', (summary.failed ?? 0) > 0);
+
+    } else {
+      // Clear fields if data is missing
+      okEl.textContent = '-';
+      failedEl.textContent = '-';
+      totalEl.textContent = '-';
+      lastOkEl.textContent = '-';
+      lastFailedEl.textContent = '-';
+      failedEl.classList.remove('font-bold');
+    }
+  }
+
+  // --- Updated Function: Update PBS Info Section ---
   function updatePbsInfo(pbs) {
+    // Add logging to inspect received data structure
+    console.log('[updatePbsInfo] Received PBS data:', JSON.stringify(pbs, null, 2)); // Log the received object
+
+    // Get references to all elements
     const statusElement = document.getElementById('pbs-connection-status');
     const dsSection = document.getElementById('pbs-datastores-section');
     const dsTableBody = document.getElementById('pbs-datastores-table-body');
-    const tasksSection = document.getElementById('pbs-tasks-section');
+    const summariesSection = document.getElementById('pbs-tasks-summaries-section');
+    const recentTasksSection = document.getElementById('pbs-recent-tasks-section');
+    const recentTasksTableBody = document.getElementById('pbs-recent-tasks-table-body');
+    // Old tasks section element (to ensure it remains hidden or remove if safe)
+    const oldTasksSection = document.getElementById('pbs-tasks-section'); 
 
-    // Check if elements exist
-    if (!statusElement || !dsSection || !dsTableBody || !tasksSection) {
-        console.warn("PBS UI elements not found, cannot update.");
+    // Basic check for essential elements
+    if (!statusElement || !dsSection || !dsTableBody || !summariesSection || !recentTasksSection || !recentTasksTableBody) {
+        console.warn("One or more PBS UI elements not found, cannot update fully.");
         return;
     }
+    // Hide old task section if it exists
+    if (oldTasksSection) oldTasksSection.classList.add('hidden');
+
+    // ---> Ensure all detail sections are hidden initially <--- 
+    dsSection.classList.add('hidden');
+    summariesSection.classList.add('hidden');
+    recentTasksSection.classList.add('hidden');
+    // ---> End initial hide <--- 
 
     // Update Connection Status
     let statusText = 'Loading...';
+    let showDetails = false;
     statusElement.className = 'mb-3 text-sm'; // Reset classes
-    // ---> ADDED 'configured' state handling <---
-    if (pbs.status === 'configured') {
-        statusText = `PBS Configured, attempting connection...`;
-        statusElement.classList.add('text-gray-600', 'dark:text-gray-400');
-        // Keep sections hidden until actual 'ok' or 'error' status arrives
-        dsSection.classList.add('hidden');
-        tasksSection.classList.add('hidden');
-    } else if (pbs.status === 'ok') {
-    // ---> END ADDED SECTION <---
-        statusText = `Connected to PBS: ${pbs.nodeName || 'Unknown Node'}`;
-        statusElement.classList.add('text-green-600', 'dark:text-green-400');
-        dsSection.classList.remove('hidden');
-        tasksSection.classList.remove('hidden');
-    } else if (pbs.status === 'error') {
-        statusText = `Error connecting to PBS: ${pbs.nodeName || 'Configured Host'}. Check logs.`;
-        statusElement.classList.add('text-red-600', 'dark:text-red-400');
-        dsSection.classList.add('hidden');
-        tasksSection.classList.add('hidden');
-    } else if (pbs.status === 'unconfigured') {
-        statusText = 'PBS monitoring is not configured.';
-        statusElement.classList.add('text-gray-600', 'dark:text-gray-400');
-        dsSection.classList.add('hidden');
-        tasksSection.classList.add('hidden');
-    } else {
-        statusText = 'PBS status unknown.';
-        statusElement.classList.add('text-gray-600', 'dark:text-gray-400');
-        dsSection.classList.add('hidden');
-        tasksSection.classList.add('hidden');
+
+    switch (pbs.status) {
+        case 'configured':
+            statusText = `PBS Configured (${pbs.nodeName || '...'}), attempting connection...`;
+            statusElement.classList.add('text-gray-600', 'dark:text-gray-400');
+            showDetails = false;
+            break;
+        case 'ok':
+            statusText = `Connected to PBS: ${pbs.nodeName || 'Unknown Node'}`;
+            statusElement.classList.add('text-green-600', 'dark:text-green-400');
+            showDetails = true;
+            break;
+        case 'error':
+            statusText = `Error connecting to PBS: ${pbs.nodeName || 'Configured Host'}. Check Pulse logs.`;
+            statusElement.classList.add('text-red-600', 'dark:text-red-400');
+            showDetails = false;
+            break;
+        case 'unconfigured':
+            statusText = 'PBS monitoring is not configured.';
+            statusElement.classList.add('text-gray-600', 'dark:text-gray-400');
+            showDetails = false;
+            break;
+        default:
+            statusText = `PBS status: ${pbs.status || 'Unknown'}`;
+            statusElement.classList.add('text-gray-600', 'dark:text-gray-400');
+            showDetails = false;
+            break;
     }
     statusElement.textContent = statusText;
 
-    // Update Datastores Table (only if status is ok)
-    if (pbs.status === 'ok' && pbs.datastores) {
+    // Show/Hide Detail Sections based on connection status
+    // Use toggle with the 'force' parameter based on showDetails
+    dsSection.classList.toggle('hidden', !showDetails);
+    summariesSection.classList.toggle('hidden', !showDetails);
+    recentTasksSection.classList.toggle('hidden', !showDetails);
+
+    // Update Datastores Table (only if showing details and data exists)
+    if (showDetails && pbs.datastores) {
         dsTableBody.innerHTML = ''; // Clear previous rows
         if (pbs.datastores.length === 0) {
-             dsTableBody.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-sm text-gray-400 text-center">No PBS datastores found or accessible.</td></tr>';
+             dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">No PBS datastores found or accessible.</td></tr>`;
         } else {
             pbs.datastores.forEach(ds => {
                 const totalBytes = ds.total || 0;
                 const usedBytes = ds.used || 0;
-                const availableBytes = ds.available ?? (totalBytes - usedBytes); // Calculate if avail is null
+                // Calculate available, defaulting to 0 if total is null/0
+                const availableBytes = (ds.available !== null && ds.available !== undefined) ? ds.available : (totalBytes > 0 ? totalBytes - usedBytes : 0);
                 const usagePercent = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
                 const usageColor = getUsageColor(usagePercent);
-                const usageText = `${usagePercent}% (${formatBytes(usedBytes)} of ${formatBytes(totalBytes)})`;
+                const usageText = totalBytes > 0 ? `${usagePercent}% (${formatBytes(usedBytes)} of ${formatBytes(totalBytes)})` : 'N/A';
+                const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
 
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
@@ -1449,40 +1566,61 @@ document.addEventListener('DOMContentLoaded', function() {
                     <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${ds.path || 'N/A'}</td>
                     <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(usedBytes)}</td>
                     <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(availableBytes)}</td>
-                    <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(totalBytes)}</td>
-                    <td class="px-4 py-2 text-center">${createProgressTextBarHTML(usagePercent, usageText, usageColor)}</td>
+                    <td class="px-4 py-2 text-right whitespace-nowrap">${totalBytes > 0 ? formatBytes(totalBytes) : 'N/A'}</td>
+                    <td class="px-4 py-2 text-center min-w-[150px]">${totalBytes > 0 ? createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-'}</td>
+                    <td class="px-4 py-2 text-center whitespace-nowrap">${gcStatusHtml}</td>
                 `;
                 dsTableBody.appendChild(row);
             });
         }
+    } else if (!showDetails) {
+        // Clear table if not showing details
+        dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
     }
 
-    // Update Task Summary (only if status is ok)
-    if (pbs.status === 'ok' && pbs.tasks && pbs.tasks.summary) {
-        const summary = pbs.tasks.summary;
-        document.getElementById('pbs-tasks-ok').textContent = summary.ok ?? '-';
-        document.getElementById('pbs-tasks-failed').textContent = summary.failed ?? '-';
-        document.getElementById('pbs-tasks-total').textContent = summary.total ?? '-';
-
-        const formatTimestamp = (ts) => {
-            if (!ts) return 'Never';
-            try {
-                return new Date(ts * 1000).toLocaleString();
-            } catch (e) {
-                return 'Invalid Date';
-            }
-        };
-
-        document.getElementById('pbs-tasks-last-ok').textContent = formatTimestamp(summary.lastOk);
-        document.getElementById('pbs-tasks-last-failed').textContent = formatTimestamp(summary.lastFailed);
+    // Update Task Summary Cards (only if showing details)
+    if (showDetails) {
+        // Access the nested summary objects correctly
+        updatePbsTaskSummaryCard('tasks', pbs.backupTasks); // Pass the whole backupTasks object which contains .summary
+        updatePbsTaskSummaryCard('verify', pbs.verificationTasks); // Pass the whole object
+        updatePbsTaskSummaryCard('sync', pbs.syncTasks);       // Pass the whole object
+        updatePbsTaskSummaryCard('prune', pbs.pruneTasks);     // Pass the whole object
     } else {
-        // Clear task summary if PBS status is not ok
-        document.getElementById('pbs-tasks-ok').textContent = '-';
-        document.getElementById('pbs-tasks-failed').textContent = '-';
-        document.getElementById('pbs-tasks-total').textContent = '-';
-        document.getElementById('pbs-tasks-last-ok').textContent = '-';
-        document.getElementById('pbs-tasks-last-failed').textContent = '-';
+        // Clear all summary cards if not showing details
+        updatePbsTaskSummaryCard('tasks', null);
+        updatePbsTaskSummaryCard('verify', null);
+        updatePbsTaskSummaryCard('sync', null);
+        updatePbsTaskSummaryCard('prune', null);
     }
+
+    // Update Recent Backup Tasks Table (only if showing details and data exists)
+    // Access the nested recentTasks array correctly
+    if (showDetails && pbs.backupTasks && pbs.backupTasks.recentTasks) {
+        recentTasksTableBody.innerHTML = ''; // Clear previous rows
+        const recentTasks = pbs.backupTasks.recentTasks; // Use the correct path
+
+        if (recentTasks.length === 0) {
+            recentTasksTableBody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">No recent backup tasks found (last 7 days).</td></tr>`;
+        } else {
+            recentTasks.forEach(task => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
+                row.innerHTML = `
+                    <td class="px-4 py-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${task.id || 'N/A'}</td>
+                    <td class="px-4 py-2 text-center">${getPbsStatusIcon(task.status)}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatPbsTimestamp(task.startTime)}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatDuration(task.duration)}</td>
+                    <!-- <td class="px-4 py-2 text-right whitespace-nowrap">${task.size ? formatBytes(task.size) : 'N/A'}</td> -->
+                    <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-400 dark:text-gray-500 font-mono truncate" title="${task.upid || 'N/A'}">${task.upid || 'N/A'}</td>
+                `;
+                recentTasksTableBody.appendChild(row);
+            });
+        }
+    } else if (!showDetails) {
+        // Clear table if not showing details
+        recentTasksTableBody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
+    }
+
   }
   // --- End Update PBS Info Function ---
 

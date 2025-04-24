@@ -562,7 +562,7 @@ let currentNodes = [];
 let currentVms = [];
 let currentContainers = [];
 let currentMetrics = [];
-let pbsData = { tasks: {}, datastores: [], nodeName: null, status: 'initializing' }; // Re-add global pbsData
+let pbsData = { status: 'initializing' }; // Initial status
 let isDiscoveryRunning = false; // Prevent concurrent discovery runs
 let isMetricsRunning = false;   // Prevent concurrent metric runs
 let discoveryTimeoutId = null;
@@ -705,7 +705,8 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
  */
 async function fetchDiscoveryData() {
   console.log("[Discovery Cycle] Starting fetch across all endpoints...");
-  let aggregatedResult = { nodes: [], vms: [], containers: [], pbs: pbsData || {} }; // Initialize with current PBS data
+  // Initialize with the *current* pbsData state to preserve status between fetches if a fetch fails
+  let aggregatedResult = { nodes: [], vms: [], containers: [], pbs: pbsData || { status: 'initializing' } };
 
   // --- PVE Data Fetching ---
   const pveEndpointIds = Object.keys(apiClients).filter(id => !apiClients[id].isPbs); // Exclude PBS client if present
@@ -817,58 +818,110 @@ async function fetchDiscoveryData() {
   }
 
   // --- Fetch PBS Data (if configured) ---
-  let newPbsData = null; // Use null to indicate fetch status
+  let pbsFetchStatus = 'unconfigured'; // Default status if not configured
+  let fetchedPbsData = null; // Store successfully fetched data
+
   if (pbsApiClient) {
       console.log("INFO: Fetching PBS discovery data...");
       let pbsNodeName = pbsApiClient.config.nodeName; // Use configured name if available
-      // Ensure pbsApiClient.client exists before trying to use it
+
       if (!pbsApiClient.client) {
           console.error("ERROR: pbsApiClient.client is not initialized!");
+          pbsFetchStatus = 'error'; // Set status to error if client isn't ready
       } else {
           if (!pbsNodeName) {
-              pbsNodeName = await fetchPbsNodeName(pbsApiClient); // Pass the whole object
-              // Store detected name back in config for future use within this run
+              pbsNodeName = await fetchPbsNodeName(pbsApiClient);
               if (pbsNodeName && pbsNodeName !== 'localhost') {
                   pbsApiClient.config.nodeName = pbsNodeName;
               }
           }
 
-          try {
-              const [tasks, datastores] = await Promise.all([
-                  fetchPbsTaskData(pbsApiClient, pbsNodeName), // Pass the whole object
-                  fetchPbsDatastoreData(pbsApiClient) // Pass the whole object
-              ]);
-              // Assign fetched data to the newPbsData object *only on success*
-              newPbsData = { tasks, datastores, nodeName: pbsNodeName, status: 'ok' };
-              console.log("INFO: Finished fetching PBS discovery data successfully.");
-          } catch (pbsError) {
-              console.error(`ERROR: Failed fetching PBS data during discovery cycle: ${pbsError.message}`);
-              // Do NOT update pbsData here, let it keep the old value
-              // newPbsData remains null to indicate failure of this fetch attempt
-               if (pbsError.response?.status === 401) {
-                  console.error("ERROR: PBS API Authentication Expired or Invalid (401). Re-login needed.");
-                  // Future improvement: Trigger re-login here
-               }
+          // Only proceed if we have a node name (or fallback 'localhost')
+          if (pbsNodeName) {
+              try {
+                  // Fetch all data concurrently
+                  const [
+                      backupTasks, // Now includes detailed recent tasks
+                      datastores,
+                      verificationTasks,
+                      syncTasks,
+                      pruneTasks
+                  ] = await Promise.all([
+                      fetchPbsTaskData(pbsApiClient, pbsNodeName), // Enhanced function
+                      fetchPbsDatastoreData(pbsApiClient),
+                      fetchPbsTaskSummaryByType(pbsApiClient, pbsNodeName, ['verify']), // Fetch verification tasks
+                      fetchPbsTaskSummaryByType(pbsApiClient, pbsNodeName, ['sync']),   // Fetch sync tasks
+                      fetchPbsTaskSummaryByType(pbsApiClient, pbsNodeName, ['garbage_collection', 'prune']) // Fetch GC/Prune tasks
+                  ]);
+
+                  // Combine fetched data *only on success*
+                  fetchedPbsData = {
+                      backupTasks: backupTasks, // Contains { recentTasks: [], summary: {...} }
+                      datastores: datastores, // Contains GC status per datastore
+                      verificationTasks: verificationTasks, // Contains summary: {...}
+                      syncTasks: syncTasks,             // Contains summary: {...}
+                      pruneTasks: pruneTasks,           // Contains summary: {...} for GC/Prune
+                      nodeName: pbsNodeName,
+                      status: 'ok' // Overall status is OK if all fetches succeed
+                  };
+                  pbsFetchStatus = 'ok'; // Update status on successful fetch
+                  console.log("INFO: Finished fetching PBS discovery data successfully.");
+
+              } catch (pbsError) {
+                  console.error(`ERROR: Failed fetching PBS data during discovery cycle: ${pbsError.message}`);
+                  pbsFetchStatus = 'error'; // Set status to error on fetch failure
+                  if (pbsError.response?.status === 401) {
+                      console.error("ERROR: PBS API Authentication Expired or Invalid (401). Re-login needed.");
+                  }
+                  // Keep fetchedPbsData as null
+              }
+          } else {
+              console.error("ERROR: Could not determine PBS node name, cannot fetch PBS task data.");
+              pbsFetchStatus = 'error'; // Error if node name is missing
           }
       }
   } else {
        console.log("[Discovery Cycle] No PBS client configured.");
-       // Set specific status if unconfigured
-       newPbsData = { tasks: {}, datastores: [], nodeName: null, status: 'unconfigured' };
+       pbsFetchStatus = 'unconfigured';
+       // Ensure a default structure for unconfigured state
+       fetchedPbsData = {
+           backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+           datastores: [],
+           verificationTasks: { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+           syncTasks: { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+           pruneTasks: { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+           nodeName: null,
+           status: 'unconfigured'
+       };
   }
   // --- End Fetch PBS Data ---
 
   // --- Update Global State ---
-  // Only update pbsData if the fetch was successful (newPbsData is not null)
-  if (newPbsData !== null) {
-    pbsData = newPbsData;
+  // Update pbsData only if the fetch was successful OR if it's the first time and status is unconfigured
+  if (fetchedPbsData && (pbsFetchStatus === 'ok' || (pbsFetchStatus === 'unconfigured' && pbsData.status === 'initializing'))) {
+        pbsData = fetchedPbsData;
+  } else if (pbsFetchStatus === 'error') {
+      // If fetch failed, update only the status field in the global pbsData
+      // Preserve the last known good data for other fields
+      pbsData = {
+          ...(pbsData || {}), // Keep existing data
+          status: 'error', // Update status to error
+          nodeName: pbsApiClient?.config?.nodeName || pbsData?.nodeName || null // Preserve node name if possible
+      };
+      // Ensure essential structures exist if pbsData was previously null/empty
+       pbsData.backupTasks = pbsData.backupTasks || { recentTasks: [], summary: {} };
+       pbsData.datastores = pbsData.datastores || [];
+       pbsData.verificationTasks = pbsData.verificationTasks || { summary: {} };
+       pbsData.syncTasks = pbsData.syncTasks || { summary: {} };
+       pbsData.pruneTasks = pbsData.pruneTasks || { summary: {} };
   }
-  // Always update PVE data using the accumulated temporary variables
+
+  // Always update PVE data
   aggregatedResult.nodes = tempNodes;
   aggregatedResult.vms = tempVms;
   aggregatedResult.containers = tempContainers;
 
-  // Add the *final, potentially updated* pbsData state to the result to be emitted
+  // Add the final, potentially updated pbsData state to the result
   aggregatedResult.pbs = pbsData;
 
   if (DEBUG_METRICS) {
@@ -1181,122 +1234,211 @@ async function fetchPbsNodeName(pbsClient) {
     }
 }
 
+// Modified fetchPbsTaskData to include more details and handle backup tasks specifically
 async function fetchPbsTaskData(pbsClient, nodeName) {
-    // Fetches recent backup task history from PBS
+    console.log(`INFO: Fetching PBS backup task data for node ${nodeName}...`);
     if (!nodeName) {
-        console.warn("WARN: Cannot fetch PBS task data without node name.");
+        console.warn("WARN: Cannot fetch PBS backup task data without node name.");
         return { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } };
     }
     try {
-        // Fetch tasks from the last 7 days (adjust as needed)
         const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
         const response = await pbsClient.client.get(`/nodes/${nodeName}/tasks`, {
             params: {
-                // typefilter: 'backup', // Filter specifically for backup tasks if needed - type seems inconsistent?
                 since: sinceTimestamp,
-                limit: 200, // Limit the number of tasks fetched
-                errors: 1 // Include tasks with errors
+                limit: 200, // Fetch a decent number for analysis
+                errors: 1,
+                // Do not filter by type here, filter after fetching
             }
         });
 
-        let tasks = response.data && response.data.data ? response.data.data : [];
-        // Filter further if needed - e.g., task 'type' might be 'backup', 'sync', 'gc', 'verify'
-        // We might only care about 'backup' type for this summary
-        tasks = tasks.filter(task => task.type === 'backup' || task.worker_type === 'backup'); // Adjust filter based on actual API response
+        const allTasks = response.data?.data ?? [];
+
+        // Filter specifically for backup tasks (adjust types if needed based on actual API)
+        const backupTasks = allTasks.filter(task =>
+            task.worker_type === 'backup' || task.type === 'backup'
+        );
 
         let okCount = 0;
         let failedCount = 0;
         let lastOkTimestamp = 0;
         let lastFailedTimestamp = 0;
 
-        tasks.forEach(task => {
-            if (task.status === 'OK') {
+        const detailedTasks = backupTasks.map(task => {
+            // Simplify status and count
+            const isOk = task.status === 'OK';
+            const isFailed = task.status && task.status !== 'OK' && task.status !== 'running';
+
+            if (isOk) {
                 okCount++;
                 if (task.endtime > lastOkTimestamp) lastOkTimestamp = task.endtime;
-            } else if (task.status && task.status !== 'running') { // Count non-OK, non-running tasks as failed
+            } else if (isFailed) {
                 failedCount++;
                 if (task.endtime > lastFailedTimestamp) lastFailedTimestamp = task.endtime;
             }
-        });
 
-        console.log(`INFO: Fetched ${tasks.length} PBS backup tasks. OK: ${okCount}, Failed: ${failedCount}`);
+            // Extract relevant details (add more as needed from API response)
+            return {
+                upid: task.upid,
+                node: task.node,
+                type: task.worker_type || task.type,
+                id: task.worker_id || task.id, // Guest ID (e.g., 'vm/100')
+                status: task.status,
+                startTime: task.starttime,
+                endTime: task.endtime,
+                duration: task.endtime && task.starttime ? task.endtime - task.starttime : null,
+                // Add size/performance details if available in the task object
+                // size: task.size, // Example placeholder
+                // performance: task.performance, // Example placeholder
+            };
+        }).sort((a, b) => (b.startTime || 0) - (a.startTime || 0)); // Sort by start time descending
+
+        console.log(`INFO: Processed ${backupTasks.length} PBS backup tasks. OK: ${okCount}, Failed: ${failedCount}`);
 
         return {
-            recentTasks: tasks.slice(0, 20), // Return only the latest 20 for potential UI display
+            // Return latest 20 detailed tasks for UI display
+            recentTasks: detailedTasks.slice(0, 20),
             summary: {
                 ok: okCount,
                 failed: failedCount,
-                total: tasks.length,
+                total: backupTasks.length,
                 lastOk: lastOkTimestamp || null,
                 lastFailed: lastFailedTimestamp || null,
             }
         };
 
     } catch (error) {
-        console.error(`ERROR: Failed to fetch PBS task data for node ${nodeName}: ${error.message}`);
-        if (error.response?.status === 401) {
-             console.error("ERROR: PBS API authentication failed (401). Check PBS_TOKEN_ID and PBS_TOKEN_SECRET.");
-        } else if (error.response?.status === 403) {
-            console.error("ERROR: PBS API authorization failed (403). Check token permissions.");
-        }
+        console.error(`ERROR: Failed to fetch PBS backup task data for node ${nodeName}: ${error.message}`);
+        // Handle specific errors like 401/403
+        if (error.response?.status === 401) console.error("ERROR: PBS API authentication failed (401).");
+        else if (error.response?.status === 403) console.error("ERROR: PBS API authorization failed (403).");
         // Return empty data on error
         return { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } };
     }
 }
 
+// NEW Helper function to fetch and summarize tasks by type(s)
+async function fetchPbsTaskSummaryByType(pbsClient, nodeName, taskTypes) {
+    const typeString = taskTypes.join('/');
+    console.log(`INFO: Fetching PBS ${typeString} task summary for node ${nodeName}...`);
+     if (!nodeName) {
+        console.warn(`WARN: Cannot fetch PBS ${typeString} task data without node name.`);
+        return { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } };
+    }
+    try {
+        const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+        const response = await pbsClient.client.get(`/nodes/${nodeName}/tasks`, {
+            params: {
+                since: sinceTimestamp,
+                limit: 500, // Fetch enough to get recent summaries
+                errors: 1,
+                // Consider filtering by type if API supports it reliably, otherwise filter below
+                // typefilter: taskTypes.join(','), // Might work depending on API version
+            }
+        });
+
+        const allTasks = response.data?.data ?? [];
+
+        // Filter for the specified task types
+        const relevantTasks = allTasks.filter(task =>
+            taskTypes.includes(task.worker_type) || taskTypes.includes(task.type)
+        );
+
+        let okCount = 0;
+        let failedCount = 0;
+        let lastOkTimestamp = 0;
+        let lastFailedTimestamp = 0;
+
+        relevantTasks.forEach(task => {
+            const isOk = task.status === 'OK';
+            const isFailed = task.status && task.status !== 'OK' && task.status !== 'running';
+
+            if (isOk) {
+                okCount++;
+                if (task.endtime > lastOkTimestamp) lastOkTimestamp = task.endtime;
+            } else if (isFailed) {
+                failedCount++;
+                if (task.endtime > lastFailedTimestamp) lastFailedTimestamp = task.endtime;
+            }
+        });
+
+        console.log(`INFO: Processed ${relevantTasks.length} PBS ${typeString} tasks. OK: ${okCount}, Failed: ${failedCount}`);
+
+        return {
+            summary: {
+                ok: okCount,
+                failed: failedCount,
+                total: relevantTasks.length,
+                lastOk: lastOkTimestamp || null,
+                lastFailed: lastFailedTimestamp || null,
+            }
+        };
+
+    } catch (error) {
+        console.error(`ERROR: Failed to fetch PBS ${typeString} task summary for node ${nodeName}: ${error.message}`);
+        if (error.response?.status === 401) console.error("ERROR: PBS API authentication failed (401).");
+        else if (error.response?.status === 403) console.error("ERROR: PBS API authorization failed (403).");
+        return { summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } };
+    }
+}
+
+
 async function fetchPbsDatastoreData(pbsClient) {
     // Fetches datastore usage details from PBS using the /status/datastore-usage endpoint
+    console.log("INFO: Fetching PBS datastore data...");
     let datastores = [];
     try {
         // Fetch usage stats for all datastores at once
         const usageResponse = await pbsClient.client.get('/status/datastore-usage');
-        const usageData = usageResponse.data && usageResponse.data.data ? usageResponse.data.data : [];
+        const usageData = usageResponse.data?.data ?? [];
 
         if (usageData.length > 0) {
             console.log(`INFO: Fetched status for ${usageData.length} PBS datastores via /status/datastore-usage.`);
             // Map the received data to the expected format
             datastores = usageData.map(ds => ({
-                name: ds.store, // Field name might be 'store' or 'name'
-                path: ds.path || 'N/A', // Path might not be directly in usage stats
+                name: ds.store,
+                path: ds.path || 'N/A',
                 total: ds.total,
                 used: ds.used,
-                available: ds.avail, // Field name might be 'avail' or 'available'
-                // Add other relevant fields if available, e.g., gc status
+                available: ds.avail,
+                // Ensure gcStatus is included and defaults gracefully
                 gcStatus: ds['garbage-collection-status'] || 'unknown'
             }));
         } else {
             console.warn("WARN: PBS /status/datastore-usage returned empty data. Falling back to /config/datastore.");
-            // Fallback to fetching config if usage endpoint is empty
-            throw new Error("Empty data from /status/datastore-usage");
+            throw new Error("Empty data from /status/datastore-usage"); // Trigger fallback
         }
 
     } catch (usageError) {
         console.error(`ERROR: Failed to fetch PBS datastore usage via /status/datastore-usage: ${usageError.message}. Trying fallback /config/datastore.`);
-        // --- Fallback Logic --- 
+        // --- Fallback Logic ---
         try {
             const configResponse = await pbsClient.client.get('/config/datastore');
-            const datastoresConfig = configResponse.data && configResponse.data.data ? configResponse.data.data : [];
+            const datastoresConfig = configResponse.data?.data ?? [];
             if (datastoresConfig.length > 0) {
                 console.log(`INFO: Fetched config for ${datastoresConfig.length} PBS datastores (fallback). Status unavailable.`);
                  datastores = datastoresConfig.map(dsConfig => ({
                     name: dsConfig.name,
                     path: dsConfig.path,
-                    total: null,
+                    total: null, // Usage/Status info unavailable from config
                     used: null,
                     available: null,
-                    gcStatus: 'unknown (config only)'
+                    gcStatus: 'unknown (config only)' // Explicitly mark GC status
                 }));
+            } else {
+                 console.warn("WARN: Fallback fetch of PBS datastore config also returned empty data.");
             }
         } catch (configError) {
             console.error(`ERROR: Fallback fetch of PBS datastore config failed: ${configError.message}`);
              if (configError.response?.status === 401 || configError.response?.status === 403) {
                 console.error("ERROR: PBS API authentication/authorization failed for datastore config access.");
              }
-             // Keep datastores as empty array if both attempts fail
+             // Keep datastores as empty array if both primary and fallback attempts fail
         }
-        // --- End Fallback --- 
+        // --- End Fallback ---
     }
 
+    console.log(`INFO: Finished fetching PBS datastore data. Found ${datastores.length} datastores.`);
     return datastores;
 }
 

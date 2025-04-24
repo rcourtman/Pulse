@@ -68,11 +68,23 @@
 
     <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700">
       <!-- Add Tailwind classes, JS will toggle active classes -->
-      <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px" data-tab="main">Main</div>
-      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="nodes">Nodes</div>
-      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="storage">Storage</div>
+      <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px flex items-center gap-1.5" data-tab="main">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span>Main</span>
+      </div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="nodes">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+          <span>Nodes</span>
+      </div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="storage">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          <span>Storage</span>
+      </div>
       <!-- Add PBS Tab -->
-      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="pbs">PBS</div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="pbs">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          <span>PBS</span>
+      </div>
     </div>
 
     <!-- Removed outer .section wrapper, apply styles directly to tab content where needed -->
@@ -212,7 +224,7 @@
       <div id="pbs-datastores-section" class="mb-4 hidden">
           <h3 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Datastores</h3>
           <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
-            <table id="pbs-datastores-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <table id="pbs-datastores-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
               <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
                 <tr>
                   <th scope="col" class="px-4 py-2 text-left font-semibold">Name</th>
@@ -221,41 +233,85 @@
                   <th scope="col" class="px-4 py-2 text-right font-semibold">Available</th>
                   <th scope="col" class="px-4 py-2 text-right font-semibold">Total</th>
                   <th scope="col" class="px-4 py-2 text-center font-semibold">Usage</th>
+                  <th scope="col" class="px-4 py-2 text-center font-semibold">GC Status</th>
                 </tr>
               </thead>
-              <tbody id="pbs-datastores-table-body" class="divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+              <tbody id="pbs-datastores-table-body" class="divide-y divide-gray-200 dark:divide-gray-700">
                 <!-- Datastore rows will be inserted here -->
-                <tr><td colspan="6" class="px-4 py-4 text-sm text-gray-400 text-center">Loading datastore data...</td></tr>
+                <tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">Loading datastore data...</td></tr>
               </tbody>
             </table>
           </div>
       </div>
 
-      <!-- Backup Task Summary -->
-      <div id="pbs-tasks-section" class="hidden">
-        <h3 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Backup Task Summary (Last 7 Days)</h3>
-         <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
-           <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700">
-             <span class="font-medium text-gray-800 dark:text-gray-200">Successful:</span>
-             <span id="pbs-tasks-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span>
-           </div>
-           <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700">
-             <span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span>
-             <span id="pbs-tasks-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span>
-           </div>
-            <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700">
-             <span class="font-medium text-gray-800 dark:text-gray-200">Total:</span>
-             <span id="pbs-tasks-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span>
-           </div>
-           <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700 md:col-span-1">
-             <span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span>
-             <span id="pbs-tasks-last-ok" class="ml-1 text-gray-600 dark:text-gray-400">-</span>
-           </div>
-           <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700 md:col-span-2">
-             <span class="font-medium text-gray-800 dark:text-gray-200">Last Failed:</span>
-             <span id="pbs-tasks-last-failed" class="ml-1 text-gray-600 dark:text-gray-400">-</span>
-           </div>
-         </div>
+      <!-- Task Summaries (Grid Layout) -->
+      <div id="pbs-tasks-summaries-section" class="mb-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 hidden">
+        <!-- Backup Task Summary -->
+        <div id="pbs-backup-summary-card" class="border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-50/50 dark:bg-gray-700/30">
+            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Backups (7d)</h4>
+            <div class="space-y-1 text-sm">
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span id="pbs-tasks-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span id="pbs-tasks-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span id="pbs-tasks-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span id="pbs-tasks-last-ok" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span id="pbs-tasks-last-failed" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
+            </div>
+        </div>
+        <!-- Verification Task Summary -->
+        <div id="pbs-verify-summary-card" class="border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-50/50 dark:bg-gray-700/30">
+            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Verification (7d)</h4>
+            <div class="space-y-1 text-sm">
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span id="pbs-verify-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span id="pbs-verify-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span id="pbs-verify-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span id="pbs-verify-last-ok" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span id="pbs-verify-last-failed" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
+            </div>
+        </div>
+        <!-- Sync Task Summary -->
+        <div id="pbs-sync-summary-card" class="border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-50/50 dark:bg-gray-700/30">
+            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Sync (7d)</h4>
+            <div class="space-y-1 text-sm">
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span id="pbs-sync-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span id="pbs-sync-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span id="pbs-sync-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span id="pbs-sync-last-ok" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span id="pbs-sync-last-failed" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
+            </div>
+        </div>
+        <!-- Prune/GC Task Summary -->
+        <div id="pbs-prune-summary-card" class="border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-50/50 dark:bg-gray-700/30">
+            <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Prune/GC (7d)</h4>
+            <div class="space-y-1 text-sm">
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">OK:</span> <span id="pbs-prune-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span> <span id="pbs-prune-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Total:</span> <span id="pbs-prune-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span> <span id="pbs-prune-last-ok" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
+              <div><span class="font-medium text-gray-800 dark:text-gray-200">Last Fail:</span> <span id="pbs-prune-last-failed" class="ml-1 text-gray-600 dark:text-gray-400 text-xs">-</span></div>
+            </div>
+        </div>
+      </div>
+
+      <!-- Detailed Recent Backup Task List -->
+      <div id="pbs-recent-tasks-section" class="mb-4 hidden">
+          <h3 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Recent Backup Tasks</h3>
+          <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded max-h-96 overflow-y-auto">
+            <table id="pbs-recent-tasks-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+              <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0">
+                <tr>
+                  <th scope="col" class="px-4 py-2 text-left font-semibold">Guest</th>
+                  <th scope="col" class="px-4 py-2 text-left font-semibold">Status</th>
+                  <th scope="col" class="px-4 py-2 text-left font-semibold">Start Time</th>
+                  <th scope="col" class="px-4 py-2 text-left font-semibold">Duration</th>
+                  <th scope="col" class="px-4 py-2 text-left font-semibold">UPID</th>
+                </tr>
+              </thead>
+              <tbody id="pbs-recent-tasks-table-body" class="divide-y divide-gray-200 dark:divide-gray-700">
+                <!-- Recent task rows will be inserted here -->
+                <tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">Loading recent task data...</td></tr>
+              </tbody>
+            </table>
+          </div>
       </div>
 
     </div>
