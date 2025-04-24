@@ -121,6 +121,7 @@ document.addEventListener('DOMContentLoaded', function() {
   let containersData = [];
   let metricsData = [];
   let dashboardData = [];
+  let pbsData = {}; // Add state for PBS data
   // Load saved sort state from localStorage or use defaults
   const savedSortState = JSON.parse(localStorage.getItem('pulseSortState')) || {};
   const sortState = {
@@ -1069,6 +1070,7 @@ document.addEventListener('DOMContentLoaded', function() {
         vmsData = data.vms || [];
         containersData = data.containers || [];
         metricsData = data.metrics || [];
+        pbsData = data.pbs || { status: 'unconfigured' }; // Store PBS data, default if missing
         console.log('[socket.on("rawData")] Parsed data and updated stores');
 
         // Set flag after first successful data parse
@@ -1180,6 +1182,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateContainersTable(containersData);
     refreshDashboardData(); // Process and update the main dashboard
     updateStorageInfo(storageData); // Update storage info tab
+    updatePbsInfo(pbsData); // Update PBS info
   }
 
   // Add a separate fetch for storage data, maybe less frequent?
@@ -1233,5 +1236,102 @@ document.addEventListener('DOMContentLoaded', function() {
           }
       });
   // --- End fetch version ---
+
+  // --- New Function: Update PBS Info Section ---
+  function updatePbsInfo(pbs) {
+    const statusElement = document.getElementById('pbs-connection-status');
+    const dsSection = document.getElementById('pbs-datastores-section');
+    const dsTableBody = document.getElementById('pbs-datastores-table-body');
+    const tasksSection = document.getElementById('pbs-tasks-section');
+
+    // Check if elements exist
+    if (!statusElement || !dsSection || !dsTableBody || !tasksSection) {
+        console.warn("PBS UI elements not found, cannot update.");
+        return;
+    }
+
+    // Update Connection Status
+    let statusText = 'Loading...';
+    statusElement.className = 'mb-3 text-sm'; // Reset classes
+    if (pbs.status === 'ok') {
+        statusText = `Connected to PBS: ${pbs.nodeName || 'Unknown Node'}`;
+        statusElement.classList.add('text-green-600', 'dark:text-green-400');
+        dsSection.classList.remove('hidden');
+        tasksSection.classList.remove('hidden');
+    } else if (pbs.status === 'error') {
+        statusText = `Error connecting to PBS: ${pbs.nodeName || 'Configured Host'}. Check logs.`;
+        statusElement.classList.add('text-red-600', 'dark:text-red-400');
+        dsSection.classList.add('hidden');
+        tasksSection.classList.add('hidden');
+    } else if (pbs.status === 'unconfigured') {
+        statusText = 'PBS monitoring is not configured.';
+        statusElement.classList.add('text-gray-600', 'dark:text-gray-400');
+        dsSection.classList.add('hidden');
+        tasksSection.classList.add('hidden');
+    } else {
+        statusText = 'PBS status unknown.';
+        statusElement.classList.add('text-gray-600', 'dark:text-gray-400');
+        dsSection.classList.add('hidden');
+        tasksSection.classList.add('hidden');
+    }
+    statusElement.textContent = statusText;
+
+    // Update Datastores Table (only if status is ok)
+    if (pbs.status === 'ok' && pbs.datastores) {
+        dsTableBody.innerHTML = ''; // Clear previous rows
+        if (pbs.datastores.length === 0) {
+             dsTableBody.innerHTML = '<tr><td colspan="6" class="px-4 py-4 text-sm text-gray-400 text-center">No PBS datastores found or accessible.</td></tr>';
+        } else {
+            pbs.datastores.forEach(ds => {
+                const totalBytes = ds.total || 0;
+                const usedBytes = ds.used || 0;
+                const availableBytes = ds.available ?? (totalBytes - usedBytes); // Calculate if avail is null
+                const usagePercent = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
+                const usageColor = getUsageColor(usagePercent);
+                const usageText = `${usagePercent}% (${formatBytes(usedBytes)} of ${formatBytes(totalBytes)})`;
+
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
+                row.innerHTML = `
+                    <td class="px-4 py-2 whitespace-nowrap">${ds.name || 'N/A'}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${ds.path || 'N/A'}</td>
+                    <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(usedBytes)}</td>
+                    <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(availableBytes)}</td>
+                    <td class="px-4 py-2 text-right whitespace-nowrap">${formatBytes(totalBytes)}</td>
+                    <td class="px-4 py-2 text-center">${createProgressTextBarHTML(usagePercent, usageText, usageColor)}</td>
+                `;
+                dsTableBody.appendChild(row);
+            });
+        }
+    }
+
+    // Update Task Summary (only if status is ok)
+    if (pbs.status === 'ok' && pbs.tasks && pbs.tasks.summary) {
+        const summary = pbs.tasks.summary;
+        document.getElementById('pbs-tasks-ok').textContent = summary.ok ?? '-';
+        document.getElementById('pbs-tasks-failed').textContent = summary.failed ?? '-';
+        document.getElementById('pbs-tasks-total').textContent = summary.total ?? '-';
+
+        const formatTimestamp = (ts) => {
+            if (!ts) return 'Never';
+            try {
+                return new Date(ts * 1000).toLocaleString();
+            } catch (e) {
+                return 'Invalid Date';
+            }
+        };
+
+        document.getElementById('pbs-tasks-last-ok').textContent = formatTimestamp(summary.lastOk);
+        document.getElementById('pbs-tasks-last-failed').textContent = formatTimestamp(summary.lastFailed);
+    } else {
+        // Clear task summary if PBS status is not ok
+        document.getElementById('pbs-tasks-ok').textContent = '-';
+        document.getElementById('pbs-tasks-failed').textContent = '-';
+        document.getElementById('pbs-tasks-total').textContent = '-';
+        document.getElementById('pbs-tasks-last-ok').textContent = '-';
+        document.getElementById('pbs-tasks-last-failed').textContent = '-';
+    }
+  }
+  // --- End Update PBS Info Function ---
 
 }); // End DOMContentLoaded

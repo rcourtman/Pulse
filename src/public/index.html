@@ -71,6 +71,8 @@
       <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px" data-tab="main">Main</div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="nodes">Nodes</div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="storage">Storage</div>
+      <!-- Add PBS Tab -->
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t" data-tab="pbs">PBS</div>
     </div>
 
     <!-- Removed outer .section wrapper, apply styles directly to tab content where needed -->
@@ -200,6 +202,65 @@
           </div>
       </div>
     </div>
+
+    <!-- Add PBS Tab Content -->
+    <div id="pbs" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
+      <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Proxmox Backup Server Status</h2>
+      <div id="pbs-connection-status" class="mb-3 text-sm text-gray-600 dark:text-gray-400">Loading PBS status...</div>
+
+      <!-- Datastore Summary -->
+      <div id="pbs-datastores-section" class="mb-4 hidden">
+          <h3 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Datastores</h3>
+          <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
+            <table id="pbs-datastores-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                <tr>
+                  <th scope="col" class="px-4 py-2 text-left font-semibold">Name</th>
+                  <th scope="col" class="px-4 py-2 text-left font-semibold">Path</th>
+                  <th scope="col" class="px-4 py-2 text-right font-semibold">Used</th>
+                  <th scope="col" class="px-4 py-2 text-right font-semibold">Available</th>
+                  <th scope="col" class="px-4 py-2 text-right font-semibold">Total</th>
+                  <th scope="col" class="px-4 py-2 text-center font-semibold">Usage</th>
+                </tr>
+              </thead>
+              <tbody id="pbs-datastores-table-body" class="divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                <!-- Datastore rows will be inserted here -->
+                <tr><td colspan="6" class="px-4 py-4 text-sm text-gray-400 text-center">Loading datastore data...</td></tr>
+              </tbody>
+            </table>
+          </div>
+      </div>
+
+      <!-- Backup Task Summary -->
+      <div id="pbs-tasks-section" class="hidden">
+        <h3 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Backup Task Summary (Last 7 Days)</h3>
+         <div class="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm">
+           <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700">
+             <span class="font-medium text-gray-800 dark:text-gray-200">Successful:</span>
+             <span id="pbs-tasks-ok" class="ml-1 text-green-600 dark:text-green-400 font-semibold">-</span>
+           </div>
+           <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700">
+             <span class="font-medium text-gray-800 dark:text-gray-200">Failed:</span>
+             <span id="pbs-tasks-failed" class="ml-1 text-red-600 dark:text-red-400 font-semibold">-</span>
+           </div>
+            <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700">
+             <span class="font-medium text-gray-800 dark:text-gray-200">Total:</span>
+             <span id="pbs-tasks-total" class="ml-1 text-gray-700 dark:text-gray-300 font-semibold">-</span>
+           </div>
+           <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700 md:col-span-1">
+             <span class="font-medium text-gray-800 dark:text-gray-200">Last OK:</span>
+             <span id="pbs-tasks-last-ok" class="ml-1 text-gray-600 dark:text-gray-400">-</span>
+           </div>
+           <div class="bg-gray-50 dark:bg-gray-700/50 p-2 rounded border border-gray-200 dark:border-gray-700 md:col-span-2">
+             <span class="font-medium text-gray-800 dark:text-gray-200">Last Failed:</span>
+             <span id="pbs-tasks-last-failed" class="ml-1 text-gray-600 dark:text-gray-400">-</span>
+           </div>
+         </div>
+      </div>
+
+    </div>
+    <!-- End PBS Tab Content -->
+
   </div>
   
   <!-- Custom Tooltip Element - Styled with Tailwind -->
