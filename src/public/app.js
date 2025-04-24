@@ -1660,7 +1660,28 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    // Remove initial loading message if it exists
+    // --- NEW: Check if PBS is configured --- //
+    if (!pbsArray || pbsArray.length === 0) {
+        container.innerHTML = ''; // Clear any previous content (like loading message)
+        const placeholder = document.createElement('div');
+        // Use banner/card styling with an icon
+        placeholder.className = 'pbs-not-configured-banner flex items-start p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 rounded-lg text-sm text-blue-800 dark:text-blue-300';
+        placeholder.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+            </svg>
+            <div>
+                <p class="font-semibold mb-1">Proxmox Backup Server Not Configured</p>
+                <p class="text-xs opacity-90">PBS connection details (e.g., <code>PROXMOX_HOST_2</code>, <code>PROXMOX_TOKEN_ID_2</code>) need to be set in your <code>.env</code> file to enable PBS monitoring.</p>
+            </div>
+        `;
+        container.appendChild(placeholder);
+        console.log("[updatePbsInfo] No PBS data received, showing 'Not Configured' banner.");
+        return; // Stop processing for this tab
+    }
+    // --- END NEW Check --- //
+
+    // Remove initial loading message if it exists AND we have data
     const loadingMessage = document.getElementById('pbs-loading-message');
     if (loadingMessage) {
         loadingMessage.remove();
