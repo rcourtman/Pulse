@@ -845,6 +845,9 @@ document.addEventListener('DOMContentLoaded', function() {
           typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
           typeof entry[key] === 'number' && !isNaN(entry[key])
       );
+      // ---> ADDED: Log the filtered history <---\
+      console.log(`[calculateAverageRate - ${key}] Filtered validHistory (${validHistory.length} entries):`, validHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
+      // ---> END ADDED SECTION <---\
       if (validHistory.length < 2) return null;
       const oldest = validHistory[0];
       const newest = validHistory[validHistory.length - 1];
@@ -920,6 +923,9 @@ document.addEventListener('DOMContentLoaded', function() {
             // ---> END ADDED SECTION <---
             avgNetInRate = calculateAverageRate(history, 'netin') ?? 0;
             avgNetOutRate = calculateAverageRate(history, 'netout') ?? 0;
+            // ---> ADDED: Log history content before calculation <---\
+            console.log(`[processGuest - ${guest.vmid}] History before rate calc:`, history.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), dr: e.diskread, dw: e.diskwrite })));
+            // ---> END ADDED SECTION <---\
             avgMemoryPercent = (guest.maxmem > 0) ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
             avgDiskPercent = (guest.maxdisk > 0) ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
             // console.log(`[dbg ${guest.vmid}] Rates (B/s): netin=${avgNetInRate?.toFixed(0)}, netout=${avgNetOutRate?.toFixed(0)}, diskread=${avgDiskReadRate?.toFixed(0)}, diskwrite=${avgDiskWriteRate?.toFixed(0)}`); // DEBUG: Keep commented
