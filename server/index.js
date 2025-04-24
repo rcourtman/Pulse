@@ -207,7 +207,7 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../src/public')));
 
 // Allow iframe embedding
 app.use((req, res, next) => {
@@ -951,7 +951,7 @@ server.listen(PORT, () => {
   
   // Setup hot reload in development mode
   if (process.env.NODE_ENV === 'development' && chokidar) {
-    const publicPath = path.join(__dirname, '../public');
+    const publicPath = path.join(__dirname, '../src/public');
     console.log(`Watching for changes in ${publicPath}`);
     const watcher = chokidar.watch(publicPath, { 
       ignored: /(^|[\\\/])\./, // ignore dotfiles
