@@ -7,7 +7,7 @@
     "start": "cd server && node index.js",
     "dev:server": "NODE_ENV=development node -r dotenv/config --env-file=.env server/index.js",
     "dev:css": "./node_modules/.bin/tailwindcss -c ./src/tailwind.config.js -i ./src/index.css -o ./src/public/output.css --watch",
-    "build:css": "NODE_ENV=development ./node_modules/.bin/tailwindcss -c ./src/tailwind.config.js -i ./src/index.css -o ./src/public/output.css",
+    "build:css": "npx @tailwindcss/cli -i ./src/index.css -o ./src/public/output.css --minify",
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:css\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
