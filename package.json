@@ -6,8 +6,8 @@
   "scripts": {
     "start": "cd server && node index.js",
     "dev:server": "NODE_ENV=development node -r dotenv/config --env-file=.env server/index.js",
-    "dev:css": "./node_modules/.bin/tailwindcss -c ./src/tailwind.config.js -i ./src/index.css -o ./src/public/output.css --watch",
-    "build:css": "npx @tailwindcss/cli -i ./src/index.css -o ./src/public/output.css --minify",
+    "dev:css": "tailwindcss -i ./src/index.css -o ./src/public/output.css --watch",
+    "build:css": "tailwindcss -c ./src/tailwind.config.js -i ./src/index.css -o ./src/public/output.css",
     "dev": "concurrently \"npm:dev:server\" \"npm:dev:css\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -21,11 +21,10 @@
   "author": "Richard Courtman",
   "license": "MIT",
   "dependencies": {
-    "concurrently": "^8.2.2",
-    "tailwindcss": "^4.1.4"
+    "concurrently": "^8.2.2"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.1.4",
+    "tailwindcss": "^3.4.4",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3"
   }

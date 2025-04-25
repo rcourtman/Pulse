@@ -248,7 +248,15 @@ perform_update() {
     cd .. # Back to PULSE_DIR
 
     # Build CSS after dependencies
-    echo "Skipping CSS build step (using pre-built CSS)."
+    print_info "Building CSS assets..."
+    if ! npm run build:css > /dev/null 2>&1; then
+        print_error "Failed to build CSS assets during update."
+        # Potentially return 1 here if CSS build failure is critical
+        # For now, just warn and continue
+        print_warning "Continuing update despite CSS build failure."
+    else
+        print_success "CSS assets built."
+    fi
 
     set_permissions # Ensure permissions are correct after update and build
 
@@ -821,7 +829,16 @@ case "$INSTALL_MODE" in
             install_npm_deps || exit 1 # Installs root and server (NOW INCLUDES DEV)
             
             # Build CSS after dependencies
-            echo "Skipping CSS build step (using pre-built CSS)."
+            print_info "Building CSS assets..."
+            cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before building CSS"; exit 1; }
+            if ! npm run build:css > /dev/null 2>&1; then
+                print_error "Failed to build CSS assets."
+                exit 1
+            else
+                print_success "CSS assets built."
+            fi
+            # Now cd back if needed, though subsequent steps might need PULSE_DIR
+            # cd .. 
 
             set_permissions || exit 1 # Set permissions AFTER building css
             configure_environment || exit 1 # Prompt user for details
