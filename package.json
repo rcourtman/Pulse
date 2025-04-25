@@ -23,6 +23,10 @@
   "dependencies": {
     "concurrently": "^8.2.2"
   },
+  // NOTE: Using Tailwind CSS v3 due to build inconsistencies observed with v4.
+  // v4 (specifically 4.1.4) resulted in incorrectly purged CSS files when built
+  // within certain Linux environments (e.g., Proxmox LXC - Debian 12 x86_64),
+  // failing to detect dynamically added classes. v3.4.4 builds correctly.
   "devDependencies": {
     "tailwindcss": "^3.4.4",
     "autoprefixer": "^10.4.21",
