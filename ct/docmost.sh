@@ -51,7 +51,7 @@ function update_script() {
     cp -r /opt/docmost/data /opt/
     rm -rf /opt/docmost
     temp_file=$(mktemp)
-    curl -fsSL "https://github.com/docmost/docmost/archive/refs/tags/v${RELEASE}.tar.gz" -o ""$temp_file""
+    curl -fsSL "https://github.com/docmost/docmost/archive/refs/tags/v${RELEASE}.tar.gz" -o "$temp_file"
     tar -xzf "$temp_file"
     mv docmost-${RELEASE} /opt/docmost
     cd /opt/docmost
