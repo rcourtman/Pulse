@@ -1687,6 +1687,13 @@ document.addEventListener('DOMContentLoaded', function() {
         loadingMessage.remove();
     }
     
+    // ---> ADDED: Also remove the 'Not Configured' banner if present, as we now have data
+    const notConfiguredBanner = container.querySelector('.pbs-not-configured-banner');
+    if (notConfiguredBanner) {
+        notConfiguredBanner.remove();
+    }
+    // ---> END ADDED
+
     // console.log('[updatePbsInfo] Processing PBS array:', pbsArray); 
 
     const currentInstanceIds = new Set(); 

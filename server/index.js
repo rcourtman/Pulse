@@ -1,4 +1,4 @@
-// require('dotenv').config(); // Load environment variables from .env file
+require('dotenv').config(); // Load environment variables from .env file
 
 // --- BEGIN Environment Variable Validation ---
 const primaryRequiredEnvVars = [
@@ -478,9 +478,19 @@ app.get('/api/version', (req, res) => {
 
 app.get('/api/storage', async (req, res) => {
     try {
-        // Return the current node data which includes storage information
-        // TODO: Consider filtering/transforming this data specifically for storage endpoint if needed
-        res.json({ nodes: currentNodes }); // Return current node state
+        // Transform currentNodes into the format expected by updateStorageInfo
+        const storageInfoByNode = {};
+        (currentNodes || []).forEach(node => {
+            // Assuming storage details are fetched and stored within the node object
+            // during the discovery cycle. Need to find where Proxmox stores this.
+            // Use the `storage` property added by the updated `fetchDataForNode` function
+            storageInfoByNode[node.node] = node.storage || []; // Use node name as key
+            if (!node.storage) {
+                // This warning should ideally not appear now unless the storage fetch itself failed
+                console.warn(`[API /api/storage] No storage data found for node: ${node.node}. Sending empty array.`);
+            }
+        });
+        res.json(storageInfoByNode); // Return the transformed object
     } catch (error) {
         console.error("Error in /api/storage:", error);
         res.status(500).json({ globalError: error.message || "Failed to fetch storage details." });
@@ -551,7 +561,8 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
     vms: [],
     containers: [],
     metrics: [],
-    nodeStatus: null // Initialize node status object
+    nodeStatus: null, // Initialize node status object
+    storage: [] // Initialize storage array
   };
 
   // Fetch node status ONLY (removed concurrent /cpu fetch)
@@ -568,6 +579,22 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
     console.error(`[Discovery] Error fetching status for node ${nodeName} (Endpoint: ${endpointId})${status}: ${err.message}`);
     nodeData.nodeStatus = {}; // Ensure nodeStatus is an object even on failure
   }
+
+  // ---> ADDED: Fetch Node Storage <---
+  try {
+    const storageResult = await apiClient.get(`/nodes/${nodeName}/storage`);
+    if (storageResult.data && storageResult.data.data && Array.isArray(storageResult.data.data)) {
+      nodeData.storage = storageResult.data.data; // Store storage array
+    } else {
+      console.warn(`[Discovery] Storage data for ${nodeName} (Endpoint: ${endpointId}) was empty or malformed.`);
+      nodeData.storage = []; // Default to empty array on failure/malformed
+    }
+  } catch (err) {
+    const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
+    console.error(`[Discovery] Error fetching storage for node ${nodeName} (Endpoint: ${endpointId})${status}: ${err.message}`);
+    nodeData.storage = []; // Default to empty array on error
+  }
+  // ---> END ADDED <---
 
   try {
     // Fetch VMs
@@ -685,7 +712,8 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
   return {
       vms: nodeData.vms,
       containers: nodeData.containers,
-      nodeStatus: nodeData.nodeStatus // Return node status
+      nodeStatus: nodeData.nodeStatus, // Return node status
+      storage: nodeData.storage // Return storage array
   };
 }
 
@@ -786,6 +814,12 @@ async function fetchDiscoveryData() {
                             // Update status if uptime indicates online, otherwise keep original list status
                             endpointNodes[targetNodeIndex].status = statusData.uptime > 0 ? 'online' : endpointNodes[targetNodeIndex].status;
                           }
+
+                          // ---> ADDED: Merge node storage if available <---
+                          if (result.value.storage && Array.isArray(result.value.storage)) {
+                            endpointNodes[targetNodeIndex].storage = result.value.storage;
+                          }
+                          // ---> END ADDED <---
 
                       } else if (result.status === 'rejected') {
                           // Log node-specific failure if needed, but continue processing others
