@@ -231,7 +231,7 @@ perform_update() {
 
     print_info "Re-installing npm dependencies (root)..."
     # Keep --omit=dev here, we'll install cli separately
-    if ! npm install --omit=dev --unsafe-perm > /dev/null 2>&1; then 
+    if ! npm install --unsafe-perm > /dev/null 2>&1; then
         print_warning "Failed to install root npm dependencies during update. Continuing..."
     else
         print_success "Root dependencies updated."
@@ -239,20 +239,13 @@ perform_update() {
 
     print_info "Re-installing server dependencies..."
     cd server || { print_error "Failed to change directory to $PULSE_DIR/server"; cd ..; return 1; }
-     if npm install --omit=dev --unsafe-perm > /dev/null 2>&1; then
+     if npm install --unsafe-perm > /dev/null 2>&1; then
         print_success "Server dependencies updated."
     else
         print_error "Failed to install server npm dependencies."
         exit 1 # Exit if server deps fail
     fi
     cd .. # Back to PULSE_DIR
-
-    # Explicitly install tailwindcss cli required for build
-    print_info "Installing Tailwind CSS CLI for build..."
-    if ! npm install @tailwindcss/cli --no-save > /dev/null 2>&1; then # --no-save avoids modifying package-lock.json unnecessarily
-        print_error "Failed to install @tailwindcss/cli."
-        return 1
-    fi
 
     # Build CSS after dependencies
     print_info "Building CSS assets..."
@@ -376,19 +369,20 @@ install_npm_deps() {
 
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
-    print_info "Installing root dependencies..."
+    print_info "Installing root dependencies (including dev)..."
     # Use --unsafe-perm if running npm install as root, which might be necessary for some packages
-    # Use --omit=dev to skip development dependencies
-    if npm install --omit=dev --unsafe-perm > /dev/null 2>&1; then
+    # REMOVED --omit=dev to ensure build tools like postcss/autoprefixer are present
+    if npm install --unsafe-perm > /dev/null 2>&1; then
         print_success "Root dependencies installed."
     else
         print_error "Failed to install root npm dependencies."
         return 1
     fi
 
-    print_info "Installing server dependencies..."
+    print_info "Installing server dependencies (including dev)..."
     cd server || { print_error "Failed to change directory to $PULSE_DIR/server"; cd ..; return 1; }
-     if npm install --omit=dev --unsafe-perm > /dev/null 2>&1; then
+    # REMOVED --omit=dev
+     if npm install --unsafe-perm > /dev/null 2>&1; then
         print_success "Server dependencies installed."
     else
         print_error "Failed to install server npm dependencies."
@@ -831,21 +825,11 @@ case "$INSTALL_MODE" in
                 exit 1
             fi
 
-            install_npm_deps || exit 1 # Installs root (omit dev) and server (omit dev)
+            install_npm_deps || exit 1 # Installs root and server (NOW INCLUDES DEV)
             
-            # Explicitly install tailwindcss cli required for build
-            print_info "Installing Tailwind CSS CLI for build..."
-            cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before installing CLI"; exit 1; }
-            if ! npm install @tailwindcss/cli --no-save > /dev/null 2>&1; then
-                print_error "Failed to install @tailwindcss/cli."
-                # cd .. # No need to cd back here if exiting
-                exit 1
-            fi
-            # Don't cd back yet, stay for build
-
             # Build CSS after dependencies
             print_info "Building CSS assets..."
-            # Already in $PULSE_DIR
+            cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before building CSS"; exit 1; }
             if ! npm run build:css > /dev/null 2>&1; then
                 print_error "Failed to build CSS assets."
                 exit 1
