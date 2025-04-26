@@ -203,7 +203,8 @@ perform_update() {
     git config --global --add safe.directory "$PULSE_DIR" > /dev/null 2>&1 || print_warning "Could not configure safe.directory for root user."
 
     print_info "Fetching latest changes from git (running as user $PULSE_USER)..."
-    if ! sudo -u "$PULSE_USER" git fetch origin --tags; then # Ensure tags are fetched
+    # Add --force to allow overwriting local tags if they conflict with remote after amends/force-pushes
+    if ! sudo -u "$PULSE_USER" git fetch origin --tags --force; then # Ensure tags are fetched
         print_error "Failed to fetch latest changes from git."
         cd ..
         return 1
