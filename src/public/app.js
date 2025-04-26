@@ -663,7 +663,9 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function formatSpeedInt(bytesPerSecond) {
       if (bytesPerSecond === undefined || bytesPerSecond === null || isNaN(bytesPerSecond)) return 'N/A';
-      if (bytesPerSecond < 1) return '0 B/s';
+      // if (bytesPerSecond < 1) return '0 B/s'; // Old logic
+      if (bytesPerSecond === 0) return '0 B/s'; // Show 0 only if exactly 0
+      if (bytesPerSecond < 1) return '<1 B/s'; // Show <1 for small positive rates
       return `${formatBytesInt(bytesPerSecond)}/s`;
   }
 
