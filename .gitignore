@@ -22,7 +22,7 @@ src/public/output.css
 .DS_Store
 
 # Local Documentation (Not for Repo)
-RELEASE_PROCEDURE.md 
+RELEASE_PROCEDURE.md
 
 # Cursor IDE configuration/rules
 .cursor/ 
