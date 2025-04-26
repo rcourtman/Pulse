@@ -490,6 +490,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // Create tooltips and bar HTML using correct fields
       const cpuTooltipText = `${cpuPercent.toFixed(1)}%`;
       const memTooltipText = `${formatBytes(memUsed)} / ${formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
+      // ---- START DEBUG LOG ----
+      // console.log(`[Node: ${node.node}] diskUsed raw: ${diskUsed}, diskTotal raw: ${diskTotal}`);
+      // ---- END DEBUG LOG ----
       const diskTooltipText = `${formatBytes(diskUsed)} / ${formatBytes(diskTotal)} (${diskPercent.toFixed(1)}%)`;
       
       const cpuBarHTML = createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
@@ -596,13 +599,28 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // --- Formatting Helpers ---
   function formatBytes(bytes) {
+/* 
+     // --- EXTREME DEBUG: Return raw bytes as string --- 
+     if (bytes === undefined || bytes === null || isNaN(bytes)) return 'N/A_debug';
+     return `DEBUG_RAW_${bytes}`;
+     // --- END EXTREME DEBUG ---
+*/ 
+     // Correct logic reinstated:
      if (bytes === undefined || bytes === null || isNaN(bytes)) return 'N/A';
      if (bytes <= 0) return '0 B'; // Handle 0 or negative
      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
      const i = Math.floor(Math.log(bytes) / Math.log(1024));
      const unitIndex = Math.max(0, Math.min(i, units.length - 1));
      const value = bytes / Math.pow(1024, unitIndex);
-     return `${parseFloat(value.toFixed(unitIndex === 0 ? 0 : 1))} ${units[unitIndex]}`;
+     // Determine decimal places based on unit
+     let decimals = 0;
+     if (unitIndex === 1 || unitIndex === 2) { // KB or MB
+       decimals = 1;
+     } else if (unitIndex >= 3) { // GB or TB
+       decimals = 2;
+     }
+     // Format with determined decimals, avoiding parseFloat wrapping
+     return `${value.toFixed(decimals)} ${units[unitIndex]}`;
   }
   function formatCpu(cpu) {
       if (cpu === undefined || cpu === null || isNaN(cpu)) return 'N/A';
@@ -626,6 +644,11 @@ document.addEventListener('DOMContentLoaded', function() {
       return `${formatBytes(bytesPerSecond)}/s`;
   }
   function formatBytesInt(bytes) {
+      // ---- START DEBUG LOG ----
+      // if (bytes > 1073741824 && bytes < 3221225472) { // Log only for values between 1GB and 3GB to target the likely bad value
+      //   console.log(`[formatBytesInt DEBUG] Received suspicious byte value: ${bytes}`);
+      // }
+      // ---- END DEBUG LOG ----
       if (bytes === undefined || bytes === null || isNaN(bytes)) return 'N/A';
       if (bytes <= 0) return '0 B';
       const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -927,6 +950,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Helper: Calculates average, returns null if invalid/insufficient data
     function calculateAverage(historyArray, key) {
+      // ---- START DEBUG LOG ----
+      // if (key === 'disk') {
+      //   console.log(`[calculateAverage DEBUG - key: ${key}] Received historyArray:`, JSON.stringify(historyArray));
+      // }
+      // ---- END DEBUG LOG ----
       if (!historyArray || historyArray.length === 0) return null;
       const validEntries = historyArray.filter(entry => typeof entry[key] === 'number' && !isNaN(entry[key]));
       if (validEntries.length === 0) return null;
@@ -972,78 +1000,83 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Process VMs and Containers
     const processGuest = (guest, type) => {
-        // console.log(`[refreshDashboardData] Processing ${type} ${guest.vmid} (${guest.name}). Found metrics:`, metrics);
+        // ---- START DEBUG LOG ----
+        // if (guest.vmid === 103 || guest.name === 'socat') { // Keep commented 
+        //   console.log(`[processGuest START DEBUG - vmid: ${guest.vmid}] guest object:`, JSON.stringify(guest));
+        //   const relevantMetrics = (metricsData || []).filter(m => m.id === 103 || m.guestName === 'socat' || m.guestName === 'pihole');
+        //   console.log(`[processGuest START DEBUG - vmid: ${guest.vmid}] Relevant metricsData entries:`, JSON.stringify(relevantMetrics)); 
+        // }
+        // ---- END DEBUG LOG ----
+
+        // Define variables for averages first
         let avgCpu = 0, avgMem = 0, avgDisk = 0;
         let avgDiskReadRate = 0, avgDiskWriteRate = 0, avgNetInRate = 0, avgNetOutRate = 0;
         let avgMemoryPercent = 'N/A', avgDiskPercent = 'N/A';
 
-        if (guest.status === 'running') { // Only process running guests
+        // Find the corresponding metrics for this guest (more specific match)
+        const metrics = (metricsData || []).find(m => 
+            m.id === guest.vmid && 
+            m.type === guest.type &&
+            m.node === guest.node && 
+            m.endpointId === guest.endpointId
+        ); 
 
-            // ---> Keep Ensure history exists check <---
-            if (!dashboardHistory[guest.vmid] || !Array.isArray(dashboardHistory[guest.vmid])) {
-                // console.log(`[processGuest - ${guest.vmid}] Initializing/Resetting history array.`); // REMOVED THIS LOG
-                dashboardHistory[guest.vmid] = [];
+        // Only process history and calculate averages if the guest is running AND we found metrics
+        if (guest.status === 'running' && metrics && metrics.current) { 
+            // ---> Ensure history exists check <---
+            if (!dashboardHistory[guest.id] || !Array.isArray(dashboardHistory[guest.id])) { // Use guest.id (unique combo) as key
+               dashboardHistory[guest.id] = [];
             }
-            // ---> END SECTION <---
+            // ---> End section <---
+            
+            // ---> Use uniqueId for history key <---
+            const history = dashboardHistory[guest.id]; // Use unique guest.id
+            // ---> End change <---
 
-            const history = dashboardHistory[guest.vmid];
-            const metrics = (metricsData || []).find(m => m.id === guest.vmid && m.type === type);
+            // Add current data point to history
+            const currentDataPoint = { 
+                timestamp: Date.now(), 
+                ...metrics.current 
+            };
+            history.push(currentDataPoint);
+            if (history.length > AVERAGING_WINDOW_SIZE) history.shift();
 
-            if (metrics && metrics.current) {
-                // console.log(`[dbg ${guest.vmid}] metrics.current:`, JSON.stringify(metrics.current));
+            // Calculate averages from history
+            avgCpu = calculateAverage(history, 'cpu') ?? 0;
+            avgMem = calculateAverage(history, 'mem') ?? 0;
+            avgDisk = calculateAverage(history, 'disk') ?? 0;
+            avgDiskReadRate = calculateAverageRate(history, 'diskread') ?? 0;
+            avgDiskWriteRate = calculateAverageRate(history, 'diskwrite') ?? 0;
+            avgNetInRate = calculateAverageRate(history, 'netin') ?? 0;
+            avgNetOutRate = calculateAverageRate(history, 'netout') ?? 0;
+            avgMemoryPercent = (guest.maxmem > 0) ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
+            avgDiskPercent = (guest.maxdisk > 0) ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
 
-                // ---> REVERTED: Back to spread syntax <---
-                const currentDataPoint = { 
-                    timestamp: Date.now(), 
-                    ...metrics.current // Use spread syntax
-                };
-                // ---> END REVERTED SECTION <---
-
-                // ---> REMOVED: Debug log for deep copy <---
-                // console.log(`[processGuest - ${guest.vmid}] Created currentDataPoint (deep copy): ...`);
-                // ---> END REMOVED SECTION <---
-
-                history.push(currentDataPoint);
-                if (history.length > AVERAGING_WINDOW_SIZE) history.shift();
-
-                // Calculate averages (rest of the block remains the same)
-                avgCpu = calculateAverage(history, 'cpu') ?? 0;
-                avgMem = calculateAverage(history, 'mem') ?? 0;
-                avgDisk = calculateAverage(history, 'disk') ?? 0;
-                avgDiskReadRate = calculateAverageRate(history, 'diskread') ?? 0;
-                avgDiskWriteRate = calculateAverageRate(history, 'diskwrite') ?? 0;
-                // ---> REMOVED: Redundant log (already have calc log) <---
-                // console.log(`[processGuest - ${guest.vmid}] Calculated avgDiskReadRate: ${avgDiskReadRate}`);
-                // ---> END REMOVED SECTION <---
-                avgNetInRate = calculateAverageRate(history, 'netin') ?? 0;
-                avgNetOutRate = calculateAverageRate(history, 'netout') ?? 0;
-                // ---> REMOVED: Redundant log (already have calc log) <---
-                // console.log(`[processGuest - ${guest.vmid}] History before rate calc:`, ...);
-                // ---> END REMOVED SECTION <---
-                avgMemoryPercent = (guest.maxmem > 0) ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
-                avgDiskPercent = (guest.maxdisk > 0) ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
-
-            } // End if metrics && metrics.current
-
-        } else { // Guest is stopped or unknown
-             // Clear history for non-running guests
-             if (dashboardHistory[guest.vmid]) {
-                 // console.log(`[processGuest - ${guest.vmid}] Clearing history for non-running guest.`);
-                 delete dashboardHistory[guest.vmid];
+        } else { // Guest is stopped, unknown, or metrics not found for it
+             // Clear history for this specific guest instance
+             // ---> Use uniqueId for history key <---
+             if (dashboardHistory[guest.id]) { 
+                 // console.log(`[processGuest - ${guest.id}] Clearing history for stopped/unmatched guest.`);
+                 delete dashboardHistory[guest.id];
              }
-             // Metrics remain at default 0 / N/A
+             // ---> End change <---
+             // Averages remain at their default 0 / N/A values declared above
         }
 
-        // Update dashboardData entry (rest of processGuest remains the same)
-        const name = guest.name || `${type === 'qemu' ? 'VM' : 'CT'} ${guest.vmid}`;
+        // Prepare guest name and uptime regardless of running state
+        const name = guest.name || `${guest.type === 'qemu' ? 'VM' : 'CT'} ${guest.vmid}`;
         const uptimeFormatted = formatUptime(guest.uptime);
         if (name.length > maxNameLength) maxNameLength = name.length;
         if (uptimeFormatted.length > maxUptimeLength) maxUptimeLength = uptimeFormatted.length;
 
-        // Always push the guest data, using defaults for stopped guests
+        // Push data for the dashboard table
         dashboardData.push({
-            id: guest.vmid, name: name, node: guest.node,
-            type: type === 'qemu' ? 'VM' : 'CT',
+            id: guest.vmid, // Display ID
+            uniqueId: guest.id, // Unique ID for history key
+            vmid: guest.vmid, 
+            name: name, 
+            node: guest.node, 
+            type: guest.type === 'qemu' ? 'VM' : 'CT', 
             status: guest.status,
             cpu: avgCpu,
             cpus: guest.cpus || 1,
@@ -1170,7 +1203,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // console.log('[createGuestRow] Received guest data:', guest);
       const row = document.createElement('tr');
       // Add more prominent hover background, shadow, lift effect, and transition
-      row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px ${guest.status === 'stopped' ? 'opacity-60' : ''}`;
+      row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px ${guest.status === 'stopped' ? 'opacity-600' : ''}`;
       row.setAttribute('data-name', guest.name.toLowerCase());
       row.setAttribute('data-type', guest.type.toLowerCase());
       row.setAttribute('data-node', guest.node.toLowerCase());
