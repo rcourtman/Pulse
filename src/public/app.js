@@ -1380,6 +1380,9 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         // <--- END CHANGE
 
+        // Update Tab Availability AFTER potentially updating pbsDataArray
+        updateTabAvailability(); 
+
         // console.log('[socket.on("rawData")] Parsed data and updated stores');
 
         // Set flag after first successful data parse
@@ -1421,6 +1424,8 @@ document.addEventListener('DOMContentLoaded', function() {
           }));
           // Trigger an immediate partial UI update for PBS status
           updatePbsInfo(pbsDataArray);
+          // Update tab availability based on this initial status
+          updateTabAvailability(); 
       } else {
           console.warn('[socket] Received non-array data for pbsInitialStatus:', pbsStatusArray);
       }
@@ -1801,26 +1806,18 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    // --- NEW: Check if PBS is configured --- //
+    // --- REVERTED Check: Remove the banner creation --- //
     if (!pbsArray || pbsArray.length === 0) {
-        container.innerHTML = ''; // Clear any previous content (like loading message)
-        const placeholder = document.createElement('div');
-        // Use banner/card styling with an icon
-        placeholder.className = 'pbs-not-configured-banner flex items-start p-4 border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 rounded-lg text-sm text-blue-800 dark:text-blue-300';
-        placeholder.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-3 flex-shrink-0" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-            </svg>
-            <div>
-                <p class="font-semibold mb-1">Proxmox Backup Server Not Configured</p>
-                <p class="text-xs opacity-90">Please ensure Proxmox Backup Server is configured in your environment (<code>.env</code> file) to enable monitoring.</p>
-            </div>
-        `;
+        container.innerHTML = ''; // Clear previous content
+        // Optionally, add a simple text message instead of the banner
+        const placeholder = document.createElement('p');
+        placeholder.className = 'text-gray-500 dark:text-gray-400 p-4 text-center text-sm';
+        placeholder.textContent = 'Proxmox Backup Server integration is not configured.';
         container.appendChild(placeholder);
-        console.log("[updatePbsInfo] No PBS data received, showing 'Not Configured' banner.");
+        // console.log("[updatePbsInfo] No PBS data received, showing simple text message.");
         return; // Stop processing for this tab
     }
-    // --- END NEW Check --- //
+    // --- END REVERTED Check --- //
 
     // Remove initial loading message if it exists AND we have data
     const loadingMessage = document.getElementById('pbs-loading-message');
@@ -2206,22 +2203,30 @@ document.addEventListener('DOMContentLoaded', function() {
       const tableBody = document.getElementById('backups-overview-tbody');
       const loadingMsg = document.getElementById('backups-loading-message');
       const noDataMsg = document.getElementById('backups-no-data-message');
+      // REMOVED pbsNotConfiguredMsg reference
 
+      // REVERTED check for UI elements
       if (!container || !tableContainer || !tableBody || !loadingMsg || !noDataMsg) {
           console.error("UI elements for Backups tab not found!");
           return;
       }
+
+      // --- REVERTED PBS Check Section --- 
+      // The logic to disable the tab itself will handle the visibility
+      // Assume if this function is called, the tab is considered 'available'
+      // for now, although the data processing might still find nothing.
+      // --- END REVERTED --- 
 
       // Combine VMs and Containers into a single list of guests
       const allGuests = [
           ...(vmsData || []), 
           ...(containersData || [])
       ];
-      // console.log("[Backups Tab DEBUG] All Guests:", JSON.stringify(allGuests.slice(0, 5))); // Log first 5 guests
 
-      // Check if we have guest data and PBS data (even if empty array)
-      if (!initialDataReceived || !pbsDataArray) {
-          // Still loading initial data
+      // REVERTED Check for initial data (re-add pbsDataArray check temporarily, 
+      // will be handled by tab disabling later)
+      if (!initialDataReceived || !pbsDataArray) { 
+          // Still loading initial data or PBS not configured yet
           loadingMsg.classList.remove('hidden');
           tableContainer.classList.add('hidden');
           noDataMsg.classList.add('hidden');
@@ -2236,6 +2241,11 @@ document.addEventListener('DOMContentLoaded', function() {
           noDataMsg.classList.remove('hidden');
           return;
       }
+
+      // REVERTED: Logic for showing table container
+      loadingMsg.classList.add('hidden');
+      // Visibility handled by data processing result below
+      // tableContainer.classList.remove('hidden'); 
 
       // ---> REWRITTEN: Data Processing Logic for Backup Health <---
       const backupStatusByGuest = [];
@@ -2462,5 +2472,43 @@ document.addEventListener('DOMContentLoaded', function() {
        // ---> END ADDED < ---
   }
   // --- END: Backups Tab Logic ---
+
+  // ---> NEW: Function to Update Tab Availability <---
+  function updateTabAvailability() {
+      const pbsTab = document.querySelector('.tab[data-tab="pbs"]');
+      const backupsTab = document.querySelector('.tab[data-tab="backups"]');
+
+      if (!pbsTab || !backupsTab) {
+          console.warn("PBS or Backups tab element not found for availability update.");
+          return;
+      }
+
+      // Check if PBS is configured and connected (at least one instance OK)
+      const isPbsAvailable = pbsDataArray && pbsDataArray.length > 0 && pbsDataArray.some(pbs => pbs.status === 'ok');
+
+      const disabledClasses = ['opacity-50', 'cursor-not-allowed', 'pointer-events-none'];
+      const enabledClasses = ['hover:bg-gray-200', 'dark:hover:bg-gray-700', 'cursor-pointer']; // Ensure hover/pointer restored
+
+      [pbsTab, backupsTab].forEach(tab => {
+          if (!isPbsAvailable) {
+              // Apply disabled styles
+              tab.classList.add(...disabledClasses);
+              tab.classList.remove(...enabledClasses);
+              // Add tooltip explaining why it's disabled
+              tab.setAttribute('title', 'Requires PBS integration to be configured and connected.');
+              // Ensure it doesn't look active if it was previously
+              tab.classList.remove('active', 'bg-white', 'dark:bg-gray-800', 'border-gray-300', 'dark:border-gray-700');
+              tab.classList.add('bg-gray-100', 'dark:bg-gray-700/50', 'border-transparent');
+
+          } else {
+              // Remove disabled styles
+              tab.classList.remove(...disabledClasses);
+              tab.classList.add(...enabledClasses);
+              // Remove tooltip
+              tab.removeAttribute('title');
+          }
+      });
+  }
+  // ---> END NEW Function <---
 
 }); // End DOMContentLoaded
