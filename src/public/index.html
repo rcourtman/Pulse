@@ -80,6 +80,11 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
           <span>Storage</span>
       </div>
+      <!-- Add Backups Tab -->
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="backups">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg> <!-- Shield with check -->
+          <span>Backups</span>
+      </div>
       <!-- Add PBS Tab -->
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="pbs">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
@@ -219,7 +224,7 @@
 
     <!-- PBS Tab Content -->
     <div id="pbs" class="tab-content hidden bg-white dark:bg-gray-800 p-4 border border-t-0 border-gray-300 dark:border-gray-700 rounded-b-lg shadow-sm">
-      <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Proxmox Backup Server Status</h2>
+      <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Proxmox Backup Server Status</h2>
 
       <div id="pbs-instances-container" class="space-y-6">
         <p id="pbs-loading-message" class="text-gray-500 dark:text-gray-400">Loading PBS data...</p>
@@ -229,10 +234,57 @@
     </div>
     <!-- End PBS Tab Content -->
 
+    <!-- Backups Tab Content -->
+    <div id="backups" class="tab-content hidden bg-white dark:bg-gray-800 p-4 border border-t-0 border-gray-300 dark:border-gray-700 rounded-b-lg shadow-sm">
+      <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Guest Backup Status</h2>
+
+      <div id="backups-overview-container" class="space-y-4">
+        <p id="backups-loading-message" class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading backup status overview...</p>
+        
+        <!-- Backups Filter Bar REMOVED -->
+
+        <div id="backups-table-container" class="hidden space-y-2">
+          <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
+            <table id="backups-overview-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-100 dark:bg-gray-700/50 sticky top-0"> 
+                  <tr>
+                    <!-- ADDED: Health Status Header -->
+                    <th scope="col" class="sortable p-1 px-2 text-center font-semibold cursor-pointer select-none whitespace-nowrap w-[30px]" data-sort="backupHealthStatus"></th> 
+                    <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="guestName">Guest Name</th>
+                    <th scope="col" class="sortable p-1 px-2 text-center font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="guestId">ID</th>
+                    <th scope="col" class="sortable p-1 px-2 text-center font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="guestType">Type</th>
+                    <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="node">Node</th>
+                    <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="latestBackupTime">Latest Backup</th>
+                    <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="pbsInstanceName">PBS Instance</th>
+                    <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="datastoreName">Datastore</th>
+                    <th scope="col" class="sortable p-1 px-2 text-center font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="totalBackups"># Backups</th>
+                  </tr>
+                </thead>
+                <tbody id="backups-overview-tbody" class="divide-y divide-gray-200 dark:divide-gray-700"><!-- Populated by JS --></tbody>
+              </table>
+          </div>
+        </div>
+        <p id="backups-no-data-message" class="hidden text-gray-500 dark:text-gray-400 p-4 text-center">No Proxmox guests found or no PBS backup data available.</p>
+      </div>
+
+    </div>
+    <!-- End Backups Tab Content -->
+
   </div>
   
   <!-- Custom Tooltip Element - Styled with Tailwind -->
   <div id="custom-tooltip" class="custom-tooltip absolute hidden z-50 px-2 py-1 text-xs text-white bg-gray-900/90 rounded shadow-lg pointer-events-none transition-opacity duration-100"></div>
+
+  <!-- Guest Snapshot Details Modal -->
+  <div id="snapshot-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-50"><div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-3xl max-h-[80vh] flex flex-col"><div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 pb-3 mb-4"><h3 id="snapshot-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Snapshot Details</h3>
+        <button id="snapshot-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+      </div>
+      <div id="snapshot-modal-body" class="overflow-y-auto flex-grow"><p>Loading snapshots...</p>
+        <!-- Snapshot table will be inserted here -->
+      </div>
+    </div>
+  </div>
+  <!-- End Modal -->
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/app.js" defer></script>

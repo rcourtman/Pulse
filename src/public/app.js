@@ -91,32 +91,40 @@ document.addEventListener('DOMContentLoaded', function() {
   // --- Tab Functionality ---
   const tabs = document.querySelectorAll('.tab');
   const tabContents = document.querySelectorAll('.tab-content');
-  let showTab = 'main'; // Default visible tab
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-      const tabId = tab.getAttribute('data-tab');
-
+      // Deactivate all tabs and hide all content
       tabs.forEach(t => {
-        t.classList.remove('active', 'bg-white', 'dark:bg-gray-800', 'border', 'border-gray-300', 'dark:border-gray-700', 'border-b-0', '-mb-px');
+        // Remove active classes, add inactive classes
+        t.classList.remove('active', 'bg-white', 'dark:bg-gray-800', 'border-gray-300', 'dark:border-gray-700', 'text-gray-900', 'dark:text-white');
         t.classList.add('bg-gray-100', 'dark:bg-gray-700/50', 'border-transparent', 'text-gray-600', 'dark:text-gray-400', 'hover:bg-gray-200', 'dark:hover:bg-gray-700');
       });
-      tab.classList.add('active', 'bg-white', 'dark:bg-gray-800', 'border', 'border-gray-300', 'dark:border-gray-700', 'border-b-0', '-mb-px');
+      tabContents.forEach(content => content.classList.add('hidden'));
+
+      // Activate clicked tab and show its content
+      // Add active classes, remove inactive classes
+      tab.classList.add('active', 'bg-white', 'dark:bg-gray-800', 'border-gray-300', 'dark:border-gray-700', 'text-gray-900', 'dark:text-white', '-mb-px');
       tab.classList.remove('bg-gray-100', 'dark:bg-gray-700/50', 'border-transparent', 'text-gray-600', 'dark:text-gray-400', 'hover:bg-gray-200', 'dark:hover:bg-gray-700');
-
-      tabContents.forEach(content => {
-        content.classList.remove('block');
-        content.classList.add('hidden');
-        if (content.id === tabId) {
-          content.classList.remove('hidden');
-          content.classList.add('block');
+      
+      const tabId = tab.getAttribute('data-tab');
+      const activeContent = document.getElementById(tabId);
+      if (activeContent) {
+        activeContent.classList.remove('hidden');
+        // If switching to dashboard, re-apply filter (in case data updated while on another tab)
+        if (tabId === 'main') {
+            applyDashboardFilters();
         }
-      });
-
-      showTab = tabId; // Update global state
-      // Potentially trigger data refresh if needed for the specific tab
+        // ---> ADDED: Trigger Backups Tab update if switching to it <---
+        if (tabId === 'backups') {
+            updateBackupsTab(); // Call the update function when tab is selected
+        }
+        // ---> END ADDED <---
+      }
     });
   });
+
+  // --- End Tab Switching Logic ---
 
   // --- Data Storage and State ---
   let nodesData = [];
@@ -129,24 +137,19 @@ document.addEventListener('DOMContentLoaded', function() {
   const savedSortState = JSON.parse(localStorage.getItem('pulseSortState')) || {};
   const sortState = {
     nodes: { column: null, direction: 'asc', ...(savedSortState.nodes || {}) },
-    main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) }
-    // ---> REMOVE: PBS sort state <---
-    // pbsBackup: { column: 'startTime', direction: 'desc', ...(savedSortState.pbsBackup || {}) },
-    // pbsVerify: { column: 'startTime', direction: 'desc', ...(savedSortState.pbsVerify || {}) },
-    // pbsSync: { column: 'startTime', direction: 'desc', ...(savedSortState.pbsSync || {}) },
-    // pbsPruneGc: { column: 'startTime', direction: 'desc', ...(savedSortState.pbsPruneGc || {}) }
-    // ---> END REMOVE <---
+    main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) },
+    backups: { column: 'latestBackupTime', direction: 'desc', ...(savedSortState.backups || {}) }
   };
   let groupByNode = true; // Default view
-  let filterGuestType = 'all'; // Default filter
+  let filterGuestType = 'all'; // Restore this state variable
   const AVERAGING_WINDOW_SIZE = 5;
   const dashboardHistory = {}; // Re-add this line
   let filterStatus = 'all'; // New state variable for status filter
   let initialDataReceived = false; // Flag to control initial rendering
   let storageData = {}; // Add state for storage data
-  // ---> REMOVE: pbsConfigured flag is less relevant now
-  // let pbsConfigured = false; // Flag to track if PBS is configured
-  // <--- END REMOVE
+  // ---> ADDED: State for Backups Tab Filters <---
+  let backupsFilterHealth = 'all'; // 'ok', 'warning', 'error', 'none'
+  // ---> END RENAMED <---
 
   // Define initial limit for PBS task tables
   const INITIAL_PBS_TASK_LIMIT = 5;
@@ -219,6 +222,10 @@ document.addEventListener('DOMContentLoaded', function() {
            derivedKey = 'nodes';
        } else if (tableId.startsWith('main-')) {
            derivedKey = 'main';
+       // ---> ADDED: Handle backups table < ---
+       } else if (tableId.startsWith('backups-')) {
+           derivedKey = 'backups';
+       // ---> END ADDED < ---
        } else {
            derivedKey = null;
        }
@@ -282,8 +289,8 @@ document.addEventListener('DOMContentLoaded', function() {
           // Save updated sort state to localStorage (Only relevant keys)
           const stateToSave = {
             nodes: sortState.nodes,
-            main: sortState.main
-            // Note: PBS sort state is not saved to localStorage currently
+            main: sortState.main,
+            backups: sortState.backups
           };
           localStorage.setItem('pulseSortState', JSON.stringify(stateToSave));
 
@@ -293,6 +300,9 @@ document.addEventListener('DOMContentLoaded', function() {
               case 'vms': updateVmsTable(vmsData); break;
               case 'containers': updateContainersTable(containersData); break;
               case 'main': updateDashboardTable(); break;
+              // ---> ADDED: Trigger update for backups table < ---
+              case 'backups': updateBackupsTab(); break; 
+              // ---> END ADDED < ---
               default: console.error('Unknown table type for sorting:', tableType);
           }
 
@@ -306,6 +316,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // setupTableSorting('vms-table'); // Removed - Table doesn't exist in base HTML
   // setupTableSorting('containers-table'); // Removed - Table doesn't exist in base HTML
   setupTableSorting('main-table');
+  setupTableSorting('backups-overview-table'); // Setup sorting for the backups table
 
   // --- Filtering Logic ---
   // Grouping Filter
@@ -320,11 +331,13 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // Type Filter
+  // Restore the event listener for main dashboard type filter
   document.querySelectorAll('input[name="type-filter"]').forEach(radio => {
     radio.addEventListener('change', function() {
       if (this.checked) {
-        filterGuestType = this.value;
-        updateDashboardTable();
+        filterGuestType = this.value; // Use the restored state variable
+        updateDashboardTable(); // Update the main dashboard table
+        // REMOVED: updateBackupsTab(); // Don't update backups tab from here
         if (searchInput) searchInput.dispatchEvent(new Event('input')); // Re-apply text filter
       }
     });
@@ -351,6 +364,31 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
+  // ---> ADDED: Event listeners for Backups Tab Filters <---\
+  // Backup Type Filter - REMOVED
+  /*
+  document.querySelectorAll('input[name="backups-type-filter"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      if (this.checked) {
+        backupsFilterType = this.value;
+        updateBackupsTab(); // Only update the backups tab
+      }
+    });
+  });
+  */
+
+  // ---> MODIFIED: Event listener for Backups Health Filter <---
+  // Backup Status/Age Filter -> Backup Health Filter
+  document.querySelectorAll('input[name="backups-status-filter"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      if (this.checked) {
+        backupsFilterHealth = this.value; // Update the health filter state
+        updateBackupsTab(); // Only update the backups tab
+      }
+    });
+  });
+  // ---> END MODIFIED <---
+
   // --- Data Sorting Function ---
   function sortData(data, column, direction, type) {
     if (!column || !data) return data || []; // Return empty array if data is null/undefined
@@ -363,9 +401,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Use a helper to get comparable values, handling potential missing data
       const getValue = (item, col) => {
-          if (!item) return type === 'string' ? '' : 0; // Default value based on expected type
+          if (!item) return type === 'string' ? '' : (col === 'latestBackupTime' ? null : 0); // Handle backups time
           let val = item[col];
-          
+
           // Special Handling for Percentage Columns (Main and Nodes tables)
           if ((type === 'main' || type === 'nodes') && (col === 'cpu' || col === 'memory' || col === 'disk')) {
             // Treat N/A string as -1 for sorting purposes
@@ -379,10 +417,27 @@ document.addEventListener('DOMContentLoaded', function() {
           // Handle specific column logic if needed
           if (type === 'main' && col === 'id') val = parseInt(item.vmid || item.id || 0);
           else if (type === 'nodes' && col === 'id') val = item.node;
+          // ---> ADDED: Handle backup table specific columns < ---
+          else if (type === 'backups') {
+              // Map health status to a sortable value (e.g., Failed=1, Old=2, Stale=3, None=4, OK=5)
+              if (col === 'backupHealthStatus') {
+                  switch (item[col]) {
+                      case 'failed': return 1;
+                      case 'old': return 2;
+                      case 'stale': return 3;
+                      case 'none': return 4;
+                      case 'ok': return 5;
+                      default: return 0; // Should not happen
+                  }
+              }
+              if (col === 'guestId' || col === 'totalBackups') val = parseInt(item[col] || 0);
+              if (col === 'latestBackupTime') val = item[col]; // Keep as timestamp (number or null)
+          }
+          // ---> END ADDED < ---
           // ... other specific cases ...
-          
+
           // Fallback for other types or columns
-          return val ?? (type === 'string' ? '' : 0); // Use default if null/undefined
+          return val ?? (type === 'string' ? '' : (col === 'latestBackupTime' ? null : 0)); // Use default if null/undefined
       };
 
       // Handle specific sorting logic for nodes
@@ -409,20 +464,29 @@ document.addEventListener('DOMContentLoaded', function() {
         valueB = getValue(b, column);
       }
 
-      // Determine type for comparison (Now should favor number for percentage/uptime/loadavg columns)
-      const compareType = (typeof valueA === 'number' && typeof valueB === 'number') ? 'number' : 'string';
+      // Determine type for comparison (Now should favor number for percentage/uptime/loadavg/timestamp columns)
+      // ---> MODIFIED: Handle null timestamps for backups < ---
+      const compareType = (typeof valueA === 'number' && typeof valueB === 'number') || (column === 'latestBackupTime' && (typeof valueA === 'number' || valueA === null) && (typeof valueB === 'number' || valueB === null)) 
+          ? 'number' 
+          : 'string';
 
       // Comparison logic
       if (compareType === 'string') {
-        valueA = String(valueA).toLowerCase();
-        valueB = String(valueB).toLowerCase();
+        valueA = String(valueA ?? '').toLowerCase(); // Handle potential null/undefined
+        valueB = String(valueB ?? '').toLowerCase(); // Handle potential null/undefined
         return direction === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
-      } else {
-        // Ensure numeric comparison
+      } else { // Numeric comparison (including timestamps)
+        // Treat null timestamps as very old (or very new if sorting asc)
+        if (valueA === null && valueB === null) return 0;
+        if (valueA === null) return direction === 'asc' ? -1 : 1;
+        if (valueB === null) return direction === 'asc' ? 1 : -1;
+
+        // Ensure numeric comparison for non-null numbers
         valueA = parseFloat(valueA) || 0;
         valueB = parseFloat(valueB) || 0;
         return direction === 'asc' ? valueA - valueB : valueB - valueA;
       }
+      // ---> END MODIFIED < ---
     });
   }
 
@@ -1115,34 +1179,41 @@ document.addEventListener('DOMContentLoaded', function() {
     mainTableBody.innerHTML = ''; // Clear
 
     const currentSearchTerm = searchInput ? searchInput.value.toLowerCase() : '';
+    const searchTerms = currentSearchTerm.split(',').map(term => term.trim()).filter(term => term);
 
-    // Apply type filter
-    const typeFilteredData = (dashboardData || []).filter(guest =>
-      filterGuestType === 'all' || (guest.type && guest.type.toLowerCase() === filterGuestType)
-    );
+    // ---> REVISED FILTERING LOGIC <---
+    // 1. Start with the raw dashboardData
+    let dataToProcess = dashboardData || [];
 
-    // Apply status filter
-    const statusFilteredData = typeFilteredData.filter(guest =>
-      filterStatus === 'all' || guest.status === filterStatus
-    );
+    // 2. Apply sorting first (using the current state)
+    let sortedData = sortData(dataToProcess, sortState.main.column, sortState.main.direction, 'main');
 
-    // Apply sorting
-    const sortedData = sortData(statusFilteredData, sortState.main.column, sortState.main.direction, 'main');
-
-    // Apply search filter
-    const searchTerms = (searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : []);
-
-    // Filter data based on search terms, type filter, and status filter
+    // 3. Apply all filters (type, status, search) in one pass
     let filteredData = sortedData.filter(item => {
-      const typeMatch = (filterGuestType === 'all' || (item.type && item.type.toLowerCase() === filterGuestType));
-      const statusMatch = (filterStatus === 'all' || item.status === filterStatus);
-      const nameMatch = searchTerms.length === 0 || searchTerms.some(term =>
-          (item.name?.toLowerCase() || '').includes(term) ||
-          (item.node?.toLowerCase() || '').includes(term) || // Allow searching node name
-          (item.id?.toString() || '').includes(term)        // Allow searching ID
-      );
-      return typeMatch && statusMatch && nameMatch; // Combine all filters
+        // Check Status Filter
+        const statusMatch = (filterStatus === 'all' || item.status === filterStatus);
+        if (!statusMatch) return false; // Early exit if status doesn't match
+        
+        // Check Type Filter
+        const typeMatch = (filterGuestType === 'all') || 
+                          (filterGuestType === 'vm' && item.type === 'VM') || 
+                          (filterGuestType === 'ct' && item.type === 'CT');
+        if (!typeMatch) return false; // Early exit if type doesn't match
+
+        // Check Search Filter (only if terms exist)
+        if (searchTerms.length > 0) {
+            const nameMatch = searchTerms.some(term =>
+                (item.name?.toLowerCase() || '').includes(term) ||
+                (item.node?.toLowerCase() || '').includes(term) || 
+                (item.id?.toString() || '').includes(term)
+            );
+            if (!nameMatch) return false; // Early exit if search doesn't match
+        }
+
+        // If all checks passed, include the item
+        return true; 
     });
+    // ---> END REVISED FILTERING LOGIC <---
 
     // Group data if needed
     const nodeGroups = {};
@@ -1183,9 +1254,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle empty table states
     if (visibleCount === 0) {
         const filterText = currentSearchTerm ? ` match filter "${currentSearchTerm}"` : '';
-        const typeText = filterGuestType !== 'all' ? filterGuestType.toUpperCase() + 's' : 'guests';
         const statusText = filterStatus !== 'all' ? ` (${filterStatus})` : ''; // Add status to the message
-        mainTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500">No ${typeText}${statusText}${filterText} found</td></tr>`;
+        mainTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500">No guests${statusText}${filterText} found</td></tr>`;
     }
 
     // Update Status Text
@@ -1193,7 +1263,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const statusBaseText = `Updated: ${new Date().toLocaleTimeString()}`;
         let statusFilterText = currentSearchTerm ? ` | Filter: "${currentSearchTerm}"` : '';
         let statusCountText = ` | Showing ${visibleCount}`;
-        if (filterGuestType !== 'all') statusCountText += ` ${filterGuestType.toUpperCase()}s`;
         if (filterStatus !== 'all') statusCountText += ` (${filterStatus})`; // Add status to the count text
         statusCountText += ` guests`;
         if (groupByNode && visibleNodes.size > 0) statusCountText += ` across ${visibleNodes.size} nodes`;
@@ -1205,27 +1274,45 @@ document.addEventListener('DOMContentLoaded', function() {
       // console.log('[createGuestRow] Received guest data:', guest);
       const row = document.createElement('tr');
       // Add more prominent hover background, shadow, lift effect, and transition
-      row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px ${guest.status === 'stopped' ? 'opacity-600' : ''}`;
+      // Also add opacity and grayscale for stopped guests
+      row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px ${guest.status === 'stopped' ? 'opacity-60 grayscale' : ''}`;
       row.setAttribute('data-name', guest.name.toLowerCase());
       row.setAttribute('data-type', guest.type.toLowerCase());
       row.setAttribute('data-node', guest.node.toLowerCase());
       row.setAttribute('data-id', guest.id);
 
-      const cpuPercent = Math.round(guest.cpu * 100);
-      const memoryPercent = guest.memory; 
-      const diskPercent = guest.disk;
+      // --- Calculate values only if guest is running ---
+      let cpuBarHTML = '-';
+      let memoryBarHTML = '-';
+      let diskBarHTML = '-';
+      let diskReadFormatted = '-';
+      let diskWriteFormatted = '-';
+      let netInFormatted = '-';
+      let netOutFormatted = '-';
 
-      const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus).toFixed(1)}/${guest.cpus} cores)` : ''}`;
-      const memoryTooltipText = guest.memoryTotal ? `${formatBytesInt(guest.memoryCurrent)} / ${formatBytesInt(guest.memoryTotal)} (${memoryPercent}%)` : `${memoryPercent}%`;
-      const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
-      
-      const cpuColorClass = getUsageColor(cpuPercent);
-      const memColorClass = getUsageColor(memoryPercent);
-      const diskColorClass = getUsageColor(diskPercent);
-      
-      const cpuBarHTML = createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
-      const memoryBarHTML = createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
-      const diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+      if (guest.status === 'running') {
+        const cpuPercent = Math.round(guest.cpu * 100);
+        const memoryPercent = guest.memory; 
+        const diskPercent = guest.disk;
+
+        const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus).toFixed(1)}/${guest.cpus} cores)` : ''}`;
+        const memoryTooltipText = guest.memoryTotal ? `${formatBytesInt(guest.memoryCurrent)} / ${formatBytesInt(guest.memoryTotal)} (${memoryPercent}%)` : `${memoryPercent}%`;
+        const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
+        
+        const cpuColorClass = getUsageColor(cpuPercent);
+        const memColorClass = getUsageColor(memoryPercent);
+        const diskColorClass = getUsageColor(diskPercent);
+        
+        cpuBarHTML = createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
+        memoryBarHTML = createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
+        diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+
+        diskReadFormatted = formatSpeedInt(guest.diskread);
+        diskWriteFormatted = formatSpeedInt(guest.diskwrite);
+        netInFormatted = formatSpeedInt(guest.netin);
+        netOutFormatted = formatSpeedInt(guest.netout);
+      }
+      // --- End calculation block ---
 
       const typeIconClass = guest.type === 'VM'
           ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium' 
@@ -1236,14 +1323,14 @@ document.addEventListener('DOMContentLoaded', function() {
         <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
         <td class="p-1 px-1 text-center">${typeIcon}</td>
         <td class="p-1 px-2 text-center">${guest.id}</td>
-        <td class="p-1 px-2 whitespace-nowrap">${formatUptime(guest.uptime)}</td>
+        <td class="p-1 px-2 whitespace-nowrap">${guest.status === 'stopped' ? '-' : formatUptime(guest.uptime)}</td>
         <td class="p-1 px-2">${cpuBarHTML}</td>
         <td class="p-1 px-2">${memoryBarHTML}</td>
         <td class="p-1 px-2">${diskBarHTML}</td>
-        <td class="p-1 px-2 text-right whitespace-nowrap">${formatSpeedInt(guest.diskread)}</td>
-        <td class="p-1 px-2 text-right whitespace-nowrap">${formatSpeedInt(guest.diskwrite)}</td>
-        <td class="p-1 px-2 text-right whitespace-nowrap">${formatSpeedInt(guest.netin)}</td>
-        <td class="p-1 px-2 text-right whitespace-nowrap">${formatSpeedInt(guest.netout)}</td>
+        <td class="p-1 px-2 text-right whitespace-nowrap">${diskReadFormatted}</td>
+        <td class="p-1 px-2 text-right whitespace-nowrap">${diskWriteFormatted}</td>
+        <td class="p-1 px-2 text-right whitespace-nowrap">${netInFormatted}</td>
+        <td class="p-1 px-2 text-right whitespace-nowrap">${netOutFormatted}</td>
       `;
       return row;
   }
@@ -1362,7 +1449,7 @@ document.addEventListener('DOMContentLoaded', function() {
       
       const filterAllRadio = document.getElementById('filter-all');
       if(filterAllRadio) filterAllRadio.checked = true;
-      filterGuestType = 'all';
+      // REMOVED: filterGuestType = 'all';
       
       const statusAllRadio = document.getElementById('filter-status-all');
       if(statusAllRadio) statusAllRadio.checked = true;
@@ -1370,6 +1457,22 @@ document.addEventListener('DOMContentLoaded', function() {
       
       updateDashboardTable();
       if (searchInput) searchInput.blur(); // Blur search input after reset
+
+      // ---> ADDED: Reset Backups Tab Filters <---\
+      // const backupTypeAllRadio = document.getElementById('backups-filter-type-all'); // REMOVED
+      // if(backupTypeAllRadio) backupTypeAllRadio.checked = true; // REMOVED
+      // backupsFilterType = 'all'; // REMOVED
+
+      // ---> MODIFIED: Reset Backups Health Filter <---
+      const backupStatusAllRadio = document.getElementById('backups-filter-status-all');
+      if(backupStatusAllRadio) backupStatusAllRadio.checked = true;
+      backupsFilterHealth = 'all';
+      // ---> END MODIFIED <---
+
+      // Reset Type filter for main dashboard
+      const typeAllRadio = document.getElementById('filter-all');
+      if(typeAllRadio) typeAllRadio.checked = true;
+      filterGuestType = 'all';
   }
 
   // --- Reset Filters/Sort Listener ---
@@ -1432,6 +1535,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // ---> CHANGE: Pass pbsDataArray
     // updatePbsInfo(pbsData);
     updatePbsInfo(pbsDataArray);
+    // ---> ADDED: Call backup tab update
+    updateBackupsTab(); 
+    // ---> END ADDED
     // <--- END CHANGE
   }
 
@@ -2091,5 +2197,270 @@ document.addEventListener('DOMContentLoaded', function() {
       console.warn("PBS instances container not found, toggle functionality will not work.");
   }
   // --- End PBS Task Table Toggle Listener ---
+
+  // --- NEW: Backups Tab Logic ---
+  function updateBackupsTab() {
+      // console.log("[Backups Tab] Updating..."); // Debug log
+      const container = document.getElementById('backups-overview-container');
+      const tableContainer = document.getElementById('backups-table-container');
+      const tableBody = document.getElementById('backups-overview-tbody');
+      const loadingMsg = document.getElementById('backups-loading-message');
+      const noDataMsg = document.getElementById('backups-no-data-message');
+
+      if (!container || !tableContainer || !tableBody || !loadingMsg || !noDataMsg) {
+          console.error("UI elements for Backups tab not found!");
+          return;
+      }
+
+      // Combine VMs and Containers into a single list of guests
+      const allGuests = [
+          ...(vmsData || []), 
+          ...(containersData || [])
+      ];
+      // console.log("[Backups Tab DEBUG] All Guests:", JSON.stringify(allGuests.slice(0, 5))); // Log first 5 guests
+
+      // Check if we have guest data and PBS data (even if empty array)
+      if (!initialDataReceived || !pbsDataArray) {
+          // Still loading initial data
+          loadingMsg.classList.remove('hidden');
+          tableContainer.classList.add('hidden');
+          noDataMsg.classList.add('hidden');
+          return;
+      }
+
+      if (allGuests.length === 0) {
+           // No guests found from PVE
+          loadingMsg.classList.add('hidden');
+          tableContainer.classList.add('hidden');
+          noDataMsg.textContent = "No Proxmox guests (VMs/Containers) found.";
+          noDataMsg.classList.remove('hidden');
+          return;
+      }
+
+      // ---> REWRITTEN: Data Processing Logic for Backup Health <---
+      const backupStatusByGuest = [];
+      const now = Math.floor(Date.now() / 1000);
+      const sevenDaysAgo = now - (7 * 24 * 60 * 60);
+      const threeDaysAgo = now - (3 * 24 * 60 * 60);
+
+      // 1. Combine all recent backup tasks from all PBS instances
+      const allRecentBackupTasks = (pbsDataArray || []).flatMap(pbs =>
+          (pbs.backupTasks?.recentTasks || []).map(task => ({ // Ensure recentTasks exists
+              ...task,
+              // Attempt to extract guest ID and type from the task ID (e.g., "vm/101", "ct/102")
+              guestId: task.id?.split('/')[1] || null,
+              guestTypePbs: task.id?.split('/')[0] || null, // vm or ct
+              pbsInstanceName: pbs.pbsInstanceName // Add instance name for reference
+          }))
+      );
+
+      // 2. Flatten snapshots (as before, for total count and latest timestamp fallback)
+      const allSnapshots = (pbsDataArray || []).flatMap(pbsInstance =>
+          (pbsInstance.datastores || []).flatMap(ds =>
+              (ds.snapshots || []).map(snap => ({
+                  ...snap,
+                  pbsInstanceName: pbsInstance.pbsInstanceName,
+                  datastoreName: ds.name,
+                  backupType: snap['backup-type'],
+                  backupVMID: snap['backup-id']
+              }))
+          )
+      );
+
+      // 3. Process each PVE guest
+      allGuests.forEach(guest => {
+          const guestId = String(guest.vmid);
+          const guestTypePve = guest.type === 'qemu' ? 'vm' : 'ct';
+
+          // Find snapshots for this guest
+          const guestSnapshots = allSnapshots.filter(snap =>
+              String(snap.backupVMID) === guestId && snap.backupType === guestTypePve
+          );
+          const totalBackups = guestSnapshots.length;
+          const latestSnapshot = guestSnapshots.reduce((latest, snap) => {
+              return (!latest || (snap['backup-time'] && snap['backup-time'] > latest['backup-time'])) ? snap : latest;
+          }, null);
+          const latestSnapshotTime = latestSnapshot ? latestSnapshot['backup-time'] : null;
+
+          // Find the latest backup task for this guest
+          const guestTasks = allRecentBackupTasks.filter(task =>
+              task.guestId === guestId && task.guestTypePbs === guestTypePve
+          );
+          const latestTask = guestTasks.reduce((latest, task) => {
+             return (!latest || (task.startTime && task.startTime > latest.startTime)) ? task : latest;
+          }, null);
+
+          // Determine Backup Health Status
+          let healthStatus = 'none';
+          let displayTimestamp = latestSnapshotTime; // Default to snapshot time
+
+          if (latestTask) {
+              displayTimestamp = latestTask.startTime; // Prefer task start time if available
+              if (latestTask.status === 'OK') {
+                  if (latestTask.startTime >= threeDaysAgo) {
+                      healthStatus = 'ok';
+                  } else if (latestTask.startTime >= sevenDaysAgo) {
+                      healthStatus = 'stale'; // Successful but 3-7 days old
+                  } else {
+                      healthStatus = 'old'; // Successful but > 7 days old
+                  }
+              } else {
+                  // Any non-OK status for the latest task marks it as failed
+                  healthStatus = 'failed';
+              }
+          } else if (latestSnapshotTime) {
+              // No recent tasks found, rely on snapshot age
+               if (latestSnapshotTime >= threeDaysAgo) {
+                   healthStatus = 'stale'; // Treat as stale if no recent task, even if snapshot < 3d
+               } else if (latestSnapshotTime >= sevenDaysAgo) {
+                   healthStatus = 'stale'; // Also stale if 3-7d old snapshot, no task
+               } else {
+                   healthStatus = 'old'; // Treat as old if snapshot > 7d, no task
+               }
+          } else {
+              // No tasks and no snapshots
+              healthStatus = 'none';
+              displayTimestamp = null; // Ensure no timestamp shown
+          }
+
+          backupStatusByGuest.push({
+              guestName: guest.name || `Guest ${guest.vmid}`,
+              guestId: guest.vmid,
+              guestType: guest.type === 'qemu' ? 'VM' : 'LXC',
+              node: guest.node,
+              guestPveStatus: guest.status, // Add the PVE status here
+              latestBackupTime: displayTimestamp, // Use determined display timestamp
+              pbsInstanceName: latestSnapshot?.pbsInstanceName || latestTask?.pbsInstanceName || 'N/A',
+              datastoreName: latestSnapshot?.datastoreName || 'N/A', // Only snapshots know datastore
+              totalBackups: totalBackups,
+              backupHealthStatus: healthStatus // Store the calculated health
+          });
+      });
+      // ---> END REWRITTEN Data Processing Logic <---
+
+      // console.log("[Backups Tab] Processed Guest Status with Health:", backupStatusByGuest); // Debug log
+
+      // ---> MODIFIED: Filter the data based on health status <---
+      const filteredBackupStatus = backupStatusByGuest.filter(item => {
+          // Check Health Filter
+          const healthMatch = (backupsFilterHealth === 'all') ||
+                              (backupsFilterHealth === 'ok' && (item.backupHealthStatus === 'ok' || item.backupHealthStatus === 'stale')) || // OK includes Stale for filtering
+                              (backupsFilterHealth === 'warning' && (item.backupHealthStatus === 'old')) || // Warning = Old
+                              (backupsFilterHealth === 'error' && item.backupHealthStatus === 'failed') || // Error = Failed
+                              (backupsFilterHealth === 'none' && item.backupHealthStatus === 'none');
+          if (!healthMatch) return false;
+
+          // If all checks pass, include the item
+          return true;
+      });
+      // ---> END MODIFIED <---
+
+      // ---> MODIFIED: Sort the *filtered* data <---
+      const sortedBackupStatus = sortData(filteredBackupStatus, sortState.backups.column, sortState.backups.direction, 'backups');
+      // ---> END MODIFIED <---
+
+      // Populate the table
+      tableBody.innerHTML = ''; // Clear previous content
+      // ---> MODIFIED: Use filtered and sorted data <---
+      if (sortedBackupStatus.length > 0) { 
+          sortedBackupStatus.forEach(guestStatus => { 
+      // ---> END MODIFIED < ---
+              const row = tableBody.insertRow();
+              // ---> MODIFIED: Add dashboard hover/transition classes < ---
+              // Conditionally add opacity and grayscale if the guest PVE status is 'stopped'
+              row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px ${guestStatus.guestPveStatus === 'stopped' ? 'opacity-60 grayscale' : ''}`;
+              
+              const latestBackupFormatted = guestStatus.latestBackupTime 
+                  ? formatPbsTimestamp(guestStatus.latestBackupTime) 
+                  : '<span class="text-gray-400">No backups found</span>';
+
+              // Determine the color class based on the latest backup time
+              // ---> ADDED: Determine color/icon based on HEALTH status <---
+              let healthIndicator = '';
+              switch (guestStatus.backupHealthStatus) {
+                  case 'ok':
+                      healthIndicator = '<span class="text-green-600 dark:text-green-400" title="OK">●</span>';
+                      break;
+                  case 'stale':
+                      healthIndicator = '<span class="text-yellow-600 dark:text-yellow-400" title="Stale">●</span>';
+                      break;
+                  case 'failed':
+                      healthIndicator = '<span class="text-red-600 dark:text-red-400 font-bold" title="Failed">✖</span>';
+                      break;
+                  case 'old':
+                       healthIndicator = '<span class="text-orange-600 dark:text-orange-400" title="Old">●</span>';
+                       break;
+                  case 'none':
+                      healthIndicator = '<span class="text-gray-400 dark:text-gray-500" title="None">-</span>';
+                      break;
+              }
+              // ---> END ADDED <---
+
+              // --- Generate Type Icon --- 
+              const typeIconClass = guestStatus.guestType === 'VM'
+                  ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium' 
+                  : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
+              const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guestStatus.guestType}</span>`;
+              // --- End Type Icon ---
+
+              // ---> MODIFIED: Standardize padding, alignment, and text styles, ADD health indicator < ---
+              row.innerHTML = `
+                  <td class="p-1 px-2 whitespace-nowrap text-center">${healthIndicator}</td> <!-- Health Status -->
+                  <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
+                  <td class="p-1 px-2 text-center text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
+                  <td class="p-1 px-2 text-center">${typeIcon}</td> <!-- Use icon -->
+                  <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
+                  <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${latestBackupFormatted}</td> 
+                  <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.pbsInstanceName}</td>
+                  <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.datastoreName}</td>
+                  <td class="p-1 px-2 text-center text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
+              `;
+              // ---> END MODIFIED < ---
+          });
+
+          loadingMsg.classList.add('hidden');
+          noDataMsg.classList.add('hidden');
+          tableContainer.classList.remove('hidden'); // Show the table
+      } else {
+          // This case should technically be covered by the initial checks, but added for safety
+          loadingMsg.classList.add('hidden');
+          tableContainer.classList.add('hidden');
+          // ---> MODIFIED: Clearer message if no backups/guests OR if filters cause empty state <---
+          let emptyMessage = "No backup information found for any guests.";
+          if (backupStatusByGuest.length === 0) { // Check original data length before filtering
+              if (allGuests.length === 0) {
+                   emptyMessage = "No Proxmox guests (VMs/Containers) found.";
+              } else {
+                  emptyMessage = "No backup information found for any guests.";
+              }
+          } 
+          // ---> MODIFIED: Use filtered data length for empty message check and improve wording <---
+          else if (filteredBackupStatus.length === 0) { // Check filtered data length
+               const typeFilterText = backupsFilterType === 'all' ? '' : `Type: ${backupsFilterType.toUpperCase()}`;
+               // ---> MODIFIED: Map health filter value to labels for message <---
+               // let statusFilterLabel = '';
+               // switch (backupsFilterHealth) { ... }
+               // const statusFilterText = backupsFilterHealth === 'all' ? '' : `Status: ${statusFilterLabel}`;
+               const filtersApplied = [typeFilterText].filter(Boolean).join(', '); // Only include type filter
+               
+               if (filtersApplied) {
+                 emptyMessage = `No guests found matching the selected filters (${filtersApplied}).`;
+               } else {
+                 // This case shouldn't normally happen if backupStatusByGuest was not empty, but good to have a fallback
+                 emptyMessage = "No guests with backup information found."; 
+               }
+          }
+          // ---> END MODIFIED < ---
+          noDataMsg.textContent = emptyMessage;
+          // ---> END MODIFIED < ---
+          noDataMsg.classList.remove('hidden');
+      }
+       // ---> ADDED: Update sort UI for backups table < ---
+       const backupsSortColumn = sortState.backups.column;
+       const backupsHeader = document.querySelector(`#backups-overview-table th[data-sort="${backupsSortColumn}"]`);
+       updateSortUI('backups-overview-table', backupsHeader);
+       // ---> END ADDED < ---
+  }
+  // --- END: Backups Tab Logic ---
 
 }); // End DOMContentLoaded

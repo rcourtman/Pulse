@@ -110,6 +110,7 @@ const cors = require('cors');
 const { Server } = require('socket.io');
 const axios = require('axios');
 const https = require('https');
+const { URL } = require('url'); // <--- ADD: Import URL constructor
 const axiosRetry = require('axios-retry').default; // Import axios-retry
 
 // Development specific dependencies
@@ -140,11 +141,21 @@ function loadPbsConfig(index = null) {
     const portVar = `PBS_PORT${suffix}`;
     const selfSignedVar = `PBS_ALLOW_SELF_SIGNED_CERTS${suffix}`;
 
-    const pbsHost = process.env[hostVar];
-    if (!pbsHost) {
+    const pbsHostUrl = process.env[hostVar]; // Rename variable to reflect it's a URL
+    if (!pbsHostUrl) {
         // No more PBS configs if PBS_HOST is missing
         return false; // Indicate no more configs found
     }
+
+    // ---> ADDED: URL Parsing for Hostname Fallback <---\
+    let pbsHostname = pbsHostUrl; // Default to full URL if parsing fails
+    try {
+        const parsedUrl = new URL(pbsHostUrl);
+        pbsHostname = parsedUrl.hostname; // Extract just the hostname
+    } catch (e) {
+        console.warn(`WARN: Could not parse PBS_HOST URL "${pbsHostUrl}". Using full value as fallback name.`);
+    }
+    // ---> END ADDED <---\
 
     const pbsUser = process.env[userVar];
     const pbsPassword = process.env[passVar];
@@ -157,7 +168,7 @@ function loadPbsConfig(index = null) {
     // Check User/Password first
     if (pbsUser && pbsPassword) {
         const pbsPlaceholders = placeholderValues.filter(p =>
-            pbsHost.includes(p) || pbsUser.includes(p) || pbsPassword.includes(p)
+            pbsHostUrl.includes(p) || pbsUser.includes(p) || pbsPassword.includes(p) // Check against URL
         );
         if (pbsPlaceholders.length > 0) {
             console.warn(`WARN: Skipping PBS configuration ${index || 'primary'} (User/Pass). Placeholder values detected for: ${pbsPlaceholders.join(', ')}`);
@@ -165,8 +176,8 @@ function loadPbsConfig(index = null) {
             config = {
                 id: `${idPrefix}_userpass`,
                 authMethod: 'userpass',
-                name: process.env[nodeNameVar] || pbsHost, // User-defined name or host
-                host: pbsHost,
+                name: process.env[nodeNameVar] || pbsHostname, // User-defined name or parsed hostname
+                host: pbsHostUrl, // Keep original full URL here
                 port: process.env[portVar] || '8007',
                 user: pbsUser,
                 password: pbsPassword,
@@ -177,11 +188,11 @@ function loadPbsConfig(index = null) {
             };
             console.log(`INFO: Found PBS configuration ${index || 'primary'} (User/Password): ${config.name} (${config.host})`);
         }
-    } 
+    }
     // Check Token second
     else if (pbsTokenId && pbsTokenSecret) {
         const pbsPlaceholders = placeholderValues.filter(p =>
-            pbsHost.includes(p) || pbsTokenId.includes(p) || pbsTokenSecret.includes(p)
+            pbsHostUrl.includes(p) || pbsTokenId.includes(p) || pbsTokenSecret.includes(p) // Check against URL
         );
         if (pbsPlaceholders.length > 0) {
             console.warn(`WARN: Skipping PBS configuration ${index || 'primary'} (Token). Placeholder values detected for: ${pbsPlaceholders.join(', ')}`);
@@ -189,8 +200,8 @@ function loadPbsConfig(index = null) {
             config = {
                 id: `${idPrefix}_token`,
                 authMethod: 'token',
-                name: process.env[nodeNameVar] || pbsHost,
-                host: pbsHost,
+                name: process.env[nodeNameVar] || pbsHostname,
+                host: pbsHostUrl, // Keep original full URL here
                 port: process.env[portVar] || '8007',
                 tokenId: pbsTokenId,
                 tokenSecret: pbsTokenSecret,
@@ -200,7 +211,7 @@ function loadPbsConfig(index = null) {
             };
              console.log(`INFO: Found PBS configuration ${index || 'primary'} (API Token): ${config.name} (${config.host})`);
         }
-    } 
+    }
     // Warn if host is set but auth is incomplete
     else {
          console.warn(`WARN: Partial PBS configuration found for ${hostVar}. Please set either (${userVar} + ${passVar}) or (${tokenIdVar} + ${tokenSecretVar}) along with ${hostVar}.`);
@@ -914,14 +925,45 @@ async function fetchDiscoveryData() {
 
               // Only proceed if we have a node name
               if (instanceData.nodeName) {
-                  // Fetch datastores and the consolidated task list concurrently
-                  const [datastoresResult, allTasksResult] = await Promise.all([
-                      fetchPbsDatastoreData({ client: pbsClientInstance, config: pbsInstanceConfig }),
-                      fetchAllPbsTasksForProcessing({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName) // New function call
-                  ]);
+                  // Fetch datastores first, then snapshots, then tasks
+                  const datastoresResult = await fetchPbsDatastoreData({ client: pbsClientInstance, config: pbsInstanceConfig });
+
+                  // Fetch snapshots for each datastore
+                  const snapshotFetchPromises = (datastoresResult || []).map(async (ds) => {
+                      const storeName = ds.name; // Assuming 'name' holds the datastore ID
+                      if (!storeName) {
+                          console.warn(`WARN: [PBS Discovery - ${instanceName}] Skipping snapshot fetch for datastore with no name:`, ds);
+                          ds.snapshots = []; // Ensure snapshots array exists even if skipped
+                          ds.snapshotError = 'Missing datastore name';
+                          return ds; // Return the datastore object as is
+                      }
+                      try {
+                          console.log(`INFO: [PBS Discovery - ${instanceName}] Fetching snapshots for datastore '${storeName}'...`);
+                          const snapshotResponse = await pbsClientInstance.get(`/admin/datastore/${storeName}/snapshots`);
+                          ds.snapshots = snapshotResponse.data?.data ?? [];
+                          ds.snapshotError = null;
+                          // console.log(`INFO: [PBS Discovery - ${instanceName}] Fetched ${ds.snapshots.length} snapshots for datastore ${storeName}.`);
+                      } catch (snapshotError) {
+                          const status = snapshotError.response?.status ? ` (Status: ${snapshotError.response.status})` : '';
+                          console.error(`ERROR: [PBS Discovery - ${instanceName}] Failed to fetch snapshots for datastore ${storeName}${status}: ${snapshotError.message}`);
+                          ds.snapshots = []; // Ensure snapshots array exists on error
+                          ds.snapshotError = snapshotError.message;
+                          // Propagate specific auth errors if needed
+                          if (snapshotError.response?.status === 401 || snapshotError.response?.status === 403) {
+                              // Optionally re-throw or handle critical permission errors differently
+                          }
+                      }
+                      return ds; // Return the datastore object with snapshots added
+                  });
+
+                  // Wait for all snapshot fetches for this instance to complete
+                  const datastoresWithSnapshots = await Promise.all(snapshotFetchPromises);
+
+                  // Fetch tasks after getting datastores and snapshots
+                  const allTasksResult = await fetchAllPbsTasksForProcessing({ client: pbsClientInstance, config: pbsInstanceConfig }, instanceData.nodeName); // New function call
 
                   // Assign datastore results
-                  instanceData.datastores = datastoresResult;
+                  instanceData.datastores = datastoresWithSnapshots; // Use the array that now includes snapshots
 
                   // Process the single task list for all summaries and details
                   if (allTasksResult && allTasksResult.tasks) {
