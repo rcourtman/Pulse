@@ -380,14 +380,7 @@ app.get('/api/storage', async (req, res) => {
         // Transform currentNodes into the format expected by updateStorageInfo
         const storageInfoByNode = {};
         (currentNodes || []).forEach(node => {
-            // Assuming storage details are fetched and stored within the node object
-            // during the discovery cycle. Need to find where Proxmox stores this.
-            // Use the `storage` property added by the updated `fetchDataForNode` function
             storageInfoByNode[node.node] = node.storage || []; // Use node name as key
-            if (!node.storage) {
-                // This warning should ideally not appear now unless the storage fetch itself failed
-                console.warn(`[API /api/storage] No storage data found for node: ${node.node}. Sending empty array.`);
-            }
         });
         res.json(storageInfoByNode); // Return the transformed object
     } catch (error) {
@@ -726,7 +719,7 @@ async function fetchDiscoveryData() {
                       }
                   });
                   console.log(`[Discovery Cycle - ${endpointName}] Completed. Found: ${endpointNodes.length} nodes, ${endpointVms.length} VMs, ${endpointContainers.length} containers.`);
-                  // Return combined results for this endpoint
+                  // Return combined results for this endpoint, including the enriched endpointNodes
                   return { endpointId: endpointName, status: 'fulfilled', value: { nodes: endpointNodes, vms: endpointVms, containers: endpointContainers } };
               } catch (error) {
                   const status = error.response?.status ? ` (Status: ${error.response.status})` : '';
@@ -744,10 +737,11 @@ async function fetchDiscoveryData() {
       pveOutcomes.forEach(endpointOutcome => {
           if (endpointOutcome.status === 'fulfilled' && endpointOutcome.value.status === 'fulfilled' && endpointOutcome.value.value) {
               // Successfully fetched data for this endpoint
-              const { nodes, vms, containers } = endpointOutcome.value.value;
+              // Destructure the correct node array which includes storage data
+              const { nodes: endpointNodesWithStorage, vms, containers } = endpointOutcome.value.value;
               const successfulEndpointId = endpointOutcome.value.endpointId; // Use the returned endpointId/name
               // console.log(`[Discovery Cycle] Accumulating data from endpoint: ${successfulEndpointId}`); // Debug log
-              tempNodes.push(...nodes);
+              tempNodes.push(...endpointNodesWithStorage); // Push the nodes that have storage attached
               tempVms.push(...vms);
               tempContainers.push(...containers);
           } else {
