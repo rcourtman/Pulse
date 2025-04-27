@@ -140,19 +140,54 @@ document.addEventListener('DOMContentLoaded', function() {
     main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) },
     backups: { column: 'latestBackupTime', direction: 'desc', ...(savedSortState.backups || {}) }
   };
-  let groupByNode = true; // Default view
-  let filterGuestType = 'all'; // Restore this state variable
+
+  // ---> ADDED: Load and manage filter state <---
+  const savedFilterState = JSON.parse(localStorage.getItem('pulseFilterState')) || {};
+  let groupByNode = savedFilterState.groupByNode ?? true; // Default view
+  let filterGuestType = savedFilterState.filterGuestType || 'all'; 
+  let filterStatus = savedFilterState.filterStatus || 'all'; // New state variable for status filter
+  let backupsFilterHealth = savedFilterState.backupsFilterHealth || 'all'; // 'ok', 'warning', 'error', 'none'
+  // ---> END ADDED <---
+
   const AVERAGING_WINDOW_SIZE = 5;
   const dashboardHistory = {}; // Re-add this line
-  let filterStatus = 'all'; // New state variable for status filter
+  // REMOVED: let filterStatus = 'all'; 
   let initialDataReceived = false; // Flag to control initial rendering
   let storageData = {}; // Add state for storage data
   // ---> ADDED: State for Backups Tab Filters <---
-  let backupsFilterHealth = 'all'; // 'ok', 'warning', 'error', 'none'
+  // REMOVED: let backupsFilterHealth = 'all'; 
   // ---> END RENAMED <---
 
   // Define initial limit for PBS task tables
   const INITIAL_PBS_TASK_LIMIT = 5;
+
+  // ---> ADDED: Function to save filter state <---
+  function saveFilterState() {
+      const stateToSave = {
+          groupByNode,
+          filterGuestType,
+          filterStatus,
+          backupsFilterHealth
+      };
+      localStorage.setItem('pulseFilterState', JSON.stringify(stateToSave));
+  }
+  // ---> END ADDED <---
+
+  // ---> ADDED: Function to apply initial filter UI state <---
+  function applyInitialFilterUI() {
+      // Grouping
+      document.getElementById(groupByNode ? 'group-grouped' : 'group-flat').checked = true;
+      // Main Type
+      document.getElementById(`filter-${filterGuestType === 'ct' ? 'lxc' : filterGuestType}`).checked = true;
+      // Main Status
+      document.getElementById(`filter-status-${filterStatus}`).checked = true;
+      // Backup Health
+      document.getElementById(`backups-filter-status-${backupsFilterHealth}`).checked = true;
+  }
+  // ---> END ADDED <---
+
+  // Apply initial UI states after defining variables and functions
+  applyInitialFilterUI(); 
 
   // --- Global Helper for Text Progress Bar ---
   const createProgressTextBarHTML = (percent, text, colorClass) => {
@@ -326,6 +361,7 @@ document.addEventListener('DOMContentLoaded', function() {
         groupByNode = (this.value === 'grouped');
         updateDashboardTable();
         if (searchInput) searchInput.dispatchEvent(new Event('input')); // Re-apply text filter
+        saveFilterState(); // ---> ADDED: Save state <---
       }
     });
   });
@@ -339,6 +375,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateDashboardTable(); // Update the main dashboard table
         // REMOVED: updateBackupsTab(); // Don't update backups tab from here
         if (searchInput) searchInput.dispatchEvent(new Event('input')); // Re-apply text filter
+        saveFilterState(); // ---> ADDED: Save state <---
       }
     });
   });
@@ -360,6 +397,7 @@ document.addEventListener('DOMContentLoaded', function() {
         filterStatus = this.value; // Update the status filter state
         updateDashboardTable(); // Re-render the table
         if (searchInput) searchInput.dispatchEvent(new Event('input')); // Re-apply text filter if needed
+        saveFilterState(); // ---> ADDED: Save state <---
       }
     });
   });
@@ -384,6 +422,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (this.checked) {
         backupsFilterHealth = this.value; // Update the health filter state
         updateBackupsTab(); // Only update the backups tab
+        saveFilterState(); // ---> ADDED: Save state <---
       }
     });
   });
@@ -1456,9 +1495,11 @@ document.addEventListener('DOMContentLoaded', function() {
       if(filterAllRadio) filterAllRadio.checked = true;
       // REMOVED: filterGuestType = 'all';
       
+      // --- ADDED: Reset status filter state ---
       const statusAllRadio = document.getElementById('filter-status-all');
       if(statusAllRadio) statusAllRadio.checked = true;
       filterStatus = 'all';
+      // --- END ADDED ---
       
       updateDashboardTable();
       if (searchInput) searchInput.blur(); // Blur search input after reset
@@ -1478,6 +1519,8 @@ document.addEventListener('DOMContentLoaded', function() {
       const typeAllRadio = document.getElementById('filter-all');
       if(typeAllRadio) typeAllRadio.checked = true;
       filterGuestType = 'all';
+
+      saveFilterState(); // ---> ADDED: Save reset state <---
   }
 
   // --- Reset Filters/Sort Listener ---
