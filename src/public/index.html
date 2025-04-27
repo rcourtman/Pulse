@@ -49,6 +49,11 @@
         </div>
       <!-- Header Controls (Aligned Right) -->
       <div class="header-controls flex flex-1 justify-end items-center gap-4">
+        <!-- Start: UI Scale Slider -->
+        <div class="ui-scale-slider flex items-center opacity-50 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300" title="Adjust UI Scale" style="gap: 4px;">
+          <input type="range" id="ui-scale-slider" min="0.75" max="1.25" step="0.05" value="1.0" class="cursor-pointer accent-blue-600 dark:accent-blue-500" style="width: 80px; height: 16px;">
+        </div>
+        <!-- End: UI Scale Slider -->
         <!-- Replaced toggle switch with icon button - removed focus ring -->
         <button id="theme-toggle-button" type="button" class="p-1 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none" aria-label="Toggle theme">
           <!-- Sun icon (visible in light mode) -->
@@ -60,11 +65,6 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
           </svg>
         </button>
-        <!-- Start: UI Scale Slider -->
-        <div class="ui-scale-slider flex items-center opacity-50 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300" title="Adjust UI Scale" style="gap: 4px;">
-          <input type="range" id="ui-scale-slider" min="0.75" max="1.25" step="0.05" value="1.0" class="cursor-pointer accent-blue-600 dark:accent-blue-500" style="width: 80px; height: 16px;">
-        </div>
-        <!-- End: UI Scale Slider -->
         <div id="connection-status" class="status disconnected text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Disconnected</div>
         <!-- JS will need to toggle classes like 'bg-red-100 dark:bg-red-800/30 text-red-700 dark:text-red-300' for disconnected -->
         <!-- and 'bg-green-100 dark:bg-green-800/30 text-green-700 dark:text-green-300' for connected -->
