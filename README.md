@@ -81,13 +81,24 @@ An API token is recommended for connecting Pulse to Proxmox.
     *   Click `Add`.
     *   **Important:** Copy the displayed `Secret` value immediately and store it securely. It will only be shown once.
 
-4.  **Assign permissions**
-    *   Go to `Datacenter` → `Permissions` → `Add` → `User Permission`.
-    *   Path: `/`
-    *   User: Select the user the token belongs to (e.g., "pulse-monitor@pam").
-    *   Role: `PVEAuditor` (provides read-only access).
-    *   Ensure `Propagate` is checked.
-    *   Click `Add`.
+4.  **Assign permissions (to both User and Token)**
+    *   Go to `Datacenter` → `Permissions`.
+    *   **First, add permission for the User:**
+        *   Click `Add` → `User Permission`.
+        *   Path: `/`
+        *   User: Select the user you created (e.g., "pulse-monitor@pam").
+        *   Role: `PVEAuditor` (provides read-only access).
+        *   Ensure `Propagate` is checked.
+        *   Click `Add`.
+    *   **Second, add permission for the API Token:**
+        *   Click `Add` → `API Token Permission`.
+        *   Path: `/`
+        *   API Token: Select the token you created (e.g., "pulse-monitor@pam!pulse").
+        *   Role: `PVEAuditor`.
+        *   Ensure `Propagate` is checked.
+        *   Click `Add`.
+
+    *Note: Assigning the `PVEAuditor` role at the root path (`/`) with `Propagate` checked is crucial for Pulse to discover and monitor all nodes, VMs, containers, and storage in your cluster.*
 
 5.  **Update your `server/.env` file** with the `Token ID` (which looks like `user@realm!tokenid`, e.g., `pulse-monitor@pam!pulse`) and the `Secret` you saved.
 
