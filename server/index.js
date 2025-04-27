@@ -284,7 +284,8 @@ async function initializeAllPbsClients() {
                 });
 
                 pbsAxiosInstance.interceptors.request.use(reqConfig => {
-                    reqConfig.headers.Authorization = `PBSAPIToken ${config.tokenId}=${config.tokenSecret}`;
+                    // Correct PBS format: PBSAPIToken=TOKENID:TOKENSECRET
+                    reqConfig.headers.Authorization = `PBSAPIToken=${config.tokenId}:${config.tokenSecret}`;
                     return reqConfig;
                 });
 
