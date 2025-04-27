@@ -176,15 +176,19 @@ document.addEventListener('DOMContentLoaded', function() {
   // ---> ADDED: Function to apply initial filter UI state <---
   function applyInitialFilterUI() {
       // Grouping
-      document.getElementById(groupByNode ? 'group-grouped' : 'group-flat').checked = true;
+      const groupRadio = document.getElementById(groupByNode ? 'group-grouped' : 'group-list');
+      if (groupRadio) groupRadio.checked = true;
       // Main Type
-      document.getElementById(`filter-${filterGuestType === 'ct' ? 'lxc' : filterGuestType}`).checked = true;
+      const typeRadio = document.getElementById(`filter-${filterGuestType === 'ct' ? 'lxc' : filterGuestType}`);
+      if (typeRadio) typeRadio.checked = true;
       // Main Status
-      document.getElementById(`filter-status-${filterStatus}`).checked = true;
+      const statusRadio = document.getElementById(`filter-status-${filterStatus}`);
+      if (statusRadio) statusRadio.checked = true;
       // Backup Health
-      document.getElementById(`backups-filter-status-${backupsFilterHealth}`).checked = true;
+      const backupHealthRadio = document.getElementById(`backups-filter-status-${backupsFilterHealth}`);
+      if (backupHealthRadio) backupHealthRadio.checked = true;
   }
-  // ---> END ADDED <---
+  // ---> END ADDED < ---
 
   // Apply initial UI states after defining variables and functions
   applyInitialFilterUI(); 
