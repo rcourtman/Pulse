@@ -23,6 +23,7 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
 - [Contributing](#-contributing)
+- [Privacy](#-privacy)
 - [License](#-license)
 - [Trademark Notice](#trademark-notice)
 - [Support](#-support)
@@ -319,6 +320,14 @@ Once installed, the Pulse application runs as a `systemd` service. You can manag
 ## 👋 Contributing
 
 Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests or opening issues.
+
+## 🔒 Privacy
+
+Pulse is designed with privacy in mind:
+
+*   **No Data Collection:** The application does not collect, store, or transmit any personal user data or telemetry information to external servers.
+*   **Local Communication:** All communication occurs directly between the Pulse application (running in your environment, e.g., Docker container or LXC) and your configured Proxmox VE or Proxmox Backup Server endpoints.
+*   **Credential Handling:** Proxmox credentials (API tokens or username/password) are used solely for authenticating with your Proxmox API and are not logged or sent elsewhere.
 
 ## 📜 License
 
