@@ -1,11 +1,13 @@
 require('dotenv').config(); // Load environment variables from .env file
 
 // --- BEGIN Environment Variable Validation ---
+// Define required primary variables (API Token Auth Only)
 const primaryRequiredEnvVars = [
   'PROXMOX_HOST',
   'PROXMOX_TOKEN_ID',
   'PROXMOX_TOKEN_SECRET'
 ];
+
 const placeholderValues = [
   'your-proxmox-ip-or-hostname',
   'your-api-token-id@pam!your-token-name',
@@ -52,11 +54,6 @@ endpoints.push({
   tokenSecret: process.env.PROXMOX_TOKEN_SECRET,
   enabled: process.env.PROXMOX_ENABLED !== 'false', // Currently unused, but kept for potential future use
   allowSelfSignedCerts: process.env.PROXMOX_ALLOW_SELF_SIGNED_CERTS !== 'false',
-  credentials: { // Keep password fallback possibility
-    username: process.env.PROXMOX_USERNAME,
-    password: process.env.PROXMOX_PASSWORD,
-    realm: process.env.PROXMOX_REALM || 'pam'
-  }
 });
 
 // Load additional endpoints (PROXMOX_HOST_2, _3, ...)
@@ -87,11 +84,6 @@ while (process.env[`PROXMOX_HOST_${i}`]) {
     tokenSecret: tokenSecret,
     enabled: process.env[`PROXMOX_ENABLED_${i}`] !== 'false',
     allowSelfSignedCerts: process.env[`PROXMOX_ALLOW_SELF_SIGNED_CERTS_${i}`] !== 'false',
-    credentials: { // Allow fallback for additional endpoints too
-      username: process.env[`PROXMOX_USERNAME_${i}`],
-      password: process.env[`PROXMOX_PASSWORD_${i}`],
-      realm: process.env[`PROXMOX_REALM_${i}`] || 'pam'
-    }
   });
   i++;
 }
@@ -132,9 +124,6 @@ const pbsApiClients = {}; // Object to hold initialized clients, keyed by pbsCon
 function loadPbsConfig(index = null) {
     const suffix = index ? `_${index}` : '';
     const hostVar = `PBS_HOST${suffix}`;
-    const userVar = `PBS_USER${suffix}`;
-    const passVar = `PBS_PASSWORD${suffix}`;
-    const realmVar = `PBS_REALM${suffix}`;
     const tokenIdVar = `PBS_TOKEN_ID${suffix}`;
     const tokenSecretVar = `PBS_TOKEN_SECRET${suffix}`;
     const nodeNameVar = `PBS_NODE_NAME${suffix}`;
@@ -157,40 +146,14 @@ function loadPbsConfig(index = null) {
     }
     // ---> END ADDED <---\
 
-    const pbsUser = process.env[userVar];
-    const pbsPassword = process.env[passVar];
     const pbsTokenId = process.env[tokenIdVar];
     const pbsTokenSecret = process.env[tokenSecretVar];
 
     let config = null;
     let idPrefix = index ? `pbs_endpoint_${index}` : 'pbs_primary';
 
-    // Check User/Password first
-    if (pbsUser && pbsPassword) {
-        const pbsPlaceholders = placeholderValues.filter(p =>
-            pbsHostUrl.includes(p) || pbsUser.includes(p) || pbsPassword.includes(p) // Check against URL
-        );
-        if (pbsPlaceholders.length > 0) {
-            console.warn(`WARN: Skipping PBS configuration ${index || 'primary'} (User/Pass). Placeholder values detected for: ${pbsPlaceholders.join(', ')}`);
-        } else {
-            config = {
-                id: `${idPrefix}_userpass`,
-                authMethod: 'userpass',
-                name: process.env[nodeNameVar] || pbsHostname, // User-defined name or parsed hostname
-                host: pbsHostUrl, // Keep original full URL here
-                port: process.env[portVar] || '8007',
-                user: pbsUser,
-                password: pbsPassword,
-                realm: process.env[realmVar] || 'pbs',
-                nodeName: process.env[nodeNameVar], // Store explicitly set node name
-                allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
-                enabled: true // Assuming enabled if configured
-            };
-            console.log(`INFO: Found PBS configuration ${index || 'primary'} (User/Password): ${config.name} (${config.host})`);
-        }
-    }
-    // Check Token second
-    else if (pbsTokenId && pbsTokenSecret) {
+    // Check Token ONLY
+    if (pbsTokenId && pbsTokenSecret) {
         const pbsPlaceholders = placeholderValues.filter(p =>
             pbsHostUrl.includes(p) || pbsTokenId.includes(p) || pbsTokenSecret.includes(p) // Check against URL
         );
@@ -199,7 +162,7 @@ function loadPbsConfig(index = null) {
         } else {
             config = {
                 id: `${idPrefix}_token`,
-                authMethod: 'token',
+                authMethod: 'token', // Explicitly set auth method
                 name: process.env[nodeNameVar] || pbsHostname,
                 host: pbsHostUrl, // Keep original full URL here
                 port: process.env[portVar] || '8007',
@@ -214,14 +177,16 @@ function loadPbsConfig(index = null) {
     }
     // Warn if host is set but auth is incomplete
     else {
-         console.warn(`WARN: Partial PBS configuration found for ${hostVar}. Please set either (${userVar} + ${passVar}) or (${tokenIdVar} + ${tokenSecretVar}) along with ${hostVar}.`);
+         console.warn(`WARN: Partial PBS configuration found for ${hostVar}. Please set (${tokenIdVar} + ${tokenSecretVar}) along with ${hostVar}.`);
     }
 
     if (config) {
         pbsConfigs.push(config);
         return true; // Indicate a config was found and added
     }
-    return true; // Indicate we should check the next index even if this one was partial/invalid
+    // If host was present but token details were missing/invalid, return true to check next index
+    // but don't push an incomplete config.
+    return !!pbsHostUrl; // Return true if host was set, false otherwise
 }
 
 // Load primary PBS config (index=null)
@@ -262,18 +227,14 @@ endpoints.forEach(endpoint => {
 
   // Add request interceptor for authentication (specific to this endpoint)
   apiClient.interceptors.request.use(config => {
-    // Add API token authentication
+    // Add API token authentication ONLY
     if (endpoint.tokenId && endpoint.tokenSecret) {
       config.headers.Authorization = `PVEAPIToken=${endpoint.tokenId}=${endpoint.tokenSecret}`;
-    }
-    // Fallback to password auth if configured FOR THIS ENDPOINT
-    else if (endpoint.credentials && endpoint.credentials.username && endpoint.credentials.password) {
-      const { username, password, realm } = endpoint.credentials;
-      config.headers.Authorization = `Basic ${Buffer.from(`${username}@${realm}:${password}`).toString('base64')}`;
-      if (!realm) console.warn(`WARN: Using password auth for endpoint ${endpoint.name} without a realm specified. Defaulting to 'pam'.`);
     } else {
-        // Should not happen due to validation, but log just in case
-        console.error(`ERROR: Endpoint ${endpoint.name} has neither token nor full username/password credentials configured.`);
+        // This should ideally not happen if validation passed, but log error.
+        console.error(`ERROR: Endpoint ${endpoint.name} is missing required API token credentials.`);
+        // Optionally, you could cancel the request here:
+        // return Promise.reject(new Error(`Missing API token for endpoint ${endpoint.name}`));
     }
     return config;
   });
@@ -300,75 +261,6 @@ endpoints.forEach(endpoint => {
 });
 
 // --- Create PBS API Client (if configured) ---
-async function getPbsAuthTicketAndSetupClient(config) {
-    const pbsBaseURL = config.host.includes('://')
-        ? `${config.host}` // Assume full URL if :// is present
-        : `https://${config.host}:${config.port}`;
-
-    const loginUrl = `${pbsBaseURL}/api2/json/access/ticket`;
-    const httpsAgent = new https.Agent({
-        rejectUnauthorized: !config.allowSelfSignedCerts
-    });
-
-    try {
-        console.log(`INFO: Attempting PBS login for user ${config.user}...`);
-        const response = await axios.post(loginUrl, `username=${encodeURIComponent(config.user)}&password=${encodeURIComponent(config.password)}`, {
-            httpsAgent: httpsAgent,
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        });
-
-        const ticket = response.data.data.ticket;
-        const csrfToken = response.data.data.CSRFPreventionToken;
-        const username = response.data.data.username;
-
-        if (!ticket || !csrfToken) {
-            throw new Error("Login response missing ticket or CSRF token.");
-        }
-
-        console.log(`INFO: PBS login successful for ${username}. Setting up authenticated client.`);
-
-        // Create the authenticated client instance
-        const pbsAuthenticatedClient = axios.create({
-            baseURL: `${pbsBaseURL}/api2/json`,
-            httpsAgent: httpsAgent,
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        // Apply interceptor for cookie and CSRF token
-        pbsAuthenticatedClient.interceptors.request.use(reqConfig => {
-            reqConfig.headers['CSRFPreventionToken'] = csrfToken;
-            reqConfig.headers['Cookie'] = `PBSAuthCookie=${ticket}`;
-            return reqConfig;
-        });
-
-        // Apply retry logic
-        axiosRetry(pbsAuthenticatedClient, {
-            retries: 3,
-            retryDelay: (retryCount, error) => {
-                console.warn(`Retrying authenticated PBS API request (attempt ${retryCount}) due to error: ${error.message}`);
-                return axiosRetry.exponentialDelay(retryCount);
-            },
-            retryCondition: (error) => {
-                // Also retry on 401/403 in case ticket expires or CSRF mismatch?
-                // For now, just standard retry conditions.
-                return axiosRetry.isNetworkError(error) || axiosRetry.isRetryableError(error);
-            },
-        });
-
-        return { client: pbsAuthenticatedClient, config: config }; // Return the fully configured client object
-
-    } catch (error) {
-        console.error(`ERROR: PBS login failed for user ${config.user}: ${error.message}`);
-        if (error.response) {
-            console.error(`ERROR: PBS login response status: ${error.response.status}`);
-            console.error(`ERROR: PBS login response data: ${JSON.stringify(error.response.data)}`);
-        }
-        return null; // Indicate failure
-    }
-}
-
 async function initializeAllPbsClients() {
     if (pbsConfigs.length === 0) return;
 
@@ -376,14 +268,8 @@ async function initializeAllPbsClients() {
     const initPromises = pbsConfigs.map(async (config) => {
         let clientData = null;
         try {
-            if (config.authMethod === 'userpass') {
-                clientData = await getPbsAuthTicketAndSetupClient(config);
-                if (clientData) {
-                    console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (User/Password Auth)`);
-                } else {
-                    console.error(`ERROR: Failed to initialize PBS client (User/Password) for: ${config.name} (${config.host})`);
-                }
-            } else if (config.authMethod === 'token') {
+            // We only support token auth now
+            if (config.authMethod === 'token') {
                 // Token Auth Logic (adapted from old initializePbsClient)
                 const pbsBaseURL = config.host.includes('://')
                     ? `${config.host}/api2/json`
@@ -398,7 +284,7 @@ async function initializeAllPbsClients() {
                 });
 
                 pbsAxiosInstance.interceptors.request.use(reqConfig => {
-                    reqConfig.headers.Authorization = `PBSAPIToken ${config.tokenId}:${config.tokenSecret}`;
+                    reqConfig.headers.Authorization = `PBSAPIToken ${config.tokenId}=${config.tokenSecret}`;
                     return reqConfig;
                 });
 
@@ -416,7 +302,8 @@ async function initializeAllPbsClients() {
                 clientData = { client: pbsAxiosInstance, config: config };
                  console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)`);
             } else {
-                 console.error(`ERROR: Unknown authMethod '${config.authMethod}' for PBS config: ${config.name}`);
+                 // This case should not be reachable anymore if loadPbsConfig only creates 'token' authMethod configs
+                 console.error(`ERROR: Unexpected authMethod '${config.authMethod}' found during PBS client initialization for: ${config.name}`);
             }
 
             if (clientData) {
