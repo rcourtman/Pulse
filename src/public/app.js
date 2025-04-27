@@ -456,7 +456,6 @@ document.addEventListener('DOMContentLoaded', function() {
             return isNaN(numericVal) ? 0 : numericVal; // Default to 0 if parsing fails unexpectedly
           }
           // --- End Special Handling ---
-
           // Handle specific column logic if needed
           if (type === 'main' && col === 'id') val = parseInt(item.vmid || item.id || 0);
           else if (type === 'nodes' && col === 'id') val = item.node;
@@ -2557,5 +2556,46 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
   // ---> END NEW Function <---
+
+  // --- START: UI Scale Slider Logic ---
+  const uiScaleSlider = document.getElementById('ui-scale-slider');
+  // Target the root <html> element for font-size adjustment
+  // REUSE existing variable declared earlier
+
+  const applyRootFontSize = (sliderValue) => {
+      // Map slider value (0.75-1.25) to root font size (e.g., 12px-20px, centered around 16px)
+      const baseSize = 16; // Assuming default browser root font size is 16px
+      const newSizePx = baseSize * sliderValue; 
+      
+      if (htmlElement) {
+          htmlElement.style.fontSize = `${newSizePx}px`;
+      }
+      if (uiScaleSlider) {
+          uiScaleSlider.value = sliderValue;
+      }
+  };
+
+  const loadRootFontSize = () => {
+      const savedMultiplier = localStorage.getItem('uiFontMultiplier');
+      if (savedMultiplier) {
+          applyRootFontSize(parseFloat(savedMultiplier));
+      } else {
+          applyRootFontSize(1.0); // Default multiplier (maps to 16px)
+      }
+  };
+
+  if (uiScaleSlider && htmlElement) {
+      uiScaleSlider.addEventListener('input', (event) => {
+          const newMultiplier = parseFloat(event.target.value);
+          applyRootFontSize(newMultiplier);
+          localStorage.setItem('uiFontMultiplier', newMultiplier.toString());
+      });
+
+      // Load initial font size
+      loadRootFontSize();
+  } else {
+      console.error('Could not find UI scale slider or HTML element.');
+  }
+  // --- END: UI Scale Slider Logic ---
 
 }); // End DOMContentLoaded
