@@ -4,11 +4,12 @@
   "description": "Simple raw monitor for Proxmox API data",
   "main": "index.js",
   "dependencies": {
-    "axios": "^1.6.0",
+    "axios": "^1.9.0",
     "axios-retry": "^4.5.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^5.1.0",
+    "semver": "^7.7.1",
     "socket.io": "^4.7.2"
   },
   "devDependencies": {
