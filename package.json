@@ -28,6 +28,6 @@
     "autoprefixer": "^10.4.21",
     "dotenv": "^16.5.0",
     "postcss": "^8.5.3",
-    "tailwindcss": "^3.4.4"
+    "tailwindcss": "^4.1.4"
   }
 }
