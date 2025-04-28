@@ -14,6 +14,7 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 - [Configuration](#️-configuration)
   - [Environment Variables](#environment-variables)
   - [Creating a Proxmox API Token](#creating-a-proxmox-api-token)
+  - [Creating a Proxmox Backup Server API Token](#creating-a-proxmox-backup-server-api-token)
   - [Required Permissions](#required-permissions)
 - [Installation](#-installation)
 - [Running the Application](#-running-the-application)
@@ -62,6 +63,36 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
     If you only need to monitor a single Proxmox cluster or node, you only need to set the primary variables (`PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`).
 
+    **Proxmox Backup Server (PBS) Configuration (Optional):**
+
+    Pulse can also monitor backup status information from a Proxmox Backup Server instance. If you want to enable this feature, configure the following environment variables:
+
+    - `PBS_HOST`: URL of your Proxmox Backup Server (e.g., `https://your-pbs-ip-or-hostname:8007`).
+    - `PBS_TOKEN_ID`: Your PBS API Token ID (e.g., `user@pam!tokenid`). Create this in the PBS UI (see below).
+    - `PBS_TOKEN_SECRET`: Your PBS API Token Secret.
+    - `PBS_NODE_NAME`: (Potentially Required) The internal hostname of your PBS server. **Crucially, this might be different from the hostname used in `PBS_HOST`**. See detailed explanation below.
+    - `PBS_ALLOW_SELF_SIGNED_CERTS`: (Optional) Set to `true` if your PBS server uses self-signed SSL certificates. Defaults to `false`.
+    - `PBS_PORT`: (Optional) Port for the PBS API. Defaults to `8007`.
+
+    *Note: Currently, Pulse only supports monitoring a single PBS instance. Numbered variables like `PBS_HOST_2` are not yet supported.*
+
+    **Why `PBS_NODE_NAME` is Important:**
+
+    Pulse needs to query task lists specific to the PBS node (e.g., `/api2/json/nodes/{nodeName}/tasks`). While Pulse attempts to discover this node name automatically, this can fail due to API limitations or specific permission issues (like accessing `/api2/json/nodes`, which is not a standard PBS management endpoint).
+
+    If Pulse cannot fetch task data correctly (which might result in recent backups showing as 'stale'), you likely need to set `PBS_NODE_NAME` manually.
+
+    **How to find your PBS Node Name:**
+    1.  **SSH:** Log into your PBS server via SSH and run the command `hostname`. The output is the value needed for `PBS_NODE_NAME`.
+    2.  **UI:** Log into the PBS web interface. The hostname is typically displayed on the main Dashboard under Server Status.
+    3.  **MOTD:** The hostname is often shown in the Message of the Day when you log in via SSH.
+
+    Example: If your PBS connects via `https://minipc-pbs.lan:8007` but its internal hostname is `proxmox-backup-server`, you would set:
+    ```
+    PBS_HOST=https://minipc-pbs.lan:8007
+    PBS_NODE_NAME=proxmox-backup-server
+    ```
+
 ### Creating a Proxmox API Token
 
 An API token is recommended for connecting Pulse to Proxmox.
@@ -102,6 +133,34 @@ An API token is recommended for connecting Pulse to Proxmox.
     *Note: Assigning the `PVEAuditor` role at the root path (`/`) with `Propagate` checked is crucial for Pulse to discover and monitor all nodes, VMs, containers, and storage in your cluster.*
 
 5.  **Update your `server/.env` file** with the `Token ID` (which looks like `user@realm!tokenid`, e.g., `pulse-monitor@pam!pulse`) and the `Secret` you saved.
+
+### Creating a Proxmox Backup Server API Token
+
+If you are configuring PBS monitoring, you need a separate API token created within PBS.
+
+1.  **Log in to the Proxmox Backup Server web interface**
+2.  **Create a dedicated user** (optional but recommended)
+    *   Go to `Configuration` → `Access Control` → `User Management`.
+    *   Click `Add`.
+    *   Enter a `User ID` (e.g., "pulse-monitor@pam"), set other fields as needed, and click `Add`.
+3.  **Create an API token**
+    *   Under `Configuration` → `Access Control`, select `API Token`.
+    *   Click `Add`.
+    *   Select the `User` (e.g., "pulse-monitor@pam") or `root@pam`.
+    *   Enter a `Token Name` (e.g., "pulse").
+    *   Leave `Privilege Separation` checked.
+    *   Click `Add`.
+    *   **Important:** Copy the displayed `Secret` value immediately.
+4.  **Assign permissions**
+    *   Under `Configuration` → `Access Control`, select `Permissions`.
+    *   Click `Add` → `API Token Permission`.
+    *   Path: `/datastore` (This grants access to view datastores and their contents, including backup snapshots).
+    *   API Token: Select the token you created (e.g., "pulse-monitor@pam!pulse").
+    *   Role: `DatastoreAudit` (Provides read-only access to datastore contents and backups).
+    *   Ensure `Propagate` is checked.
+    *   Click `Add`.
+    *   *(Note: While `DatastoreAudit` on `/datastore` is usually sufficient for backup status, if you still encounter issues fetching task lists, you might need broader permissions like `Audit` on path `/` for the token, although this has shown inconsistent behaviour with API tokens vs user sessions in some PBS versions).*
+5.  **Update your `server/.env` file** with the PBS `Token ID` (`PBS_TOKEN_ID`) and the `Secret` (`PBS_TOKEN_SECRET`).
 
 ### Required Permissions
 

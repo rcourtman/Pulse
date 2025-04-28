@@ -301,7 +301,7 @@ async function initializeAllPbsClients() {
                 });
 
                 clientData = { client: pbsAxiosInstance, config: config };
-                 console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)`);
+                 console.log(`INFO: Successfully initialized client for instance '${config.name}' (Token Auth)`);
             } else {
                  // This case should not be reachable anymore if loadPbsConfig only creates 'token' authMethod configs
                  console.error(`ERROR: Unexpected authMethod '${config.authMethod}' found during PBS client initialization for: ${config.name}`);
@@ -311,12 +311,12 @@ async function initializeAllPbsClients() {
                 pbsApiClients[config.id] = clientData; // Store successful client keyed by config ID
             }
         } catch (error) {
-             console.error(`ERROR: Unhandled exception during PBS client initialization for ${config.name}: ${error.message}`);
+             console.error(`ERROR: Unhandled exception during PBS client initialization for ${config.name}: ${error.message}`, error.stack);
         }
     });
 
     await Promise.allSettled(initPromises);
-    console.log(`INFO: [PBS Init] Finished initialization. ${Object.keys(pbsApiClients).length} / ${pbsConfigs.length} PBS clients initialized successfully.`);
+    console.log(`INFO: Finished initialization. ${Object.keys(pbsApiClients).length} / ${pbsConfigs.length} PBS clients initialized successfully.`);
 }
 
 if (Object.keys(apiClients).length === 0 && pbsConfigs.length === 0) {
@@ -1205,7 +1205,7 @@ async function fetchPbsNodeName(pbsClient) {
             return 'localhost'; // Fallback
         }
     } catch (error) {
-        console.error(`ERROR: Failed to fetch PBS nodes list: ${error.message}`);
+        console.error(`ERROR: Failed to fetch PBS nodes list for ${pbsClient.config.name}: ${error.message}`, error.stack);
         return 'localhost'; // Fallback on error
     }
 }
@@ -1225,21 +1225,22 @@ async function fetchAllPbsTasksForProcessing(pbsClient, nodeName) {
         return { tasks: null, error: true };
     }
     try {
-        const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
-        const response = await pbsClient.client.get(`/nodes/${nodeName}/tasks`, {
-            params: {
-                since: sinceTimestamp,
-                limit: 1000, // Fetch a larger number to cover 7 days of various tasks
-                errors: 1,
-            }
-        });
+        const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000); // RESTORED
+        const requestUrl = `/nodes/${nodeName}/tasks`;
+        const requestParams = {
+            since: sinceTimestamp, // RESTORED
+            limit: 1000, // Kept (was 1000 after increasing from 20)
+            errors: 1, // RESTORED
+        };
+        const paramsToSend = Object.keys(requestParams).length > 0 ? { params: requestParams } : {};
+        const response = await pbsClient.client.get(requestUrl, paramsToSend);
         const allTasks = response.data?.data ?? [];
-        console.log(`INFO: Fetched ${allTasks.length} tasks from PBS for processing.`);
         return { tasks: allTasks, error: false };
     } catch (error) {
-        console.error(`ERROR: Failed to fetch PBS task list for node ${nodeName}: ${error.message}`);
-        if (error.response?.status === 401) console.error("ERROR: PBS API authentication failed (401).");
-        else if (error.response?.status === 403) console.error("ERROR: PBS API authorization failed (403).");
+        console.error(`ERROR: Failed to fetch PBS task list for node ${nodeName} (${pbsClient.config.name}): ${error.message}`, error.stack);
+        if (error.response) { // Log more detail if available
+             console.error(`Error details: Status=${error.response.status}, Data=${JSON.stringify(error.response.data)}`);
+        }
         return { tasks: null, error: true };
     }
 }
@@ -1305,10 +1306,10 @@ function processPbsTasks(allTasks) {
     // Process and sort recent tasks for each category
     const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
 
-    const recentBackupTasks = taskResults.backup.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
-    const recentVerifyTasks = taskResults.verify.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
-    const recentSyncTasks = taskResults.sync.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
-    const recentPruneGcTasks = taskResults.pruneGc.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
+    const recentBackupTasks = taskResults.backup.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 100);
+    const recentVerifyTasks = taskResults.verify.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 100);
+    const recentSyncTasks = taskResults.sync.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 100);
+    const recentPruneGcTasks = taskResults.pruneGc.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 100);
 
     console.log(`INFO: Processed PBS Tasks - Backup: ${taskResults.backup.list.length} (OK: ${taskResults.backup.ok}, Fail: ${taskResults.backup.failed}), Verify: ${taskResults.verify.list.length} (OK: ${taskResults.verify.ok}, Fail: ${taskResults.verify.failed}), Sync: ${taskResults.sync.list.length} (OK: ${taskResults.sync.ok}, Fail: ${taskResults.sync.failed}), Prune/GC: ${taskResults.pruneGc.list.length} (OK: ${taskResults.pruneGc.ok}, Fail: ${taskResults.pruneGc.failed})`);
 
@@ -1366,11 +1367,13 @@ async function fetchPbsTaskSummaryByType(pbsClient, nodeName, taskTypes) {
 
 async function fetchPbsDatastoreData(pbsClient) {
     // Fetches datastore usage details from PBS using the /status/datastore-usage endpoint
-    console.log("INFO: Fetching PBS datastore data...");
+    console.log(`INFO: Fetching PBS datastore data for ${pbsClient.config.name}...`);
     let datastores = [];
+    const primaryUrl = '/status/datastore-usage';
+    const fallbackUrl = '/config/datastore';
     try {
         // Fetch usage stats for all datastores at once
-        const usageResponse = await pbsClient.client.get('/status/datastore-usage');
+        const usageResponse = await pbsClient.client.get(primaryUrl);
         const usageData = usageResponse.data?.data ?? [];
 
         if (usageData.length > 0) {
@@ -1391,14 +1394,15 @@ async function fetchPbsDatastoreData(pbsClient) {
         }
 
     } catch (usageError) {
-        console.error(`ERROR: Failed to fetch PBS datastore usage via /status/datastore-usage: ${usageError.message}. Trying fallback /config/datastore.`);
+        console.error(`ERROR: Failed to fetch PBS datastore usage via ${primaryUrl} for ${pbsClient.config.name}: ${usageError.message}. Trying fallback ${fallbackUrl}.`, usageError.stack);
         // --- Fallback Logic ---
         try {
-            const configResponse = await pbsClient.client.get('/config/datastore');
+            const configResponse = await pbsClient.client.get(fallbackUrl);
             const datastoresConfig = configResponse.data?.data ?? [];
             if (datastoresConfig.length > 0) {
                 console.log(`INFO: Fetched config for ${datastoresConfig.length} PBS datastores (fallback). Status unavailable.`);
-                 datastores = datastoresConfig.map(dsConfig => ({
+                // Map the received data to the expected format
+                datastores = datastoresConfig.map(dsConfig => ({
                     name: dsConfig.name,
                     path: dsConfig.path,
                     total: null, // Usage/Status info unavailable from config
@@ -1410,13 +1414,12 @@ async function fetchPbsDatastoreData(pbsClient) {
                  console.warn("WARN: Fallback fetch of PBS datastore config also returned empty data.");
             }
         } catch (configError) {
-            console.error(`ERROR: Fallback fetch of PBS datastore config failed: ${configError.message}`);
-             if (configError.response?.status === 401 || configError.response?.status === 403) {
-                console.error("ERROR: PBS API authentication/authorization failed for datastore config access.");
+            console.error(`ERROR: Fallback fetch of PBS datastore config (${fallbackUrl}) for ${pbsClient.config.name}: ${configError.message}`, configError.stack);
+             if (configError.response) { // Log more detail if available
+                console.error(`Fallback error details: Status=${configError.response.status}, Data=${JSON.stringify(configError.response.data)}`);
              }
              // Keep datastores as empty array if both primary and fallback attempts fail
         }
-        // --- End Fallback ---
     }
 
     console.log(`INFO: Finished fetching PBS datastore data. Found ${datastores.length} datastores.`);
