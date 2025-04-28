@@ -280,12 +280,37 @@ async function initializeAllPbsClients() {
                     httpsAgent: new https.Agent({
                         rejectUnauthorized: !config.allowSelfSignedCerts
                     }),
-                    headers: { 'Content-Type': 'application/json' }
+                    // REMOVED default headers here
+                    // headers: { 'Content-Type': 'application/json' }
                 });
 
                 pbsAxiosInstance.interceptors.request.use(reqConfig => {
                     // Correct PBS format: PBSAPIToken=TOKENID:TOKENSECRET
                     reqConfig.headers.Authorization = `PBSAPIToken=${config.tokenId}:${config.tokenSecret}`;
+                    
+                    // ---> WORKAROUND for PBS API Bug <--- 
+                    // PBS API (tested on 3.3.4) incorrectly returns 400 Bad Request ("value does not match regex pattern")
+                    // on GET requests (e.g., /tasks) if a 'Content-Type' header is present when using API Token authentication.
+                    // Therefore, explicitly remove 'Content-Type' for GET requests.
+                    // It seems fine/required for POST/PUT requests, so add it back for non-GET.
+                    // See Bugzilla #6365 for related details.
+                    if (reqConfig.method && reqConfig.method.toLowerCase() !== 'get') {
+                         reqConfig.headers['Content-Type'] = 'application/json';
+                    } else {
+                        // Ensure Content-Type is removed for GET requests
+                        delete reqConfig.headers['Content-Type'];
+                    }
+                    // ---> END WORKAROUND <---
+                    
+                    // ---> ADD: Set default Accept header (optional but good practice)
+                    if (!reqConfig.headers['Accept']) {
+                        reqConfig.headers['Accept'] = 'application/json, text/plain, */*';
+                    }
+                    // ---> END ADD
+
+                    // ---> DEBUG: Log outgoing request headers (can be removed later)
+                    // console.log(`DEBUG: Axios Request Headers for ${config.name}:`, JSON.stringify(reqConfig.headers)); // REMOVED
+                    // ---> END DEBUG
                     return reqConfig;
                 });
 
@@ -1233,6 +1258,9 @@ async function fetchAllPbsTasksForProcessing(pbsClient, nodeName) {
             errors: 1, // RESTORED
         };
         const paramsToSend = Object.keys(requestParams).length > 0 ? { params: requestParams } : {};
+        // ---> DEBUG: Log outgoing request URL and params
+        // console.log(`DEBUG: Axios GET Request to ${pbsClient.config.name} - URL: ${requestUrl}, ParamsObj: ${JSON.stringify(paramsToSend)}`); // REMOVED
+        // ---> END DEBUG
         const response = await pbsClient.client.get(requestUrl, paramsToSend);
         const allTasks = response.data?.data ?? [];
         return { tasks: allTasks, error: false };

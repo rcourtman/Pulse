@@ -154,17 +154,20 @@ If you are configuring PBS monitoring, you need a separate API token created wit
 4.  **Assign permissions**
     *   Under `Configuration` → `Access Control`, select `Permissions`.
     *   Click `Add` → `API Token Permission`.
-    *   Path: `/datastore` (This grants access to view datastores and their contents, including backup snapshots).
-    *   API Token: Select the token you created (e.g., "pulse-monitor@pam!pulse").
-    *   Role: `DatastoreAudit` (Provides read-only access to datastore contents and backups).
+    *   **Path:** `/` (Grant permissions at the root level for broad access needed by Pulse).
+    *   **API Token:** Select the token you created (e.g., "pulse-monitor@pam!pulse").
+    *   **Role:** `Audit` (This role provides necessary read-only access, including system status and task history).
     *   Ensure `Propagate` is checked.
     *   Click `Add`.
-    *   *(Note: While `DatastoreAudit` on `/datastore` is usually sufficient for backup status, if you still encounter issues fetching task lists, you might need broader permissions like `Audit` on path `/` for the token, although this has shown inconsistent behaviour with API tokens vs user sessions in some PBS versions).*
+    *   
+    *   **Note on Permissions & API Behavior:** While minimal roles like `DatastoreAudit` might seem sufficient, testing (on PBS v3.3.4) revealed specific API behavior with tokens. GET requests to `/tasks` failed with a `400 Bad Request ("value does not match the regex pattern")` if the request included a `Content-Type` header (which some HTTP clients add by default), whereas requests omitting this header succeeded. Pulse now includes a workaround for this client-side. However, using the broader `Audit` role on the root path `/` also ensures Pulse can reliably access all necessary data (datastores, snapshots, task history) for full monitoring functionality. This role is still read-only.
+
 5.  **Update your `server/.env` file** with the PBS `Token ID` (`PBS_TOKEN_ID`) and the `Secret` (`PBS_TOKEN_SECRET`).
 
 ### Required Permissions
 
-The `PVEAuditor` role is recommended as it provides the necessary read-only permissions for Pulse to monitor your Proxmox environment:
+**Proxmox VE:**
+The `PVEAuditor` role is recommended as it provides the necessary read-only permissions for Pulse to monitor your Proxmox VE environment:
 - `Datastore.Audit`
 - `Permissions.Read` (implicitly included)
 - `Pool.Audit`
