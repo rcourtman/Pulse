@@ -10,6 +10,10 @@ updates:
     labels:
       - "dependencies"
       - "dependabot"
+    # Ignore updates for tailwindcss >= v4 due to build issues
+    ignore:
+      - dependency-name: "tailwindcss"
+        versions: [">= 4.0.0"]
 
   # Enable version updates for npm in the server directory
   - package-ecosystem: "npm"
