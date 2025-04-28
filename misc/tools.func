@@ -658,8 +658,8 @@ setup_local_ip_helper() {
 
     # Install networkd-dispatcher if not present
     if ! dpkg -s networkd-dispatcher >/dev/null 2>&1; then
-        apt-get update -qq
-        apt-get install -yq networkd-dispatcher
+      $STD apt-get update -qq
+      $STD apt-get install -yq networkd-dispatcher
     fi
 
     # Write update_local_ip.sh
