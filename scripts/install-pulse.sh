@@ -51,14 +51,10 @@ check_root() {
 
 # --- Installation Status Check & Action Determination --- 
 check_installation_status_and_determine_action() {
-    # Add trace for debugging
-    set -x
-
     # Check if running in non-interactive update mode FIRST
     if [ "$MODE_UPDATE" = true ]; then
         print_info "Running in non-interactive update mode..."
         INSTALL_MODE="update"
-        set +x # Turn off trace before returning
         return 0 # Continue to main update logic
     fi
 
@@ -94,6 +90,7 @@ check_installation_status_and_determine_action() {
             # Prompt based on status
             if [ "$INSTALL_MODE" = "uptodate" ]; then
                 echo "Choose an action:"
+                echo "  1) Re-run installation/update process anyway"
                 echo "  2) Remove Pulse"
                 echo "  3) Cancel"
                 read -p "Enter your choice (1-3): " user_choice
@@ -138,9 +135,6 @@ check_installation_status_and_determine_action() {
         esac
     fi
     # We don't return here, INSTALL_MODE is now set globally for the main logic
-
-    # Ensure trace is turned off before exiting function
-    set +x
 }
 
 # --- System Setup Functions --- (apt_update_upgrade, install_dependencies, setup_node, create_pulse_user)
@@ -295,13 +289,37 @@ perform_update() {
         print_warning "Could not find script path ($SCRIPT_ABS_PATH) to ensure executable permission."
     fi
 
-    print_info "Re-installing dependencies using lock files..."
-    # Call the updated function which now uses 'npm ci' by default
-    if ! install_npm_deps; then 
-        print_error "Failed to install dependencies during update."
-        # Maybe don't exit immediately? Allow CSS build etc? For now, return error.
-        return 1
+    print_info "Re-installing npm dependencies (root)..."
+    # Keep --omit=dev here, we'll install cli separately
+    # Use npm ci for faster, cleaner installs based on lock file
+    if ! npm ci --unsafe-perm > /dev/null 2>&1; then
+        print_warning "Failed to install root npm dependencies using npm ci. Trying npm install..."
+        # Fallback to npm install if ci fails (e.g., no lock file initially)
+        if ! npm install --unsafe-perm > /dev/null 2>&1; then
+            print_warning "Fallback npm install also failed for root dependencies. Continuing..."
+        else
+            print_success "Root dependencies installed via fallback npm install."
+        fi
+    else
+        print_success "Root dependencies updated using npm ci."
     fi
+
+    print_info "Re-installing server dependencies..."
+    cd server || { print_error "Failed to change directory to $PULSE_DIR/server"; cd ..; return 1; }
+    # Use npm ci for faster, cleaner installs based on lock file
+     if npm ci --unsafe-perm > /dev/null 2>&1; then
+        print_success "Server dependencies updated using npm ci."
+     else
+         print_warning "Failed to install server dependencies using npm ci. Trying npm install..."
+         # Fallback to npm install if ci fails
+         if ! npm install --unsafe-perm > /dev/null 2>&1; then
+             print_error "Fallback npm install also failed for server dependencies."
+             exit 1 # Exit if server deps fail even with fallback
+         else
+            print_success "Server dependencies installed via fallback npm install."
+         fi
+    fi
+    cd .. # Back to PULSE_DIR
 
     # Build CSS after dependencies
     print_info "Building CSS assets..."
@@ -332,10 +350,12 @@ perform_update() {
         print_success "Pulse service restart command finished successfully (Exit code: $restart_exit_code)."
     else
         print_error "Pulse service restart command failed (Exit code: $restart_exit_code)."
+        print_info "Attempting to display the last 20 lines of the service log:"
+        # Use --no-pager to prevent blocking in script
+        journalctl -u "$SERVICE_NAME" -n 20 --no-pager
         print_warning "Please check the service status manually: sudo systemctl status $SERVICE_NAME"
-        print_warning "Attempting to display last 10 lines of log output:"
-        # Use timeout to prevent hanging if journalctl fails
-        timeout 5s journalctl -u "$SERVICE_NAME" --no-pager --lines=10 --quiet || print_error "Could not retrieve logs from journalctl."
+        # Keep existing warning about journalctl as well, in case the direct output fails
+        print_warning "And check logs: sudo journalctl -u $SERVICE_NAME"
         return 1
     fi
 
@@ -424,54 +444,34 @@ perform_remove() {
 
 # --- Installation Step Functions --- (install_npm_deps, set_permissions, configure_environment, setup_systemd_service)
 install_npm_deps() {
-    print_info "Installing npm dependencies using 'npm ci'..."
+    print_info "Installing npm dependencies..."
     if [ ! -d "$PULSE_DIR" ]; then
         print_error "Pulse directory $PULSE_DIR not found. Cannot install dependencies."
+        # This shouldn't happen if called in the right flow, but check anyway
         return 1
     fi
 
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
-    print_info "Installing root dependencies (from lock file)..."
-    # Use --unsafe-perm if running as root
-    if npm ci --unsafe-perm > /dev/null 2>&1; then
+    print_info "Installing root dependencies (including dev)..."
+    # Use --unsafe-perm if running npm install as root, which might be necessary for some packages
+    # REMOVED --omit=dev to ensure build tools like postcss/autoprefixer are present
+    if npm install --unsafe-perm > /dev/null 2>&1; then
         print_success "Root dependencies installed."
     else
-        print_error "Failed to install root npm dependencies using 'npm ci'. Ensure package-lock.json is up-to-date."
-        print_warning "Attempting fallback with 'npm install'..."
-        # Fallback to install if ci fails (e.g., no lock file)
-        if npm install --unsafe-perm > /dev/null 2>&1; then
-             print_success "Root dependencies installed using fallback 'npm install'."
-        else
-             print_error "Fallback 'npm install' also failed for root dependencies."
-             return 1
-        fi
+        print_error "Failed to install root npm dependencies."
+        return 1
     fi
 
-    print_info "Installing server dependencies (from lock file)..."
+    print_info "Installing server dependencies (including dev)..."
     cd server || { print_error "Failed to change directory to $PULSE_DIR/server"; cd ..; return 1; }
-    # Check if server package-lock.json exists
-    if [ ! -f "package-lock.json" ]; then
-         print_warning "Server package-lock.json not found. Running 'npm install' instead of 'npm ci'."
-         if npm install --unsafe-perm > /dev/null 2>&1; then
-            print_success "Server dependencies installed using 'npm install'."
-         else
-            print_error "Failed to install server dependencies using 'npm install'."
-            cd ..
-            return 1
-         fi
-    elif npm ci --unsafe-perm > /dev/null 2>&1; then
+    # REMOVED --omit=dev
+     if npm install --unsafe-perm > /dev/null 2>&1; then
         print_success "Server dependencies installed."
     else
-        print_error "Failed to install server npm dependencies using 'npm ci'. Ensure server/package-lock.json is up-to-date."
-        print_warning "Attempting fallback with 'npm install'..."
-         if npm install --unsafe-perm > /dev/null 2>&1; then
-             print_success "Server dependencies installed using fallback 'npm install'."
-        else
-             print_error "Fallback 'npm install' also failed for server dependencies."
-             cd .. # Go back before returning error
-             return 1
-         fi
+        print_error "Failed to install server npm dependencies."
+        cd .. # Go back before returning error
+        return 1
     fi
 
     # Return to script execution directory or root, if needed
@@ -492,8 +492,86 @@ set_permissions() {
     fi
 }
 
+# --- Helper function to safely read .env files ---
+# Reads a .env file, ignoring comments and empty lines, populating an associative array.
+# Usage: declare -A env_vars; read_env_file "path/to/.env" env_vars
+read_env_file() {
+    local env_file="$1"
+    local -n arr="$2" # Use nameref for the associative array
+    arr=() # Clear the array
+    if [ -f "$env_file" ]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Trim leading/trailing whitespace
+            line=$(echo "$line" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            # Skip empty lines and comments
+            if [[ -z "$line" || "$line" == \#* ]]; then
+                continue
+            fi
+            # Simple split on the first '=', allows values to contain '='
+            local key="${line%%=*}"
+            local value="${line#*=}"
+            # Trim potential quotes from value (basic handling)
+            value=$(echo "$value" | sed -e 's/^"//' -e 's/"$/' -e "s/^'//" -e "s/'$//")
+            arr["$key"]="$value"
+        done < "$env_file"
+    fi
+}
+
+# --- Helper function to prompt with default ---
+# Usage: prompt_with_default VARIABLE_NAME PROMPT_TEXT [CURRENT_VALUE]
+prompt_with_default() {
+    local var_name="$1"
+    local prompt_text="$2"
+    local current_value="$3" # Optional current value
+    local user_input
+
+    if [ -n "$current_value" ]; then
+        read -p "$prompt_text [$current_value]: " user_input
+        # If user pressed Enter without typing, use the current value
+        if [ -z "$user_input" ]; then
+            printf -v "$var_name" '%s' "$current_value"
+        else
+            printf -v "$var_name" '%s' "$user_input"
+        fi
+    else
+        # No current value, standard prompt
+        read -p "$prompt_text: " user_input
+        printf -v "$var_name" '%s' "$user_input"
+    fi
+}
+
+# --- Helper function to prompt for secret with default ---
+# Usage: prompt_secret_with_default VARIABLE_NAME PROMPT_TEXT [HAS_CURRENT_VALUE]
+prompt_secret_with_default() {
+    local var_name="$1"
+    local prompt_text="$2"
+    local has_current_value=$3 # Boolean (true/false) indicates if a value exists
+    local user_input
+
+    if [ "$has_current_value" = true ]; then
+         # Ask if they want to change it first
+        read -p "$prompt_text [current value hidden, press Enter to keep, or type 'c' to change]: " change_choice
+        if [[ "$change_choice" =~ ^[Cc]$ ]]; then
+            read -sp " -> Enter new secret: " user_input
+            echo
+            # Assign the new value
+             printf -v "$var_name" '%s' "$user_input"
+            # Set a flag or return value indicating it was changed (optional, handled by direct assignment here)
+        else
+            # Indicate value should be kept - assign a special value or handle upstream
+             printf -v "$var_name" '%s' "__KEEP_SECRET__" # Special marker
+        fi
+
+    else
+        # No current value, standard secret prompt
+        read -sp "$prompt_text: " user_input
+        echo
+        printf -v "$var_name" '%s' "$user_input"
+    fi
+}
+
 configure_environment() {
-    print_info "Configuring Pulse environment (.env)..."
+    print_info "Configuring Pulse environment..."
     local env_example_path="$PULSE_DIR/.env.example"
     local env_path="$PULSE_DIR/.env"
 
@@ -502,160 +580,265 @@ configure_environment() {
         return 1
     fi
 
-    # --- Read existing values if .env exists --- 
-    local current_host=""
-    local current_token_id=""
-    local current_token_secret=""
-    local current_self_signed="true"
-    local current_port="7655"
-    local env_exists=false
-
+    # Declare associative array to hold env vars
+    declare -A current_env_vars
+    local env_file_exists=false
     if [ -f "$env_path" ]; then
-        env_exists=true
-        print_info "Reading existing configuration from $env_path..."
-        # Source the file in a subshell to avoid polluting current env, handle potential errors
-        # Use grep and cut for robustness against file content issues
-        current_host=$(grep '^PROXMOX_HOST=' "$env_path" | cut -d'=' -f2- || echo "")
-        current_token_id=$(grep '^PROXMOX_TOKEN_ID=' "$env_path" | cut -d'=' -f2- || echo "")
-        # Don't read/display token secret for security
-        current_self_signed=$(grep '^PROXMOX_ALLOW_SELF_SIGNED_CERTS=' "$env_path" | cut -d'=' -f2- || echo "true")
-        current_port=$(grep '^PORT=' "$env_path" | cut -d'=' -f2- || echo "7655")
-        print_info "Current Host: $current_host"
-        print_info "Current Token ID: $current_token_id"
-        print_info "Current Allow Self-Signed: $current_self_signed"
-        print_info "Current Port: $current_port"
+        env_file_exists=true
+        read_env_file "$env_path" current_env_vars
     fi
 
-    # --- Decide whether to configure --- 
-    local should_configure=false
-    if [ "$env_exists" = true ]; then
-        if [ -t 0 ]; then # Only prompt if interactive
-            read -p "Modify existing configuration? (y/N): " modify_confirm
-            if [[ "$modify_confirm" =~ ^[Yy]$ ]]; then
-                should_configure=true
-                print_info "Proceeding to modify configuration..."
-            else
-                print_info "Keeping existing environment configuration."
-                # Ensure correct ownership/permissions even if not modified
-                chown "$PULSE_USER":"$PULSE_USER" "$env_path"
-                chmod 600 "$env_path"
-                return 0 
+    # Define the primary keys we need to configure
+    local config_keys=("PROXMOX_HOST" "PROXMOX_TOKEN_ID" "PROXMOX_TOKEN_SECRET" "PROXMOX_ALLOW_SELF_SIGNED_CERTS" "PORT")
+
+    # Variables to store collected values
+    local proxmox_host=""
+    local proxmox_token_id=""
+    local proxmox_token_secret=""
+    local allow_self_signed=""
+    local pulse_port=""
+
+    local needs_update=false # Flag to track if we need to write the file
+
+    if [ -t 0 ]; then # Interactive mode
+        if [ "$env_file_exists" = true ]; then
+            print_warning "Configuration file $env_path already exists."
+            echo "Review the current settings and update if necessary."
+            needs_update=true # Assume update is needed if file exists interactively
+
+            # --- Get Proxmox Host ---
+            prompt_with_default proxmox_host " -> Proxmox Host URL" "${current_env_vars[PROXMOX_HOST]}"
+            while [ -z "$proxmox_host" ]; do
+                print_warning "Proxmox Host URL cannot be empty."
+                prompt_with_default proxmox_host " -> Proxmox Host URL" "${current_env_vars[PROXMOX_HOST]}"
+            done
+            if [[ ! "$proxmox_host" =~ ^https?:// ]]; then
+                 print_warning "URL does not start with http:// or https://. Prepending https://."
+                 proxmox_host="https://$proxmox_host"
+                 print_info "Using Proxmox Host URL: $proxmox_host"
             fi
-        else
-            print_info "Running non-interactively, keeping existing environment configuration."
-            return 0
-        fi
-    else
-        # .env doesn't exist, proceed with configuration
-        should_configure=true
-    fi
 
-    # --- Gather Proxmox Details (Interactive Only) --- 
-    local proxmox_host="$current_host"
-    local proxmox_token_id="$current_token_id"
-    local proxmox_token_secret="" # Always prompt for secret
-    local allow_self_signed="$current_self_signed"
-    local pulse_port="$current_port"
+             # --- Display Token Generation Info --- (Only if Token ID or Secret is missing/being changed)
+             if [ -z "${current_env_vars[PROXMOX_TOKEN_ID]}" ] || [ -z "${current_env_vars[PROXMOX_TOKEN_SECRET]}" ]; then
+                 echo ""
+                 print_info "You need a Proxmox API Token. You can create one via the Proxmox Web UI,"
+                 print_info "or run the following commands on your Proxmox host shell:"
+                 echo "----------------------------------------------------------------------"
+                 echo '  # 1. Create user 'pulse-monitor' (enter password when prompted):'
+                 echo "  pveum useradd pulse-monitor@pam -comment "API user for Pulse monitoring""
+                 echo '  '
+                 echo '  # 2. Create API token 'pulse' for user (COPY THE SECRET VALUE!):'
+                 echo "  pveum user token add pulse-monitor@pam pulse --privsep=1"
+                 echo '  '
+                 echo '  # 3. Assign PVEAuditor role to user:'
+                 echo "  pveum acl modify / -user pulse-monitor@pam -role PVEAuditor"
+                 echo "----------------------------------------------------------------------"
+                 echo "After running the 'token add' command, copy the Token ID and Secret Value"
+                 echo "and paste them below."
+                 echo ""
+             fi
 
-    if [ "$should_configure" = true ]; then
-        if [ -t 0 ]; then # Interactive prompts
-            echo "Please provide/confirm your Proxmox connection details:"
-            read -p " -> Proxmox Host URL [Current: $current_host]: " input_host
-            # Only update if user provided input
-            if [ -n "$input_host" ]; then proxmox_host="$input_host"; fi
-            # Simple validation/prepend https
-            if [[ -n "$proxmox_host" ]] && [[ ! "$proxmox_host" =~ ^https?:// ]]; then
-                print_warning "URL does not start with http:// or https://. Prepending https://."
-                proxmox_host="https://$proxmox_host"
-                print_info "Using Proxmox Host URL: $proxmox_host"
-            elif [ -z "$proxmox_host" ]; then
-                 while [ -z "$proxmox_host" ]; do
-                    print_error "Proxmox Host URL cannot be empty."
-                    read -p " -> Proxmox Host URL (e.g., https://192.168.1.100:8006): " proxmox_host
-                 done
-                 # Re-validate after getting non-empty value
-                 if [[ ! "$proxmox_host" =~ ^https?:// ]]; then 
-                      print_warning "Prepending https://."
-                      proxmox_host="https://$proxmox_host"
-                 fi
-            fi
-            
-            # Display token info (no change needed here)
-            # ... (token info display code as before) ...
-            echo ""
-            print_info "You need a Proxmox API Token..."
-            # ... (rest of token info display code) ...
-            echo ""
-
-            read -p " -> Proxmox API Token ID [Current: $current_token_id]: " input_token_id
-            if [ -n "$input_token_id" ]; then proxmox_token_id="$input_token_id"; fi
+             # --- Get Proxmox Token ID ---
+             prompt_with_default proxmox_token_id " -> Proxmox API Token ID" "${current_env_vars[PROXMOX_TOKEN_ID]}"
              while [ -z "$proxmox_token_id" ]; do
-                print_error "Proxmox Token ID cannot be empty."
-                read -p " -> Proxmox API Token ID (e.g., user@pam!tokenid): " proxmox_token_id
-            done
+                 print_warning "Proxmox Token ID cannot be empty."
+                 prompt_with_default proxmox_token_id " -> Proxmox API Token ID" "${current_env_vars[PROXMOX_TOKEN_ID]}"
+             done
 
-            # Always ask for secret, don't show current
-            read -sp " -> Proxmox API Token Secret [Current: ******]: " proxmox_token_secret
-            echo
-             while [ -z "$proxmox_token_secret" ]; do
-                print_error "Proxmox Token Secret cannot be empty."
-                read -sp " -> Proxmox API Token Secret: " proxmox_token_secret
-                echo
-            done
-
-            # Optional Settings with defaults shown
-            local self_signed_prompt_val="Y"
-            if [ "$current_self_signed" = "false" ]; then self_signed_prompt_val="n"; fi
-            read -p " -> Allow self-signed certificates for Proxmox? [Current: $self_signed_prompt_val] (Y/n): " input_self_signed
-            if [[ "$input_self_signed" =~ ^[Nn]$ ]]; then allow_self_signed="false"; else allow_self_signed="true"; fi 
-
-            read -p " -> Port for Pulse server [Current: $current_port]: " input_port
-            if [ -n "$input_port" ]; then
-                if [[ "$input_port" =~ ^[0-9]+$ ]] && [ "$input_port" -ge 1 ] && [ "$input_port" -le 65535 ]; then
-                    pulse_port="$input_port"
-                else
-                    print_warning "Invalid port number entered. Keeping current value: $current_port."
-                    pulse_port="$current_port" # Revert to current if invalid
-                fi
+            # --- Get Proxmox Token Secret ---
+            local has_secret=false
+            if [ -n "${current_env_vars[PROXMOX_TOKEN_SECRET]}" ]; then has_secret=true; fi
+            prompt_secret_with_default proxmox_token_secret " -> Proxmox API Token Secret" "$has_secret"
+            if [ "$proxmox_token_secret" = "__KEEP_SECRET__" ]; then
+                 proxmox_token_secret="${current_env_vars[PROXMOX_TOKEN_SECRET]}" # Keep existing secret
             fi
+            while [ -z "$proxmox_token_secret" ]; do
+                 print_warning "Proxmox Token Secret cannot be empty."
+                 # Re-prompt without default if it was empty
+                 read -sp " -> Proxmox API Token Secret: " proxmox_token_secret
+                 echo
+            done
 
-        else # Non-interactive 
-            print_warning "Running non-interactively. Cannot prompt for environment details."
-            if [ "$env_exists" = false ]; then
-                 print_warning "Creating .env from example, but it will need manual configuration."
-                 # Copy example but don't substitute variables
-                 cp "$env_example_path" "$env_path"
-                 chown "$PULSE_USER":"$PULSE_USER" "$env_path"
-                 chmod 600 "$env_path"
-                 print_success "Empty environment file created at $env_path. PLEASE EDIT MANUALLY."
-                 return 1 # Indicate manual intervention needed
+            # --- Get Self-Signed Cert Preference ---
+            local current_self_signed="${current_env_vars[PROXMOX_ALLOW_SELF_SIGNED_CERTS]}"
+            local self_signed_prompt="Allow self-signed certificates? (y/N)"
+            local self_signed_default_display=""
+            if [ "$current_self_signed" = "true" ]; then
+                self_signed_prompt="Allow self-signed certificates? (Y/n)"
+                self_signed_default_display="Y"
+             elif [ "$current_self_signed" = "false" ]; then
+                 self_signed_default_display="n"
+            fi
+            read -p " -> $self_signed_prompt [$self_signed_default_display]: " allow_self_signed_input
+            # Determine final value based on input or default
+            if [ -z "$allow_self_signed_input" ]; then
+                 # Use current value if input is empty
+                 allow_self_signed="$current_self_signed"
+            elif [[ "$allow_self_signed_input" =~ ^[Yy]$ ]]; then
+                allow_self_signed="true"
+            elif [[ "$allow_self_signed_input" =~ ^[Nn]$ ]]; then
+                allow_self_signed="false"
             else
-                 # Should have already returned if file existed and non-interactive
-                 print_warning "Keeping existing configuration (non-interactive)."
-                 return 0
+                print_warning "Invalid input. Keeping current value: $current_self_signed"
+                allow_self_signed="$current_self_signed"
             fi
+            # Handle case where current value was not 'true' or 'false'
+            if [[ "$allow_self_signed" != "true" && "$allow_self_signed" != "false" ]]; then
+                 print_warning "Invalid or missing current value for self-signed certs. Defaulting to 'true' (Yes)."
+                 allow_self_signed="true" # Default to true if invalid/missing
+            fi
+
+             # --- Get Pulse Port ---
+             local current_port="${current_env_vars[PORT]:-7655}" # Default to 7655 if not set
+             prompt_with_default pulse_port " -> Port for Pulse server" "$current_port"
+             if [ -n "$pulse_port" ]; then
+                if ! [[ "$pulse_port" =~ ^[0-9]+$ ]] || [ "$pulse_port" -lt 1 ] || [ "$pulse_port" -gt 65535 ]; then
+                     print_warning "Invalid port number entered ($pulse_port). Using current/default: $current_port."
+                     pulse_port="$current_port"
+                 fi
+             else
+                 # User hit enter, keep current/default
+                 pulse_port="$current_port"
+             fi
+
+        else # Interactive mode, but .env doesn't exist
+             print_info "No existing configuration file found. Please provide details:"
+             needs_update=true # Will create the file
+
+             # --- Gather Proxmox Details (Original Logic) ---
+             read -p " -> Proxmox Host URL (e.g., https://192.168.1.100:8006): " proxmox_host
+             while [ -z "$proxmox_host" ]; do
+                 print_warning "Proxmox Host URL cannot be empty."
+                 read -p " -> Proxmox Host URL (e.g., https://192.168.1.100:8006): " proxmox_host
+             done
+             if [[ ! "$proxmox_host" =~ ^https?:// ]]; then
+                  print_warning "URL does not start with http:// or https://. Prepending https://."
+                  proxmox_host="https://$proxmox_host"
+                  print_info "Using Proxmox Host URL: $proxmox_host"
+             fi
+
+             # --- Display Token Generation Info ---
+             echo ""
+             print_info "You need a Proxmox API Token. You can create one via the Proxmox Web UI,"
+             echo "or run the following commands on your Proxmox host shell:"
+             echo "----------------------------------------------------------------------"
+             echo '  # 1. Create user 'pulse-monitor'...'
+             echo "  pveum useradd pulse-monitor@pam ..."
+             echo '  '
+             echo '  # 2. Create API token 'pulse'...'
+             echo "  pveum user token add pulse-monitor@pam pulse ..."
+             echo '  '
+             echo '  # 3. Assign PVEAuditor role...'
+             echo "  pveum acl modify / -user pulse-monitor@pam ..."
+             echo "----------------------------------------------------------------------"
+             echo "Paste the Token ID and Secret Value below."
+             echo ""
+
+             read -p " -> Proxmox API Token ID (e.g., user@pam!tokenid): " proxmox_token_id
+             while [ -z "$proxmox_token_id" ]; do
+                 print_warning "Proxmox Token ID cannot be empty."
+                 read -p " -> Proxmox API Token ID: " proxmox_token_id
+             done
+
+             read -sp " -> Proxmox API Token Secret: " proxmox_token_secret
+             echo
+             while [ -z "$proxmox_token_secret" ]; do
+                 print_warning "Proxmox Token Secret cannot be empty."
+                 read -sp " -> Proxmox API Token Secret: " proxmox_token_secret
+                 echo
+             done
+
+             # --- Optional Settings ---
+             local allow_self_signed_input=""
+             read -p " -> Allow self-signed certificates for Proxmox? (Y/n): " allow_self_signed_input
+             if [[ "$allow_self_signed_input" =~ ^[Nn]$ ]]; then
+                 allow_self_signed="false"
+             else
+                 allow_self_signed="true" # Default to true
+             fi
+
+             local pulse_port_input=""
+             read -p " -> Port for Pulse server (leave blank for default 7655): " pulse_port_input
+             if [ -n "$pulse_port_input" ]; then
+                if [[ "$pulse_port_input" =~ ^[0-9]+$ ]] && [ "$pulse_port_input" -ge 1 ] && [ "$pulse_port_input" -le 65535 ]; then
+                     pulse_port="$pulse_port_input"
+                else
+                     print_warning "Invalid port number entered. Using default 7655."
+                     pulse_port="7655"
+                 fi
+             else
+                pulse_port="7655" # Default if blank
+             fi
         fi
-    fi # End if should_configure
 
-    # --- Create/Update .env file --- 
-    print_info "Writing configuration to $env_path..."
-    # Create file from scratch or overwrite existing
-    # Use printf for better control over format and prevent injection
-    printf "%s\n" "# Proxmox VE Connection Details" > "$env_path"
-    printf "PROXMOX_HOST=%s\n" "$proxmox_host" >> "$env_path"
-    printf "PROXMOX_TOKEN_ID=%s\n" "$proxmox_token_id" >> "$env_path"
-    printf "PROXMOX_TOKEN_SECRET=%s\n" "$proxmox_token_secret" >> "$env_path"
-    printf "PROXMOX_ALLOW_SELF_SIGNED_CERTS=%s\n" "$allow_self_signed" >> "$env_path"
-    printf "\n%s\n" "# Pulse Server Settings" >> "$env_path"
-    printf "PORT=%s\n" "$pulse_port" >> "$env_path"
-    # Add other variables from .env.example if they exist
-    # This requires parsing .env.example - more complex, skip for now 
-    # Example: Append rest of example, commenting them out?
-    # grep -vE '^PROXMOX_|^PORT=|^#' "$env_example_path" | sed 's/^/# /' >> "$env_path"
+    elif [ "$env_file_exists" = false ]; then # Non-interactive and file doesn't exist
+        print_warning "Running non-interactively and $env_path does not exist."
+        print_warning "Attempting to create from example, but values will be defaults."
+        print_warning "Please edit $env_path manually with your specific configuration."
+        # Set default values so the file creation logic works
+        proxmox_host=""
+        proxmox_token_id=""
+        proxmox_token_secret=""
+        allow_self_signed="true" # Default
+        pulse_port="7655" # Default
+        needs_update=true
+    else
+        # Non-interactive and file exists - do nothing, skip update
+        print_info "Running non-interactively, existing $env_path found. Skipping modifications."
+        needs_update=false
+    fi
 
-    chown "$PULSE_USER":"$PULSE_USER" "$env_path"
-    chmod 600 "$env_path"
-    print_success "Environment file updated in $env_path."
+    # --- Write .env file if changes were made or file is new ---
+    if [ "$needs_update" = true ]; then
+        print_info "Writing configuration to $env_path..."
+        # Create a temporary file first
+        local temp_env_path="$env_path.tmp"
+
+        # Copy example to temp if the original doesn't exist, otherwise copy original
+        # This preserves any extra variables the user might have added
+        if [ "$env_file_exists" = true ]; then
+            cp "$env_path" "$temp_env_path" || { print_error "Failed to copy existing .env to temp file."; return 1; }
+        else
+            cp "$env_example_path" "$temp_env_path" || { print_error "Failed to copy .env.example to temp file."; return 1; }
+        fi
+
+        # Use sed to update or add the specific variables we manage
+        # Using a loop and pattern matching for robustness
+        for key in "${config_keys[@]}"; do
+            local value=""
+            case $key in
+                PROXMOX_HOST) value="$proxmox_host" ;;
+                PROXMOX_TOKEN_ID) value="$proxmox_token_id" ;;
+                PROXMOX_TOKEN_SECRET) value="$proxmox_token_secret" ;;
+                PROXMOX_ALLOW_SELF_SIGNED_CERTS) value="$allow_self_signed" ;;
+                PORT) value="$pulse_port" ;;
+            esac
+
+            # Escape sed replacement characters in the value (especially / and &)
+            local escaped_value=$(sed -e 's/[\\/&]/\\\\&/g' <<< "$value")
+
+            # Check if key exists and update, otherwise append
+            # Use a different delimiter for sed like '#' to avoid clashes with URL slashes
+            if grep -qE "^${key}=" "$temp_env_path"; then
+                 # Use '#' as delimiter for sed
+                 sed -i "s#^${key}=.*#${key}=${escaped_value}#" "$temp_env_path"
+            else
+                echo "${key}=${value}" >> "$temp_env_path"
+            fi
+        done
+
+        # Replace original with temp file
+        if mv "$temp_env_path" "$env_path"; then
+            chown "$PULSE_USER":"$PULSE_USER" "$env_path"
+            chmod 600 "$env_path"
+            print_success "Environment file updated/created in $env_path."
+        else
+            print_error "Failed to replace $env_path with updated version."
+            rm -f "$temp_env_path" # Clean up temp file
+            return 1
+        fi
+    fi
+
     return 0
 }
 
@@ -755,14 +938,17 @@ EOF
     print_info "Starting $SERVICE_NAME..."
     systemctl start "$SERVICE_NAME"
     local start_exit_code=$?
+
     if [ $start_exit_code -eq 0 ]; then
         print_success "Service started successfully."
     else
         print_error "Failed to start systemd service (Exit code: $start_exit_code)."
-        print_warning "Please check the service status using: sudo systemctl status $SERVICE_NAME"
-        print_warning "Attempting to display last 10 lines of log output:"
-        # Use timeout to prevent hanging if journalctl fails
-        timeout 5s journalctl -u "$SERVICE_NAME" --no-pager --lines=10 --quiet || print_error "Could not retrieve logs from journalctl."
+        print_info "Attempting to display the last 20 lines of the service log:"
+        # Use --no-pager to prevent blocking in script
+        journalctl -u "$SERVICE_NAME" -n 20 --no-pager
+        print_warning "Please check the service status using: systemctl status $SERVICE_NAME"
+        # Keep existing warning about journalctl as well, in case the direct output fails
+        print_warning "And check the logs using: journalctl -u $SERVICE_NAME"
         # Don't necessarily exit, user might be able to fix it.
         return 1 # Indicate start failure
     fi
@@ -1001,12 +1187,13 @@ case "$INSTALL_MODE" in
             print_info "Starting installation..."
             # --- Installation specific steps --- 
             
-            # Check if target directory exists BEFORE cloning
-            if [ -e "$PULSE_DIR" ]; then
-                print_error "Target directory or file $PULSE_DIR already exists. Cannot clone."
-                print_error "If a previous installation failed, please remove it first: sudo rm -rf $PULSE_DIR"
+            # --- Pre-Clone Check ---
+            if [ -d "$PULSE_DIR" ] && [ ! -d "$PULSE_DIR/.git" ]; then
+                print_error "Directory $PULSE_DIR exists but is not a git repository."
+                print_error "Please remove it manually or choose a different installation path."
                 exit 1
             fi
+            # --- End Pre-Clone Check ---
             
             print_info "Cloning Pulse repository into $PULSE_DIR..."
             if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
