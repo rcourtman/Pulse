@@ -94,7 +94,7 @@ check_installation_status_and_determine_action() {
             # Prompt based on status
             if [ "$INSTALL_MODE" = "uptodate" ]; then
                 echo "Choose an action:"
-                echo "  1) Re-run installation/update process anyway"
+                # echo "  1) Re-run installation/update process anyway" # <-- Commented out for debugging
                 echo "  2) Remove Pulse"
                 echo "  3) Cancel"
                 read -p "Enter your choice (1-3): " user_choice
