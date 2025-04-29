@@ -2428,9 +2428,9 @@ document.addEventListener('DOMContentLoaded', function() {
           } else if (latestSnapshotTime) {
               // No recent tasks found, rely on snapshot age
                if (latestSnapshotTime >= threeDaysAgo) {
-                   healthStatus = 'stale'; // Treat as stale if no recent task, even if snapshot < 3d
+                   healthStatus = 'ok'; // Treat as OK if snapshot is recent, even without recent task info
                } else if (latestSnapshotTime >= sevenDaysAgo) {
-                   healthStatus = 'stale'; // Also stale if 3-7d old snapshot, no task
+                   healthStatus = 'stale'; // Keep as stale if snapshot is 3-7 days old
                } else {
                    healthStatus = 'old'; // Treat as old if snapshot > 7d, no task
                }
