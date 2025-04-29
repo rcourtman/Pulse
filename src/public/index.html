@@ -33,12 +33,11 @@
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
   <div class="container max-w-[95%] mx-auto">
-    <!-- Header - removed bottom border and padding -->
-    <div class="header flex justify-between items-center mb-2">
-      <!-- Empty div for spacing, allows logo to center -->
-      <div class="flex-1"></div>
-      <!-- Logo and Title Container (Centered) -->
-      <div class="flex items-center gap-1 flex-none">
+    <!-- Header - Add flex-col sm:flex-row for stacking on small screens -->
+    <div class="header flex flex-col sm:flex-row justify-between items-center mb-2">
+      <!-- Removed flex-1 spacer -->
+      <!-- Logo and Title Container (Centered by default, pushed left on sm+) -->
+      <div class="flex items-center gap-1 flex-none mb-2 sm:mb-0">
           <!-- Pulse Logo SVG -->
           <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="pulse-logo">
             <title>Pulse Logo</title>
@@ -47,8 +46,8 @@
           </svg>
           <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
         </div>
-      <!-- Header Controls (Aligned Right) -->
-      <div class="header-controls flex flex-1 justify-end items-center gap-4">
+      <!-- Header Controls (Full width on small, aligned right on sm+) -->
+      <div class="header-controls flex w-full sm:w-auto sm:flex-1 justify-center sm:justify-end items-center gap-4">
         <!-- Start: UI Scale Slider -->
         <!-- <div class="ui-scale-slider flex items-center opacity-50 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300" title="Adjust UI Scale" style="gap: 4px;">
           <input type="range" id="ui-scale-slider" min="0.75" max="1.25" step="0.05" value="1.0" class="cursor-pointer accent-blue-600 dark:accent-blue-500" style="width: 80px; height: 16px;">
@@ -71,7 +70,7 @@
       </div>
     </div>
 
-    <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700">
+    <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto whitespace-nowrap">
       <!-- Add Tailwind classes, JS will toggle active classes -->
       <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px flex items-center gap-1.5" data-tab="main">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
@@ -102,16 +101,16 @@
     <div id="nodes" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
       <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Nodes</h2>
       <div class="overflow-x-auto">
-        <table id="nodes-table" class="min-w-full divide-y divide-gray-700 table-fixed">
+        <table id="nodes-table" class="min-w-full divide-y divide-gray-700 table-auto text-sm">
           <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400 sticky top-0 z-10">
             <tr>
-              <th scope="col" class="sortable px-6 py-3 w-1/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="status">Status</th>
-              <th scope="col" class="sortable px-6 py-3 w-3/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="node">Node Name</th>
-              <th scope="col" class="sortable px-6 py-3 w-2/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="cpu">CPU</th>
-              <th scope="col" class="sortable px-6 py-3 w-2/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="memory">Mem</th>
-              <th scope="col" class="sortable px-6 py-3 w-2/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="disk">Disk</th>
-              <th scope="col" class="sortable px-6 py-3 w-1/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="uptime">Uptime</th>
-              <th scope="col" class="sortable px-6 py-3 w-1/12 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="loadnorm">Load (Norm)</th>
+              <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="status">Status</th>
+              <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="node">Node Name</th>
+              <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="cpu">CPU</th>
+              <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="memory">Mem</th>
+              <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="disk">Disk</th>
+              <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="uptime">Uptime</th>
+              <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="loadnorm">Load (Norm)</th>
             </tr>
           </thead>
           <tbody id="nodes-table-body" class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -168,10 +167,10 @@
         </div>
       </div>
         <!-- --- Table Container --- -->
-      <div class="table-container max-h-[80vh] overflow-y-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+      <div class="table-container max-h-[80vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
         <table id="main-table" class="w-full table-fixed text-sm">
+            <!-- Restore colgroup -->
             <colgroup>
-            <!-- Define col widths using style attribute for Tailwind compatibility -->
             <col class="name-col" style="width: var(--name-col-width, 150px);">
               <col class="type-col" style="width: 50px;">
               <col class="id-col" style="width: 50px;">
@@ -186,19 +185,19 @@
             </colgroup>
           <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
             <!-- Apply sticky header styles -->
-            <tr class="border-b border-gray-300 dark:border-gray-700">
-              <!-- Header cells with Tailwind classes -->
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="name">Name</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="type">Type</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="id">ID</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="uptime">Uptime</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="cpu">CPU</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="memory">Mem</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="disk">Disk</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="diskread">Disk Read</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="diskwrite">Disk Write</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="netin">Net In</th>
-              <th class="sortable text-left p-1 px-2 font-semibold text-gray-700 dark:text-gray-300 cursor-pointer select-none whitespace-nowrap" data-sort="netout">Net Out</th>
+            <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+              <!-- Ensure padding matches createGuestRow -->
+              <th class="sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
+              <th class="p-1 px-1 text-center" style="width: 50px;">Type</th> <!-- Keep centered, adjust padding -->
+              <th class="sortable p-1 px-2 text-center" data-sort="id" style="width: 50px;">ID</th> <!-- Keep centered -->
+              <th class="sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);">Uptime</th>
+              <th class="sortable p-1 px-2" data-sort="cpu" style="width: 110px;">CPU</th>
+              <th class="sortable p-1 px-2" data-sort="memory" style="width: 110px;">Memory</th>
+              <th class="sortable p-1 px-2" data-sort="disk" style="width: 110px;">Disk</th>
+              <th class="sortable p-1 px-2 text-right" data-sort="diskread" style="width: 70px;">Read</th>
+              <th class="sortable p-1 px-2 text-right" data-sort="diskwrite" style="width: 70px;">Write</th>
+              <th class="sortable p-1 px-2 text-right" data-sort="netin" style="width: 70px;">Net In</th>
+              <th class="sortable p-1 px-2 text-right" data-sort="netout" style="width: 70px;">Net Out</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -219,7 +218,7 @@
     <div id="storage" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
       <h2 class="text-lg font-medium mb-2 text-gray-800 dark:text-gray-200">Storage Information</h2>
       <!-- Add table container wrapper similar to main dashboard -->
-      <div class="table-container max-h-[80vh] overflow-y-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+      <div class="table-container max-h-[80vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
           <div id="storage-info-content">
             <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading storage data...</p> <!-- Keep placeholder -->
             <!-- Storage table will be populated here by JS -->

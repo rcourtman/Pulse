@@ -209,8 +209,8 @@ document.addEventListener('DOMContentLoaded', function() {
             style="width: ${numericPercent}%;"
           >
           </div>
-          <!-- Text is centered within the outer container -->
-          <span class="absolute inset-0 flex items-center justify-center text-xs font-medium ${textColorClass} px-1 truncate">
+          <!-- Text is centered within the outer container - Add whitespace-nowrap -->
+          <span class="absolute inset-0 flex items-center justify-center text-xs font-medium ${textColorClass} px-1 truncate whitespace-nowrap">
             ${text}
           </span>
         </div>
@@ -594,7 +594,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const diskColorClass = getUsageColor(diskPercent);
 
       // Create tooltips and bar HTML using correct fields
-      const cpuTooltipText = `${cpuPercent.toFixed(1)}%`;
+      const cpuTooltipText = `${cpuPercent.toFixed(1)}%${node.maxcpu && node.maxcpu > 0 ? ` (${(node.cpu * node.maxcpu).toFixed(1)}/${node.maxcpu} cores)` : ''}`;
       const memTooltipText = `${formatBytes(memUsed)} / ${formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
       // ---- START DEBUG LOG ----
       // console.log(`[Node: ${node.node}] diskUsed raw: ${diskUsed}, diskTotal raw: ${diskTotal}`);
@@ -633,10 +633,10 @@ document.addEventListener('DOMContentLoaded', function() {
           </span>
         </td>
         <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${node.node || 'N/A'}">${node.node || 'N/A'}</td>
-        <!-- Add metric-tooltip-trigger and data-tooltip for custom tooltip -->
-        <td class="p-1 px-2 text-right">${cpuBarHTML}</td>
-        <td class="p-1 px-2 text-right">${memoryBarHTML}</td>
-        <td class="p-1 px-2 text-right">${diskBarHTML}</td>
+        <!-- Add min-width to progress bar columns -->
+        <td class="p-1 px-2 text-right min-w-[200px]">${cpuBarHTML}</td>
+        <td class="p-1 px-2 text-right min-w-[200px]">${memoryBarHTML}</td>
+        <td class="p-1 px-2 text-right min-w-[200px]">${diskBarHTML}</td>
         <td class="p-1 px-2 text-right whitespace-nowrap">${uptimeFormatted}</td>
         <td class="p-1 px-2 text-right whitespace-nowrap">${normalizedLoadFormatted}</td>
       `;
@@ -889,19 +889,21 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Create ONE table for all nodes
     const table = document.createElement('table');
-    table.className = 'w-full text-sm border-collapse table-fixed';
+    // Add min-w-full and table-auto for consistency and scrolling
+    table.className = 'w-full text-sm border-collapse table-auto min-w-full';
 
     const thead = document.createElement('thead');
     // Define widths for most columns, leave Usage column without width
+    // REMOVED explicit width classes (w-X/Y, w-[...px])
     thead.innerHTML = `
         <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0 z-10"> 
-          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-3/12">Storage</th>
-          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-2/12">Content</th>
-          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Type</th>
-          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-[80px]">Shared</th>
-          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-[150px]">Usage</th>
-          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Avail</th>
-          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300 w-1/12">Total</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Storage</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Content</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Type</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Shared</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Usage</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Avail</th>
+          <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Total</th>
         </tr>
       `;
     table.appendChild(thead);
@@ -964,19 +966,24 @@ document.addEventListener('DOMContentLoaded', function() {
         const contentBadges = contentTypes.map(ct => {
             const details = getContentBadgeDetails(ct); // Use the updated helper
             // Re-add data-tooltip with the purpose, add trigger class and cursor
-            return `<span data-tooltip="${details.tooltip}" class="storage-tooltip-trigger inline-block ${details.badgeClass} rounded px-1.5 py-0.5 text-xs font-medium mr-1 mb-1 cursor-default">${ct}</span>`;
+            return `<span data-tooltip="${details.tooltip}" class="storage-tooltip-trigger inline-block ${details.badgeClass} rounded px-1.5 py-0.5 text-xs font-medium mr-1 cursor-default">${ct}</span>`;
         }).join('');
 
         const usageBarHTML = createProgressTextBarHTML(usagePercent, usageTooltipText, usageColorClass);
 
+        // Standardize padding to p-1 px-2 like other tables
         row.innerHTML = `
-            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-900 dark:text-gray-100 font-medium">${store.storage || 'N/A'}</td>
-            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${contentBadges || '-'}</td>
-            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300">${store.type || 'N/A'}</td>
-            <td class="p-2 px-3 py-1 whitespace-nowrap text-center storage-tooltip-trigger cursor-default" data-tooltip="${sharedIconTooltip}">${sharedIcon}</td>
-            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300">${usageBarHTML}</td>
-            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300 text-right">${formatBytes(store.avail)}</td>
-            <td class="p-2 px-3 py-1 whitespace-nowrap text-gray-600 dark:text-gray-300 text-right">${formatBytes(store.total)}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-900 dark:text-gray-100 font-medium">${store.storage || 'N/A'}</td>
+            <!-- Add flex items-center for vertical alignment -->
+            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs flex items-center">${contentBadges || '-'}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${store.type || 'N/A'}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-center storage-tooltip-trigger cursor-default" data-tooltip="${sharedIconTooltip}">${sharedIcon}</td>
+            <!-- Remove min-width to allow auto-sizing -->
+            <!-- Remove whitespace-nowrap from parent TD -->
+            <!-- RE-ADD min-width -->
+            <td class="p-1 px-2 text-gray-600 dark:text-gray-300 min-w-[250px]">${usageBarHTML}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-right">${formatBytes(store.avail)}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-right">${formatBytes(store.total)}</td>
         `;
         tbody.appendChild(row);
       });
@@ -1315,9 +1322,9 @@ document.addEventListener('DOMContentLoaded', function() {
   function createGuestRow(guest) {
       // console.log('[createGuestRow] Received guest data:', guest);
       const row = document.createElement('tr');
-      // Add more prominent hover background, shadow, lift effect, and transition
-      // Also add opacity and grayscale for stopped guests
-      row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px ${guest.status === 'stopped' ? 'opacity-60 grayscale' : ''}`;
+      // ---> MODIFIED: Remove responsive classes from the row <---
+      row.className = `border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${guest.status === 'stopped' ? 'opacity-60 grayscale' : ''}`;
+      // ---> END MODIFIED <---
       row.setAttribute('data-name', guest.name.toLowerCase());
       row.setAttribute('data-type', guest.type.toLowerCase());
       row.setAttribute('data-node', guest.node.toLowerCase());
@@ -1334,17 +1341,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
       if (guest.status === 'running') {
         const cpuPercent = Math.round(guest.cpu * 100);
-        const memoryPercent = guest.memory; 
+        const memoryPercent = guest.memory;
         const diskPercent = guest.disk;
 
+        // Revert to original calculation using guest.cpus
         const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus).toFixed(1)}/${guest.cpus} cores)` : ''}`;
         const memoryTooltipText = guest.memoryTotal ? `${formatBytesInt(guest.memoryCurrent)} / ${formatBytesInt(guest.memoryTotal)} (${memoryPercent}%)` : `${memoryPercent}%`;
         const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
-        
+
         const cpuColorClass = getUsageColor(cpuPercent);
         const memColorClass = getUsageColor(memoryPercent);
         const diskColorClass = getUsageColor(diskPercent);
-        
+
         cpuBarHTML = createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
         memoryBarHTML = createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
         diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
@@ -1357,7 +1365,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // --- End calculation block ---
 
       const typeIconClass = guest.type === 'VM'
-          ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium' 
+          ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium'
           : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
       const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guest.type}</span>`;
 
@@ -1374,8 +1382,46 @@ document.addEventListener('DOMContentLoaded', function() {
         <td class="p-1 px-2 text-right whitespace-nowrap">${netInFormatted}</td>
         <td class="p-1 px-2 text-right whitespace-nowrap">${netOutFormatted}</td>
       `;
+
+      // ---> ADDED: Loop through TDs to add responsive classes <---
+      // REMOVED: Responsive class and data-label logic
+      /*
+      const cells = row.querySelectorAll('td');
+      cells.forEach(td => {
+          td.classList.add('block', 'sm:table-cell', 'px-3', 'py-2', 'align-middle', 'text-sm'); // Add base responsive and style classes
+          // Add a pseudo-element for the label on mobile if needed
+          const headerText = getHeaderTextForCell(td); // You'll need to implement getHeaderTextForCell
+          if (headerText) {
+              td.setAttribute('data-label', headerText);
+          }
+      });
+      */
+      // ---> END ADDED <---
+
       return row;
   }
+
+  // --- ADDED HELPER FUNCTION ---
+  function getHeaderTextForCell(td) {
+    try {
+        const cellIndex = Array.from(td.parentNode.children).indexOf(td);
+        const headerRow = document.querySelector('#main-table thead tr');
+        if (!headerRow) {
+            console.warn("Header row not found for #main-table");
+            return 'Unknown Header';
+        }
+        const headerCell = headerRow.children[cellIndex];
+        if (!headerCell) {
+            console.warn(`Header cell not found at index ${cellIndex}`);
+            return 'Unknown Header';
+        }
+        return headerCell.textContent || headerCell.innerText || 'Unknown Header';
+    } catch (error) {
+        console.error("Error getting header text for cell:", error, td);
+        return 'Error Header';
+    }
+  }
+  // --- END ADDED HELPER FUNCTION ---
 
   // --- WebSocket Message Handling ---
   // Add a generic listener to catch *any* events from the server
@@ -1475,12 +1521,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // ---> END CHANGE
 
   function requestFullData() {
-      // console.log("Requesting full data...");
-      if (socket.connected) {
-        socket.emit('requestData'); // Standard emit
-      } else {
-        console.warn("Socket not connected, cannot request full data.");
-      }
+    console.log('Requesting full data reload from server...');
+    socket.emit('requestData'); // Ensure this uses the correct event name
   }
 
   // --- Function to Reset Dashboard Filters/Sort ---
@@ -1854,11 +1896,11 @@ document.addEventListener('DOMContentLoaded', function() {
             const row = document.createElement('tr');
             row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 ease-in-out';
             row.innerHTML = `
-                <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
-                <td class="px-3 py-2 text-sm text-center">${statusIcon}</td>
-                <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
-                <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
-                <td class="px-3 py-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
+                <td class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
+                <td class="px-4 py-2 text-sm text-center">${statusIcon}</td>
+                <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
+                <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
+                <td class="px-4 py-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
             `; // Display shortened UPID, full UPID in title
             tableBody.appendChild(row);
         });
@@ -1885,11 +1927,11 @@ document.addEventListener('DOMContentLoaded', function() {
                            const row = document.createElement('tr');
                            row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 ease-in-out';
                            row.innerHTML = `
-                               <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
-                               <td class="px-3 py-2 text-sm text-center">${statusIcon}</td>
-                               <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
-                               <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
-                               <td class="px-3 py-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
+                               <td class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
+                               <td class="px-4 py-2 text-sm text-center">${statusIcon}</td>
+                               <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
+                               <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
+                               <td class="px-4 py-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
                            `; // Display shortened UPID, full UPID in title
                             tableBody.appendChild(row);
                         });
