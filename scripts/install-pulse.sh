@@ -51,10 +51,14 @@ check_root() {
 
 # --- Installation Status Check & Action Determination --- 
 check_installation_status_and_determine_action() {
+    # Add trace for debugging
+    set -x
+
     # Check if running in non-interactive update mode FIRST
     if [ "$MODE_UPDATE" = true ]; then
         print_info "Running in non-interactive update mode..."
         INSTALL_MODE="update"
+        set +x # Turn off trace before returning
         return 0 # Continue to main update logic
     fi
 
@@ -135,6 +139,9 @@ check_installation_status_and_determine_action() {
         esac
     fi
     # We don't return here, INSTALL_MODE is now set globally for the main logic
+
+    # Ensure trace is turned off before exiting function
+    set +x
 }
 
 # --- System Setup Functions --- (apt_update_upgrade, install_dependencies, setup_node, create_pulse_user)
