@@ -33,13 +33,13 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
 ### Environment Variables
 
-1.  **Copy Example File:** This application requires environment variables for configuration. Copy the example environment file from `server/.env.example` to `server/.env`.
+1.  **Copy Example File:** This application requires environment variables for configuration. Copy the example environment file `.env.example` to `.env`.
 
     ```bash
-    cp server/.env.example server/.env
+    cp .env.example .env
     ```
 
-2.  **Edit `.env`:** Open `server/.env` in a text editor and update the values for your Proxmox environment, including the Host, Token ID, and Token Secret obtained below.
+2.  **Edit `.env`:** Open `.env` in a text editor and update the values for your Proxmox environment, including the Host, Token ID, and Token Secret obtained below.
 
     The following variables are available:
     - `PROXMOX_HOST`: URL of your Proxmox server (e.g., `https://your-proxmox-ip:8006`).
@@ -70,7 +70,7 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
     - `PBS_HOST`: URL of your Proxmox Backup Server (e.g., `https://your-pbs-ip-or-hostname:8007`).
     - `PBS_TOKEN_ID`: Your PBS API Token ID (e.g., `user@pam!tokenid`). Create this in the PBS UI (see below).
     - `PBS_TOKEN_SECRET`: Your PBS API Token Secret.
-    - `PBS_NODE_NAME`: (Potentially Required) The internal hostname of your PBS server. **Crucially, this might be different from the hostname used in `PBS_HOST`**. See detailed explanation below.
+    - `PBS_NODE_NAME`: **Required (Unless Token has Sys.Audit)** The internal hostname of your PBS server (e.g., the output of `hostname` on the PBS server). **This is generally required when using API tokens**, as the endpoint used for automatic node discovery (`/api2/json/nodes`) is typically restricted for tokens (see below). Crucially, this might be different from the hostname used in `PBS_HOST`.
     - `PBS_ALLOW_SELF_SIGNED_CERTS`: (Optional) Set to `true` if your PBS server uses self-signed SSL certificates. Defaults to `false`.
     - `PBS_PORT`: (Optional) Port for the PBS API. Defaults to `8007`.
 
@@ -78,9 +78,9 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
     **Why `PBS_NODE_NAME` is Important:**
 
-    Pulse needs to query task lists specific to the PBS node (e.g., `/api2/json/nodes/{nodeName}/tasks`). While Pulse attempts to discover this node name automatically, this can fail due to API limitations or specific permission issues (like accessing `/api2/json/nodes`, which is not a standard PBS management endpoint).
+    Pulse needs to query task lists specific to the PBS node (e.g., `/api2/json/nodes/{nodeName}/tasks`). It attempts to discover this node name automatically by querying the `/api2/json/nodes` endpoint first. However, **this endpoint is typically restricted for API tokens** (returning a 403 Forbidden error), even for tokens with high privileges, unless the `Sys.Audit` permission is explicitly granted on the root path (`/`).
 
-    If Pulse cannot fetch task data correctly (which might result in recent backups showing as 'stale'), you likely need to set `PBS_NODE_NAME` manually.
+    Therefore, **setting `PBS_NODE_NAME` in your `.env` file is the standard and recommended way** to ensure Pulse can correctly query the task endpoints for your PBS instance when using API token authentication. If it's not set and automatic discovery fails due to permissions, Pulse will be unable to fetch task data.
 
     **How to find your PBS Node Name:**
     1.  **SSH:** Log into your PBS server via SSH and run the command `hostname`. The output is the value needed for `PBS_NODE_NAME`.
@@ -132,7 +132,7 @@ An API token is recommended for connecting Pulse to Proxmox.
 
     *Note: Assigning the `PVEAuditor` role at the root path (`/`) with `Propagate` checked is crucial for Pulse to discover and monitor all nodes, VMs, containers, and storage in your cluster.*
 
-5.  **Update your `server/.env` file** with the `Token ID` (which looks like `user@realm!tokenid`, e.g., `pulse-monitor@pam!pulse`) and the `Secret` you saved.
+5.  **Update your `.env` file** with the `Token ID` (which looks like `user@realm!tokenid`, e.g., `pulse-monitor@pam!pulse`) and the `Secret` you saved.
 
 ### Creating a Proxmox Backup Server API Token
 
@@ -159,10 +159,10 @@ If you are configuring PBS monitoring, you need a separate API token created wit
     *   **Role:** `Audit` (This role provides necessary read-only access, including system status and task history).
     *   Ensure `Propagate` is checked.
     *   Click `Add`.
-    *   
-    *   **Note on Permissions & API Behavior:** While minimal roles like `DatastoreAudit` might seem sufficient, testing (on PBS v3.3.4) revealed specific API behavior with tokens. GET requests to `/tasks` failed with a `400 Bad Request ("value does not match the regex pattern")` if the request included a `Content-Type` header (which some HTTP clients add by default), whereas requests omitting this header succeeded. Pulse now includes a workaround for this client-side. However, using the broader `Audit` role on the root path `/` also ensures Pulse can reliably access all necessary data (datastores, snapshots, task history) for full monitoring functionality. This role is still read-only.
 
-5.  **Update your `server/.env` file** with the PBS `Token ID` (`PBS_TOKEN_ID`) and the `Secret` (`PBS_TOKEN_SECRET`).
+    *   **Note on Permissions:** The `Audit` role granted on the root path (`/`) provides sufficient read-only access for Pulse to monitor datastores, snapshots, and task history.
+
+5.  **Update your `.env` file** with the PBS `Token ID` (`PBS_TOKEN_ID`) and the `Secret` (`PBS_TOKEN_SECRET`).
 
 ### Required Permissions
 
@@ -224,7 +224,7 @@ Using Docker Compose is the recommended way to run the application in a containe
 
 **Steps:**
 
-1.  **Configure Environment:** Ensure you have created and configured your `server/.env` file as described in the [Environment Variables](#environment-variables) section above.
+1.  **Configure Environment:** Ensure you have created and configured your `.env` file as described in the [Environment Variables](#environment-variables) section above.
 
 2.  **Run:** Navigate to the project root directory in your terminal and run:
     ```bash
@@ -243,7 +243,7 @@ To stop the container(s) defined in the `docker-compose.yml` file, run:
 docker compose down
 ```
 
-*Note: If you modify the `server/.env` file after the container is already running, you may need to restart the container for the changes to take effect. You can do this by running `docker compose down` followed by `docker compose up -d`, or by using `docker compose up -d --force-recreate`.*
+*Note: If you modify the `.env` file after the container is already running, you may need to restart the container for the changes to take effect. You can do this by running `docker compose down` followed by `docker compose up -d`, or by using `docker compose up -d --force-recreate`.*
 
 ### Alternative: Quick Start with Inline Variables
 

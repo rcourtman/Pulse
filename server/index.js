@@ -280,37 +280,12 @@ async function initializeAllPbsClients() {
                     httpsAgent: new https.Agent({
                         rejectUnauthorized: !config.allowSelfSignedCerts
                     }),
-                    // REMOVED default headers here
-                    // headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' }
                 });
 
                 pbsAxiosInstance.interceptors.request.use(reqConfig => {
                     // Correct PBS format: PBSAPIToken=TOKENID:TOKENSECRET
                     reqConfig.headers.Authorization = `PBSAPIToken=${config.tokenId}:${config.tokenSecret}`;
-                    
-                    // ---> WORKAROUND for PBS API Bug <--- 
-                    // PBS API (tested on 3.3.4) incorrectly returns 400 Bad Request ("value does not match regex pattern")
-                    // on GET requests (e.g., /tasks) if a 'Content-Type' header is present when using API Token authentication.
-                    // Therefore, explicitly remove 'Content-Type' for GET requests.
-                    // It seems fine/required for POST/PUT requests, so add it back for non-GET.
-                    // See Bugzilla #6365 for related details.
-                    if (reqConfig.method && reqConfig.method.toLowerCase() !== 'get') {
-                         reqConfig.headers['Content-Type'] = 'application/json';
-                    } else {
-                        // Ensure Content-Type is removed for GET requests
-                        delete reqConfig.headers['Content-Type'];
-                    }
-                    // ---> END WORKAROUND <---
-                    
-                    // ---> ADD: Set default Accept header (optional but good practice)
-                    if (!reqConfig.headers['Accept']) {
-                        reqConfig.headers['Accept'] = 'application/json, text/plain, */*';
-                    }
-                    // ---> END ADD
-
-                    // ---> DEBUG: Log outgoing request headers (can be removed later)
-                    // console.log(`DEBUG: Axios Request Headers for ${config.name}:`, JSON.stringify(reqConfig.headers)); // REMOVED
-                    // ---> END DEBUG
                     return reqConfig;
                 });
 
@@ -326,7 +301,7 @@ async function initializeAllPbsClients() {
                 });
 
                 clientData = { client: pbsAxiosInstance, config: config };
-                 console.log(`INFO: Successfully initialized client for instance '${config.name}' (Token Auth)`);
+                 console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)`);
             } else {
                  // This case should not be reachable anymore if loadPbsConfig only creates 'token' authMethod configs
                  console.error(`ERROR: Unexpected authMethod '${config.authMethod}' found during PBS client initialization for: ${config.name}`);
@@ -341,7 +316,7 @@ async function initializeAllPbsClients() {
     });
 
     await Promise.allSettled(initPromises);
-    console.log(`INFO: Finished initialization. ${Object.keys(pbsApiClients).length} / ${pbsConfigs.length} PBS clients initialized successfully.`);
+    console.log(`INFO: [PBS Init] Finished initialization. ${Object.keys(pbsApiClients).length} / ${pbsConfigs.length} PBS clients initialized successfully.`);
 }
 
 if (Object.keys(apiClients).length === 0 && pbsConfigs.length === 0) {
@@ -1250,19 +1225,16 @@ async function fetchAllPbsTasksForProcessing(pbsClient, nodeName) {
         return { tasks: null, error: true };
     }
     try {
-        const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000); // RESTORED
-        const requestUrl = `/nodes/${nodeName}/tasks`;
-        const requestParams = {
-            since: sinceTimestamp, // RESTORED
-            limit: 1000, // Kept (was 1000 after increasing from 20)
-            errors: 1, // RESTORED
-        };
-        const paramsToSend = Object.keys(requestParams).length > 0 ? { params: requestParams } : {};
-        // ---> DEBUG: Log outgoing request URL and params
-        // console.log(`DEBUG: Axios GET Request to ${pbsClient.config.name} - URL: ${requestUrl}, ParamsObj: ${JSON.stringify(paramsToSend)}`); // REMOVED
-        // ---> END DEBUG
-        const response = await pbsClient.client.get(requestUrl, paramsToSend);
+        const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+        const response = await pbsClient.client.get(`/nodes/${nodeName}/tasks`, {
+            params: {
+                since: sinceTimestamp,
+                limit: 1000, // Fetch a larger number to cover 7 days of various tasks
+                errors: 1,
+            }
+        });
         const allTasks = response.data?.data ?? [];
+        console.log(`INFO: Fetched ${allTasks.length} tasks from PBS for processing.`);
         return { tasks: allTasks, error: false };
     } catch (error) {
         console.error(`ERROR: Failed to fetch PBS task list for node ${nodeName} (${pbsClient.config.name}): ${error.message}`, error.stack);
@@ -1334,10 +1306,10 @@ function processPbsTasks(allTasks) {
     // Process and sort recent tasks for each category
     const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
 
-    const recentBackupTasks = taskResults.backup.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 100);
-    const recentVerifyTasks = taskResults.verify.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 100);
-    const recentSyncTasks = taskResults.sync.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 100);
-    const recentPruneGcTasks = taskResults.pruneGc.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 100);
+    const recentBackupTasks = taskResults.backup.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
+    const recentVerifyTasks = taskResults.verify.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
+    const recentSyncTasks = taskResults.sync.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
+    const recentPruneGcTasks = taskResults.pruneGc.list.map(createDetailedTask).sort(sortTasksDesc).slice(0, 20);
 
     console.log(`INFO: Processed PBS Tasks - Backup: ${taskResults.backup.list.length} (OK: ${taskResults.backup.ok}, Fail: ${taskResults.backup.failed}), Verify: ${taskResults.verify.list.length} (OK: ${taskResults.verify.ok}, Fail: ${taskResults.verify.failed}), Sync: ${taskResults.sync.list.length} (OK: ${taskResults.sync.ok}, Fail: ${taskResults.sync.failed}), Prune/GC: ${taskResults.pruneGc.list.length} (OK: ${taskResults.pruneGc.ok}, Fail: ${taskResults.pruneGc.failed})`);
 
@@ -1395,13 +1367,11 @@ async function fetchPbsTaskSummaryByType(pbsClient, nodeName, taskTypes) {
 
 async function fetchPbsDatastoreData(pbsClient) {
     // Fetches datastore usage details from PBS using the /status/datastore-usage endpoint
-    console.log(`INFO: Fetching PBS datastore data for ${pbsClient.config.name}...`);
+    console.log("INFO: Fetching PBS datastore data...");
     let datastores = [];
-    const primaryUrl = '/status/datastore-usage';
-    const fallbackUrl = '/config/datastore';
     try {
         // Fetch usage stats for all datastores at once
-        const usageResponse = await pbsClient.client.get(primaryUrl);
+        const usageResponse = await pbsClient.client.get('/status/datastore-usage');
         const usageData = usageResponse.data?.data ?? [];
 
         if (usageData.length > 0) {
@@ -1422,15 +1392,14 @@ async function fetchPbsDatastoreData(pbsClient) {
         }
 
     } catch (usageError) {
-        console.error(`ERROR: Failed to fetch PBS datastore usage via ${primaryUrl} for ${pbsClient.config.name}: ${usageError.message}. Trying fallback ${fallbackUrl}.`, usageError.stack);
+        console.error(`ERROR: Failed to fetch PBS datastore usage via /status/datastore-usage for ${pbsClient.config.name}: ${usageError.message}. Trying fallback /config/datastore.`, usageError.stack);
         // --- Fallback Logic ---
         try {
-            const configResponse = await pbsClient.client.get(fallbackUrl);
+            const configResponse = await pbsClient.client.get('/config/datastore');
             const datastoresConfig = configResponse.data?.data ?? [];
             if (datastoresConfig.length > 0) {
                 console.log(`INFO: Fetched config for ${datastoresConfig.length} PBS datastores (fallback). Status unavailable.`);
-                // Map the received data to the expected format
-                datastores = datastoresConfig.map(dsConfig => ({
+                 datastores = datastoresConfig.map(dsConfig => ({
                     name: dsConfig.name,
                     path: dsConfig.path,
                     total: null, // Usage/Status info unavailable from config
@@ -1442,12 +1411,13 @@ async function fetchPbsDatastoreData(pbsClient) {
                  console.warn("WARN: Fallback fetch of PBS datastore config also returned empty data.");
             }
         } catch (configError) {
-            console.error(`ERROR: Fallback fetch of PBS datastore config (${fallbackUrl}) for ${pbsClient.config.name}: ${configError.message}`, configError.stack);
+            console.error(`ERROR: Fallback fetch of PBS datastore config (/config/datastore) for ${pbsClient.config.name}: ${configError.message}`, configError.stack);
              if (configError.response) { // Log more detail if available
                 console.error(`Fallback error details: Status=${configError.response.status}, Data=${JSON.stringify(configError.response.data)}`);
              }
              // Keep datastores as empty array if both primary and fallback attempts fail
         }
+        // --- End Fallback ---
     }
 
     console.log(`INFO: Finished fetching PBS datastore data. Found ${datastores.length} datastores.`);
