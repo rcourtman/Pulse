@@ -677,7 +677,44 @@ EOF
     return 0
 }
 
-# --- Final Steps Functions --- (setup_cron_update, prompt_for_cron_setup, final_instructions)
+# --- Final Steps Functions --- (setup_cron_update, disable_cron_update, prompt_for_cron_setup, final_instructions)
+
+# Function to specifically disable the cron job
+disable_cron_update() {
+    print_info "Disabling Pulse automatic update cron job..."
+    local cron_identifier="# Pulse-Auto-Update ($SCRIPT_NAME)"
+    local escaped_cron_identifier
+    escaped_cron_identifier=$(sed 's/[/.*^$]/\\&/g' <<< "$cron_identifier")
+
+    # Get current crontab content or empty string if none exists
+    current_cron=$(crontab -l -u root 2>/dev/null || true)
+
+    # Check if the job actually exists before trying to remove
+    if ! echo "$current_cron" | grep -q "^${escaped_cron_identifier}$"; then
+        print_info "Pulse automatic update cron job not found. Nothing to disable."
+        return 0
+    fi
+
+    # Use sed to remove the identifier line and the line immediately following it.
+    filtered_cron=$(echo "$current_cron" | sed "/^${escaped_cron_identifier}$/{N;d;}")
+
+    # Load the modified crontab content
+    # Handle case where removing the job leaves the crontab empty
+    if [ -z "$filtered_cron" ]; then
+        echo "" | crontab -u root -
+    else
+        echo "$filtered_cron" | crontab -u root -
+    fi
+
+    if [ $? -eq 0 ]; then
+        print_success "Cron job for automatic updates disabled successfully."
+    else
+        print_error "Failed to disable cron job. Please check crontab configuration manually."
+        return 1
+    fi
+    return 0
+}
+
 setup_cron_update() {
     local cron_schedule=""
     local cron_command=""
@@ -749,8 +786,35 @@ setup_cron_update() {
 
 prompt_for_cron_setup() {
     # Only prompt if not running in update mode
-    if [ "$MODE_UPDATE" = false ]; then
-        echo "" # Add spacing
+    if [ "$MODE_UPDATE" = true ]; then
+        return 0
+    fi
+
+    local cron_identifier="# Pulse-Auto-Update ($SCRIPT_NAME)"
+    local cron_exists=false
+    # Check if cron job exists for root user
+    if crontab -l -u root 2>/dev/null | grep -q "$cron_identifier"; then
+        cron_exists=true
+    fi
+
+    echo "" # Add spacing
+
+    if [ "$cron_exists" = true ]; then
+        print_info "Automatic updates for Pulse appear to be currently ENABLED."
+        echo "Choose an action:"
+        echo "  1) Change update schedule"
+        echo "  2) Disable automatic updates"
+        echo "  3) Keep current schedule (Do nothing)"
+        read -p "Enter your choice (1-3): " cron_manage_choice
+
+        case $cron_manage_choice in
+            1) setup_cron_update ;; # Call function to prompt for new schedule and update
+            2) disable_cron_update ;; # Call function to remove the job
+            3) print_info "Keeping current automatic update schedule.";; 
+            *) print_warning "Invalid choice. No changes made to automatic updates.";; 
+        esac
+    else
+        print_info "Automatic updates for Pulse appear to be currently DISABLED."
         read -p "Do you want to set up automatic updates for Pulse? (Y/n): " setup_cron_confirm
         if [[ ! "$setup_cron_confirm" =~ ^[Nn]$ ]]; then # Proceed if not 'N' or 'n' (Default Yes)
             setup_cron_update
