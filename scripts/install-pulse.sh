@@ -39,7 +39,7 @@ print_warning() {
 }
 
 print_error() {
-  echo -e "\033[1;31m[ERROR]\033[0m $1" >&2
+  echo -e "\033[1;31m[ERROR]\033[0m $1 >&2
 }
 
 check_root() {
@@ -58,25 +58,61 @@ check_installation_status_and_determine_action() {
         return 0 # Continue to main update logic
     fi
 
-    # If not in update mode, proceed with interactive checks
     print_info "Checking Pulse installation at $PULSE_DIR..."
     if [ -d "$PULSE_DIR" ]; then
         # Directory exists
         if [ -d "$PULSE_DIR/.git" ]; then
-            # It's a git repository - Offer Update/Remove/Cancel
-            print_warning "Pulse seems to be already installed."
-            echo "Choose an action:"
-            echo "  1) Update Pulse to the latest version"
-            echo "  2) Remove Pulse"
-            echo "  3) Cancel"
-            read -p "Enter your choice (1-3): " user_choice
+            # It's a git repository - Check if up-to-date
+            cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; INSTALL_MODE="error"; return; }
+            print_info "Fetching remote information..."
+            # Fetch quietly as the user might not need to see this yet
+            if ! sudo -u "$PULSE_USER" git fetch origin > /dev/null 2>&1; then
+                 print_warning "Could not fetch remote information to check for updates. Proceeding anyway..."
+                 # Reset INSTALL_MODE, it will be set below
+                 INSTALL_MODE=""
+            else
+                # Compare local HEAD with remote main
+                local_head=$(sudo -u "$PULSE_USER" git rev-parse HEAD 2>/dev/null)
+                remote_main=$(sudo -u "$PULSE_USER" git rev-parse origin/main 2>/dev/null)
 
-            case $user_choice in
-                1) INSTALL_MODE="update" ;; 
-                2) INSTALL_MODE="remove" ;; 
-                3) INSTALL_MODE="cancel" ;; 
-                *) print_error "Invalid choice."; INSTALL_MODE="error" ;; 
-            esac
+                if [ "$local_head" = "$remote_main" ]; then
+                    print_info "Pulse is already installed and up-to-date with the main branch."
+                    INSTALL_MODE="uptodate"
+                else
+                    print_warning "Pulse is installed, but an update is available (local: ${local_head:0:7}, remote: ${remote_main:0:7})."
+                    # Set default mode to update if different
+                    INSTALL_MODE="update"
+                fi
+            fi
+            cd .. # Go back to original directory
+
+            # Prompt based on status
+            if [ "$INSTALL_MODE" = "uptodate" ]; then
+                echo "Choose an action:"
+                echo "  1) Re-run installation/update process anyway"
+                echo "  2) Remove Pulse"
+                echo "  3) Cancel"
+                read -p "Enter your choice (1-3): " user_choice
+                case $user_choice in
+                    1) INSTALL_MODE="update" ;; # Treat re-run as update
+                    2) INSTALL_MODE="remove" ;; 
+                    3) INSTALL_MODE="cancel" ;; 
+                    *) print_error "Invalid choice."; INSTALL_MODE="error" ;; 
+                esac
+            else # Covers case where fetch failed OR update is available
+                 echo "Choose an action:"
+                 echo "  1) Update Pulse to the latest version" 
+                 echo "  2) Remove Pulse"
+                 echo "  3) Cancel"
+                 read -p "Enter your choice (1-3): " user_choice
+                 case $user_choice in
+                     1) INSTALL_MODE="update" ;; 
+                     2) INSTALL_MODE="remove" ;; 
+                     3) INSTALL_MODE="cancel" ;; 
+                     *) print_error "Invalid choice."; INSTALL_MODE="error" ;; 
+                 esac
+            fi
+
         else
             # Directory exists but isn't a git repository
             print_error "Directory $PULSE_DIR exists but does not appear to be a valid Pulse git repository."
