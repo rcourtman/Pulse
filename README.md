@@ -28,6 +28,7 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 - [License](#-license)
 - [Trademark Notice](#trademark-notice)
 - [Support](#-support)
+- [Troubleshooting](#-troubleshooting)
 
 ## 🛠️ Configuration
 
@@ -80,7 +81,7 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
     Pulse needs to query task lists specific to the PBS node (e.g., `/api2/json/nodes/{nodeName}/tasks`). It attempts to discover this node name automatically by querying the `/api2/json/nodes` endpoint first. However, **this endpoint is typically restricted for API tokens** (returning a 403 Forbidden error), even for tokens with high privileges, unless the `Sys.Audit` permission is explicitly granted on the root path (`/`).
 
-    Therefore, **setting `PBS_NODE_NAME` in your `.env` file is the standard and recommended way** to ensure Pulse can correctly query the task endpoints for your PBS instance when using API token authentication. If it's not set and automatic discovery fails due to permissions, Pulse will be unable to fetch task data.
+    Therefore, **setting `PBS_NODE_NAME` in your `.env` file is the standard and recommended way** to ensure Pulse can correctly query the task endpoints for your PBS instance when using API token authentication. If it's not set and automatic discovery fails due to permissions, Pulse will be unable to fetch task data. **If you are experiencing issues where PBS tasks (backups, verifications, etc.) are not appearing in Pulse, verifying that `PBS_NODE_NAME` is set correctly in your `.env` file (matching the output of `hostname` on the PBS server) should be your first troubleshooting step.**
 
     **How to find your PBS Node Name:**
     1.  **SSH:** Log into your PBS server via SSH and run the command `hostname`. The output is the value needed for `PBS_NODE_NAME`.
@@ -406,3 +407,17 @@ If you encounter any issues or have questions, please file an issue on the [GitH
 If you find this project useful, consider supporting its development:
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
+
+## ❓ Troubleshooting
+
+If you encounter issues connecting to your Proxmox VE or Proxmox Backup Server instances, check the following:
+
+*   **Pulse Application Logs:** Examine the logs from the Pulse container (`docker logs pulse_monitor`) or the systemd service (`sudo journalctl -u pulse-monitor.service -f`) for specific error messages (e.g., connection refused, 401 Unauthorized, 403 Forbidden, timeout).
+*   **`.env` Configuration:** Double-check all relevant environment variables in your `.env` file for accuracy:
+    *   `PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`
+    *   `PROXMOX_ALLOW_SELF_SIGNED_CERTS` (especially if using self-signed certificates)
+    *   `PBS_HOST`, `PBS_TOKEN_ID`, `PBS_TOKEN_SECRET`
+    *   `PBS_ALLOW_SELF_SIGNED_CERTS`
+    *   **`PBS_NODE_NAME`**: As mentioned above, ensure this exactly matches the output of `hostname` run on your PBS server. This is the most common cause of missing PBS task data.
+*   **Network Connectivity:** Ensure the machine or container running Pulse can reach the specified Proxmox VE and PBS host addresses and ports (usually `8006` for PVE, `8007` for PBS). Firewalls or network configuration might block access.
+*   **API Token Permissions:** Verify that the API tokens used have the recommended roles assigned correctly in the Proxmox VE / PBS web interface (`PVEAuditor` for PVE, `Audit` for PBS, both assigned at path `/` with propagation enabled).

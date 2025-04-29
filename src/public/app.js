@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', function() {
         activeContent.classList.remove('hidden');
         // If switching to dashboard, re-apply filter (in case data updated while on another tab)
         if (tabId === 'main') {
-            applyDashboardFilters();
+            updateDashboardTable(); // Renamed: Use the function that handles dashboard rendering/filtering
         }
         // ---> ADDED: Trigger Backups Tab update if switching to it <---
         if (tabId === 'backups') {
@@ -1946,7 +1946,6 @@ document.addEventListener('DOMContentLoaded', function() {
     // Helper functions defined here or accessible in scope
     const createSummaryCard = (type, title, summaryData) => {
         const card = document.createElement('div');
-        card.className = 'border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-100/50 dark:bg-gray-700/50';
         const summary = summaryData?.summary || {};
         const ok = summary.ok ?? '-';
         const failed = summary.failed ?? '-';
@@ -1954,6 +1953,11 @@ document.addEventListener('DOMContentLoaded', function() {
         const lastOk = formatPbsTimestamp(summary.lastOk);
         const lastFailed = formatPbsTimestamp(summary.lastFailed);
         const failedStyle = (failed > 0) ? 'font-bold text-red-600 dark:text-red-400' : 'text-red-600 dark:text-red-400 font-semibold';
+        
+        // Add highlighting class if there are failures
+        const highlightClass = (failed > 0) ? 'border-l-4 border-red-500 dark:border-red-400' : 'border-l-4 border-transparent'; // Use transparent border normally
+        card.className = `border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-100/50 dark:bg-gray-700/50 ${highlightClass}`;
+
         card.innerHTML = `
             <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">${title} (7d)</h4>
             <div class="space-y-1 text-sm">
@@ -2008,7 +2012,7 @@ document.addEventListener('DOMContentLoaded', function() {
       currentInstanceIds.add(instanceElementId); 
 
       let instanceWrapper = document.getElementById(instanceElementId);
-      let detailsContainer, dsTableBody, statusElement;
+      let detailsContainer, dsTableBody, instanceTitleElement; 
 
       // Determine Status Text and Detail Visibility
       let statusText = 'Loading...';
@@ -2037,15 +2041,66 @@ document.addEventListener('DOMContentLoaded', function() {
               break;
       }
 
+      // --- START: Calculate Overall Health ---
+      let overallHealth = 'ok'; // Assume ok initially
+      let healthTitle = 'OK';
+      if (pbsInstance.status === 'error') {
+          overallHealth = 'error';
+          healthTitle = `Error: ${pbsInstance.errorMessage || 'Connection failed'}`;
+      } else if (pbsInstance.status !== 'ok') {
+          overallHealth = 'warning'; // Configured or unknown status
+          healthTitle = 'Connecting or unknown status';
+      } else {
+          // Check datastores
+          const highUsageDatastore = (pbsInstance.datastores || []).find(ds => {
+              const totalBytes = ds.total || 0;
+              const usedBytes = ds.used || 0;
+              const usagePercent = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
+              return usagePercent > 85; // Warning threshold
+          });
+          if (highUsageDatastore) {
+              overallHealth = 'warning';
+              healthTitle = `Warning: Datastore ${highUsageDatastore.name} usage high (${Math.round((highUsageDatastore.used / highUsageDatastore.total) * 100)}%)`;
+          }
+
+          // Check task failures (only if status is still ok or warning)
+          if (overallHealth !== 'error') {
+              const hasFailures = [
+                  pbsInstance.backupTasks,
+                  pbsInstance.verificationTasks,
+                  pbsInstance.syncTasks,
+                  pbsInstance.pruneTasks
+              ].some(taskGroup => (taskGroup?.summary?.failed ?? 0) > 0);
+
+              if (hasFailures) {
+                  overallHealth = 'error'; // Treat any failure in the last 7 days as an error state for the badge
+                  healthTitle = 'Error: One or more recent tasks failed';
+              }
+          }
+      }
+      // --- END: Calculate Overall Health ---
+
+      // Helper to generate health badge HTML
+      const createHealthBadgeHTML = (health, title) => {
+          let colorClass = 'bg-gray-400 dark:bg-gray-500'; // Default/unknown
+          if (health === 'ok') colorClass = 'bg-green-500';
+          else if (health === 'warning') colorClass = 'bg-yellow-500';
+          else if (health === 'error') colorClass = 'bg-red-500';
+          // Log the health status being used for the badge
+          console.log(`[PBS Health Badge - ${instanceName}] Health: ${health}, Title: ${title}, Class: ${colorClass}`);
+          return `<span title="${title}" class="inline-block w-3 h-3 ${colorClass} rounded-full mr-2 flex-shrink-0"></span>`;
+      };
+
       if (instanceWrapper) {
           // Instance Exists: Update
-          statusElement = instanceWrapper.querySelector(`#pbs-status-${instanceId}`);
+          console.log(`[PBS Update - ${instanceName}] Found existing wrapper:`, instanceWrapper);
           detailsContainer = instanceWrapper.querySelector(`#pbs-details-${instanceId}`);
+          instanceTitleElement = instanceWrapper.querySelector('h3'); // Find the existing h3
+          console.log(`[PBS Update - ${instanceName}] Found title element:`, instanceTitleElement);
 
-          // Update status text and color
-          if (statusElement) { 
-            statusElement.textContent = statusText;
-            statusElement.className = `text-sm ${statusColorClass}`; 
+          // Update health badge and instance name in title
+          if (instanceTitleElement) {
+              instanceTitleElement.innerHTML = `${createHealthBadgeHTML(overallHealth, healthTitle)}${instanceName}`;
           }
 
           // Update contents IF the details container exists
@@ -2124,17 +2179,14 @@ document.addEventListener('DOMContentLoaded', function() {
           instanceWrapper.id = instanceElementId;
 
           // Header
+          console.log(`[PBS Create - ${instanceName}] Creating new wrapper.`);
           const headerDiv = document.createElement('div');
           headerDiv.className = 'flex justify-between items-center mb-3';
-          const instanceTitle = document.createElement('h3');
-          instanceTitle.className = 'text-lg font-semibold text-gray-800 dark:text-gray-200';
-          instanceTitle.textContent = instanceName;
-          statusElement = document.createElement('div');
-          statusElement.className = `text-sm ${statusColorClass}`;
-          statusElement.id = `pbs-status-${instanceId}`;
-          statusElement.textContent = statusText;
-          headerDiv.appendChild(instanceTitle);
-          headerDiv.appendChild(statusElement);
+          instanceTitleElement = document.createElement('h3'); // Assign to instanceTitleElement
+          instanceTitleElement.className = 'text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center'; // Corrected: Use instanceTitleElement
+          // Add health badge and instance name
+          instanceTitleElement.innerHTML = `${createHealthBadgeHTML(overallHealth, healthTitle)}${instanceName}`;
+          headerDiv.appendChild(instanceTitleElement);
           instanceWrapper.appendChild(headerDiv);
 
           // Details Container
@@ -2169,6 +2221,7 @@ document.addEventListener('DOMContentLoaded', function() {
           const summariesSection = document.createElement('div');
           summariesSection.id = `pbs-summaries-section-${instanceId}`;
           summariesSection.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4';
+          console.log(`[PBS Create - ${instanceName}] Adding summary cards. Backup failures: ${pbsInstance.backupTasks?.summary?.failed ?? 'N/A'}`);
           summariesSection.appendChild(createSummaryCard('backup', 'Backups', pbsInstance.backupTasks));
           summariesSection.appendChild(createSummaryCard('verify', 'Verification', pbsInstance.verificationTasks));
           summariesSection.appendChild(createSummaryCard('sync', 'Sync', pbsInstance.syncTasks));
