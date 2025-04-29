@@ -820,7 +820,7 @@ async function fetchDiscoveryData() {
                           return ds; // Return the datastore object as is
                       }
                       try {
-                          console.log(`INFO: [PBS Discovery - ${instanceName}] Fetching snapshots for datastore '${storeName}'...`);
+                          // console.log(`INFO: [PBS Discovery - ${instanceName}] Fetching snapshots for datastore '${storeName}'...`); // <-- COMMENTED OUT
                           const snapshotResponse = await pbsClientInstance.get(`/admin/datastore/${storeName}/snapshots`);
                           ds.snapshots = snapshotResponse.data?.data ?? [];
                           ds.snapshotError = null;
@@ -1028,7 +1028,7 @@ io.on('connection', (socket) => {
   if (initialPbsStatuses.length === 0) {
       initialPbsStatuses.push({ pbsEndpointId: 'none', pbsInstanceName: 'None', status: 'unconfigured' });
   }
-  console.log(`[socket] Sending initial PBS status array to new client:`, initialPbsStatuses);
+  console.log('[socket] Sending initial PBS status array to new client.'); // <-- SIMPLIFIED
   socket.emit('pbsInitialStatus', initialPbsStatuses); // Send the array
   // ---> END CHANGE <---
 
@@ -1083,6 +1083,13 @@ async function runDiscoveryCycle() {
     // ---> CHANGE: Update pbsDataArray
     pbsDataArray = discoveryData.pbs || []; // Update the global array
     // <--- END CHANGE
+
+    // Add summary log here, after updating global state
+    const pveNodeCount = currentNodes?.length || 0;
+    const pveVmCount = currentVms?.length || 0;
+    const pveCtCount = currentContainers?.length || 0;
+    const pbsInstanceCount = pbsDataArray?.length || 0;
+    console.log(`INFO: Discovery cycle summary. Aggregated: ${pveNodeCount} nodes, ${pveVmCount} VMs, ${pveCtCount} CTs, ${pbsInstanceCount} PBS instances.`);
 
     // Emit combined data
     if (io.engine.clientsCount > 0) {
