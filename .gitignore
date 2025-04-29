@@ -29,3 +29,6 @@ RELEASE_PROCEDURE.md
 
 # macOS
 .DS_Store 
+
+# Feature Ideas - Should not be tracked
+docs/feature_ideas/ 
