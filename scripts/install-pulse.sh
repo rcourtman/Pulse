@@ -673,18 +673,17 @@ EOF
 setup_cron_update() {
     local cron_schedule=""
     local cron_command=""
-    # Use the pre-calculated absolute path
     local script_path="$SCRIPT_ABS_PATH"
+    local escaped_script_path # For grep/sed patterns
+    local cron_identifier="# Pulse-Auto-Update ($SCRIPT_NAME)" # Identifier comment
+    local escaped_cron_identifier
 
     if [ -z "$script_path" ] || [ ! -f "$script_path" ]; then
          print_warning "Could not reliably determine script path for cron job. Skipping auto-update setup."
          return 1
     fi
-    # Escape path for use in sed/grep (already handled by pre-calculation? Check this)
-    # Re-calculate escaped path just in case
-    local escaped_script_path
-    escaped_script_path=$(sed 's/[&/\\]/\\&/g' <<< "$script_path")
-
+    # Escape necessary characters for sed pattern matching
+    escaped_cron_identifier=$(sed 's/[/.*^$]/\\&/g' <<< "$cron_identifier")
 
     print_info "Choose update frequency:"
     echo "  1) Daily"
@@ -702,42 +701,41 @@ setup_cron_update() {
     esac
 
     # Construct the cron command
-    # Runs as root, uses absolute path to bash and the script, redirects output
     cron_command="$cron_schedule /usr/bin/bash $script_path --update >> $LOG_FILE 2>&1"
-    local cron_identifier="# Pulse-Auto-Update ($SCRIPT_NAME)" # Identifier comment
 
-    # Check if cron job already exists for this script
-    if crontab -l -u root 2>/dev/null | grep -q "$cron_identifier"; then
-        print_warning "An automatic update cron job for Pulse already seems to exist."
-        read -p "Overwrite existing schedule? (y/N): " overwrite_cron
-        if [[ ! "$overwrite_cron" =~ ^[Yy]$ ]]; then
-            print_info "Skipping cron job modification."
-            return 0
-        fi
-        # Remove existing job before adding the new one
-         (crontab -l -u root 2>/dev/null | grep -v "$cron_identifier") | crontab -u root -
-         if [ $? -ne 0 ]; then
-             print_error "Failed to remove existing cron job."
-             return 1
-         fi
-         print_info "Existing cron job removed."
+    # --- Improved Cron Job Handling ---
+    print_info "Checking/Updating cron job for Pulse automatic updates..."
+    # Get current crontab content or empty string if none exists
+    current_cron=$(crontab -l -u root 2>/dev/null || true)
+
+    # Use sed to remove the identifier line and the line immediately following it.
+    # The pattern looks for the exact identifier comment at the beginning of a line (^).
+    # If found, it reads the Next line (N) and Deletes both (d).
+    filtered_cron=$(echo "$current_cron" | sed "/^${escaped_cron_identifier}$/{N;d;}")
+
+    # Prepare the new crontab content
+    # If filtered_cron is empty after removal, avoid leading newline. Otherwise, add newline before appending.
+    if [ -z "$filtered_cron" ]; then
+        new_cron_content=$(printf "%s\n%s" "$cron_identifier" "$cron_command")
+    else
+        new_cron_content=$(printf "%s\n%s\n%s" "$filtered_cron" "$cron_identifier" "$cron_command")
     fi
 
-    # Add the new cron job
-    print_info "Adding cron job with schedule: $cron_schedule"
-    # Add identifier comment and the command
-    (crontab -l -u root 2>/dev/null; echo "$cron_identifier"; echo "$cron_command") | crontab -u root -
+    # Load the new crontab content
+    echo "$new_cron_content" | crontab -u root -
     if [ $? -eq 0 ]; then
-        print_success "Cron job for automatic updates added successfully."
+        print_success "Cron job for automatic updates set successfully."
         print_info "Update logs will be written to $LOG_FILE"
-        # Ensure log file exists and is writable (optional, cron might create it)
+        # Ensure log file exists and is writable
         touch "$LOG_FILE" || print_warning "Could not touch log file $LOG_FILE"
+        chown root:root "$LOG_FILE" || print_warning "Could not chown log file $LOG_FILE to root"
         chmod 644 "$LOG_FILE" || print_warning "Could not chmod log file $LOG_FILE"
-
     else
-        print_error "Failed to add cron job. Please check crontab configuration."
+        print_error "Failed to update cron job. Please check crontab configuration manually."
         return 1
     fi
+    # --- End Improved Cron Job Handling ---
+
     return 0
 }
 
