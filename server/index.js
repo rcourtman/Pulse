@@ -1190,11 +1190,38 @@ function scheduleNextMetric() {
   metricTimeoutId = setTimeout(runMetricCycle, METRIC_UPDATE_INTERVAL);
 }
 
-// Start the initial cycles
-console.log('Starting initial data fetch cycles...');
-runDiscoveryCycle(); // Run discovery first
-// Metrics will be triggered after discovery or by its own timer if clients connect later
-scheduleNextMetric(); // Start scheduling metrics right away
+// Start the server
+async function startServer() {
+    await initializeAllPbsClients();
+
+    await runDiscoveryCycle(); // << ADDED
+
+    server.listen(PORT, () => {
+        console.log(`Server listening on port ${PORT}`);
+        
+        scheduleNextMetric(); // << ADDED
+
+        // Setup hot reload in development mode
+        if (process.env.NODE_ENV === 'development' && chokidar) {
+          const publicPath = path.join(__dirname, '../src/public');
+          console.log(`Watching for changes in ${publicPath}`);
+          const watcher = chokidar.watch(publicPath, { 
+            ignored: /(^|[\\\/])\./, // ignore dotfiles
+            persistent: true,
+            ignoreInitial: true // Don't trigger on initial scan
+          });
+          
+          watcher.on('change', (filePath) => {
+            // console.log(`File changed: ${filePath}. Triggering hot reload.`);
+            io.emit('hotReload'); // Notify clients to reload
+          });
+          
+          watcher.on('error', error => console.error(`Watcher error: ${error}`));
+        }
+    });
+}
+
+startServer();
 
 // --- PBS Data Fetching Functions ---
 
@@ -1435,32 +1462,3 @@ async function fetchPbsDatastoreData(pbsClient) {
 }
 
 // --- END PBS Data Fetching Functions ---
-
-// Start the server
-async function startServer() {
-    await initializeAllPbsClients();
-
-    server.listen(PORT, () => {
-        console.log(`Server listening on port ${PORT}`);
-        
-        // Setup hot reload in development mode
-        if (process.env.NODE_ENV === 'development' && chokidar) {
-          const publicPath = path.join(__dirname, '../src/public');
-          console.log(`Watching for changes in ${publicPath}`);
-          const watcher = chokidar.watch(publicPath, { 
-            ignored: /(^|[\\\/])\./, // ignore dotfiles
-            persistent: true,
-            ignoreInitial: true // Don't trigger on initial scan
-          });
-          
-          watcher.on('change', (filePath) => {
-            // console.log(`File changed: ${filePath}. Triggering hot reload.`);
-            io.emit('hotReload'); // Notify clients to reload
-          });
-          
-          watcher.on('error', error => console.error(`Watcher error: ${error}`));
-        }
-    });
-}
-
-startServer();
