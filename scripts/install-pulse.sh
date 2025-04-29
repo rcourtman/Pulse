@@ -269,11 +269,16 @@ perform_update() {
         return 1
     fi
 
-    print_info "Restarting Pulse service ($SERVICE_NAME)..."
-    if systemctl restart "$SERVICE_NAME"; then
-        print_success "Pulse service restarted."
+    print_info "===> Attempting to restart Pulse service ($SERVICE_NAME)..."
+    systemctl restart "$SERVICE_NAME"
+    local restart_exit_code=$?
+
+    if [ $restart_exit_code -eq 0 ]; then
+        print_success "Pulse service restart command finished successfully (Exit code: $restart_exit_code)."
     else
-        print_error "Failed to restart Pulse service. Check service status manually: systemctl status $SERVICE_NAME"
+        print_error "Pulse service restart command failed (Exit code: $restart_exit_code)."
+        print_warning "Please check the service status manually: sudo systemctl status $SERVICE_NAME"
+        print_warning "And check logs: sudo journalctl -u $SERVICE_NAME"
         return 1
     fi
 
