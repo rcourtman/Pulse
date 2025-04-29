@@ -79,7 +79,8 @@ check_installation_status_and_determine_action() {
                     print_info "Pulse is already installed and up-to-date with the main branch."
                     INSTALL_MODE="uptodate"
                 else
-                    print_warning "Pulse is installed, but an update is available (local: ${local_head:0:7}, remote: ${remote_main:0:7})."
+                    # Escape parentheses in the warning string
+                    print_warning "Pulse is installed, but an update is available \(local: ${local_head:0:7}, remote: ${remote_main:0:7}\)."
                     # Set default mode to update if different
                     INSTALL_MODE="update"
                 fi
