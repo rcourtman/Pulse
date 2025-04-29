@@ -1720,7 +1720,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const getPbsGcStatusText = (gcStatus) => {
     // Handle falsy values, 'unknown', or literal 'N/A' string
     if (!gcStatus || gcStatus === 'unknown' || gcStatus === 'N/A') { 
-      return '<span class="text-xs text-gray-400">Unknown</span>';
+      return '<span class="text-xs text-gray-400">-</span>'; // Changed from "Unknown"
     }
     // Determine color based on known status keywords
     let colorClass = 'text-gray-600 dark:text-gray-400';
@@ -1768,80 +1768,141 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // --- NEW Function to Populate a PBS Task Table --- // MOVED UP & MODIFIED
+  // ---> ADDED: Helper to parse PBS task target string <---
+  const parsePbsTaskTarget = (task) => {
+    const workerId = task.worker_id || task.id || ''; // e.g., guests:ct/103/681078F1 or hosts:host/bkp-2024-05-15 or guests::ct/103
+    const taskType = task.worker_type || task.type || ''; // e.g., backup, verify, prune, garbage_collection
+
+    // Default
+    let displayTarget = workerId;
+
+    if (taskType === 'backup' || taskType === 'verify') {
+      // Format: datastore:type/id/snapshot or datastore:host/id
+      const parts = workerId.split(':');
+      if (parts.length >= 2) {
+        const targetPart = parts[1]; // e.g., ct/103/681078F1 or host/bkp-2024-05-15
+        const targetSubParts = targetPart.split('/');
+        if (targetSubParts.length >= 2) {
+            // Try to get guest type and ID (e.g., ct/103 -> type=ct, id=103)
+            const guestType = targetSubParts[0]; // ct or vm or host
+            const guestId = targetSubParts[1]; // 103 or bkp-2024-05-15
+            displayTarget = `${guestType}/${guestId}`;
+        }
+      }
+    } else if (taskType === 'prune' || taskType === 'garbage_collection') {
+        // Format: datastore::group or datastore:group
+        const parts = workerId.split('::'); // Try double colon first for prune groups
+        if (parts.length === 2) {
+            displayTarget = `Prune ${parts[0]} (${parts[1]})`; // e.g., Prune guests (ct/103)
+        } else {
+            const singleColonParts = workerId.split(':'); // Fallback for GC datastore
+             if (singleColonParts.length === 1 && workerId !== '') { // GC often just has datastore name
+                 displayTarget = `GC ${workerId}`;
+             } else if (singleColonParts.length >= 2) {
+                 displayTarget = `Prune ${singleColonParts[0]} (${singleColonParts[1]})` // Fallback prune format?
+             }
+        }
+    } else if (taskType === 'sync') {
+        // Often just job id? Example: job_id
+        displayTarget = `Sync Job: ${workerId}`;
+    }
+
+    // TODO: Add guest name lookup here in the future if possible
+    // Maybe: find guest name from vmsData/containersData based on parsed type/id
+
+    return displayTarget; // Return the parsed or original string
+  };
+  // ---> END ADDED <---
+
+  // Function to populate a specific PBS task table
   function populatePbsTaskTable(parentSectionElement, fullTasksArray) {
     if (!parentSectionElement) {
-        console.error("Parent section element not provided to populatePbsTaskTable.");
+        console.warn('[PBS UI] Parent element not found for task table');
         return;
     }
-    // Find elements relative to the parent section
-    const tbody = parentSectionElement.querySelector('.pbs-task-tbody'); 
-    const buttonContainer = parentSectionElement.querySelector('.pbs-toggle-button-container');
+    const tableBody = parentSectionElement.querySelector('tbody');
+    const showMoreButton = parentSectionElement.querySelector('.pbs-show-more');
+    const noTasksMessage = parentSectionElement.querySelector('.pbs-no-tasks');
 
-    if (!tbody || !buttonContainer) {
-        // If elements aren't found *within the parent*, log an error
-        console.error(`Required child elements (.pbs-task-tbody or .pbs-toggle-button-container) not found within provided parent section.`, parentSectionElement);
-        return;
+    if (!tableBody) {
+        console.warn('[PBS UI] Table body not found within', parentSectionElement);
+        return; // Exit if table body doesn't exist
     }
 
-    // Ensure tbody has an ID if it doesn't (needed for button linking)
-    if (!tbody.id) {
-        const table = parentSectionElement.querySelector('table');
-        tbody.id = table && table.id ? table.id.replace('-table-', '-tbody-') : `pbs-tbody-${Date.now()}-${Math.random()}`; 
-        console.warn(`Assigned dynamic ID to tbody: ${tbody.id}`);
-    }
-
-    tbody.innerHTML = ''; // Clear previous content
-    buttonContainer.innerHTML = ''; // Clear previous button
+    // Clear previous rows
+    tableBody.innerHTML = '';
 
     const tasks = fullTasksArray || []; // Ensure tasks is an array
-    const totalTasks = tasks.length;
-    const limit = INITIAL_PBS_TASK_LIMIT;
-    const isCurrentlyExpanded = tbody.dataset.isExpanded === 'true'; // Check current state 
+    let displayedTasks = tasks.slice(0, INITIAL_PBS_TASK_LIMIT);
 
-    const tasksToDisplay = isCurrentlyExpanded ? tasks : tasks.slice(0, limit);
-
-    // Store full data and state on the tbody
-    tbody.dataset.fullTasks = JSON.stringify(tasks); // Store all tasks
-    tbody.dataset.initialLimit = limit;
-    tbody.dataset.isExpanded = isCurrentlyExpanded ? 'true' : 'false'; 
-
-    if (tasksToDisplay.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">No recent tasks found (last 7 days).</td></tr>`;
+    if (tasks.length === 0) {
+        if (noTasksMessage) noTasksMessage.classList.remove('hidden');
+        if (showMoreButton) showMoreButton.classList.add('hidden');
     } else {
-        tasksToDisplay.forEach(task => {
+        if (noTasksMessage) noTasksMessage.classList.add('hidden');
+
+        displayedTasks.forEach(task => {
+            const target = parsePbsTaskTarget(task); // Use the new parsing function
+            const statusIcon = getPbsStatusIcon(task.status);
+            const startTime = task.startTime ? formatPbsTimestamp(task.startTime) : 'N/A';
+            const duration = task.duration !== null ? formatDuration(task.duration) : 'N/A';
+            const upid = task.upid || 'N/A';
+            // ---> ADDED: Shorten UPID <---
+            const shortUpid = upid.length > 30 ? `${upid.substring(0, 15)}...${upid.substring(upid.length - 15)}` : upid;
+            // ---> END ADDED <---
+
             const row = document.createElement('tr');
-            row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
+            row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 ease-in-out';
             row.innerHTML = `
-                <td class="px-4 py-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${task.id || 'N/A'}</td>
-                <td class="px-4 py-2 text-center">${getPbsStatusIcon(task.status)}</td>
-                <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatPbsTimestamp(task.startTime)}</td>
-                <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${formatDuration(task.duration)}</td>
-                <td class="px-4 py-2 whitespace-nowrap text-xs text-gray-400 dark:text-gray-500 font-mono truncate" title="${task.upid || 'N/A'}">${task.upid || 'N/A'}</td>
-            `;
-            tbody.appendChild(row);
+                <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
+                <td class="px-3 py-2 text-sm text-center">${statusIcon}</td>
+                <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
+                <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
+                <td class="px-3 py-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
+            `; // Display shortened UPID, full UPID in title
+            tableBody.appendChild(row);
         });
-    }
 
-    // Add Show More/Less button if needed
-    if (totalTasks > limit) {
-        const button = document.createElement('button');
-        const isExpanded = tbody.dataset.isExpanded === 'true';
-        const buttonText = isExpanded ? 'Show Less' : `Show More (${totalTasks - limit} older)`;
-        const iconSvg = isExpanded 
-            ? '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-1 h-3 w-3"><polyline points="18 15 12 9 6 15"></polyline></svg>' 
-            : '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ml-1 h-3 w-3"><polyline points="6 9 12 15 18 9"></polyline></svg>';
+        if (showMoreButton) {
+            if (tasks.length > INITIAL_PBS_TASK_LIMIT) {
+                showMoreButton.classList.remove('hidden');
+                const remainingCount = tasks.length - INITIAL_PBS_TASK_LIMIT;
+                showMoreButton.textContent = `Show More (${remainingCount} older)`;
+                // Manage click handler carefully to avoid duplicates
+                if (!showMoreButton.dataset.handlerAttached) {
+                    showMoreButton.addEventListener('click', () => {
+                        // Append the rest of the tasks
+                        tasks.slice(INITIAL_PBS_TASK_LIMIT).forEach(task => {
+                           const target = parsePbsTaskTarget(task); // Use the new parsing function
+                           const statusIcon = getPbsStatusIcon(task.status);
+                           const startTime = task.startTime ? formatPbsTimestamp(task.startTime) : 'N/A';
+                           const duration = task.duration !== null ? formatDuration(task.duration) : 'N/A';
+                           const upid = task.upid || 'N/A';
+                           // ---> ADDED: Shorten UPID <---
+                           const shortUpid = upid.length > 30 ? `${upid.substring(0, 15)}...${upid.substring(upid.length - 15)}` : upid;
+                           // ---> END ADDED <---
 
-        button.innerHTML = buttonText + iconSvg;
-        button.type = 'button';
-        // Updated classes for button styling
-        button.className = 'pbs-toggle-button text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-500';
-        button.dataset.targetTbodyId = tbody.id; // Use the actual ID of the tbody we found/assigned
-        buttonContainer.appendChild(button);
-    } else {
-        tbody.dataset.isExpanded = 'false'; 
+                           const row = document.createElement('tr');
+                           row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 ease-in-out';
+                           row.innerHTML = `
+                               <td class="px-3 py-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
+                               <td class="px-3 py-2 text-sm text-center">${statusIcon}</td>
+                               <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
+                               <td class="px-3 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
+                               <td class="px-3 py-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
+                           `; // Display shortened UPID, full UPID in title
+                            tableBody.appendChild(row);
+                        });
+                        showMoreButton.classList.add('hidden'); // Hide after showing all
+                    });
+                     showMoreButton.dataset.handlerAttached = 'true'; // Mark handler as attached
+                }
+            } else {
+                showMoreButton.classList.add('hidden');
+            }
+        }
     }
-  }
+}
   // --- END NEW Function ---
 
   // --- Updated Function: Update PBS Info Section (Upsert Logic) ---
