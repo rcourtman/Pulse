@@ -123,15 +123,23 @@ install_dependencies() {
 
 setup_node() {
     print_info "Setting up Node.js repository (NodeSource)..."
-    # Check if Node.js is already installed and meets version requirement (optional, for robustness)
-    # node_version=$(node -v 2>/dev/null | sed 's/v//' | cut -d. -f1)
-    # if [[ "$node_version" -ge "$NODE_MAJOR_VERSION" ]]; then
-    #     print_info "Node.js version ${node_version} already installed and meets requirement (>=${NODE_MAJOR_VERSION}). Skipping setup."
-    #     return 0
-    # fi
+    # Check if Node.js is already installed and meets version requirement
+    if command -v node &> /dev/null; then
+        current_node_version=$(node -v 2>/dev/null)
+        current_major_version=$(echo "$current_node_version" | sed 's/v//' | cut -d. -f1)
+        if [[ -n "$current_major_version" ]] && [[ "$current_major_version" -ge "$NODE_MAJOR_VERSION" ]]; then
+            print_info "Node.js version ${current_node_version} already installed and meets requirement (>= v${NODE_MAJOR_VERSION}.x). Skipping setup."
+            return 0
+        else
+            print_warning "Installed Node.js version ($current_node_version) does not meet requirement (>= v${NODE_MAJOR_VERSION}.x) or could not be determined. Proceeding with setup..."
+        fi
+    else
+         print_info "Node.js not found. Proceeding with setup..."
+    fi
 
+    # Check if curl is installed before using it
     if ! command -v curl &> /dev/null; then
-        print_error "curl is required but not found. Please install it first."
+        print_error "curl is required but not found. Please install it first (apt-get install curl)."
         exit 1
     fi
 
