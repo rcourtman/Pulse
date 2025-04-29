@@ -51,13 +51,14 @@ check_root() {
 
 # --- Installation Status Check & Action Determination --- 
 check_installation_status_and_determine_action() {
-    # Remove --update flag check for now, handle interactively
-    # if [ "$MODE_UPDATE" = true ]; then
-    #     print_info "Running in non-interactive update mode..."
-    #     INSTALL_MODE="update"
-    #     return 0 # Continue to main update logic
-    # fi
+    # Check if running in non-interactive update mode FIRST
+    if [ "$MODE_UPDATE" = true ]; then
+        print_info "Running in non-interactive update mode..."
+        INSTALL_MODE="update"
+        return 0 # Continue to main update logic
+    fi
 
+    # If not in update mode, proceed with interactive checks
     print_info "Checking Pulse installation at $PULSE_DIR..."
     if [ -d "$PULSE_DIR" ]; then
         # Directory exists
@@ -228,6 +229,19 @@ perform_update() {
     if ! sudo -u "$PULSE_USER" git clean -fd; then
         print_warning "Failed to clean untracked files from the repository."
         # Continue anyway, as the core update (reset) succeeded
+    fi
+
+    # Ensure the script itself remains executable after update
+    if [ -n "$SCRIPT_ABS_PATH" ] && [ -f "$SCRIPT_ABS_PATH" ]; then
+        print_info "Ensuring install script ($SCRIPT_ABS_PATH) is executable..."
+        if chmod +x "$SCRIPT_ABS_PATH"; then
+            print_success "Install script executable permission set."
+        else
+            print_warning "Failed to set executable permission on install script."
+            # Not necessarily fatal, continue update
+        fi
+    else
+        print_warning "Could not find script path ($SCRIPT_ABS_PATH) to ensure executable permission."
     fi
 
     print_info "Re-installing npm dependencies (root)..."
