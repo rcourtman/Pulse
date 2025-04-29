@@ -2129,16 +2129,16 @@ document.addEventListener('DOMContentLoaded', function() {
           else if (health === 'warning') colorClass = 'bg-yellow-500';
           else if (health === 'error') colorClass = 'bg-red-500';
           // Log the health status being used for the badge
-          console.log(`[PBS Health Badge - ${instanceName}] Health: ${health}, Title: ${title}, Class: ${colorClass}`);
+          // console.log(`[PBS Health Badge - ${instanceName}] Health: ${health}, Title: ${title}, Class: ${colorClass}`);
           return `<span title="${title}" class="inline-block w-3 h-3 ${colorClass} rounded-full mr-2 flex-shrink-0"></span>`;
       };
 
       if (instanceWrapper) {
           // Instance Exists: Update
-          console.log(`[PBS Update - ${instanceName}] Found existing wrapper:`, instanceWrapper);
+          // console.log(`[PBS Update - ${instanceName}] Found existing wrapper:`, instanceWrapper);
           detailsContainer = instanceWrapper.querySelector(`#pbs-details-${instanceId}`);
           instanceTitleElement = instanceWrapper.querySelector('h3'); // Find the existing h3
-          console.log(`[PBS Update - ${instanceName}] Found title element:`, instanceTitleElement);
+          // console.log(`[PBS Update - ${instanceName}] Found title element:`, instanceTitleElement);
 
           // Update health badge and instance name in title
           if (instanceTitleElement) {
@@ -2221,7 +2221,7 @@ document.addEventListener('DOMContentLoaded', function() {
           instanceWrapper.id = instanceElementId;
 
           // Header
-          console.log(`[PBS Create - ${instanceName}] Creating new wrapper.`);
+          // console.log(`[PBS Create - ${instanceName}] Creating new wrapper.`);
           const headerDiv = document.createElement('div');
           headerDiv.className = 'flex justify-between items-center mb-3';
           instanceTitleElement = document.createElement('h3'); // Assign to instanceTitleElement
@@ -2263,7 +2263,7 @@ document.addEventListener('DOMContentLoaded', function() {
           const summariesSection = document.createElement('div');
           summariesSection.id = `pbs-summaries-section-${instanceId}`;
           summariesSection.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4';
-          console.log(`[PBS Create - ${instanceName}] Adding summary cards. Backup failures: ${pbsInstance.backupTasks?.summary?.failed ?? 'N/A'}`);
+          // console.log(`[PBS Create - ${instanceName}] Adding summary cards. Backup failures: ${pbsInstance.backupTasks?.summary?.failed ?? 'N/A'}`);
           summariesSection.appendChild(createSummaryCard('backup', 'Backups', pbsInstance.backupTasks));
           summariesSection.appendChild(createSummaryCard('verify', 'Verification', pbsInstance.verificationTasks));
           summariesSection.appendChild(createSummaryCard('sync', 'Sync', pbsInstance.syncTasks));
