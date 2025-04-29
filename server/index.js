@@ -1233,7 +1233,10 @@ async function fetchAllPbsTasksForProcessing(pbsClient, nodeName) {
     }
     try {
         const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
-        const response = await pbsClient.client.get(`/nodes/${nodeName}/tasks`, {
+        // Trim whitespace from nodeName, then explicitly encode it
+        const trimmedNodeName = nodeName.trim();
+        const encodedNodeName = encodeURIComponent(trimmedNodeName);
+        const response = await pbsClient.client.get(`/nodes/${encodedNodeName}/tasks`, {
             params: {
                 since: sinceTimestamp,
                 limit: 1000, // Fetch a larger number to cover 7 days of various tasks
