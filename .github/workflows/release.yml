@@ -27,6 +27,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # --- Add Debug Steps ---
+      - name: List test files
+        run: ls -la server/tests/
+      
+      - name: Show config test content
+        run: cat server/tests/config.test.js
+
+      - name: Show current commit hash
+        run: git rev-parse HEAD
+      # --- End Debug Steps ---
+
       - name: Run tests
         run: npm test # Important: Ensure tests pass before releasing
 
