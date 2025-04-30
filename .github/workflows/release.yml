@@ -22,10 +22,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20.x' # Match the CI workflow version
-          cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+      - name: Clean install dependencies
+        run: rm -rf node_modules && npm ci
 
       # --- Add Debug Steps ---
       - name: List test files
