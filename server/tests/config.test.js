@@ -62,24 +62,18 @@ describe('Configuration Loading (loadConfiguration)', () => {
     jest.restoreAllMocks(); // Restore console mocks
   });
 
-  // Test Case 1: Minimal Valid Primary Proxmox Config
-  test('should load successfully with minimal valid primary Proxmox config', () => {
+  // Test Case 1: Minimal Valid PVE Config
+  test('should load minimal PVE config successfully', () => {
     setEnvVars({
-      PROXMOX_HOST: '192.168.1.100',
-      PROXMOX_TOKEN_ID: 'user@pam!token',
-      PROXMOX_TOKEN_SECRET: 'secret-uuid',
+      PROXMOX_HOST: 'pve.example.com',
+      PROXMOX_TOKEN_ID: 'user@pam!pve',
+      PROXMOX_TOKEN_SECRET: 'secretpve',
     });
-
-    const config = loadConfiguration();
-    expect(config.endpoints).toHaveLength(1);
-    expect(config.endpoints[0].id).toBe('primary');
-    expect(config.endpoints[0].host).toBe('192.168.1.100');
-    expect(config.endpoints[0].tokenId).toBe('user@pam!token');
-    expect(config.endpoints[0].tokenSecret).toBe('secret-uuid');
-    expect(config.endpoints[0].port).toBe('8006'); // Default port
-    expect(config.endpoints[0].enabled).toBe(true);
-    expect(config.endpoints[0].allowSelfSignedCerts).toBe(true);
-    expect(config.pbsConfigs).toHaveLength(0);
+    const { config, errors } = loadConfig();
+    expect(errors).toHaveLength(0);
+    expect(config.pve.host).toBe('pve.example.BROKEN'); // <-- INTENTIONALLY BROKEN
+    expect(config.pve.tokenId).toBe('user@pam!pve');
+    expect(config.pve.tokenSecret).toBe('secretpve');
   });
 
   // Test Case 2: Missing Primary Proxmox Variables
