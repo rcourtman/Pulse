@@ -3,15 +3,14 @@ name: Prepare Release
 on:
   workflow_dispatch:
     inputs:
-      version_type:
-        description: 'Version type (patch, minor, major)'
+      version_number:
+        description: 'Exact version tag to create (e.g., v1.2.3)'
         required: true
-        default: 'patch'
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+        type: string
+      changelog_path:
+        description: 'Path to the changelog file for this release'
+        required: true
+        type: string
 
 jobs:
   prepare:
@@ -43,11 +42,12 @@ jobs:
       - name: Bump version and capture new version
         id: version_bump
         run: |
-          # Run npm version, which updates package.json and package-lock.json
-          # The output of npm version is the new version number (e.g., v3.2.3)
-          NEW_VERSION=$(npm version ${{ github.event.inputs.version_type }} --no-git-tag-version)
-          echo "New version tag: $NEW_VERSION"
-          # Set the new version as an output for later steps
+          # Run npm version with the exact version number provided as input
+          # This updates package.json and package-lock.json
+          # The output should be the same version number (e.g., v1.2.3)
+          NEW_VERSION=$(npm version ${{ github.event.inputs.version_number }} --no-git-tag-version --allow-same-version) # Use exact version_number, allow same version avoids error if already set
+          echo "Specified version tag: $NEW_VERSION"
+          # Set the specified version as an output for later steps
           echo "new_version_tag=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
 
