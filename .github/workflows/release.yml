@@ -3,11 +3,10 @@ name: Create Release
 on:
   push:
     tags:
-      - 'v*.*.*' # Trigger on version tags like v1.0.0, v1.2.3, etc.
-  workflow_dispatch:
+      - 'v*.*.*' # Trigger ONLY on version tags like v1.0.0, v1.2.3, etc.
 
 permissions:
-  contents: write # Needed to create releases
+  contents: write # Needed to create releases and write release notes
 
 jobs:
   release:
@@ -17,7 +16,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }} # Explicitly checkout the triggering tag/ref
+          ref: ${{ github.ref }} # Checkout the specific tag that triggered the run
+          fetch-depth: 0 # Fetch history for release notes generation
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -51,18 +51,15 @@ jobs:
           platforms: linux/amd64,linux/arm64 # Add other platforms if needed
           push: true
           tags: |
-            rcourtman/pulse:${{ github.ref_name }}
+            rcourtman/pulse:${{ github.ref_name }} # Use tag name from push event
             rcourtman/pulse:latest
       # --- End Docker Steps --- 
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2 # Popular action for creating releases
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Provided by GitHub Actions
-        with:
-          draft: true # Create the release as a draft initially
-          # Optionally, you can generate release notes automatically:
-          # generate_release_notes: true
-          # Assets can be uploaded later if needed, e.g.:
-          # files: |
-          #   ./release-*.zip 
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes \
+            --draft # Keep as draft initially 

@@ -28,6 +28,7 @@
   "_comment_tailwind_v3_reason": "Using Tailwind CSS v3 (3.4.4) due to build inconsistencies observed with v4 (specifically 4.1.4). v4 resulted in incorrectly purged CSS files when built within certain Linux environments (e.g., Proxmox LXC - Debian 12 x86_64), failing to detect dynamically added classes. v3.4.4 builds correctly.",
   "devDependencies": {
     "autoprefixer": "^10.4.21",
+    "conventional-changelog-cli": "^5.0.0",
     "dotenv": "^16.5.0",
     "jest": "^29.7.0",
     "postcss": "^8.5.3",
