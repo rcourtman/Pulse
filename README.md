@@ -11,16 +11,16 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 ## 📋 Table of Contents
+- [Quick Start (Docker Compose)](#-quick-start-docker-compose)
 - [Configuration](#️-configuration)
   - [Environment Variables](#environment-variables)
   - [Creating a Proxmox API Token](#creating-a-proxmox-api-token)
   - [Creating a Proxmox Backup Server API Token](#creating-a-proxmox-backup-server-api-token)
   - [Required Permissions](#required-permissions)
-- [Installation](#-installation)
-- [Running the Application](#-running-the-application)
-- [Running the Application (Node.js)](#️-running-the-application-nodejs)
-- [Running with Docker Compose](#-running-with-docker-compose)
-- [Running with LXC Installation Script](#-running-with-lxc-installation-script)
+- [Deployment](#-deployment)
+  - [Running with Docker Compose](#-running-with-docker-compose)
+  - [Running with LXC Installation Script](#-running-with-lxc-installation-script)
+  - [Running with Node.js (Development)](#️-running-the-application-nodejs-development)
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
 - [Contributing](#-contributing)
@@ -30,194 +30,162 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 - [Support](#-support)
 - [Troubleshooting](#-troubleshooting)
 
+## 🚀 Quick Start (Docker Compose)
+
+This is the fastest way to get Pulse running.
+
+1.  **Get Files:** Clone the repository (`git clone https://github.com/rcourtman/Pulse.git && cd Pulse`) or download `docker-compose.yml` and `.env.example` manually.
+2.  **Copy `.env`:** `cp .env.example .env`
+3.  **Edit `.env`:** Fill in your primary Proxmox API details (`PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`). See [Creating a Proxmox API Token](#creating-a-proxmox-api-token) if you don't have one.
+4.  **Run:** `docker compose up -d`
+5.  **Access:** Open your browser to `http://<your-host-ip>:7655`.
+
 ## 🛠️ Configuration
 
 ### Environment Variables
 
-1.  **Copy Example File:** This application requires environment variables for configuration. Copy the example environment file `.env.example` to `.env`.
+Pulse is configured using environment variables, typically set in a `.env` file in the project root.
 
+1.  **Copy Example File:** If you haven't already, copy the example file:
     ```bash
     cp .env.example .env
     ```
+2.  **Edit `.env`:** Open `.env` in a text editor and update the values for your environment(s).
 
-2.  **Edit `.env`:** Open `.env` in a text editor and update the values for your Proxmox environment, including the Host, Token ID, and Token Secret obtained below.
+#### Proxmox VE (Primary Environment)
 
-    The following variables are available:
-    - `PROXMOX_HOST`: URL of your Proxmox server (e.g., `https://your-proxmox-ip:8006`).
-    - `PROXMOX_TOKEN_ID`: Your API Token ID (e.g., `user@pam!tokenid`).
-    - `PROXMOX_TOKEN_SECRET`: Your API Token Secret.
-    - `PROXMOX_ALLOW_SELF_SIGNED_CERTS`: (Optional) Set to `true` if your Proxmox server uses self-signed SSL certificates. Defaults to `false`.
-    - `PORT`: (Optional) Port for the Pulse server to listen on. Defaults to `7655`.
-    - `PROXMOX_USERNAME`, `PROXMOX_PASSWORD`, `PROXMOX_REALM`: (Optional) Fallback credentials if API token is not provided.
+These are the minimum required variables:
+-   `PROXMOX_HOST`: URL of your Proxmox server (e.g., `https://192.168.1.10:8006`).
+-   `PROXMOX_TOKEN_ID`: Your API Token ID (e.g., `user@pam!tokenid`).
+-   `PROXMOX_TOKEN_SECRET`: Your API Token Secret.
 
-    ***Note:** Even if you have a Proxmox cluster, you only need to provide the connection details (`PROXMOX_HOST`, token, etc.) for **one** node in the cluster. Pulse will automatically discover and fetch data from the other nodes.*\n
+Optional variables:
+-   `PROXMOX_NODE_NAME`: A display name for this endpoint in the UI (defaults to `PROXMOX_HOST`).
+-   `PROXMOX_ALLOW_SELF_SIGNED_CERTS`: Set to `true` if your Proxmox server uses self-signed SSL certificates. Defaults to `false`.
+-   `PORT`: Port for the Pulse server to listen on. Defaults to `7655`.
+-   *(Username/Password fallback exists but API Token is strongly recommended)*
 
-    **Monitoring Multiple Proxmox Environments (Optional):**
+***Note:** For a Proxmox cluster, you only need to provide connection details for **one** node. Pulse automatically discovers other cluster members.*
 
-    To monitor multiple, separate Proxmox environments (e.g., different clusters or standalone nodes at different sites) within the same Pulse interface, you can define additional endpoints using numbered environment variables. Pulse will automatically detect and connect to these if they are configured:
 
-    - `PROXMOX_HOST_2`, `PROXMOX_TOKEN_ID_2`, `PROXMOX_TOKEN_SECRET_2`: Connection details for the second environment.
-    - `PROXMOX_HOST_3`, `PROXMOX_TOKEN_ID_3`, `PROXMOX_TOKEN_SECRET_3`: Connection details for the third environment.
-    - ...and so on.
+#### Multiple Proxmox Environments (Optional)
 
-    You can also use the corresponding optional variables for each numbered endpoint (e.g., `PROXMOX_ALLOW_SELF_SIGNED_CERTS_2`, `PROXMOX_PORT_2`, `PROXMOX_NODE_NAME_2`, `PROXMOX_USERNAME_2`, `PROXMOX_PASSWORD_2`, `PROXMOX_REALM_2`).
+To monitor separate Proxmox environments (e.g., different clusters, sites) in one Pulse instance, add numbered variables:
 
-    If you only need to monitor a single Proxmox cluster or node, you only need to set the primary variables (`PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`).
+-   `PROXMOX_HOST_2`, `PROXMOX_TOKEN_ID_2`, `PROXMOX_TOKEN_SECRET_2`
+-   `PROXMOX_HOST_3`, `PROXMOX_TOKEN_ID_3`, `PROXMOX_TOKEN_SECRET_3`
+-   ...and so on.
 
-    **Proxmox Backup Server (PBS) Configuration (Optional):**
+Optional numbered variables also exist (e.g., `PROXMOX_ALLOW_SELF_SIGNED_CERTS_2`, `PROXMOX_NODE_NAME_2`).
 
-    Pulse can also monitor backup status information from a Proxmox Backup Server instance. If you want to enable this feature, configure the following environment variables:
+#### Proxmox Backup Server (PBS) (Optional)
 
-    - `PBS_HOST`: URL of your Proxmox Backup Server (e.g., `https://your-pbs-ip-or-hostname:8007`).
-    - `PBS_TOKEN_ID`: Your PBS API Token ID (e.g., `user@pam!tokenid`). Create this in the PBS UI (see below).
-    - `PBS_TOKEN_SECRET`: Your PBS API Token Secret.
-    - `PBS_NODE_NAME`: **Required (Unless Token has Sys.Audit)** The internal hostname of your PBS server (e.g., the output of `hostname` on the PBS server). **This is generally required when using API tokens**, as the endpoint used for automatic node discovery (`/api2/json/nodes`) is typically restricted for tokens (see below). Crucially, this might be different from the hostname used in `PBS_HOST`.
-    - `PBS_ALLOW_SELF_SIGNED_CERTS`: (Optional) Set to `true` if your PBS server uses self-signed SSL certificates. Defaults to `false`.
-    - `PBS_PORT`: (Optional) Port for the PBS API. Defaults to `8007`.
+To monitor a PBS instance:
 
-    *Note: Currently, Pulse only supports monitoring a single PBS instance. Numbered variables like `PBS_HOST_2` are not yet supported.*
+-   `PBS_HOST`: URL of your PBS server (e.g., `https://192.168.1.11:8007`).
+-   `PBS_TOKEN_ID`: Your PBS API Token ID (e.g., `user@pbs!tokenid`). See [Creating a Proxmox Backup Server API Token](#creating-a-proxmox-backup-server-api-token).
+-   `PBS_TOKEN_SECRET`: Your PBS API Token Secret.
+-   `PBS_NODE_NAME`: **Important!** The internal hostname of your PBS server (e.g., `pbs-server-01`). This is usually required for API token auth because the token might lack permission to auto-discover the node name. See details below.
+-   `PBS_ALLOW_SELF_SIGNED_CERTS`: Set to `true` for self-signed certificates. Defaults to `false`.
+-   `PBS_PORT`: PBS API port. Defaults to `8007`.
 
-    **Why `PBS_NODE_NAME` is Important:**
+*Note: Currently, only one PBS instance can be configured.*
 
-    Pulse needs to query task lists specific to the PBS node (e.g., `/api2/json/nodes/{nodeName}/tasks`). It attempts to discover this node name automatically by querying the `/api2/json/nodes` endpoint first. However, **this endpoint is typically restricted for API tokens** (returning a 403 Forbidden error), even for tokens with high privileges, unless the `Sys.Audit` permission is explicitly granted on the root path (`/`).
+<details>
+<summary><strong>Why <code>PBS_NODE_NAME</code> is Required (Click to Expand)</strong></summary>
 
-    Therefore, **setting `PBS_NODE_NAME` in your `.env` file is the standard and recommended way** to ensure Pulse can correctly query the task endpoints for your PBS instance when using API token authentication. If it's not set and automatic discovery fails due to permissions, Pulse will be unable to fetch task data. **If you are experiencing issues where PBS tasks (backups, verifications, etc.) are not appearing in Pulse, verifying that `PBS_NODE_NAME` is set correctly in your `.env` file (matching the output of `hostname` on the PBS server) should be your first troubleshooting step.**
+Pulse needs to query task lists specific to the PBS node (e.g., `/api2/json/nodes/{nodeName}/tasks`). It attempts to discover this node name automatically by querying `/api2/json/nodes`. However, this endpoint is often restricted for API tokens (returning a 403 Forbidden error), even for tokens with high privileges, unless the `Sys.Audit` permission is granted on the root path (`/`).
 
-    **How to find your PBS Node Name:**
-    1.  **SSH:** Log into your PBS server via SSH and run the command `hostname`. The output is the value needed for `PBS_NODE_NAME`.
-    2.  **UI:** Log into the PBS web interface. The hostname is typically displayed on the main Dashboard under Server Status.
-    3.  **MOTD:** The hostname is often shown in the Message of the Day when you log in via SSH.
+Therefore, **setting `PBS_NODE_NAME` in your `.env` file is the standard and recommended way** to ensure Pulse can correctly query task endpoints when using API token authentication. If it's not set and automatic discovery fails due to permissions, Pulse will be unable to fetch task data (backups, verifications, etc.).
 
-    Example: If your PBS connects via `https://minipc-pbs.lan:8007` but its internal hostname is `proxmox-backup-server`, you would set:
-    ```
-    PBS_HOST=https://minipc-pbs.lan:8007
-    PBS_NODE_NAME=proxmox-backup-server
-    ```
+**How to find your PBS Node Name:**
+1.  **SSH:** Log into your PBS server via SSH and run `hostname`.
+2.  **UI:** Log into the PBS web interface. The hostname is typically displayed on the Dashboard under Server Status.
+
+Example: If your PBS connects via `https://minipc-pbs.lan:8007` but its internal hostname is `proxmox-backup-server`, set:
+```env
+PBS_HOST=https://minipc-pbs.lan:8007
+PBS_NODE_NAME=proxmox-backup-server
+```
+</details>
 
 ### Creating a Proxmox API Token
 
-An API token is recommended for connecting Pulse to Proxmox.
+Using an API token is the recommended authentication method.
 
-1.  **Log in to the Proxmox web interface**
+<details>
+<summary><strong>Steps to Create a PVE API Token (Click to Expand)</strong></summary>
 
-2.  **Create a dedicated user** (optional but recommended for security)
+1.  **Log in to the Proxmox VE web interface.**
+2.  **Create a dedicated user** (optional but recommended):
     *   Go to `Datacenter` → `Permissions` → `Users`.
-    *   Click `Add`.
-    *   Enter a `User name` (e.g., "pulse-monitor"), set Realm to `Proxmox VE authentication server`, set a password, and ensure `Enabled` is checked. Click `Add`.
-
-3.  **Create an API token**
+    *   Click `Add`. Enter a `User name` (e.g., "pulse-monitor"), set Realm to `Proxmox VE authentication server` (`pam`), set a password, ensure `Enabled`. Click `Add`.
+3.  **Create an API token:**
     *   Go to `Datacenter` → `Permissions` → `API Tokens`.
     *   Click `Add`.
-    *   Select the `User` you created (e.g., "pulse-monitor@pam") or `root@pam`.
+    *   Select the `User` (e.g., "pulse-monitor@pam") or `root@pam`.
     *   Enter a `Token ID` (e.g., "pulse").
-    *   Leave `Privilege Separation` checked (more secure).
-    *   Click `Add`.
-    *   **Important:** Copy the displayed `Secret` value immediately and store it securely. It will only be shown once.
-
-4.  **Assign permissions (to both User and Token)**
+    *   Leave `Privilege Separation` checked. Click `Add`.
+    *   **Important:** Copy the `Secret` value immediately. It's shown only once.
+4.  **Assign permissions (to User and Token):**
     *   Go to `Datacenter` → `Permissions`.
-    *   **First, add permission for the User:**
-        *   Click `Add` → `User Permission`.
-        *   Path: `/`
-        *   User: Select the user you created (e.g., "pulse-monitor@pam").
-        *   Role: `PVEAuditor` (provides read-only access).
-        *   Ensure `Propagate` is checked.
-        *   Click `Add`.
-    *   **Second, add permission for the API Token:**
-        *   Click `Add` → `API Token Permission`.
-        *   Path: `/`
-        *   API Token: Select the token you created (e.g., "pulse-monitor@pam!pulse").
-        *   Role: `PVEAuditor`.
-        *   Ensure `Propagate` is checked.
-        *   Click `Add`.
+    *   **Add User Permission:** Click `Add` → `User Permission`. Path: `/`, User: `pulse-monitor@pam`, Role: `PVEAuditor`, check `Propagate`. Click `Add`.
+    *   **Add Token Permission:** Click `Add` → `API Token Permission`. Path: `/`, API Token: `pulse-monitor@pam!pulse`, Role: `PVEAuditor`, check `Propagate`. Click `Add`.
+    *   *Note: The `PVEAuditor` role at the root path (`/`) with `Propagate` is crucial.*
+5.  **Update `.env`:** Set `PROXMOX_TOKEN_ID` (e.g., `pulse-monitor@pam!pulse`) and `PROXMOX_TOKEN_SECRET` (the secret you copied).
 
-    *Note: Assigning the `PVEAuditor` role at the root path (`/`) with `Propagate` checked is crucial for Pulse to discover and monitor all nodes, VMs, containers, and storage in your cluster.*
-
-5.  **Update your `.env` file** with the `Token ID` (which looks like `user@realm!tokenid`, e.g., `pulse-monitor@pam!pulse`) and the `Secret` you saved.
+</details>
 
 ### Creating a Proxmox Backup Server API Token
 
-If you are configuring PBS monitoring, you need a separate API token created within PBS.
+If monitoring PBS, create a token within the PBS interface.
 
-1.  **Log in to the Proxmox Backup Server web interface**
-2.  **Create a dedicated user** (optional but recommended)
+<details>
+<summary><strong>Steps to Create a PBS API Token (Click to Expand)</strong></summary>
+
+1.  **Log in to the Proxmox Backup Server web interface.**
+2.  **Create a dedicated user** (optional but recommended):
     *   Go to `Configuration` → `Access Control` → `User Management`.
+    *   Click `Add`. Enter `User ID` (e.g., "pulse-monitor@pbs"), set Realm (likely `pbs`), add password. Click `Add`.
+3.  **Create an API token:**
+    *   Go to `Configuration` → `Access Control` → `API Token`.
     *   Click `Add`.
-    *   Enter a `User ID` (e.g., "pulse-monitor@pam"), set other fields as needed, and click `Add`.
-3.  **Create an API token**
-    *   Under `Configuration` → `Access Control`, select `API Token`.
-    *   Click `Add`.
-    *   Select the `User` (e.g., "pulse-monitor@pam") or `root@pam`.
-    *   Enter a `Token Name` (e.g., "pulse").
-    *   Leave `Privilege Separation` checked.
-    *   Click `Add`.
-    *   **Important:** Copy the displayed `Secret` value immediately.
-4.  **Assign permissions**
-    *   Under `Configuration` → `Access Control`, select `Permissions`.
+    *   Select `User` (e.g., "pulse-monitor@pbs") or `root@pam`.
+    *   Enter `Token Name` (e.g., "pulse").
+    *   Leave `Privilege Separation` checked. Click `Add`.
+    *   **Important:** Copy the `Secret` value immediately.
+4.  **Assign permissions:**
+    *   Go to `Configuration` → `Access Control` → `Permissions`.
     *   Click `Add` → `API Token Permission`.
-    *   **Path:** `/` (Grant permissions at the root level for broad access needed by Pulse).
-    *   **API Token:** Select the token you created (e.g., "pulse-monitor@pam!pulse").
-    *   **Role:** `Audit` (This role provides necessary read-only access, including system status and task history).
-    *   Ensure `Propagate` is checked.
-    *   Click `Add`.
+    *   Path: `/` (root level).
+    *   API Token: Select the token (e.g., "pulse-monitor@pbs!pulse").
+    *   Role: `Audit`.
+    *   Check `Propagate`. Click `Add`.
+    *   *Note: The `Audit` role at root path (`/`) is needed for read-only access.*
+5.  **Update `.env`:** Set `PBS_TOKEN_ID` (e.g., `pulse-monitor@pbs!pulse`) and `PBS_TOKEN_SECRET`.
 
-    *   **Note on Permissions:** The `Audit` role granted on the root path (`/`) provides sufficient read-only access for Pulse to monitor datastores, snapshots, and task history.
-
-5.  **Update your `.env` file** with the PBS `Token ID` (`PBS_TOKEN_ID`) and the `Secret` (`PBS_TOKEN_SECRET`).
+</details>
 
 ### Required Permissions
 
-**Proxmox VE:**
-The `PVEAuditor` role is recommended as it provides the necessary read-only permissions for Pulse to monitor your Proxmox VE environment:
-- `Datastore.Audit`
-- `Permissions.Read` (implicitly included)
-- `Pool.Audit`
-- `Sys.Audit`
-- `VM.Audit`
+-   **Proxmox VE:** The `PVEAuditor` role assigned at path `/` with `Propagate` enabled is recommended.
+    <details>
+    <summary>Permissions included in PVEAuditor (Click to Expand)</summary>
+    - `Datastore.Audit`
+    - `Permissions.Read` (implicitly included)
+    - `Pool.Audit`
+    - `Sys.Audit`
+    - `VM.Audit`
+    </details>
+-   **Proxmox Backup Server:** The `Audit` role assigned at path `/` with `Propagate` enabled is recommended.
 
-## 💾 Installation
+## 🚀 Deployment
 
-Navigate to the project root directory and install the necessary Node.js dependencies.
+Choose one of the following methods to deploy Pulse.
 
-```bash
-# Install root dependencies
-npm install
-```
+### Running with Docker Compose
 
-You also need to install dependencies for the server component:
-
-```bash
-# Install server dependencies
-cd server
-npm install
-cd ..
-```
-
-## ▶️ Running the Application (Node.js)
-
-These instructions are for running the application directly using Node.js.
-
-### Development Mode
-
-To run the application in development mode (useful for testing changes):
-
-```bash
-npm run dev
-```
-This command starts the server, typically using `nodemon` or similar for automatic restarts on file changes. Check the terminal output for the URL (e.g., `http://localhost:7655`).
-
-### Production Mode
-
-To run the application normally:
-
-```bash
-npm run start
-```
-This command starts the server using `node`. Access the application via the configured host and port.
-
-## 🐳 Running with Docker Compose
-
-Using Docker Compose is the recommended way to run the application in a containerized environment.
+Using Docker Compose is the recommended way for most users.
 
 **Prerequisites:**
 - Docker ([Install Docker](https://docs.docker.com/engine/install/))
@@ -225,35 +193,25 @@ Using Docker Compose is the recommended way to run the application in a containe
 
 **Steps:**
 
-1.  **Configure Environment:** Ensure you have created and configured your `.env` file as described in the [Environment Variables](#environment-variables) section above.
-
-2.  **Run:** Navigate to the project root directory in your terminal and run:
+1.  **Configure Environment:** Ensure your `.env` file is created and configured as described in [Configuration](#️-configuration).
+2.  **Run:** In the project root directory, run:
     ```bash
     docker compose up -d
     ```
-    - This command will download the pre-built `rcourtman/pulse:latest` image from Docker Hub (if not already present) and start the container.
-    - `-d`: Runs the container in detached mode (in the background).
+    This downloads the `rcourtman/pulse:latest` image and starts the container in the background.
+3.  **Access:** Open `http://<your-host-ip>:7655` (or the host port mapped in `docker-compose.yml`).
 
-3.  **Access:** The application should now be running. Access it via `http://<your-host-ip>:7655` (or the host port you mapped in `docker-compose.yml`).
-
-**Stopping the Application:**
-
-To stop the container(s) defined in the `docker-compose.yml` file, run:
-
+**Stopping:**
 ```bash
 docker compose down
 ```
 
-*Note: If you modify the `.env` file after the container is already running, you may need to restart the container for the changes to take effect. You can do this by running `docker compose down` followed by `docker compose up -d`, or by using `docker compose up -d --force-recreate`.*
+*Note: Restart the container (`docker compose down && docker compose up -d`) if you change `.env` after starting.*
 
-### Alternative: Quick Start with Inline Variables
+<details>
+<summary><strong>Alternative: Inline Variables in `docker-compose.yml` (Click to Expand)</strong></summary>
 
-If you prefer not to use a separate `.env` file, you can define the environment variables directly within a `docker-compose.yml` file. This is useful for a quick test or simple deployments.
-
-1.  Save the following content as `docker-compose.yml`.
-2.  **Replace the placeholder values** for `PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, and `PROXMOX_TOKEN_SECRET` with your actual Proxmox credentials.
-3.  Run `docker compose up -d` in the same directory as the file.
-4.  Access the dashboard at `http://<your-host-ip>:7655`.
+You can define environment variables directly in `docker-compose.yml` instead of using `.env`. **Replace placeholder values** before running `docker compose up -d`.
 
 ```yaml
 version: '3.8'
@@ -267,18 +225,16 @@ services:
       - "7655:7655" # Map container port 7655 to host port 7655
     environment:
       # --- Required Proxmox Connection Details ---
-      # Replace placeholders with your actual values
       PROXMOX_HOST: "https://your-proxmox-ip-or-hostname:8006"
       PROXMOX_TOKEN_ID: "your-user@pam!your-token-name"
       PROXMOX_TOKEN_SECRET: "your-api-token-secret-uuid"
 
       # --- Optional Settings ---
-      # Set to "true" if your Proxmox uses self-signed SSL certificates
       PROXMOX_ALLOW_SELF_SIGNED_CERTS: "false"
-      # Define additional endpoints if needed (PROXMOX_HOST_2, etc.)
-      # PROXMOX_HOST_2: "https://other-proxmox-ip:8006"
-      # PROXMOX_TOKEN_ID_2: "user2@pam!token2"
-      # PROXMOX_TOKEN_SECRET_2: "secret-uuid-2"
+      # PBS_HOST: "https://your-pbs-ip:8007"
+      # PBS_TOKEN_ID: "your-pbs-user@pbs!token"
+      # PBS_TOKEN_SECRET: "your-pbs-secret"
+      # PBS_NODE_NAME: "your-pbs-hostname"
 
     # Optional: Mount a local directory for potential future config needs
     # volumes:
@@ -289,112 +245,100 @@ networks:
     driver: bridge
 ```
 
-## 🚀 Running with LXC Installation Script
+</details>
 
-For installation within a Proxmox VE LXC container, a convenient script is provided to set up Pulse inside an **existing** LXC container (Debian/Ubuntu based). This script automates dependency installation, configuration, and setting up a systemd service.
+### Running with LXC Installation Script
+
+An installation script is available for setting up Pulse inside an **existing** Debian/Ubuntu-based Proxmox VE LXC container.
 
 **Prerequisites:**
-- A running Proxmox VE environment.
-- A Debian or Ubuntu based LXC container already created in Proxmox.
-    - *Tip: Creating a suitable LXC container is easy using helper scripts. For example, the [Community Scripts](https://community-scripts.github.io/ProxmoxVE/scripts?id=debian) collection offers a Debian script you can run directly on your Proxmox host:*
-      ```bash
-      bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/debian.sh)"
-      ```
-- Network connectivity from the LXC to your Proxmox server.
+- A running Proxmox VE host.
+- An existing Debian or Ubuntu LXC container with network access to Proxmox.
+    - *Tip: Use [Community Scripts](https://community-scripts.github.io/ProxmoxVE/scripts?id=debian) to easily create one: `bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/debian.sh)"`*
 
 **Steps:**
 
-1.  **Access LXC Console:** Log in to the console of your existing LXC container (e.g., via the Proxmox web UI or SSH). You should typically be logged in as `root`.
-
-2.  **Download and Run the Script:** The recommended way is to download the script first, make it executable, and then run it. This allows interaction with prompts for configuration and optional features like automatic updates.
+1.  **Access LXC Console:** Log in to your LXC container (usually as `root`).
+2.  **Download and Run Script:**
     ```bash
     # Ensure you are in a suitable directory, like /root or /tmp
     curl -sLO https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh
     chmod +x install-pulse.sh
     ./install-pulse.sh
     ```
-    *(The older method of piping directly to `bash` using `wget` or `curl` might still work for initial installs but will skip interactive prompts like the automatic update setup.)*
+3.  **Follow Prompts:** The script guides you through:
+    *   Installing dependencies (`git`, `curl`, `nodejs`, `npm`, `sudo`).
+    *   Entering your Proxmox Host URL, API Token ID, Secret, and self-signed cert preference.
+    *   (Optional) Entering PBS connection details if desired.
+    *   Setting up Pulse as a `systemd` service (`pulse-monitor.service`).
+    *   Optionally enabling automatic updates via cron.
+4.  **Access Pulse:** The script will display the URL (e.g., `http://<LXC-IP-ADDRESS>:7655`).
 
-3.  **Follow Prompts:** The script will guide you through the installation process:
-    *   It will update the container and install necessary packages (`git`, `curl`, `nodejs`, `npm`, `gpg`, `sudo`).
-    *   It will guide you through creating the required Proxmox API Token if needed.
-    *   It will ask for your Proxmox Host URL, API Token ID, and API Token Secret.
-    *   It will ask about allowing self-signed certificates and optionally setting a custom port.
-    *   It will configure Pulse and set it up as a `systemd` service (`pulse-monitor.service`) to run automatically.
-    *   **Automatic Updates (Optional):** After a successful installation or update, the script will ask if you want to enable automatic updates (Daily, Weekly, or Monthly) via a cron job.
-
-4.  **Access Pulse:** Once the script finishes, it will display the URL (using the LXC's IP address) where you can access the Pulse dashboard (e.g., `http://<LXC-IP-ADDRESS>:7655`).
+<details>
+<summary><strong>Updating and Managing the LXC Installation (Click to Expand)</strong></summary>
 
 **Updating Pulse:**
 
-To update Pulse to the latest version, simply re-run the script from the same directory where you downloaded it:
-
+Re-run the script from the directory where you downloaded it:
 ```bash
 ./install-pulse.sh
 ```
-The script will detect the existing installation and offer to update it.
-
-**Non-Interactive Updates:**
-
-You can also run the update non-interactively using the `--update` flag. This is useful for scripting or if used in the cron job for automatic updates:
-
+Or run non-interactively (e.g., for cron):
 ```bash
 ./install-pulse.sh --update
 ```
 
-**Automatic Update Details:**
+**Managing the Pulse Service:**
 
-If you enable automatic updates via the script prompt:
-- A cron job is added to the `root` user's crontab.
-- The job runs `./install-pulse.sh --update` according to the chosen schedule (Daily, Weekly, Monthly).
-- Output (including any errors) from the update process is logged to `/var/log/pulse_update.log`.
-- You can view the root crontab using `sudo crontab -l -u root` and edit it using `sudo crontab -e -u root`.
+Use standard `systemctl` commands:
+*   Check Status: `sudo systemctl status pulse-monitor.service`
+*   Stop Service: `sudo systemctl stop pulse-monitor.service`
+*   Start Service: `sudo systemctl start pulse-monitor.service`
+*   View Logs: `sudo journalctl -u pulse-monitor.service -f`
+*   Enable/Disable on Boot: `sudo systemctl enable/disable pulse-monitor.service`
 
-**Managing the Pulse Service**
+**Automatic Updates:**
+If enabled via the script, a cron job runs `./install-pulse.sh --update` Daily/Weekly/Monthly. Logs are in `/var/log/pulse_update.log`. Manage with `sudo crontab -l -u root` or `sudo crontab -e -u root`.
 
-Once installed, the Pulse application runs as a `systemd` service. You can manage it using standard `systemctl` commands:
+</details>
 
-*   **Check Status:** `sudo systemctl status pulse-monitor.service`
-*   **Stop Service:** `sudo systemctl stop pulse-monitor.service`
-*   **Start Service:** `sudo systemctl start pulse-monitor.service`
-*   **View Logs:** `sudo journalctl -u pulse-monitor.service -f`
-*   **Enable on Boot (usually done by script):** `sudo systemctl enable pulse-monitor.service`
-*   **Disable on Boot:** `sudo systemctl disable pulse-monitor.service`
+### Running the Application (Node.js - Development)
+
+For development purposes or running directly from source, see the **[DEVELOPMENT.md](DEVELOPMENT.md)** guide. This involves cloning the repository, installing dependencies using `npm install` in both the root and `server` directories, and running `npm run dev` or `npm run start`.
 
 ## ✨ Features
 
-- Lightweight monitoring for Proxmox VE nodes.
-- Displays real-time status for VMs and Containers via WebSocket updates.
+- Lightweight monitoring for Proxmox VE nodes, VMs, and Containers.
+- Real-time status updates via WebSockets.
 - Simple, responsive web interface.
-- Efficient polling: Stops polling the Proxmox API when no clients (browsers) are connected, reducing load.
-- Docker support for easy deployment.
-- Support for monitoring multiple distinct Proxmox environments.
-- Monitoring support for Proxmox Backup Server (PBS) instances (configured as additional endpoints).
-- LXC installation script for easy setup.
+- Efficient polling: Stops API polling when no clients are connected.
+- Docker support.
+- Multi-environment PVE monitoring support.
+- Proxmox Backup Server (PBS) monitoring support.
+- LXC installation script.
 
 ## 💻 System Requirements
 
-- **Node.js:** Version 18.x or later recommended.
+- **Node.js:** Version 18.x or later (if building/running from source).
 - **NPM:** Compatible version with Node.js.
-- **Docker & Docker Compose:** Latest stable versions recommended if using container deployment.
-- **Proxmox VE:** Version 7.x or 8.x recommended (tested primarily on 8.x).
-- **Web Browser:** Modern evergreen browser (Chrome, Firefox, Edge, Safari).
+- **Docker & Docker Compose:** Latest stable versions (if using container deployment).
+- **Proxmox VE:** Version 7.x or 8.x recommended.
+- **Proxmox Backup Server:** Version 2.x or 3.x recommended (if monitored).
+- **Web Browser:** Modern evergreen browser.
 
 ## 👋 Contributing
 
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests or opening issues.
+Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md).
 
 ## 🔒 Privacy
 
-Pulse is designed with privacy in mind:
-
-*   **No Data Collection:** The application does not collect, store, or transmit any personal user data or telemetry information to external servers.
-*   **Local Communication:** All communication occurs directly between the Pulse application (running in your environment, e.g., Docker container or LXC) and your configured Proxmox VE or Proxmox Backup Server endpoints.
-*   **Credential Handling:** Proxmox credentials (API tokens or username/password) are used solely for authenticating with your Proxmox API and are not logged or sent elsewhere.
+*   **No Data Collection:** Pulse does not collect or transmit any telemetry or user data externally.
+*   **Local Communication:** Operates entirely between your environment and your Proxmox/PBS APIs.
+*   **Credential Handling:** Credentials are used only for API authentication and are not logged or sent elsewhere.
 
 ## 📜 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.
 
 ## ™️ Trademark Notice
 
@@ -402,22 +346,16 @@ Proxmox® and Proxmox VE® are registered trademarks of Proxmox Server Solutions
 
 ## ❤️ Support
 
-If you encounter any issues or have questions, please file an issue on the [GitHub repository](https://github.com/rcourtman/Pulse/issues).
+File issues on the [GitHub repository](https://github.com/rcourtman/Pulse/issues).
 
-If you find this project useful, consider supporting its development:
-
+If you find Pulse useful, consider supporting its development:
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 ## ❓ Troubleshooting
 
-If you encounter issues connecting to your Proxmox VE or Proxmox Backup Server instances, check the following:
+Common connection issues:
 
-*   **Pulse Application Logs:** Examine the logs from the Pulse container (`docker logs pulse_monitor`) or the systemd service (`sudo journalctl -u pulse-monitor.service -f`) for specific error messages (e.g., connection refused, 401 Unauthorized, 403 Forbidden, timeout).
-*   **`.env` Configuration:** Double-check all relevant environment variables in your `.env` file for accuracy:
-    *   `PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`
-    *   `PROXMOX_ALLOW_SELF_SIGNED_CERTS` (especially if using self-signed certificates)
-    *   `PBS_HOST`, `PBS_TOKEN_ID`, `PBS_TOKEN_SECRET`
-    *   `PBS_ALLOW_SELF_SIGNED_CERTS`
-    *   **`PBS_NODE_NAME`**: As mentioned above, ensure this exactly matches the output of `hostname` run on your PBS server. This is the most common cause of missing PBS task data.
-*   **Network Connectivity:** Ensure the machine or container running Pulse can reach the specified Proxmox VE and PBS host addresses and ports (usually `8006` for PVE, `8007` for PBS). Firewalls or network configuration might block access.
-*   **API Token Permissions:** Verify that the API tokens used have the recommended roles assigned correctly in the Proxmox VE / PBS web interface (`PVEAuditor` for PVE, `Audit` for PBS, both assigned at path `/` with propagation enabled).
+*   **Pulse Application Logs:** Check container logs (`docker logs pulse_monitor`) or service logs (`sudo journalctl -u pulse-monitor.service -f`) for errors (401 Unauthorized, 403 Forbidden, connection refused, timeout).
+*   **`.env` Configuration:** Verify `PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`, and `PROXMOX_ALLOW_SELF_SIGNED_CERTS`. For PBS, also check `PBS_HOST`, `PBS_TOKEN_ID`, `PBS_TOKEN_SECRET`, `PBS_ALLOW_SELF_SIGNED_CERTS`, and especially **`PBS_NODE_NAME`**. Ensure no placeholder values remain.
+*   **Network Connectivity:** Can the machine running Pulse reach the PVE/PBS hostnames/IPs and ports (usually 8006 for PVE, 8007 for PBS)? Check firewalls.
+*   **API Token Permissions:** Ensure the correct roles (`PVEAuditor` for PVE, `Audit` for PBS) are assigned at the root path (`/`) with `Propagate` enabled in the respective UIs.
