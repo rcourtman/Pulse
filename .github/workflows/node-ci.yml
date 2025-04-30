@@ -30,4 +30,12 @@ jobs:
       run: npm ci # Use ci for faster, more reliable installs in CI
 
     - name: Run tests
+      env: # Add environment variables from GitHub secrets
+        PROXMOX_HOST: ${{ secrets.PROXMOX_HOST }}
+        PROXMOX_TOKEN_ID: ${{ secrets.PROXMOX_TOKEN_ID }}
+        PROXMOX_TOKEN_SECRET: ${{ secrets.PROXMOX_TOKEN_SECRET }}
+        # Add other required primary variables here if needed, e.g.:
+        # PBS_HOST: ${{ secrets.PBS_HOST }}
+        # PBS_TOKEN_ID: ${{ secrets.PBS_TOKEN_ID }}
+        # PBS_TOKEN_SECRET: ${{ secrets.PBS_TOKEN_SECRET }}
       run: npm test 
