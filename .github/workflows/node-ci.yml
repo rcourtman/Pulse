@@ -1,0 +1,33 @@
+name: Node.js CI
+
+on:
+  push:
+    branches: [ "main" ] # Adjust if your main branch has a different name
+  pull_request:
+    branches: [ "main" ] # Adjust if your main branch has a different name
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x] # Use Node.js LTS version 20
+        # See supported Node.js release schedule at https://nodejs.org/en/about/releases/
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm' # Cache npm dependencies
+
+    - name: Install dependencies
+      run: npm ci # Use ci for faster, more reliable installs in CI
+
+    - name: Run tests
+      run: npm test 
