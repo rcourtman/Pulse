@@ -22,6 +22,7 @@
   "license": "MIT",
   "dependencies": {
     "axios": "^1.9.0",
+    "axios-retry": "^4.5.0",
     "concurrently": "^9.1.2"
   },
   "_comment_tailwind_v3_reason": "Using Tailwind CSS v3 (3.4.4) due to build inconsistencies observed with v4 (specifically 4.1.4). v4 resulted in incorrectly purged CSS files when built within certain Linux environments (e.g., Proxmox LXC - Debian 12 x86_64), failing to detect dynamically added classes. v3.4.4 builds correctly.",
