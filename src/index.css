@@ -1,3 +1,7 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities; 
+@tailwind utilities;
+
+.overflow-y-hidden {
+  overflow-y: hidden;
+}
