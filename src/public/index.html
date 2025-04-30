@@ -48,12 +48,12 @@
   <!-- End Loading Overlay -->
 
   <div class="container max-w-[95%] mx-auto">
-    <!-- Header - Add flex-col sm:flex-row for stacking on small screens -->
-    <div class="header flex flex-col sm:flex-row justify-between items-center mb-2">
-      <!-- ADDED: Empty spacer div, only active on sm+ screens -->
-      <div class="hidden sm:block sm:flex-1"></div>
-      <!-- Logo and Title Container (Centered by default, pushed left on sm+) -->
-      <div class="flex items-center gap-1 flex-none mb-2 sm:mb-0">
+    <!-- Header - Flex row, space between -->
+    <div class="header flex flex-row justify-between items-center mb-2">
+      <!-- Spacer: Visible only on md+ screens to push logo center -->
+      <div class="hidden md:block md:flex-1"></div>
+      <!-- Logo and Title Container - flex-none prevents growth -->
+      <div class="flex items-center gap-1 flex-none">
           <!-- Pulse Logo SVG -->
           <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="pulse-logo">
             <title>Pulse Logo</title>
@@ -62,8 +62,8 @@
           </svg>
           <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
         </div>
-      <!-- Header Controls (Full width on small, aligned right on sm+) -->
-      <div class="header-controls flex w-full sm:w-auto sm:flex-1 justify-center sm:justify-end items-center gap-4">
+      <!-- Header Controls - Align right, flex-1 only on md+ to balance spacer -->
+      <div class="header-controls flex justify-end items-center gap-4 md:flex-1">
         <!-- Start: UI Scale Slider -->
         <!-- <div class="ui-scale-slider flex items-center opacity-50 hover:opacity-100 focus-within:opacity-100 transition-opacity duration-300" title="Adjust UI Scale" style="gap: 4px;">
           <input type="range" id="ui-scale-slider" min="0.75" max="1.25" step="0.05" value="1.0" class="cursor-pointer accent-blue-600 dark:accent-blue-500" style="width: 80px; height: 16px;">
@@ -90,25 +90,25 @@
       <!-- Add Tailwind classes, JS will toggle active classes -->
       <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px flex items-center gap-1.5" data-tab="main">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-          <span>Main</span>
+          <span class="hidden md:inline">Main</span>
       </div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="nodes">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
-          <span>Nodes</span>
+          <span class="hidden md:inline">Nodes</span>
       </div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="storage">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
-          <span>Storage</span>
+          <span class="hidden md:inline">Storage</span>
       </div>
       <!-- Add Backups Tab -->
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="backups">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg> <!-- Shield with check -->
-          <span>Backups</span>
+          <span class="hidden md:inline">Backups</span>
       </div>
       <!-- Add PBS Tab -->
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="pbs">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-          <span>PBS</span>
+          <span class="hidden md:inline">PBS</span>
       </div>
     </div>
 
@@ -153,31 +153,53 @@
           <div class="flex items-center gap-2">
             <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
               <input type="radio" id="group-grouped" name="group-filter" value="grouped" class="hidden peer/grouped" checked>
-              <label for="group-grouped" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/grouped:bg-blue-100 dark:peer-checked/grouped:bg-blue-800/50 peer-checked/grouped:text-blue-700 dark:peer-checked/grouped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Grouped</label>
+              <label for="group-grouped" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/grouped:bg-blue-100 dark:peer-checked/grouped:bg-blue-800/50 peer-checked/grouped:text-blue-700 dark:peer-checked/grouped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/></svg>
+                <span class="hidden md:inline">Grouped</span>
+              </label>
               <input type="radio" id="group-list" name="group-filter" value="list" class="hidden peer/list">
-              <label for="group-list" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/list:bg-blue-100 dark:peer-checked/list:bg-blue-800/50 peer-checked/list:text-blue-700 dark:peer-checked/list:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">List</label>
+              <label for="group-list" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/list:bg-blue-100 dark:peer-checked/list:bg-blue-800/50 peer-checked/list:text-blue-700 dark:peer-checked/list:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                <span class="hidden md:inline">List</span>
+              </label>
             </div>
             </div>
             <!-- Show Toggle -->
           <div class="flex items-center gap-2 pl-2">
             <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
               <input type="radio" id="filter-all" name="type-filter" value="all" class="hidden peer/all" checked>
-              <label for="filter-all" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-green-100 dark:peer-checked/all:bg-green-800/50 peer-checked/all:text-green-700 dark:peer-checked/all:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+              <label for="filter-all" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-green-100 dark:peer-checked/all:bg-green-800/50 peer-checked/all:text-green-700 dark:peer-checked/all:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                <span class="inline">All</span>
+              </label>
               <input type="radio" id="filter-vm" name="type-filter" value="vm" class="hidden peer/vm">
-              <label for="filter-vm" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/vm:bg-green-100 dark:peer-checked/vm:bg-green-800/50 peer-checked/vm:text-green-700 dark:peer-checked/vm:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">VMs</label>
+              <label for="filter-vm" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/vm:bg-green-100 dark:peer-checked/vm:bg-green-800/50 peer-checked/vm:text-green-700 dark:peer-checked/vm:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+                <span class="hidden md:inline">VMs</span>
+              </label>
               <input type="radio" id="filter-lxc" name="type-filter" value="ct" class="hidden peer/lxc">
-              <label for="filter-lxc" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">LXCs</label>
+              <label for="filter-lxc" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22.08" y2="12"/></svg>
+                <span class="hidden md:inline">LXCs</span>
+              </label>
             </div>
           </div>
           <!-- Status Toggle -->
           <div class="flex items-center gap-2 pl-2">
             <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
               <input type="radio" id="filter-status-all" name="status-filter" value="all" class="hidden peer/status-all" checked>
-              <label for="filter-status-all" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/status-all:bg-blue-100 dark:peer-checked/status-all:bg-blue-800/50 peer-checked/status-all:text-blue-700 dark:peer-checked/status-all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+              <label for="filter-status-all" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/status-all:bg-blue-100 dark:peer-checked/status-all:bg-blue-800/50 peer-checked/status-all:text-blue-700 dark:peer-checked/status-all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                <span class="inline">All</span>
+              </label>
               <input type="radio" id="filter-status-running" name="status-filter" value="running" class="hidden peer/status-running">
-              <label for="filter-status-running" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-running:bg-blue-100 dark:peer-checked/status-running:bg-blue-800/50 peer-checked/status-running:text-blue-700 dark:peer-checked/status-running:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Running</label>
+              <label for="filter-status-running" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-running:bg-blue-100 dark:peer-checked/status-running:bg-blue-800/50 peer-checked/status-running:text-blue-700 dark:peer-checked/status-running:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span class="hidden md:inline">Running</span>
+              </label>
               <input type="radio" id="filter-status-stopped" name="status-filter" value="stopped" class="hidden peer/status-stopped">
-              <label for="filter-status-stopped" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-stopped:bg-blue-100 dark:peer-checked/status-stopped:bg-blue-800/50 peer-checked/status-stopped:text-blue-700 dark:peer-checked/status-stopped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Stopped</label>
+              <label for="filter-status-stopped" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-stopped:bg-blue-100 dark:peer-checked/status-stopped:bg-blue-800/50 peer-checked/status-stopped:text-blue-700 dark:peer-checked/status-stopped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
+                <span class="hidden md:inline">Stopped</span>
+              </label>
             </div>
           </div>
         </div>
