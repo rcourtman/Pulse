@@ -158,6 +158,10 @@ document.addEventListener('DOMContentLoaded', function() {
   // REMOVED: let backupsFilterHealth = 'all'; 
   // ---> END RENAMED <---
 
+  // ---> ADDED: Get reference to loading overlay <---
+  const loadingOverlay = document.getElementById('loading-overlay');
+  // ---> END ADDED <---
+
   // Define initial limit for PBS task tables
   const INITIAL_PBS_TASK_LIMIT = 5;
 
@@ -237,6 +241,11 @@ document.addEventListener('DOMContentLoaded', function() {
     connectionStatus.textContent = 'Connected';
     connectionStatus.classList.remove('disconnected', 'bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300');
     connectionStatus.classList.add('connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300');
+    
+    // ---> REMOVED: Clear disconnection animation interval <---
+    // if (disconnectAnimationIntervalId) { ... }
+    // ---> END REMOVED <---
+
     requestFullData(); // Request data once connected
   });
 
@@ -244,7 +253,24 @@ document.addEventListener('DOMContentLoaded', function() {
     // console.log('[socket] Disconnected:', reason);
     connectionStatus.textContent = 'Disconnected';
     connectionStatus.classList.remove('connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300');
-    connectionStatus.classList.add('disconnected', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300');
+    connectionStatus.classList.add('disconnected', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300'); // Use distinct disconnected styling
+    wasConnected = false; // Ensure hot reload logic knows state
+
+    // ---> MODIFIED: Show loading overlay with simple text <---
+    if (loadingOverlay) {
+      const loadingText = loadingOverlay.querySelector('p'); 
+      if (loadingText) {
+          // Set simple text content
+          loadingText.textContent = 'Connection lost.';
+          
+          // ---> REMOVED: Interval logic for animation <---
+          // if (disconnectAnimationIntervalId) { ... }
+          // disconnectAnimationIntervalId = setInterval(() => { ... }, 500);
+          // ---> END REMOVED <---
+      }
+      loadingOverlay.style.display = 'flex'; 
+    }
+    // ---> END MODIFIED <---
   });
 
   // --- Sorting Logic ---
@@ -1522,6 +1548,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function requestFullData() {
     console.log('Requesting full data reload from server...');
+    // ---> ADDED: Show loading overlay when requesting data <---\
+    if (loadingOverlay) {
+      const loadingText = loadingOverlay.querySelector('p'); // Changed selector from #loading-text to p
+      if (loadingText) {
+          loadingText.textContent = 'Connected. Reloading data...';
+      }
+      loadingOverlay.style.display = 'flex'; // Or \'block\', ensure it matches initial display style
+    }
+    // ---> END ADDED <---\
     socket.emit('requestData'); // Ensure this uses the correct event name
   }
 
@@ -1632,6 +1667,20 @@ document.addEventListener('DOMContentLoaded', function() {
     updateBackupsTab(); 
     // ---> END ADDED
     // <--- END CHANGE
+
+    // ---> MODIFIED: Hide loading overlay only if connected and overlay is visible < ---
+    if (loadingOverlay && loadingOverlay.style.display !== 'none') {
+        if (socket.connected) { // ADDED: Check socket connection status
+            console.log('[UI Update] Hiding loading overlay.'); // Add log for confirmation
+            loadingOverlay.style.display = 'none';
+        } else {
+            // Keep overlay visible if socket is disconnected
+            // console.log('[UI Update] Socket disconnected, keeping overlay visible.'); // Optional debug log
+        }
+    }
+    // ---> END MODIFIED < ---
+
+    initialDataReceived = true; // Keep this flag for other logic (like the interval trigger)
   }
 
   // Add a separate fetch for storage data, maybe less frequent?

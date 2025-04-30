@@ -1,0 +1,206 @@
+const axios = require('axios');
+const https = require('https');
+const axiosRetry = require('axios-retry').default;
+
+/**
+ * Creates a request interceptor for PVE API authentication.
+ * @param {Object} endpoint - The PVE endpoint configuration.
+ * @returns {Function} - An Axios request interceptor function.
+ */
+function createPveAuthInterceptor(endpoint) {
+  return config => {
+    if (endpoint.tokenId && endpoint.tokenSecret) {
+      config.headers.Authorization = `PVEAPIToken=${endpoint.tokenId}=${endpoint.tokenSecret}`;
+    } else {
+      // Error condition for missing credentials
+      console.error(`ERROR: Endpoint ${endpoint.name} is missing required API token credentials.`);
+    }
+    return config;
+  };
+}
+
+/**
+ * Logs a warning and calculates exponential delay for PVE retries.
+ * @param {string} endpointName - The name of the PVE endpoint.
+ * @param {number} retryCount - The current retry attempt number.
+ * @param {Error} error - The error that caused the retry.
+ * @returns {number} - The delay in milliseconds.
+ */
+function pveRetryDelayLogger(endpointName, retryCount, error) {
+  console.warn(`Retrying PVE API request for ${endpointName} (attempt ${retryCount}) due to error: ${error.message}`);
+  return axiosRetry.exponentialDelay(retryCount);
+}
+
+/**
+ * Checks if an error warrants retrying a PVE API call.
+ * @param {Error} error - The error object.
+ * @returns {boolean} - True if the request should be retried, false otherwise.
+ */
+function pveRetryConditionChecker(error) {
+  return (
+    axiosRetry.isNetworkError(error) ||
+    axiosRetry.isRetryableError(error) ||
+    error.response?.status === 596 // Specific PVE status code
+  );
+}
+
+/**
+ * Initializes Axios clients for Proxmox VE endpoints.
+ * @param {Array} endpoints - Array of PVE endpoint configuration objects.
+ * @returns {Object} - Object containing initialized PVE API clients keyed by endpoint ID.
+ */
+function initializePveClients(endpoints) {
+  const apiClients = {};
+  console.log(`INFO: Initializing API clients for ${endpoints.length} Proxmox VE endpoints...`);
+
+  endpoints.forEach(endpoint => {
+    if (!endpoint.enabled) {
+      console.log(`INFO: Skipping disabled PVE endpoint: ${endpoint.name} (${endpoint.host})`);
+      return; // Skip disabled endpoints
+    }
+
+    const baseURL = endpoint.host.includes('://')
+      ? `${endpoint.host}/api2/json`
+      : `https://${endpoint.host}:${endpoint.port}/api2/json`;
+
+    const apiClient = axios.create({
+      baseURL: baseURL,
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: !endpoint.allowSelfSignedCerts
+      }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    });
+
+    // Use the extracted interceptor function
+    apiClient.interceptors.request.use(createPveAuthInterceptor(endpoint));
+
+    // Apply retry logic
+    axiosRetry(apiClient, {
+      retries: 3,
+      retryDelay: pveRetryDelayLogger.bind(null, endpoint.name),
+      retryCondition: pveRetryConditionChecker,
+    });
+
+    apiClients[endpoint.id] = { client: apiClient, config: endpoint };
+    console.log(`INFO: Initialized PVE API client for endpoint: ${endpoint.name} (${endpoint.host})`);
+  });
+
+  return apiClients;
+}
+
+/**
+ * Logs a warning and calculates exponential delay for PBS retries.
+ * @param {string} configName - The name of the PBS configuration.
+ * @param {number} retryCount - The current retry attempt number.
+ * @param {Error} error - The error that caused the retry.
+ * @returns {number} - The delay in milliseconds.
+ */
+function pbsRetryDelayLogger(configName, retryCount, error) {
+  console.warn(`Retrying PBS API request for ${configName} (Token Auth - attempt ${retryCount}) due to error: ${error.message}`);
+  return axiosRetry.exponentialDelay(retryCount);
+}
+
+/**
+ * Checks if an error warrants retrying a PBS API call.
+ * @param {Error} error - The error object.
+ * @returns {boolean} - True if the request should be retried, false otherwise.
+ */
+function pbsRetryConditionChecker(error) {
+  return axiosRetry.isNetworkError(error) || axiosRetry.isRetryableError(error);
+}
+
+/**
+ * Creates a request interceptor for PBS API authentication (Token Auth).
+ * @param {Object} config - The PBS configuration object.
+ * @returns {Function} - An Axios request interceptor function.
+ */
+function createPbsAuthInterceptor(config) {
+  return reqConfig => {
+    // Assumes config.tokenId and config.tokenSecret exist (checked during config load perhaps?)
+    reqConfig.headers.Authorization = `PBSAPIToken=${config.tokenId}:${config.tokenSecret}`;
+    return reqConfig;
+  };
+}
+
+/**
+ * Initializes Axios clients for Proxmox Backup Server instances.
+ * @param {Array} pbsConfigs - Array of PBS configuration objects.
+ * @returns {Promise<Object>} - Promise resolving to an object containing initialized PBS API clients keyed by config ID.
+ */
+async function initializePbsClients(pbsConfigs) {
+  const pbsApiClients = {};
+  if (pbsConfigs.length === 0) {
+      console.log("INFO: No PBS instances configured, skipping PBS client initialization.");
+      return pbsApiClients;
+  }
+
+  console.log(`INFO: Initializing API clients for ${pbsConfigs.length} PBS instances...`);
+  const initPromises = pbsConfigs.map(async (config) => {
+      let clientData = null;
+      try {
+          if (config.authMethod === 'token') {
+              const pbsBaseURL = config.host.includes('://')
+                  ? `${config.host}/api2/json`
+                  : `https://${config.host}:${config.port}/api2/json`;
+
+              const pbsAxiosInstance = axios.create({
+                  baseURL: pbsBaseURL,
+                  httpsAgent: new https.Agent({
+                      rejectUnauthorized: !config.allowSelfSignedCerts
+                  }),
+                  headers: { 'Content-Type': 'application/json' }
+              });
+
+              // Use the extracted interceptor function
+              pbsAxiosInstance.interceptors.request.use(createPbsAuthInterceptor(config));
+
+              axiosRetry(pbsAxiosInstance, {
+                  retries: 3,
+                  retryDelay: pbsRetryDelayLogger.bind(null, config.name),
+                  retryCondition: pbsRetryConditionChecker,
+              });
+
+              clientData = { client: pbsAxiosInstance, config: config };
+              console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)`);
+          } else {
+              console.error(`ERROR: Unexpected authMethod '${config.authMethod}' found during PBS client initialization for: ${config.name}`);
+          }
+
+          if (clientData) {
+              pbsApiClients[config.id] = clientData;
+          }
+      } catch (error) {
+          console.error(`ERROR: Unhandled exception during PBS client initialization for ${config.name}: ${error.message}`, error.stack);
+      }
+      // We don't return clientData here, we modify pbsApiClients directly
+  });
+
+  await Promise.allSettled(initPromises);
+  console.log(`INFO: [PBS Init] Finished initialization. ${Object.keys(pbsApiClients).length} / ${pbsConfigs.length} PBS clients initialized successfully.`);
+  return pbsApiClients;
+}
+
+/**
+ * Initializes all Proxmox VE and PBS API clients.
+ * @param {Array} endpoints - Array of PVE endpoint configuration objects.
+ * @param {Array} pbsConfigs - Array of PBS configuration objects.
+ * @returns {Promise<Object>} - Promise resolving to an object containing { apiClients, pbsApiClients }.
+ */
+async function initializeApiClients(endpoints, pbsConfigs) {
+    const apiClients = initializePveClients(endpoints);
+    const pbsApiClients = await initializePbsClients(pbsConfigs); // Wait for PBS clients to initialize
+    return { apiClients, pbsApiClients };
+}
+
+// Export the new helper functions for potential direct testing
+module.exports = {
+  initializeApiClients,
+  createPveAuthInterceptor,
+  createPbsAuthInterceptor,
+  pveRetryDelayLogger,
+  pveRetryConditionChecker,
+  pbsRetryDelayLogger,
+  pbsRetryConditionChecker,
+}; 

@@ -32,3 +32,18 @@ RELEASE_PROCEDURE.md
 
 # Feature Ideas - Should not be tracked
 docs/feature_ideas/ 
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional VS Code files
+.vscode/
+
+# Test coverage
+/coverage/ 

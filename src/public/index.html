@@ -32,6 +32,21 @@
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
+  <!-- Loading Overlay -->
+  <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-100 dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80">
+    <div class="text-center">
+      <!-- You can replace this with a spinner or a more complex animation -->
+       <!-- Pulse Logo SVG -->
+       <svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="pulse-logo mx-auto mb-2">
+        <title>Pulse Logo</title>
+        <circle class="pulse-logo-outer" cx="50" cy="50" r="45"/>
+        <circle class="pulse-logo-inner pulse-logo-circle" cx="50" cy="50" r="25"/>
+      </svg>
+      <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Loading data...</p>
+    </div>
+  </div>
+  <!-- End Loading Overlay -->
+
   <div class="container max-w-[95%] mx-auto">
     <!-- Header - Add flex-col sm:flex-row for stacking on small screens -->
     <div class="header flex flex-col sm:flex-row justify-between items-center mb-2">
