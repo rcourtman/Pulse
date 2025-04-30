@@ -51,7 +51,7 @@ jobs:
           platforms: linux/amd64,linux/arm64 # Add other platforms if needed
           push: true
           tags: |
-            rcourtman/pulse:${{ github.ref_name }} # Use tag name from push event
+            rcourtman/pulse:${{ github.ref_name }}
             rcourtman/pulse:latest
       # --- End Docker Steps --- 
 
