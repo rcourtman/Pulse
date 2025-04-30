@@ -69,22 +69,31 @@ function processPbsTasks(allTasks) {
 
     console.log(`INFO: [pbsUtils] Processed PBS Tasks - Backup: ${taskResults.backup.list.length} (...), Verify: ${taskResults.verify.list.length} (...), Sync: ${taskResults.sync.list.length} (...), Prune/GC: ${taskResults.pruneGc.list.length} (...)`); // Shortened log
 
+    // Helper function to create the summary object
+    const createSummary = (category) => ({ 
+        ok: category.ok,
+        failed: category.failed,
+        total: category.ok + category.failed,
+        lastOk: category.lastOk || null, // Use null if 0
+        lastFailed: category.lastFailed || null // Use null if 0
+    });
+
     return {
         backupTasks: {
             recentTasks: recentBackupTasks,
-            summary: { /* ... summary ... */ }
+            summary: createSummary(taskResults.backup)
         },
         verificationTasks: {
             recentTasks: recentVerifyTasks,
-            summary: { /* ... summary ... */ }
+            summary: createSummary(taskResults.verify)
         },
         syncTasks: {
             recentTasks: recentSyncTasks,
-            summary: { /* ... summary ... */ }
+            summary: createSummary(taskResults.sync)
         },
         pruneTasks: {
             recentTasks: recentPruneGcTasks,
-            summary: { /* ... summary ... */ }
+            summary: createSummary(taskResults.pruneGc)
         }
     };
 }
