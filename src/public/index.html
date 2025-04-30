@@ -50,7 +50,8 @@
   <div class="container max-w-[95%] mx-auto">
     <!-- Header - Add flex-col sm:flex-row for stacking on small screens -->
     <div class="header flex flex-col sm:flex-row justify-between items-center mb-2">
-      <!-- Removed flex-1 spacer -->
+      <!-- ADDED: Empty spacer div, only active on sm+ screens -->
+      <div class="hidden sm:block sm:flex-1"></div>
       <!-- Logo and Title Container (Centered by default, pushed left on sm+) -->
       <div class="flex items-center gap-1 flex-none mb-2 sm:mb-0">
           <!-- Pulse Logo SVG -->
