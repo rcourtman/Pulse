@@ -26,24 +26,9 @@ jobs:
       - name: Clean install dependencies
         run: rm -rf node_modules && npm ci
 
-      # --- Add Debug Steps ---
-      - name: List test files
-        run: ls -la server/tests/
-      
-      - name: Show config test content
-        run: cat server/tests/config.test.js
-
-      - name: Show current commit hash
-        run: git rev-parse HEAD
-      # --- End Debug Steps ---
-
       - name: Run tests
-        # Print file right before test, clear cache, then run tests
-        run: |
-          echo "--- Content before test --- "
-          cat server/tests/config.test.js
-          echo "--- End content --- "
-          npm test -- --clearCache && npm test # Important: Ensure tests pass before releasing
+        # Simplified test command
+        run: npm test # Important: Ensure tests pass before releasing
 
       # --- Add Docker Steps --- 
       - name: Set up QEMU

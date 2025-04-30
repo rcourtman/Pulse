@@ -36,9 +36,5 @@ jobs:
         # PBS_HOST: ${{ secrets.PBS_HOST }}
         # PBS_TOKEN_ID: ${{ secrets.PBS_TOKEN_ID }}
         # PBS_TOKEN_SECRET: ${{ secrets.PBS_TOKEN_SECRET }}
-      # Print file right before test, clear cache, then run tests
-      run: |
-          echo "--- Content before test --- "
-          cat server/tests/config.test.js
-          echo "--- End content --- "
-          npm test -- --clearCache && npm test 
+      # Simplified test command
+      run: npm test 
