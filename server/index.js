@@ -1302,6 +1302,8 @@ function processPbsTasks(allTasks) {
     const taskTypeMap = {
         backup: 'backup',
         verify: 'verify',
+        verificationjob: 'verify', // Add mapping for verificationjob
+        verify_group: 'verify', // Add mapping for verify_group
         sync: 'sync',
         garbage_collection: 'pruneGc',
         prune: 'pruneGc'
