@@ -39,7 +39,8 @@ jobs:
       # --- End Debug Steps ---
 
       - name: Run tests
-        run: npm test # Important: Ensure tests pass before releasing
+        # Clear Jest cache first, then run tests
+        run: npm test -- --clearCache && npm test # Important: Ensure tests pass before releasing
 
       # --- Add Docker Steps --- 
       - name: Set up QEMU

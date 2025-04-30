@@ -38,4 +38,16 @@ jobs:
         # PBS_HOST: ${{ secrets.PBS_HOST }}
         # PBS_TOKEN_ID: ${{ secrets.PBS_TOKEN_ID }}
         # PBS_TOKEN_SECRET: ${{ secrets.PBS_TOKEN_SECRET }}
-      run: npm test 
+      run: npm test
+
+    - name: Run tests with cache clearing # Changed step name for clarity
+      env: # Add environment variables from GitHub secrets
+        PROXMOX_HOST: ${{ secrets.PROXMOX_HOST }}
+        PROXMOX_TOKEN_ID: ${{ secrets.PROXMOX_TOKEN_ID }}
+        PROXMOX_TOKEN_SECRET: ${{ secrets.PROXMOX_TOKEN_SECRET }}
+        # Add other required primary variables here if needed, e.g.:
+        # PBS_HOST: ${{ secrets.PBS_HOST }}
+        # PBS_TOKEN_ID: ${{ secrets.PBS_TOKEN_ID }}
+        # PBS_TOKEN_SECRET: ${{ secrets.PBS_TOKEN_SECRET }}
+      # Clear Jest cache first, then run tests
+      run: npm test -- --clearCache && npm test 
