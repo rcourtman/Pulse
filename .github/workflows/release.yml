@@ -76,6 +76,8 @@ jobs:
         with:
           # Use input tag for dispatch, otherwise default (inferred from github.ref)
           tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || '' }}
+          # Dynamically set the path to the changelog file based on the tag
+          body_path: changelog-${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || github.ref_name }}.md
           draft: true # Create the release as a draft initially
           # Optionally, you can generate release notes automatically:
           # generate_release_notes: true
