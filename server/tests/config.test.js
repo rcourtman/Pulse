@@ -71,7 +71,7 @@ describe('Configuration Loading (loadConfiguration)', () => {
     });
     const { config, errors } = loadConfig();
     expect(errors).toHaveLength(0);
-    expect(config.pve.host).toBe('pve.example.BROKEN'); // <-- INTENTIONALLY BROKEN
+    expect(config.pve.host).toBe('pve.example.com');
     expect(config.pve.tokenId).toBe('user@pam!pve');
     expect(config.pve.tokenSecret).toBe('secretpve');
   });
