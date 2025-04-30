@@ -50,8 +50,8 @@ jobs:
           platforms: linux/amd64,linux/arm64 # Add other platforms if needed
           push: true
           tags: |
-            rcourtman/pulse:${{ github.ref_name }} # e.g., rcourtman/pulse:v3.2.2
-            rcourtman/pulse:latest # Also tag as latest
+            rcourtman/pulse:${{ github.ref_name }}
+            rcourtman/pulse:latest
       # --- End Docker Steps --- 
 
       - name: Create GitHub Release
