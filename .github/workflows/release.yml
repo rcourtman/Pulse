@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*.*.*' # Trigger on version tags like v1.0.0, v1.2.3, etc.
   workflow_dispatch:
+    inputs:
+      tag_name: # Added input for manual trigger
+        description: 'Tag to create the release for (e.g., v1.2.3)'
+        required: true
+        type: string
 
 permissions:
   contents: write # Needed to create releases
@@ -14,10 +19,19 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     steps:
+      - name: Determine Ref to Checkout
+        id: determine_ref
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "ref=${{ github.event.inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${{ github.ref }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }} # Explicitly checkout the triggering tag/ref
+          ref: ${{ steps.determine_ref.outputs.ref }} # Use determined ref (tag or branch)
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -51,7 +65,7 @@ jobs:
           platforms: linux/amd64,linux/arm64 # Add other platforms if needed
           push: true
           tags: |
-            rcourtman/pulse:${{ github.ref_name }}
+            rcourtman/pulse:${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || github.ref_name }}
             rcourtman/pulse:latest
       # --- End Docker Steps --- 
 
@@ -60,6 +74,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # Provided by GitHub Actions
         with:
+          # Use input tag for dispatch, otherwise default (inferred from github.ref)
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag_name || '' }}
           draft: true # Create the release as a draft initially
           # Optionally, you can generate release notes automatically:
           # generate_release_notes: true
