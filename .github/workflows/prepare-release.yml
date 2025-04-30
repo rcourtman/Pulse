@@ -1,0 +1,66 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_type:
+        description: 'Version type (patch, minor, major)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  prepare:
+    name: Prepare Release Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to push commits and tags
+
+    steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main # Ensure we are on the main branch
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm' # Cache npm dependencies
+
+      - name: Clean install dependencies
+        run: rm -rf node_modules && npm ci
+
+      - name: Configure Git User
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version and capture new version
+        id: version_bump
+        run: |
+          # Run npm version, which updates package.json and package-lock.json
+          # The output of npm version is the new version number (e.g., v3.2.3)
+          NEW_VERSION=$(npm version ${{ github.event.inputs.version_type }} --no-git-tag-version)
+          echo "New version tag: $NEW_VERSION"
+          # Set the new version as an output for later steps
+          echo "new_version_tag=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+
+      - name: Commit version bump
+        run: |
+          git add package.json package-lock.json
+          git commit -m "chore: Bump version to ${{ steps.version_bump.outputs.new_version_tag }}"
+
+      - name: Push commit to main
+        run: git push origin main
+
+      - name: Create Git Tag
+        run: git tag ${{ steps.version_bump.outputs.new_version_tag }}
+
+      - name: Push Git Tag
+        run: git push origin ${{ steps.version_bump.outputs.new_version_tag }} 
