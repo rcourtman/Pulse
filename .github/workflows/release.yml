@@ -61,5 +61,5 @@ jobs:
         run: |
           gh release create ${{ github.ref_name }} \
             --title "Release ${{ github.ref_name }}" \
-            --generate-notes \
+            --notes-file CHANGELOG.md \
             --draft # Keep as draft initially 
