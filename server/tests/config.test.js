@@ -69,11 +69,23 @@ describe('Configuration Loading (loadConfiguration)', () => {
       PROXMOX_TOKEN_ID: 'user@pam!pve',
       PROXMOX_TOKEN_SECRET: 'secretpve',
     });
-    const { config, errors } = loadConfiguration();
-    expect(errors).toHaveLength(0);
-    expect(config.pve.host).toBe('pve.example.com');
-    expect(config.pve.tokenId).toBe('user@pam!pve');
-    expect(config.pve.tokenSecret).toBe('secretpve');
+    // Expect no error to be thrown for valid config
+    let loadedConfig;
+    expect(() => {
+      loadedConfig = loadConfiguration();
+    }).not.toThrow();
+
+    // Check the returned structure
+    expect(loadedConfig).toBeDefined();
+    expect(loadedConfig.endpoints).toHaveLength(1); // Check endpoints array
+    expect(loadedConfig.pbsConfigs).toHaveLength(0); // Expect no PBS configs
+
+    // Check the primary PVE endpoint details within the endpoints array
+    const primaryEndpoint = loadedConfig.endpoints[0];
+    expect(primaryEndpoint.id).toBe('primary');
+    expect(primaryEndpoint.host).toBe('pve.example.com');
+    expect(primaryEndpoint.tokenId).toBe('user@pam!pve');
+    expect(primaryEndpoint.tokenSecret).toBe('secretpve');
   });
 
   // Test Case 2: Missing Primary Proxmox Variables
