@@ -77,5 +77,4 @@ jobs:
             --title "Prepare Release ${{ steps.version_bump.outputs.new_version_tag }}" \
             --body "This PR includes the version bump and updated changelog for release ${{ steps.version_bump.outputs.new_version_tag }}. Please review." \
             --base main \
-            --head ${{ steps.version_bump.outputs.new_version_branch }} \
-            --label "release" # Optional: Add a label if it exists 
+            --head ${{ steps.version_bump.outputs.new_version_branch }} 
