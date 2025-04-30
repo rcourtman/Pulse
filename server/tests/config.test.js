@@ -69,7 +69,7 @@ describe('Configuration Loading (loadConfiguration)', () => {
       PROXMOX_TOKEN_ID: 'user@pam!pve',
       PROXMOX_TOKEN_SECRET: 'secretpve',
     });
-    const { config, errors } = loadConfig();
+    const { config, errors } = loadConfiguration();
     expect(errors).toHaveLength(0);
     expect(config.pve.host).toBe('pve.example.com');
     expect(config.pve.tokenId).toBe('user@pam!pve');
