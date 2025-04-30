@@ -62,5 +62,8 @@ jobs:
       - name: Create Git Tag
         run: git tag ${{ steps.version_bump.outputs.new_version_tag }}
 
+      - name: Delete Remote Tag if Exists (Ignore Errors)
+        run: git push --delete origin ${{ steps.version_bump.outputs.new_version_tag }} || true
+
       - name: Push Git Tag
         run: git push origin ${{ steps.version_bump.outputs.new_version_tag }} 
