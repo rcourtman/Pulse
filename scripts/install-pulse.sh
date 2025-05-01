@@ -15,7 +15,7 @@ LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
 SCRIPT_ABS_PATH="" # Store absolute path of the script here
 REPO_URL="https://github.com/rcourtman/Pulse.git"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
-CURRENT_SCRIPT_COMMIT_SHA="5c9d9525e2ba5eafd2ec6b8a55ec49e2e4cd52de" # Keeping HEAD version
+CURRENT_SCRIPT_COMMIT_SHA="f0fd214" # Updated to match current commit
 # Version of the script being run (will be replaced by self-update mechanism)
 INSTALLER_VERSION="0.0.0" # Placeholder
 
@@ -105,7 +105,7 @@ print_dependency_info() {
     echo "This script will install Pulse, a lightweight monitoring application."
     echo "See README.md for more details about Pulse: https://github.com/rcourtman/Pulse"
     echo ""
-     # --- Display Dependencies (Method from stash, content from HEAD) ---
+     # --- Display Dependencies (Method from stash, CORRECTED content from HEAD) ---
      local dep_text
      dep_text=$(cat << 'EOF'
 -----------------------------------------------------
