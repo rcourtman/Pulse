@@ -229,6 +229,13 @@ self_update_check() {
 
             # ---> NEW: Update embedded SHA in the downloaded file BEFORE fixing endings/moving < ---
             print_info "[DEBUG] Updating embedded SHA in temp script to $latest_remote_sha..."
+            # ---> START DEBUG: Check temp file before sed < ---
+            print_info "[DEBUG] Checking temporary file state: $temp_script"
+            ls -l "$temp_script"
+            print_info "[DEBUG] Line count in temp file:"
+            cat "$temp_script" | wc -l
+            print_info "[DEBUG] End temp file check"
+            # ---> END DEBUG < ---
             # Use sed to find the line starting with CURRENT_SCRIPT_COMMIT_SHA= and replace the quoted value
             # Using # as delimiter for sed to avoid issues with slashes in SHAs (unlikely, but safe)
             # Use -i for GNU sed (Linux) and -e to explicitly provide the script
