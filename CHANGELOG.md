@@ -1,3 +1,15 @@
+## [3.2.3](https://github.com/rcourtman/Pulse/compare/v3.2.2...v3.2.3) (2025-05-01) 
+
+### Features
+
+*   Responsive layout improvements for header, tabs, and filters ([7073886](https://github.com/rcourtman/Pulse/commit/7073886d74648e468088f9a7d7b6f0730cfe2883))
+
+### Bug Fixes
+
+*   **pbs:** Populate summary stats in processPbsTasks ([f827742](https://github.com/rcourtman/Pulse/commit/f827742fc1a19b9220b881f6e938297465cb2c67))
+*   Prevent vertical scrollbar artifact on tabs nav ([79f705d](https://github.com/rcourtman/Pulse/commit/79f705db95d3d4a62276cacf878b0e72659d5790), fixes #64) (thanks @luckman212!)
+
+
 # [3.3.0](https://github.com/rcourtman/Pulse/compare/v3.3.2...v3.3.0) (2025-04-30)
 
 
