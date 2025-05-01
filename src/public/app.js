@@ -1368,20 +1368,44 @@ document.addEventListener('DOMContentLoaded', function() {
       if (guest.status === 'running') {
         const cpuPercent = Math.round(guest.cpu * 100);
         const memoryPercent = guest.memory;
-        const diskPercent = guest.disk;
+        // REMOVED: const diskPercent = guest.disk;
 
         // Revert to original calculation using guest.cpus
         const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus).toFixed(1)}/${guest.cpus} cores)` : ''}`;
         const memoryTooltipText = guest.memoryTotal ? `${formatBytesInt(guest.memoryCurrent)} / ${formatBytesInt(guest.memoryTotal)} (${memoryPercent}%)` : `${memoryPercent}%`;
-        const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
+        // REMOVED: const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
 
         const cpuColorClass = getUsageColor(cpuPercent);
         const memColorClass = getUsageColor(memoryPercent);
-        const diskColorClass = getUsageColor(diskPercent);
+        // REMOVED: const diskColorClass = getUsageColor(diskPercent);
 
         cpuBarHTML = createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
         memoryBarHTML = createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
-        diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+        // REMOVED: diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+        
+        // --- NEW Conditional Disk Display ---
+        if (guest.type === 'lxc') { // Assuming type is 'lxc' or 'qemu' (check data structure if needed)
+            const diskPercent = guest.disk; // Use metric disk usage for LXC
+            const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
+            const diskColorClass = getUsageColor(diskPercent);
+            diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+        } else if (guest.type === 'VM') { 
+            // --- DEBUG LOGGING --- 
+            if (guest.name && guest.name.toLowerCase().includes('unraid')) { // Log only for specific VM for clarity
+                console.log(`[DEBUG] VM Disk Check (${guest.name}): guest.diskTotal =`, guest.diskTotal);
+            }
+            // --- END DEBUG LOGGING --- 
+            if (guest.diskTotal) { // Check if total disk exists and is non-zero
+                 // For VMs, show only total size without progress bar
+                const totalDiskFormatted = formatBytesInt(guest.diskTotal);
+                diskBarHTML = `<span class=\"text-xs text-gray-700 dark:text-gray-200 truncate\">${totalDiskFormatted}</span>`; 
+            } else {
+                 diskBarHTML = '-'; // Fallback if no total disk reported by API
+            }
+        } else {
+             diskBarHTML = '-'; // Fallback if type unknown
+        }
+        // --- END Conditional Disk Display ---
 
         diskReadFormatted = formatSpeedInt(guest.diskread);
         diskWriteFormatted = formatSpeedInt(guest.diskwrite);
