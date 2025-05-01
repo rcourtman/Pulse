@@ -12,18 +12,30 @@ SCRIPT_NAME="install-pulse.sh" # Used for cron job identification
 LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
 SCRIPT_ABS_PATH="" # Store absolute path of the script here
 
-# --- Flags ---
+# --- Flags & Variables ---
 MODE_UPDATE=false # Flag to run in non-interactive update mode
 INSTALL_MODE=""   # Stores the determined action: install, update, remove, cancel, error
+SPECIFIED_VERSION_TAG="" # Stores tag specified via --version
+TARGET_TAG="" # Stores the final tag to be installed/updated
 
 # --- Argument Parsing ---
+# Consume arguments until --version is found, then expect its value
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        --update) MODE_UPDATE=true ;;
+        --update) MODE_UPDATE=true; shift ;;
+        --version)
+            if [[ -n "$2" ]] && [[ "$2" != --* ]]; then
+                SPECIFIED_VERSION_TAG="$2"
+                shift 2 # Consume --version and its value
+            else
+                echo "Error: --version requires a tag name (e.g., v3.2.3)" >&2
+                exit 1
+            fi
+            ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
-    shift
 done
+
 
 # --- Helper Functions ---
 print_info() {
@@ -49,68 +61,190 @@ check_root() {
   fi
 }
 
-# --- Installation Status Check & Action Determination --- 
+# --- Git Helper Functions ---
+# Fetches remote tags and returns the latest semantic version tag (vX.Y.Z)
+get_latest_remote_tag() {
+    local latest_tag
+    print_info "Fetching latest remote tags..."
+    # Use sudo only if not already root (though check_root ensures we are)
+    if ! sudo -u "$PULSE_USER" git fetch origin --tags --force >/dev/null 2>&1; then
+        print_warning "Could not fetch remote tags."
+        return 1
+    fi
+    # Sort tags semantically (version sort) and get the latest 'v*' tag
+    latest_tag=$(sudo -u "$PULSE_USER" git tag -l 'v*' --sort='-version:refname' | head -n 1)
+    if [ -z "$latest_tag" ]; then
+        print_warning "Could not determine the latest remote release tag."
+        return 1
+    fi
+    echo "$latest_tag"
+    return 0
+}
+
+# Checks if a specific tag exists remotely
+check_remote_tag_exists() {
+    local tag_to_check=$1
+    if [ -z "$tag_to_check" ]; then return 1; fi
+    print_info "Checking if remote tag '$tag_to_check' exists..."
+    # Use ls-remote to check efficiently
+    if sudo -u "$PULSE_USER" git ls-remote --tags origin "refs/tags/$tag_to_check" | grep -q "refs/tags/$tag_to_check$"; then
+        print_info "Remote tag '$tag_to_check' found."
+        return 0
+    else
+        print_error "Remote tag '$tag_to_check' not found."
+        return 1
+    fi
+}
+
+# Gets the tag currently checked out
+get_current_local_tag() {
+    local current_tag
+    # describe might fail if not exactly on a tag, try rev-parse first on HEAD
+    # then try describe. If HEAD isn't tagged, describe --tags might give nearest ancestor.
+    current_tag=$(sudo -u "$PULSE_USER" git describe --tags --exact-match HEAD 2>/dev/null)
+    if [ $? -ne 0 ]; then
+         # Not exactly on a tag, maybe try nearest? Or just report empty?
+         # For comparison, maybe nearest is okay, but indicates "not on latest release"
+         current_tag=$(sudo -u "$PULSE_USER" git describe --tags --abbrev=0 HEAD 2>/dev/null)
+         # If even that fails, return empty
+         if [ $? -ne 0 ]; then
+             current_tag=""
+         fi
+    fi
+    echo "$current_tag"
+}
+
+
+# --- Installation Status Check & Action Determination ---
 check_installation_status_and_determine_action() {
     # Check if running in non-interactive update mode FIRST
     if [ "$MODE_UPDATE" = true ]; then
         print_info "Running in non-interactive update mode..."
         INSTALL_MODE="update"
-        return 0 # Continue to main update logic
+        # Determine target tag (latest unless specified)
+        if [ -n "$SPECIFIED_VERSION_TAG" ]; then
+            # Need to check if repo exists to run git commands
+            if [ -d "$PULSE_DIR/.git" ]; then
+                 cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; INSTALL_MODE="error"; return; }
+                 if check_remote_tag_exists "$SPECIFIED_VERSION_TAG"; then
+                     TARGET_TAG="$SPECIFIED_VERSION_TAG"
+                 else
+                     INSTALL_MODE="error" # Tag not found
+                     cd ..; return
+                 fi
+                 cd ..
+            else
+                print_error "Cannot validate specified version tag: Pulse directory $PULSE_DIR not found."
+                INSTALL_MODE="error"; return
+            fi
+        else
+            # Need to check if repo exists to run git commands
+            if [ -d "$PULSE_DIR/.git" ]; then
+                cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; INSTALL_MODE="error"; return; }
+                TARGET_TAG=$(get_latest_remote_tag)
+                if [ $? -ne 0 ] || [ -z "$TARGET_TAG" ]; then
+                     print_error "Could not determine latest remote tag for update."
+                     INSTALL_MODE="error"
+                fi
+                cd ..
+            else
+                 print_error "Cannot determine latest version tag: Pulse directory $PULSE_DIR not found."
+                 INSTALL_MODE="error"; return
+            fi
+        fi
+        # If error occurred determining tag, INSTALL_MODE will be set to error
+        return 0 # Continue to main update logic if no error
     fi
 
     print_info "Checking Pulse installation at $PULSE_DIR..."
     if [ -d "$PULSE_DIR" ]; then
         # Directory exists
         if [ -d "$PULSE_DIR/.git" ]; then
-            # It's a git repository - Check if up-to-date
+            # It's a git repository
             cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; INSTALL_MODE="error"; return; }
-            print_info "Fetching remote information..."
-            # Fetch quietly as the user might not need to see this yet
-            if ! sudo -u "$PULSE_USER" git fetch origin > /dev/null 2>&1; then
-                 print_warning "Could not fetch remote information to check for updates. Proceeding anyway..."
-                 # Reset INSTALL_MODE, it will be set below
-                 INSTALL_MODE=""
-            else
-                # Compare local HEAD with remote main
-                local_head=$(sudo -u "$PULSE_USER" git rev-parse HEAD 2>/dev/null)
-                remote_main=$(sudo -u "$PULSE_USER" git rev-parse origin/main 2>/dev/null)
 
-                if [ "$local_head" = "$remote_main" ]; then
-                    print_info "Pulse is already installed and up-to-date with the main branch."
+            local current_tag
+            current_tag=$(get_current_local_tag) # Get tag of current HEAD
+
+            local latest_tag
+            latest_tag=$(get_latest_remote_tag) # Get latest remote tag (also fetches)
+            if [ $? -ne 0 ] || [ -z "$latest_tag" ]; then
+                print_warning "Could not determine the latest remote release tag. Cannot check for updates reliably."
+                INSTALL_MODE="update" # Offer update anyway
+            else
+                print_info "Current installed version (tag): ${current_tag:-Not on a tag}"
+                print_info "Latest available version (tag): $latest_tag"
+
+                if [ -n "$current_tag" ] && [ "$current_tag" = "$latest_tag" ]; then
+                    print_info "Pulse is already installed and up-to-date with the latest release ($latest_tag)."
                     INSTALL_MODE="uptodate"
                 else
-                    # Escape parentheses in the warning string
-                    print_warning "Pulse is installed, but an update is available \(local: ${local_head:0:7}, remote: ${remote_main:0:7}\)."
-                    # Set default mode to update if different
+                    print_warning "Pulse is installed, but an update to $latest_tag is available."
                     INSTALL_MODE="update"
                 fi
+            fi
+
+            # Determine target tag for potential install/update
+            if [ -n "$SPECIFIED_VERSION_TAG" ]; then
+                 if check_remote_tag_exists "$SPECIFIED_VERSION_TAG"; then
+                     TARGET_TAG="$SPECIFIED_VERSION_TAG"
+                     print_info "Will target specified version: $TARGET_TAG"
+                     INSTALL_MODE="update" # Force update mode if specific version requested
+                 else
+                     INSTALL_MODE="error"; cd ..; return # Specified tag not found
+                 fi
+            else
+                TARGET_TAG="$latest_tag" # Default to latest determined tag
             fi
             cd .. # Go back to original directory
 
             # Prompt based on status
             if [ "$INSTALL_MODE" = "uptodate" ]; then
-                echo "Choose an action:"
-                echo "  1) Re-run installation/update process anyway"
-                echo "  2) Remove Pulse"
-                echo "  3) Cancel"
-                read -p "Enter your choice (1-3): " user_choice
-                case $user_choice in
-                    1) INSTALL_MODE="update" ;; # Treat re-run as update
-                    2) INSTALL_MODE="remove" ;; 
-                    3) INSTALL_MODE="cancel" ;; 
-                    *) print_error "Invalid choice."; INSTALL_MODE="error" ;; 
-                esac
-            else # Covers case where fetch failed OR update is available
-                 echo "Choose an action:"
-                 echo "  1) Update Pulse to the latest version" 
-                 echo "  2) Remove Pulse"
-                 echo "  3) Cancel"
+                # If user specified a version different from current, offer update
+                if [ -n "$SPECIFIED_VERSION_TAG" ] && [ "$SPECIFIED_VERSION_TAG" != "$current_tag" ]; then
+                     print_info "You requested version $SPECIFIED_VERSION_TAG, but $current_tag is installed."
+                     echo "Choose an action:"
+                     echo "  1) Install specified version ($SPECIFIED_VERSION_TAG)"
+                     echo "  2) Remove Pulse"
+                     echo "  3) Cancel"
+                     read -p "Enter your choice (1-3): " user_choice
+                     case $user_choice in
+                         1) INSTALL_MODE="update" ;; # Treat re-run as update
+                         2) INSTALL_MODE="remove" ;;
+                         3) INSTALL_MODE="cancel" ;;
+                         *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+                     esac
+                else # Up to date and no specific version requested OR specified matches current
+                    echo "Choose an action:"
+                    echo "  1) Re-install current version ($current_tag)" # Changed prompt
+                    echo "  2) Remove Pulse"
+                    echo "  3) Cancel"
+                    read -p "Enter your choice (1-3): " user_choice
+                    case $user_choice in
+                        1) INSTALL_MODE="update" ;; # Treat re-run as update
+                        2) INSTALL_MODE="remove" ;;
+                        3) INSTALL_MODE="cancel" ;;
+                        *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+                    esac
+                fi
+            elif [ "$INSTALL_MODE" = "update" ]; then # Update available or fetch failed
+                 if [ -n "$SPECIFIED_VERSION_TAG" ]; then
+                     echo "Choose an action:"
+                     echo "  1) Install specified version ($SPECIFIED_VERSION_TAG)"
+                     echo "  2) Remove Pulse"
+                     echo "  3) Cancel"
+                 else # Defaulting to latest tag
+                      echo "Choose an action:"
+                      echo "  1) Update Pulse to the latest version ($TARGET_TAG)"
+                      echo "  2) Remove Pulse"
+                      echo "  3) Cancel"
+                 fi
                  read -p "Enter your choice (1-3): " user_choice
                  case $user_choice in
-                     1) INSTALL_MODE="update" ;; 
-                     2) INSTALL_MODE="remove" ;; 
-                     3) INSTALL_MODE="cancel" ;; 
-                     *) print_error "Invalid choice."; INSTALL_MODE="error" ;; 
+                     1) INSTALL_MODE="update" ;;
+                     2) INSTALL_MODE="remove" ;;
+                     3) INSTALL_MODE="cancel" ;;
+                     *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                  esac
             fi
 
@@ -123,16 +257,28 @@ check_installation_status_and_determine_action() {
     else
         # Directory doesn't exist - Offer Install/Cancel
         print_info "Pulse is not currently installed."
-        echo "Choose an action:"
-        echo "  1) Install Pulse"
-        echo "  2) Cancel"
-        read -p "Enter your choice (1-2): " user_choice
-
-        case $user_choice in
-            1) INSTALL_MODE="install" ;; 
-            2) INSTALL_MODE="cancel" ;; 
-            *) print_error "Invalid choice."; INSTALL_MODE="error" ;; 
-        esac
+        # Determine target tag for potential install
+        if [ -n "$SPECIFIED_VERSION_TAG" ]; then
+            # Need to check tag existence BEFORE offering install
+            # Clone temporarily to check? No, use ls-remote. Need git installed first...
+            # Assume git is installed by dependencies step later, check tag existence THEN.
+            # For now, just store it.
+            TARGET_TAG="$SPECIFIED_VERSION_TAG"
+            print_info "Will attempt to install specified version: $TARGET_TAG"
+            INSTALL_MODE="install"
+        else
+            # Need git to determine latest. We'll do this later in the install step.
+            # Set mode first.
+            echo "Choose an action:"
+            echo "  1) Install Pulse (latest version)"
+            echo "  2) Cancel"
+            read -p "Enter your choice (1-2): " user_choice
+            case $user_choice in
+                1) INSTALL_MODE="install" ;; # Target tag determined later
+                2) INSTALL_MODE="cancel" ;;
+                *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+            esac
+        fi
     fi
     # We don't return here, INSTALL_MODE is now set globally for the main logic
 }
@@ -240,57 +386,69 @@ create_pulse_user() {
     fi
 }
 
+
 # --- Core Action Functions --- (perform_update, perform_remove)
 perform_update() {
-    print_info "Attempting to update Pulse..."
+    # TARGET_TAG should be set by check_installation_status_and_determine_action
+    if [ -z "$TARGET_TAG" ]; then
+        print_error "Target version tag not determined. Cannot update."
+        return 1
+    fi
+    print_info "Attempting to update Pulse to version $TARGET_TAG..."
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
     # Add safe directory config for root user, just in case
     git config --global --add safe.directory "$PULSE_DIR" > /dev/null 2>&1 || print_warning "Could not configure safe.directory for root user."
 
-    print_info "Fetching latest changes from git (running as user $PULSE_USER)..."
-    # Add --force to allow overwriting local tags if they conflict with remote after amends/force-pushes
-    if ! sudo -u "$PULSE_USER" git fetch origin --tags --force; then # Ensure tags are fetched
-        print_error "Failed to fetch latest changes from git."
+    print_info "Fetching latest changes and tags from git (running as user $PULSE_USER)..."
+    # Ensure tags are fetched
+    if ! sudo -u "$PULSE_USER" git fetch origin --tags --force; then
+        print_error "Failed to fetch latest changes/tags from git."
         cd ..
         return 1
     fi
 
-    print_info "Resetting local repository to match remote 'main' branch..."
-    # Reset local main to exactly match the fetched origin/main, discarding local changes/commits
-    if ! sudo -u "$PULSE_USER" git reset --hard origin/main; then
-        print_error "Failed to reset local repository to origin/main."
+    # Check if target tag actually exists after fetching
+    if ! sudo -u "$PULSE_USER" git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
+         print_error "Target tag '$TARGET_TAG' could not be found locally after fetch."
+         print_error "It might have been deleted remotely or there was a fetch issue."
+         cd ..
+         return 1
+    fi
+
+    print_info "Checking out target version tag '$TARGET_TAG'..."
+    # Checkout the specific tag. This will result in a detached HEAD state.
+    if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
+        print_error "Failed to checkout tag '$TARGET_TAG'."
         cd ..
         return 1
     fi
 
-    # Get the latest tag pointing to the current HEAD
-    local latest_tag
-    latest_tag=$(sudo -u "$PULSE_USER" git describe --tags --abbrev=0 HEAD 2>/dev/null)
+    # Get the tag again now that we've checked it out
+    local current_tag
+    current_tag=$(sudo -u "$PULSE_USER" git describe --tags --exact-match HEAD 2>/dev/null) # Should now match TARGET_TAG
 
     print_info "Cleaning repository (removing untracked files)..."
     # Remove untracked files and directories to ensure a clean state
     # Use -f for files, -d for directories. Do NOT use -x which removes ignored files like .env
     if ! sudo -u "$PULSE_USER" git clean -fd; then
         print_warning "Failed to clean untracked files from the repository."
-        # Continue anyway, as the core update (reset) succeeded
+        # Continue anyway, as the core update (checkout) succeeded
     fi
 
-    # Ensure the script itself remains executable after update
+    # Ensure the script itself remains executable after update (No change here)
     if [ -n "$SCRIPT_ABS_PATH" ] && [ -f "$SCRIPT_ABS_PATH" ]; then
         print_info "Ensuring install script ($SCRIPT_ABS_PATH) is executable..."
         if chmod +x "$SCRIPT_ABS_PATH"; then
             print_success "Install script executable permission set."
         else
             print_warning "Failed to set executable permission on install script."
-            # Not necessarily fatal, continue update
         fi
     else
         print_warning "Could not find script path ($SCRIPT_ABS_PATH) to ensure executable permission."
     fi
 
     print_info "Re-installing npm dependencies (root)..."
-    # Keep --omit=dev here, we'll install cli separately
     if ! npm install --unsafe-perm > /dev/null 2>&1; then
         print_warning "Failed to install root npm dependencies during update. Continuing..."
     else
@@ -311,8 +469,6 @@ perform_update() {
     print_info "Building CSS assets..."
     if ! npm run build:css > /dev/null 2>&1; then
         print_error "Failed to build CSS assets during update."
-        # Potentially return 1 here if CSS build failure is critical
-        # For now, just warn and continue
         print_warning "Continuing update despite CSS build failure."
     else
         print_success "CSS assets built."
@@ -324,7 +480,6 @@ perform_update() {
     print_info "Ensuring systemd service ($SERVICE_NAME) is configured..."
     if ! setup_systemd_service true; then # Pass true to indicate update mode (skip start/enable)
         print_error "Failed to configure systemd service during update."
-        # Decide if this should be fatal, likely yes as restart will fail
         return 1
     fi
 
@@ -341,14 +496,15 @@ perform_update() {
         return 1
     fi
 
-    # Use the detected tag in the success message
-    if [ -n "$latest_tag" ]; then
-      print_success "Pulse updated successfully to version $latest_tag!"
+    # Use the actual checked-out tag in the success message
+    if [ -n "$current_tag" ]; then
+      print_success "Pulse updated successfully to version $current_tag!"
     else
-      print_success "Pulse updated successfully!" # Fallback if tag detection failed
+      print_success "Pulse updated successfully! (Could not confirm exact tag)"
     fi
     return 0
 }
+
 
 perform_remove() {
     print_warning "This will stop and disable the Pulse service(s) and remove the installation directory ($PULSE_DIR)."
@@ -714,7 +870,9 @@ EOF
     return 0
 }
 
+
 # --- Final Steps Functions --- (setup_cron_update, disable_cron_update, prompt_for_cron_setup, final_instructions)
+# (No changes needed in disable_cron_update or setup_cron_update logic, but prompt needs adjusting)
 
 # Function to specifically disable the cron job
 disable_cron_update() {
@@ -767,7 +925,7 @@ setup_cron_update() {
     # Escape necessary characters for sed pattern matching
     escaped_cron_identifier=$(sed 's/[/.*^$]/\\&/g' <<< "$cron_identifier")
 
-    print_info "Choose update frequency:"
+    print_info "Choose update frequency (will update to the *latest release tag*):" # Clarified update target
     echo "  1) Daily"
     echo "  2) Weekly"
     echo "  3) Monthly"
@@ -782,7 +940,7 @@ setup_cron_update() {
         *) print_error "Invalid choice. Skipping auto-update setup."; return 1 ;;
     esac
 
-    # Construct the cron command
+    # Construct the cron command (keeps using --update flag, logic inside update handles finding latest tag)
     cron_command="$cron_schedule /usr/bin/bash $script_path --update >> $LOG_FILE 2>&1"
 
     # --- Improved Cron Job Handling ---
@@ -798,9 +956,9 @@ setup_cron_update() {
     # Prepare the new crontab content
     # If filtered_cron is empty after removal, avoid leading newline. Otherwise, add newline before appending.
     if [ -z "$filtered_cron" ]; then
-        new_cron_content=$(printf "%s\n%s" "$cron_identifier" "$cron_command")
+        new_cron_content=$(printf "%s\\n%s" "$cron_identifier" "$cron_command")
     else
-        new_cron_content=$(printf "%s\n%s\n%s" "$filtered_cron" "$cron_identifier" "$cron_command")
+        new_cron_content=$(printf "%s\\n%s\\n%s" "$filtered_cron" "$cron_identifier" "$cron_command")
     fi
 
     # Load the new crontab content
@@ -838,6 +996,7 @@ prompt_for_cron_setup() {
 
     if [ "$cron_exists" = true ]; then
         print_info "Automatic updates for Pulse appear to be currently ENABLED."
+        print_info "(Cron job will update to the latest release tag when run)" # Clarification
         echo "Choose an action:"
         echo "  1) Change update schedule"
         echo "  2) Disable automatic updates"
@@ -847,11 +1006,12 @@ prompt_for_cron_setup() {
         case $cron_manage_choice in
             1) setup_cron_update ;; # Call function to prompt for new schedule and update
             2) disable_cron_update ;; # Call function to remove the job
-            3) print_info "Keeping current automatic update schedule.";; 
-            *) print_warning "Invalid choice. No changes made to automatic updates.";; 
+            3) print_info "Keeping current automatic update schedule.";;
+            *) print_warning "Invalid choice. No changes made to automatic updates.";;
         esac
     else
         print_info "Automatic updates for Pulse appear to be currently DISABLED."
+        print_info "(Cron job would update to the latest release tag when run)" # Clarification
         read -p "Do you want to set up automatic updates for Pulse? (Y/n): " setup_cron_confirm
         if [[ ! "$setup_cron_confirm" =~ ^[Nn]$ ]]; then # Proceed if not 'N' or 'n' (Default Yes)
             setup_cron_update
@@ -874,8 +1034,19 @@ final_instructions() {
         port_value="7655" # Default port
     fi
 
+    # Get current checked out tag for final message
+    local final_tag=""
+    if [ -d "$PULSE_DIR/.git" ]; then
+        cd "$PULSE_DIR" || print_warning "Could not cd to $PULSE_DIR to get final tag."
+        final_tag=$(get_current_local_tag)
+        cd .. # Go back
+    fi
+
     echo ""
     print_success "Pulse for Proxmox VE installation/update complete!"
+    if [ -n "$final_tag" ]; then
+        print_success "Current version installed: $final_tag"
+    fi
     echo "-------------------------------------------------------------"
     print_info "You should be able to access the Pulse dashboard at:"
     if [ -n "$ip_address" ]; then
@@ -914,9 +1085,10 @@ else
 fi
 
 # Check installation status and determine user's desired action first
-check_installation_status_and_determine_action # Sets the INSTALL_MODE variable
+# This also determines TARGET_TAG
+check_installation_status_and_determine_action
 
-# --- Execute Action Based on INSTALL_MODE --- 
+# --- Execute Action Based on INSTALL_MODE ---
 case "$INSTALL_MODE" in
     "remove")
         print_info "Proceeding with removal..."
@@ -936,7 +1108,7 @@ case "$INSTALL_MODE" in
         # Only install dependencies if installing or updating
         print_info "Proceeding with install/update. Installing prerequisites..."
         apt_update_upgrade || exit 1
-        install_dependencies || exit 1
+        install_dependencies || exit 1 # Installs git needed for tag checks
         setup_node || exit 1
         create_pulse_user || exit 1
         print_success "Prerequisites installed."
@@ -944,17 +1116,54 @@ case "$INSTALL_MODE" in
         # Now perform the specific action
         if [ "$INSTALL_MODE" = "install" ]; then
             print_info "Starting installation..."
-            # --- Installation specific steps --- 
+            # --- Installation specific steps ---
+
+            # If TARGET_TAG was specified, check it exists BEFORE cloning
+            if [ -n "$SPECIFIED_VERSION_TAG" ]; then
+                 # Check tag existence remotely using ls-remote (requires git)
+                 # Use check_remote_tag_exists but don't cd into repo
+                 if ! git ls-remote --tags --exit-code origin "refs/tags/$SPECIFIED_VERSION_TAG"; then
+                     print_error "Specified version tag '$SPECIFIED_VERSION_TAG' not found on remote repository."
+                     exit 1
+                 else
+                     print_info "Specified version tag '$SPECIFIED_VERSION_TAG' confirmed."
+                     TARGET_TAG="$SPECIFIED_VERSION_TAG"
+                 fi
+            fi
+
             print_info "Cloning Pulse repository into $PULSE_DIR..."
+            # Clone shallowly initially? No, need history for tags.
             if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
                 print_success "Repository cloned successfully."
+                cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR after clone."; exit 1; }
+                # Set ownership early so subsequent git commands run as pulse user
+                chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR" || print_warning "Failed initial chown after clone."
             else
                 print_error "Failed to clone repository."
                 exit 1
             fi
 
+            # Determine TARGET_TAG if not specified (find latest tag)
+            if [ -z "$TARGET_TAG" ]; then
+                TARGET_TAG=$(get_latest_remote_tag) # Already fetched during check if update, fetch here if install
+                if [ $? -ne 0 ] || [ -z "$TARGET_TAG" ]; then
+                     print_error "Could not determine latest release tag to install."
+                     cd ..; exit 1
+                fi
+                print_info "Determined latest version tag: $TARGET_TAG"
+            fi
+
+            # Checkout the target tag
+            print_info "Checking out target version tag '$TARGET_TAG'..."
+            if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
+                 print_error "Failed to checkout tag '$TARGET_TAG' after cloning."
+                 cd ..; exit 1
+            fi
+            print_success "Checked out version $TARGET_TAG."
+            cd .. # Back to original dir before dependency install
+
             install_npm_deps || exit 1 # Installs root and server (NOW INCLUDES DEV)
-            
+
             # Build CSS after dependencies
             print_info "Building CSS assets..."
             cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before building CSS"; exit 1; }
@@ -965,7 +1174,7 @@ case "$INSTALL_MODE" in
                 print_success "CSS assets built."
             fi
             # Now cd back if needed, though subsequent steps might need PULSE_DIR
-            # cd .. 
+            cd ..
 
             set_permissions || exit 1 # Set permissions AFTER building css
             configure_environment || exit 1 # Prompt user for details
@@ -973,10 +1182,10 @@ case "$INSTALL_MODE" in
             final_instructions
             prompt_for_cron_setup # Ask about cron on fresh install
 
-        else # Update mode
-            print_info "Starting update..."
-            # --- Update specific steps --- 
-            if perform_update; then
+        else # Update mode (TARGET_TAG determined during check)
+            print_info "Starting update to version $TARGET_TAG..."
+            # --- Update specific steps ---
+            if perform_update; then # perform_update now uses TARGET_TAG
                 print_success "Pulse update completed successfully."
                 final_instructions
                 prompt_for_cron_setup
