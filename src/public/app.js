@@ -1384,17 +1384,13 @@ document.addEventListener('DOMContentLoaded', function() {
         // REMOVED: diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
         
         // --- NEW Conditional Disk Display ---
-        if (guest.type === 'lxc') { // Assuming type is 'lxc' or 'qemu' (check data structure if needed)
+        if (guest.type === 'CT') { // Corrected check: Use 'CT' for containers
             const diskPercent = guest.disk; // Use metric disk usage for LXC
             const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
             const diskColorClass = getUsageColor(diskPercent);
             diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
         } else if (guest.type === 'VM') { 
-            // --- DEBUG LOGGING --- 
-            if (guest.name && guest.name.toLowerCase().includes('unraid')) { // Log only for specific VM for clarity
-                console.log(`[DEBUG] VM Disk Check (${guest.name}): guest.diskTotal =`, guest.diskTotal);
-            }
-            // --- END DEBUG LOGGING --- 
+            // REMOVED DEBUG LOGGING
             if (guest.diskTotal) { // Check if total disk exists and is non-zero
                  // For VMs, show only total size without progress bar
                 const totalDiskFormatted = formatBytesInt(guest.diskTotal);
