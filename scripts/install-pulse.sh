@@ -229,49 +229,45 @@ self_update_check() {
 
             # ---> NEW: Update embedded SHA in the downloaded file BEFORE fixing endings/moving < ---
             print_info "[DEBUG] Updating embedded SHA in temp script to $latest_remote_sha..."
-            # ---> START DEBUG: Check temp file before sed < ---
-            print_info "[DEBUG] Checking temporary file state: $temp_script"
-            ls -l "$temp_script"
-            print_info "[DEBUG] Line count in temp file:"
-            cat "$temp_script" | wc -l
-            print_info "[DEBUG] End temp file check"
-            # ---> END DEBUG < ---
-            # Use sed to find the line starting with CURRENT_SCRIPT_COMMIT_SHA= and replace the quoted value
-            # Using # as delimiter for sed to avoid issues with slashes in SHAs (unlikely, but safe)
-            # Use -i for GNU sed (Linux) and -e to explicitly provide the script
-            sed -i -e "s#^CURRENT_SCRIPT_COMMIT_SHA=.*#CURRENT_SCRIPT_COMMIT_SHA=\"$latest_remote_sha\"#" "$temp_script"
-            local update_sha_exit_code=$?
-            if [ $update_sha_exit_code -ne 0 ]; then
-                 print_error "sed command failed while updating embedded SHA! Aborting update."
-                 print_error "Exit code: $update_sha_exit_code"
-                 rm -f "$temp_script"
-                 return 1
-            fi
-            # --- END NEW STEP ---
+            # ---> START REPLACEMENT LOGIC (Robust alternative to sed)
+            local processed_temp_script="${temp_script}.processed"
+            local line_updated=false
+            while IFS= read -r line || [[ -n "$line" ]]; do
+                # Check if the line starts with the variable we want to replace
+                if [[ "$line" == CURRENT_SCRIPT_COMMIT_SHA=* ]]; then
+                    echo "CURRENT_SCRIPT_COMMIT_SHA=\"$latest_remote_sha\"" >> "$processed_temp_script"
+                    line_updated=true
+                # Optional: Fix line endings (though curl might handle this)
+                # elif [[ "$line" == *$'\r' ]]; then
+                #    echo "${line%$'\r'}" >> "$processed_temp_script" 
+                else
+                    # Write other lines as-is
+                    echo "$line" >> "$processed_temp_script"
+                fi
+            done < "$temp_script"
 
-            # ---> Fix line endings on TEMP file < ---
-            # Keep this step to ensure downloaded script content is clean
-            # Use -i for GNU sed (Linux)
-            sed -i 's/\r$//' "$temp_script"
-            local sed_exit_code=$?
-            if [ $sed_exit_code -ne 0 ]; then
-                 print_error "sed command failed! Cannot fix line endings. Aborting."
-                 rm -f "$temp_script"
-                 return 1 # Return instead of exit
-            fi
-            # ---> Remove hash calculation of temp file ---
-
-            if ! chmod +x "$temp_script"; then
-                print_error "Failed to make temporary script executable."
-                rm -f "$temp_script"
+            if [ "$line_updated" = false ]; then
+                print_error "Failed to find and update CURRENT_SCRIPT_COMMIT_SHA line in downloaded script!"
+                rm -f "$temp_script" "$processed_temp_script"
                 return 1
             fi
-            # --- Move the FIXED temp file into place ---
-            if ! mv "$temp_script" "$SCRIPT_ABS_PATH"; then
-                 print_error "Failed to replace the current script file."
-                 rm -f "$temp_script" # Clean up if mv failed
+            # ---> END REPLACEMENT LOGIC <---
+
+            # ---> NOW work with processed_temp_script <---
+            if ! chmod +x "$processed_temp_script"; then
+                print_error "Failed to make processed temporary script executable."
+                rm -f "$temp_script" "$processed_temp_script"
+                return 1
+            fi
+
+            # --- Move the PROCESSED temp file into place ---
+            if ! mv "$processed_temp_script" "$SCRIPT_ABS_PATH"; then
+                 print_error "Failed to replace the current script file with processed version."
+                 rm -f "$temp_script" "$processed_temp_script" # Clean up both temps
                  return 1
             fi
+            rm -f "$temp_script" # Clean up original temp file
+
             print_success "Installer updated successfully to commit ${latest_remote_sha:0:7}."
             print_info "Re-executing with updated installer..."
             # ---> MODIFY exec to pass flag < ---
