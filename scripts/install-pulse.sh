@@ -69,7 +69,7 @@ print_warning() {
 }
 
 print_error() {
-  echo -e "\033[1;31m[ERROR]\033[0m $1" >&2
+  echo -e "\033[1;31m[ERROR]\033[0m $1 >&2
 }
 
 check_root() {
@@ -276,49 +276,72 @@ check_installation_status_and_determine_action() {
                 # If user specified a version different from current, offer update
                 if [ -n "$SPECIFIED_VERSION_TAG" ] && [ "$SPECIFIED_VERSION_TAG" != "$current_tag" ]; then
                      print_info "You requested version $SPECIFIED_VERSION_TAG, but $current_tag is installed."
-                     echo "Choose an action:"
-                     echo "  1) Install specified version ($SPECIFIED_VERSION_TAG)"
-                     echo "  2) Remove Pulse"
-                     echo "  3) Cancel"
-                     read -p "Enter your choice (1-3): " user_choice
+                     printf '%s\\n' "Choose an action:"
+                     # Reordered options
+                     printf '  %s) %s\\n' "1" "Manage automatic updates"
+                     printf '  %s) %s %s\\n' "2" "Install specified version" "$SPECIFIED_VERSION_TAG"
+                     printf '  %s) %s\\n' "3" "Remove Pulse"
+                     printf '  %s) %s\\n' "4" "Cancel"
+                     read -p "Enter your choice [1-4]: " user_choice # Updated range
                      case $user_choice in
-                         1) INSTALL_MODE="update" ;; # Treat re-run as update
-                         2) INSTALL_MODE="remove" ;;
-                         3) INSTALL_MODE="cancel" ;;
+                         # Adjusted case logic
+                         1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;; # Call cron setup and then cancel main flow
+                         2) INSTALL_MODE="update" ;; # Treat re-run as update
+                         3) INSTALL_MODE="remove" ;;
+                         4) INSTALL_MODE="cancel" ;;
                          *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                      esac
                 else # Up to date and no specific version requested OR specified matches current
-                    echo "Choose an action:"
-                    echo "  1) Re-install current version ($current_tag)" # Changed prompt
-                    echo "  2) Remove Pulse"
-                    echo "  3) Cancel"
-                    read -p "Enter your choice (1-3): " user_choice
+                    printf '%s\\n' "Choose an action:"
+                    # Reordered options
+                    printf '  %s) %s\\n' "1" "Manage automatic updates"
+                    printf '  %s) %s %s\\n' "2" "Re-install current version" "$current_tag"
+                    printf '  %s) %s\\n' "3" "Remove Pulse"
+                    printf '  %s) %s\\n' "4" "Cancel"
+                    read -p "Enter your choice [1-4]: " user_choice # Updated range
                     case $user_choice in
-                        1) INSTALL_MODE="update" ;; # Treat re-run as update
-                        2) INSTALL_MODE="remove" ;;
-                        3) INSTALL_MODE="cancel" ;;
+                        # Adjusted case logic
+                        1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;; # Call cron setup and then cancel main flow
+                        2) INSTALL_MODE="update" ;; # Treat re-run as update
+                        3) INSTALL_MODE="remove" ;;
+                        4) INSTALL_MODE="cancel" ;;
                         *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                     esac
                 fi
             elif [ "$INSTALL_MODE" = "update" ]; then # Update available or fetch failed
                  if [ -n "$SPECIFIED_VERSION_TAG" ]; then
-                     echo "Choose an action:"
-                     echo "  1) Install specified version ($SPECIFIED_VERSION_TAG)"
-                     echo "  2) Remove Pulse"
-                     echo "  3) Cancel"
+                     printf '%s\\n' "Choose an action:"
+                     # Reordered options
+                     printf '  %s) %s\\n' "1" "Manage automatic updates"
+                     printf '  %s) %s %s\\n' "2" "Install specified version" "$SPECIFIED_VERSION_TAG"
+                     printf '  %s) %s\\n' "3" "Remove Pulse"
+                     printf '  %s) %s\\n' "4" "Cancel"
+                     read -p "Enter your choice [1-4]: " user_choice # Updated range
+                     case $user_choice in
+                         # Adjusted case logic
+                         1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;; # Call cron setup and then cancel main flow
+                         2) INSTALL_MODE="update" ;;
+                         3) INSTALL_MODE="remove" ;;
+                         4) INSTALL_MODE="cancel" ;;
+                         *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+                     esac
                  else # Defaulting to latest tag
-                      echo "Choose an action:"
-                      echo "  1) Update Pulse to the latest version ($TARGET_TAG)"
-                      echo "  2) Remove Pulse"
-                      echo "  3) Cancel"
+                      printf '%s\\n' "Choose an action:"
+                      # Reordered options
+                      printf '  %s) %s\\n' "1" "Manage automatic updates"
+                      printf '  %s) %s %s\\n' "2" "Update Pulse to the latest version" "$TARGET_TAG"
+                      printf '  %s) %s\\n' "3" "Remove Pulse"
+                      printf '  %s) %s\\n' "4" "Cancel"
+                      read -p "Enter your choice [1-4]: " user_choice # Updated range
+                      case $user_choice in
+                          # Adjusted case logic
+                          1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;; # Call cron setup and then cancel main flow
+                          2) INSTALL_MODE="update" ;;
+                          3) INSTALL_MODE="remove" ;;
+                          4) INSTALL_MODE="cancel" ;;
+                          *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+                      esac
                  fi
-                 read -p "Enter your choice (1-3): " user_choice
-                 case $user_choice in
-                     1) INSTALL_MODE="update" ;;
-                     2) INSTALL_MODE="remove" ;;
-                     3) INSTALL_MODE="cancel" ;;
-                     *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
-                 esac
             fi
 
         else
