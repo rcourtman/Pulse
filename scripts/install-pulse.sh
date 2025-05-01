@@ -15,7 +15,7 @@ LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
 SCRIPT_ABS_PATH="" # Store absolute path of the script here
 REPO_URL="https://github.com/rcourtman/Pulse.git"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
-CURRENT_SCRIPT_COMMIT_SHA="5c9d9525e2ba5eafd2ec6b8a55ec49e2e4cd52de"
+CURRENT_SCRIPT_COMMIT_SHA="5c9d9525e2ba5eafd2ec6b8a55ec49e2e4cd52de" # Keeping HEAD version
 # Version of the script being run (will be replaced by self-update mechanism)
 INSTALLER_VERSION="0.0.0" # Placeholder
 
@@ -91,11 +91,23 @@ check_root() {
 
 # ---> NEW: Function to inform about dependencies < ---
 print_dependency_info() {
+    # --- ASCII Banner (from stash) ---
+    echo -e "\033[1;34m" # Start color blue
+    echo ' ____        _          '
+    echo '|  _ \ _   _| |___  ___ '
+    echo '| |_) | | | | / __|/ _ \'
+    echo '|  __/| |_| | \__ \  __/'
+    echo '|_|    \__,_|_|___/\___|'
+    echo '                       '
+    echo -e "\033[0m" # End color
+    echo "" # Keep blank line for spacing
+    echo -e "\033[1mWelcome to the Pulse for Proxmox VE Installer\033[0m"
+    echo "This script will install Pulse, a lightweight monitoring application."
+    echo "See README.md for more details about Pulse: https://github.com/rcourtman/Pulse"
     echo ""
-    # --- End ASCII Banner ---
-
-    # --- Display Dependencies ---
-    print_info "$(cat << 'EOF'
+     # --- Display Dependencies (Method from stash, content from HEAD) ---
+     local dep_text
+     dep_text=$(cat << 'EOF'
 -----------------------------------------------------
 Required Dependencies:
 
@@ -113,8 +125,9 @@ Required Dependencies:
 
 -----------------------------------------------------
 EOF
-    )"
-    # --- End Display Dependencies ---
+     )
+     print_info "$dep_text"
+     # --- End Display Dependencies ---
 
     # --- NEW: Confirmation Prompt (Default Yes) ---
     local confirm_proceed
@@ -1334,7 +1347,7 @@ prompt_for_cron_setup() {
 final_instructions() {
     # Try to get the IP address of the container
     local ip_address
-    ip_address=$(hostname -I | awk '{print $1}') # Get the first IP address
+    ip_address=$(hostname -I | awk '{print $1}') # <--- Line 1155 (UNCOMMENTED)
     local port_value
     # Read the port from the .env file, fallback to default if not found/readable
     local env_path="$PULSE_DIR/.env"
@@ -1359,12 +1372,12 @@ final_instructions() {
     fi
     echo "-------------------------------------------------------------"
     print_info "You should be able to access the Pulse dashboard at:"
-    if [ -n "$ip_address" ]; then
-        echo "  http://$ip_address:$port_value"
-    else
+    if [ -n "$ip_address" ]; then # <--- UNCOMMENTED
+        echo "  http://$ip_address:$port_value" # <--- UNCOMMENTED
+    else # <--- UNCOMMENTED
         echo "  http://<YOUR-LXC-IP>:$port_value"
         print_warning "Could not automatically determine the LXC IP address."
-    fi
+    fi # <--- UNCOMMENTED
     echo ""
     print_info "The Pulse service $SERVICE_NAME is running and enabled on boot."
     print_info "To check the status: sudo systemctl status $SERVICE_NAME"
