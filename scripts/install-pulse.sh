@@ -15,7 +15,7 @@ LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
 SCRIPT_ABS_PATH="" # Store absolute path of the script here
 REPO_URL="https://github.com/rcourtman/Pulse.git"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
-CURRENT_SCRIPT_COMMIT_SHA="a29105e" # Replaced placeholder with actual commit SHA
+CURRENT_SCRIPT_COMMIT_SHA="690f5cb4d9543666ed6f4cbd2323544905a1ee4c"
 
 # --- Flags & Variables ---
 MODE_UPDATE="" # Flag to run in non-interactive update mode (empty string means false)
@@ -90,15 +90,15 @@ check_root() {
 # ---> NEW: Function to inform about dependencies < ---
 print_dependency_info() {
     # --- ASCII Banner ---
-    echo -e "\033[1;34m"
-    echo " ____        _          "
-    echo "|  _ \ _   _| |___  ___ "
-    echo "| |_) | | | | / __|/ _ \"
-    echo "|  __/| |_| | \__ \  __/"
-    echo "|_|    \__,_|_|___/\___|"
-    echo "                       "
-    echo "\033[0m"
-    echo ""
+    echo -e "\033[1;34m" # Start color blue
+    echo ' ____        _          '
+    echo '|  _ \ _   _| |___  ___ '
+    echo '| |_) | | | | / __|/ _ \'
+    echo '|  __/| |_| | \__ \  __/'
+    echo '|_|    \__,_|_|___/\___|'
+    echo '                       '
+    echo -e "\033[0m" # End color
+    echo "" # Keep blank line for spacing
     echo -e "\033[1mWelcome to the Pulse for Proxmox VE Installer\033[0m"
     echo "This script will install Pulse, a lightweight monitoring application."
     echo "See README.md for more details about Pulse: https://github.com/rcourtman/Pulse"
@@ -229,10 +229,11 @@ self_update_check() {
             print_info "[DEBUG] Updating embedded SHA in temp script to $latest_remote_sha..."
             # Use sed to find the line starting with CURRENT_SCRIPT_COMMIT_SHA= and replace the quoted value
             # Using # as delimiter for sed to avoid issues with slashes in SHAs (unlikely, but safe)
-            sed -i "s#^CURRENT_SCRIPT_COMMIT_SHA=.*#CURRENT_SCRIPT_COMMIT_SHA=\"$latest_remote_sha\"#" "$temp_script"
+            # Use -i '' for BSD sed compatibility (macOS) and -e to explicitly provide the script
+            sed -i '' -e "s#^CURRENT_SCRIPT_COMMIT_SHA=.*#CURRENT_SCRIPT_COMMIT_SHA=\"$latest_remote_sha\"#" "$temp_script"
             local update_sha_exit_code=$?
             if [ $update_sha_exit_code -ne 0 ]; then
-                 print_error "sed command failed while updating embedded SHA! Aborting update." 
+                 print_error "sed command failed while updating embedded SHA! Aborting update."
                  print_error "Exit code: $update_sha_exit_code"
                  rm -f "$temp_script"
                  return 1
@@ -241,7 +242,8 @@ self_update_check() {
 
             # ---> Fix line endings on TEMP file < ---
             # Keep this step to ensure downloaded script content is clean
-            sed -i 's/\r$//' "$temp_script"
+            # Use -i '' for macOS compatibility
+            sed -i '' 's/\r$//' "$temp_script"
             local sed_exit_code=$?
             if [ $sed_exit_code -ne 0 ]; then
                  print_error "sed command failed! Cannot fix line endings. Aborting."
@@ -419,41 +421,41 @@ check_installation_status_and_determine_action() {
                 # If user specified a version different from current, offer update
                 if [ -n "$SPECIFIED_VERSION_TAG" ] && [ "$SPECIFIED_VERSION_TAG" != "$current_tag" ]; then
                      print_info "You requested version $SPECIFIED_VERSION_TAG, but $current_tag is installed."
-                     printf '%s\n' "Choose an action:"
-                     printf '  %s) %s %s\n' "1" "Install specified version" "$SPECIFIED_VERSION_TAG"
-                     printf '  %s) %s\n' "2" "Remove Pulse"
-                     printf '  %s) %s\n' "3" "Cancel"
-                     printf '  %s) %s\n' "4" "Manage automatic updates"
+                     echo -e "Choose an action:"
+                     echo -e "  1) Manage automatic updates"
+                     echo -e "  2) Re-install current version $current_tag"
+                     echo -e "  3) Remove Pulse"
+                     echo -e "  4) Cancel"
                      read -p "Enter your choice [1-4]: " user_choice # Updated range
                      case $user_choice in
-                         1) INSTALL_MODE="update" ;; # Treat re-run as update
-                         2) INSTALL_MODE="remove" ;;
-                         3) INSTALL_MODE="cancel" ;;
-                         4) prompt_for_cron_setup; INSTALL_MODE="cancel" ;; # Call cron setup and then cancel main flow
+                         1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;; # Call cron setup and then cancel main flow
+                         2) INSTALL_MODE="update" ;; # Treat re-run as update
+                         3) INSTALL_MODE="remove" ;;
+                         4) INSTALL_MODE="cancel" ;;
                          *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                      esac
                 else # Up to date and no specific version requested OR specified matches current
-                    printf '%s\n' "Choose an action:"
-                    printf '  %s) %s %s\n' "1" "Re-install current version" "$current_tag"
-                    printf '  %s) %s\n' "2" "Remove Pulse"
-                    printf '  %s) %s\n' "3" "Cancel"
-                    printf '  %s) %s\n' "4" "Manage automatic updates"
+                    echo -e "Choose an action:"
+                    echo -e "  1) Manage automatic updates"
+                    echo -e "  2) Re-install current version $current_tag"
+                    echo -e "  3) Remove Pulse"
+                    echo -e "  4) Cancel"
                     read -p "Enter your choice [1-4]: " user_choice # Updated range
                     case $user_choice in
-                        1) INSTALL_MODE="update" ;; # Treat re-run as update
-                        2) INSTALL_MODE="remove" ;;
-                        3) INSTALL_MODE="cancel" ;;
-                        4) prompt_for_cron_setup; INSTALL_MODE="cancel" ;; # Call cron setup and then cancel main flow
+                        1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;; # Call cron setup and then cancel main flow
+                        2) INSTALL_MODE="update" ;; # Treat re-run as update
+                        3) INSTALL_MODE="remove" ;;
+                        4) INSTALL_MODE="cancel" ;;
                         *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                     esac
                 fi
             elif [ "$INSTALL_MODE" = "update" ]; then # Update available or fetch failed
                  if [ -n "$SPECIFIED_VERSION_TAG" ]; then
-                     printf '%s\n' "Choose an action:"
-                     printf '  %s) %s %s\n' "1" "Install specified version" "$SPECIFIED_VERSION_TAG"
-                     printf '  %s) %s\n' "2" "Remove Pulse"
-                     printf '  %s) %s\n' "3" "Cancel"
-                     printf '  %s) %s\n' "4" "Manage automatic updates"
+                     echo "Choose an action:"
+                     echo "  1) Install specified version $SPECIFIED_VERSION_TAG"
+                     echo "  2) Remove Pulse"
+                     echo "  3) Cancel"
+                     echo "  4) Manage automatic updates"
                      read -p "Enter your choice [1-4]: " user_choice # Updated range
                      case $user_choice in
                          1) INSTALL_MODE="update" ;;
@@ -463,11 +465,11 @@ check_installation_status_and_determine_action() {
                          *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                      esac
                  else # Defaulting to latest tag
-                      printf '%s\n' "Choose an action:"
-                      printf '  %s) %s %s\n' "1" "Update Pulse to the latest version" "$TARGET_TAG"
-                      printf '  %s) %s\n' "2" "Remove Pulse"
-                      printf '  %s) %s\n' "3" "Cancel"
-                      printf '  %s) %s\n' "4" "Manage automatic updates"
+                      echo "Choose an action:"
+                      echo "  1) Update Pulse to the latest version $TARGET_TAG"
+                      echo "  2) Remove Pulse"
+                      echo "  3) Cancel"
+                      echo "  4) Manage automatic updates"
                       read -p "Enter your choice [1-4]: " user_choice # Updated range
                       case $user_choice in
                           1) INSTALL_MODE="update" ;;
@@ -1252,10 +1254,10 @@ setup_cron_update() {
     trimmed_filtered_cron=$(echo "$filtered_cron" | awk 'NF') # Get non-empty lines
     if [ -n "$trimmed_filtered_cron" ]; then
         # Append the new block with a preceding newline
-        new_cron_content=$(printf "%s\\n%s\\n%s" "$trimmed_filtered_cron" "$cron_identifier" "$cron_command")
+        new_cron_content=$(printf "%s\n%s\n%s" "$trimmed_filtered_cron" "$cron_identifier" "$cron_command")
     else
         # Filtered cron was empty, just add the new block
-        new_cron_content=$(printf "%s\\n%s" "$cron_identifier" "$cron_command")
+        new_cron_content=$(printf "%s\n%s" "$cron_identifier" "$cron_command")
     fi
 
     # Load the new crontab content
@@ -1300,10 +1302,10 @@ prompt_for_cron_setup() {
     if [ "$cron_exists" = true ]; then
         print_info "Automatic updates for Pulse appear to be currently ENABLED."
         print_info "[Cron job will update to the latest release tag when run]" # Clarification
-        echo "Choose an action:"
-        echo "  1) Keep current schedule [Do nothing]"
-        echo "  2) Disable automatic updates"
-        echo "  3) Change update schedule"
+        echo -e "Choose an action:"
+        echo -e "  1) Keep current schedule [Do nothing]"
+        echo -e "  2) Disable automatic updates"
+        echo -e "  3) Change update schedule"
         read -p "Enter your choice [1-3]: " cron_manage_choice
 
         case $cron_manage_choice in
