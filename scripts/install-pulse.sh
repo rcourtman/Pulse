@@ -15,7 +15,9 @@ LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
 SCRIPT_ABS_PATH="" # Store absolute path of the script here
 REPO_URL="https://github.com/rcourtman/Pulse.git"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
-CURRENT_SCRIPT_COMMIT_SHA="690f5cb4d9543666ed6f4cbd2323544905a1ee4c"
+CURRENT_SCRIPT_COMMIT_SHA="5c9d9525e2ba5eafd2ec6b8a55ec49e2e4cd52de"
+# Version of the script being run (will be replaced by self-update mechanism)
+INSTALLER_VERSION="0.0.0" # Placeholder
 
 # --- Flags & Variables ---
 MODE_UPDATE="" # Flag to run in non-interactive update mode (empty string means false)
@@ -89,34 +91,34 @@ check_root() {
 
 # ---> NEW: Function to inform about dependencies < ---
 print_dependency_info() {
-    # --- ASCII Banner ---
-    echo -e "\033[1;34m" # Start color blue
-    echo ' ____        _          '
-    echo '|  _ \ _   _| |___  ___ '
-    echo '| |_) | | | | / __|/ _ \'
-    echo '|  __/| |_| | \__ \  __/'
-    echo '|_|    \__,_|_|___/\___|'
-    echo '                       '
-    echo -e "\033[0m" # End color
-    echo "" # Keep blank line for spacing
-    echo -e "\033[1mWelcome to the Pulse for Proxmox VE Installer\033[0m"
-    echo "This script will install Pulse, a lightweight monitoring application."
-    echo "See README.md for more details about Pulse: https://github.com/rcourtman/Pulse"
     echo ""
     # --- End ASCII Banner ---
 
-    print_info "-----------------------------------------------------"
-    print_info "This script requires the following dependencies:"
-    print_info " - Standard tools: curl, git, sudo, gpg, diffutils"
-    print_info "   (These will be installed if missing via apt-get)"
-    print_info " - Node.js & npm: For running Pulse"
-    print_info "   (Will be installed via NodeSource repository setup)"
-    print_info " - jq: For checking for installer script updates"
-    print_info "   (If missing, the script will *attempt* to install it"
-    print_info "    using 'apt-get install jq' to enable self-updates.)"
-    print_info "-----------------------------------------------------"
+    # --- Display Dependencies ---
+    print_info "$(cat << 'EOF'
+-----------------------------------------------------
+Required Dependencies:
+
+  - Core Tools:
+    * curl, git, sudo, gpg, diffutils
+    (Will be installed via apt-get if missing)
+
+  - Pulse Runtime:
+    * Node.js & npm
+    (Will be installed via NodeSource if missing)
+
+  - Installer Self-Update:
+    * jq
+    (Will attempt apt-get install if missing)
+
+-----------------------------------------------------
+EOF
+    )"
+    # --- End Display Dependencies ---
+
     # --- NEW: Confirmation Prompt (Default Yes) ---
     local confirm_proceed
+
     # Prompt defaults to Yes [Y/n]
     read -p "Do you want to proceed with the installation/update? [Y/n]: " confirm_proceed
     # Exit only if user explicitly enters 'n' or 'N'
