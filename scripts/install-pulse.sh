@@ -99,7 +99,9 @@ self_update_check() {
         # Compare the downloaded script with the running script
         if ! diff -q "$SCRIPT_ABS_PATH" "$temp_script" >/dev/null 2>&1; then
             print_warning "A newer version of the installation script is available."
-            read -p "Do you want to update the installer and re-run? (Y/n): " update_confirm
+            # Use separate echo and read for better compatibility
+            echo -n "Do you want to update the installer and re-run? (Y/n): "
+            read update_confirm
             if [[ ! "$update_confirm" =~ ^[Nn]$ ]]; then # Default Yes
                 print_info "Updating installer script..."
                 # Make the new script executable
