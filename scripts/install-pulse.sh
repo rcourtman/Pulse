@@ -11,12 +11,31 @@ SERVICE_NAME="pulse-monitor.service"
 SCRIPT_NAME="install-pulse.sh" # Used for cron job identification
 LOG_FILE="/var/log/pulse_update.log" # Log file for cron updates
 SCRIPT_ABS_PATH="" # Store absolute path of the script here
+REPO_URL="https://github.com/rcourtman/Pulse.git"
+SCRIPT_RAW_URL="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
 
 # --- Flags & Variables ---
 MODE_UPDATE=false # Flag to run in non-interactive update mode
 INSTALL_MODE=""   # Stores the determined action: install, update, remove, cancel, error
 SPECIFIED_VERSION_TAG="" # Stores tag specified via --version
 TARGET_TAG="" # Stores the final tag to be installed/updated
+
+# Determine absolute path of the script early
+if command -v readlink &> /dev/null && readlink -f "$0" &> /dev/null; then
+    SCRIPT_ABS_PATH=$(readlink -f "$0")
+else
+    # Basic fallback if readlink -f is not available or fails
+     if [[ "$0" == /* ]]; then
+        SCRIPT_ABS_PATH="$0"
+     else
+        SCRIPT_ABS_PATH="$(pwd)/$0"
+     fi
+     # Verify the fallback path
+     if [ ! -f "$SCRIPT_ABS_PATH" ]; then
+          # Cannot reliably get path, self-update won't work safely
+          SCRIPT_ABS_PATH=""
+     fi
+fi
 
 # --- Argument Parsing ---
 # Consume arguments until --version is found, then expect its value
@@ -35,7 +54,6 @@ while [[ "$#" -gt 0 ]]; do
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
 done
-
 
 # --- Helper Functions ---
 print_info() {
@@ -59,6 +77,61 @@ check_root() {
     print_error "This script must be run as root. Please use sudo."
     exit 1
   fi
+}
+
+# --- Self-Update Function ---
+self_update_check() {
+    # Only run check if interactive and script path was found
+    if [ ! -t 0 ] || [ "$MODE_UPDATE" = true ] || [ -z "$SCRIPT_ABS_PATH" ]; then
+        return 0
+    fi
+
+    # Check if curl and diff are available (should be after dependency install)
+    if ! command -v curl &> /dev/null || ! command -v diff &> /dev/null; then
+        print_warning "curl or diff not found. Cannot check for installer updates."
+        return 0
+    fi
+
+    print_info "Checking for updates to the installer script itself..."
+    local temp_script="/tmp/${SCRIPT_NAME}.tmp"
+
+    if curl -sL "$SCRIPT_RAW_URL" -o "$temp_script"; then
+        # Compare the downloaded script with the running script
+        if ! diff -q "$SCRIPT_ABS_PATH" "$temp_script" >/dev/null 2>&1; then
+            print_warning "A newer version of the installation script is available."
+            read -p "Do you want to update the installer and re-run? (Y/n): " update_confirm
+            if [[ ! "$update_confirm" =~ ^[Nn]$ ]]; then # Default Yes
+                print_info "Updating installer script..."
+                # Make the new script executable
+                if ! chmod +x "$temp_script"; then
+                    print_error "Failed to make temporary script executable."
+                    rm -f "$temp_script"
+                    return 1 # Continue with old script?
+                fi
+                # Replace the current script
+                if ! mv "$temp_script" "$SCRIPT_ABS_PATH"; then
+                    print_error "Failed to replace the current script file."
+                    rm -f "$temp_script" # Clean up if mv failed
+                    return 1
+                fi
+                print_success "Installer updated successfully."
+                print_info "Please re-run the script using: sudo bash $SCRIPT_ABS_PATH"
+                exit 0 # Exit cleanly, user needs to re-run
+            else
+                print_info "Skipping installer update. Continuing with the current version."
+                rm -f "$temp_script"
+                return 0
+            fi
+        else
+            # print_info "Installer script is up-to-date."
+            rm -f "$temp_script"
+            return 0
+        fi
+    else
+        print_warning "Could not download the latest installer script for comparison."
+        rm -f "$temp_script" # Clean up potential partial file
+        return 0 # Continue with current script
+    fi
 }
 
 # --- Git Helper Functions ---
@@ -1067,23 +1140,6 @@ final_instructions() {
 # --- Main Execution --- Refactored
 check_root
 
-# Determine absolute path of the script early
-if command -v readlink &> /dev/null && readlink -f "$0" &> /dev/null; then
-    SCRIPT_ABS_PATH=$(readlink -f "$0")
-else
-    # Basic fallback if readlink -f is not available or fails
-     if [[ "$0" == /* ]]; then
-        SCRIPT_ABS_PATH="$0"
-     else
-        SCRIPT_ABS_PATH="$(pwd)/$0"
-     fi
-     # Verify the fallback path
-     if [ ! -f "$SCRIPT_ABS_PATH" ]; then
-          print_warning "Warning: Could not reliably determine absolute script path using fallback."
-          SCRIPT_ABS_PATH="" # Clear path if unsure
-     fi
-fi
-
 # Check installation status and determine user's desired action first
 # This also determines TARGET_TAG
 check_installation_status_and_determine_action
@@ -1108,10 +1164,13 @@ case "$INSTALL_MODE" in
         # Only install dependencies if installing or updating
         print_info "Proceeding with install/update. Installing prerequisites..."
         apt_update_upgrade || exit 1
-        install_dependencies || exit 1 # Installs git needed for tag checks
+        install_dependencies || exit 1 # Installs git, curl, diff
         setup_node || exit 1
         create_pulse_user || exit 1
         print_success "Prerequisites installed."
+
+        # ---> ADDED: Check for self-update AFTER dependencies are installed <---
+        self_update_check || print_warning "Installer self-check failed, continuing..."
 
         # Now perform the specific action
         if [ "$INSTALL_MODE" = "install" ]; then
