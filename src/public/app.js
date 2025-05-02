@@ -41,6 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const mainTableBody = document.querySelector('#main-table tbody');
   const tooltipElement = document.getElementById('custom-tooltip');
   const searchInput = document.getElementById('dashboard-search');
+  const backupsSearchInput = document.getElementById('backups-search'); // Added
   const statusElement = document.getElementById('dashboard-status-text');
   const versionSpan = document.getElementById('app-version'); // Get version span
 
@@ -147,7 +148,11 @@ document.addEventListener('DOMContentLoaded', function() {
   let filterGuestType = savedFilterState.filterGuestType || 'all'; 
   let filterStatus = savedFilterState.filterStatus || 'all'; // New state variable for status filter
   let backupsFilterHealth = savedFilterState.backupsFilterHealth || 'all'; // 'ok', 'warning', 'error', 'none'
-  // ---> END ADDED <---
+  // ---> ADDED: State for Backup Guest Type Filter <---\
+  let backupsFilterGuestType = savedFilterState.backupsFilterGuestType || 'all'; // 'vm', 'ct', 'all'
+  // ---> END ADDED <---\
+
+  let backupsSearchTerm = ''; // Added: State for backup search
 
   const AVERAGING_WINDOW_SIZE = 5;
   const dashboardHistory = {}; // Re-add this line
@@ -171,7 +176,8 @@ document.addEventListener('DOMContentLoaded', function() {
           groupByNode,
           filterGuestType,
           filterStatus,
-          backupsFilterHealth
+          backupsFilterHealth,
+          backupsFilterGuestType // ---> ADDED: Save backup type filter state <---
       };
       localStorage.setItem('pulseFilterState', JSON.stringify(stateToSave));
   }
@@ -191,6 +197,10 @@ document.addEventListener('DOMContentLoaded', function() {
       // Backup Health
       const backupHealthRadio = document.getElementById(`backups-filter-status-${backupsFilterHealth}`);
       if (backupHealthRadio) backupHealthRadio.checked = true;
+      // ---> ADDED: Apply initial backup type filter UI <---
+      const backupTypeRadio = document.getElementById(`backups-filter-type-${backupsFilterGuestType}`);
+      if (backupTypeRadio) backupTypeRadio.checked = true;
+      // ---> END ADDED <---\
   }
   // ---> END ADDED < ---
 
@@ -420,6 +430,15 @@ document.addEventListener('DOMContentLoaded', function() {
       console.warn('Element #dashboard-search not found - text filtering disabled.');
   }
 
+  // Backups Text Search Filter (NEW)
+  if (backupsSearchInput) {
+      backupsSearchInput.addEventListener('input', function() {
+          updateBackupsTab(); // Re-render the backups table to apply the search
+      });
+  } else {
+      console.warn('Element #backups-search not found - backups text filtering disabled.');
+  }
+
   // Status Filter (NEW)
   document.querySelectorAll('input[name="status-filter"]').forEach(radio => {
     radio.addEventListener('change', function() {
@@ -433,17 +452,16 @@ document.addEventListener('DOMContentLoaded', function() {
   });
 
   // ---> ADDED: Event listeners for Backups Tab Filters <---\
-  // Backup Type Filter - REMOVED
-  /*
+  // Backup Type Filter - ADDED
   document.querySelectorAll('input[name="backups-type-filter"]').forEach(radio => {
     radio.addEventListener('change', function() {
       if (this.checked) {
-        backupsFilterType = this.value;
+        backupsFilterGuestType = this.value;
         updateBackupsTab(); // Only update the backups tab
+        saveFilterState(); // Save state
       }
     });
   });
-  */
 
   // ---> MODIFIED: Event listener for Backups Health Filter <---
   // Backup Status/Age Filter -> Backup Health Filter
@@ -457,6 +475,25 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
   // ---> END MODIFIED <---
+
+  // ---> ADDED: Event listener for Reset Backups Filters Button and Keyboard Shortcut <---
+  const resetBackupsButton = document.getElementById('reset-backups-filters-button');
+  const backupsTabContent = document.getElementById('backups'); // Declare ONCE here
+
+  if (resetBackupsButton) {
+      resetBackupsButton.addEventListener('click', resetBackupsView);
+  }
+
+  if (backupsTabContent) { // Reuse for keydown listener
+      backupsTabContent.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+              if (backupsTabContent.contains(document.activeElement)) {
+                  resetBackupsView();
+              }
+          }
+      });
+  }
+  // ---> END ADDED <---
 
   // --- Data Sorting Function ---
   function sortData(data, column, direction, type) {
@@ -1266,13 +1303,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // 3. Apply all filters (type, status, search) in one pass
     let filteredData = sortedData.filter(item => {
         // Check Status Filter
-        const statusMatch = (filterStatus === 'all' || item.status === filterStatus);
+        const statusMatch = (filterStatus === 'all') || item.status === filterStatus;
         if (!statusMatch) return false; // Early exit if status doesn't match
         
         // Check Type Filter
         const typeMatch = (filterGuestType === 'all') || 
                           (filterGuestType === 'vm' && item.type === 'VM') || 
-                          (filterGuestType === 'ct' && item.type === 'CT');
+                          (filterGuestType === 'lxc' && item.type === 'CT'); // Match 'lxc' filter state to 'CT' data type
         if (!typeMatch) return false; // Early exit if type doesn't match
 
         // Check Search Filter (only if terms exist)
@@ -1413,7 +1450,7 @@ document.addEventListener('DOMContentLoaded', function() {
       const typeIconClass = guest.type === 'VM'
           ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium'
           : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
-      const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guest.type}</span>`;
+      const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guest.type === 'VM' ? 'VM' : 'LXC'}</span>`;
 
       row.innerHTML = `
         <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
@@ -2622,6 +2659,11 @@ document.addEventListener('DOMContentLoaded', function() {
       // console.log("[Backups Tab] Processed Guest Status with Health:", backupStatusByGuest); // Debug log
 
       // ---> MODIFIED: Filter the data based on health status <---
+      // ---> ADDED: Get current backup search term <---
+      const currentBackupsSearchTerm = backupsSearchInput ? backupsSearchInput.value.toLowerCase() : '';
+      const backupsSearchTerms = currentBackupsSearchTerm.split(',').map(term => term.trim()).filter(term => term);
+      // ---> END ADDED <---
+      
       const filteredBackupStatus = backupStatusByGuest.filter(item => {
           // Check Health Filter
           const healthMatch = (backupsFilterHealth === 'all') ||
@@ -2630,6 +2672,23 @@ document.addEventListener('DOMContentLoaded', function() {
                               (backupsFilterHealth === 'error' && item.backupHealthStatus === 'failed') || // Error = Failed
                               (backupsFilterHealth === 'none' && item.backupHealthStatus === 'none');
           if (!healthMatch) return false;
+
+          // Check Type Filter
+          const typeMatch = (backupsFilterGuestType === 'all') ||
+                            (backupsFilterGuestType === 'vm' && item.guestType === 'VM') ||
+                            (backupsFilterGuestType === 'lxc' && item.guestType === 'LXC'); // Use 'lxc' to match radio value and data type
+          if (!typeMatch) return false;
+          
+          // ---> ADDED: Check Search Filter <---
+          if (backupsSearchTerms.length > 0) {
+              const nameMatch = backupsSearchTerms.some(term =>
+                  (item.guestName?.toLowerCase() || '').includes(term) ||
+                  (item.node?.toLowerCase() || '').includes(term) ||
+                  (item.guestId?.toString() || '').includes(term)
+              );
+              if (!nameMatch) return false; // Early exit if search doesn't match
+          }
+          // ---> END ADDED <---
 
           // If all checks pass, include the item
           return true;
@@ -2645,9 +2704,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // ---> MODIFIED: Use filtered and sorted data <---
       if (sortedBackupStatus.length > 0) { 
           sortedBackupStatus.forEach(guestStatus => { 
-      // ---> END MODIFIED < ---
+      // ---> END MODIFIED <---
               const row = tableBody.insertRow();
-              // ---> MODIFIED: Add dashboard hover/transition classes < ---
+              // ---> MODIFIED: Add dashboard hover/transition classes <---
               // Conditionally add opacity and grayscale if the guest PVE status is 'stopped'
               row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px ${guestStatus.guestPveStatus === 'stopped' ? 'opacity-60 grayscale' : ''}`;
               
@@ -2684,7 +2743,7 @@ document.addEventListener('DOMContentLoaded', function() {
               const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guestStatus.guestType}</span>`;
               // --- End Type Icon ---
 
-              // ---> MODIFIED: Standardize padding, alignment, and text styles, ADD health indicator < ---
+              // ---> MODIFIED: Standardize padding, alignment, and text styles, ADD health indicator <---
               row.innerHTML = `
                   <td class="p-1 px-2 whitespace-nowrap text-center">${healthIndicator}</td> <!-- Health Status -->
                   <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
@@ -2696,7 +2755,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.datastoreName}</td>
                   <td class="p-1 px-2 text-center text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
               `;
-              // ---> END MODIFIED < ---
+              // ---> END MODIFIED <---
           });
 
           loadingMsg.classList.add('hidden');
@@ -2717,7 +2776,7 @@ document.addEventListener('DOMContentLoaded', function() {
           } 
           // ---> MODIFIED: Use filtered data length for empty message check and improve wording <---
           else if (filteredBackupStatus.length === 0) { // Check filtered data length
-               const typeFilterText = backupsFilterType === 'all' ? '' : `Type: ${backupsFilterType.toUpperCase()}`;
+               const typeFilterText = backupsFilterGuestType === 'all' ? '' : `Type: ${backupsFilterGuestType.toUpperCase()}`;
                // ---> MODIFIED: Map health filter value to labels for message <---
                // let statusFilterLabel = '';
                // switch (backupsFilterHealth) { ... }
@@ -2731,16 +2790,24 @@ document.addEventListener('DOMContentLoaded', function() {
                  emptyMessage = "No guests with backup information found."; 
                }
           }
-          // ---> END MODIFIED < ---
+          // ---> END MODIFIED <---
+          // ---> ADDED: Include search term in empty message <---
+          if (filteredBackupStatus.length === 0 && backupsSearchTerms.length > 0) {
+             emptyMessage = `No guests found matching search "${currentBackupsSearchTerm}".`;
+             if (filtersApplied) {
+                 emptyMessage += ` and filters (${filtersApplied})`;
+             }
+          }
+          // ---> END ADDED <---
           noDataMsg.textContent = emptyMessage;
-          // ---> END MODIFIED < ---
+          // ---> END MODIFIED <---
           noDataMsg.classList.remove('hidden');
       }
-       // ---> ADDED: Update sort UI for backups table < ---
+       // ---> ADDED: Update sort UI for backups table <---
        const backupsSortColumn = sortState.backups.column;
        const backupsHeader = document.querySelector(`#backups-overview-table th[data-sort="${backupsSortColumn}"]`);
        updateSortUI('backups-overview-table', backupsHeader);
-       // ---> END ADDED < ---
+       // ---> END ADDED <---
   }
   // --- END: Backups Tab Logic ---
 
@@ -2781,5 +2848,72 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
   // ---> END NEW Function <---
+
+  // ---> ADDED: Function to Reset Backups Tab Filters/Sort <---
+  function resetBackupsView() {
+      console.log('Resetting backups view...');
+      // Reset Search
+      if (backupsSearchInput) backupsSearchInput.value = '';
+      backupsSearchTerm = ''; // Clear state variable if you were using one
+      
+      // Reset Type Filter
+      const backupTypeAllRadio = document.getElementById('backups-filter-type-all');
+      if(backupTypeAllRadio) backupTypeAllRadio.checked = true;
+      backupsFilterGuestType = 'all';
+
+      // Reset Health Filter
+      const backupStatusAllRadio = document.getElementById('backups-filter-status-all');
+      if(backupStatusAllRadio) backupStatusAllRadio.checked = true;
+      backupsFilterHealth = 'all';
+
+      // Reset Sort
+      sortState.backups = { column: 'latestBackupTime', direction: 'desc' }; // Default sort
+      const initialBackupsHeader = document.querySelector('#backups-overview-table th[data-sort="latestBackupTime"]');
+      updateSortUI('backups-overview-table', initialBackupsHeader);
+
+      // Update table and save state
+      updateBackupsTab();
+      saveFilterState();
+  }
+  // ---> END ADDED <---
+
+  // Reset button listener
+  if (resetBackupsButton) {
+      resetBackupsButton.addEventListener('click', resetBackupsView);
+  }
+
+  if (backupsTabContent) { // Reuse for keydown listener
+      backupsTabContent.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+              if (backupsTabContent.contains(document.activeElement)) {
+                  resetBackupsView();
+              }
+          }
+      });
+  }
+  // ---> END ADDED <---
+
+  // --- Event Listeners for Main Dashboard Filters ---
+  // DELETE FROM HERE
+  // ... existing code ...
+  // if(statusAllRadio) statusAllRadio.checked = true; // REMOVED
+  // filterStatus = 'all'; // REMOVED
+  // --- END ADDED ---
+  // TO HERE
+
+  // ---> REMOVED: Resetting Backups Filters from Main Reset <---
+  // updateDashboardTable(); // Moved down
+  // if (searchInput) searchInput.blur(); // Moved down
+
+  // Reset Type filter for main dashboard
+  const typeAllRadio = document.getElementById('filter-all');
+  if(typeAllRadio) typeAllRadio.checked = true;
+  filterGuestType = 'all'; // Keep resetting the main dashboard type filter here
+
+  // saveFilterState(); // Moved down
+
+  updateDashboardTable(); // Trigger dashboard update
+  if (searchInput) searchInput.blur(); // Blur search input after reset
+  saveFilterState(); // Save potentially changed main dashboard state
 
 }); // End DOMContentLoaded
