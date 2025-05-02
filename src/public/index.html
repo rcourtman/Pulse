@@ -141,7 +141,7 @@
         <!-- --- Dashboard Filter Bar --- -->
       <div class="dashboard-filter flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
         <div class="dashboard-filter-controls flex-grow flex items-center gap-2">
-          <input type="text" id="dashboard-search" placeholder="Search (use ',' for OR)" class="flex-grow p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+          <input type="text" id="dashboard-search" placeholder="Search Name, ID, Node (use ',' for OR)" class="flex-grow p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
           <!-- Reset Button -->
           <button id="reset-filters-button" title="Reset Filters & Sort (Esc)" class="p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg> <!-- RotateLeft icon -->
@@ -168,18 +168,18 @@
           <div class="flex items-center gap-2 pl-2">
             <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
               <input type="radio" id="filter-all" name="type-filter" value="all" class="hidden peer/all" checked>
-              <label for="filter-all" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-green-100 dark:peer-checked/all:bg-green-800/50 peer-checked/all:text-green-700 dark:peer-checked/all:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+              <label for="filter-all" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-blue-100 dark:peer-checked/all:bg-blue-800/50 peer-checked/all:text-blue-700 dark:peer-checked/all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
                 <span class="inline">All</span>
               </label>
               <input type="radio" id="filter-vm" name="type-filter" value="vm" class="hidden peer/vm">
-              <label for="filter-vm" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/vm:bg-green-100 dark:peer-checked/vm:bg-green-800/50 peer-checked/vm:text-green-700 dark:peer-checked/vm:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+              <label for="filter-vm" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/vm:bg-blue-100 dark:peer-checked/vm:bg-blue-800/50 peer-checked/vm:text-blue-700 dark:peer-checked/vm:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
-                <span class="hidden md:inline">VMs</span>
+                <span class="hidden md:inline">VM</span>
               </label>
-              <input type="radio" id="filter-lxc" name="type-filter" value="ct" class="hidden peer/lxc">
+              <input type="radio" id="filter-lxc" name="type-filter" value="lxc" class="hidden peer/lxc">
               <label for="filter-lxc" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22.08" y2="12"/></svg>
-                <span class="hidden md:inline">LXCs</span>
+                <span class="hidden md:inline">LXC</span>
               </label>
             </div>
           </div>
@@ -191,12 +191,12 @@
                 <span class="inline">All</span>
               </label>
               <input type="radio" id="filter-status-running" name="status-filter" value="running" class="hidden peer/status-running">
-              <label for="filter-status-running" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-running:bg-blue-100 dark:peer-checked/status-running:bg-blue-800/50 peer-checked/status-running:text-blue-700 dark:peer-checked/status-running:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+              <label for="filter-status-running" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-running:bg-green-100 dark:peer-checked/status-running:bg-green-800/50 peer-checked/status-running:text-green-700 dark:peer-checked/status-running:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 <span class="hidden md:inline">Running</span>
               </label>
               <input type="radio" id="filter-status-stopped" name="status-filter" value="stopped" class="hidden peer/status-stopped">
-              <label for="filter-status-stopped" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-stopped:bg-blue-100 dark:peer-checked/status-stopped:bg-blue-800/50 peer-checked/status-stopped:text-blue-700 dark:peer-checked/status-stopped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+              <label for="filter-status-stopped" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-stopped:bg-gray-100 dark:peer-checked/status-stopped:bg-gray-600/50 peer-checked/status-stopped:text-gray-700 dark:peer-checked/status-stopped:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
                 <span class="hidden md:inline">Stopped</span>
               </label>
@@ -282,8 +282,80 @@
 
       <div id="backups-overview-container" class="space-y-4">
         <p id="backups-loading-message" class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading backup status overview...</p>
-        
-        <!-- Backups Filter Bar REMOVED -->
+
+        <div class="backups-filter flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+
+            <!-- Search Input and Reset Button Container (Matches Main Dash) -->
+            <div class="dashboard-filter-controls flex-grow flex items-center gap-2"> <!-- Changed class to match main dash -->
+                <input type="text" id="backups-search" placeholder="Search Name, ID, Node (use ',' for OR)" class="flex-grow p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                <button id="reset-backups-filters-button" title="Reset Filters & Sort (Esc)" class="p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg> <!-- RotateLeft icon -->
+                </button>
+            </div>
+
+            <!-- Toggles Wrapper (Matches Main Dash structure) -->
+            <div class="filter-toggles-wrapper flex items-center gap-4 flex-wrap">
+                <!-- Guest Type Filter -->
+                <div class="flex items-center gap-2">
+                    <!-- Removed explicit "Type:" span -->
+                    <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                        <input type="radio" id="backups-filter-type-all" name="backups-type-filter" value="all" class="hidden peer/btype-all">
+                        <label for="backups-filter-type-all" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/btype-all:bg-blue-100 dark:peer-checked/btype-all:bg-blue-800/50 peer-checked/btype-all:text-blue-700 dark:peer-checked/btype-all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                            <span class="hidden md:inline">All</span>
+                            <span class="inline md:hidden">All</span>
+                        </label>
+                        <input type="radio" id="backups-filter-type-vm" name="backups-type-filter" value="vm" class="hidden peer/btype-vm">
+                        <label for="backups-filter-type-vm" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/btype-vm:bg-blue-100 dark:peer-checked/btype-vm:bg-blue-800/50 peer-checked/btype-vm:text-blue-700 dark:peer-checked/btype-vm:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+                            <span class="hidden md:inline">VM</span>
+                        </label>
+                        <input type="radio" id="backups-filter-type-ct" name="backups-type-filter" value="lxc" class="hidden peer/btype-ct">
+                        <label for="backups-filter-type-ct" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/btype-ct:bg-green-100 dark:peer-checked/btype-ct:bg-green-800/50 peer-checked/btype-ct:text-green-700 dark:peer-checked/btype-ct:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22.08" y2="12"/></svg>
+                            <span class="hidden md:inline">LXC</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Health Status Filter -->
+                <div class="flex items-center gap-2">
+                    <!-- Removed explicit "Health:" span -->
+                    <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                        <input type="radio" id="backups-filter-status-all" name="backups-status-filter" value="all" class="hidden peer/bhealth-all">
+                        <label for="backups-filter-status-all" class="px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/bhealth-all:bg-blue-100 dark:peer-checked/bhealth-all:bg-blue-800/50 peer-checked/bhealth-all:text-blue-700 dark:peer-checked/bhealth-all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                            <span class="hidden md:inline">All</span>
+                            <span class="inline md:hidden">All</span>
+                        </label>
+                        <input type="radio" id="backups-filter-status-ok" name="backups-status-filter" value="ok" class="hidden peer/bhealth-ok">
+                        <label for="backups-filter-status-ok" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/bhealth-ok:bg-green-100 dark:peer-checked/bhealth-ok:bg-green-800/50 peer-checked/bhealth-ok:text-green-700 dark:peer-checked/bhealth-ok:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden text-green-600 dark:text-green-400"><path d="M20 6 9 17l-5-5"/></svg>
+                            <span class="hidden md:inline">OK</span>
+                        </label>
+                        <input type="radio" id="backups-filter-status-stale" name="backups-status-filter" value="stale" class="hidden peer/bhealth-stale">
+                        <label for="backups-filter-status-stale" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/bhealth-stale:bg-yellow-100 dark:peer-checked/bhealth-stale:bg-yellow-800/50 peer-checked/bhealth-stale:text-yellow-700 dark:peer-checked/bhealth-stale:text-yellow-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden text-yellow-600 dark:text-yellow-400"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                            <span class="hidden md:inline">Stale</span>
+                        </label>
+                        <input type="radio" id="backups-filter-status-old" name="backups-status-filter" value="old" class="hidden peer/bhealth-old">
+                        <label for="backups-filter-status-old" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/bhealth-old:bg-orange-100 dark:peer-checked/bhealth-old:bg-orange-800/50 peer-checked/bhealth-old:text-orange-700 dark:peer-checked/bhealth-old:text-orange-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden text-orange-600 dark:text-orange-400"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></svg>
+                            <span class="hidden md:inline">Old</span>
+                        </label>
+                        <input type="radio" id="backups-filter-status-failed" name="backups-status-filter" value="failed" class="hidden peer/bhealth-failed">
+                        <label for="backups-filter-status-failed" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/bhealth-failed:bg-red-100 dark:peer-checked/bhealth-failed:bg-red-800/50 peer-checked/bhealth-failed:text-red-700 dark:peer-checked/bhealth-failed:text-red-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden text-red-600 dark:text-red-400"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                            <span class="hidden md:inline">Failed</span>
+                        </label>
+                        <input type="radio" id="backups-filter-status-none" name="backups-status-filter" value="none" class="hidden peer/bhealth-none">
+                        <label for="backups-filter-status-none" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/bhealth-none:bg-gray-100 dark:peer-checked/bhealth-none:bg-gray-600/50 peer-checked/bhealth-none:text-gray-700 dark:peer-checked/bhealth-none:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden text-gray-400 dark:text-gray-500"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+                            <span class="hidden md:inline">None</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <!-- Removed Separators -->
+        </div>
 
         <div id="backups-table-container" class="hidden space-y-2">
           <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
