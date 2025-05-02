@@ -43,6 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const searchInput = document.getElementById('dashboard-search');
   const backupsSearchInput = document.getElementById('backups-search'); // Added
   const statusElement = document.getElementById('dashboard-status-text');
+  const backupsStatusElement = document.getElementById('backups-status-text'); // Added
   const versionSpan = document.getElementById('app-version'); // Get version span
 
   if (!connectionStatus) {
@@ -2506,15 +2507,16 @@ document.addEventListener('DOMContentLoaded', function() {
   // --- NEW: Backups Tab Logic ---
   function updateBackupsTab() {
       // console.log("[Backups Tab] Updating..."); // Debug log
-      const container = document.getElementById('backups-overview-container');
+      // Removed reference to #backups-overview-container
       const tableContainer = document.getElementById('backups-table-container');
       const tableBody = document.getElementById('backups-overview-tbody');
       const loadingMsg = document.getElementById('backups-loading-message');
       const noDataMsg = document.getElementById('backups-no-data-message');
-      // REMOVED pbsNotConfiguredMsg reference
+      // Reference to the new status text element
+      const statusTextElement = document.getElementById('backups-status-text'); 
 
-      // REVERTED check for UI elements
-      if (!container || !tableContainer || !tableBody || !loadingMsg || !noDataMsg) {
+      // REVERTED check for UI elements (removed container check)
+      if (!tableContainer || !tableBody || !loadingMsg || !noDataMsg || !statusTextElement) { 
           console.error("UI elements for Backups tab not found!");
           return;
       }
@@ -2701,10 +2703,11 @@ document.addEventListener('DOMContentLoaded', function() {
 
       // Populate the table
       tableBody.innerHTML = ''; // Clear previous content
+      let visibleCount = 0; // Added counter
       // ---> MODIFIED: Use filtered and sorted data <---
       if (sortedBackupStatus.length > 0) { 
           sortedBackupStatus.forEach(guestStatus => { 
-      // ---> END MODIFIED <---
+              // ---> END MODIFIED < ---
               const row = tableBody.insertRow();
               // ---> MODIFIED: Add dashboard hover/transition classes <---
               // Conditionally add opacity and grayscale if the guest PVE status is 'stopped'
@@ -2756,6 +2759,7 @@ document.addEventListener('DOMContentLoaded', function() {
                   <td class="p-1 px-2 text-center text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
               `;
               // ---> END MODIFIED <---
+              visibleCount++; // Increment counter
           });
 
           loadingMsg.classList.add('hidden');
@@ -2808,6 +2812,21 @@ document.addEventListener('DOMContentLoaded', function() {
        const backupsHeader = document.querySelector(`#backups-overview-table th[data-sort="${backupsSortColumn}"]`);
        updateSortUI('backups-overview-table', backupsHeader);
        // ---> END ADDED <---
+       // ---> ADDED: Update status text for backups tab < ---
+       if (statusTextElement) {
+           const statusBaseText = `Updated: ${new Date().toLocaleTimeString()}`;
+           let statusFilterText = currentBackupsSearchTerm ? ` | Filter: "${currentBackupsSearchTerm}"` : '';
+           // Add type/health filter status if not 'all'
+           const typeFilterLabel = backupsFilterGuestType !== 'all' ? backupsFilterGuestType.toUpperCase() : '';
+           const healthFilterLabel = backupsFilterHealth !== 'all' ? backupsFilterHealth.charAt(0).toUpperCase() + backupsFilterHealth.slice(1) : ''; // Capitalize health status
+           const otherFilters = [typeFilterLabel, healthFilterLabel].filter(Boolean).join('/');
+           if (otherFilters) {
+               statusFilterText += ` | ${otherFilters}`;
+           }
+           let statusCountText = ` | Showing ${visibleCount} guests`;
+           statusTextElement.textContent = statusBaseText + statusFilterText + statusCountText;
+       }
+       // ---> END ADDED < ---
   }
   // --- END: Backups Tab Logic ---
 
