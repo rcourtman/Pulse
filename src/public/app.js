@@ -1,41 +1,28 @@
-// Setup hot reload capability (No changes needed here unless it manipulates classes/styles)
 (function setupHotReload() {
-  // Check for connection to server and auto-refresh
   const socket = io();
 
-  // Listen for hotReload event from server
   socket.on('hotReload', function() {
-    // console.log('Hot reload triggered, refreshing page...');
     window.location.reload();
   });
 
-  // Fallback: Check for server disconnects/reconnects as trigger for reload
   let wasConnected = false;
   socket.on('connect', function() {
-    // console.log('Connected to server');
     if (wasConnected) {
       console.log('Reconnected - refreshing page');
-      // Slight delay to ensure server is ready after reconnect
       setTimeout(() => window.location.reload(), 500);
     }
     wasConnected = true;
-    // Note: Initial data request moved to DOMContentLoaded to ensure elements exist
   });
 
-  // Optional: Log disconnects
   socket.on('disconnect', function(reason) {
-    // console.log('Disconnected from server:', reason);
     wasConnected = false; // Reset connection status
-    // UI update for disconnect handled in DOMContentLoaded listener
   });
 
 })();
 
-// Helper function to sanitize strings for use in HTML IDs
 const sanitizeForId = (str) => str.replace(/[^a-zA-Z0-9-]/g, '-');
 
 document.addEventListener('DOMContentLoaded', function() {
-  // Guard clauses to ensure essential elements exist before proceeding
   const themeToggleButton = document.getElementById('theme-toggle-button');
   const connectionStatus = document.getElementById('connection-status');
   const mainTableBody = document.querySelector('#main-table tbody');
@@ -52,19 +39,20 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   if (!mainTableBody) {
       console.error('Critical element #main-table tbody not found!');
-      // Allow execution for other features, but log error
   }
    if (!tooltipElement) {
       console.warn('Element #custom-tooltip not found - tooltips will not work.');
   }
+  const sliderValueTooltip = document.getElementById('slider-value-tooltip'); // Get the new tooltip element
+  if (!sliderValueTooltip) {
+      console.warn('Element #slider-value-tooltip not found - slider values will not display on drag.');
+  }
 
   const htmlElement = document.documentElement; // Target <html>
 
-  // --- Theme Handling ---
   const prefersDarkScheme = window.matchMedia('(prefers-color-scheme: dark)');
   const savedTheme = localStorage.getItem('theme');
 
-  // Function to apply the theme (no longer needs to set checkbox state)
   function applyTheme(theme) {
     if (theme === 'dark') {
       htmlElement.classList.add('dark');
@@ -75,14 +63,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // Determine initial theme
   const initialTheme = savedTheme || (prefersDarkScheme.matches ? 'dark' : 'light');
   applyTheme(initialTheme);
 
-  // Add event listener to the button
   if (themeToggleButton) {
     themeToggleButton.addEventListener('click', function() {
-      // Toggle theme based on current state
       const currentIsDark = htmlElement.classList.contains('dark');
       applyTheme(currentIsDark ? 'light' : 'dark');
     });
@@ -90,22 +75,19 @@ document.addEventListener('DOMContentLoaded', function() {
     console.warn('Element #theme-toggle-button not found - theme switching disabled.');
   }
 
-  // --- Tab Functionality ---
   const tabs = document.querySelectorAll('.tab');
   const tabContents = document.querySelectorAll('.tab-content');
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
-      // Deactivate all tabs and hide all content
+      // --- Deactivate all top-level tabs and content --- 
       tabs.forEach(t => {
-        // Remove active classes, add inactive classes
         t.classList.remove('active', 'bg-white', 'dark:bg-gray-800', 'border-gray-300', 'dark:border-gray-700', 'text-gray-900', 'dark:text-white');
         t.classList.add('bg-gray-100', 'dark:bg-gray-700/50', 'border-transparent', 'text-gray-600', 'dark:text-gray-400', 'hover:bg-gray-200', 'dark:hover:bg-gray-700');
       });
       tabContents.forEach(content => content.classList.add('hidden'));
 
-      // Activate clicked tab and show its content
-      // Add active classes, remove inactive classes
+      // --- Activate clicked top-level tab and content --- 
       tab.classList.add('active', 'bg-white', 'dark:bg-gray-800', 'border-gray-300', 'dark:border-gray-700', 'text-gray-900', 'dark:text-white', '-mb-px');
       tab.classList.remove('bg-gray-100', 'dark:bg-gray-700/50', 'border-transparent', 'text-gray-600', 'dark:text-gray-400', 'hover:bg-gray-200', 'dark:hover:bg-gray-700');
       
@@ -113,29 +95,84 @@ document.addEventListener('DOMContentLoaded', function() {
       const activeContent = document.getElementById(tabId);
       if (activeContent) {
         activeContent.classList.remove('hidden');
-        // If switching to dashboard, re-apply filter (in case data updated while on another tab)
+
+        // --- Handle nested tabs within 'main' --- 
         if (tabId === 'main') {
-            updateDashboardTable(); // Renamed: Use the function that handles dashboard rendering/filtering
+            // Ensure the 'Dashboard' nested tab is active by default when switching TO 'main'
+            activateNestedTab('nested-tab-dashboard'); 
+            updateDashboardTable(); 
         }
-        // ---> ADDED: Trigger Backups Tab update if switching to it <---
+        // --- End handle nested tabs ---
+
         if (tabId === 'backups') {
             updateBackupsTab(); // Call the update function when tab is selected
         }
-        // ---> END ADDED <---
       }
     });
   });
 
-  // --- End Tab Switching Logic ---
+  // --- Nested Tab Logic (Main Dashboard) ---
+  const nestedTabsContainer = document.querySelector('.nested-tabs'); // Container for tabs
+  const nestedTabContentContainer = document.querySelector('#log-content-area'); // NEW: Container for log panels
+  const logSessionArea = document.getElementById('log-session-area'); // NEW: Wrapper for log tabs & content
+  // --- END Nested Tab Logic ---
 
-  // --- Data Storage and State ---
+  function activateNestedTab(targetId) {
+      // Deactivate all nested tabs (only within the log section's tab container)
+      if (nestedTabsContainer) {
+          nestedTabsContainer.querySelectorAll('.nested-tab').forEach(nt => {
+              nt.classList.remove('active', 'text-blue-600', 'border-blue-600'); // Reset styles
+              nt.classList.add('text-gray-500', 'hover:text-gray-700', 'dark:text-gray-400', 'dark:hover:text-gray-200', 'border-transparent', 'hover:border-gray-300', 'dark:hover:border-gray-600');
+          });
+      }
+      // Hide all nested tab content (only within the log content area)
+      if (nestedTabContentContainer) {
+          nestedTabContentContainer.querySelectorAll('.log-session-panel-container').forEach(panelContainer => { // CORRECT SELECTOR
+              panelContainer.classList.add('hidden');
+          });
+      }
+
+      // Activate the target tab (in the log section's tab container)
+      const targetTab = nestedTabsContainer?.querySelector(`.nested-tab[data-nested-tab="${targetId}"]`);
+      if (targetTab) {
+          targetTab.classList.add('active', 'text-blue-600', 'border-blue-600'); // Apply active styles
+          targetTab.classList.remove('text-gray-500', 'hover:text-gray-700', 'dark:text-gray-400', 'dark:hover:text-gray-200', 'border-transparent', 'hover:border-gray-300', 'dark:hover:border-gray-600');
+      }
+
+      // Show the target content (within the log content area)
+      // const targetContent = nestedTabContentContainer?.querySelector(`#${targetId}`); // OLD: Looked for #log-session-id
+      const targetPanelContainer = nestedTabContentContainer?.querySelector(`#${targetId}`); // Still look for the #log-session-id container
+      if (targetPanelContainer) {
+          targetPanelContainer.classList.remove('hidden');
+          // Make sure the parent area is visible too
+          if (logSessionArea) logSessionArea.classList.remove('hidden');
+      }
+      // Update dashboard if switching back to it - NO LONGER NEEDED HERE
+      // if (targetId === 'nested-tab-dashboard') {
+      //     updateDashboardTable();
+      // }
+  }
+
+  // Add initial listeners only to static nested tabs (Dashboard) - REMOVED as there are no static tabs
+  /*
+  if (nestedTabsContainer) {
+      nestedTabsContainer.querySelectorAll('.nested-tab:not([data-nested-tab^="log-session-"])').forEach(nestedTab => {
+          nestedTab.addEventListener('click', () => {
+              const nestedTabId = nestedTab.getAttribute('data-nested-tab');
+              if (nestedTabId) { // Check if ID exists
+                  activateNestedTab(nestedTabId);
+              }
+          });
+      });
+  }
+  */
+
   let nodesData = [];
   let vmsData = [];
   let containersData = [];
   let metricsData = [];
   let dashboardData = [];
   let pbsDataArray = []; 
-  // Load saved sort state from localStorage or use defaults
   const savedSortState = JSON.parse(localStorage.getItem('pulseSortState')) || {};
   const sortState = {
     nodes: { column: null, direction: 'asc', ...(savedSortState.nodes || {}) },
@@ -143,35 +180,61 @@ document.addEventListener('DOMContentLoaded', function() {
     backups: { column: 'latestBackupTime', direction: 'desc', ...(savedSortState.backups || {}) }
   };
 
-  // ---> ADDED: Load and manage filter state <---
   const savedFilterState = JSON.parse(localStorage.getItem('pulseFilterState')) || {};
   let groupByNode = savedFilterState.groupByNode ?? true; // Default view
   let filterGuestType = savedFilterState.filterGuestType || 'all'; 
   let filterStatus = savedFilterState.filterStatus || 'all'; // New state variable for status filter
   let backupsFilterHealth = savedFilterState.backupsFilterHealth || 'all'; // 'ok', 'warning', 'error', 'none'
-  // ---> ADDED: State for Backup Guest Type Filter <---\
   let backupsFilterGuestType = savedFilterState.backupsFilterGuestType || 'all'; // 'vm', 'ct', 'all'
-  // ---> END ADDED <---\
 
   let backupsSearchTerm = ''; // Added: State for backup search
+  let isThresholdRowVisible = false; // State for threshold row visibility
+
+  // --- Updated Threshold State Structure ---
+  let thresholdState = {
+    cpu: { value: 0 }, // Keep sliders as simple value
+    memory: { value: 0 },
+    disk: { value: 0 },
+    diskread: { value: 0 },
+    diskwrite:{ value: 0 },
+    netin:    { value: 0 },
+    netout:   { value: 0 }
+  };
+
+  // --- Threshold Logging State ---
+  let isThresholdLoggingActive = false; // Keep for potential UI state, but use activeLogSessions for logic
+  let activeLogSessions = {}; // Object to hold multiple logging sessions { sessionId: { thresholds: {}, startTime: Date, durationMs: number, timerId: number, entries: [], element: node } }
+  let thresholdLogEntries = [];
+  let activeLoggingThresholds = null; // Will store the thresholds active at logging start
+  // --- END Threshold Logging State ---
+
+  // Load saved threshold state from localStorage
+  const savedThresholdState = JSON.parse(localStorage.getItem('pulseThresholdState')) || {};
+  // Merge saved state, ensuring structure is maintained
+  for (const type in thresholdState) {
+    if (savedThresholdState.hasOwnProperty(type)) {
+        // Ensure the loaded type exists in our default structure
+        if (thresholdState[type].hasOwnProperty('operator')) {
+            // For text inputs, load operator and input string
+            thresholdState[type].operator = savedThresholdState[type]?.operator || '>=';
+            thresholdState[type].input = savedThresholdState[type]?.input || '';
+            // We will parse the loaded input later when inputs are initialized
+        } else {
+            // For sliders, load the numeric value
+            thresholdState[type].value = savedThresholdState[type]?.value || 0;
+        }
+    }
+  }
 
   const AVERAGING_WINDOW_SIZE = 5;
   const dashboardHistory = {}; // Re-add this line
-  // REMOVED: let filterStatus = 'all'; 
   let initialDataReceived = false; // Flag to control initial rendering
   let storageData = {}; // Add state for storage data
-  // ---> ADDED: State for Backups Tab Filters <---
-  // REMOVED: let backupsFilterHealth = 'all'; 
-  // ---> END RENAMED <---
 
-  // ---> ADDED: Get reference to loading overlay <---
   const loadingOverlay = document.getElementById('loading-overlay');
-  // ---> END ADDED <---
 
-  // Define initial limit for PBS task tables
   const INITIAL_PBS_TASK_LIMIT = 5;
 
-  // ---> ADDED: Function to save filter state <---
   function saveFilterState() {
       const stateToSave = {
           groupByNode,
@@ -181,34 +244,263 @@ document.addEventListener('DOMContentLoaded', function() {
           backupsFilterGuestType // ---> ADDED: Save backup type filter state <---
       };
       localStorage.setItem('pulseFilterState', JSON.stringify(stateToSave));
+      // Save threshold state separately
+      localStorage.setItem('pulseThresholdState', JSON.stringify(thresholdState));
   }
-  // ---> END ADDED <---
 
-  // ---> ADDED: Function to apply initial filter UI state <---
   function applyInitialFilterUI() {
-      // Grouping
       const groupRadio = document.getElementById(groupByNode ? 'group-grouped' : 'group-list');
       if (groupRadio) groupRadio.checked = true;
-      // Main Type
       const typeRadio = document.getElementById(`filter-${filterGuestType === 'ct' ? 'lxc' : filterGuestType}`);
       if (typeRadio) typeRadio.checked = true;
-      // Main Status
       const statusRadio = document.getElementById(`filter-status-${filterStatus}`);
       if (statusRadio) statusRadio.checked = true;
-      // Backup Health
       const backupHealthRadio = document.getElementById(`backups-filter-status-${backupsFilterHealth}`);
       if (backupHealthRadio) backupHealthRadio.checked = true;
-      // ---> ADDED: Apply initial backup type filter UI <---
       const backupTypeRadio = document.getElementById(`backups-filter-type-${backupsFilterGuestType}`);
       if (backupTypeRadio) backupTypeRadio.checked = true;
-      // ---> END ADDED <---\
+
+      // --- Apply Initial Threshold UI ---
+      for (const type in thresholdState) {
+        if (sliders[type]) { // Slider
+          const sliderElement = document.getElementById(`threshold-slider-${type}`);
+          if (sliderElement) sliderElement.value = thresholdState[type].value;
+        } else if (thresholdSelects[type]) { // Dropdown Select
+          const inputElement = document.getElementById(`threshold-input-${type}`);
+          const selectElement = document.getElementById(`threshold-select-${type}`);
+          if (selectElement) selectElement.value = thresholdState[type].value;
+        }
+      }
+      // --- END Apply Initial Threshold UI ---
   }
-  // ---> END ADDED < ---
 
-  // Apply initial UI states after defining variables and functions
-  applyInitialFilterUI(); 
+  // --- Define Threshold Element References BEFORE they are used ---
+  const sliders = {
+    cpu: document.getElementById('threshold-slider-cpu'),
+    memory: document.getElementById('threshold-slider-memory'),
+    disk: document.getElementById('threshold-slider-disk'),
+  };
+  const thresholdSelects = {
+    diskread: document.getElementById('threshold-select-diskread'),
+    diskwrite: document.getElementById('threshold-select-diskwrite'),
+    netin: document.getElementById('threshold-select-netin'),
+    netout: document.getElementById('threshold-select-netout'),
+  };
+  // --- END Threshold Element References ---
 
-  // --- Global Helper for Text Progress Bar ---
+  // --- Threshold Indicator Logic ---
+  const thresholdBadge = document.getElementById('threshold-count-badge');
+
+  function updateThresholdIndicator() {
+    if (!thresholdBadge) return;
+
+    const mainTableHeader = document.querySelector('#main-table thead');
+    const mainTableBody = document.querySelector('#main-table tbody'); // Need this to get default row classes later
+    if (!mainTableHeader || !mainTableBody) return; // Guard if table elements not found
+
+    let activeCount = 0;
+    for (const type in thresholdState) {
+      // Define default and active color classes
+      const defaultColorClasses = ['text-gray-600', 'dark:text-gray-300'];
+      const activeColorClasses = ['text-blue-600', 'dark:text-blue-400'];
+
+      // Find the corresponding header cell
+      const headerCell = mainTableHeader.querySelector(`th[data-sort="${type}"]`);
+
+      if (thresholdState[type].value > 0) {
+        activeCount++;
+        // Add class to header
+        if (headerCell) {
+          headerCell.classList.add('threshold-active-header');
+          // Remove default colors and add active colors
+          headerCell.classList.remove(...defaultColorClasses);
+          headerCell.classList.add(...activeColorClasses);
+        }
+      } else {
+        // Remove class from header
+        if (headerCell) {
+          headerCell.classList.remove('threshold-active-header');
+          // Remove active colors and add default colors
+          // Note: Headers inherit base color from TR, but explicitly adding ensures override
+          headerCell.classList.remove(...activeColorClasses);
+          headerCell.classList.add(...defaultColorClasses);
+        }
+      }
+    }
+
+    if (activeCount > 0) {
+      thresholdBadge.textContent = activeCount;
+      thresholdBadge.classList.remove('hidden');
+    } else {
+      thresholdBadge.classList.add('hidden');
+    }
+  }
+  // --- END Threshold Indicator Logic ---
+
+  applyInitialFilterUI();
+  updateThresholdIndicator(); // Set initial indicator state
+
+  // Get references to threshold row and toggle button
+  const thresholdRow = document.getElementById('threshold-slider-row');
+  const toggleThresholdsButton = document.getElementById('toggle-thresholds-button');
+  // const thresholdLogControlsRow = document.getElementById('threshold-log-controls-row'); // REMOVED
+
+  // const logControlsArea = document.getElementById('log-controls-area'); // REMOVED - Controls moved back to main bar
+
+  // --- Threshold Log Elements ---
+  const toggleLogModeButton = document.getElementById('toggle-log-mode-button');
+  // const logDurationInput = document.getElementById('log-duration-input'); // Old Input
+  const logDurationSelect = document.getElementById('log-duration-select'); // New Select
+  // const logSessionsContainer = document.getElementById('log-sessions-container'); // Added
+  const logModeButtonText = toggleLogModeButton?.querySelector('span'); // Get inner span for text change
+  // const logContainer = document.getElementById('threshold-log-container'); // REMOVED
+  // const logTableBody = document.getElementById('threshold-log-tbody'); // REMOVED
+  // const logStatusText = document.getElementById('threshold-log-status-text'); // REMOVED
+  const mainTableContainer = document.getElementById('main'); // Assuming 'main' is the ID of the main tab content
+  // --- END Threshold Log Elements ---
+
+  // Function to update threshold row visibility based on state
+  function updateThresholdRowVisibility() {
+      // if (thresholdRow && logControlsArea) { // Old check
+      if (thresholdRow) { // Only toggle the slider row now
+          thresholdRow.classList.toggle('hidden', !isThresholdRowVisible);
+          // logControlsArea.classList.toggle('hidden', !isThresholdRowVisible); // REMOVED
+          // Optional: Update button appearance (e.g., add active class)
+          if (toggleThresholdsButton) {
+              toggleThresholdsButton.classList.toggle('bg-blue-100', isThresholdRowVisible);
+              toggleThresholdsButton.classList.toggle('dark:bg-blue-800/50', isThresholdRowVisible);
+              toggleThresholdsButton.classList.toggle('text-blue-700', isThresholdRowVisible);
+              toggleThresholdsButton.classList.toggle('dark:text-blue-300', isThresholdRowVisible);
+          }
+      }
+  }
+
+  // Set initial visibility on load
+  updateThresholdRowVisibility(); 
+
+  // Add listener to toggle button
+  if (toggleThresholdsButton) {
+      toggleThresholdsButton.addEventListener('click', () => {
+          isThresholdRowVisible = !isThresholdRowVisible;
+          updateThresholdRowVisibility();
+      });
+  } else {
+      console.warn('#toggle-thresholds-button not found.');
+  }
+
+  // --- BEGIN Threshold Slider Setup ---
+  // --- BEGIN Threshold Text Input Setup ---
+  // --- END Threshold Text Input Setup ---
+
+  // Function to update threshold state and trigger table update
+  function updateThreshold(type, value) {
+    // All inputs now just update a simple value
+    thresholdState[type].value = parseInt(value) || 0; // Ensure it's a number, default to 0
+ 
+    updateDashboardTable();
+    saveFilterState(); // Save state whenever a threshold changes
+    updateThresholdIndicator(); // Update badge count
+  }
+
+  // Function to get formatted display text for a threshold type and value
+  function getThresholdDisplayText(type, value) {
+      const numericValue = parseInt(value);
+      let displayText = '';
+      if (type === 'uptime') {
+        displayText = formatUptime(numericValue); 
+      } else if (type === 'diskio' || type === 'netio') {
+        displayText = formatSpeed(numericValue); 
+      } else { // cpu, memory, disk
+        displayText = `${numericValue}%`;
+      }
+      return displayText;
+  }
+
+  // Function to update and show the slider value tooltip
+  function updateSliderTooltip(sliderElement) {
+      if (!sliderValueTooltip || !sliderElement) return; // Guard clause
+
+      const type = sliderElement.id.replace('threshold-slider-', ''); // Extract type from slider ID
+      // Ensure we only process sliders here
+      if (!sliders[type]) return;
+
+      const numericValue = parseInt(sliderElement.value);
+      let displayText = `${numericValue}%`; // Only sliders left are percentages
+
+      const rect = sliderElement.getBoundingClientRect();
+      const min = parseFloat(sliderElement.min);
+      const max = parseFloat(sliderElement.max);
+      const value = parseFloat(sliderElement.value);
+      
+      const percent = (max > min) ? (value - min) / (max - min) : 0;
+      
+      // Estimate thumb's visual center X position 
+      // This calculation might need fine-tuning depending on exact browser/CSS for the thumb
+      const thumbWidthEstimate = 16; // Approximate width of the slider thumb
+      let thumbX = rect.left + (percent * (rect.width - thumbWidthEstimate)) + (thumbWidthEstimate / 2);
+      
+      // Update tooltip content first to get its actual width for centering
+      sliderValueTooltip.textContent = displayText;
+      sliderValueTooltip.classList.remove('hidden'); // Make visible before getting rect
+      const tooltipRect = sliderValueTooltip.getBoundingClientRect(); 
+      
+      // Center tooltip horizontally over thumbX
+      const posX = thumbX - (tooltipRect.width / 2);
+      // Position tooltip above slider with a small gap
+      const posY = rect.top - tooltipRect.height - 5; 
+
+      sliderValueTooltip.style.left = `${posX}px`;
+      sliderValueTooltip.style.top = `${posY}px`;
+  }
+
+  // Function to hide the slider tooltip
+  function hideSliderTooltip() {
+      if (sliderValueTooltip) {
+          sliderValueTooltip.classList.add('hidden');
+      }
+  }
+
+  // Add event listeners to sliders
+  for (const type in sliders) {
+    if (sliders[type]) {
+      const sliderElement = sliders[type];
+
+      // Update state & tooltip position WHILE dragging
+      sliderElement.addEventListener('input', (event) => {
+        const value = event.target.value;
+        updateThreshold(type, value); // Update state & potentially filter table (if thresholdsMet check is used)
+        updateSliderTooltip(event.target); // Update tooltip position & text
+      });
+
+      // Show tooltip on interaction start
+      const showTooltip = (event) => {
+          updateSliderTooltip(event.target);
+      };
+      sliderElement.addEventListener('mousedown', showTooltip);
+      sliderElement.addEventListener('touchstart', showTooltip, { passive: true });
+
+    } else {
+      console.warn(`Slider element not found for type: ${type}`);
+    }
+  }
+
+  // --- Add Event Listeners for Dropdown Selects ---
+  for (const type in thresholdSelects) {
+      const selectElement = thresholdSelects[type];
+      if (selectElement) {
+          selectElement.addEventListener('change', (event) => {
+              const value = event.target.value;
+              updateThreshold(type, value);
+          });
+      }
+  }
+  // --- END Select Listeners ---
+
+  // Hide the slider tooltip on interaction end (mouseup/touchend anywhere)
+  document.addEventListener('mouseup', hideSliderTooltip);
+  document.addEventListener('touchend', hideSliderTooltip);
+  // --- END Threshold Slider Setup ---
+
   const createProgressTextBarHTML = (percent, text, colorClass) => {
       const numericPercent = isNaN(parseInt(percent)) ? 0 : parseInt(percent);
       const textColorClass = 'text-gray-700 dark:text-gray-200';
@@ -231,65 +523,46 @@ document.addEventListener('DOMContentLoaded', function() {
         </div>
       `;
   };
-  // --- End Global Helper ---
 
-  // --- Global Helper for Usage Color ---
   const getUsageColor = (percent) => {
       if (isNaN(percent) || percent === 'N/A') return 'bg-gray-400 dark:bg-gray-600';
       const numericPercentage = parseInt(percent);
-      // Using thresholds consistent across tables now
       if (numericPercentage > 85) return 'bg-red-500'; 
       if (numericPercentage > 70) return 'bg-yellow-500';
       return 'bg-green-500';
   };
-  // --- End Global Helper ---
 
-  // --- WebSocket Connection ---
   const socket = io();
 
   socket.on('connect', function() {
-    // console.log('[socket] Connected');
     connectionStatus.textContent = 'Connected';
     connectionStatus.classList.remove('disconnected', 'bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300');
     connectionStatus.classList.add('connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300');
     
-    // ---> REMOVED: Clear disconnection animation interval <---
-    // if (disconnectAnimationIntervalId) { ... }
-    // ---> END REMOVED <---
 
     requestFullData(); // Request data once connected
   });
 
   socket.on('disconnect', function(reason) {
-    // console.log('[socket] Disconnected:', reason);
     connectionStatus.textContent = 'Disconnected';
     connectionStatus.classList.remove('connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300');
     connectionStatus.classList.add('disconnected', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300'); // Use distinct disconnected styling
     wasConnected = false; // Ensure hot reload logic knows state
 
-    // ---> MODIFIED: Show loading overlay with simple text <---
     if (loadingOverlay) {
       const loadingText = loadingOverlay.querySelector('p'); 
       if (loadingText) {
-          // Set simple text content
           loadingText.textContent = 'Connection lost.';
           
-          // ---> REMOVED: Interval logic for animation <---
-          // if (disconnectAnimationIntervalId) { ... }
-          // disconnectAnimationIntervalId = setInterval(() => { ... }, 500);
-          // ---> END REMOVED <---
       }
       loadingOverlay.style.display = 'flex'; 
     }
-    // ---> END MODIFIED <---
   });
 
-  // --- Sorting Logic ---
   function updateSortUI(tableId, clickedHeader, explicitKey = null) { // Accept explicitKey
       const tableElement = document.getElementById(tableId);
       if (!tableElement) return;
 
-      // Derive key for logging/comparison ONLY
       let derivedKey;
        if (tableId.startsWith('pbs-')) {
            const match = tableId.match(/pbs-recent-(backup|verify|sync|prunegc)-tasks-table-/);
@@ -298,30 +571,23 @@ document.addEventListener('DOMContentLoaded', function() {
            derivedKey = 'nodes';
        } else if (tableId.startsWith('main-')) {
            derivedKey = 'main';
-       // ---> ADDED: Handle backups table < ---
        } else if (tableId.startsWith('backups-')) {
            derivedKey = 'backups';
-       // ---> END ADDED < ---
        } else {
            derivedKey = null;
        }
 
-      // ---> FIX: Use the explicitly passed key primarily <---
       const tableKey = explicitKey || derivedKey; // Use explicitKey if provided, otherwise fallback to derived (for non-PBS calls)
       if (!tableKey) {
           console.error(`[updateSortUI] Could not determine sort key for tableId: ${tableId}`);
           return;
       }
-      // ---> END FIX <---
 
       const currentSort = sortState[tableKey];
 
-      // Keep log for comparison
-      // console.log(`[updateSortUI - Check] tableId='${tableId}', explicitKey='${explicitKey}', derivedKey='${derivedKey}', finalKey='${tableKey}', typeof sortState[tableKey]=${typeof sortState[tableKey]}, value=`, currentSort);
 
       if (!currentSort) {
           console.error(`[updateSortUI] No sort state found for finalKey: '${tableKey}'`);
-          // console.log('[updateSortUI] Current sortState:', JSON.stringify(sortState));
           return;
       }
 
@@ -362,7 +628,6 @@ document.addEventListener('DOMContentLoaded', function() {
             sortState[tableType].direction = 'asc';
           }
 
-          // Save updated sort state to localStorage (Only relevant keys)
           const stateToSave = {
             nodes: sortState.nodes,
             main: sortState.main,
@@ -370,15 +635,12 @@ document.addEventListener('DOMContentLoaded', function() {
           };
           localStorage.setItem('pulseSortState', JSON.stringify(stateToSave));
 
-          // Trigger the correct update function based on table type
           switch(tableType) {
               case 'nodes': updateNodesTable(nodesData); break;
               case 'vms': updateVmsTable(vmsData); break;
               case 'containers': updateContainersTable(containersData); break;
               case 'main': updateDashboardTable(); break;
-              // ---> ADDED: Trigger update for backups table < ---
               case 'backups': updateBackupsTab(); break; 
-              // ---> END ADDED < ---
               default: console.error('Unknown table type for sorting:', tableType);
           }
 
@@ -387,15 +649,10 @@ document.addEventListener('DOMContentLoaded', function() {
       });
   }
 
-  // Setup sorting for all tables
   setupTableSorting('nodes-table');
-  // setupTableSorting('vms-table'); // Removed - Table doesn't exist in base HTML
-  // setupTableSorting('containers-table'); // Removed - Table doesn't exist in base HTML
   setupTableSorting('main-table');
   setupTableSorting('backups-overview-table'); // Setup sorting for the backups table
 
-  // --- Filtering Logic ---
-  // Grouping Filter
   document.querySelectorAll('input[name="group-filter"]').forEach(radio => {
     radio.addEventListener('change', function() {
       if (this.checked) {
@@ -407,31 +664,25 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // Type Filter
-  // Restore the event listener for main dashboard type filter
   document.querySelectorAll('input[name="type-filter"]').forEach(radio => {
     radio.addEventListener('change', function() {
       if (this.checked) {
         filterGuestType = this.value; // Use the restored state variable
         updateDashboardTable(); // Update the main dashboard table
-        // REMOVED: updateBackupsTab(); // Don't update backups tab from here
         if (searchInput) searchInput.dispatchEvent(new Event('input')); // Re-apply text filter
         saveFilterState(); // ---> ADDED: Save state <---
       }
     });
   });
 
-  // Text Search Filter
   if (searchInput) {
       searchInput.addEventListener('input', function() {
-          // Re-rendering the table applies the search filter within updateDashboardTable
           updateDashboardTable();
       });
   } else {
       console.warn('Element #dashboard-search not found - text filtering disabled.');
   }
 
-  // Backups Text Search Filter (NEW)
   if (backupsSearchInput) {
       backupsSearchInput.addEventListener('input', function() {
           updateBackupsTab(); // Re-render the backups table to apply the search
@@ -440,7 +691,6 @@ document.addEventListener('DOMContentLoaded', function() {
       console.warn('Element #backups-search not found - backups text filtering disabled.');
   }
 
-  // Status Filter (NEW)
   document.querySelectorAll('input[name="status-filter"]').forEach(radio => {
     radio.addEventListener('change', function() {
       if (this.checked) {
@@ -452,8 +702,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // ---> ADDED: Event listeners for Backups Tab Filters <---\
-  // Backup Type Filter - ADDED
   document.querySelectorAll('input[name="backups-type-filter"]').forEach(radio => {
     radio.addEventListener('change', function() {
       if (this.checked) {
@@ -464,8 +712,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 
-  // ---> MODIFIED: Event listener for Backups Health Filter <---
-  // Backup Status/Age Filter -> Backup Health Filter
   document.querySelectorAll('input[name="backups-status-filter"]').forEach(radio => {
     radio.addEventListener('change', function() {
       if (this.checked) {
@@ -475,9 +721,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
-  // ---> END MODIFIED <---
 
-  // ---> ADDED: Event listener for Reset Backups Filters Button and Keyboard Shortcut <---
   const resetBackupsButton = document.getElementById('reset-backups-filters-button');
   const backupsTabContent = document.getElementById('backups'); // Declare ONCE here
 
@@ -494,38 +738,27 @@ document.addEventListener('DOMContentLoaded', function() {
           }
       });
   }
-  // ---> END ADDED <---
 
-  // --- Data Sorting Function ---
   function sortData(data, column, direction, type) {
     if (!column || !data) return data || []; // Return empty array if data is null/undefined
 
-    // Create a shallow copy to avoid modifying the original array
     const dataToSort = [...data];
 
     return dataToSort.sort((a, b) => {
       let valueA, valueB;
 
-      // Use a helper to get comparable values, handling potential missing data
       const getValue = (item, col) => {
           if (!item) return type === 'string' ? '' : (col === 'latestBackupTime' ? null : 0); // Handle backups time
           let val = item[col];
 
-          // Special Handling for Percentage Columns (Main and Nodes tables)
           if ((type === 'main' || type === 'nodes') && (col === 'cpu' || col === 'memory' || col === 'disk')) {
-            // Treat N/A string as -1 for sorting purposes
             if (val === 'N/A') return -1;
-            // Convert numeric percentage values (or numeric strings) to numbers
             const numericVal = parseFloat(val);
             return isNaN(numericVal) ? 0 : numericVal; // Default to 0 if parsing fails unexpectedly
           }
-          // --- End Special Handling ---
-          // Handle specific column logic if needed
           if (type === 'main' && col === 'id') val = parseInt(item.vmid || item.id || 0);
           else if (type === 'nodes' && col === 'id') val = item.node;
-          // ---> ADDED: Handle backup table specific columns < ---
           else if (type === 'backups') {
-              // Map health status to a sortable value (e.g., Failed=1, Old=2, Stale=3, None=4, OK=5)
               if (col === 'backupHealthStatus') {
                   switch (item[col]) {
                       case 'failed': return 1;
@@ -539,20 +772,15 @@ document.addEventListener('DOMContentLoaded', function() {
               if (col === 'guestId' || col === 'totalBackups') val = parseInt(item[col] || 0);
               if (col === 'latestBackupTime') val = item[col]; // Keep as timestamp (number or null)
           }
-          // ---> END ADDED < ---
-          // ... other specific cases ...
 
-          // Fallback for other types or columns
           return val ?? (type === 'string' ? '' : (col === 'latestBackupTime' ? null : 0)); // Use default if null/undefined
       };
 
-      // Handle specific sorting logic for nodes
       if (type === 'nodes') {
           if (column === 'uptime') {
               valueA = a ? a.uptime || 0 : 0;
               valueB = b ? b.uptime || 0 : 0;
           } else if (column === 'loadnorm') { // <-- Changed from 'loadavg'
-              // Calculate normalized load for comparison, default to -1 for sorting invalid/missing data low
               const normA = (a && a.loadavg && a.loadavg.length > 0 && a.maxcpu > 0) 
                   ? (parseFloat(a.loadavg[0]) / a.maxcpu) 
                   : -1;
@@ -570,43 +798,32 @@ document.addEventListener('DOMContentLoaded', function() {
         valueB = getValue(b, column);
       }
 
-      // Determine type for comparison (Now should favor number for percentage/uptime/loadavg/timestamp columns)
-      // ---> MODIFIED: Handle null timestamps for backups < ---
       const compareType = (typeof valueA === 'number' && typeof valueB === 'number') || (column === 'latestBackupTime' && (typeof valueA === 'number' || valueA === null) && (typeof valueB === 'number' || valueB === null)) 
           ? 'number' 
           : 'string';
 
-      // Comparison logic
       if (compareType === 'string') {
         valueA = String(valueA ?? '').toLowerCase(); // Handle potential null/undefined
         valueB = String(valueB ?? '').toLowerCase(); // Handle potential null/undefined
         return direction === 'asc' ? valueA.localeCompare(valueB) : valueB.localeCompare(valueA);
       } else { // Numeric comparison (including timestamps)
-        // Treat null timestamps as very old (or very new if sorting asc)
         if (valueA === null && valueB === null) return 0;
         if (valueA === null) return direction === 'asc' ? -1 : 1;
         if (valueB === null) return direction === 'asc' ? 1 : -1;
 
-        // Ensure numeric comparison for non-null numbers
         valueA = parseFloat(valueA) || 0;
         valueB = parseFloat(valueB) || 0;
         return direction === 'asc' ? valueA - valueB : valueB - valueA;
       }
-      // ---> END MODIFIED < ---
     });
   }
 
-  // --- NEW PBS Task Sorting Function --- // ---> REMOVE FUNCTION <---
   /*
   function sortPbsTasks(data, column, direction) {
-      // ... function content ...
   }
   */
-  // --- END NEW PBS Task Sorting Function --- // ---> END REMOVE <---
 
-  // --- Data Update/Display Functions ---
   function updateNodesTable(nodes, skipSorting = false) {
-    // Corrected selector to target the tbody directly by its ID
     const tbody = document.getElementById('nodes-table-body');
     if (!tbody) {
       console.error('Critical element #nodes-table-body not found for nodes table update!');
@@ -617,78 +834,55 @@ document.addEventListener('DOMContentLoaded', function() {
     const dataToDisplay = skipSorting ? (nodes || []) : sortData(nodes, sortState.nodes.column, sortState.nodes.direction, 'nodes');
 
     if (dataToDisplay.length === 0) {
-      // Corrected colspan to match the actual number of columns (7)
       tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found or data unavailable</td></tr>'; 
       return;
     }
 
     dataToDisplay.forEach(node => {
       const row = document.createElement('tr');
-      // Use same hover/transition classes as main dashboard rows
       row.className = 'transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px'; 
 
-      // ---- START DEBUG LOG ----
-      // console.log(`[updateNodesTable] Processing node data:`, node);
-      // ---- END DEBUG LOG ----
 
-      // --- Determine Status (Inferring 'online' if we have data from /status endpoint) ---
-      // Proxmox API /nodes/{node}/status usually only returns data for online nodes.
-      // A more robust check might involve looking at node.uptime or specific error fallbacks from the backend.
       const isOnline = node && node.uptime > 0; // Simple inference based on uptime
       const statusText = isOnline ? 'online' : (node.status || 'unknown'); // Use synthesized status if available, else unknown
       const statusColor = isOnline 
         ? 'bg-green-500 dark:bg-green-400' 
         : 'bg-red-500 dark:bg-red-400'; // Red for inferred offline/unknown
 
-      // Calculate percentages safely using the correct data structure
       const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
-      // ---> Use correct top-level properties for memory and disk <---
       const memUsed = node.mem || 0;       // Use node.mem
       const memTotal = node.maxmem || 0;     // Use node.maxmem
       const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
-      // ---> Use node.rootfs object for disk
       const diskUsed = node.disk || 0;       // Use node.disk
       const diskTotal = node.maxdisk || 0;   // Use node.maxdisk
       const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0; 
-      // ---> END MODIFICATION <---
 
-      // Get color classes for bars
       const cpuColorClass = getUsageColor(cpuPercent);
       const memColorClass = getUsageColor(memPercent);
       const diskColorClass = getUsageColor(diskPercent);
 
-      // Create tooltips and bar HTML using correct fields
       const cpuTooltipText = `${cpuPercent.toFixed(1)}%${node.maxcpu && node.maxcpu > 0 ? ` (${(node.cpu * node.maxcpu).toFixed(1)}/${node.maxcpu} cores)` : ''}`;
       const memTooltipText = `${formatBytes(memUsed)} / ${formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
-      // ---- START DEBUG LOG ----
-      // console.log(`[Node: ${node.node}] diskUsed raw: ${diskUsed}, diskTotal raw: ${diskTotal}`);
-      // ---- END DEBUG LOG ----
       const diskTooltipText = `${formatBytes(diskUsed)} / ${formatBytes(diskTotal)} (${diskPercent.toFixed(1)}%)`;
       
       const cpuBarHTML = createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
       const memoryBarHTML = createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
       const diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
 
-      // Format Uptime and Normalized Load Average
       const uptimeFormatted = formatUptime(node.uptime || 0);
       let normalizedLoadFormatted = 'N/A';
-      // Calculate normalized load if possible
       if (node.loadavg && node.loadavg.length > 0 && node.maxcpu && node.maxcpu > 0) {
           const load1m = parseFloat(node.loadavg[0]);
           if (!isNaN(load1m)) {
               const normalizedLoad = load1m / node.maxcpu;
               normalizedLoadFormatted = normalizedLoad.toFixed(2);
           } else {
-              // Log if loadavg[0] is not a number
               console.warn(`[updateNodesTable] Node '${node.node}' has non-numeric loadavg[0]:`, node.loadavg[0]);
           }
       } else if (node.loadavg && node.maxcpu <= 0) {
-           // Log if maxcpu is invalid
            console.warn(`[updateNodesTable] Node '${node.node}' has invalid maxcpu (${node.maxcpu}) for load normalization.`);
       } // Implicit else: loadavg missing or empty, keep 'N/A'
 
-      // Correctly generate the 7 columns matching the updated header order
-      // Use styling consistent with main dashboard (p-1 px-2, etc.)
       row.innerHTML = `
         <td class="p-1 px-2 whitespace-nowrap">
           <span class="flex items-center">
@@ -767,29 +961,23 @@ document.addEventListener('DOMContentLoaded', function() {
       });
     }
 
-  // --- Formatting Helpers ---
   function formatBytes(bytes) {
 /* 
-     // --- EXTREME DEBUG: Return raw bytes as string --- 
      if (bytes === undefined || bytes === null || isNaN(bytes)) return 'N/A_debug';
      return `DEBUG_RAW_${bytes}`;
-     // --- END EXTREME DEBUG ---
 */ 
-     // Correct logic reinstated:
      if (bytes === undefined || bytes === null || isNaN(bytes)) return 'N/A';
      if (bytes <= 0) return '0 B'; // Handle 0 or negative
      const units = ['B', 'KB', 'MB', 'GB', 'TB'];
      const i = Math.floor(Math.log(bytes) / Math.log(1024));
      const unitIndex = Math.max(0, Math.min(i, units.length - 1));
      const value = bytes / Math.pow(1024, unitIndex);
-     // Determine decimal places based on unit
      let decimals = 0;
      if (unitIndex === 1 || unitIndex === 2) { // KB or MB
        decimals = 1;
      } else if (unitIndex >= 3) { // GB or TB
        decimals = 2;
      }
-     // Format with determined decimals, avoiding parseFloat wrapping
      return `${value.toFixed(decimals)} ${units[unitIndex]}`;
   }
   function formatCpu(cpu) {
@@ -814,11 +1002,6 @@ document.addEventListener('DOMContentLoaded', function() {
       return `${formatBytes(bytesPerSecond)}/s`;
   }
   function formatBytesInt(bytes) {
-      // ---- START DEBUG LOG ----
-      // if (bytes > 1073741824 && bytes < 3221225472) { // Log only for values between 1GB and 3GB to target the likely bad value
-      //   console.log(`[formatBytesInt DEBUG] Received suspicious byte value: ${bytes}`);
-      // }
-      // ---- END DEBUG LOG ----
       if (bytes === undefined || bytes === null || isNaN(bytes)) return 'N/A';
       if (bytes <= 0) return '0 B';
       const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -833,51 +1016,39 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   function formatSpeedInt(bytesPerSecond) {
       if (bytesPerSecond === undefined || bytesPerSecond === null || isNaN(bytesPerSecond)) return 'N/A';
-      // if (bytesPerSecond < 1) return '0 B/s'; // Old logic
       if (bytesPerSecond === 0) return '0 B/s'; // Show 0 only if exactly 0
       if (bytesPerSecond < 1) return '<1 B/s'; // Show <1 for small positive rates
       return `${formatBytesInt(bytesPerSecond)}/s`;
   }
 
-  // --- Storage Data Display Function ---
   function updateStorageInfo(storage) {
     const contentDiv = document.getElementById('storage-info-content');
     if (!contentDiv) return;
     contentDiv.innerHTML = ''; // Clear previous content
     contentDiv.className = ''; 
 
-    // Check for global error first
     if (storage && storage.globalError) {
-        // Error message styling - remove card styles, just use text/padding
         contentDiv.innerHTML = `<p class="p-4 text-red-700 dark:text-red-300">Error: ${storage.globalError}</p>`;
         return;
     }
 
-    // ---> REFINED CHECK for empty or all-error state <---
     const nodeKeys = storage ? Object.keys(storage) : [];
     const hasValidNodeData = nodeKeys.length > 0 && nodeKeys.some(key => Array.isArray(storage[key]));
     const allNodesAreErrors = nodeKeys.length > 0 && nodeKeys.every(key => storage[key] && storage[key].error);
 
     if (nodeKeys.length === 0) {
-      // Truly empty or null/undefined
       contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data received from server.</p>';
       return;
     } else if (allNodesAreErrors) {
-      // All nodes reported fetch errors
       contentDiv.innerHTML = '<p class="text-red-600 dark:text-red-400 p-4 text-center">Failed to load storage data for all nodes. Check server logs.</p>';
       return;
     } else if (!hasValidNodeData) {
-      // Contains keys, but none have valid array data (maybe unexpected format?)
       contentDiv.innerHTML = '<p class="text-yellow-600 dark:text-yellow-400 p-4 text-center">Received unexpected storage data format from server.</p>';
       return;
     }
-    // ---> END REFINED CHECK <---
 
-    // If we reach here, there's at least one node with potentially valid (even if empty) storage data array.
 
-    // --- Helper function for Storage Icons ---
     function getStorageTypeIcon(type) {
-        // Simple icons using Tailwind/SVG - can be expanded
         switch(type) {
             case 'dir': 
                 return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-yellow-600 dark:text-yellow-400"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>'; // Folder
@@ -897,9 +1068,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-gray-500"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>'; // HelpCircle (unknown)
         }
     }
-    // --- End Helper ---
 
-    // --- Updated Helper for Content Badge Details (Class + Tooltip) ---
     function getContentBadgeDetails(contentType) {
         let details = {
             badgeClass: 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300', // Default style
@@ -931,16 +1100,12 @@ document.addEventListener('DOMContentLoaded', function() {
                  details.badgeClass = 'bg-pink-100 dark:bg-pink-900/50 text-pink-700 dark:text-pink-300';
                  details.tooltip = 'Snippet files (e.g., cloud-init configs)';
                  break;
-            // Add more cases as needed
         }
         return details;
     }
-    // --- End Helper ---
 
-    // --- Helper: Sort storage array --- 
     function sortNodeStorageData(storageArray) {
         if (!storageArray || !Array.isArray(storageArray)) return [];
-        // Create a shallow copy to avoid modifying the original
         const sortedArray = [...storageArray];
         sortedArray.sort((a, b) => {
             const nameA = String(a.storage || '').toLowerCase();
@@ -949,16 +1114,11 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         return sortedArray;
     }
-    // --- End Helper ---
 
-    // Create ONE table for all nodes
     const table = document.createElement('table');
-    // Add min-w-full and table-auto for consistency and scrolling
     table.className = 'w-full text-sm border-collapse table-auto min-w-full';
 
     const thead = document.createElement('thead');
-    // Define widths for most columns, leave Usage column without width
-    // REMOVED explicit width classes (w-X/Y, w-[...px])
     thead.innerHTML = `
         <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0 z-10"> 
           <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Storage</th>
@@ -975,15 +1135,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const tbody = document.createElement('tbody');
     tbody.className = 'divide-y divide-gray-200 dark:divide-gray-600';
 
-    // --- Sort nodes alphabetically before processing ---
     const sortedNodeNames = Object.keys(storage).sort((a, b) => a.localeCompare(b));
-    // --- End Node Sorting ---
 
-    // Iterate through the *sorted* node names
     sortedNodeNames.forEach(nodeName => {
       const nodeStorageData = storage[nodeName]; 
 
-      // Add Node Header Row - Colspan needs to match data columns (7)
       const nodeHeaderRow = document.createElement('tr');
       nodeHeaderRow.className = 'bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs node-storage-header'; 
       nodeHeaderRow.innerHTML = `
@@ -993,7 +1149,6 @@ document.addEventListener('DOMContentLoaded', function() {
         </td>`;
       tbody.appendChild(nodeHeaderRow);
 
-      // Handle errors or empty data for this specific node
       if (nodeStorageData.error) {
         const errorRow = document.createElement('tr');
         errorRow.innerHTML = `<td colspan="7" class="p-2 px-3 text-sm text-red-600 dark:text-red-400 italic">Error loading storage: ${nodeStorageData.error}</td>`;
@@ -1008,10 +1163,8 @@ document.addEventListener('DOMContentLoaded', function() {
         return; // Skip to next node
       }
 
-      // Sort storage data within this node
       const sortedNodeStorageData = sortNodeStorageData(nodeStorageData);
       
-      // Add Storage Data Rows for this node using the sorted storage data
       sortedNodeStorageData.forEach(store => { 
         const row = document.createElement('tr');
         const isDisabled = store.enabled === 0 || store.active === 0;
@@ -1029,13 +1182,11 @@ document.addEventListener('DOMContentLoaded', function() {
         contentTypes.sort(); 
         const contentBadges = contentTypes.map(ct => {
             const details = getContentBadgeDetails(ct); // Use the updated helper
-            // Re-add data-tooltip with the purpose, add trigger class and cursor
             return `<span data-tooltip="${details.tooltip}" class="storage-tooltip-trigger inline-block ${details.badgeClass} rounded px-1.5 py-0.5 text-xs font-medium mr-1 cursor-default">${ct}</span>`;
         }).join('');
 
         const usageBarHTML = createProgressTextBarHTML(usagePercent, usageTooltipText, usageColorClass);
 
-        // Standardize padding to p-1 px-2 like other tables
         row.innerHTML = `
             <td class="p-1 px-2 whitespace-nowrap text-gray-900 dark:text-gray-100 font-medium">${store.storage || 'N/A'}</td>
             <!-- Add flex items-center for vertical alignment -->
@@ -1057,25 +1208,19 @@ document.addEventListener('DOMContentLoaded', function() {
     table.appendChild(tbody);
     contentDiv.appendChild(table);
 
-    // --- Tooltip Listener Setup (Moved outside updateStorageInfo) ---
     if (tooltipElement) { 
         const storageTbody = table.querySelector('tbody'); // Get the tbody we just created
         if (storageTbody) {
-           // Remove these listeners from here
         } // End if storageTbody
     } // End if tooltipElement
-    // --- End Tooltip Listener Setup ---
 
   }
 
-  // --- Consolidated Tooltip Logic (Attached to Document Body) ---
   if (tooltipElement) { 
-      // Set faster duration (already done, kept for clarity)
       tooltipElement.classList.remove('duration-100'); 
       tooltipElement.classList.add('duration-50');
 
       document.body.addEventListener('mouseover', (event) => {
-          // Look for either trigger class
           const target = event.target.closest('.metric-tooltip-trigger, .storage-tooltip-trigger'); 
           if (target) {
               const tooltipText = target.getAttribute('data-tooltip');
@@ -1092,7 +1237,6 @@ document.addEventListener('DOMContentLoaded', function() {
       });
 
       document.body.addEventListener('mouseout', (event) => {
-          // Look for either trigger class
           const target = event.target.closest('.metric-tooltip-trigger, .storage-tooltip-trigger');
           if (target) {
               tooltipElement.classList.add('hidden', 'opacity-0');
@@ -1101,7 +1245,6 @@ document.addEventListener('DOMContentLoaded', function() {
       });
 
        document.body.addEventListener('mousemove', (event) => {
-           // Look for either trigger class
            const target = event.target.closest('.metric-tooltip-trigger, .storage-tooltip-trigger');
            if (!tooltipElement.classList.contains('hidden') && target) {
                const offsetX = 10;
@@ -1109,31 +1252,20 @@ document.addEventListener('DOMContentLoaded', function() {
                tooltipElement.style.left = `${event.pageX + offsetX}px`;
                tooltipElement.style.top = `${event.pageY + offsetY}px`;
            } else if (!tooltipElement.classList.contains('hidden') && !target) {
-               // Optional: hide if mouse moves off trigger onto non-trigger area
-               // This might be less desirable with body-level listener, could hide unexpectedly.
            }
        });
 
   } else {
       console.warn('Tooltip element not found, custom tooltips disabled.');
   }
-  // --- End Consolidated Tooltip Logic ---
 
-  // --- Dashboard Data Processing & Display ---
   function refreshDashboardData() {
     dashboardData = [];
-    // console.log('[refreshDashboardData] Starting refresh...');
 
     let maxNameLength = 0;
     let maxUptimeLength = 0;
 
-    // Helper: Calculates average, returns null if invalid/insufficient data
     function calculateAverage(historyArray, key) {
-      // ---- START DEBUG LOG ----
-      // if (key === 'disk') {
-      //   console.log(`[calculateAverage DEBUG - key: ${key}] Received historyArray:`, JSON.stringify(historyArray));
-      // }
-      // ---- END DEBUG LOG ----
       if (!historyArray || historyArray.length === 0) return null;
       const validEntries = historyArray.filter(entry => typeof entry[key] === 'number' && !isNaN(entry[key]));
       if (validEntries.length === 0) return null;
@@ -1141,24 +1273,15 @@ document.addEventListener('DOMContentLoaded', function() {
       return sum / validEntries.length;
     }
 
-    // Helper: Calculates rate, returns null if invalid/insufficient data
     function calculateAverageRate(historyArray, key) {
 
-      // ---> REMOVED: Special handling for diskread debugging <---
-      // if (key === 'diskread') { ... debug logic ... }
-      // ---> END REMOVED SECTION <---
 
       if (!historyArray || historyArray.length < 2) return null;
-      // ---> Keep filtering logic <---
       const validHistory = historyArray.filter(entry =>
           typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
           typeof entry[key] === 'number' && !isNaN(entry[key])
       );
-      // ---> END SECTION <---
 
-      // ---> REMOVED: Redundant log (was same as above) <---
-      // console.log(`[calculateAverageRate - ${key}] Valid history (${validHistory.length} entries):`, validHistory.map(e => ({ t: new Date(e.timestamp).toLocaleTimeString(), v: e[key] })));
-      // ---> END REMOVED SECTION <---
 
       if (validHistory.length < 2) return null;
       const oldest = validHistory[0];
@@ -1166,33 +1289,17 @@ document.addEventListener('DOMContentLoaded', function() {
       const valueDiff = newest[key] - oldest[key];
       const timeDiff = (newest.timestamp - oldest.timestamp) / 1000;
 
-      // ---> REMOVED: Duplicate history log <---
-      // if (key === 'diskread' || key === 'diskwrite') { ... log sample history ... }
-      // ---> END REMOVED SECTION <---
 
-      // ---> Keep log for rate calculation details <---
-      // console.log(`[calculateAverageRate - ${key}] oldest=${oldest[key]}, newest=${newest[key]}, timeDiff=${timeDiff.toFixed(2)}s, valueDiff=${valueDiff}, rate=${timeDiff > 0 ? (valueDiff / timeDiff).toFixed(0) : 'N/A'}`);
-      // ---> END SECTION <---
       if (timeDiff <= 0) return 0;
       return valueDiff / timeDiff;
     }
 
-    // Process VMs and Containers
     const processGuest = (guest, type) => {
-        // ---- START DEBUG LOG ----
-        // if (guest.vmid === 103 || guest.name === 'socat') { // Keep commented 
-        //   console.log(`[processGuest START DEBUG - vmid: ${guest.vmid}] guest object:`, JSON.stringify(guest));
-        //   const relevantMetrics = (metricsData || []).filter(m => m.id === 103 || m.guestName === 'socat' || m.guestName === 'pihole');
-        //   console.log(`[processGuest START DEBUG - vmid: ${guest.vmid}] Relevant metricsData entries:`, JSON.stringify(relevantMetrics)); 
-        // }
-        // ---- END DEBUG LOG ----
 
-        // Define variables for averages first
         let avgCpu = 0, avgMem = 0, avgDisk = 0;
         let avgDiskReadRate = 0, avgDiskWriteRate = 0, avgNetInRate = 0, avgNetOutRate = 0;
         let avgMemoryPercent = 'N/A', avgDiskPercent = 'N/A';
 
-        // Find the corresponding metrics for this guest (more specific match)
         const metrics = (metricsData || []).find(m => 
             m.id === guest.vmid && 
             m.type === guest.type &&
@@ -1200,19 +1307,13 @@ document.addEventListener('DOMContentLoaded', function() {
             m.endpointId === guest.endpointId
         ); 
 
-        // Only process history and calculate averages if the guest is running AND we found metrics
         if (guest.status === 'running' && metrics && metrics.current) { 
-            // ---> Ensure history exists check <---
             if (!dashboardHistory[guest.id] || !Array.isArray(dashboardHistory[guest.id])) { // Use guest.id (unique combo) as key
                dashboardHistory[guest.id] = [];
             }
-            // ---> End section <---
             
-            // ---> Use uniqueId for history key <---
             const history = dashboardHistory[guest.id]; // Use unique guest.id
-            // ---> End change <---
 
-            // Add current data point to history
             const currentDataPoint = { 
                 timestamp: Date.now(), 
                 ...metrics.current 
@@ -1220,7 +1321,6 @@ document.addEventListener('DOMContentLoaded', function() {
             history.push(currentDataPoint);
             if (history.length > AVERAGING_WINDOW_SIZE) history.shift();
 
-            // Calculate averages from history
             avgCpu = calculateAverage(history, 'cpu') ?? 0;
             avgMem = calculateAverage(history, 'mem') ?? 0;
             avgDisk = calculateAverage(history, 'disk') ?? 0;
@@ -1232,23 +1332,16 @@ document.addEventListener('DOMContentLoaded', function() {
             avgDiskPercent = (guest.maxdisk > 0) ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
 
         } else { // Guest is stopped, unknown, or metrics not found for it
-             // Clear history for this specific guest instance
-             // ---> Use uniqueId for history key <---
              if (dashboardHistory[guest.id]) { 
-                 // console.log(`[processGuest - ${guest.id}] Clearing history for stopped/unmatched guest.`);
                  delete dashboardHistory[guest.id];
              }
-             // ---> End change <---
-             // Averages remain at their default 0 / N/A values declared above
         }
 
-        // Prepare guest name and uptime regardless of running state
         const name = guest.name || `${guest.type === 'qemu' ? 'VM' : 'CT'} ${guest.vmid}`;
         const uptimeFormatted = formatUptime(guest.uptime);
         if (name.length > maxNameLength) maxNameLength = name.length;
         if (uptimeFormatted.length > maxUptimeLength) maxUptimeLength = uptimeFormatted.length;
 
-        // Push data for the dashboard table
         dashboardData.push({
             id: guest.vmid, // Display ID
             uniqueId: guest.id, // Unique ID for history key
@@ -1276,7 +1369,6 @@ document.addEventListener('DOMContentLoaded', function() {
     (vmsData || []).forEach(vm => processGuest(vm, 'qemu'));
     (containersData || []).forEach(ct => processGuest(ct, 'lxc'));
 
-    // Set Column Widths
     const nameColWidth = Math.min(Math.max(maxNameLength * 8 + 16, 100), 300);
     const uptimeColWidth = Math.max(maxUptimeLength * 7 + 16, 80);
     if (htmlElement) {
@@ -1284,117 +1376,186 @@ document.addEventListener('DOMContentLoaded', function() {
         htmlElement.style.setProperty('--uptime-col-width', `${uptimeColWidth}px`);
     }
 
-    updateDashboardTable(); // Render the table
+    // updateDashboardTable(); // Render the table // REMOVED THIS LINE TO FIX RECURSION
   }
 
   function updateDashboardTable() {
-    if (!mainTableBody) return;
-    mainTableBody.innerHTML = ''; // Clear
-
-    const currentSearchTerm = searchInput ? searchInput.value.toLowerCase() : '';
-    const searchTerms = currentSearchTerm.split(',').map(term => term.trim()).filter(term => term);
-
-    // ---> REVISED FILTERING LOGIC <---
-    // 1. Start with the raw dashboardData
-    let dataToProcess = dashboardData || [];
-
-    // 2. Apply sorting first (using the current state)
-    let sortedData = sortData(dataToProcess, sortState.main.column, sortState.main.direction, 'main');
-
-    // 3. Apply all filters (type, status, search) in one pass
-    let filteredData = sortedData.filter(item => {
-        // Check Status Filter
-        const statusMatch = (filterStatus === 'all') || item.status === filterStatus;
-        if (!statusMatch) return false; // Early exit if status doesn't match
-        
-        // Check Type Filter
-        const typeMatch = (filterGuestType === 'all') || 
-                          (filterGuestType === 'vm' && item.type === 'VM') || 
-                          (filterGuestType === 'lxc' && item.type === 'CT'); // Match 'lxc' filter state to 'CT' data type
-        if (!typeMatch) return false; // Early exit if type doesn't match
-
-        // Check Search Filter (only if terms exist)
-        if (searchTerms.length > 0) {
-            const nameMatch = searchTerms.some(term =>
-                (item.name?.toLowerCase() || '').includes(term) ||
-                (item.node?.toLowerCase() || '').includes(term) || 
-                (item.id?.toString() || '').includes(term)
-            );
-            if (!nameMatch) return false; // Early exit if search doesn't match
-        }
-
-        // If all checks passed, include the item
-        return true; 
-    });
-    // ---> END REVISED FILTERING LOGIC <---
-
-    // Group data if needed
-    const nodeGroups = {};
-    if (groupByNode) {
-      filteredData.forEach(guest => {
-        if (!nodeGroups[guest.node]) nodeGroups[guest.node] = [];
-        nodeGroups[guest.node].push(guest);
-      });
+    const tableBody = document.querySelector('#main-table tbody');
+    const statusElement = document.getElementById('dashboard-status-text');
+    if (!tableBody || !statusElement) {
+        console.error('Dashboard table body or status element not found!');
+        return;
     }
 
-    // Render Rows
+    refreshDashboardData(); // Ensure dashboardData is up-to-date with latest averages
+
+    // --- Define threshold prefixes used for search term filtering ---
+    // const thresholdPrefixes = ['cpu>=', 'memory>=', 'disk>=', 'uptime>=', 'diskread>=', 'diskwrite>=', 'netin>=', 'netout>=']; // REMOVED
+
+    // Get raw search terms, split by comma
+    const textSearchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : [];
+
+    // Separate search terms from threshold filter tags
+    // const textSearchTerms = rawSearchTerms.filter(term => !thresholdPrefixes.some(prefix => term.startsWith(prefix))); // REMOVED separation
+    // Note: We don't actually need to *use* the threshold tags parsed from the search bar for filtering,
+    // because the filtering happens based on the actual thresholdState object below.
+
+    let filteredData = dashboardData.filter(guest => {
+        // 1. Type Filter
+        const typeMatch = filterGuestType === 'all' || (filterGuestType === 'vm' && guest.type === 'VM') || (filterGuestType === 'lxc' && guest.type === 'CT');
+        // 2. Status Filter
+        const statusMatch = filterStatus === 'all' || guest.status === filterStatus;
+        
+        // 3. Search Filter (using ONLY text terms, ignore threshold tags)
+        const searchMatch = textSearchTerms.length === 0 || textSearchTerms.some(term => 
+            (guest.name && guest.name.toLowerCase().includes(term)) || 
+            (guest.node && guest.node.toLowerCase().includes(term)) ||
+            (guest.vmid && guest.vmid.toString().includes(term)) ||
+            (guest.id && guest.id.toString().includes(term)) // Assuming guest.id is the uniqueId
+        );
+        
+        // 4. Threshold Filtering (uses thresholdState, independent of search bar tags)
+        let thresholdsMet = true;
+        for (const type in thresholdState) {
+            const state = thresholdState[type];
+            let guestValue;
+
+            if (type === 'cpu') guestValue = guest.cpu * 100; // % value
+            else if (type === 'memory') guestValue = guest.memory; // % value
+            else if (type === 'disk') guestValue = guest.disk; // % value
+            else if (type === 'diskread') guestValue = guest.diskread; // bytes/s
+            else if (type === 'diskwrite') guestValue = guest.diskwrite; // bytes/s
+            else if (type === 'netin') guestValue = guest.netin; // bytes/s
+            else if (type === 'netout') guestValue = guest.netout; // bytes/s
+            else continue; // Should not happen
+
+            // Simplified check: Only filter if threshold value is > 0
+            if (state.value > 0) {
+                // Skip check if guest value is invalid/unavailable (e.g., stopped VM)
+                if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) {
+                    thresholdsMet = false; // Guest cannot meet a specific threshold if value is missing
+                    break;
+                }
+
+                // All filters are now effectively '>='
+                if (!(guestValue >= state.value)) {
+                    thresholdsMet = false;
+                    break;
+                }
+            }
+        }
+        // --- END Updated Threshold Filtering ---
+
+        return typeMatch && statusMatch && searchMatch && thresholdsMet;
+    });
+
+    // Apply sorting
+    let sortedData = sortData(filteredData, sortState.main.column, sortState.main.direction, 'main');
+
+    // --- BEGIN Restored Rendering Logic ---
+    tableBody.innerHTML = ''; // Clear previous content
     let visibleCount = 0;
     let visibleNodes = new Set();
 
     if (groupByNode) {
-      Object.keys(nodeGroups).sort().forEach(nodeName => {
-        visibleNodes.add(nodeName.toLowerCase());
-        const nodeHeaderRow = document.createElement('tr');
-        nodeHeaderRow.className = 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs';
-        nodeHeaderRow.innerHTML = `<td colspan="11" class="px-2 py-1">
-          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
-          ${nodeName}
-        </td>`;
-        mainTableBody.appendChild(nodeHeaderRow);
-        nodeGroups[nodeName].forEach(guest => {
-          mainTableBody.appendChild(createGuestRow(guest));
-          visibleCount++;
+        const nodeGroups = {};
+        // Group sorted data by node
+        sortedData.forEach(guest => {
+            const nodeName = guest.node || 'Unknown Node'; // Handle guests potentially without a node
+            if (!nodeGroups[nodeName]) nodeGroups[nodeName] = [];
+            nodeGroups[nodeName].push(guest);
         });
-      });
-    } else {
-      filteredData.forEach(guest => {
-        mainTableBody.appendChild(createGuestRow(guest));
-        visibleCount++;
-        visibleNodes.add(guest.node.toLowerCase());
-      });
+
+        // Sort node names and render groups
+        Object.keys(nodeGroups).sort().forEach(nodeName => {
+            visibleNodes.add(nodeName.toLowerCase());
+            const nodeHeaderRow = document.createElement('tr');
+            nodeHeaderRow.className = 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs';
+            // Ensure colspan matches the number of columns in the main table head (11)
+            nodeHeaderRow.innerHTML = `<td colspan="11" class="px-2 py-1">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                ${nodeName}
+            </td>`;
+            tableBody.appendChild(nodeHeaderRow);
+
+            // Render guests within this node group
+            nodeGroups[nodeName].forEach(guest => {
+                const guestRow = createGuestRow(guest); // Use the existing function
+                if (guestRow) { // Check if createGuestRow returned a valid row
+                    tableBody.appendChild(guestRow);
+                    visibleCount++;
+                }
+            });
+        });
+    } else { // Render as a flat list if not grouping
+        sortedData.forEach(guest => {
+            const guestRow = createGuestRow(guest); // Use the existing function
+             if (guestRow) { // Check if createGuestRow returned a valid row
+                tableBody.appendChild(guestRow);
+                visibleCount++;
+                visibleNodes.add((guest.node || 'Unknown Node').toLowerCase());
+            }
+        });
     }
 
-    // Handle empty table states
+    // Handle case where no guests match filters
     if (visibleCount === 0) {
-        const filterText = currentSearchTerm ? ` match filter "${currentSearchTerm}"` : '';
-        const statusText = filterStatus !== 'all' ? ` (${filterStatus})` : ''; // Add status to the message
-        mainTableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500">No guests${statusText}${filterText} found</td></tr>`;
+        // Generate filter description string
+        let filterDescription = [];
+        if (filterGuestType !== 'all') filterDescription.push(`Type: ${filterGuestType.toUpperCase()}`);
+        if (filterStatus !== 'all') filterDescription.push(`Status: ${filterStatus}`);
+        if (textSearchTerms.length > 0) filterDescription.push(`Search: "${textSearchTerms.join(', ')}"`);
+        const activeThresholds = Object.entries(thresholdState).filter(([_, state]) => state.value > 0);
+        if (activeThresholds.length > 0) {
+            // Generate threshold description without relying on getThresholdFilterTag
+            const thresholdTexts = activeThresholds.map(([key, state]) => {
+                return `${getReadableThresholdName(key)}>=${formatThresholdValue(key, state.value)}`;
+            }); 
+            filterDescription.push(`Thresholds: ${thresholdTexts.join(', ')}`);
+        }
+
+        let message = "No guests match the current filters";
+        if (filterDescription.length > 0) {
+            message += ` (${filterDescription.join('; ')})`;
+        }
+        message += ".";
+
+        tableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500 dark:text-gray-400">${message}</td></tr>`;
     }
 
-    // Update Status Text
-    if (statusElement) {
-        const statusBaseText = `Updated: ${new Date().toLocaleTimeString()}`;
-        let statusFilterText = currentSearchTerm ? ` | Filter: "${currentSearchTerm}"` : '';
-        let statusCountText = ` | Showing ${visibleCount}`;
-        if (filterStatus !== 'all') statusCountText += ` (${filterStatus})`; // Add status to the count text
-        statusCountText += ` guests`;
-        if (groupByNode && visibleNodes.size > 0) statusCountText += ` across ${visibleNodes.size} nodes`;
-        statusElement.textContent = statusBaseText + statusFilterText + statusCountText;
+    // Update the status text below the table
+    const statusBaseText = `Updated: ${new Date().toLocaleTimeString()}`;
+    let statusFilterText = textSearchTerms.length > 0 ? ` | Search: "${textSearchTerms.join(', ')}"` : '';
+    const typeLabel = filterGuestType !== 'all' ? filterGuestType.toUpperCase() : '';
+    const statusLabel = filterStatus !== 'all' ? filterStatus : '';
+    const otherFilters = [typeLabel, statusLabel].filter(Boolean).join('/');
+    if (otherFilters) {
+        statusFilterText += ` | ${otherFilters}`;
     }
+    let statusCountText = ` | Showing ${visibleCount} guests`;
+    if (groupByNode && visibleNodes.size > 0) statusCountText += ` across ${visibleNodes.size} nodes`;
+    statusElement.textContent = statusBaseText + statusFilterText + statusCountText;
+
+    // Update sort UI indicator for the main table
+    const mainSortColumn = sortState.main.column;
+    const mainHeader = document.querySelector(`#main-table th[data-sort="${mainSortColumn}"]`);
+    if (mainHeader) {
+        updateSortUI('main-table', mainHeader);
+    } else {
+        // Fallback or error handling if header not found
+        console.warn(`Sort header for column '${mainSortColumn}' not found in main table.`);
+    }
+    // --- END Restored Rendering Logic ---
   }
 
   function createGuestRow(guest) {
-      // console.log('[createGuestRow] Received guest data:', guest);
       const row = document.createElement('tr');
-      // ---> MODIFIED: Remove responsive classes from the row <---
       row.className = `border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${guest.status === 'stopped' ? 'opacity-60 grayscale' : ''}`;
-      // ---> END MODIFIED <---
       row.setAttribute('data-name', guest.name.toLowerCase());
       row.setAttribute('data-type', guest.type.toLowerCase());
       row.setAttribute('data-node', guest.node.toLowerCase());
       row.setAttribute('data-id', guest.id);
 
-      // --- Calculate values only if guest is running ---
       let cpuBarHTML = '-';
       let memoryBarHTML = '-';
       let diskBarHTML = '-';
@@ -1406,31 +1567,23 @@ document.addEventListener('DOMContentLoaded', function() {
       if (guest.status === 'running') {
         const cpuPercent = Math.round(guest.cpu * 100);
         const memoryPercent = guest.memory;
-        // REMOVED: const diskPercent = guest.disk;
 
-        // Revert to original calculation using guest.cpus
         const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus).toFixed(1)}/${guest.cpus} cores)` : ''}`;
         const memoryTooltipText = guest.memoryTotal ? `${formatBytesInt(guest.memoryCurrent)} / ${formatBytesInt(guest.memoryTotal)} (${memoryPercent}%)` : `${memoryPercent}%`;
-        // REMOVED: const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
 
         const cpuColorClass = getUsageColor(cpuPercent);
         const memColorClass = getUsageColor(memoryPercent);
-        // REMOVED: const diskColorClass = getUsageColor(diskPercent);
 
         cpuBarHTML = createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
         memoryBarHTML = createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
-        // REMOVED: diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
         
-        // --- NEW Conditional Disk Display ---
         if (guest.type === 'CT') { // Corrected check: Use 'CT' for containers
             const diskPercent = guest.disk; // Use metric disk usage for LXC
             const diskTooltipText = guest.diskTotal ? `${formatBytesInt(guest.diskCurrent)} / ${formatBytesInt(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
             const diskColorClass = getUsageColor(diskPercent);
             diskBarHTML = createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
         } else if (guest.type === 'VM') { 
-            // REMOVED DEBUG LOGGING
             if (guest.diskTotal) { // Check if total disk exists and is non-zero
-                 // For VMs, show only total size without progress bar
                 const totalDiskFormatted = formatBytesInt(guest.diskTotal);
                 diskBarHTML = `<span class=\"text-xs text-gray-700 dark:text-gray-200 truncate\">${totalDiskFormatted}</span>`; 
             } else {
@@ -1439,14 +1592,12 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
              diskBarHTML = '-'; // Fallback if type unknown
         }
-        // --- END Conditional Disk Display ---
 
         diskReadFormatted = formatSpeedInt(guest.diskread);
         diskWriteFormatted = formatSpeedInt(guest.diskwrite);
         netInFormatted = formatSpeedInt(guest.netin);
         netOutFormatted = formatSpeedInt(guest.netout);
       }
-      // --- End calculation block ---
 
       const typeIconClass = guest.type === 'VM'
           ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium'
@@ -1467,25 +1618,9 @@ document.addEventListener('DOMContentLoaded', function() {
         <td class="p-1 px-2 text-right whitespace-nowrap">${netOutFormatted}</td>
       `;
 
-      // ---> ADDED: Loop through TDs to add responsive classes <---
-      // REMOVED: Responsive class and data-label logic
-      /*
-      const cells = row.querySelectorAll('td');
-      cells.forEach(td => {
-          td.classList.add('block', 'sm:table-cell', 'px-3', 'py-2', 'align-middle', 'text-sm'); // Add base responsive and style classes
-          // Add a pseudo-element for the label on mobile if needed
-          const headerText = getHeaderTextForCell(td); // You'll need to implement getHeaderTextForCell
-          if (headerText) {
-              td.setAttribute('data-label', headerText);
-          }
-      });
-      */
-      // ---> END ADDED <---
-
       return row;
   }
 
-  // --- ADDED HELPER FUNCTION ---
   function getHeaderTextForCell(td) {
     try {
         const cellIndex = Array.from(td.parentNode.children).indexOf(td);
@@ -1505,88 +1640,48 @@ document.addEventListener('DOMContentLoaded', function() {
         return 'Error Header';
     }
   }
-  // --- END ADDED HELPER FUNCTION ---
 
-  // --- WebSocket Message Handling ---
-  // Add a generic listener to catch *any* events from the server
   socket.onAny((eventName, ...args) => {
-    // console.log(`[socket.onAny] Received event: ${eventName}`, args); // DEBUG: Keep commented
   });
 
-  // Listener for the 'rawData' event from the server
   socket.on('rawData', (jsonData) => {
-    // console.log('[socket.on("rawData")] Received data event');
     try {
-        // Assuming server sends data as a JSON string
         const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
 
-        // Update global data stores
         nodesData = data.nodes || [];
         vmsData = data.vms || [];
         containersData = data.containers || [];
-        // ---> REMOVED incorrect update to storageData <---
-        // storageData = data.storage || {}; // DO NOT UPDATE storage here
-        // ---> END REMOVAL <---
 
-        // ---> MODIFIED: Only update metrics if present in data <---
         if (data.hasOwnProperty('metrics')) {
              metricsData = data.metrics || [];
              if (data.metrics && data.metrics.length > 0) {
-                 // console.log(`[socket.on("rawData")] Updated metricsData (${metricsData.length} entries).`);
              }
         } else {
-            // If metrics key is missing (e.g., from discovery cycle), DO NOT update metricsData
-             // ---> REMOVED DEBUG_METRICS check <---
-            // console.log('[socket.on("rawData")] Metrics key missing, preserving existing metricsData.');
         }
-        // ---> END MODIFICATION <---
 
-        // ---> CHANGE: Update pbsDataArray
         if (data.hasOwnProperty('pbs')) {
-            // Expecting an array now
             pbsDataArray = Array.isArray(data.pbs) ? data.pbs : []; 
-            // console.log(`[socket.on("rawData")] Updated pbsDataArray with ${pbsDataArray.length} instance(s).`);
         } else {
-            // If pbs key is missing, preserve the existing array
-            // console.log('[socket.on("rawData")] PBS key missing in rawData, preserving existing pbsDataArray.');
         }
-        // <--- END CHANGE
 
-        // Update Tab Availability AFTER potentially updating pbsDataArray
         updateTabAvailability(); 
 
-        // console.log('[socket.on("rawData")] Parsed data and updated stores');
 
-        // Set flag after first successful data parse
         if (!initialDataReceived) {
           initialDataReceived = true;
-          // console.log('[socket.on("rawData")] Initial data received, enabling UI updates.');
 
-          // Optional: Trigger immediate first render instead of waiting for interval
-          // updateAllUITables();
         }
 
-        // --- REMOVED UI update calls from here ---
-        // updateNodesTable(nodesData);
-        // updateVmsTable(vmsData);
-        // updateContainersTable(containersData);
-        // refreshDashboardData(); 
-        // console.log('[socket.on("rawData")] Processed data and updated UI');
 
     } catch (e) {
         console.error('Error processing received rawData:', e, jsonData);
     }
   });
 
-  // ---> CHANGE: Handle initial PBS status array
   socket.on('pbsInitialStatus', (pbsStatusArray) => {
-      // console.log('[socket] Received pbsInitialStatus array:', pbsStatusArray);
       if (Array.isArray(pbsStatusArray)) {
-          // Update the global pbsDataArray with these initial statuses
-          // This ensures the UI shows something before the first full discovery
           pbsDataArray = pbsStatusArray.map(statusInfo => ({ 
               ...statusInfo, // includes pbsEndpointId, pbsInstanceName, status
-              // Add default empty structures for other fields expected by updatePbsInfo
               backupTasks: { recentTasks: [], summary: {} },
               datastores: [],
               verificationTasks: { summary: {} },
@@ -1594,19 +1689,15 @@ document.addEventListener('DOMContentLoaded', function() {
               pruneTasks: { summary: {} },
               nodeName: null // Node name isn't known yet
           }));
-          // Trigger an immediate partial UI update for PBS status
           updatePbsInfo(pbsDataArray);
-          // Update tab availability based on this initial status
           updateTabAvailability(); 
       } else {
           console.warn('[socket] Received non-array data for pbsInitialStatus:', pbsStatusArray);
       }
   });
-  // ---> END CHANGE
 
   function requestFullData() {
     console.log('Requesting full data reload from server...');
-    // ---> ADDED: Show loading overlay when requesting data <---\
     if (loadingOverlay) {
       const loadingText = loadingOverlay.querySelector('p'); // Changed selector from #loading-text to p
       if (loadingText) {
@@ -1614,13 +1705,37 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       loadingOverlay.style.display = 'flex'; // Or \'block\', ensure it matches initial display style
     }
-    // ---> END ADDED <---\
     socket.emit('requestData'); // Ensure this uses the correct event name
   }
 
-  // --- Function to Reset Dashboard Filters/Sort ---
+  function resetThresholds() {
+      for (const type in thresholdState) {
+          if (sliders[type]) { // Slider
+             // If logging is active while resetting, stop it.
+             if (isThresholdLoggingActive && toggleLogModeButton) {
+                 toggleLogModeButton.click(); // Simulate click to stop logging cleanly
+             }
+
+              thresholdState[type].value = 0;
+              const sliderElement = sliders[type];
+              if (sliderElement) sliderElement.value = 0;
+          } else if (thresholdSelects[type]) { // Dropdown Select
+              thresholdState[type].value = 0;
+              const selectElement = thresholdSelects[type];
+              if (selectElement) selectElement.value = 0; // Set to the 'Any' option value
+          }
+
+      } // End for loop
+      hideSliderTooltip(); // Make sure tooltip is hidden after reset
+      // Ensure threshold row is hidden on reset
+      isThresholdRowVisible = false;
+      updateThresholdRowVisibility();
+      // --- END Reset Thresholds Logic (within this func) ---
+      updateThresholdIndicator(); // Update badge after reset
+  }
+
+  // Reset the main dashboard view
   function resetDashboardView() {
-      // console.log('Resetting dashboard view...');
       if (searchInput) searchInput.value = '';
       sortState.main = { column: 'id', direction: 'asc' }; 
       updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]'));
@@ -1631,29 +1746,24 @@ document.addEventListener('DOMContentLoaded', function() {
       
       const filterAllRadio = document.getElementById('filter-all');
       if(filterAllRadio) filterAllRadio.checked = true;
-      // REMOVED: filterGuestType = 'all';
+      filterGuestType = 'all'; // Reset type filter state
       
-      // --- ADDED: Reset status filter state ---
       const statusAllRadio = document.getElementById('filter-status-all');
       if(statusAllRadio) statusAllRadio.checked = true;
       filterStatus = 'all';
-      // --- END ADDED ---
       
-      updateDashboardTable();
+      // --- BEGIN Reset Thresholds ---
+      resetThresholds(); // Call the dedicated reset function
+      // --- END Reset Thresholds Section ---
+
+      updateDashboardTable(); // Update table AFTER resetting everything
       if (searchInput) searchInput.blur(); // Blur search input after reset
 
-      // ---> ADDED: Reset Backups Tab Filters <---\
-      // const backupTypeAllRadio = document.getElementById('backups-filter-type-all'); // REMOVED
-      // if(backupTypeAllRadio) backupTypeAllRadio.checked = true; // REMOVED
-      // backupsFilterType = 'all'; // REMOVED
 
-      // ---> MODIFIED: Reset Backups Health Filter <---
       const backupStatusAllRadio = document.getElementById('backups-filter-status-all');
       if(backupStatusAllRadio) backupStatusAllRadio.checked = true;
       backupsFilterHealth = 'all';
-      // ---> END MODIFIED <---
 
-      // Reset Type filter for main dashboard
       const typeAllRadio = document.getElementById('filter-all');
       if(typeAllRadio) typeAllRadio.checked = true;
       filterGuestType = 'all';
@@ -1661,7 +1771,6 @@ document.addEventListener('DOMContentLoaded', function() {
       saveFilterState(); // ---> ADDED: Save reset state <---
   }
 
-  // --- Reset Filters/Sort Listener ---
   document.addEventListener('keydown', function(event) {
     const activeElement = document.activeElement;
     const isSearchInputFocused = activeElement === searchInput;
@@ -1684,12 +1793,10 @@ document.addEventListener('DOMContentLoaded', function() {
     ) {
         if (searchInput) {
             searchInput.focus();
-            // We let the subsequent keypress event populate the input
         }
     }
   });
 
-  // Add listener for the new Reset button
   const resetButton = document.getElementById('reset-filters-button');
   if (resetButton) {
       resetButton.addEventListener('click', resetDashboardView); // Call the same reset function
@@ -1697,57 +1804,38 @@ document.addEventListener('DOMContentLoaded', function() {
       console.warn('Reset button #reset-filters-button not found.');
   }
 
-  // --- Initial Setup Calls ---
-  // Update the UI to reflect the currently loaded sort state for the main table
   const initialMainSortColumn = sortState.main.column;
   const initialMainHeader = document.querySelector(`#main-table th[data-sort="${initialMainSortColumn}"]`);
   if (initialMainHeader) {
     updateSortUI('main-table', initialMainHeader);
   } else {
-      // Fallback or log if the saved column header isn't found (e.g., after code changes)
       console.warn(`Initial sort header for column '${initialMainSortColumn}' not found in main table.`);
       updateSortUI('main-table', document.querySelector('#main-table th[data-sort="id"]')); // Fallback to ID visual
   }
-  // Data is requested on socket 'connect' event
 
-  // --- Frontend Render Interval ---
   function updateAllUITables() {
-    // Update UI tables using the currently stored data
     updateNodesTable(nodesData);
-    // updateVmsTable(vmsData); // No separate VM table
-    // updateContainersTable(containersData); // No separate CT table
-    refreshDashboardData(); // Process and update the main dashboard
+    refreshDashboardData(); // Process data and update dashboardData array
+    updateDashboardTable(); // ADDED: Re-render the main table with refreshed data
     updateStorageInfo(storageData); // Update storage info tab
-    // ---> CHANGE: Pass pbsDataArray
-    // updatePbsInfo(pbsData);
     updatePbsInfo(pbsDataArray);
-    // ---> ADDED: Call backup tab update
     updateBackupsTab(); 
-    // ---> END ADDED
-    // <--- END CHANGE
 
-    // ---> MODIFIED: Hide loading overlay only if connected and overlay is visible < ---
     if (loadingOverlay && loadingOverlay.style.display !== 'none') {
         if (socket.connected) { // ADDED: Check socket connection status
             console.log('[UI Update] Hiding loading overlay.'); // Add log for confirmation
             loadingOverlay.style.display = 'none';
         } else {
-            // Keep overlay visible if socket is disconnected
-            // console.log('[UI Update] Socket disconnected, keeping overlay visible.'); // Optional debug log
         }
     }
-    // ---> END MODIFIED < ---
 
     initialDataReceived = true; // Keep this flag for other logic (like the interval trigger)
   }
 
-  // Add a separate fetch for storage data, maybe less frequent?
   async function fetchStorageData() {
     try {
       const response = await fetch('/api/storage');
-      // Check if the response was successful (status code 200-299)
       if (!response.ok) {
-          // Try to parse error json from server if possible, otherwise use status text
           let serverErrorMsg = `Server responded with status: ${response.status} ${response.statusText}`;
           try {
               const errorJson = await response.json();
@@ -1757,57 +1845,37 @@ document.addEventListener('DOMContentLoaded', function() {
                    serverErrorMsg += ` | Body: ${JSON.stringify(errorJson)}`;
               }
           } catch (parseError) {
-              // Ignore parsing error if response is not JSON
           }
           throw new Error(serverErrorMsg); // Throw error to be caught below
       }
 
-      // Only parse and update global storageData if response.ok
       const fetchedData = await response.json();
-      // ---> MODIFIED: Only update global state on success <---
-      // ---> REMOVED: Log successfully fetched data <---
-      // console.log('[Storage Fetch] Successfully fetched and parsed data:', fetchedData);
-      // ---> END REMOVED SECTION <---
       storageData = fetchedData; // Update the global variable
-      // console.log('[Storage Fetch] Successfully updated storageData.'); // Optional debug log
-      // ---> END MODIFICATION <---
 
     } catch (error) { // Catches fetch errors (network) and the thrown error above
-      // ---> MODIFIED: Improved error logging (No change to logic here, just logging) <---
       let finalErrorMessage = 'Failed to load storage data due to an unknown error.';
       if (error instanceof TypeError) {
-        // Likely a network error (failed fetch)
         finalErrorMessage = `Failed to load storage data due to a network error: ${error.message}`;
         console.error('Network error during storage fetch:', error);
       } else {
-        // Likely an error thrown from the !response.ok block or JSON parsing error
         finalErrorMessage = error.message;
         console.error('Error processing storage response:', error);
       }
-      // ---> MODIFIED: Don't update global storageData on error <---
-      // storageData = { globalError: finalErrorMessage }; 
-      // Just log the error, don't update the global state which would clear the UI
       console.error(`Storage fetch failed, preserving previous data. Error: ${finalErrorMessage}`);
-      // ---> END MODIFICATION <---
     }
-    // Update UI in the main interval now
-    // updateStorageInfo(storageData);
   }
 
   setInterval(() => {
     if (initialDataReceived) {
-      // console.log('[UI Interval] Updating UI tables...');
       updateAllUITables();
+      checkThresholdViolations(); // Add check after UI update
     }
   }, 2000); // Update UI every 2 seconds (was 2500)
 
-  // Fetch storage data periodically (e.g., every 10 seconds)
   setInterval(fetchStorageData, 30000); // Changed to 30 seconds
   fetchStorageData(); // Initial fetch on load
 
-  // --- End Frontend Render Interval ---
 
-  // --- Fetch and display version ---
   fetch('/api/version')
       .then(response => response.json())
       .then(data => {
@@ -1821,9 +1889,7 @@ document.addEventListener('DOMContentLoaded', function() {
               versionSpan.textContent = 'error';
           }
       });
-  // --- End fetch version ---
 
-  // --- Helper Functions for PBS Tab --- // MOVED UP
   const formatPbsTimestamp = (ts) => {
       if (!ts) return 'Never';
       try {
@@ -1867,22 +1933,18 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   const getPbsGcStatusText = (gcStatus) => {
-    // Handle falsy values, 'unknown', or literal 'N/A' string
     if (!gcStatus || gcStatus === 'unknown' || gcStatus === 'N/A') { 
       return '<span class="text-xs text-gray-400">-</span>'; // Changed from "Unknown"
     }
-    // Determine color based on known status keywords
     let colorClass = 'text-gray-600 dark:text-gray-400';
     if (gcStatus.includes('error') || gcStatus.includes('failed')) {
         colorClass = 'text-red-500 dark:text-red-400';
     } else if (gcStatus === 'OK') {
         colorClass = 'text-green-500 dark:text-green-400';
     }
-    // Return the original status text with appropriate color
     return `<span class="text-xs ${colorClass}">${gcStatus}</span>`;
   };
 
-  // --- Function to Update Specific Task Summary Card ---
   function updatePbsTaskSummaryCard(prefix, summaryData) {
     const okEl = document.getElementById(`pbs-${prefix}-ok`);
     const failedEl = document.getElementById(`pbs-${prefix}-failed`);
@@ -1903,11 +1965,9 @@ document.addEventListener('DOMContentLoaded', function() {
       lastOkEl.textContent = formatPbsTimestamp(summary.lastOk);
       lastFailedEl.textContent = formatPbsTimestamp(summary.lastFailed);
 
-      // Add warning style if failures exist
       failedEl.classList.toggle('font-bold', (summary.failed ?? 0) > 0);
 
     } else {
-      // Clear fields if data is missing
       okEl.textContent = '-';
       failedEl.textContent = '-';
       totalEl.textContent = '-';
@@ -1917,29 +1977,24 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // ---> ADDED: Helper to parse PBS task target string <---
   const parsePbsTaskTarget = (task) => {
     const workerId = task.worker_id || task.id || ''; // e.g., guests:ct/103/681078F1 or hosts:host/bkp-2024-05-15 or guests::ct/103
     const taskType = task.worker_type || task.type || ''; // e.g., backup, verify, prune, garbage_collection
 
-    // Default
     let displayTarget = workerId;
 
     if (taskType === 'backup' || taskType === 'verify') {
-      // Format: datastore:type/id/snapshot or datastore:host/id
       const parts = workerId.split(':');
       if (parts.length >= 2) {
         const targetPart = parts[1]; // e.g., ct/103/681078F1 or host/bkp-2024-05-15
         const targetSubParts = targetPart.split('/');
         if (targetSubParts.length >= 2) {
-            // Try to get guest type and ID (e.g., ct/103 -> type=ct, id=103)
             const guestType = targetSubParts[0]; // ct or vm or host
             const guestId = targetSubParts[1]; // 103 or bkp-2024-05-15
             displayTarget = `${guestType}/${guestId}`;
         }
       }
     } else if (taskType === 'prune' || taskType === 'garbage_collection') {
-        // Format: datastore::group or datastore:group
         const parts = workerId.split('::'); // Try double colon first for prune groups
         if (parts.length === 2) {
             displayTarget = `Prune ${parts[0]} (${parts[1]})`; // e.g., Prune guests (ct/103)
@@ -1952,18 +2007,13 @@ document.addEventListener('DOMContentLoaded', function() {
              }
         }
     } else if (taskType === 'sync') {
-        // Often just job id? Example: job_id
         displayTarget = `Sync Job: ${workerId}`;
     }
 
-    // TODO: Add guest name lookup here in the future if possible
-    // Maybe: find guest name from vmsData/containersData based on parsed type/id
 
     return displayTarget; // Return the parsed or original string
   };
-  // ---> END ADDED <---
 
-  // Function to populate a specific PBS task table
   function populatePbsTaskTable(parentSectionElement, fullTasksArray) {
     if (!parentSectionElement) {
         console.warn('[PBS UI] Parent element not found for task table');
@@ -1978,7 +2028,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return; // Exit if table body doesn't exist
     }
 
-    // Clear previous rows
     tableBody.innerHTML = '';
 
     const tasks = fullTasksArray || []; // Ensure tasks is an array
@@ -1996,9 +2045,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const startTime = task.startTime ? formatPbsTimestamp(task.startTime) : 'N/A';
             const duration = task.duration !== null ? formatDuration(task.duration) : 'N/A';
             const upid = task.upid || 'N/A';
-            // ---> ADDED: Shorten UPID <---
             const shortUpid = upid.length > 30 ? `${upid.substring(0, 15)}...${upid.substring(upid.length - 15)}` : upid;
-            // ---> END ADDED <---
 
             const row = document.createElement('tr');
             row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 ease-in-out';
@@ -2017,19 +2064,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 showMoreButton.classList.remove('hidden');
                 const remainingCount = tasks.length - INITIAL_PBS_TASK_LIMIT;
                 showMoreButton.textContent = `Show More (${remainingCount} older)`;
-                // Manage click handler carefully to avoid duplicates
                 if (!showMoreButton.dataset.handlerAttached) {
                     showMoreButton.addEventListener('click', () => {
-                        // Append the rest of the tasks
                         tasks.slice(INITIAL_PBS_TASK_LIMIT).forEach(task => {
                            const target = parsePbsTaskTarget(task); // Use the new parsing function
                            const statusIcon = getPbsStatusIcon(task.status);
                            const startTime = task.startTime ? formatPbsTimestamp(task.startTime) : 'N/A';
                            const duration = task.duration !== null ? formatDuration(task.duration) : 'N/A';
                            const upid = task.upid || 'N/A';
-                           // ---> ADDED: Shorten UPID <---
                            const shortUpid = upid.length > 30 ? `${upid.substring(0, 15)}...${upid.substring(upid.length - 15)}` : upid;
-                           // ---> END ADDED <---
 
                            const row = document.createElement('tr');
                            row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 ease-in-out';
@@ -2052,9 +2095,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 }
-  // --- END NEW Function ---
 
-  // --- Updated Function: Update PBS Info Section (Upsert Logic) ---
   function updatePbsInfo(pbsArray) {
     const container = document.getElementById('pbs-instances-container');
     if (!container) {
@@ -2062,37 +2103,28 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
 
-    // --- REVERTED Check: Remove the banner creation --- //
     if (!pbsArray || pbsArray.length === 0) {
         container.innerHTML = ''; // Clear previous content
-        // Optionally, add a simple text message instead of the banner
         const placeholder = document.createElement('p');
         placeholder.className = 'text-gray-500 dark:text-gray-400 p-4 text-center text-sm';
         placeholder.textContent = 'Proxmox Backup Server integration is not configured.';
         container.appendChild(placeholder);
-        // console.log("[updatePbsInfo] No PBS data received, showing simple text message.");
         return; // Stop processing for this tab
     }
-    // --- END REVERTED Check --- //
 
-    // Remove initial loading message if it exists AND we have data
     const loadingMessage = document.getElementById('pbs-loading-message');
     if (loadingMessage) {
         loadingMessage.remove();
     }
     
-    // ---> ADDED: Also remove the 'Not Configured' banner if present, as we now have data
     const notConfiguredBanner = container.querySelector('.pbs-not-configured-banner');
     if (notConfiguredBanner) {
         notConfiguredBanner.remove();
     }
-    // ---> END ADDED
 
-    // console.log('[updatePbsInfo] Processing PBS array:', pbsArray); 
 
     const currentInstanceIds = new Set(); 
 
-    // Helper functions defined here or accessible in scope
     const createSummaryCard = (type, title, summaryData) => {
         const card = document.createElement('div');
         const summary = summaryData?.summary || {};
@@ -2103,7 +2135,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const lastFailed = formatPbsTimestamp(summary.lastFailed);
         const failedStyle = (failed > 0) ? 'font-bold text-red-600 dark:text-red-400' : 'text-red-600 dark:text-red-400 font-semibold';
         
-        // Add highlighting class if there are failures
         const highlightClass = (failed > 0) ? 'border-l-4 border-red-500 dark:border-red-400' : 'border-l-4 border-transparent'; // Use transparent border normally
         card.className = `border border-gray-200 dark:border-gray-700 rounded p-3 bg-gray-100/50 dark:bg-gray-700/50 ${highlightClass}`;
 
@@ -2144,15 +2175,11 @@ document.addEventListener('DOMContentLoaded', function() {
         `;
     };
 
-    // ---> REMOVE: setupPbsSortListener function definition <---
     /*
      const setupPbsSortListener = (tableId, sortStateKey, pbsInstance) => { 
-        // ... function content ...
      };
     */
-    // ---> END REMOVE <---
 
-    // Create/Update content for each PBS instance
     pbsArray.forEach((pbsInstance, index) => {
       const rawInstanceId = pbsInstance.pbsEndpointId || `instance-${index}`;
       const instanceId = sanitizeForId(rawInstanceId); // Use sanitized ID for elements
@@ -2163,34 +2190,28 @@ document.addEventListener('DOMContentLoaded', function() {
       let instanceWrapper = document.getElementById(instanceElementId);
       let detailsContainer, dsTableBody, instanceTitleElement; 
 
-      // Determine Status Text and Detail Visibility
       let statusText = 'Loading...';
       let showDetails = false;
       let statusColorClass = 'text-gray-600 dark:text-gray-400';
       switch (pbsInstance.status) {
           case 'configured':
-              // statusText = `Configured (${pbsInstance.nodeName || '...'}), attempting connection...`; // Original
               statusText = `Configured, attempting connection...`; // Simplified
               statusColorClass = 'text-gray-600 dark:text-gray-400';
               break;
           case 'ok':
-              // statusText = `Status: OK (${pbsInstance.nodeName || 'Unknown Node'})`; // Original
               statusText = `Status: OK`; // Simplified
               statusColorClass = 'text-green-600 dark:text-green-400';
               showDetails = true;
               break;
           case 'error':
-              // statusText = `Error connecting (${pbsInstance.errorMessage || 'Check Pulse logs.'})`; // Original
               statusText = `Error: ${pbsInstance.errorMessage || 'Connection failed'}`; // Simplified
               statusColorClass = 'text-red-600 dark:text-red-400';
               break;
-          // 'unconfigured' is handled by the empty array check earlier
           default:
               statusText = `Status: ${pbsInstance.status || 'Unknown'}`;
               break;
       }
 
-      // --- START: Calculate Overall Health ---
       let overallHealth = 'ok'; // Assume ok initially
       let healthTitle = 'OK';
       if (pbsInstance.status === 'error') {
@@ -2200,7 +2221,6 @@ document.addEventListener('DOMContentLoaded', function() {
           overallHealth = 'warning'; // Configured or unknown status
           healthTitle = 'Connecting or unknown status';
       } else {
-          // Check datastores
           const highUsageDatastore = (pbsInstance.datastores || []).find(ds => {
               const totalBytes = ds.total || 0;
               const usedBytes = ds.used || 0;
@@ -2212,7 +2232,6 @@ document.addEventListener('DOMContentLoaded', function() {
               healthTitle = `Warning: Datastore ${highUsageDatastore.name} usage high (${Math.round((highUsageDatastore.used / highUsageDatastore.total) * 100)}%)`;
           }
 
-          // Check task failures (only if status is still ok or warning)
           if (overallHealth !== 'error') {
               const hasFailures = [
                   pbsInstance.backupTasks,
@@ -2227,34 +2246,24 @@ document.addEventListener('DOMContentLoaded', function() {
               }
           }
       }
-      // --- END: Calculate Overall Health ---
 
-      // Helper to generate health badge HTML
       const createHealthBadgeHTML = (health, title) => {
           let colorClass = 'bg-gray-400 dark:bg-gray-500'; // Default/unknown
           if (health === 'ok') colorClass = 'bg-green-500';
           else if (health === 'warning') colorClass = 'bg-yellow-500';
           else if (health === 'error') colorClass = 'bg-red-500';
-          // Log the health status being used for the badge
-          // console.log(`[PBS Health Badge - ${instanceName}] Health: ${health}, Title: ${title}, Class: ${colorClass}`);
           return `<span title="${title}" class="inline-block w-3 h-3 ${colorClass} rounded-full mr-2 flex-shrink-0"></span>`;
       };
 
       if (instanceWrapper) {
-          // Instance Exists: Update
-          // console.log(`[PBS Update - ${instanceName}] Found existing wrapper:`, instanceWrapper);
           detailsContainer = instanceWrapper.querySelector(`#pbs-details-${instanceId}`);
           instanceTitleElement = instanceWrapper.querySelector('h3'); // Find the existing h3
-          // console.log(`[PBS Update - ${instanceName}] Found title element:`, instanceTitleElement);
 
-          // Update health badge and instance name in title
           if (instanceTitleElement) {
               instanceTitleElement.innerHTML = `${createHealthBadgeHTML(overallHealth, healthTitle)}${instanceName}`;
           }
 
-          // Update contents IF the details container exists
           if (detailsContainer) {
-               // Update Datastore Table Body
                dsTableBody = detailsContainer.querySelector(`#pbs-ds-tbody-${instanceId}`);
                if (dsTableBody) {
                    dsTableBody.innerHTML = ''; 
@@ -2281,7 +2290,6 @@ document.addEventListener('DOMContentLoaded', function() {
                   }
                }
 
-               // Update Task Summary Cards
                const summariesSection = detailsContainer.querySelector(`#pbs-summaries-section-${instanceId}`);
                if (summariesSection) {
                  summariesSection.innerHTML = ''; // Clear existing cards
@@ -2291,7 +2299,6 @@ document.addEventListener('DOMContentLoaded', function() {
                  summariesSection.appendChild(createSummaryCard('prune', 'Prune/GC', pbsInstance.pruneTasks));
                }
 
-               // Update Task Tables
               if (showDetails) {
                   const backupSection = detailsContainer.querySelector('.pbs-task-section[data-task-type="backup"]');
                   if (backupSection) populatePbsTaskTable(backupSection, pbsInstance.backupTasks?.recentTasks);
@@ -2306,7 +2313,6 @@ document.addEventListener('DOMContentLoaded', function() {
                   if (pruneGcSection) populatePbsTaskTable(pruneGcSection, pbsInstance.pruneTasks?.recentTasks);
 
               } else {
-                   // If details are hidden, ensure tables show the status message
                   const backupTbody = document.getElementById(`pbs-recent-backup-tasks-tbody-${instanceId}`);
                   if (backupTbody) backupTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
                   const verifyTbody = document.getElementById(`pbs-recent-verify-tasks-tbody-${instanceId}`);
@@ -2317,33 +2323,26 @@ document.addEventListener('DOMContentLoaded', function() {
                   if (pruneTbody) pruneTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
               }
 
-              // Toggle visibility at the end
               detailsContainer.classList.toggle('hidden', !showDetails);
           } // End if(detailsContainer)
 
       } else {
-          // Instance Doesn't Exist: Create
           instanceWrapper = document.createElement('div');
           instanceWrapper.className = 'pbs-instance-section border border-gray-200 dark:border-gray-700 rounded p-4 mb-4 bg-gray-50/30 dark:bg-gray-800/30';
           instanceWrapper.id = instanceElementId;
 
-          // Header
-          // console.log(`[PBS Create - ${instanceName}] Creating new wrapper.`);
           const headerDiv = document.createElement('div');
           headerDiv.className = 'flex justify-between items-center mb-3';
           instanceTitleElement = document.createElement('h3'); // Assign to instanceTitleElement
           instanceTitleElement.className = 'text-lg font-semibold text-gray-800 dark:text-gray-200 flex items-center'; // Corrected: Use instanceTitleElement
-          // Add health badge and instance name
           instanceTitleElement.innerHTML = `${createHealthBadgeHTML(overallHealth, healthTitle)}${instanceName}`;
           headerDiv.appendChild(instanceTitleElement);
           instanceWrapper.appendChild(headerDiv);
 
-          // Details Container
           detailsContainer = document.createElement('div');
           detailsContainer.className = `pbs-instance-details space-y-4 ${showDetails ? '' : 'hidden'}`;
           detailsContainer.id = `pbs-details-${instanceId}`;
 
-          // Datastores Section
           const dsSection = document.createElement('div');
           dsSection.id = `pbs-ds-section-${instanceId}`;
           dsSection.innerHTML = `
@@ -2366,18 +2365,15 @@ document.addEventListener('DOMContentLoaded', function() {
               </div>`;
           detailsContainer.appendChild(dsSection);
 
-          // Task Summaries Section
           const summariesSection = document.createElement('div');
           summariesSection.id = `pbs-summaries-section-${instanceId}`;
           summariesSection.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4';
-          // console.log(`[PBS Create - ${instanceName}] Adding summary cards. Backup failures: ${pbsInstance.backupTasks?.summary?.failed ?? 'N/A'}`);
           summariesSection.appendChild(createSummaryCard('backup', 'Backups', pbsInstance.backupTasks));
           summariesSection.appendChild(createSummaryCard('verify', 'Verification', pbsInstance.verificationTasks));
           summariesSection.appendChild(createSummaryCard('sync', 'Sync', pbsInstance.syncTasks));
           summariesSection.appendChild(createSummaryCard('prune', 'Prune/GC', pbsInstance.pruneTasks));
           detailsContainer.appendChild(summariesSection);
 
-          // Create Task Sections
            const recentBackupTasksSection = document.createElement('div');
            recentBackupTasksSection.className = 'pbs-task-section'; // Add class
            recentBackupTasksSection.dataset.taskType = 'backup'; // Add data attribute
@@ -2405,13 +2401,11 @@ document.addEventListener('DOMContentLoaded', function() {
           instanceWrapper.appendChild(detailsContainer);
           container.appendChild(instanceWrapper); // Append new instance to DOM
 
-          // Populate tables and attach listeners AFTER appending
           dsTableBody = instanceWrapper.querySelector(`#pbs-ds-tbody-${instanceId}`); // Find the newly created body
            if (dsTableBody) {
                if (showDetails && pbsInstance.datastores) {
                     if (pbsInstance.datastores.length === 0) { dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">No PBS datastores found or accessible.</td></tr>`; }
                     else { 
-                        // Populate rows
                         pbsInstance.datastores.forEach(ds => { 
                           const totalBytes = ds.total || 0; 
                           const usedBytes = ds.used || 0; 
@@ -2443,7 +2437,6 @@ document.addEventListener('DOMContentLoaded', function() {
               if (pruneGcSection) populatePbsTaskTable(pruneGcSection, pbsInstance.pruneTasks?.recentTasks);
 
           } else {
-               // If details are hidden, ensure tables show the status message
               const backupTbody = document.getElementById(`pbs-recent-backup-tasks-tbody-${instanceId}`);
               if (backupTbody) backupTbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 text-sm text-gray-400 text-center">${statusText}</td></tr>`;
               const verifyTbody = document.getElementById(`pbs-recent-verify-tasks-tbody-${instanceId}`);
@@ -2458,18 +2451,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
   }); // End forEach pbsInstance
 
-  // --- Remove Orphaned Instances ---
   container.querySelectorAll('.pbs-instance-section').forEach(el => {
       if (!currentInstanceIds.has(el.id)) {
-          // console.log(`Removing orphaned PBS instance element: ${el.id}`);
           el.remove();
       }
   });
 
 }
-// --- End Update PBS Info Function ---
 
-  // --- PBS Task Table Toggle Listener ---
   const pbsInstancesContainer = document.getElementById('pbs-instances-container');
   if (pbsInstancesContainer) {
       pbsInstancesContainer.addEventListener('click', (event) => {
@@ -2483,7 +2472,6 @@ document.addEventListener('DOMContentLoaded', function() {
               return;
           }
 
-          // Find the parent section containing this tbody
           const parentSection = tbody.closest('.pbs-task-section');
           if (!parentSection) {
               console.error("Parent task section (.pbs-task-section) not found for tbody:", targetTbodyId);
@@ -2493,50 +2481,33 @@ document.addEventListener('DOMContentLoaded', function() {
           const isCurrentlyExpanded = tbody.dataset.isExpanded === 'true';
           const fullTasks = JSON.parse(tbody.dataset.fullTasks || '[]');
 
-          // Toggle the expanded state *before* re-populating
           tbody.dataset.isExpanded = isCurrentlyExpanded ? 'false' : 'true';
 
-          // Re-populate the table using the parent section and full task list
           populatePbsTaskTable(parentSection, fullTasks);
       });
   } else {
       console.warn("PBS instances container not found, toggle functionality will not work.");
   }
-  // --- End PBS Task Table Toggle Listener ---
 
-  // --- NEW: Backups Tab Logic ---
   function updateBackupsTab() {
-      // console.log("[Backups Tab] Updating..."); // Debug log
-      // Removed reference to #backups-overview-container
       const tableContainer = document.getElementById('backups-table-container');
       const tableBody = document.getElementById('backups-overview-tbody');
       const loadingMsg = document.getElementById('backups-loading-message');
       const noDataMsg = document.getElementById('backups-no-data-message');
-      // Reference to the new status text element
       const statusTextElement = document.getElementById('backups-status-text'); 
 
-      // REVERTED check for UI elements (removed container check)
       if (!tableContainer || !tableBody || !loadingMsg || !noDataMsg || !statusTextElement) { 
           console.error("UI elements for Backups tab not found!");
           return;
       }
 
-      // --- REVERTED PBS Check Section --- 
-      // The logic to disable the tab itself will handle the visibility
-      // Assume if this function is called, the tab is considered 'available'
-      // for now, although the data processing might still find nothing.
-      // --- END REVERTED --- 
 
-      // Combine VMs and Containers into a single list of guests
       const allGuests = [
           ...(vmsData || []), 
           ...(containersData || [])
       ];
 
-      // REVERTED Check for initial data (re-add pbsDataArray check temporarily, 
-      // will be handled by tab disabling later)
       if (!initialDataReceived || !pbsDataArray) { 
-          // Still loading initial data or PBS not configured yet
           loadingMsg.classList.remove('hidden');
           tableContainer.classList.add('hidden');
           noDataMsg.classList.add('hidden');
@@ -2544,7 +2515,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
 
       if (allGuests.length === 0) {
-           // No guests found from PVE
           loadingMsg.classList.add('hidden');
           tableContainer.classList.add('hidden');
           noDataMsg.textContent = "No Proxmox guests (VMs/Containers) found.";
@@ -2552,29 +2522,22 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
       }
 
-      // REVERTED: Logic for showing table container
       loadingMsg.classList.add('hidden');
-      // Visibility handled by data processing result below
-      // tableContainer.classList.remove('hidden'); 
 
-      // ---> REWRITTEN: Data Processing Logic for Backup Health <---
       const backupStatusByGuest = [];
       const now = Math.floor(Date.now() / 1000);
       const sevenDaysAgo = now - (7 * 24 * 60 * 60);
       const threeDaysAgo = now - (3 * 24 * 60 * 60);
 
-      // 1. Combine all recent backup tasks from all PBS instances
       const allRecentBackupTasks = (pbsDataArray || []).flatMap(pbs =>
           (pbs.backupTasks?.recentTasks || []).map(task => ({ // Ensure recentTasks exists
               ...task,
-              // Attempt to extract guest ID and type from the task ID (e.g., "vm/101", "ct/102")
               guestId: task.id?.split('/')[1] || null,
               guestTypePbs: task.id?.split('/')[0] || null, // vm or ct
               pbsInstanceName: pbs.pbsInstanceName // Add instance name for reference
           }))
       );
 
-      // 2. Flatten snapshots (as before, for total count and latest timestamp fallback)
       const allSnapshots = (pbsDataArray || []).flatMap(pbsInstance =>
           (pbsInstance.datastores || []).flatMap(ds =>
               (ds.snapshots || []).map(snap => ({
@@ -2587,12 +2550,10 @@ document.addEventListener('DOMContentLoaded', function() {
           )
       );
 
-      // 3. Process each PVE guest
       allGuests.forEach(guest => {
           const guestId = String(guest.vmid);
           const guestTypePve = guest.type === 'qemu' ? 'vm' : 'ct';
 
-          // Find snapshots for this guest
           const guestSnapshots = allSnapshots.filter(snap =>
               String(snap.backupVMID) === guestId && snap.backupType === guestTypePve
           );
@@ -2602,7 +2563,6 @@ document.addEventListener('DOMContentLoaded', function() {
           }, null);
           const latestSnapshotTime = latestSnapshot ? latestSnapshot['backup-time'] : null;
 
-          // Find the latest backup task for this guest
           const guestTasks = allRecentBackupTasks.filter(task =>
               task.guestId === guestId && task.guestTypePbs === guestTypePve
           );
@@ -2610,7 +2570,6 @@ document.addEventListener('DOMContentLoaded', function() {
              return (!latest || (task.startTime && task.startTime > latest.startTime)) ? task : latest;
           }, null);
 
-          // Determine Backup Health Status
           let healthStatus = 'none';
           let displayTimestamp = latestSnapshotTime; // Default to snapshot time
 
@@ -2625,11 +2584,9 @@ document.addEventListener('DOMContentLoaded', function() {
                       healthStatus = 'old'; // Successful but > 7 days old
                   }
               } else {
-                  // Any non-OK status for the latest task marks it as failed
                   healthStatus = 'failed';
               }
           } else if (latestSnapshotTime) {
-              // No recent tasks found, rely on snapshot age
                if (latestSnapshotTime >= threeDaysAgo) {
                    healthStatus = 'ok'; // Treat as OK if snapshot is recent, even without recent task info
                } else if (latestSnapshotTime >= sevenDaysAgo) {
@@ -2638,7 +2595,6 @@ document.addEventListener('DOMContentLoaded', function() {
                    healthStatus = 'old'; // Treat as old if snapshot > 7d, no task
                }
           } else {
-              // No tasks and no snapshots
               healthStatus = 'none';
               displayTimestamp = null; // Ensure no timestamp shown
           }
@@ -2656,18 +2612,12 @@ document.addEventListener('DOMContentLoaded', function() {
               backupHealthStatus: healthStatus // Store the calculated health
           });
       });
-      // ---> END REWRITTEN Data Processing Logic <---
 
-      // console.log("[Backups Tab] Processed Guest Status with Health:", backupStatusByGuest); // Debug log
 
-      // ---> MODIFIED: Filter the data based on health status <---
-      // ---> ADDED: Get current backup search term <---
       const currentBackupsSearchTerm = backupsSearchInput ? backupsSearchInput.value.toLowerCase() : '';
       const backupsSearchTerms = currentBackupsSearchTerm.split(',').map(term => term.trim()).filter(term => term);
-      // ---> END ADDED <---
       
       const filteredBackupStatus = backupStatusByGuest.filter(item => {
-          // Check Health Filter
           const healthMatch = (backupsFilterHealth === 'all') ||
                               (backupsFilterHealth === 'ok' && (item.backupHealthStatus === 'ok' || item.backupHealthStatus === 'stale')) || // OK includes Stale for filtering
                               (backupsFilterHealth === 'warning' && (item.backupHealthStatus === 'old')) || // Warning = Old
@@ -2675,13 +2625,11 @@ document.addEventListener('DOMContentLoaded', function() {
                               (backupsFilterHealth === 'none' && item.backupHealthStatus === 'none');
           if (!healthMatch) return false;
 
-          // Check Type Filter
           const typeMatch = (backupsFilterGuestType === 'all') ||
                             (backupsFilterGuestType === 'vm' && item.guestType === 'VM') ||
                             (backupsFilterGuestType === 'lxc' && item.guestType === 'LXC'); // Use 'lxc' to match radio value and data type
           if (!typeMatch) return false;
           
-          // ---> ADDED: Check Search Filter <---
           if (backupsSearchTerms.length > 0) {
               const nameMatch = backupsSearchTerms.some(term =>
                   (item.guestName?.toLowerCase() || '').includes(term) ||
@@ -2690,35 +2638,23 @@ document.addEventListener('DOMContentLoaded', function() {
               );
               if (!nameMatch) return false; // Early exit if search doesn't match
           }
-          // ---> END ADDED <---
 
-          // If all checks pass, include the item
           return true;
       });
-      // ---> END MODIFIED <---
 
-      // ---> MODIFIED: Sort the *filtered* data <---
       const sortedBackupStatus = sortData(filteredBackupStatus, sortState.backups.column, sortState.backups.direction, 'backups');
-      // ---> END MODIFIED <---
 
-      // Populate the table
       tableBody.innerHTML = ''; // Clear previous content
       let visibleCount = 0; // Added counter
-      // ---> MODIFIED: Use filtered and sorted data <---
       if (sortedBackupStatus.length > 0) { 
           sortedBackupStatus.forEach(guestStatus => { 
-              // ---> END MODIFIED < ---
               const row = tableBody.insertRow();
-              // ---> MODIFIED: Add dashboard hover/transition classes <---
-              // Conditionally add opacity and grayscale if the guest PVE status is 'stopped'
               row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px ${guestStatus.guestPveStatus === 'stopped' ? 'opacity-60 grayscale' : ''}`;
               
               const latestBackupFormatted = guestStatus.latestBackupTime 
                   ? formatPbsTimestamp(guestStatus.latestBackupTime) 
                   : '<span class="text-gray-400">No backups found</span>';
 
-              // Determine the color class based on the latest backup time
-              // ---> ADDED: Determine color/icon based on HEALTH status <---
               let healthIndicator = '';
               switch (guestStatus.backupHealthStatus) {
                   case 'ok':
@@ -2737,16 +2673,12 @@ document.addEventListener('DOMContentLoaded', function() {
                       healthIndicator = '<span class="text-gray-400 dark:text-gray-500" title="None">-</span>';
                       break;
               }
-              // ---> END ADDED <---
 
-              // --- Generate Type Icon --- 
               const typeIconClass = guestStatus.guestType === 'VM'
                   ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium' 
                   : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
               const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guestStatus.guestType}</span>`;
-              // --- End Type Icon ---
 
-              // ---> MODIFIED: Standardize padding, alignment, and text styles, ADD health indicator <---
               row.innerHTML = `
                   <td class="p-1 px-2 whitespace-nowrap text-center">${healthIndicator}</td> <!-- Health Status -->
                   <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
@@ -2758,7 +2690,6 @@ document.addEventListener('DOMContentLoaded', function() {
                   <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.datastoreName}</td>
                   <td class="p-1 px-2 text-center text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
               `;
-              // ---> END MODIFIED <---
               visibleCount++; // Increment counter
           });
 
@@ -2766,10 +2697,8 @@ document.addEventListener('DOMContentLoaded', function() {
           noDataMsg.classList.add('hidden');
           tableContainer.classList.remove('hidden'); // Show the table
       } else {
-          // This case should technically be covered by the initial checks, but added for safety
           loadingMsg.classList.add('hidden');
           tableContainer.classList.add('hidden');
-          // ---> MODIFIED: Clearer message if no backups/guests OR if filters cause empty state <---
           let emptyMessage = "No backup information found for any guests.";
           if (backupStatusByGuest.length === 0) { // Check original data length before filtering
               if (allGuests.length === 0) {
@@ -2778,45 +2707,31 @@ document.addEventListener('DOMContentLoaded', function() {
                   emptyMessage = "No backup information found for any guests.";
               }
           } 
-          // ---> MODIFIED: Use filtered data length for empty message check and improve wording <---
           else if (filteredBackupStatus.length === 0) { // Check filtered data length
                const typeFilterText = backupsFilterGuestType === 'all' ? '' : `Type: ${backupsFilterGuestType.toUpperCase()}`;
-               // ---> MODIFIED: Map health filter value to labels for message <---
-               // let statusFilterLabel = '';
-               // switch (backupsFilterHealth) { ... }
-               // const statusFilterText = backupsFilterHealth === 'all' ? '' : `Status: ${statusFilterLabel}`;
                const filtersApplied = [typeFilterText].filter(Boolean).join(', '); // Only include type filter
                
                if (filtersApplied) {
                  emptyMessage = `No guests found matching the selected filters (${filtersApplied}).`;
                } else {
-                 // This case shouldn't normally happen if backupStatusByGuest was not empty, but good to have a fallback
                  emptyMessage = "No guests with backup information found."; 
                }
           }
-          // ---> END MODIFIED <---
-          // ---> ADDED: Include search term in empty message <---
           if (filteredBackupStatus.length === 0 && backupsSearchTerms.length > 0) {
              emptyMessage = `No guests found matching search "${currentBackupsSearchTerm}".`;
              if (filtersApplied) {
                  emptyMessage += ` and filters (${filtersApplied})`;
              }
           }
-          // ---> END ADDED <---
           noDataMsg.textContent = emptyMessage;
-          // ---> END MODIFIED <---
           noDataMsg.classList.remove('hidden');
       }
-       // ---> ADDED: Update sort UI for backups table <---
        const backupsSortColumn = sortState.backups.column;
        const backupsHeader = document.querySelector(`#backups-overview-table th[data-sort="${backupsSortColumn}"]`);
        updateSortUI('backups-overview-table', backupsHeader);
-       // ---> END ADDED <---
-       // ---> ADDED: Update status text for backups tab < ---
        if (statusTextElement) {
            const statusBaseText = `Updated: ${new Date().toLocaleTimeString()}`;
            let statusFilterText = currentBackupsSearchTerm ? ` | Filter: "${currentBackupsSearchTerm}"` : '';
-           // Add type/health filter status if not 'all'
            const typeFilterLabel = backupsFilterGuestType !== 'all' ? backupsFilterGuestType.toUpperCase() : '';
            const healthFilterLabel = backupsFilterHealth !== 'all' ? backupsFilterHealth.charAt(0).toUpperCase() + backupsFilterHealth.slice(1) : ''; // Capitalize health status
            const otherFilters = [typeFilterLabel, healthFilterLabel].filter(Boolean).join('/');
@@ -2826,11 +2741,8 @@ document.addEventListener('DOMContentLoaded', function() {
            let statusCountText = ` | Showing ${visibleCount} guests`;
            statusTextElement.textContent = statusBaseText + statusFilterText + statusCountText;
        }
-       // ---> END ADDED < ---
   }
-  // --- END: Backups Tab Logic ---
 
-  // ---> NEW: Function to Update Tab Availability <---
   function updateTabAvailability() {
       const pbsTab = document.querySelector('.tab[data-tab="pbs"]');
       const backupsTab = document.querySelector('.tab[data-tab="backups"]');
@@ -2840,7 +2752,6 @@ document.addEventListener('DOMContentLoaded', function() {
           return;
       }
 
-      // Check if PBS is configured and connected (at least one instance OK)
       const isPbsAvailable = pbsDataArray && pbsDataArray.length > 0 && pbsDataArray.some(pbs => pbs.status === 'ok');
 
       const disabledClasses = ['opacity-50', 'cursor-not-allowed', 'pointer-events-none'];
@@ -2848,55 +2759,41 @@ document.addEventListener('DOMContentLoaded', function() {
 
       [pbsTab, backupsTab].forEach(tab => {
           if (!isPbsAvailable) {
-              // Apply disabled styles
               tab.classList.add(...disabledClasses);
               tab.classList.remove(...enabledClasses);
-              // Add tooltip explaining why it's disabled
               tab.setAttribute('title', 'Requires PBS integration to be configured and connected.');
-              // Ensure it doesn't look active if it was previously
               tab.classList.remove('active', 'bg-white', 'dark:bg-gray-800', 'border-gray-300', 'dark:border-gray-700');
               tab.classList.add('bg-gray-100', 'dark:bg-gray-700/50', 'border-transparent');
 
           } else {
-              // Remove disabled styles
               tab.classList.remove(...disabledClasses);
               tab.classList.add(...enabledClasses);
-              // Remove tooltip
               tab.removeAttribute('title');
           }
       });
   }
-  // ---> END NEW Function <---
 
-  // ---> ADDED: Function to Reset Backups Tab Filters/Sort <---
   function resetBackupsView() {
       console.log('Resetting backups view...');
-      // Reset Search
       if (backupsSearchInput) backupsSearchInput.value = '';
       backupsSearchTerm = ''; // Clear state variable if you were using one
       
-      // Reset Type Filter
       const backupTypeAllRadio = document.getElementById('backups-filter-type-all');
       if(backupTypeAllRadio) backupTypeAllRadio.checked = true;
       backupsFilterGuestType = 'all';
 
-      // Reset Health Filter
       const backupStatusAllRadio = document.getElementById('backups-filter-status-all');
       if(backupStatusAllRadio) backupStatusAllRadio.checked = true;
       backupsFilterHealth = 'all';
 
-      // Reset Sort
       sortState.backups = { column: 'latestBackupTime', direction: 'desc' }; // Default sort
       const initialBackupsHeader = document.querySelector('#backups-overview-table th[data-sort="latestBackupTime"]');
       updateSortUI('backups-overview-table', initialBackupsHeader);
 
-      // Update table and save state
       updateBackupsTab();
       saveFilterState();
   }
-  // ---> END ADDED <---
 
-  // Reset button listener
   if (resetBackupsButton) {
       resetBackupsButton.addEventListener('click', resetBackupsView);
   }
@@ -2910,29 +2807,921 @@ document.addEventListener('DOMContentLoaded', function() {
           }
       });
   }
-  // ---> END ADDED <---
 
-  // --- Event Listeners for Main Dashboard Filters ---
-  // DELETE FROM HERE
-  // ... existing code ...
-  // if(statusAllRadio) statusAllRadio.checked = true; // REMOVED
-  // filterStatus = 'all'; // REMOVED
-  // --- END ADDED ---
-  // TO HERE
 
-  // ---> REMOVED: Resetting Backups Filters from Main Reset <---
-  // updateDashboardTable(); // Moved down
-  // if (searchInput) searchInput.blur(); // Moved down
 
-  // Reset Type filter for main dashboard
   const typeAllRadio = document.getElementById('filter-all');
   if(typeAllRadio) typeAllRadio.checked = true;
   filterGuestType = 'all'; // Keep resetting the main dashboard type filter here
 
-  // saveFilterState(); // Moved down
 
   updateDashboardTable(); // Trigger dashboard update
   if (searchInput) searchInput.blur(); // Blur search input after reset
   saveFilterState(); // Save potentially changed main dashboard state
+
+// --- START Threshold Logging Functions ---
+
+  function startThresholdLogging() {
+    /* // REMOVED Check: Allow multiple logs
+    if (Object.keys(activeLogSessions).length > 0) {
+        console.warn("Threshold logging already active. Stop the current session first.");
+        // Optionally provide user feedback here (e.g., flash the button)
+        return;
+    }
+    */
+
+    // --- Get Duration --- 
+    const durationMinutes = parseInt(logDurationSelect.value); // Use select value
+    if (isNaN(durationMinutes) || durationMinutes <= 0) {
+        alert("Please select a valid duration."); 
+        logDurationSelect.focus();
+        return;
+    }
+    const durationMs = durationMinutes * 60 * 1000;
+    // --- End Get Duration --- 
+
+    // --- Snapshot current filter state --- 
+    const snapshottedThresholds = {};
+    let activeThresholdCount = 0;
+    let criteriaDescThresholds = [];
+    for (const type in thresholdState) {
+        const value = thresholdState[type].value;
+        if (value > 0) {
+            snapshottedThresholds[type] = value;
+            activeThresholdCount++;
+            criteriaDescThresholds.push(`${getReadableThresholdName(type)}>=${formatThresholdValue(type, value)}`);
+        }
+    }
+
+    // --- Snapshot filters ---
+    const snapshottedFilterGuestType = filterGuestType; 
+    const snapshottedFilterStatus = filterStatus;
+    let criteriaDescFilters = [];
+    if (snapshottedFilterGuestType !== 'all') criteriaDescFilters.push(`Type: ${snapshottedFilterGuestType.toUpperCase()}`);
+    if (snapshottedFilterStatus !== 'all') criteriaDescFilters.push(`Status: ${snapshottedFilterStatus}`);
+    // --- End snapshot filters ---
+
+    const snapshottedRawSearch = searchInput ? searchInput.value.toLowerCase() : '';
+    const snapshottedSearchTerms = snapshottedRawSearch.split(',').map(term => term.trim()).filter(term => term);
+    let criteriaDescSearch = snapshottedSearchTerms.length > 0 ? `Search: "${snapshottedSearchTerms.join(', ')}"` : null;
+    // --- End Snapshot ---
+
+    // --- Check if *any* criteria is set (Thresholds OR Search OR Filters) --- 
+    if (activeThresholdCount === 0 && snapshottedSearchTerms.length === 0 && criteriaDescFilters.length === 0) { 
+        alert("Please set at least one threshold, enter search terms, or select a Type/Status filter before starting the log."); // Updated alert message
+        if (toggleThresholdsButton && !isThresholdRowVisible && activeThresholdCount === 0) { // Only show thresholds if none are set
+            toggleThresholdsButton.click(); 
+        }
+        return;
+    }
+
+    const sessionId = Date.now(); // Use timestamp as unique ID
+    const startTime = new Date();
+    // Build session title including search terms and thresholds
+    let fullCriteriaDesc = [criteriaDescFilters.join('; '), criteriaDescSearch, criteriaDescThresholds.length > 0 ? `Thresholds: ${criteriaDescThresholds.join(', ')}`: null].filter(Boolean).join('; ');
+    const sessionTitle = `Log @ ${startTime.toLocaleTimeString()}${fullCriteriaDesc ? ` (${fullCriteriaDesc})` : ''}`;
+    // const shortLogTitle = generateShortLogTitle(criteriaDescThresholds, criteriaDescFilters, criteriaDescSearch); // REMOVED call
+
+    // Create the session panel HTML
+    const panel = document.createElement('div');
+    panel.id = `log-session-panel-${sessionId}`; // Add prefix to panel ID
+    panel.className = 'log-session-panel border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 shadow-md';
+
+    const header = document.createElement('div');
+    header.className = 'log-session-header flex justify-between items-center p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 rounded-t';
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'text-sm font-medium text-gray-700 dark:text-gray-200 truncate';
+    titleSpan.textContent = sessionTitle;
+    titleSpan.title = sessionTitle; // Full title on hover
+
+    const panelCloseButton = document.createElement('button'); // Renamed variable
+    panelCloseButton.className = 'p-1 rounded text-gray-500 hover:bg-red-100 dark:text-gray-400 dark:hover:bg-red-800/50';
+    panelCloseButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    panelCloseButton.title = 'Close Log Panel & Stop Log (if active)'; // Updated title
+
+    panelCloseButton.onclick = (event) => { // Updated logic
+        const panelToRemove = event.currentTarget.closest('.log-session-panel');
+        if (panelToRemove) {
+            const panelSessionIdStr = panelToRemove.id.replace('log-session-panel-', '');
+
+            // Stop the log session if it's active
+            if (activeLogSessions[panelSessionIdStr]) {
+                stopThresholdLogging(panelSessionIdStr, 'manual');
+            }
+
+            const tabToRemove = nestedTabsContainer.querySelector(`.nested-tab[data-nested-tab="log-session-${panelSessionIdStr}"]`);
+            const contentToRemove = nestedTabContentContainer.querySelector(`#log-session-${panelSessionIdStr}`); // Target the content div
+
+            if (tabToRemove) tabToRemove.remove();
+            if (contentToRemove) contentToRemove.remove(); // Remove the content div (which contains the panel)
+
+            updateClearAllButtonVisibility(); // Update clear button state after removal
+
+            // If the closed tab was active, switch back to the main dashboard
+            if (tabToRemove && tabToRemove.classList.contains('active')) {
+                activateNestedTab('nested-tab-dashboard');
+            }
+        }
+    };
+
+    header.appendChild(titleSpan);
+    header.appendChild(panelCloseButton); // Append renamed button
+
+    const tableContainer = document.createElement('div');
+    tableContainer.className = 'log-table-container p-2 max-h-96 overflow-y-auto'; // Limit height and enable scroll
+
+    const table = document.createElement('table');
+    table.id = `log-table-${sessionId}`;
+    table.className = 'min-w-full text-xs border-collapse';
+    table.innerHTML = `
+        <thead class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10">
+            <tr class="border-b border-gray-300 dark:border-gray-600">
+                <th class="p-1 px-2 text-left font-semibold text-gray-600 dark:text-gray-300">Time</th>
+                <th class="p-1 px-2 text-left font-semibold text-gray-600 dark:text-gray-300">Guest</th>
+                <th class="p-1 px-2 text-left font-semibold text-gray-600 dark:text-gray-300">Node</th>
+                <!-- New Metric Headers -->
+                <th class="p-1 px-2 text-right font-semibold text-gray-600 dark:text-gray-300">CPU</th>
+                <th class="p-1 px-2 text-right font-semibold text-gray-600 dark:text-gray-300">Mem</th>
+                <th class="p-1 px-2 text-right font-semibold text-gray-600 dark:text-gray-300">Disk%</th>
+                <th class="p-1 px-2 text-right font-semibold text-gray-600 dark:text-gray-300">DRead</th>
+                <th class="p-1 px-2 text-right font-semibold text-gray-600 dark:text-gray-300">DWrite</th>
+                <th class="p-1 px-2 text-right font-semibold text-gray-600 dark:text-gray-300">NetIn</th>
+                <th class="p-1 px-2 text-right font-semibold text-gray-600 dark:text-gray-300">NetOut</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            <!-- Log entries added here -->
+             <tr class="initial-log-message">
+                <td colspan="10" class="p-2 text-center text-gray-500 dark:text-gray-400 italic"> <!-- Adjusted colspan -->
+                    Logging started for ${durationMinutes} min<span class="dot-animate">.</span><span class="dot-animate">.</span><span class="dot-animate">.</span>
+                </td>
+             </tr>
+        </tbody>
+    `;
+
+    tableContainer.appendChild(table);
+    panel.appendChild(header);
+    panel.appendChild(tableContainer);
+    // logSessionsContainer.appendChild(panel); // Original line
+    // logSessionsContainer.prepend(panel); // Insert new panel at the top
+
+    // --- START Dynamic Tab and Content Creation (Restored) ---
+    const nestedTabId = `log-session-${sessionId}`;
+
+    // Create Nested Tab Element
+    const newTab = document.createElement('div');
+    newTab.className = 'nested-tab px-3 py-1.5 cursor-pointer text-sm font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 flex items-center gap-1';
+    newTab.dataset.nestedTab = nestedTabId;
+    newTab.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <span class="log-tab-title" title="${fullCriteriaDesc || 'Log started ' + startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}">${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+        <span class="log-timer-display ml-1.5 text-xs text-gray-500 dark:text-gray-400" data-session-id="${sessionId}">(--:--)</span>
+    `;
+    newTab.addEventListener('click', () => activateNestedTab(nestedTabId));
+
+    // --- Add Rename Functionality ---
+    const tabTitleSpan = newTab.querySelector('.log-tab-title'); // Renamed variable
+    if (tabTitleSpan) {
+        tabTitleSpan.addEventListener('dblclick', () => {
+            tabTitleSpan.classList.add('hidden'); // Hide the span
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = tabTitleSpan.textContent;
+            input.className = 'log-tab-rename-input flex-grow p-0 px-1 h-5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none'; // Basic styling
+            input.style.maxWidth = '150px'; // Prevent excessive width
+
+            const finalizeRename = () => {
+                const newName = input.value.trim();
+                if (newName) {
+                    tabTitleSpan.textContent = newName;
+                }
+                input.remove(); // Remove the input
+                tabTitleSpan.classList.remove('hidden'); // Show the span again
+            };
+
+            const cancelRename = () => {
+                input.remove();
+                tabTitleSpan.classList.remove('hidden');
+            };
+
+            input.addEventListener('blur', finalizeRename);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    finalizeRename();
+                } else if (e.key === 'Escape') {
+                    cancelRename();
+                }
+            });
+
+            // Insert input before the timer span, or at the end if timer doesn't exist
+            const timerSpan = newTab.querySelector('.log-timer-display');
+            if (timerSpan) {
+                newTab.insertBefore(input, timerSpan);
+            } else {
+                 newTab.appendChild(input);
+            }
+            input.focus();
+            input.select();
+        });
+    }
+    // --- End Rename Functionality ---
+
+    // --- Add Close Button to Tab --- 
+    const tabCloseButton = document.createElement('button');
+    tabCloseButton.className = 'ml-auto pl-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 opacity-50 hover:opacity-100 transition-opacity';
+    tabCloseButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>';
+    tabCloseButton.title = 'Close & Stop Log';
+    tabCloseButton.onclick = (event) => {
+        event.stopPropagation(); // Prevent tab activation when clicking close
+        const tabElement = event.currentTarget.closest('.nested-tab');
+        if (!tabElement) return;
+
+        const tabSessionId = tabElement.dataset.nestedTab; // e.g., "log-session-1678886400000"
+        const tabSessionIdStr = tabSessionId.replace('log-session-', '');
+
+        // Stop the log session if it's active
+        if (activeLogSessions[tabSessionIdStr]) {
+            stopThresholdLogging(tabSessionIdStr, 'manual');
+        }
+
+        const contentToRemove = nestedTabContentContainer.querySelector(`#${tabSessionId}`);
+
+        tabElement.remove();
+        if (contentToRemove) contentToRemove.remove();
+
+        updateClearAllButtonVisibility();
+
+        // If the closed tab was active, switch back to the main dashboard
+        if (tabElement.classList.contains('active')) {
+            activateNestedTab('nested-tab-dashboard');
+        }
+    };
+    newTab.appendChild(tabCloseButton);
+    // --- END Add Close Button to Tab --- 
+
+    // Create Nested Tab Content Element (This is the container for the panel)
+    const newContent = document.createElement('div');
+    newContent.id = nestedTabId; // ID is log-session-<timestamp>
+    // newContent.className = 'nested-tab-content p-3 hidden'; // OLD class
+    newContent.className = 'log-session-panel-container hidden'; // NEW class, start hidden
+    newContent.appendChild(panel); // Add the log panel to the content area
+
+    // Append to DOM
+    if (nestedTabsContainer && nestedTabContentContainer && logSessionArea) {
+        nestedTabsContainer.appendChild(newTab);
+        nestedTabContentContainer.appendChild(newContent); // Append content container to #log-content-area
+        logSessionArea.classList.remove('hidden'); // Show the whole log area
+    } else {
+        console.error("Log tab/content container or session area not found!");
+    }
+
+    // Activate the new tab
+    activateNestedTab(nestedTabId);
+    // --- END Dynamic Tab and Content Creation (Restored) ---
+
+    // --- Append panel to the new container --- 
+    // if (logSessionsContainer) { // REMOVED
+    //     logSessionsContainer.prepend(panel); // Add the panel to the dedicated container // REMOVED
+    // } else { // REMOVED
+    //     console.error("#log-sessions-container not found!"); // REMOVED
+    // } // REMOVED
+    // --- END Append panel ---
+
+    // Start the timer to automatically stop the session
+    const timerId = setTimeout(() => {
+        // Pass 'timer' reason when stopped by timeout
+        stopThresholdLogging(sessionId, 'timer'); 
+    }, durationMs);
+
+    // Store session info
+    activeLogSessions[sessionId] = {
+        thresholds: snapshottedThresholds,
+        startTime: startTime,
+        durationMs: durationMs,
+        timerId: timerId,
+        entries: [],
+        element: panel, // Reference to the DOM element for easy removal
+        searchTerms: snapshottedSearchTerms, // Store snapshotted search terms
+        filterGuestType: snapshottedFilterGuestType, // <<< ADDED
+        filterStatus: snapshottedFilterStatus       // <<< ADDED
+    };
+
+    // Update UI
+    // isThresholdLoggingActive = true; // REMOVED
+    // logDurationSelect.disabled = true; // REMOVED - Keep select enabled
+
+    console.log(`[Log Session ${sessionId}] Started. Duration: ${durationMinutes}m. Thresholds:`, snapshottedThresholds);
+  }
+
+  function stopThresholdLogging(sessionId, reason = 'manual') { // Added reason parameter
+      const session = activeLogSessions[sessionId];
+      if (!session) {
+          console.warn(`Attempted to stop non-existent log session: ${sessionId}`);
+          return;
+      }
+
+      console.log(`[Log Session ${sessionId}] Stopping. Reason: ${reason}`);
+
+      clearTimeout(session.timerId); // Clear the auto-stop timer regardless of reason
+
+      // --- Modifications for Persistence ---
+      if (session.element) {
+          // 1. Disable the close button on the panel
+          /* // REMOVED THIS BLOCK - We want the 'x' to always remove the panel
+          const closeButton = session.element.querySelector('.log-session-header button');
+          if (closeButton) {
+              closeButton.disabled = true;
+              closeButton.classList.add('opacity-50', 'cursor-not-allowed');
+              closeButton.onclick = null; // Remove listener
+          }
+          */
+
+          // 2. Add final status message to the table body (Less critical now, but keep for timer expiry case)
+          const tableBody = session.element.querySelector(`#log-table-${sessionId} tbody`);
+          if (tableBody) {
+              // Remove the initial 'Logging started...' message if it's still there
+              const initialMsgRow = tableBody.querySelector('.initial-log-message');
+              if (initialMsgRow) initialMsgRow.remove();
+
+              const finalStatusRow = tableBody.insertRow(-1); // Insert at the end
+              finalStatusRow.className = 'final-log-message';
+              const cell = finalStatusRow.insertCell(0);
+              cell.colSpan = 6; // Span all columns
+              cell.className = 'p-1 px-2 text-center text-xs text-gray-500 dark:text-gray-400 italic border-t border-gray-200 dark:border-gray-700';
+              const stopTime = new Date().toLocaleTimeString();
+              if (reason === 'timer') {
+                  cell.textContent = `Logging finished (timer expired) at ${stopTime}`;
+              } else {
+                  cell.textContent = `Logging stopped manually at ${stopTime}`;
+              }
+          }
+          // Remove panel removal - Keep panel visible after stop
+          // session.element.remove(); // << REMOVED THIS LINE
+      }
+      // --- End Modifications --- 
+
+      // Remove from active sessions AFTER updating its UI elements
+      delete activeLogSessions[sessionId]; 
+
+      // Update main UI only if this was the last active session - REMOVED Global State Updates
+      /* // REMOVED Block
+      if (Object.keys(activeLogSessions).length === 0) {
+          isThresholdLoggingActive = false;
+          logDurationSelect.disabled = false; // Enable select
+      }
+      */
+      updateClearAllButtonVisibility(); // Update clear button state after stopping
+  }
+
+  function addLogRow(sessionId, entry) {
+      const session = activeLogSessions[sessionId];
+      if (!session || !session.element) return;
+
+      const tableBody = session.element.querySelector(`#log-table-${sessionId} tbody`);
+      if (!tableBody) return;
+
+      // Remove initial message if present
+      const initialMsgRow = tableBody.querySelector('.initial-log-message');
+      if (initialMsgRow) initialMsgRow.remove();
+
+      const row = tableBody.insertRow(0); // Insert at the top
+      row.className = 'bg-yellow-50 dark:bg-yellow-900/20 animate-pulse-once'; // Highlight new rows briefly
+
+      // --- Apply Bold Styling Based on Active Thresholds ---
+      const cpuValueHTML = entry.activeThresholdKeys.includes('cpu') ? `<strong>${entry.cpuFormatted}</strong>` : entry.cpuFormatted;
+      const memValueHTML = entry.activeThresholdKeys.includes('memory') ? `<strong>${entry.memFormatted}</strong>` : entry.memFormatted;
+      const diskValueHTML = entry.activeThresholdKeys.includes('disk') ? `<strong>${entry.diskFormatted}</strong>` : entry.diskFormatted;
+      const diskReadValueHTML = entry.activeThresholdKeys.includes('diskread') ? `<strong>${entry.diskReadFormatted}</strong>` : entry.diskReadFormatted;
+      const diskWriteValueHTML = entry.activeThresholdKeys.includes('diskwrite') ? `<strong>${entry.diskWriteFormatted}</strong>` : entry.diskWriteFormatted;
+      const netInValueHTML = entry.activeThresholdKeys.includes('netin') ? `<strong>${entry.netInFormatted}</strong>` : entry.netInFormatted;
+      const netOutValueHTML = entry.activeThresholdKeys.includes('netout') ? `<strong>${entry.netOutFormatted}</strong>` : entry.netOutFormatted;
+      // --- End Apply Bold Styling ---
+
+      // --- Apply Bold Styling for Search Matches ---
+      const guestDisplayHTML = entry.guestMatchedSearch ? `<strong>${entry.guestName} (${entry.guestId})</strong>` : `${entry.guestName} (${entry.guestId})`;
+      const nodeDisplayHTML = entry.nodeMatchedSearch ? `<strong>${entry.node}</strong>` : entry.node;
+      // --- End Apply Bold Styling for Search Matches ---
+
+
+      // Populate cells with comprehensive metric data
+      console.log(`[addLogRow] About to add row for ${entry.guestName} (${entry.guestId}) to session ${sessionId}`); // DEBUG
+      row.innerHTML = `
+          <td class="p-1 px-2 whitespace-nowrap">${entry.timestamp.toLocaleTimeString()}</td>
+          <td class="p-1 px-2 whitespace-nowrap" title="${entry.guestName}">${guestDisplayHTML}</td>
+          <td class="p-1 px-2 whitespace-nowrap">${nodeDisplayHTML}</td>
+          <td class="p-1 px-2 whitespace-nowrap text-right">${cpuValueHTML}</td>
+          <td class="p-1 px-2 whitespace-nowrap text-right">${memValueHTML}</td>
+          <td class="p-1 px-2 whitespace-nowrap text-right">${diskValueHTML}</td>
+          <td class="p-1 px-2 whitespace-nowrap text-right">${diskReadValueHTML}</td>
+          <td class="p-1 px-2 whitespace-nowrap text-right">${diskWriteValueHTML}</td>
+          <td class="p-1 px-2 whitespace-nowrap text-right">${netInValueHTML}</td>
+          <td class="p-1 px-2 whitespace-nowrap text-right">${netOutValueHTML}</td>
+      `;
+
+      tableBody.prepend(row); // Prepend the row
+
+      // --- DEBUG: Check if row is in DOM and potentially visible ---
+      const addedRow = tableBody.firstChild; // Get the row we just prepended
+      if (addedRow === row) {
+          console.log(`[addLogRow] Row for ${entry.guestName} successfully prepended to session ${sessionId}. Computed display: ${window.getComputedStyle(addedRow).display}`);
+      } else {
+          console.error(`[addLogRow] Failed to prepend or find row for ${entry.guestName} in session ${sessionId}!`);
+      }
+      // --- END DEBUG ---
+
+      // Remove the pulse animation class after it finishes
+      // setTimeout(() => { // Commented out pulse for debugging clarity
+       setTimeout(() => {
+            row.classList.remove('bg-yellow-50', 'dark:bg-yellow-900/20', 'animate-pulse-once');
+       }, 1500); // Match animation duration in CSS if defined, otherwise estimate
+
+       session.entries.push(entry); // Add to session data
+  }
+
+
+function checkThresholdViolations() {
+      if (Object.keys(activeLogSessions).length === 0) {
+          return; // No active logging sessions
+    }
+
+    const now = new Date();
+
+      // --- Get current UI filter state --- 
+      const currentFilterGuestType = filterGuestType;
+      const currentFilterStatus = filterStatus;
+      // const rawSearchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : []; // REMOVED
+      // const currentTextSearchTerms = rawSearchTerms.filter(term => !thresholdPrefixes.some(prefix => term.startsWith(prefix))); // REMOVED
+      // --- End Get current UI filter state --- 
+
+      // We assume refreshDashboardData() has been called recently by the main interval,
+      // so dashboardData is up-to-date.
+
+    dashboardData.forEach(guest => {
+          // --- REVERT: Remove checks for current UI filters --- 
+          /* // REMOVED Block
+          // --- Apply Dashboard Filters BEFORE checking thresholds ---
+          // Must be running
+          if (guest.status !== 'running') return; 
+
+          // Type Filter
+          const typeMatch = currentFilterGuestType === 'all' || (currentFilterGuestType === 'vm' && guest.type === 'VM') || (currentFilterGuestType === 'lxc' && guest.type === 'CT');
+          if (!typeMatch) return; // Skip if type doesn't match UI filter
+
+          // Status Filter (Redundant if only checking running, but keep for consistency?)
+          const statusMatch = currentFilterStatus === 'all' || guest.status === currentFilterStatus;
+          if (!statusMatch) return; // Skip if status doesn't match UI filter
+
+          // Text Search Filter
+          const searchMatch = currentTextSearchTerms.length === 0 || currentTextSearchTerms.some(term => 
+                (guest.name && guest.name.toLowerCase().includes(term)) || 
+                (guest.node && guest.node.toLowerCase().includes(term)) ||
+                (guest.vmid && guest.vmid.toString().includes(term)) ||
+                (guest.id && guest.id.toString().includes(term))
+            );
+          if (!searchMatch) return; // Skip if text search doesn't match
+          // --- End Apply Dashboard Filters --- 
+          */
+
+          // --- Keep only the check for running status --- 
+        if (guest.status !== 'running') return; // Only log for running guests
+          // --- End Keep only check --- 
+
+          Object.keys(activeLogSessions).forEach(sessionId => {
+              const session = activeLogSessions[sessionId];
+              if (!session) return; // Should not happen, but safety check
+
+              // --- Apply Snapshotted Type/Status Filters FIRST --- <<< Added
+              const sessionFilterGuestType = session.filterGuestType;
+              const sessionFilterStatus = session.filterStatus;
+
+              const typeMatch = sessionFilterGuestType === 'all' ||
+                                (sessionFilterGuestType === 'vm' && guest.type === 'VM') ||
+                                (sessionFilterGuestType === 'lxc' && guest.type === 'CT');
+              if (!typeMatch) return; // Skip guest if type doesn't match session filter
+
+              const statusMatch = sessionFilterStatus === 'all' || guest.status === sessionFilterStatus;
+              if (!statusMatch) return; // Skip guest if status doesn't match session filter
+              // --- End Apply Snapshotted Type/Status Filters ---
+
+              // --- Apply Snapshotted Text Search Filter --- <<< Renamed section
+              const snapshottedSearch = session.searchTerms || []; // Get snapshotted terms
+              let guestMatchedSearch = false; // Flag specifically for guest match
+              let nodeMatchedSearch = false;  // Flag specifically for node match
+              let overallSearchMatch = false; // Flag to check if ANY part matched for logging
+
+              if (snapshottedSearch.length > 0) {
+                  snapshottedSearch.forEach(term => {
+                      if (!guestMatchedSearch && (
+                          (guest.name && guest.name.toLowerCase().includes(term)) ||
+                          (guest.vmid && guest.vmid.toString().includes(term)) ||
+                          (guest.id && guest.id.toString().includes(term)) // Assuming guest.id is the uniqueId
+                      )) {
+                          guestMatchedSearch = true;
+                      }
+                      if (!nodeMatchedSearch && (
+                          (guest.node && guest.node.toLowerCase().includes(term))
+                      )) {
+                          nodeMatchedSearch = true;
+                      }
+                  });
+
+                  overallSearchMatch = guestMatchedSearch || nodeMatchedSearch;
+
+                  // If search terms exist, but neither guest nor node matched, skip guest.
+                  if (!overallSearchMatch) return; 
+              } else {
+                  // If no search terms, consider it a match for logging purposes
+                  overallSearchMatch = true; 
+              }
+              // --- End Apply Snapshotted Text Search ---
+
+              // --- Now check thresholds (if any were snapshotted) ---
+              let meetsAllThresholds = true; // Start assuming guest meets all thresholds
+              // let shouldLogEntry = false; // Old OR logic flag
+              let violationDetails = []; // Still useful to store which thresholds were active for context
+
+              for (const type in session.thresholds) {
+                  const thresholdValue = session.thresholds[type]; // Snapshotted value
+            if (thresholdValue <= 0) continue; // Skip inactive thresholds from the snapshot
+
+            let guestValue;
+                  let valueFormatted, limitFormatted;
+
+                  // Get the current guest value for the specific metric type
+            if (type === 'cpu') guestValue = guest.cpu * 100;
+            else if (type === 'memory') guestValue = guest.memory;
+            else if (type === 'disk') guestValue = guest.disk;
+            else if (type === 'diskread') guestValue = guest.diskread;
+            else if (type === 'diskwrite') guestValue = guest.diskwrite;
+            else if (type === 'netin') guestValue = guest.netin;
+            else if (type === 'netout') guestValue = guest.netout;
+                  else continue; // Unknown type in snapshot
+
+                  // Skip check if guest value is invalid/unavailable
+                  if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) {
+                      continue;
+                  }
+
+                  // Check for violation (guest value >= threshold limit)
+                  // if (guestValue >= thresholdValue) { // Old OR check
+                  if (guestValue < thresholdValue) { // Check if guest FAILS this threshold
+                      // valueFormatted = formatThresholdValue(type, guestValue);
+                      // limitFormatted = formatThresholdValue(type, thresholdValue);
+                      // shouldLogEntry = true; // Old OR logic flag
+                      // violationDetails.push({ type: getReadableThresholdName(type), value: formatThresholdValue(type, guestValue), limit: formatThresholdValue(type, thresholdValue) });
+                      meetsAllThresholds = false; // Guest failed at least one threshold
+                      // --- DEBUG LOG --- 
+                      console.log(`[Log Check FAIL] Guest: ${guest.name}, Metric: ${type}, Value: ${guestValue}, Threshold: ${thresholdValue}`);
+                      // --- END DEBUG LOG ---
+                      break; // No need to check further thresholds for this guest
+                  } else {
+                      // --- DEBUG LOG --- 
+                      console.log(`[Log Check PASS] Guest: ${guest.name}, Metric: ${type}, Value: ${guestValue}, Threshold: ${thresholdValue}`);
+                      // --- END DEBUG LOG ---
+                      // Optional: Store passed threshold details for context if needed
+                      // violationDetails.push({ type: getReadableThresholdName(type), value: formatThresholdValue(type, guestValue), limit: formatThresholdValue(type, thresholdValue) });
+                  }
+              } // End loop through session thresholds
+
+              // If the guest met ALL thresholds checked
+              // if (shouldLogEntry) { // Old OR check
+              if (meetsAllThresholds) { 
+                    // Gather all current metrics for the guest
+                    const metricsSnapshot = {
+                        cpu: guest.cpu * 100,
+                        mem: guest.memory,
+                        disk: guest.disk,
+                        diskRead: guest.diskread,
+                        diskWrite: guest.diskwrite,
+                        netIn: guest.netin,
+                        netOut: guest.netout
+                    };
+
+                    // Create the comprehensive log entry
+                    const logEntry = {
+                        timestamp: now,
+                        guestId: guest.vmid,
+                        guestName: guest.name,
+                        node: guest.node,
+                        // Formatted values for display
+                        cpuFormatted: formatThresholdValue('cpu', metricsSnapshot.cpu),
+                        memFormatted: formatThresholdValue('memory', metricsSnapshot.mem),
+                        diskFormatted: formatThresholdValue('disk', metricsSnapshot.disk),
+                        diskReadFormatted: formatThresholdValue('diskread', metricsSnapshot.diskRead),
+                        diskWriteFormatted: formatThresholdValue('diskwrite', metricsSnapshot.diskWrite),
+                        netInFormatted: formatThresholdValue('netin', metricsSnapshot.netIn),
+                        netOutFormatted: formatThresholdValue('netout', metricsSnapshot.netOut),
+                        // Raw values for potential debouncing/comparison
+                        metricsRaw: metricsSnapshot, 
+                        activeThresholdKeys: Object.keys(session.thresholds), // Pass the keys for highlighting
+                        guestMatchedSearch: guestMatchedSearch, // <<< ADDED specific flag
+                        nodeMatchedSearch: nodeMatchedSearch   // <<< ADDED specific flag
+                        // violations: violationDetails // Removed for now, as only logging passes
+                    };
+
+                    // Avoid logging the exact same violation repeatedly very quickly (debouncing)
+                    const lastEntry = session.entries.length > 0 ? session.entries[0] : null; // Check the most recent entry (inserted at top)
+                    if (!lastEntry ||
+                        !(lastEntry.guestId === logEntry.guestId &&
+                          (now.getTime() - lastEntry.timestamp.getTime()) < 5000) // Simple time-based debounce per guest
+                       )
+                    {
+                          addLogRow(sessionId, logEntry);
+                    }
+              }
+          }); // End loop through active sessions
+      }); // End loop through guests
+  }
+
+  // Add listener for the Start/Stop Log button
+  if (toggleLogModeButton) {
+      toggleLogModeButton.addEventListener('click', () => {
+          if (isThresholdLoggingActive) {
+              // Find the active session ID (assuming only one for now)
+              const activeSessionId = Object.keys(activeLogSessions)[0];
+              if (activeSessionId) {
+                  // Explicitly pass 'manual' when clicking the main button
+                  stopThresholdLogging(activeSessionId, 'manual'); 
+              }
+          } else {
+              startThresholdLogging();
+          }
+      });
+  } else {
+      console.warn('#toggle-log-mode-button not found.');
+  }
+
+  // Add listener for the NEW Start Log button
+  const startLogButton = document.getElementById('start-log-button');
+  if (startLogButton) {
+      startLogButton.addEventListener('click', () => {
+          startThresholdLogging(); // Only starts logging
+      });
+  } else {
+      console.warn('#start-log-button not found.');
+  }
+
+  // Add function to manage Clear All button visibility
+  const clearAllLogsButton = document.getElementById('clear-all-logs-button'); // Get reference later
+
+  function updateClearAllButtonVisibility() {
+    if (!clearAllLogsButton || !nestedTabsContainer) return; // Check nestedTabsContainer
+
+    // Check if there are any log tabs that correspond to finished sessions
+    let hasFinishedLogs = false;
+    nestedTabsContainer.querySelectorAll('.nested-tab[data-nested-tab^="log-session-"]').forEach(tab => {
+        const sessionId = tab.dataset.nestedTab.replace('log-session-', '');
+        if (!activeLogSessions[sessionId]) { // If session ID not in active sessions, it's finished
+            hasFinishedLogs = true;
+        }
+    });
+
+    if (hasFinishedLogs) {
+        clearAllLogsButton.classList.remove('hidden');
+    } else {
+        clearAllLogsButton.classList.add('hidden');
+    }
+  }
+
+  // Add listener for the Clear All button
+  if (clearAllLogsButton) {
+      clearAllLogsButton.addEventListener('click', () => {
+          if (nestedTabsContainer && nestedTabContentContainer && logSessionArea) { // Check logSessionArea exists
+              const tabsToRemove = [];
+              const contentsToRemove = [];
+              // Find finished log tabs and content
+              nestedTabsContainer.querySelectorAll('.nested-tab[data-nested-tab^="log-session-"]').forEach(tab => {
+                  const sessionIdFull = tab.dataset.nestedTab; // Use the full ID from data attribute
+                  if (!activeLogSessions[sessionIdFull.replace('log-session-', '')]) { // Check if session is NOT active
+                      tabsToRemove.push(tab);
+                      const content = nestedTabContentContainer.querySelector(`#${sessionIdFull}`); // Find content by ID
+                      if (content) contentsToRemove.push(content);
+                  }
+              });
+
+              // Remove them from DOM
+              tabsToRemove.forEach(tab => tab.remove());
+              contentsToRemove.forEach(content => content.remove());
+
+              // Hide the entire log area if no tabs are left after clearing
+               if (nestedTabsContainer.querySelectorAll('.nested-tab[data-nested-tab^="log-session-"]').length === 0) {
+                  logSessionArea.classList.add('hidden');
+               }
+          }
+          // Hide the button itself after clearing
+          clearAllLogsButton.classList.add('hidden');
+      });
+  } else {
+      console.warn('#clear-all-logs-button not found.');
+  }
+
+// --- END Threshold Logging Functions ---
+ 
+// --- START Reset Functions ---
+// Define standalone resetThresholds function
+function resetThresholds() {
+    /* // REMOVED: Don't stop active log on view reset
+    // If logging is active while resetting thresholds, stop it.
+    if (isThresholdLoggingActive) {
+        const activeSessionId = Object.keys(activeLogSessions)[0];
+        if (activeSessionId) {
+            stopThresholdLogging(activeSessionId, 'manual'); // Stop manually to preserve logs
+        }
+    }
+    */
+
+    for (const type in thresholdState) {
+        if (sliders[type]) { // Slider
+            thresholdState[type].value = 0;
+            const sliderElement = sliders[type];
+            if (sliderElement) sliderElement.value = 0;
+        } else if (thresholdSelects[type]) { // Dropdown Select
+            thresholdState[type].value = 0;
+            const selectElement = thresholdSelects[type];
+            if (selectElement) selectElement.value = 0; // Set to the 'Any' option value
+        }
+    } // End for loop
+    hideSliderTooltip(); // Make sure tooltip is hidden after reset
+    // Ensure threshold row is hidden on reset
+    isThresholdRowVisible = false;
+    updateThresholdRowVisibility();
+    updateThresholdIndicator(); // Update badge after reset
+}
+
+// Reset the main dashboard view
+  // ... existing code ...
+  // --- END Reset Functions ---
+
+  // --- Helper functions moved outside DOMContentLoaded ---
+
+  // NEW Helper function to generate a concise title for log tabs
+  function generateShortLogTitle(thresholds, filters, search, maxLen = 25) {
+      let parts = [];
+
+      // 1. Thresholds (simplified)
+      if (thresholds.length > 0) {
+          const simpleThresholds = thresholds.map(t => {
+              // Extract key parts like 'CPU>=80%' or 'Disk Read>=1 MB/s'
+              const match = t.match(/^([\w\s]+)[>=<]+(.*)$/);
+              if (match) {
+                  const key = match[1].replace(' %',''); // Remove space+%
+                  const value = match[2].replace(/%|\s.*$/g, ''); // Remove % and units like /s
+                  return `${key}>${value}`;
+              }
+              return t; // Fallback
+          });
+          parts.push(simpleThresholds.join(' ')); // Use space separator
+      }
+
+      // 2. Search
+      if (search) {
+          // Extract search term like "Search: 'term'"
+           const termMatch = search.match(/^Search: "(.+)"$/);
+           if (termMatch) {
+                // parts.push(`S:'${termMatch[1].substring(0, 10)}'`); // Old format
+                parts.push(`'${termMatch[1].substring(0, 10)}'`); // New format: just the term in quotes
+           }
+      }
+
+      // 3. Filters
+      if (filters.length > 0) {
+          const simpleFilters = filters.map(f => {
+              // Extract key parts like 'Type: VM' -> 'VM'
+              const parts = f.split(': ');
+              return parts.length > 1 ? parts[1] : f;
+          });
+           parts.push(simpleFilters.join('/'));
+      }
+
+      let shortTitle = parts.join(' '); // Use space separator
+
+      if (shortTitle.length > maxLen) {
+          return shortTitle.substring(0, maxLen - 1) + '…'; // Truncate
+      } else if (shortTitle.length === 0) {
+          return 'Log'; // Fallback if no criteria
+      }
+
+      return shortTitle;
+  }
+
+  function getReadableThresholdName(type) {
+      switch(type) {
+          case 'cpu': return 'CPU';
+          case 'memory': return 'Memory %';
+          case 'disk': return 'Disk %'; // More specific for VM % usage
+          case 'diskread': return 'Disk Read';
+          case 'diskwrite': return 'Disk Write';
+          case 'netin': return 'Net In';
+          case 'netout': return 'Net Out';
+          default: return type.charAt(0).toUpperCase() + type.slice(1); // Capitalize
+      }
+  }
+
+  function formatThresholdValue(type, value) {
+      if (value === null || value === undefined || isNaN(value)) return 'N/A';
+      if (type === 'cpu' || type === 'memory' || type === 'disk') return `${Math.round(value)}%`; // Round percentages for display
+      if (type === 'diskread' || type === 'diskwrite' || type === 'netin' || type === 'netout') return formatSpeedInt(value); // Use integer speed format
+      return String(value);
+  }
+
+  // Add CSS for the pulse animation (if not already defined elsewhere)
+  // Example: Add this to your CSS file or a <style> block in index.html
+  /*
+  @keyframes pulse-once {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+  .animate-pulse-once {
+    animation: pulse-once 1.5s ease-in-out;
+  }
+  */
+
+  // --- START Search Bar Threshold Integration ---
+  function getThresholdFilterTag(type, value) {
+    if (value <= 0) return null; // No tag for inactive thresholds
+
+    let operator = '>='; // Default operator
+    let displayValue;
+
+    // Format value based on type for the tag
+    if (type === 'cpu' || type === 'memory' || type === 'disk') {
+        displayValue = `${parseInt(value)}`; // Just the number for percentage
+    } else if (type === 'uptime') {
+        displayValue = `${parseInt(value)}`; // Use seconds for uptime
+    } else if (['diskread', 'diskwrite', 'netin', 'netout'].includes(type)) {
+        displayValue = `${parseInt(value)}`; // Use bytes/sec
+    } else {
+        return null; // Unknown type
+    }
+    return `${type}${operator}${displayValue}`;
+  }
+
+  function updateSearchTermWithThreshold(type, value) {
+    if (!searchInput) return; // Only works if search input exists
+
+    const newTag = getThresholdFilterTag(type, value);
+    const currentSearchText = searchInput.value || '';
+    let searchTerms = currentSearchText.split(',').map(term => term.trim()).filter(term => term);
+
+    // Remove any existing tag for this type
+    const typePrefix = `${type}>=`;
+    searchTerms = searchTerms.filter(term => !term.startsWith(typePrefix));
+
+    // Add the new tag if the threshold is active
+    if (newTag) {
+        searchTerms.push(newTag);
+    }
+
+    const updatedSearchText = searchTerms.join(', ');
+    if (searchInput.value !== updatedSearchText) {
+        searchInput.value = updatedSearchText;
+        // Dispatch input event to trigger table update based on search
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  }
+  // --- END Search Bar Threshold Integration ---
+
+  // --- Global Timer Update Logic ---
+  function formatRemainingTime(ms) {
+      if (ms <= 0) return "00:00";
+      const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  function updateAllLogTimers() {
+      const now = Date.now();
+      // Select all visible timer spans first
+      document.querySelectorAll('.log-timer-display').forEach(timerSpan => {
+          const sessionId = timerSpan.dataset.sessionId;
+          const session = activeLogSessions[sessionId];
+
+          if (session) {
+              const endTime = session.startTime.getTime() + session.durationMs;
+              const remainingMs = endTime - now;
+              timerSpan.textContent = formatRemainingTime(remainingMs);
+
+              // Optional: Change style when finished
+              if (remainingMs <= 0) {
+                  timerSpan.classList.add('text-red-500', 'dark:text-red-400');
+              }
+
+          } else {
+              // If session is no longer active but span exists, ensure it shows 00:00
+              // This might happen briefly if stopThresholdLogging hasn't updated it yet
+              if (timerSpan.textContent !== "00:00") {
+                 timerSpan.textContent = "00:00";
+                 timerSpan.classList.add('text-red-500', 'dark:text-red-400');
+              }
+          }
+      });
+  }
+
+  // Start the global timer interval
+  setInterval(updateAllLogTimers, 1000); // Update every second
+  // --- END Global Timer Update Logic ---
 
 }); // End DOMContentLoaded
