@@ -96,7 +96,7 @@ document.addEventListener('DOMContentLoaded', function() {
       if (activeContent) {
         activeContent.classList.remove('hidden');
 
-        // --- Handle nested tabs within 'main' --- 
+        // --- Handle nested tabs within 'main' ---
         if (tabId === 'main') {
             // Ensure the 'Dashboard' nested tab is active by default when switching TO 'main'
             activateNestedTab('nested-tab-dashboard'); 
@@ -202,7 +202,6 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   // --- Threshold Logging State ---
-  let isThresholdLoggingActive = false; // Keep for potential UI state, but use activeLogSessions for logic
   let activeLogSessions = {}; // Object to hold multiple logging sessions { sessionId: { thresholds: {}, startTime: Date, durationMs: number, timerId: number, entries: [], element: node } }
   let thresholdLogEntries = [];
   let activeLoggingThresholds = null; // Will store the thresholds active at logging start
@@ -339,6 +338,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   applyInitialFilterUI();
   updateThresholdIndicator(); // Set initial indicator state
+  updateLogControlsVisibility(); // Check visibility on initial load
 
   // Get references to threshold row and toggle button
   const thresholdRow = document.getElementById('threshold-slider-row');
@@ -400,6 +400,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updateDashboardTable();
     saveFilterState(); // Save state whenever a threshold changes
     updateThresholdIndicator(); // Update badge count
+    updateLogControlsVisibility(); // Update button visibility
   }
 
   // Function to get formatted display text for a threshold type and value
@@ -671,6 +672,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateDashboardTable(); // Update the main dashboard table
         if (searchInput) searchInput.dispatchEvent(new Event('input')); // Re-apply text filter
         saveFilterState(); // ---> ADDED: Save state <---
+        updateLogControlsVisibility(); // Update button visibility
       }
     });
   });
@@ -678,6 +680,7 @@ document.addEventListener('DOMContentLoaded', function() {
   if (searchInput) {
       searchInput.addEventListener('input', function() {
           updateDashboardTable();
+          updateLogControlsVisibility(); // Update button visibility
       });
   } else {
       console.warn('Element #dashboard-search not found - text filtering disabled.');
@@ -698,6 +701,7 @@ document.addEventListener('DOMContentLoaded', function() {
         updateDashboardTable(); // Re-render the table
         if (searchInput) searchInput.dispatchEvent(new Event('input')); // Re-apply text filter if needed
         saveFilterState(); // ---> ADDED: Save state <---
+        updateLogControlsVisibility(); // Update button visibility
       }
     });
   });
@@ -1389,16 +1393,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     refreshDashboardData(); // Ensure dashboardData is up-to-date with latest averages
 
-    // --- Define threshold prefixes used for search term filtering ---
-    // const thresholdPrefixes = ['cpu>=', 'memory>=', 'disk>=', 'uptime>=', 'diskread>=', 'diskwrite>=', 'netin>=', 'netout>=']; // REMOVED
-
     // Get raw search terms, split by comma
     const textSearchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : [];
-
-    // Separate search terms from threshold filter tags
-    // const textSearchTerms = rawSearchTerms.filter(term => !thresholdPrefixes.some(prefix => term.startsWith(prefix))); // REMOVED separation
-    // Note: We don't actually need to *use* the threshold tags parsed from the search bar for filtering,
-    // because the filtering happens based on the actual thresholdState object below.
 
     let filteredData = dashboardData.filter(guest => {
         // 1. Type Filter
@@ -1711,11 +1707,6 @@ document.addEventListener('DOMContentLoaded', function() {
   function resetThresholds() {
       for (const type in thresholdState) {
           if (sliders[type]) { // Slider
-             // If logging is active while resetting, stop it.
-             if (isThresholdLoggingActive && toggleLogModeButton) {
-                 toggleLogModeButton.click(); // Simulate click to stop logging cleanly
-             }
-
               thresholdState[type].value = 0;
               const sliderElement = sliders[type];
               if (sliderElement) sliderElement.value = 0;
@@ -1759,6 +1750,8 @@ document.addEventListener('DOMContentLoaded', function() {
       updateDashboardTable(); // Update table AFTER resetting everything
       if (searchInput) searchInput.blur(); // Blur search input after reset
 
+      // Call visibility check AFTER resetting filters
+      updateLogControlsVisibility();
 
       const backupStatusAllRadio = document.getElementById('backups-filter-status-all');
       if(backupStatusAllRadio) backupStatusAllRadio.checked = true;
@@ -2822,24 +2815,6 @@ document.addEventListener('DOMContentLoaded', function() {
 // --- START Threshold Logging Functions ---
 
   function startThresholdLogging() {
-    /* // REMOVED Check: Allow multiple logs
-    if (Object.keys(activeLogSessions).length > 0) {
-        console.warn("Threshold logging already active. Stop the current session first.");
-        // Optionally provide user feedback here (e.g., flash the button)
-        return;
-    }
-    */
-
-    // --- Get Duration --- 
-    const durationMinutes = parseInt(logDurationSelect.value); // Use select value
-    if (isNaN(durationMinutes) || durationMinutes <= 0) {
-        alert("Please select a valid duration."); 
-        logDurationSelect.focus();
-        return;
-    }
-    const durationMs = durationMinutes * 60 * 1000;
-    // --- End Get Duration --- 
-
     // --- Snapshot current filter state --- 
     const snapshottedThresholds = {};
     let activeThresholdCount = 0;
@@ -2922,6 +2897,11 @@ document.addEventListener('DOMContentLoaded', function() {
             if (tabToRemove && tabToRemove.classList.contains('active')) {
                 activateNestedTab('nested-tab-dashboard');
             }
+
+            // Hide the entire log area if no log tabs are left
+            if (nestedTabsContainer && logSessionArea && nestedTabsContainer.querySelectorAll('.nested-tab[data-nested-tab^="log-session-"]').length === 0) {
+                logSessionArea.classList.add('hidden');
+            }
         }
     };
 
@@ -2954,7 +2934,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <!-- Log entries added here -->
              <tr class="initial-log-message">
                 <td colspan="10" class="p-2 text-center text-gray-500 dark:text-gray-400 italic"> <!-- Adjusted colspan -->
-                    Logging started for ${durationMinutes} min<span class="dot-animate">.</span><span class="dot-animate">.</span><span class="dot-animate">.</span>
+                    Logging started continuously<span class="dot-animate">.</span><span class="dot-animate">.</span><span class="dot-animate">.</span>
                 </td>
              </tr>
         </tbody>
@@ -2976,7 +2956,6 @@ document.addEventListener('DOMContentLoaded', function() {
     newTab.innerHTML = `
         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
         <span class="log-tab-title" title="${fullCriteriaDesc || 'Log started ' + startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}">${startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-        <span class="log-timer-display ml-1.5 text-xs text-gray-500 dark:text-gray-400" data-session-id="${sessionId}">(--:--)</span>
     `;
     newTab.addEventListener('click', () => activateNestedTab(nestedTabId));
 
@@ -3057,6 +3036,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tabElement.classList.contains('active')) {
             activateNestedTab('nested-tab-dashboard');
         }
+
+        // Hide the entire log area if no log tabs are left
+        if (nestedTabsContainer && logSessionArea && nestedTabsContainer.querySelectorAll('.nested-tab[data-nested-tab^="log-session-"]').length === 0) {
+            logSessionArea.classList.add('hidden');
+        }
     };
     newTab.appendChild(tabCloseButton);
     // --- END Add Close Button to Tab --- 
@@ -3089,18 +3073,10 @@ document.addEventListener('DOMContentLoaded', function() {
     // } // REMOVED
     // --- END Append panel ---
 
-    // Start the timer to automatically stop the session
-    const timerId = setTimeout(() => {
-        // Pass 'timer' reason when stopped by timeout
-        stopThresholdLogging(sessionId, 'timer'); 
-    }, durationMs);
-
     // Store session info
     activeLogSessions[sessionId] = {
         thresholds: snapshottedThresholds,
         startTime: startTime,
-        durationMs: durationMs,
-        timerId: timerId,
         entries: [],
         element: panel, // Reference to the DOM element for easy removal
         searchTerms: snapshottedSearchTerms, // Store snapshotted search terms
@@ -3112,7 +3088,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // isThresholdLoggingActive = true; // REMOVED
     // logDurationSelect.disabled = true; // REMOVED - Keep select enabled
 
-    console.log(`[Log Session ${sessionId}] Started. Duration: ${durationMinutes}m. Thresholds:`, snapshottedThresholds);
+    console.log(`[Log Session ${sessionId}] Started. Thresholds:`, snapshottedThresholds);
   }
 
   function stopThresholdLogging(sessionId, reason = 'manual') { // Added reason parameter
@@ -3124,20 +3100,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
       console.log(`[Log Session ${sessionId}] Stopping. Reason: ${reason}`);
 
-      clearTimeout(session.timerId); // Clear the auto-stop timer regardless of reason
-
       // --- Modifications for Persistence ---
       if (session.element) {
-          // 1. Disable the close button on the panel
-          /* // REMOVED THIS BLOCK - We want the 'x' to always remove the panel
-          const closeButton = session.element.querySelector('.log-session-header button');
-          if (closeButton) {
-              closeButton.disabled = true;
-              closeButton.classList.add('opacity-50', 'cursor-not-allowed');
-              closeButton.onclick = null; // Remove listener
-          }
-          */
-
           // 2. Add final status message to the table body (Less critical now, but keep for timer expiry case)
           const tableBody = session.element.querySelector(`#log-table-${sessionId} tbody`);
           if (tableBody) {
@@ -3206,7 +3170,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
       // Populate cells with comprehensive metric data
-      console.log(`[addLogRow] About to add row for ${entry.guestName} (${entry.guestId}) to session ${sessionId}`); // DEBUG
+      // console.log(`[addLogRow] About to add row for ${entry.guestName} (${entry.guestId}) to session ${sessionId}`); // DEBUG
       row.innerHTML = `
           <td class="p-1 px-2 whitespace-nowrap">${entry.timestamp.toLocaleTimeString()}</td>
           <td class="p-1 px-2 whitespace-nowrap" title="${entry.guestName}">${guestDisplayHTML}</td>
@@ -3225,9 +3189,9 @@ document.addEventListener('DOMContentLoaded', function() {
       // --- DEBUG: Check if row is in DOM and potentially visible ---
       const addedRow = tableBody.firstChild; // Get the row we just prepended
       if (addedRow === row) {
-          console.log(`[addLogRow] Row for ${entry.guestName} successfully prepended to session ${sessionId}. Computed display: ${window.getComputedStyle(addedRow).display}`);
+          // console.log(`[addLogRow] Row for ${entry.guestName} successfully prepended to session ${sessionId}. Computed display: ${window.getComputedStyle(addedRow).display}`);
       } else {
-          console.error(`[addLogRow] Failed to prepend or find row for ${entry.guestName} in session ${sessionId}!`);
+          // console.error(`[addLogRow] Failed to prepend or find row for ${entry.guestName} in session ${sessionId}!`);
       }
       // --- END DEBUG ---
 
@@ -3251,39 +3215,12 @@ function checkThresholdViolations() {
       // --- Get current UI filter state --- 
       const currentFilterGuestType = filterGuestType;
       const currentFilterStatus = filterStatus;
-      // const rawSearchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : []; // REMOVED
-      // const currentTextSearchTerms = rawSearchTerms.filter(term => !thresholdPrefixes.some(prefix => term.startsWith(prefix))); // REMOVED
       // --- End Get current UI filter state --- 
 
       // We assume refreshDashboardData() has been called recently by the main interval,
       // so dashboardData is up-to-date.
 
     dashboardData.forEach(guest => {
-          // --- REVERT: Remove checks for current UI filters --- 
-          /* // REMOVED Block
-          // --- Apply Dashboard Filters BEFORE checking thresholds ---
-          // Must be running
-          if (guest.status !== 'running') return; 
-
-          // Type Filter
-          const typeMatch = currentFilterGuestType === 'all' || (currentFilterGuestType === 'vm' && guest.type === 'VM') || (currentFilterGuestType === 'lxc' && guest.type === 'CT');
-          if (!typeMatch) return; // Skip if type doesn't match UI filter
-
-          // Status Filter (Redundant if only checking running, but keep for consistency?)
-          const statusMatch = currentFilterStatus === 'all' || guest.status === currentFilterStatus;
-          if (!statusMatch) return; // Skip if status doesn't match UI filter
-
-          // Text Search Filter
-          const searchMatch = currentTextSearchTerms.length === 0 || currentTextSearchTerms.some(term => 
-                (guest.name && guest.name.toLowerCase().includes(term)) || 
-                (guest.node && guest.node.toLowerCase().includes(term)) ||
-                (guest.vmid && guest.vmid.toString().includes(term)) ||
-                (guest.id && guest.id.toString().includes(term))
-            );
-          if (!searchMatch) return; // Skip if text search doesn't match
-          // --- End Apply Dashboard Filters --- 
-          */
-
           // --- Keep only the check for running status --- 
         if (guest.status !== 'running') return; // Only log for running guests
           // --- End Keep only check --- 
@@ -3292,7 +3229,7 @@ function checkThresholdViolations() {
               const session = activeLogSessions[sessionId];
               if (!session) return; // Should not happen, but safety check
 
-              // --- Apply Snapshotted Type/Status Filters FIRST --- <<< Added
+              // --- Apply Snapshotted Type/Status Filters FIRST ---
               const sessionFilterGuestType = session.filterGuestType;
               const sessionFilterStatus = session.filterStatus;
 
@@ -3305,7 +3242,7 @@ function checkThresholdViolations() {
               if (!statusMatch) return; // Skip guest if status doesn't match session filter
               // --- End Apply Snapshotted Type/Status Filters ---
 
-              // --- Apply Snapshotted Text Search Filter --- <<< Renamed section
+              // --- Apply Snapshotted Text Search Filter ---
               const snapshottedSearch = session.searchTerms || []; // Get snapshotted terms
               let guestMatchedSearch = false; // Flag specifically for guest match
               let nodeMatchedSearch = false;  // Flag specifically for node match
@@ -3339,7 +3276,6 @@ function checkThresholdViolations() {
 
               // --- Now check thresholds (if any were snapshotted) ---
               let meetsAllThresholds = true; // Start assuming guest meets all thresholds
-              // let shouldLogEntry = false; // Old OR logic flag
               let violationDetails = []; // Still useful to store which thresholds were active for context
 
               for (const type in session.thresholds) {
@@ -3365,28 +3301,20 @@ function checkThresholdViolations() {
                   }
 
                   // Check for violation (guest value >= threshold limit)
-                  // if (guestValue >= thresholdValue) { // Old OR check
                   if (guestValue < thresholdValue) { // Check if guest FAILS this threshold
-                      // valueFormatted = formatThresholdValue(type, guestValue);
-                      // limitFormatted = formatThresholdValue(type, thresholdValue);
-                      // shouldLogEntry = true; // Old OR logic flag
-                      // violationDetails.push({ type: getReadableThresholdName(type), value: formatThresholdValue(type, guestValue), limit: formatThresholdValue(type, thresholdValue) });
                       meetsAllThresholds = false; // Guest failed at least one threshold
                       // --- DEBUG LOG --- 
-                      console.log(`[Log Check FAIL] Guest: ${guest.name}, Metric: ${type}, Value: ${guestValue}, Threshold: ${thresholdValue}`);
+                      // console.log(`[Log Check FAIL] Guest: ${guest.name}, Metric: ${type}, Value: ${guestValue}, Threshold: ${thresholdValue}`);
                       // --- END DEBUG LOG ---
                       break; // No need to check further thresholds for this guest
                   } else {
                       // --- DEBUG LOG --- 
-                      console.log(`[Log Check PASS] Guest: ${guest.name}, Metric: ${type}, Value: ${guestValue}, Threshold: ${thresholdValue}`);
+                      // console.log(`[Log Check PASS] Guest: ${guest.name}, Metric: ${type}, Value: ${guestValue}, Threshold: ${thresholdValue}`);
                       // --- END DEBUG LOG ---
-                      // Optional: Store passed threshold details for context if needed
-                      // violationDetails.push({ type: getReadableThresholdName(type), value: formatThresholdValue(type, guestValue), limit: formatThresholdValue(type, thresholdValue) });
                   }
               } // End loop through session thresholds
 
               // If the guest met ALL thresholds checked
-              // if (shouldLogEntry) { // Old OR check
               if (meetsAllThresholds) { 
                     // Gather all current metrics for the guest
                     const metricsSnapshot = {
@@ -3418,14 +3346,13 @@ function checkThresholdViolations() {
                         activeThresholdKeys: Object.keys(session.thresholds), // Pass the keys for highlighting
                         guestMatchedSearch: guestMatchedSearch, // <<< ADDED specific flag
                         nodeMatchedSearch: nodeMatchedSearch   // <<< ADDED specific flag
-                        // violations: violationDetails // Removed for now, as only logging passes
                     };
 
                     // Avoid logging the exact same violation repeatedly very quickly (debouncing)
                     const lastEntry = session.entries.length > 0 ? session.entries[0] : null; // Check the most recent entry (inserted at top)
                     if (!lastEntry ||
                         !(lastEntry.guestId === logEntry.guestId &&
-                          (now.getTime() - lastEntry.timestamp.getTime()) < 5000) // Simple time-based debounce per guest
+                          (now.getTime() - lastEntry.timestamp.getTime()) < 1000) // Simple time-based debounce per guest (Reduced to 1s)
                        )
                     {
                           addLogRow(sessionId, logEntry);
@@ -3433,24 +3360,6 @@ function checkThresholdViolations() {
               }
           }); // End loop through active sessions
       }); // End loop through guests
-  }
-
-  // Add listener for the Start/Stop Log button
-  if (toggleLogModeButton) {
-      toggleLogModeButton.addEventListener('click', () => {
-          if (isThresholdLoggingActive) {
-              // Find the active session ID (assuming only one for now)
-              const activeSessionId = Object.keys(activeLogSessions)[0];
-              if (activeSessionId) {
-                  // Explicitly pass 'manual' when clicking the main button
-                  stopThresholdLogging(activeSessionId, 'manual'); 
-              }
-          } else {
-              startThresholdLogging();
-          }
-      });
-  } else {
-      console.warn('#toggle-log-mode-button not found.');
   }
 
   // Add listener for the NEW Start Log button
@@ -3522,16 +3431,6 @@ function checkThresholdViolations() {
 // --- START Reset Functions ---
 // Define standalone resetThresholds function
 function resetThresholds() {
-    /* // REMOVED: Don't stop active log on view reset
-    // If logging is active while resetting thresholds, stop it.
-    if (isThresholdLoggingActive) {
-        const activeSessionId = Object.keys(activeLogSessions)[0];
-        if (activeSessionId) {
-            stopThresholdLogging(activeSessionId, 'manual'); // Stop manually to preserve logs
-        }
-    }
-    */
-
     for (const type in thresholdState) {
         if (sliders[type]) { // Slider
             thresholdState[type].value = 0;
@@ -3580,7 +3479,6 @@ function resetThresholds() {
           // Extract search term like "Search: 'term'"
            const termMatch = search.match(/^Search: "(.+)"$/);
            if (termMatch) {
-                // parts.push(`S:'${termMatch[1].substring(0, 10)}'`); // Old format
                 parts.push(`'${termMatch[1].substring(0, 10)}'`); // New format: just the term in quotes
            }
       }
@@ -3683,45 +3581,54 @@ function resetThresholds() {
   }
   // --- END Search Bar Threshold Integration ---
 
-  // --- Global Timer Update Logic ---
-  function formatRemainingTime(ms) {
-      if (ms <= 0) return "00:00";
-      const totalSeconds = Math.max(0, Math.floor(ms / 1000));
-      const minutes = Math.floor(totalSeconds / 60);
-      const seconds = totalSeconds % 60;
-      return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
+  // --- NEW Function to check filter state and toggle controls ---
+  function updateLogControlsVisibility() {
+      // console.log("[Debug] updateLogControlsVisibility called"); // Add log entry point
+      const startButton = document.getElementById('start-log-button');
 
-  function updateAllLogTimers() {
-      const now = Date.now();
-      // Select all visible timer spans first
-      document.querySelectorAll('.log-timer-display').forEach(timerSpan => {
-          const sessionId = timerSpan.dataset.sessionId;
-          const session = activeLogSessions[sessionId];
+      if (!startButton) {
+          // console.error("[Debug] Start log button not found!");
+          return; // Exit if start button not found
+      }
 
-          if (session) {
-              const endTime = session.startTime.getTime() + session.durationMs;
-              const remainingMs = endTime - now;
-              timerSpan.textContent = formatRemainingTime(remainingMs);
+      let isAnyFilterActive = false;
+      let activeReason = 'None'; // Store reason for debugging
 
-              // Optional: Change style when finished
-              if (remainingMs <= 0) {
-                  timerSpan.classList.add('text-red-500', 'dark:text-red-400');
-              }
-
-          } else {
-              // If session is no longer active but span exists, ensure it shows 00:00
-              // This might happen briefly if stopThresholdLogging hasn't updated it yet
-              if (timerSpan.textContent !== "00:00") {
-                 timerSpan.textContent = "00:00";
-                 timerSpan.classList.add('text-red-500', 'dark:text-red-400');
-              }
+      // 1. Check Thresholds
+      for (const type in thresholdState) {
+          if (thresholdState[type].value > 0) {
+              isAnyFilterActive = true;
+              activeReason = `Threshold: ${type}=${thresholdState[type].value}`;
+              break;
           }
-      });
-  }
+      }
+      // console.log(`[Debug] After Thresholds Check: isAnyFilterActive=${isAnyFilterActive}, Reason=${activeReason}`);
 
-  // Start the global timer interval
-  setInterval(updateAllLogTimers, 1000); // Update every second
-  // --- END Global Timer Update Logic ---
+      // 2. Check Search Input (if thresholds not already active)
+      if (!isAnyFilterActive && searchInput && searchInput.value.trim() !== '') {
+          isAnyFilterActive = true;
+          activeReason = `Search: '${searchInput.value.trim()}'`;
+      }
+      // console.log(`[Debug] After Search Check: isAnyFilterActive=${isAnyFilterActive}, Reason=${activeReason}`);
+
+      // 3. Check Type Filter (if still not active)
+      if (!isAnyFilterActive && filterGuestType !== 'all') {
+          isAnyFilterActive = true;
+          activeReason = `Type Filter: ${filterGuestType}`;
+      }
+      // console.log(`[Debug] After Type Filter Check: isAnyFilterActive=${isAnyFilterActive}, Reason=${activeReason}`);
+
+      // 4. Check Status Filter (if still not active)
+      if (!isAnyFilterActive && filterStatus !== 'all') {
+          isAnyFilterActive = true;
+          activeReason = `Status Filter: ${filterStatus}`;
+      }
+      // console.log(`[Debug] After Status Filter Check: isAnyFilterActive=${isAnyFilterActive}, Reason=${activeReason}`);
+
+      // Toggle button visibility
+      // console.log(`[Debug] Toggling button hidden state to: ${!isAnyFilterActive}`);
+      startButton.classList.toggle('hidden', !isAnyFilterActive);
+  }
+  // --- END NEW Function ---
 
 }); // End DOMContentLoaded
