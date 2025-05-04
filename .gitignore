@@ -47,3 +47,6 @@ jspm_packages/
 
 # Test coverage
 /coverage/ 
+
+# Local configuration files
+RELEASE_CHECKLIST.md 
