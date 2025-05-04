@@ -165,6 +165,31 @@ PulseApp.utils = (() => {
         });
     }
 
+    function renderTableBody(tbodyElement, data, rowRendererFn, noDataMessage = 'No data available', colspan = 100) {
+        if (!tbodyElement) {
+            console.error('Table body element not provided for rendering!');
+            return;
+        }
+        tbodyElement.innerHTML = ''; // Clear existing content
+
+        if (!data || data.length === 0) {
+            tbodyElement.innerHTML = `<tr><td colspan="${colspan}" class="p-4 text-center text-gray-500 dark:text-gray-400">${noDataMessage}</td></tr>`;
+            return;
+        }
+
+        data.forEach(item => {
+            const row = rowRendererFn(item); // Call the specific renderer for this table type
+            if (row instanceof HTMLElement) {
+                tbodyElement.appendChild(row);
+            } else {
+                 // Only log warning if rowRendererFn didn't explicitly return null/undefined
+                 if (row !== null && row !== undefined) {
+                    console.warn('Row renderer function did not return a valid HTML element for item:', item);
+                 }
+            }
+        });
+    }
+
     // Return the public API for this module
     return {
         sanitizeForId: (str) => str.replace(/[^a-zA-Z0-9-]/g, '-'),
@@ -178,6 +203,7 @@ PulseApp.utils = (() => {
         getReadableThresholdName,
         formatThresholdValue,
         getReadableThresholdCriteria,
-        sortData
+        sortData,
+        renderTableBody
     };
 })(); 

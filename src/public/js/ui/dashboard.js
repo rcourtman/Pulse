@@ -183,7 +183,6 @@ PulseApp.ui.dashboard = (() => {
         const sortStateMain = PulseApp.state.getSortState('main');
         let sortedData = PulseApp.utils.sortData(filteredData, sortStateMain.column, sortStateMain.direction, 'main');
 
-        tableBody.innerHTML = '';
         let visibleCount = 0;
         let visibleNodes = new Set();
         const groupByNode = PulseApp.state.get('groupByNode');
@@ -195,6 +194,8 @@ PulseApp.ui.dashboard = (() => {
                 if (!nodeGroups[nodeName]) nodeGroups[nodeName] = [];
                 nodeGroups[nodeName].push(guest);
             });
+            
+            tableBody.innerHTML = '';
 
             Object.keys(nodeGroups).sort().forEach(nodeName => {
                 visibleNodes.add(nodeName.toLowerCase());
@@ -215,14 +216,9 @@ PulseApp.ui.dashboard = (() => {
                 });
             });
         } else {
-            sortedData.forEach(guest => {
-                const guestRow = createGuestRow(guest);
-                 if (guestRow) {
-                    tableBody.appendChild(guestRow);
-                    visibleCount++;
-                    visibleNodes.add((guest.node || 'Unknown Node').toLowerCase());
-                }
-            });
+             PulseApp.utils.renderTableBody(tableBody, sortedData, createGuestRow, "No matching guests found.", 11);
+             visibleCount = sortedData.length;
+             sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
         }
 
         if (visibleCount === 0) {
