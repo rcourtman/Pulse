@@ -55,6 +55,9 @@ let pbsApiClients = {};
 const { fetchDiscoveryData, fetchMetricsData } = require('./dataFetcher');
 // --- END Data Fetching ---
 
+// Import the state manager
+const stateManager = require('./state');
+
 // Server configuration
 const DEBUG_METRICS = false; // Set to true to show detailed metrics logs
 const PORT = 7655; // Using a different port from the main server
@@ -93,6 +96,11 @@ app.get('/', (req, res) => {
 });
 
 // --- API Routes ---
+// Health check endpoint
+app.get('/healthz', (req, res) => {
+    res.status(200).send('OK');
+});
+
 // Example API Route (Add your actual API routes here)
 app.get('/api/version', (req, res) => {
     try {
@@ -106,7 +114,8 @@ app.get('/api/version', (req, res) => {
 
 app.get('/api/storage', async (req, res) => {
     try {
-        // This still relies on global currentNodes, which is updated by runDiscoveryCycle
+        // Get current nodes from state manager
+        const { nodes: currentNodes } = stateManager.getState();
         const storageInfoByNode = {};
         (currentNodes || []).forEach(node => {
             storageInfoByNode[node.node] = node.storage || []; 
@@ -137,17 +146,14 @@ io.on('connection', (socket) => {
   socket.on('requestData', async () => {
     console.log('Client requested data');
     try {
-      // Send the current known state immediately
-      if (currentNodes.length > 0 || currentVms.length > 0 || currentContainers.length > 0 || pbsDataArray.length > 0) {
-          socket.emit('rawData', {
-              nodes: currentNodes,
-              vms: currentVms,
-              containers: currentContainers,
-              metrics: currentMetrics,
-              pbs: pbsDataArray
-          });
+      // Get current state
+      const currentState = stateManager.getState();
+      if (stateManager.hasData()) {
+          socket.emit('rawData', currentState);
       } else {
-         console.log('No data available yet on request, waiting for next cycle.');
+         console.log('No data available yet on request, sending loading state.');
+         // Send an explicit loading state if no data is available yet
+         socket.emit('initialState', { loading: true });
          // Optionally trigger an immediate discovery cycle?
          // runDiscoveryCycle(); // Be careful with triggering cycles on demand
       }
@@ -164,11 +170,11 @@ io.on('connection', (socket) => {
 
 // --- Global State Variables ---
 // These will hold the latest fetched data
-let currentNodes = [];
-let currentVms = [];
-let currentContainers = [];
-let currentMetrics = [];
-let pbsDataArray = []; // Array to hold data for each PBS instance
+// let currentNodes = [];
+// let currentVms = [];
+// let currentContainers = [];
+// let currentMetrics = [];
+// let pbsDataArray = []; // Array to hold data for each PBS instance
 let isDiscoveryRunning = false; // Prevent concurrent discovery runs
 let isMetricsRunning = false;   // Prevent concurrent metric runs
 let discoveryTimeoutId = null;
@@ -181,11 +187,6 @@ let metricTimeoutId = null;
 // --- Main Data Fetching Logic (MOVED TO dataFetcher.js) ---
 // async function fetchDiscoveryData(...) { ... } // MOVED
 // async function fetchMetricsData(...) { ... } // MOVED
-
-// --- Socket.io connection handling (uses global state) --- 
-io.on('connection', (socket) => {
-   // ... (implementation relies on global currentNodes, currentVms, etc.)
-});
 
 // --- Update Cycle Logic --- 
 // Uses imported fetch functions and updates global state
@@ -200,25 +201,21 @@ async function runDiscoveryCycle() {
     // Use imported fetchDiscoveryData
     const discoveryData = await fetchDiscoveryData(apiClients, pbsApiClients);
     
-    // Update global state variables
-    currentNodes = discoveryData.nodes || [];
-    currentVms = discoveryData.vms || [];
-    currentContainers = discoveryData.containers || [];
-    pbsDataArray = discoveryData.pbs || []; 
+    // Update state using the state manager
+    stateManager.updateDiscoveryData(discoveryData);
+    // currentNodes = discoveryData.nodes || [];
+    // currentVms = discoveryData.vms || [];
+    // currentContainers = discoveryData.containers || [];
+    // pbsDataArray = discoveryData.pbs || []; 
 
     // ... (logging summary) ...
+    const currentState = stateManager.getState();
+    console.log(`[Discovery Cycle] Updated state. Nodes: ${currentState.nodes.length}, VMs: ${currentState.vms.length}, CTs: ${currentState.containers.length}, PBS: ${currentState.pbs.length}`);
 
     // Emit combined data using updated global state
     if (io.engine.clientsCount > 0) {
         // ... (emit rawData with currentNodes, currentVms, etc.) ...
-        io.emit('rawData', {
-            nodes: currentNodes,
-            vms: currentVms,
-            containers: currentContainers,
-            pbs: pbsDataArray,
-            // Send current metrics as well, even though discovery doesn't fetch them directly
-            metrics: currentMetrics 
-        });
+        io.emit('rawData', stateManager.getState());
     }
   } catch (error) {
       console.error(`[Discovery Cycle] Error during execution: ${error.message}`, error.stack);
@@ -241,6 +238,7 @@ async function runMetricCycle() {
         return;
     }
     // Use global state for running guests
+    const { vms: currentVms, containers: currentContainers } = stateManager.getState();
     const runningVms = currentVms.filter(vm => vm.status === 'running');
     const runningContainers = currentContainers.filter(ct => ct.status === 'running');
 
@@ -250,31 +248,25 @@ async function runMetricCycle() {
 
         // Update global currentMetrics state
         if (fetchedMetrics && fetchedMetrics.length >= 0) { // Allow empty array to clear metrics
-            currentMetrics = fetchedMetrics; 
-             console.log(`[Metrics Cycle] Updated metrics state for ${currentMetrics.length} guests.`);
+            stateManager.updateMetricsData(fetchedMetrics); 
+             console.log(`[Metrics Cycle] Updated metrics state for ${stateManager.getState().metrics.length} guests.`);
         } else {
              console.warn('[Metrics Cycle] fetchMetricsData returned unexpected value. Preserving previous metrics state.');
         }
 
         // Emit rawData with updated global state (including metrics)
-        io.emit('rawData', {
-            nodes: currentNodes,
-            vms: currentVms,
-            containers: currentContainers,
-            pbs: pbsDataArray,
-            metrics: currentMetrics
-        });
+        io.emit('rawData', stateManager.getState());
     } else {
+        const currentMetrics = stateManager.getState().metrics;
         if (currentMetrics.length > 0) {
            console.log('[Metrics Cycle] No running guests found, clearing metrics.');
-           currentMetrics = []; // Clear metrics
-           // Emit state update with cleared metrics
-        io.emit('rawData', {
-            nodes: currentNodes, vms: currentVms,
-            containers: currentContainers, metrics: currentMetrics,
-            pbs: pbsDataArray
-        });
-    }
+           stateManager.clearMetricsData(); // Clear metrics
+           // Emit state update with cleared metrics only if clients are connected
+           // (Avoid unnecessary emits if no one is listening and nothing changed except clearing metrics)
+           if (io.engine.clientsCount > 0) {
+               io.emit('rawData', stateManager.getState());
+           }
+        }
     }
   } catch (error) {
       console.error(`[Metrics Cycle] Error during execution: ${error.message}`, error.stack);
