@@ -25,6 +25,9 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 **Backups Tab:**
 ![Backups View](docs/images/05-backups-view.png)
 
+**Threshold Logging:**
+![Threshold Logging View](docs/images/06-thresholds-logging.png)
+
 </details>
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
