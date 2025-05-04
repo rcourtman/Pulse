@@ -90,6 +90,45 @@ const sections = [
       }
     },
 
+    // Threshold & Logging View: Toggle thresholds, set one, start log, capture main area
+    { name: '06-thresholds-logging', // New section
+      screenshotTarget: '#main', // Capture the main dashboard/log area
+      action: async (page) => {
+        console.log('  Action: Ensuring Main tab is active');
+        const mainTabIsActive = await page.locator('[data-tab="main"].active').isVisible();
+        if (!mainTabIsActive) {
+             await page.locator('[data-tab="main"]').click();
+             await page.waitForLoadState('networkidle', { timeout: 5000 });
+        }
+
+        console.log('  Action: Ensuring guest type filter is set to \'All\'');
+        const allFilterLabel = page.locator('label[for="filter-all"]');
+        await allFilterLabel.waitFor({ state: 'visible', timeout: 5000 });
+        await allFilterLabel.click();
+        await page.waitForTimeout(500); // Allow filter UI to update
+
+        console.log('  Action: Clicking Toggle Thresholds button');
+        await page.locator('#toggle-thresholds-button').click();
+        await page.locator('#threshold-slider-row').waitFor({ state: 'visible', timeout: 5000 });
+        console.log('  Action: Setting CPU threshold slider (e.g., to 50%)');
+        // Directly set the value for speed/reliability in automation
+        await page.locator('#threshold-slider-cpu').fill('50');
+        // Trigger input event manually after setting value programmatically
+        await page.locator('#threshold-slider-cpu').dispatchEvent('input'); 
+        await page.waitForTimeout(500); // Allow UI to react
+        console.log('  Action: Waiting for Start Log button to be visible');
+        await page.locator('#start-log-button:not(.hidden)').waitFor({ state: 'visible', timeout: 5000 });
+        console.log('  Action: Clicking Start Log button');
+        await page.locator('#start-log-button').click();
+        console.log('  Action: Waiting for Log tab and content to appear');
+        await page.locator('.nested-tab[data-nested-tab^="log-session-"]').waitFor({ state: 'visible', timeout: 10000 });
+        await page.locator('.log-session-panel').waitFor({ state: 'visible', timeout: 10000 });
+        console.log('  Action: Log session started and visible');
+        console.log('  Action: Waiting 8 seconds for potential log entries...');
+        await page.waitForTimeout(8000); // Increase pause to 8 seconds
+      }
+    },
+
     // { name: '06-task-view', url: '/#tasks', screenshotTarget: '#task-list-element', action: async (page) => { /* Navigate to task view if separate */ } }, // Uncomment and adjust if needed
 ];
 
