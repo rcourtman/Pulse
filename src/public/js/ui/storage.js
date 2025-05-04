@@ -2,39 +2,6 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.storage = (() => {
 
-    async function fetchStorageData() {
-        try {
-            const response = await fetch('/api/storage');
-            if (!response.ok) {
-                let serverErrorMsg = `Server responded with status: ${response.status} ${response.statusText}`;
-                try {
-                    const errorJson = await response.json();
-                    if (errorJson && errorJson.globalError) {
-                        serverErrorMsg = errorJson.globalError;
-                    } else if (errorJson) {
-                        serverErrorMsg += ` | Body: ${JSON.stringify(errorJson)}`;
-                    }
-                } catch (parseError) {
-                }
-                throw new Error(serverErrorMsg);
-            }
-
-            const fetchedData = await response.json();
-            PulseApp.state.set('storageData', fetchedData);
-
-        } catch (error) {
-            let finalErrorMessage = 'Failed to load storage data due to an unknown error.';
-            if (error instanceof TypeError) {
-                finalErrorMessage = `Failed to load storage data due to a network error: ${error.message}`;
-                console.error('Network error during storage fetch:', error);
-            } else {
-                finalErrorMessage = error.message;
-                console.error('Error processing storage response:', error);
-            }
-            console.error(`Storage fetch failed, preserving previous data. Error: ${finalErrorMessage}`);
-        }
-    }
-
     function getStorageTypeIcon(type) {
         switch(type) {
             case 'dir':
@@ -108,25 +75,24 @@ PulseApp.ui.storage = (() => {
         contentDiv.innerHTML = '';
         contentDiv.className = '';
 
-        const storage = PulseApp.state.get('storageData');
+        const nodes = PulseApp.state.get('nodesData') || [];
 
-        if (storage && storage.globalError) {
-            contentDiv.innerHTML = `<p class="p-4 text-red-700 dark:text-red-300">Error: ${storage.globalError}</p>`;
+        if (!Array.isArray(nodes) || nodes.length === 0) {
+            contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No node or storage data available.</p>';
             return;
         }
 
-        const nodeKeys = storage ? Object.keys(storage) : [];
-        const hasValidNodeData = nodeKeys.length > 0 && nodeKeys.some(key => Array.isArray(storage[key]));
-        const allNodesAreErrors = nodeKeys.length > 0 && nodeKeys.every(key => storage[key] && storage[key].error);
+        const storageByNode = nodes.reduce((acc, node) => {
+            if (node && node.node) {
+                acc[node.node] = Array.isArray(node.storage) ? node.storage : [];
+            }
+            return acc;
+        }, {});
+
+        const nodeKeys = Object.keys(storageByNode);
 
         if (nodeKeys.length === 0) {
-          contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data received from server.</p>';
-          return;
-        } else if (allNodesAreErrors) {
-          contentDiv.innerHTML = '<p class="text-red-600 dark:text-red-400 p-4 text-center">Failed to load storage data for all nodes. Check server logs.</p>';
-          return;
-        } else if (!hasValidNodeData) {
-          contentDiv.innerHTML = '<p class="text-yellow-600 dark:text-yellow-400 p-4 text-center">Received unexpected storage data format from server.</p>';
+          contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data found associated with nodes.</p>';
           return;
         }
 
@@ -150,10 +116,10 @@ PulseApp.ui.storage = (() => {
         const tbody = document.createElement('tbody');
         tbody.className = 'divide-y divide-gray-200 dark:divide-gray-600';
 
-        const sortedNodeNames = Object.keys(storage).sort((a, b) => a.localeCompare(b));
+        const sortedNodeNames = Object.keys(storageByNode).sort((a, b) => a.localeCompare(b));
 
         sortedNodeNames.forEach(nodeName => {
-          const nodeStorageData = storage[nodeName];
+          const nodeStorageData = storageByNode[nodeName];
 
           const nodeHeaderRow = document.createElement('tr');
           nodeHeaderRow.className = 'bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs node-storage-header';
@@ -164,14 +130,7 @@ PulseApp.ui.storage = (() => {
             </td>`;
           tbody.appendChild(nodeHeaderRow);
 
-          if (nodeStorageData.error) {
-            const errorRow = document.createElement('tr');
-            errorRow.innerHTML = `<td colspan="7" class="p-2 px-3 text-sm text-red-600 dark:text-red-400 italic">Error loading storage: ${nodeStorageData.error}</td>`;
-            tbody.appendChild(errorRow);
-            return;
-          }
-
-          if (!Array.isArray(nodeStorageData) || nodeStorageData.length === 0) {
+          if (nodeStorageData.length === 0) {
             const noDataRow = document.createElement('tr');
             noDataRow.innerHTML = `<td colspan="7" class="p-2 px-3 text-sm text-gray-500 dark:text-gray-400 italic">No storage configured or found for this node.</td>`;
             tbody.appendChild(noDataRow);
@@ -221,7 +180,6 @@ PulseApp.ui.storage = (() => {
     }
 
     return {
-        fetchStorageData,
         updateStorageInfo
     };
 })(); 

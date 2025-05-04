@@ -10,7 +10,6 @@ PulseApp.state = (() => {
         metricsData: [],
         dashboardData: [],
         pbsDataArray: [],
-        storageData: {},
         dashboardHistory: {},
         initialDataReceived: false,
         isThresholdRowVisible: false,

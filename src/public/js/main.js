@@ -1,12 +1,39 @@
 document.addEventListener('DOMContentLoaded', function() {
     const PulseApp = window.PulseApp || {};
 
+    function updateAllUITables() {
+        if (!PulseApp.state || !PulseApp.state.get('initialDataReceived')) {
+            return;
+        }
+        
+        const nodesData = PulseApp.state.get('nodesData');
+        const pbsDataArray = PulseApp.state.get('pbsDataArray');
+
+        PulseApp.ui.nodes?.updateNodesTable(nodesData);
+        PulseApp.ui.dashboard?.updateDashboardTable();
+        PulseApp.ui.storage?.updateStorageInfo();
+        PulseApp.ui.pbs?.updatePbsInfo(pbsDataArray);
+        PulseApp.ui.backups?.updateBackupsTab();
+
+        const loadingOverlay = document.getElementById('loading-overlay');
+        if (loadingOverlay && loadingOverlay.style.display !== 'none') {
+            if (PulseApp.socketHandler?.isConnected()) {
+                console.log('[UI Update] First data received, hiding loading overlay.');
+                loadingOverlay.style.display = 'none';
+            } else {
+                 console.log('[UI Update] Data received, but socket disconnected. Keeping loading overlay.');
+            }
+        }
+
+        PulseApp.thresholds?.logging?.checkThresholdViolations();
+    }
+
     function initializeModules() {
-        PulseApp.state?.init?.(); // Although state is IIFE, init might be added later
-        PulseApp.config?.init?.(); // Although config is obj literal, init might be added later
-        PulseApp.utils?.init?.(); // Although utils is obj literal, init might be added later
+        PulseApp.state?.init?.();
+        PulseApp.config?.init?.();
+        PulseApp.utils?.init?.();
         PulseApp.theme?.init?.();
-        PulseApp.socketHandler?.init?.();
+        PulseApp.socketHandler?.init?.(updateAllUITables);
         PulseApp.tooltips?.init?.();
 
         PulseApp.ui = PulseApp.ui || {};
@@ -14,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.nodes?.init?.();
         PulseApp.ui.dashboard?.init?.();
         PulseApp.ui.storage?.init?.();
-        PulseApp.ui.pbs?.initPbsEventListeners?.(); // Specific init for PBS listeners
+        PulseApp.ui.pbs?.initPbsEventListeners?.();
         PulseApp.ui.backups?.init?.();
         PulseApp.ui.thresholds?.init?.();
         PulseApp.ui.common?.init?.();
@@ -26,24 +53,19 @@ document.addEventListener('DOMContentLoaded', function() {
     function validateCriticalElements() {
         const criticalElements = [
             'connection-status',
-            'main-table', // Check for table itself
-            // 'custom-tooltip', // Non-critical
-            // 'slider-value-tooltip', // Non-critical
-            'dashboard-search', // Optional but important
-            'dashboard-status-text', // Status display
-            'app-version' // Version display
+            'main-table',
+            'dashboard-search',
+            'dashboard-status-text',
+            'app-version'
         ];
         let allFound = true;
         criticalElements.forEach(id => {
             if (!document.getElementById(id)) {
                 console.error(`Critical element #${id} not found!`);
-                // allFound = false; // Decide if you want to stop execution
             }
         });
-        // Check for table body specifically needed by dashboard updates
         if (!document.querySelector('#main-table tbody')) {
              console.error('Critical element #main-table tbody not found!');
-             // allFound = false;
         }
         return allFound;
     }
@@ -65,44 +87,11 @@ document.addEventListener('DOMContentLoaded', function() {
             });
     }
 
-    function updateAllUITables() {
-        const nodesData = PulseApp.state.get('nodesData');
-        const pbsDataArray = PulseApp.state.get('pbsDataArray');
-        const storageData = PulseApp.state.get('storageData');
-
-        PulseApp.ui.nodes?.updateNodesTable(nodesData);
-        PulseApp.ui.dashboard?.updateDashboardTable(); // Refreshes data internally
-        PulseApp.ui.storage?.updateStorageInfo(); // Uses state internaly
-        PulseApp.ui.pbs?.updatePbsInfo(pbsDataArray);
-        PulseApp.ui.backups?.updateBackupsTab();
-
-        const loadingOverlay = document.getElementById('loading-overlay');
-        if (loadingOverlay && loadingOverlay.style.display !== 'none') {
-            if (PulseApp.socketHandler.isConnected()) {
-                console.log('[UI Update] Hiding loading overlay.');
-                loadingOverlay.style.display = 'none';
-            } else {
-            }
-        }
-    }
-
-    // --- Main Execution --- 
     if (!validateCriticalElements()) {
         console.error("Stopping JS execution due to missing critical elements.");
-        // Optionally display a user-facing error message here
         return;
     }
 
     initializeModules();
     fetchVersion();
-    PulseApp.ui.storage.fetchStorageData(); // Initial fetch
-
-    setInterval(() => {
-        if (PulseApp.state.get('initialDataReceived')) {
-            updateAllUITables();
-            PulseApp.thresholds.logging?.checkThresholdViolations();
-        }
-    }, 2000); // UI update interval
-
-    setInterval(PulseApp.ui.storage.fetchStorageData, 30000); // Storage fetch interval
 }); 

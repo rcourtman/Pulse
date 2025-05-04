@@ -1,11 +1,18 @@
 PulseApp.socketHandler = (() => {
     let socket = null;
 
-    function init() {
+    // Expose the UI update function reference
+    let updateAllUITablesRef = () => { 
+        console.warn('[socketHandler] updateAllUITablesRef is not yet assigned.');
+    };
+
+    function init(updateFunctionRef) {
         socket = io();
+        updateAllUITablesRef = updateFunctionRef; // Assign the function passed from main.js
 
         socket.on('connect', handleConnect);
         socket.on('disconnect', handleDisconnect);
+        socket.on('initialState', handleInitialState);
         socket.on('rawData', handleRawData);
         socket.on('pbsInitialStatus', handlePbsInitialStatus);
 
@@ -43,6 +50,26 @@ PulseApp.socketHandler = (() => {
         }
     }
 
+    function handleInitialState(state) {
+        console.log('[socketHandler] Received initial state:', state);
+        if (state && state.loading) {
+             // Update status text to indicate loading
+             const statusText = document.getElementById('dashboard-status-text');
+             if (statusText) {
+                 statusText.textContent = 'Loading initial data...';
+             }
+             // Ensure loading overlay is visible
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay && loadingOverlay.style.display === 'none') {
+                const loadingText = loadingOverlay.querySelector('p');
+                if (loadingText) {
+                    loadingText.textContent = 'Loading data...'; // Or a specific initial loading message
+                }
+                 loadingOverlay.style.display = 'flex';
+            }
+        }
+    }
+
     function handleRawData(jsonData) {
         try {
             const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
@@ -72,7 +99,14 @@ PulseApp.socketHandler = (() => {
               PulseApp.state.set('initialDataReceived', true);
 
             }
-
+            
+            // --- Trigger UI update after processing data --- 
+            if (typeof updateAllUITablesRef === 'function') {
+                updateAllUITablesRef();
+            } else {
+                 console.error('[socketHandler] updateAllUITablesRef is not a function!');
+            }
+            // --- END Trigger ---
 
         } catch (e) {
             console.error('Error processing received rawData:', e, jsonData);
