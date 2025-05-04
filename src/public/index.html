@@ -140,13 +140,7 @@
     <div id="main" class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
       <!-- Nested Tab Content START -->
       <div id="nested-tab-dashboard" class="nested-tab-content p-3">
-          <!-- Nested Tabs START - WILL BE MOVED -->
-          <!-- <div class="nested-tabs flex border-b border-gray-200 dark:border-gray-700">
-            ... nested tabs ...
-          </div> -->
-          <!-- Nested Tabs END - WILL BE MOVED -->
 
-          <!-- Moved Dashboard Filter START -->
           <div class="dashboard-filter flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
             <div class="dashboard-filter-controls flex-grow flex items-center gap-2">
               <input type="text" id="dashboard-search" placeholder="Search Name, ID, Node (use ',' for OR)" class="flex-grow p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
@@ -223,9 +217,7 @@
               </div>
             </div>
           </div>
-          <!-- Moved Dashboard Filter END -->
 
-          <!-- Moved Table Container START -->
           <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
             <table id="main-table" class="w-full table-fixed text-sm">
                 <colgroup>
@@ -322,31 +314,16 @@
               </tbody>
             </table>
             </div>
-          <!-- Moved Table Container END -->
 
-          <!-- Nested Tabs START (Moved) - WILL BE MOVED AGAIN -->
-          <!-- <div class="nested-tabs flex border-b border-gray-200 dark:border-gray-700 mt-3"> -->
-            <!-- REMOVED Static Dashboard Tab -->
-            <!-- <div class="nested-tab active px-3 py-1.5 cursor-pointer text-sm font-medium border-b-2 border-blue-600 text-blue-600" data-nested-tab="nested-tab-dashboard">
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle mr-1"><path d="M12 2.099a10 10 0 1 0 8.645 15.215A10 10 0 0 0 12 2.099Z"/><path d="m7 13 3 3 7-7"/></svg>
-              Dashboard
-            </div> -->
-            <!-- Dynamically added log tabs will appear here -->
-          <!-- </div> -->
-          <!-- Nested Tabs END (Moved) - WILL BE MOVED AGAIN -->
-
-          <!-- Moved Status Text START -->
           <span id="dashboard-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading dashboard data...</span>
-          <!-- Moved Status Text END -->
 
           <!-- Separator -->
           <hr class="border-gray-200 dark:border-gray-700 my-2">
 
-          <!-- Log Controls Container START (Moved) -->
-          <div id="log-controls-container" class="flex justify-start items-center gap-2 mt-2"> 
-                 <button 
-                     id="start-log-button" 
-                     class="px-2 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 flex items-center h-7" 
+          <div id="log-controls-container" class="flex justify-start items-center gap-2 mt-2">
+                 <button
+                     id="start-log-button"
+                     class="px-2 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 flex items-center h-7"
                      title="Start New Threshold Log"
                  >
                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
@@ -357,27 +334,18 @@
                      <span>Clear Logs</span>
                  </button>
           </div>
-          <!-- Log Controls Container END (Moved) -->
       </div>
-      <!-- Nested Tab Content END (Main Dashboard View) -->
 
-      <!-- Log Session Area START (Contains Tabs and Content Panels) -->
       <div id="log-session-area" class="hidden mt-4 p-3 bg-white dark:bg-gray-800 rounded shadow border border-gray-200 dark:border-gray-700">
-        <!-- Nested Tabs for LOGS only -->
         <div class="nested-tabs flex border-b border-gray-200 dark:border-gray-700 mb-2">
-            <!-- Dynamically added log tabs will appear here -->
         </div>
-        <!-- Container for Log Content Panels -->
         <div id="log-content-area" class="space-y-2">
-            <!-- Dynamically added log panels will appear here -->
         </div>
       </div>
-      <!-- Log Session Area END -->
 
     </div>
 
     <div id="nodes" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
-      <!-- Add Node Table Structure -->
       <div class="table-container max-h-[80vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
         <table id="nodes-table" class="w-full table-auto text-sm">
             <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
@@ -398,7 +366,6 @@
             </tbody>
         </table>
       </div>
-      <!-- End Node Table Structure -->
     </div>
 
     <div id="storage" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
@@ -513,7 +480,26 @@
   </div>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="/app.js" defer></script>
+  <script>window.PulseApp = {};</script>
+  <!-- <script src="/app.js" defer></script> -->
+  <script src="/js/config.js" defer></script>
+  <script src="/js/state.js" defer></script>
+  <script src="/js/utils.js" defer></script>
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/tooltips.js" defer></script>
+  <script src="/js/socketHandler.js" defer></script>
+  <script src="/js/tabs.js" defer></script>
+  <script src="/js/ui/thresholds.js" defer></script>
+  <script src="/js/ui/common.js" defer></script>
+  <script src="/js/ui/nodes.js" defer></script>
+  <script src="/js/ui/dashboard.js" defer></script>
+  <script src="/js/ui/storage.js" defer></script>
+  <script src="/js/ui/pbs.js" defer></script>
+  <script src="/js/ui/backups.js" defer></script>
+  <script src="/js/thresholds/logging.js" defer></script>
+  <script src="/js/hotReload.js" defer></script>
+  <script src="/js/main.js" defer></script>
+
   <footer class="text-center text-xs text-gray-500 py-4">
     Pulse for Proxmox | Version: <a href="https://github.com/rcourtman/Pulse/releases" target="_blank" rel="noopener noreferrer" id="app-version" class="text-blue-600 dark:text-blue-400 hover:underline">loading...</a>
   </footer>
