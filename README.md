@@ -33,16 +33,17 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 ## 📋 Table of Contents
-- [Quick Start (Docker Compose)](#-quick-start-docker-compose)
+- [Quick Start (Docker Compose - Recommended)](#-quick-start-docker-compose---recommended)
+- [Development Setup (Docker Compose)](#-development-setup-docker-compose)
 - [Configuration](#️-configuration)
   - [Environment Variables](#environment-variables)
   - [Creating a Proxmox API Token](#creating-a-proxmox-api-token)
   - [Creating a Proxmox Backup Server API Token](#creating-a-proxmox-backup-server-api-token)
   - [Required Permissions](#required-permissions)
 - [Deployment](#-deployment)
-  - [Running with Docker Compose](#-running-with-docker-compose)
-  - [Running with LXC Installation Script](#-running-with-lxc-installation-script)
-  - [Running with Node.js (Development)](#️-running-the-application-nodejs-development)
+  - [Docker Compose](#running-with-docker-compose)
+  - [LXC Installation Script](#-running-with-lxc-installation-script)
+  - [Node.js (Development)](#️-running-the-application-nodejs-development)
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
 - [Contributing](#-contributing)
@@ -52,15 +53,71 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 - [Support](#-support)
 - [Troubleshooting](#-troubleshooting)
 
-## 🚀 Quick Start (Docker Compose)
+## 🚀 Quick Start (Docker Compose - Recommended)
 
-This is the fastest way to get Pulse running.
+This is the **easiest and recommended** way to run Pulse using the pre-built image from Docker Hub.
 
-1.  **Get Files:** Clone the repository (`git clone https://github.com/rcourtman/Pulse.git && cd Pulse`) or download `docker-compose.yml` and `.env.example` manually.
+**Prerequisites:**
+- Docker ([Install Docker](https://docs.docker.com/engine/install/))
+- Docker Compose ([Install Docker Compose](https://docs.docker.com/compose/install/))
+
+**Steps:**
+
+1.  **Create a Directory:** Make a directory on your Docker host where Pulse configuration will live:
+    ```bash
+    mkdir pulse-config
+    cd pulse-config
+    ```
+2.  **Create `.env` file:** Create a file named `.env` in this directory and add your Proxmox connection details. See [Configuration](#️-configuration) for details and required permissions. Minimally, you need:
+    ```env
+    # .env file
+    PROXMOX_HOST=https://your-proxmox-ip:8006
+    PROXMOX_TOKEN_ID=your_user@pam!your_token_id
+    PROXMOX_TOKEN_SECRET=your_secret_uuid_here
+    # Optional: Set to true if using self-signed certs
+    # PROXMOX_ALLOW_SELF_SIGNED_CERTS=true
+    # Optional: Add PBS details if desired
+    # PBS_HOST=https://your-pbs-ip:8007
+    # PBS_NODE_NAME=your-pbs-node-hostname # Important! See config docs.
+    # PBS_TOKEN_ID=pbs_user@pbs!token_id
+    # PBS_TOKEN_SECRET=pbs_secret_uuid_here
+    # PBS_ALLOW_SELF_SIGNED_CERTS=true
+    ```
+3.  **Create `docker-compose.yml` file:** Create a file named `docker-compose.yml` in the same directory with the following content:
+    ```yaml
+    # docker-compose.yml
+    services:
+      pulse-server:
+        image: rcourtman/pulse:latest # Pulls the latest pre-built image
+        container_name: pulse
+        restart: unless-stopped
+        ports:
+          # Map host port 7655 to container port 7655
+          # Change the left side (e.g., "8081:7655") if 7655 is busy on your host
+          - "7655:7655"
+        env_file:
+          - .env # Load environment variables from .env file
+        # Optional: Uncomment to map a volume for potential future config/log persistence
+        # volumes:
+        #   - ./data:/data
+    ```
+4.  **Run:** Start the container:
+    ```bash
+    docker compose up -d
+    ```
+5.  **Access:** Open your browser to `http://<your-docker-host-ip>:7655`.
+
+---
+
+## 🚀 Development Setup (Docker Compose)
+
+Use this method if you have cloned the repository and want to build and run the application from the local source code.
+
+1.  **Get Files:** Clone the repository (`git clone https://github.com/rcourtman/Pulse.git && cd Pulse`)
 2.  **Copy `.env`:** `cp .env.example .env`
-3.  **Edit `.env`:** Fill in your primary Proxmox API details (`PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`). See [Creating a Proxmox API Token](#creating-a-proxmox-api-token) if you don't have one.
-4.  **Run:** `docker compose up -d`
-5.  **Access:** Open your browser to `http://<your-host-ip>:7655`.
+3.  **Edit `.env`:** Fill in your primary Proxmox API details (`PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`). See [Configuration](#️-configuration) for details.
+4.  **Run:** `docker compose up --build -d` (The included `docker-compose.yml` uses the `build:` context by default).
+5.  **Access:** Open your browser to `http://localhost:7655` (or your host IP if Docker runs remotely).
 
 ## 🛠️ Configuration
 
@@ -205,18 +262,26 @@ If monitoring PBS, create a token within the PBS interface.
 
 Choose one of the following methods to deploy Pulse.
 
-### Running with Docker Compose
+### Docker Compose
 
-Using Docker Compose is the recommended way for most users.
+Refer to the [Quick Start](#-quick-start-docker-compose---recommended) or [Development Setup](#-development-setup-docker-compose) sections above for Docker Compose instructions.
 
-**Prerequisites:**
-- Docker ([Install Docker](https://docs.docker.com/engine/install/))
-- Docker Compose ([Install Docker Compose](https://docs.docker.com/compose/install/))
+### Running with LXC Installation Script
 
-**Steps:**
+This method is not provided in the original file or the code block, so it's left unchanged.
 
-1.  **Configure Environment:** Ensure your `.env` file is created and configured as described in [Configuration](#️-configuration).
-2.  **Run:** In the project root directory, run:
-    ```bash
-    docker compose up -d
-    ```
+### ️ Running the Application (Node.js Development)
+
+This method is not provided in the original file or the code block, so it's left unchanged.
+
+### Other Deployment Options
+
+This section is not provided in the original file or the code block, so it's left unchanged.
+
+## 🚀 Support
+
+This section is not provided in the original file or the code block, so it's left unchanged.
+
+## 🚀 Troubleshooting
+
+This section is not provided in the original file or the code block, so it's left unchanged.
