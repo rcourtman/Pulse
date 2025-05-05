@@ -5,9 +5,10 @@ const { loadConfiguration, ConfigurationError } = require('./configLoader');
 
 let endpoints;
 let pbsConfigs;
+let isConfigPlaceholder = false; // Add global flag
 
 try {
-  ({ endpoints, pbsConfigs } = loadConfiguration());
+  ({ endpoints, pbsConfigs, isConfigPlaceholder } = loadConfiguration());
 } catch (error) {
   if (error instanceof ConfigurationError) {
     console.error(error.message);
@@ -139,21 +140,27 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log('Client connected');
   // Immediately send current data if available
-  // if (cachedDiscoveryData) {
-  //   socket.emit('rawData', cachedDiscoveryData);
-  // }
+  const currentState = stateManager.getState();
+  if (stateManager.hasData()) {
+      // Include flag in rawData
+      socket.emit('rawData', { ...currentState, isConfigPlaceholder });
+  } else {
+      console.log('No data available yet on connect, sending initial state.');
+      // Include flag in initialState
+      socket.emit('initialState', { loading: true, isConfigPlaceholder });
+  }
 
   socket.on('requestData', async () => {
     console.log('Client requested data');
     try {
-      // Get current state
       const currentState = stateManager.getState();
       if (stateManager.hasData()) {
-          socket.emit('rawData', currentState);
+          // Include flag in rawData
+          socket.emit('rawData', { ...currentState, isConfigPlaceholder });
       } else {
          console.log('No data available yet on request, sending loading state.');
-         // Send an explicit loading state if no data is available yet
-         socket.emit('initialState', { loading: true });
+         // Include flag in initialState
+         socket.emit('initialState', { loading: true, isConfigPlaceholder });
          // Optionally trigger an immediate discovery cycle?
          // runDiscoveryCycle(); // Be careful with triggering cycles on demand
       }
@@ -203,19 +210,15 @@ async function runDiscoveryCycle() {
     
     // Update state using the state manager
     stateManager.updateDiscoveryData(discoveryData);
-    // currentNodes = discoveryData.nodes || [];
-    // currentVms = discoveryData.vms || [];
-    // currentContainers = discoveryData.containers || [];
-    // pbsDataArray = discoveryData.pbs || []; 
+    // No need to store in global vars anymore
 
     // ... (logging summary) ...
-    const currentState = stateManager.getState();
-    console.log(`[Discovery Cycle] Updated state. Nodes: ${currentState.nodes.length}, VMs: ${currentState.vms.length}, CTs: ${currentState.containers.length}, PBS: ${currentState.pbs.length}`);
+    const updatedState = stateManager.getState(); // Get the fully updated state
+    console.log(`[Discovery Cycle] Updated state. Nodes: ${updatedState.nodes.length}, VMs: ${updatedState.vms.length}, CTs: ${updatedState.containers.length}, PBS: ${updatedState.pbs.length}`);
 
-    // Emit combined data using updated global state
+    // Emit combined data using updated state manager state, including the flag
     if (io.engine.clientsCount > 0) {
-        // ... (emit rawData with currentNodes, currentVms, etc.) ...
-        io.emit('rawData', stateManager.getState());
+        io.emit('rawData', { ...updatedState, isConfigPlaceholder });
     }
   } catch (error) {
       console.error(`[Discovery Cycle] Error during execution: ${error.message}`, error.stack);
@@ -246,12 +249,12 @@ async function runMetricCycle() {
         // Use imported fetchMetricsData
         const fetchedMetrics = await fetchMetricsData(runningVms, runningContainers, apiClients);
 
-        // Update global currentMetrics state
+        // Update metrics state
         if (fetchedMetrics && fetchedMetrics.length >= 0) { // Allow empty array to clear metrics
-            stateManager.updateMetricsData(fetchedMetrics); 
-             console.log(`[Metrics Cycle] Updated metrics state for ${stateManager.getState().metrics.length} guests.`);
-        } else {
-             console.warn('[Metrics Cycle] fetchMetricsData returned unexpected value. Preserving previous metrics state.');
+           stateManager.updateMetricsData(fetchedMetrics);
+           // Emit only metrics updates if needed, or rely on full rawData updates?
+           // Consider emitting a smaller 'metricsUpdate' event if performance is key
+           // io.emit('metricsUpdate', stateManager.getState().metrics);
         }
 
         // Emit rawData with updated global state (including metrics)

@@ -52,6 +52,9 @@ PulseApp.socketHandler = (() => {
 
     function handleInitialState(state) {
         console.log('[socketHandler] Received initial state:', state);
+        // Store the placeholder flag
+        PulseApp.state.set('isConfigPlaceholder', state.isConfigPlaceholder || false);
+
         if (state && state.loading) {
              // Update status text to indicate loading
              const statusText = document.getElementById('dashboard-status-text');
@@ -100,6 +103,9 @@ PulseApp.socketHandler = (() => {
 
             }
             
+            // Store the placeholder flag
+            PulseApp.state.set('isConfigPlaceholder', data.isConfigPlaceholder || false);
+
             // --- Trigger UI update after processing data --- 
             if (typeof updateAllUITablesRef === 'function') {
                 updateAllUITablesRef();
@@ -147,7 +153,12 @@ PulseApp.socketHandler = (() => {
         if (loadingOverlay) {
           const loadingText = loadingOverlay.querySelector('p');
           if (loadingText) {
-              loadingText.textContent = 'Connected. Reloading data...';
+              // Check the flag before setting the text
+              if (PulseApp.state.get('isConfigPlaceholder')) {
+                  loadingText.textContent = 'Configuration Required';
+              } else {
+                  loadingText.textContent = 'Connected. Reloading data...';
+              }
           }
           loadingOverlay.style.display = 'flex';
         }

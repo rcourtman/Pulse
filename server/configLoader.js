@@ -82,8 +82,10 @@ function loadPbsConfig(index = null) {
 function loadConfiguration() {
     // Only load .env file if not in test environment
     if (process.env.NODE_ENV !== 'test') {
-      require('dotenv').config(); 
+      require('dotenv').config();
     }
+
+    let isConfigPlaceholder = false; // Add this flag
 
     // --- Proxmox Primary Endpoint Validation ---
     const primaryRequiredEnvVars = [
@@ -103,18 +105,19 @@ function loadConfiguration() {
         }
     });
 
-    if (missingVars.length > 0 || placeholderVars.length > 0) {
+    // Throw error only if required vars are MISSING
+    if (missingVars.length > 0) {
         let errorMessages = ['--- Configuration Error (Primary Endpoint) ---'];
-        if (missingVars.length > 0) {
-            errorMessages.push(`Missing required environment variables: ${missingVars.join(', ')}.`);
-        }
-        if (placeholderVars.length > 0) {
-            errorMessages.push(`The following primary environment variables seem to contain placeholder values: ${placeholderVars.join(', ')}.`);
-        }
+        errorMessages.push(`Missing required environment variables: ${missingVars.join(', ')}.`);
         errorMessages.push('Please ensure valid Proxmox connection details are provided.');
         errorMessages.push('Refer to server/.env.example for the required variable names and format.');
-        // Throw error instead of exiting
         throw new ConfigurationError(errorMessages.join('\n'));
+    }
+
+    // Set the flag if placeholders were detected (but don't throw error)
+    if (placeholderVars.length > 0) {
+        isConfigPlaceholder = true;
+        console.warn(`WARN: Primary Proxmox environment variables seem to contain placeholder values: ${placeholderVars.join(', ')}. Pulse may not function correctly until configured.`);
     }
 
     // --- Load All Proxmox Endpoint Configurations ---
@@ -201,7 +204,8 @@ function loadConfiguration() {
     }
 
     console.log('INFO: Configuration loaded successfully.');
-    return { endpoints, pbsConfigs };
+    // Return the flag along with endpoints and pbsConfigs
+    return { endpoints, pbsConfigs, isConfigPlaceholder };
 }
 
 module.exports = { loadConfiguration, ConfigurationError }; // Export the function and error class 
