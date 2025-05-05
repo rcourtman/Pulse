@@ -5,12 +5,13 @@ const { loadConfiguration, ConfigurationError } = require('./configLoader');
 
 let endpoints;
 let pbsConfigs;
+let configIsPlaceholder = false; // Define placeholder flag variable here
 
 try {
-  const { endpoints: loadedEndpoints, pbsConfigs: loadedPbsConfigs, isConfigPlaceholder: configIsPlaceholder } = loadConfiguration();
+  const { endpoints: loadedEndpoints, pbsConfigs: loadedPbsConfigs, isConfigPlaceholder: loadedPlaceholderFlag } = loadConfiguration();
   endpoints = loadedEndpoints;
   pbsConfigs = loadedPbsConfigs;
-  stateManager.setConfigPlaceholderStatus(configIsPlaceholder);
+  configIsPlaceholder = loadedPlaceholderFlag; // Store flag temporarily
 } catch (error) {
   if (error instanceof ConfigurationError) {
     console.error(error.message);
@@ -21,6 +22,9 @@ try {
   }
 }
 // --- END Configuration Loading ---
+
+// Set the placeholder status in stateManager *after* config loading is complete
+stateManager.setConfigPlaceholderStatus(configIsPlaceholder);
 
 const fs = require('fs'); // Add fs module
 const express = require('express');
