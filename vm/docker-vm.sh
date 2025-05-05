@@ -428,8 +428,8 @@ btrfs)
 esac
 for i in {0,1}; do
   disk="DISK$i"
-  eval "DISK${i}"="vm-${VMID}-disk-${i}${DISK_EXT:-}"
-  eval "DISK${i}_REF"="${STORAGE}:${DISK_REF:-}${!disk}"
+  eval DISK${i}=vm-${VMID}-disk-${i}${DISK_EXT:-}
+  eval DISK${i}_REF=${STORAGE}:${DISK_REF:-}${!disk}
 done
 
 msg_info "Installing Pre-Requisite libguestfs-tools onto Host"
@@ -446,16 +446,17 @@ virt-customize -q -a "${FILE}" --install qemu-guest-agent,apt-transport-https,ca
 msg_ok "Added Docker and Docker Compose Plugin to Debian 12 Qcow2 Disk Image successfully"
 
 msg_info "Creating a Docker VM"
-qm create "$VMID" -agent 1"${MACHINE}" -tablet 0 -localtime 1 -bios ovmf"${CPU_TYPE}" -cores "$CORE_COUNT" -memory "$RAM_SIZE" \
-  -name "$HN" -tags community-script,debian12,docker -net0 virtio,bridge="$BRG",macaddr="$MAC""$VLAN""$MTU" -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+qm create $VMID -agent 1${MACHINE} -tablet 0 -localtime 1 -bios ovmf${CPU_TYPE} -cores $CORE_COUNT -memory $RAM_SIZE \
+  -name $HN -tags community-script,debian12,docker -net0 virtio,bridge=$BRG,macaddr=$MAC$VLAN$MTU -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc $STORAGE $VMID $DISK0 4M 1>&/dev/null
-qm importdisk "$VMID" "${FILE}" "$STORAGE" "${DISK_IMPORT:-}" 1>&/dev/null
-qm set "$VMID" \
-  -efidisk0 "${DISK0_REF}"${FORMAT} \
-  -scsi0 "${DISK1_REF}",${DISK_CACHE}${THIN}size="${DISK_SIZE}" \
+qm importdisk $VMID ${FILE} $STORAGE ${DISK_IMPORT:-} 1>&/dev/null
+qm set $VMID \
+  -efidisk0 ${DISK0_REF}${FORMAT} \
+  -scsi0 ${DISK1_REF},${DISK_CACHE}${THIN}size=2G \
   -boot order=scsi0 \
   -serial0 socket >/dev/null
-qm set "$VMID" --agent enabled=1 >/dev/null
+qm resize $VMID scsi0 8G >/dev/null
+qm set $VMID --agent enabled=1 >/dev/null
 
 DESCRIPTION=$(
   cat <<EOF
