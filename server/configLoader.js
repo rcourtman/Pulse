@@ -1,11 +1,10 @@
 const { URL } = require('url');
 
-// Placeholder values used for validation
+// Align placeholder values with install script
 const placeholderValues = [
-  'your-proxmox-ip-or-hostname',
-  'your-api-token-id@pam!your-token-name',
-  'your-api-token-secret-uuid',
-  'your-password' // Added just in case password fallback is used without token
+  'https://proxmox_host:8006', // Match install script
+  'user@pam!tokenid',        // Match install script
+  'YOUR_API_SECRET_HERE'     // Match install script
 ];
 
 // Error class for configuration issues
