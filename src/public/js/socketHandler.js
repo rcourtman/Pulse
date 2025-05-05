@@ -52,30 +52,33 @@ PulseApp.socketHandler = (() => {
 
     function handleInitialState(state) {
         console.log('[socketHandler] Received initial state:', state);
-        // Store the placeholder flag
-        PulseApp.state.set('isConfigPlaceholder', state.isConfigPlaceholder || false);
+        const isPlaceholder = state.isConfigPlaceholder || false;
+        PulseApp.state.set('isConfigPlaceholder', isPlaceholder);
+
+        // Ensure loading overlay is visible and set correct text
+        const loadingOverlay = document.getElementById('loading-overlay');
+        if (loadingOverlay) {
+            const loadingText = loadingOverlay.querySelector('p');
+            if (loadingText) {
+                loadingText.textContent = isPlaceholder ? 'Configuration Required' : 'Loading data...';
+            }
+            loadingOverlay.style.display = 'flex'; // Ensure visible
+        }
 
         if (state && state.loading) {
-             // Update status text to indicate loading
+             // Update status text (this is separate from overlay)
              const statusText = document.getElementById('dashboard-status-text');
              if (statusText) {
-                 statusText.textContent = 'Loading initial data...';
+                 statusText.textContent = isPlaceholder ? 'Configuration Required' : 'Loading initial data...';
              }
-             // Ensure loading overlay is visible
-            const loadingOverlay = document.getElementById('loading-overlay');
-            if (loadingOverlay && loadingOverlay.style.display === 'none') {
-                const loadingText = loadingOverlay.querySelector('p');
-                if (loadingText) {
-                    loadingText.textContent = 'Loading data...'; // Or a specific initial loading message
-                }
-                 loadingOverlay.style.display = 'flex';
-            }
         }
     }
 
     function handleRawData(jsonData) {
         try {
             const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+            const isPlaceholder = data.isConfigPlaceholder || false;
+            PulseApp.state.set('isConfigPlaceholder', isPlaceholder);
 
             PulseApp.state.set('nodesData', data.nodes || []);
             PulseApp.state.set('vmsData', data.vms || []);
@@ -97,14 +100,23 @@ PulseApp.socketHandler = (() => {
                 console.warn('[socketHandler] PulseApp.ui.tabs not available for updateTabAvailability');
             }
 
-
             if (!PulseApp.state.get('initialDataReceived')) {
               PulseApp.state.set('initialDataReceived', true);
-
             }
-            
-            // Store the placeholder flag
-            PulseApp.state.set('isConfigPlaceholder', data.isConfigPlaceholder || false);
+
+            // Hide or update overlay based on config status AFTER data processing
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                if (isPlaceholder) {
+                    const loadingText = loadingOverlay.querySelector('p');
+                    if (loadingText) {
+                        loadingText.textContent = 'Configuration Required';
+                    }
+                    loadingOverlay.style.display = 'flex'; // Keep overlay visible
+                } else {
+                    loadingOverlay.style.display = 'none'; // Hide overlay on successful data load
+                }
+            }
 
             // --- Trigger UI update after processing data --- 
             if (typeof updateAllUITablesRef === 'function') {
@@ -149,19 +161,7 @@ PulseApp.socketHandler = (() => {
 
     function requestFullData() {
         console.log('Requesting full data reload from server...');
-        const loadingOverlay = document.getElementById('loading-overlay');
-        if (loadingOverlay) {
-          const loadingText = loadingOverlay.querySelector('p');
-          if (loadingText) {
-              // Check the flag before setting the text
-              if (PulseApp.state.get('isConfigPlaceholder')) {
-                  loadingText.textContent = 'Configuration Required';
-              } else {
-                  loadingText.textContent = 'Connected. Reloading data...';
-              }
-          }
-          loadingOverlay.style.display = 'flex';
-        }
+        // Remove overlay manipulation from here
         if (socket) {
             socket.emit('requestData');
         } else {
