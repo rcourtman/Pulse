@@ -5,10 +5,12 @@ const { loadConfiguration, ConfigurationError } = require('./configLoader');
 
 let endpoints;
 let pbsConfigs;
-let isConfigPlaceholder = false; // Add global flag
 
 try {
-  ({ endpoints, pbsConfigs, isConfigPlaceholder } = loadConfiguration());
+  const { endpoints: loadedEndpoints, pbsConfigs: loadedPbsConfigs, isConfigPlaceholder: configIsPlaceholder } = loadConfiguration();
+  endpoints = loadedEndpoints;
+  pbsConfigs = loadedPbsConfigs;
+  stateManager.setConfigPlaceholderStatus(configIsPlaceholder);
 } catch (error) {
   if (error instanceof ConfigurationError) {
     console.error(error.message);
@@ -139,28 +141,33 @@ const io = new Server(server, {
 
 io.on('connection', (socket) => {
   console.log('Client connected');
-  // Immediately send current data if available
+  // Get the flag from state manager
+  const { isConfigPlaceholder: currentPlaceholderStatus } = stateManager.getState();
   const currentState = stateManager.getState();
+
   if (stateManager.hasData()) {
-      // Include flag in rawData
-      socket.emit('rawData', { ...currentState, isConfigPlaceholder });
+      // Emit the flag from state manager
+      socket.emit('rawData', { ...currentState }); // getState now includes the flag
   } else {
       console.log('No data available yet on connect, sending initial state.');
-      // Include flag in initialState
-      socket.emit('initialState', { loading: true, isConfigPlaceholder });
+      // Emit the flag from state manager
+      socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
   }
 
   socket.on('requestData', async () => {
     console.log('Client requested data');
     try {
+      // Get the flag from state manager
+      const { isConfigPlaceholder: currentPlaceholderStatus } = stateManager.getState();
       const currentState = stateManager.getState();
+
       if (stateManager.hasData()) {
-          // Include flag in rawData
-          socket.emit('rawData', { ...currentState, isConfigPlaceholder });
+          // Emit the flag from state manager
+          socket.emit('rawData', { ...currentState }); // getState now includes the flag
       } else {
          console.log('No data available yet on request, sending loading state.');
-         // Include flag in initialState
-         socket.emit('initialState', { loading: true, isConfigPlaceholder });
+         // Emit the flag from state manager
+         socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
          // Optionally trigger an immediate discovery cycle?
          // runDiscoveryCycle(); // Be careful with triggering cycles on demand
       }
@@ -216,9 +223,9 @@ async function runDiscoveryCycle() {
     const updatedState = stateManager.getState(); // Get the fully updated state
     console.log(`[Discovery Cycle] Updated state. Nodes: ${updatedState.nodes.length}, VMs: ${updatedState.vms.length}, CTs: ${updatedState.containers.length}, PBS: ${updatedState.pbs.length}`);
 
-    // Emit combined data using updated state manager state, including the flag
+    // Emit combined data using updated state manager state (which includes the flag)
     if (io.engine.clientsCount > 0) {
-        io.emit('rawData', { ...updatedState, isConfigPlaceholder });
+        io.emit('rawData', updatedState);
     }
   } catch (error) {
       console.error(`[Discovery Cycle] Error during execution: ${error.message}`, error.stack);
@@ -257,7 +264,7 @@ async function runMetricCycle() {
            // io.emit('metricsUpdate', stateManager.getState().metrics);
         }
 
-        // Emit rawData with updated global state (including metrics)
+        // Emit rawData with updated global state (which includes metrics and placeholder flag)
         io.emit('rawData', stateManager.getState());
     } else {
         const currentMetrics = stateManager.getState().metrics;
