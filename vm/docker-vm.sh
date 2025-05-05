@@ -26,7 +26,7 @@ METHOD=""
 NSAPP="debian12vm"
 var_os="debian"
 var_version="12"
-DISK_SIZE="4G"
+DISK_SIZE="8G"
 
 YW=$(echo "\033[33m")
 BL=$(echo "\033[36m")
@@ -137,7 +137,7 @@ function ssh_check() {
 
 function exit-script() {
   clear
-  echo -e "⚠  User exited script \n"
+  echo -e "\n${CROSS}${RD}User exited script${CL}\n"
   exit
 }
 
@@ -146,7 +146,7 @@ function default_settings() {
   FORMAT=",efitype=4m"
   MACHINE=""
   DISK_CACHE=""
-  DISK_SIZE="4G"
+  DISK_SIZE="8G"
   HN="docker"
   CPU_TYPE=""
   CORE_COUNT="2"
@@ -157,20 +157,20 @@ function default_settings() {
   MTU=""
   START_VM="yes"
   METHOD="default"
-  echo -e "${DGN}Using Virtual Machine ID: ${BGN}${VMID}${CL}"
-  echo -e "${DGN}Using Machine Type: ${BGN}i440fx${CL}"
-  echo -e "${DGN}Using Disk Cache: ${BGN}None${CL}"
-  echo -e "${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}$DISK_SIZE${CL}"
-  echo -e "${DGN}Using Hostname: ${BGN}${HN}${CL}"
-  echo -e "${DGN}Using CPU Model: ${BGN}KVM64${CL}"
-  echo -e "${DGN}Allocated Cores: ${BGN}${CORE_COUNT}${CL}"
-  echo -e "${DGN}Allocated RAM: ${BGN}${RAM_SIZE}${CL}"
-  echo -e "${DGN}Using Bridge: ${BGN}${BRG}${CL}"
-  echo -e "${DGN}Using MAC Address: ${BGN}${MAC}${CL}"
-  echo -e "${DGN}Using VLAN: ${BGN}Default${CL}"
-  echo -e "${DGN}Using Interface MTU Size: ${BGN}Default${CL}"
-  echo -e "${DGN}Start VM when completed: ${BGN}yes${CL}"
-  echo -e "${BL}Creating a Docker VM using the above default settings${CL}"
+  echo -e "${CONTAINERID}${BOLD}${DGN}Virtual Machine ID: ${BGN}${VMID}${CL}"
+  echo -e "${CONTAINERTYPE}${BOLD}${DGN}Machine Type: ${BGN}i440fx${CL}"
+  echo -e "${DISKSIZE}${BOLD}${DGN}Disk Size: ${BGN}${DISK_SIZE}${CL}"
+  echo -e "${DISKSIZE}${BOLD}${DGN}Disk Cache: ${BGN}None${CL}"
+  echo -e "${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}${HN}${CL}"
+  echo -e "${OS}${BOLD}${DGN}CPU Model: ${BGN}KVM64${CL}"
+  echo -e "${CPUCORE}${BOLD}${DGN}CPU Cores: ${BGN}${CORE_COUNT}${CL}"
+  echo -e "${RAMSIZE}${BOLD}${DGN}RAM Size: ${BGN}${RAM_SIZE}${CL}"
+  echo -e "${BRIDGE}${BOLD}${DGN}Bridge: ${BGN}${BRG}${CL}"
+  echo -e "${MACADDRESS}${BOLD}${DGN}MAC Address: ${BGN}${MAC}${CL}"
+  echo -e "${VLANTAG}${BOLD}${DGN}VLAN: ${BGN}Default${CL}"
+  echo -e "${DEFAULT}${BOLD}${DGN}Interface MTU Size: ${BGN}Default${CL}"
+  echo -e "${GATEWAY}${BOLD}${DGN}Start VM when completed: ${BGN}yes${CL}"
+  echo -e "${CREATING}${BOLD}${DGN}Creating a Debian 12 VM using the above default settings${CL}"
 }
 
 function advanced_settings() {
@@ -447,7 +447,7 @@ msg_ok "Added Docker and Docker Compose Plugin to Debian 12 Qcow2 Disk Image suc
 
 msg_info "Creating a Docker VM"
 qm create "$VMID" -agent 1"${MACHINE}" -tablet 0 -localtime 1 -bios ovmf"${CPU_TYPE}" -cores "$CORE_COUNT" -memory "$RAM_SIZE" \
-  -name "$HN" -tags community-script,debian12,docker -net0 virtio,bridge="$BRG",macaddr="$MAC"$VLAN"$MTU" -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
+  -name "$HN" -tags community-script,debian12,docker -net0 virtio,bridge="$BRG",macaddr="$MAC""$VLAN""$MTU" -onboot 1 -ostype l26 -scsihw virtio-scsi-pci
 pvesm alloc "$STORAGE" "$VMID" "$DISK0" 4M 1>&/dev/null
 qm importdisk "$VMID" "${FILE}" "$STORAGE" "${DISK_IMPORT:-}" 1>&/dev/null
 qm set "$VMID" \
