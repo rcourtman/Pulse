@@ -155,7 +155,6 @@ io.on('connection', (socket) => {
   } else {
       console.log('No data available yet on connect, sending initial state.');
       // Emit the flag from state manager
-      console.log('[index.js] State before emitting initialState:', stateManager.getState());
       socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
   }
 
@@ -172,7 +171,6 @@ io.on('connection', (socket) => {
       } else {
          console.log('No data available yet on request, sending loading state.');
          // Emit the flag from state manager
-         console.log('[index.js] State before emitting initialState on request:', stateManager.getState());
          socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
          // Optionally trigger an immediate discovery cycle?
          // runDiscoveryCycle(); // Be careful with triggering cycles on demand

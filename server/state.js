@@ -37,7 +37,6 @@ function hasData() {
 }
 
 function setConfigPlaceholderStatus(isPlaceholder) {
-    console.log(`[stateManager] Setting isConfigPlaceholder to: ${isPlaceholder}`);
     state.isConfigPlaceholder = isPlaceholder;
 }
 
