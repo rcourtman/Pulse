@@ -1,5 +1,8 @@
 require('dotenv').config(); // Load environment variables from .env file
 
+// Import the state manager FIRST
+const stateManager = require('./state');
+
 // --- BEGIN Configuration Loading using configLoader --- 
 const { loadConfiguration, ConfigurationError } = require('./configLoader');
 
@@ -61,9 +64,6 @@ let pbsApiClients = {};
 // --- Data Fetching (Imported) ---
 const { fetchDiscoveryData, fetchMetricsData } = require('./dataFetcher');
 // --- END Data Fetching ---
-
-// Import the state manager
-const stateManager = require('./state');
 
 // Server configuration
 const DEBUG_METRICS = false; // Set to true to show detailed metrics logs
