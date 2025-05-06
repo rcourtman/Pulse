@@ -477,7 +477,7 @@ advanced_settings() {
       echo -e "${CONTAINERID}${BOLD}${DGN}Container ID: ${BGN}$CT_ID${CL}"
     fi
   else
-    exit
+    exit_script
   fi
 
   if CT_NAME=$(whiptail --backtitle "Proxmox VE Helper Scripts" --inputbox "Set Hostname" 8 58 "$NSAPP" --title "HOSTNAME" 3>&1 1>&2 2>&3); then
@@ -1442,6 +1442,8 @@ silent() {
 }
 
 exit_script() {
+  clear
+  echo -e "\n${CROSS}${RD}User exited script${CL}\n"
   exit_code=$? # Capture the exit status of the last executed command
   #200 exit codes indicate error in create_lxc.sh
   #100 exit codes indicate error in install.func
@@ -1463,6 +1465,7 @@ exit_script() {
     *) post_update_to_api "failed" "Unknown error, exit code: $exit_code in create_lxc.sh" ;;
     esac
   fi
+  exit
 }
 
 trap 'exit_script' EXIT
