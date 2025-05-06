@@ -705,10 +705,11 @@ perform_update() {
     print_info "Cleaning repository [removing untracked files]..."
     # Remove untracked files and directories to ensure a clean state
     # Use -f for files, -d for directories. Do NOT use -x which removes ignored files like .env
-    if ! sudo -u "$PULSE_USER" git clean -fd; then
-        print_warning "Failed to clean untracked files from the repository."
-        # Continue anyway, as the core update [checkout] succeeded
-    fi
+    # COMMENTING OUT CLEAN STEP as it might be removing server/package.json
+    # if ! sudo -u "$PULSE_USER" git clean -fd; then
+    #     print_warning "Failed to clean untracked files from the repository."
+    #     # Continue anyway, as the core update [checkout] succeeded
+    # fi
 
     # ---> NEW: Restore the installer script if it was backed up < ---
     if [ -n "$script_backup_path" ] && [ -f "$script_backup_path" ]; then
@@ -745,10 +746,20 @@ perform_update() {
 
     print_info "Re-installing server dependencies..."
     cd server || { print_error "Failed to change directory to $PULSE_DIR/server"; cd ..; return 1; }
-     if npm install --unsafe-perm > /dev/null 2>&1; then
-        print_success "Server dependencies updated."
+
+    print_info "[DEBUG] Current directory for server deps: $(pwd)"
+    print_info "[DEBUG] Listing contents of server/:"
+    ls -la
+    print_info "[DEBUG] Attempting to display server/package.json:"
+    cat package.json || print_warning "[DEBUG] server/package.json not found or cat failed."
+    print_info "[DEBUG] Running npm install for server (output will follow)..."
+
+    if npm install --unsafe-perm; then # Removed output redirection
+        print_success "Server dependencies updated successfully."
     else
-        print_error "Failed to install server npm dependencies."
+        # npm's error message will have already been printed to stderr
+        print_error "Failed to install server npm dependencies. See npm output above for details."
+        cd .. # cd back to PULSE_DIR before exiting
         exit 1 # Exit if server deps fail
     fi
     cd .. # Back to PULSE_DIR
