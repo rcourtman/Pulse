@@ -737,37 +737,22 @@ perform_update() {
         print_warning "Could not find script path $SCRIPT_ABS_PATH to ensure executable permission."
     fi
 
-    print_info "Re-installing npm dependencies [root]..."
-    if ! npm install --unsafe-perm > /dev/null 2>&1; then
-        print_warning "Failed to install root npm dependencies during update. Continuing..."
+    print_info "Re-installing npm dependencies in $PULSE_DIR [root]..."
+    # This will install both production and development dependencies.
+    # For a production-only install, consider adding --omit=dev or similar flags if appropriate
+    # However, build:css might require devDependencies like tailwindcss, postcss, autoprefixer.
+    if ! npm install --unsafe-perm; then # Removed output redirection, run in PULSE_DIR
+        print_error "Failed to install npm dependencies in $PULSE_DIR. See npm output above for details."
+        # cd .. # Already in PULSE_DIR
+        exit 1 
     else
-        print_success "Root dependencies updated."
+        print_success "NPM dependencies installed in $PULSE_DIR."
     fi
 
-    print_info "Re-installing server dependencies..."
-    cd server || { print_error "Failed to change directory to $PULSE_DIR/server"; cd ..; return 1; }
-
-    print_info "[DEBUG] Current directory for server deps: $(pwd)"
-    print_info "[DEBUG] Listing contents of server/:"
-    ls -la
-    print_info "[DEBUG] Attempting to display server/package.json:"
-    cat package.json || print_warning "[DEBUG] server/package.json not found or cat failed."
-    print_info "[DEBUG] Running npm install for server (output will follow)..."
-
-    if npm install --unsafe-perm; then # Removed output redirection
-        print_success "Server dependencies updated successfully."
-    else
-        # npm's error message will have already been printed to stderr
-        print_error "Failed to install server npm dependencies. See npm output above for details."
-        cd .. # cd back to PULSE_DIR before exiting
-        exit 1 # Exit if server deps fail
-    fi
-    cd .. # Back to PULSE_DIR
-
-    # Build CSS after dependencies
-    print_info "Building CSS assets..."
-    if ! npm run build:css > /dev/null 2>&1; then
-        print_error "Failed to build CSS assets during update."
+    # Build CSS after all dependencies are installed in the root
+    print_info "Building CSS assets in $PULSE_DIR..."
+    if ! npm run build:css; then # Removed output redirection, run in PULSE_DIR
+        print_error "Failed to build CSS assets during update. See output above."
         print_warning "Continuing update despite CSS build failure."
     else
         print_success "CSS assets built."
@@ -1477,19 +1462,26 @@ case "$INSTALL_MODE" in
             print_success "Checked out version $TARGET_TAG."
             cd .. # Back to original dir before dependency install
 
-            install_npm_deps || exit 1 # Installs root and server [NOW INCLUDES DEV]
-
-            # Build CSS after dependencies
-            print_info "Building CSS assets..."
-            cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before building CSS"; exit 1; }
-            if ! npm run build:css > /dev/null 2>&1; then
-                print_error "Failed to build CSS assets."
+            # Install NPM dependencies (root and server, now consolidated) in PULSE_DIR
+            print_info "Installing NPM dependencies in $PULSE_DIR..."
+            cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before npm install"; exit 1; }
+            if ! npm install --unsafe-perm; then # Run in PULSE_DIR
+                print_error "Failed to install NPM dependencies. See output above."
                 exit 1
+            else
+                print_success "NPM dependencies installed."
+            fi
+            
+            # Build CSS after dependencies
+            print_info "Building CSS assets in $PULSE_DIR..."
+            # Already in PULSE_DIR
+            if ! npm run build:css; then # Run in PULSE_DIR
+                print_error "Failed to build CSS assets. See output above."
+                exit 1 # This should be a fatal error for a fresh install
             else
                 print_success "CSS assets built."
             fi
-            # Now cd back if needed, though subsequent steps might need PULSE_DIR
-            cd ..
+            # cd .. # Stay in PULSE_DIR for subsequent steps or ensure they use absolute paths or cd
 
             set_permissions || exit 1 # Set permissions AFTER building css
             configure_environment || exit 1 # Prompt user for details
