@@ -462,14 +462,14 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
 
     // Group guests by endpointId and then by nodeName (existing logic)
     [...runningVms, ...runningContainers].forEach(guest => {
-        const { endpointId, node, vmid, type, name } = guest;
+        const { endpointId, node, vmid, type, name, agent } = guest; // Added 'agent'
         if (!guestsByEndpointNode[endpointId]) {
             guestsByEndpointNode[endpointId] = {};
         }
         if (!guestsByEndpointNode[endpointId][node]) {
             guestsByEndpointNode[endpointId][node] = [];
         }
-        guestsByEndpointNode[endpointId][node].push({ vmid, type, name: name || 'unknown' }); 
+        guestsByEndpointNode[endpointId][node].push({ vmid, type, name: name || 'unknown', agent }); // Pass agent info
     });
 
     // Iterate through endpoints and nodes (existing logic)
@@ -484,18 +484,79 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
         for (const nodeName in guestsByEndpointNode[endpointId]) {
             const guestsOnNode = guestsByEndpointNode[endpointId][nodeName];
             
-            // --- ADDED: Create promises to fetch metrics for each guest ---
             guestsOnNode.forEach(guestInfo => {
-                const { vmid, type, name: guestName } = guestInfo;
+                const { vmid, type, name: guestName, agent: guestAgentConfig } = guestInfo; // Destructure agent
                 metricPromises.push(
                     (async () => {
                         try {
                             const pathPrefix = type === 'qemu' ? 'qemu' : 'lxc';
                             // Fetch RRD and Current Status data
-                            const [rrdData, currentData] = await Promise.all([
+                            const [rrdDataResponse, currentDataResponse] = await Promise.all([
                                 apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { params: { timeframe: 'hour', cf: 'AVERAGE' } }),
                                 apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/status/current`)
                             ]);
+
+                            let currentMetrics = currentDataResponse?.data?.data || null;
+
+                            // --- QEMU Guest Agent Memory Fetch ---
+                            if (type === 'qemu' && currentMetrics && currentMetrics.agent === 1 && guestAgentConfig && (typeof guestAgentConfig === 'string' && (guestAgentConfig.startsWith('1') || guestAgentConfig.includes('enabled=1')))) {
+                                try {
+                                    // Prefer get-memory-block-info if available, fallback to get-osinfo for memory as some agents might provide it there.
+                                    // Proxmox API typically wraps agent command results in {"data": {"result": ...}} or {"data": ...}
+                                    // It's a POST request for these commands.
+                                    const agentMemInfoResponse = await apiClientInstance.post(`/nodes/${nodeName}/qemu/${vmid}/agent/get-memory-block-info`, {});
+                                    
+                                    if (agentMemInfoResponse?.data?.data?.result) { // QEMU specific result wrapper
+                                        const agentMem = agentMemInfoResponse.data.data.result;
+                                        // Standard qemu-guest-agent "get-memory-block-info" often returns an array of blocks.
+                                        // For simplicity, assuming the first block is the main one or aggregate.
+                                        // A more common detailed output might be from 'get-osinfo' or a specific 'memory-stats' if that exists.
+                                        // Let's look for common fields that would appear in 'free -m' like output.
+                                        // This is a common structure but might need adjustment based on actual agent output.
+                                        // Example from qga: {"total": <bytes>, "free": <bytes>, "available": <bytes>, "cached": <bytes>, "buffers": <bytes>}
+                                        // The Proxmox API might wrap this further, e.g. inside agentMemInfoResponse.data.data.result
+                                        
+                                        let guestMemoryDetails = null;
+                                        if (Array.isArray(agentMem) && agentMem.length > 0 && agentMem[0].hasOwnProperty('total') && agentMem[0].hasOwnProperty('free')) {
+                                            // If it's an array of memory info objects (less common for simple mem stats)
+                                            guestMemoryDetails = agentMem[0];
+                                        } else if (typeof agentMem === 'object' && agentMem !== null && agentMem.hasOwnProperty('total') && agentMem.hasOwnProperty('free')) {
+                                            // If it's a direct object with memory stats
+                                            guestMemoryDetails = agentMem;
+                                        }
+
+                                        if (guestMemoryDetails) {
+                                            currentMetrics.guest_mem_total_bytes = guestMemoryDetails.total;
+                                            currentMetrics.guest_mem_free_bytes = guestMemoryDetails.free;
+                                            currentMetrics.guest_mem_available_bytes = guestMemoryDetails.available; // Important for "actual" used
+                                            currentMetrics.guest_mem_cached_bytes = guestMemoryDetails.cached;
+                                            currentMetrics.guest_mem_buffers_bytes = guestMemoryDetails.buffers;
+
+                                            if (guestMemoryDetails.available !== undefined) {
+                                                currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.available;
+                                            } else if (guestMemoryDetails.cached !== undefined && guestMemoryDetails.buffers !== undefined) {
+                                                currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free - guestMemoryDetails.cached - guestMemoryDetails.buffers;
+                                            } else {
+                                                 currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free; // Fallback if only total & free
+                                            }
+                                            console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory fetched: Actual Used: ${((currentMetrics.guest_mem_actual_used_bytes || 0) / (1024*1024)).toFixed(0)}MB`);
+                                        } else {
+                                            console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory command 'get-memory-block-info' response format not as expected. Data:`, agentMemInfoResponse.data.data);
+                                        }
+                                    } else {
+                                         console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory command 'get-memory-block-info' did not return expected data structure. Response:`, agentMemInfoResponse.data);
+                                    }
+                                } catch (agentError) {
+                                    if (agentError.response && agentError.response.status === 500 && agentError.response.data && agentError.response.data.data && agentError.response.data.data.exitcode === -2) {
+                                         // Expected error if agent is not running or command not supported.
+                                         console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): QEMU Guest Agent not responsive or command 'get-memory-block-info' not available/supported. Error: ${agentError.message}`);
+                                    } else {
+                                         console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Error fetching guest agent memory info: ${agentError.message}. Status: ${agentError.response?.status}`);
+                                    }
+                                }
+                            }
+                            // --- End QEMU Guest Agent Memory Fetch ---
+
 
                             const metricData = {
                                 id: vmid,
@@ -504,8 +565,8 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                 type: type,
                                 endpointId: endpointId, 
                                 endpointName: endpointName, 
-                                data: rrdData?.data?.data?.length > 0 ? rrdData.data.data : [],
-                                current: currentData?.data?.data || null
+                                data: rrdDataResponse?.data?.data?.length > 0 ? rrdDataResponse.data.data : [],
+                                current: currentMetrics // This now potentially includes guest_mem_* fields
                             };
                             return metricData;
                         } catch (err) {

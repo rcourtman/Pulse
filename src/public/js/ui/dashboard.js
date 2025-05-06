@@ -52,6 +52,9 @@ PulseApp.ui.dashboard = (() => {
             let avgCpu = 0, avgMem = 0, avgDisk = 0;
             let avgDiskReadRate = null, avgDiskWriteRate = null, avgNetInRate = null, avgNetOutRate = null;
             let avgMemoryPercent = 'N/A', avgDiskPercent = 'N/A';
+            let effectiveMemorySource = 'host'; // 'host' or 'guest'
+            let currentMemForAvg = 0;
+            let currentMemTotalForDisplay = guest.maxmem;
 
             const metricsData = PulseApp.state.get('metricsData') || [];
             const metrics = metricsData.find(m =>
@@ -95,15 +98,36 @@ PulseApp.ui.dashboard = (() => {
             } else {
                 // Original logic if not dragging or no snapshot
                 if (guest.status === 'running' && metrics && metrics.current) {
+                    let baseMemoryValue = metrics.current.mem; // Default to host memory
+                    currentMemTotalForDisplay = guest.maxmem; // Default to host allocated max memory
+                    effectiveMemorySource = 'host';
+
+                    // Check if guest agent memory data is available and valid
+                    if (metrics.current.guest_mem_actual_used_bytes !== undefined && metrics.current.guest_mem_actual_used_bytes !== null) {
+                        baseMemoryValue = metrics.current.guest_mem_actual_used_bytes;
+                        effectiveMemorySource = 'guest';
+                        // If guest provides its own total, use it, otherwise stick to guest.maxmem
+                        if (metrics.current.guest_mem_total_bytes !== undefined && metrics.current.guest_mem_total_bytes > 0) {
+                            currentMemTotalForDisplay = metrics.current.guest_mem_total_bytes;
+                        }
+                        // console.log(`VM ${guest.vmid}: Using GUEST memory: ${baseMemoryValue / (1024*1024)} MB / ${currentMemTotalForDisplay / (1024*1024)} MB`);
+                    } else {
+                        // console.log(`VM ${guest.vmid}: Using HOST memory: ${baseMemoryValue / (1024*1024)} MB / ${currentMemTotalForDisplay / (1024*1024)} MB`);
+                    }
+                    currentMemForAvg = baseMemoryValue;
+
                     const currentDataPoint = {
                         timestamp: Date.now(),
-                        ...metrics.current
+                        ...metrics.current,
+                        effective_mem: currentMemForAvg, // Store the memory value actually used for averaging
+                        effective_mem_total: currentMemTotalForDisplay, // Store total used for percentage calc
+                        effective_mem_source: effectiveMemorySource // Store the source for tooltip
                     };
                     PulseApp.state.updateDashboardHistory(guestUniqueId, currentDataPoint);
                     const history = PulseApp.state.getDashboardHistory()[guestUniqueId] || [];
 
                     avgCpu = calculateAverage(history, 'cpu') ?? 0;
-                    avgMem = calculateAverage(history, 'mem') ?? 0;
+                    avgMem = calculateAverage(history, 'effective_mem') ?? 0; // Average the memory value we decided to use
                     avgDisk = calculateAverage(history, 'disk') ?? 0;
                     avgDiskReadRate = calculateAverageRate(history, 'diskread');
                     avgDiskWriteRate = calculateAverageRate(history, 'diskwrite');
@@ -115,13 +139,34 @@ PulseApp.ui.dashboard = (() => {
                 }
             }
             
-            avgMemoryPercent = (guest.maxmem > 0 && typeof avgMem === 'number') ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
+            // Use the total memory that corresponds to the source of avgMem for percentage calculation
+            // If history has entries, the last one should have effective_mem_total and effective_mem_source
+            const historyForGuest = PulseApp.state.getDashboardHistory()[guestUniqueId];
+            let finalMemTotalForPercent = guest.maxmem; // Fallback
+            let finalMemSourceForTooltip = 'host'; // Fallback
+
+            if (historyForGuest && historyForGuest.length > 0) {
+                const lastHistoryEntry = historyForGuest[historyForGuest.length - 1];
+                if (lastHistoryEntry.effective_mem_total !== undefined && lastHistoryEntry.effective_mem_total > 0) {
+                    finalMemTotalForPercent = lastHistoryEntry.effective_mem_total;
+                }
+                if (lastHistoryEntry.effective_mem_source) {
+                    finalMemSourceForTooltip = lastHistoryEntry.effective_mem_source;
+                }
+            }
+
+            avgMemoryPercent = (finalMemTotalForPercent > 0 && typeof avgMem === 'number') ? Math.round(avgMem / finalMemTotalForPercent * 100) : 'N/A';
             avgDiskPercent = (guest.maxdisk > 0 && typeof avgDisk === 'number') ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
 
             const name = guest.name || `${guest.type === 'qemu' ? 'VM' : 'CT'} ${guest.vmid}`;
             const uptimeFormatted = PulseApp.utils.formatUptime(guest.uptime);
             if (name.length > maxNameLength) maxNameLength = name.length;
             if (uptimeFormatted.length > maxUptimeLength) maxUptimeLength = uptimeFormatted.length;
+
+            let rawHostReportedMem = null;
+            if (guest.status === 'running' && metrics && metrics.current && metrics.current.mem !== undefined) {
+                rawHostReportedMem = metrics.current.mem;
+            }
 
             dashboardData.push({
                 id: guest.vmid,
@@ -134,8 +179,10 @@ PulseApp.ui.dashboard = (() => {
                 cpu: avgCpu,
                 cpus: guest.cpus || 1,
                 memory: avgMemoryPercent,
-                memoryCurrent: avgMem,
-                memoryTotal: guest.maxmem,
+                memoryCurrent: avgMem, // This is now potentially guest actual used or host used
+                memoryTotal: finalMemTotalForPercent, // This is now potentially guest total or host allocated
+                memorySource: finalMemSourceForTooltip, // Add source for tooltip generation
+                rawHostMemory: rawHostReportedMem, // Store host raw memory for tooltip comparison
                 disk: avgDiskPercent,
                 diskCurrent: avgDisk,
                 diskTotal: guest.maxdisk,
@@ -331,7 +378,13 @@ PulseApp.ui.dashboard = (() => {
             const memoryPercent = guest.memory;
 
             const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus).toFixed(1)}/${guest.cpus} cores)` : ''}`;
-            const memoryTooltipText = guest.memoryTotal ? `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)} (${memoryPercent}%)` : `${memoryPercent}%`;
+            
+            // Simplified memoryTooltipText
+            let memoryTooltipText = `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)} (${memoryPercent}%)`;
+            if (guest.type === 'VM' && guest.memorySource === 'guest' && guest.rawHostMemory !== null && guest.rawHostMemory !== undefined) {
+                // If guest source is used for the main display, append host's view for comparison.
+                memoryTooltipText += ` (Host: ${PulseApp.utils.formatBytes(guest.rawHostMemory)})`;
+            }
 
             const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent);
             const memColorClass = PulseApp.utils.getUsageColor(memoryPercent);
