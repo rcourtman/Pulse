@@ -738,9 +738,7 @@ perform_update() {
     fi
 
     print_info "Installing NPM dependencies in $PULSE_DIR (root project directory)..."
-    # This installs all dependencies defined in the root package.json (prod and dev)
-    # Dev dependencies like tailwindcss, postcss, autoprefixer are needed for build:css
-    if npm install --unsafe-perm; then # Run in PULSE_DIR, show output
+    if npm install --unsafe-perm > /dev/null; then # Redirect stdout
         print_success "NPM dependencies installed successfully in $PULSE_DIR."
     else
         print_error "Failed to install NPM dependencies in $PULSE_DIR. See npm output above."
@@ -748,12 +746,11 @@ perform_update() {
     fi
 
     print_info "Building CSS assets in $PULSE_DIR..."
-    if npm run build:css; then # Run in PULSE_DIR, show output
+    if npm run build:css > /dev/null; then # Redirect stdout
         print_success "CSS assets built successfully."
     else
         print_error "Failed to build CSS assets. See npm output above."
         print_warning "Continuing update, but frontend may not display correctly."
-        # Decide if this should be a fatal error: exit 1
     fi
 
     set_permissions # Ensure permissions are correct after update and build
@@ -1463,17 +1460,15 @@ case "$INSTALL_MODE" in
             # Install NPM dependencies (root and server, now consolidated) in PULSE_DIR
             print_info "Installing NPM dependencies in $PULSE_DIR..."
             cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before npm install"; exit 1; }
-            if ! npm install --unsafe-perm; then # Run in PULSE_DIR
+            if ! npm install --unsafe-perm > /dev/null; then # Redirect stdout
                 print_error "Failed to install NPM dependencies. See output above."
                 exit 1
             else
                 print_success "NPM dependencies installed."
             fi
             
-            # Build CSS after dependencies
             print_info "Building CSS assets in $PULSE_DIR..."
-            # Already in PULSE_DIR
-            if ! npm run build:css; then # Run in PULSE_DIR
+            if ! npm run build:css > /dev/null; then # Redirect stdout
                 print_error "Failed to build CSS assets. See output above."
                 exit 1 # This should be a fatal error for a fresh install
             else
