@@ -1,10 +1,25 @@
 const { URL } = require('url');
 
-// Align placeholder values with install script
+// Align placeholder values with install script and .env.example
 const placeholderValues = [
-  'https://proxmox_host:8006', // Match install script
-  'user@pam!tokenid',        // Match install script
-  'YOUR_API_SECRET_HERE'     // Match install script
+  // Hostname parts - case-insensitive matching might be better if OS env vars differ.
+  // For now, direct case-sensitive include check.
+  'your-proxmox-ip-or-hostname', 
+  'proxmox_host',                 // Substring for https://proxmox_host:8006 or similar
+  'YOUR_PBS_IP_OR_HOSTNAME',    // For PBS host
+
+  // Token ID parts - these are more specific to example/guidance values
+  'user@pam!your-token-name',   // Matches common PVE example format
+  'user@pbs!your-token-name',   // Matches common PBS example format
+  'your-api-token-id',          // Generic part often seen in examples
+  'user@pam!tokenid',           // From original install script comment
+  'user@pbs!tokenid',           // PBS variant of install script comment
+
+  // Secret parts
+  'your-token-secret-uuid',     // Common PVE secret example
+  'your-pbs-token-secret-uuid', // Common PBS secret example
+  'YOUR_API_SECRET_HERE',       // From original install script comment
+  'secret-uuid'                 // Specific value used in config.test.js
 ];
 
 // Error class for configuration issues

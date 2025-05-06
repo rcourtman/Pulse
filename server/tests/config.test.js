@@ -100,15 +100,30 @@ describe('Configuration Loading (loadConfiguration)', () => {
   });
 
   // Test Case 3: Placeholder Primary Proxmox Variables
-  test('should throw ConfigurationError if primary Proxmox variables contain placeholders', () => {
-    setEnvVars({
+  test('should warn and set flag if primary Proxmox variables contain placeholders', () => {
+    const envSetup = {
       PROXMOX_HOST: 'your-proxmox-ip-or-hostname',
-      PROXMOX_TOKEN_ID: 'user@pam!token',
-      PROXMOX_TOKEN_SECRET: 'secret-uuid',
-    });
+      PROXMOX_TOKEN_ID: 'user@pam!token', // A placeholder not exactly in the list
+      PROXMOX_TOKEN_SECRET: 'secret-uuid',   // Another placeholder not exactly in the list
+    };
+    setEnvVars(envSetup);
 
-    expect(() => loadConfiguration()).toThrow(ConfigurationError);
-    expect(() => loadConfiguration()).toThrow(/seem to contain placeholder values: PROXMOX_HOST/);
+    // Spy on console.warn before calling loadConfiguration
+    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    let config;
+    // Expect no error to be thrown, but placeholders to be detected
+    expect(() => {
+      config = loadConfiguration();
+    }).not.toThrow();
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('WARN: Primary Proxmox environment variables seem to contain placeholder values: PROXMOX_HOST, PROXMOX_TOKEN_SECRET')
+    );
+    expect(config.isConfigPlaceholder).toBe(true);
+
+    // Important: Restore the spy to avoid interference with other tests or console output
+    consoleWarnSpy.mockRestore();
   });
 
   // Test Case 4: Valid Primary + Additional Proxmox Endpoints

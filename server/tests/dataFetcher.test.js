@@ -1220,17 +1220,19 @@ describe('Data Fetcher', () => {
         mockClient1.get
             .mockResolvedValueOnce({ data: { data: [{ node: 'node1' }] } }) // nodes
             .mockResolvedValueOnce({ data: { data: [{ store: 'ds1', total: 1, used: 0 }] } }) // usage
-            .mockResolvedValueOnce({ data: { data: [] } }) // snapshots
-            .mockResolvedValueOnce({ data: { data: [] } }); // tasks
+            .mockResolvedValueOnce({ data: { data: [] } }) // snapshots for ds1
+            .mockResolvedValueOnce({ data: { data: [] } }); // tasks for node1
         
-        // Mock Client 2 (Fail Datastore) - Include fallback and subsequent calls
+        // Mock Client 2 (Fail Datastore, fallback success)
+        const node2Name = 'node2';
+        const fallbackDsName = 'fallback-ds-client2';
         mockClient2.get
-            .mockResolvedValueOnce({ data: { data: [{ node: 'node2' }] } }) // nodes
-            .mockRejectedValueOnce(new Error('DS Error')) // usage fails
-            .mockResolvedValueOnce({ data: { data: [] } }) // fallback /config/datastore
-            .mockResolvedValueOnce({ data: { data: [] } }) // snapshots (on empty stores)
-            .mockRejectedValueOnce(new Error('Task Error')); // tasks fail
- 
+            .mockResolvedValueOnce({ data: { data: [{ node: node2Name }] } })              // /nodes (success)
+            .mockRejectedValueOnce(new Error('DS Usage API Error'))                     // /status/datastore-usage (fail)
+            .mockResolvedValueOnce({ data: { data: [{ name: fallbackDsName, store: fallbackDsName, path: '/mnt/fb' }] } }) // /config/datastore (fallback success, 1 store)
+            .mockResolvedValueOnce({ data: { data: [{ 'backup-id': 'snap-fb'}] } })      // /admin/datastore/fallback-ds-client2/snapshots (success)
+            .mockResolvedValueOnce({ data: { data: [{ upid: 'task-c2'}] } });           // /nodes/node2/tasks (success)
+        
         // Mock Client 3 (Fail Node)
         mockClient3.get.mockRejectedValueOnce(new Error('Node Error')); // nodes fails
  
@@ -1257,12 +1259,16 @@ describe('Data Fetcher', () => {
         expect(res1.gcTasks).toBeDefined();
  
         expect(res2).toBeDefined();
-        expect(res2.status).toBe('ok'); // Still OK because node name succeeded
-        expect(res2.datastores).toEqual([]);
-        // Check tasks were processed (returning empty arrays) even after task fetch failure
-        expect(res2.backupTasks).toEqual([]);
-        expect(res2.verifyTasks).toEqual([]);
-        expect(res2.gcTasks).toEqual([]);
+        expect(res2.status).toBe('ok'); 
+        expect(res2.nodeName).toBe(node2Name);
+        expect(res2.datastores).toHaveLength(1);
+        expect(res2.datastores[0].name).toBe(fallbackDsName);
+        expect(res2.datastores[0].snapshots).toHaveLength(1);
+        expect(res2.datastores[0].snapshots[0]['backup-id']).toBe('snap-fb');
+
+        expect(res2.backupTasks).toEqual([]); // From mocked processPbsTasks
+        expect(res2.verifyTasks).toEqual([]); // From mocked processPbsTasks
+        expect(res2.gcTasks).toEqual([]);     // From mocked processPbsTasks
  
         // Assert the structure of the failed node instance
         expect(res3).toBeDefined();
@@ -1276,7 +1282,7 @@ describe('Data Fetcher', () => {
         // Error spy should be called for the node failure on res3 AND the task failure on res2
         expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to fetch PBS nodes list for PBS Node Fail: Node Error'));
         // Warn spy should be called for the datastore fallback on res2
-        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to get datastore usage for PBS DS Fail, falling back to /config/datastore. Error: DS Error'));
+        expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('Failed to get datastore usage for PBS DS Fail, falling back to /config/datastore. Error: DS Usage API Error'));
         // Task fetch doesn't happen for res2 in this scenario, so no error logged for it.
         // expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(`Failed to fetch PBS task list for node node2 (PBS DS Fail): Task Error`));
       
@@ -1339,10 +1345,9 @@ describe('Data Fetcher', () => {
         mockPbsClient.get
             .mockResolvedValueOnce({ data: { data: [{ node: pbsNodeName }] } }) // /nodes
             .mockResolvedValueOnce({ data: { data: [] } }) // /status/datastore-usage (empty)
-            .mockResolvedValueOnce({ data: { data: [{ name: 'fallback-store', path: '/mnt/fallback' }] } }); // /config/datastore (fallback succeeds)
-            // Snapshots and tasks will be called after fallback
-            // .mockResolvedValueOnce({ data: { data: [] } }) // snapshots
-            // .mockResolvedValueOnce({ data: { data: [] } }); // tasks
+            .mockResolvedValueOnce({ data: { data: [{ name: 'fallback-store', path: '/mnt/fallback', store: 'fallback-store' }] } }) // /config/datastore (fallback succeeds)
+            .mockResolvedValueOnce({ data: { data: [{ 'backup-id': 'snap1' }] } }) // snapshots for 'fallback-store'
+            .mockResolvedValueOnce({ data: { data: [{ upid: 'task1'}] } });     // tasks for pbsNodeName
 
       // Act
         const result = await fetchPbsData(mockClients);
@@ -1352,11 +1357,24 @@ describe('Data Fetcher', () => {
             expect.stringContaining(`WARN: [DataFetcher] PBS /status/datastore-usage returned empty data for ${mockClients[pbsId].config.name}. Falling back.`)
         );
         expect(mockPbsClient.get).toHaveBeenCalledWith('/config/datastore'); // Check fallback was attempted
+        expect(mockPbsClient.get).toHaveBeenCalledWith('/admin/datastore/fallback-store/snapshots'); // Check snapshot call
+        // expect(mockPbsClient.get).toHaveBeenCalledWith(`/nodes/${pbsNodeName}/tasks`); // Check task call - Original failing line
+        expect(mockPbsClient.get).toHaveBeenCalledTimes(5); // nodes, usage, config, snapshots, tasks
+        const callsFallbackTest = mockPbsClient.get.mock.calls;
+        expect(callsFallbackTest[4][0]).toBe(`/nodes/${pbsNodeName}/tasks`); // Check 5th call path
+
         expect(result).toHaveLength(1);
         expect(result[0].status).toBe('ok');
         expect(result[0].datastores).toHaveLength(1);
         expect(result[0].datastores[0].name).toBe('fallback-store');
-        expect(result[0].datastores[0].total).toBeNull(); // Fallback doesn't have usage stats
+        expect(result[0].datastores[0].total).toBeNull(); // Fallback doesn't have usage stats from /config/datastore
+        expect(result[0].datastores[0].snapshots).toHaveLength(1); // Check snapshots from mock
+        expect(result[0].datastores[0].snapshots[0]['backup-id']).toBe('snap1');
+
+        // Check tasks (processed by mocked processPbsTasks)
+        expect(result[0].backupTasks).toEqual([]);
+        expect(result[0].verifyTasks).toEqual([]);
+        expect(result[0].gcTasks).toEqual([]);
         
         consoleWarnSpy.mockRestore();
     });
@@ -1415,10 +1433,8 @@ describe('Data Fetcher', () => {
         mockPbsClient.get
             .mockResolvedValueOnce({ data: { data: [{ node: pbsNodeName }] } }) // /nodes
             .mockRejectedValueOnce(usageError) // /status/datastore-usage (fails)
-            .mockRejectedValueOnce(configError); // /config/datastore (fallback also fails)
-            // Snapshots and tasks will still be called with empty datastore array
-            // .mockResolvedValueOnce({ data: { data: [] } }) // snapshots
-            // .mockResolvedValueOnce({ data: { data: [] } }); // tasks
+            .mockRejectedValueOnce(configError) // /config/datastore (fallback also fails)
+            .mockResolvedValueOnce({ data: { data: [{ upid: 'task1' }] } }); // tasks for pbsNodeName (still called)
 
       // Act
         const result = await fetchPbsData(mockClients);
@@ -1432,6 +1448,11 @@ describe('Data Fetcher', () => {
         );
         expect(mockPbsClient.get).toHaveBeenCalledWith('/status/datastore-usage');
         expect(mockPbsClient.get).toHaveBeenCalledWith('/config/datastore'); 
+        // expect(mockPbsClient.get).toHaveBeenCalledWith(`/nodes/${pbsNodeName}/tasks`); // This was the original failing line
+        expect(mockPbsClient.get).toHaveBeenCalledTimes(4); // nodes, usage, config, tasks
+        const callsDoubleFailTest = mockPbsClient.get.mock.calls;
+        expect(callsDoubleFailTest[3][0]).toBe(`/nodes/${pbsNodeName}/tasks`); // Check 4th call path
+
         expect(result).toHaveLength(1);
         expect(result[0].status).toBe('ok'); // Status is still ok as node name succeeded
         expect(result[0].datastores).toEqual([]); // Datastores should be empty
