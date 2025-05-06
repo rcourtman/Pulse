@@ -442,24 +442,53 @@ check_installation_status_and_determine_action() {
     fi
 }
 
-apt_update_upgrade() {
-    print_info "Updating package lists and upgrading packages..."
-    if apt-get update > /dev/null && apt-get upgrade -y > /dev/null; then
-        print_success "System packages updated and upgraded."
+run_apt_update() {
+    print_info "Updating package lists..."
+    if apt-get update -qq > /dev/null; then
+        print_success "Package lists updated."
     else
-        print_error "Failed to update/upgrade system packages."
-        exit 1
+        print_error "Failed to update package lists."
+        return 1
     fi
+    return 0
+}
+
+run_apt_upgrade_system() {
+    print_info "Upgrading system packages (this may take a while)..."
+    if apt-get upgrade -y -qq > /dev/null; then
+        print_success "System packages upgraded."
+    else
+        print_error "Failed to upgrade system packages."
+        return 1
+    fi
+    return 0
 }
 
 install_dependencies() {
-    print_info "Installing necessary dependencies [git, curl, sudo, gpg, diffutils]..."
-    if apt-get install -y git curl sudo gpg diffutils > /dev/null; then
-        print_success "Dependencies installed."
+    print_info "Checking and installing necessary dependencies (git, curl, sudo, gpg, diffutils)..."
+    local required_deps=("git" "curl" "sudo" "gpg" "diffutils")
+    local missing_deps=()
+    local dep_to_install
+
+    for dep in "${required_deps[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            missing_deps+=("$dep")
+        fi
+    done
+
+    if [ ${#missing_deps[@]} -gt 0 ]; then
+        print_info "Missing dependencies: ${missing_deps[*]}. Attempting to install..."
+        dep_to_install=$(IFS=","; echo "${missing_deps[*]}") # For print message
+        if apt-get install -y -qq "${missing_deps[@]}" > /dev/null; then
+            print_success "Successfully installed: ${dep_to_install}."
+        else
+            print_error "Failed to install: ${dep_to_install}."
+            exit 1
+        fi
     else
-        print_error "Failed to install dependencies."
-        exit 1
+        print_info "All core dependencies are already installed."
     fi
+    print_success "Dependency check complete."
 }
 
 setup_node() {
@@ -1194,7 +1223,12 @@ case "$INSTALL_MODE" in
     "install" | "update")
 
         print_info "Proceeding with install/update. Installing prerequisites..."
-        apt_update_upgrade || exit 1
+        if [ "$INSTALL_MODE" = "install" ]; then
+            run_apt_update || exit 1
+            run_apt_upgrade_system || exit 1
+        elif [ "$INSTALL_MODE" = "update" ]; then
+            run_apt_update || exit 1
+        fi
         install_dependencies || exit 1
         setup_node || exit 1
         create_pulse_user || exit 1
