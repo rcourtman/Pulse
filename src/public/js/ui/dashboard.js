@@ -1,11 +1,33 @@
 PulseApp.ui = PulseApp.ui || {};
 
+const FILTER_ALL = 'all';
+const FILTER_VM = 'vm';
+const FILTER_LXC = 'lxc';
+
+const GUEST_TYPE_VM = 'VM';
+const GUEST_TYPE_CT = 'CT';
+
+const STATUS_RUNNING = 'running';
+const STATUS_STOPPED = 'stopped';
+
+const METRIC_CPU = 'cpu';
+const METRIC_MEMORY = 'memory';
+const METRIC_DISK = 'disk';
+const METRIC_DISK_READ = 'diskread';
+const METRIC_DISK_WRITE = 'diskwrite';
+const METRIC_NET_IN = 'netin';
+const METRIC_NET_OUT = 'netout';
+
 PulseApp.ui.dashboard = (() => {
     let searchInput = null;
     let guestMetricDragSnapshot = {}; // To store metrics during slider drag
+    let tableBodyEl = null;
+    let statusElementEl = null;
 
     function init() {
         searchInput = document.getElementById('dashboard-search');
+        tableBodyEl = document.querySelector('#main-table tbody');
+        statusElementEl = document.getElementById('dashboard-status-text');
     }
 
     function refreshDashboardData() {
@@ -212,10 +234,8 @@ PulseApp.ui.dashboard = (() => {
     }
 
     function updateDashboardTable() {
-        const tableBody = document.querySelector('#main-table tbody');
-        const statusElement = document.getElementById('dashboard-status-text');
-        if (!tableBody || !statusElement) {
-            console.error('Dashboard table body or status element not found!');
+        if (!tableBodyEl || !statusElementEl) {
+            console.error('Dashboard table body or status element not found/initialized!');
             return;
         }
 
@@ -229,8 +249,10 @@ PulseApp.ui.dashboard = (() => {
         const textSearchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : [];
 
         let filteredData = dashboardData.filter(guest => {
-            const typeMatch = filterGuestType === 'all' || (filterGuestType === 'vm' && guest.type === 'VM') || (filterGuestType === 'lxc' && guest.type === 'CT');
-            const statusMatch = filterStatus === 'all' || guest.status === filterStatus;
+            const typeMatch = filterGuestType === FILTER_ALL ||
+                              (filterGuestType === FILTER_VM && guest.type === GUEST_TYPE_VM) ||
+                              (filterGuestType === FILTER_LXC && guest.type === GUEST_TYPE_CT);
+            const statusMatch = filterStatus === FILTER_ALL || guest.status === filterStatus;
 
             const searchMatch = textSearchTerms.length === 0 || textSearchTerms.some(term =>
                 (guest.name && guest.name.toLowerCase().includes(term)) ||
@@ -244,13 +266,13 @@ PulseApp.ui.dashboard = (() => {
                 const state = thresholdState[type];
                 let guestValue;
 
-                if (type === 'cpu') guestValue = guest.cpu * 100;
-                else if (type === 'memory') guestValue = guest.memory;
-                else if (type === 'disk') guestValue = guest.disk;
-                else if (type === 'diskread') guestValue = guest.diskread;
-                else if (type === 'diskwrite') guestValue = guest.diskwrite;
-                else if (type === 'netin') guestValue = guest.netin;
-                else if (type === 'netout') guestValue = guest.netout;
+                if (type === METRIC_CPU) guestValue = guest.cpu * 100;
+                else if (type === METRIC_MEMORY) guestValue = guest.memory;
+                else if (type === METRIC_DISK) guestValue = guest.disk;
+                else if (type === METRIC_DISK_READ) guestValue = guest.diskread;
+                else if (type === METRIC_DISK_WRITE) guestValue = guest.diskwrite;
+                else if (type === METRIC_NET_IN) guestValue = guest.netin;
+                else if (type === METRIC_NET_OUT) guestValue = guest.netout;
                 else continue;
 
                 if (state.value > 0) {
@@ -284,7 +306,7 @@ PulseApp.ui.dashboard = (() => {
                 nodeGroups[nodeName].push(guest);
             });
             
-            tableBody.innerHTML = '';
+            tableBodyEl.innerHTML = '';
 
             Object.keys(nodeGroups).sort().forEach(nodeName => {
                 visibleNodes.add(nodeName.toLowerCase());
@@ -294,26 +316,26 @@ PulseApp.ui.dashboard = (() => {
                     <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
                     ${nodeName}
                 </td>`;
-                tableBody.appendChild(nodeHeaderRow);
+                tableBodyEl.appendChild(nodeHeaderRow);
 
                 nodeGroups[nodeName].forEach(guest => {
                     const guestRow = createGuestRow(guest);
                     if (guestRow) {
-                        tableBody.appendChild(guestRow);
+                        tableBodyEl.appendChild(guestRow);
                         visibleCount++;
                     }
                 });
             });
         } else {
-             PulseApp.utils.renderTableBody(tableBody, sortedData, createGuestRow, "No matching guests found.", 11);
+             PulseApp.utils.renderTableBody(tableBodyEl, sortedData, createGuestRow, "No matching guests found.", 11);
              visibleCount = sortedData.length;
              sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
         }
 
         if (visibleCount === 0) {
             let filterDescription = [];
-            if (filterGuestType !== 'all') filterDescription.push(`Type: ${filterGuestType.toUpperCase()}`);
-            if (filterStatus !== 'all') filterDescription.push(`Status: ${filterStatus}`);
+            if (filterGuestType !== FILTER_ALL) filterDescription.push(`Type: ${filterGuestType.toUpperCase()}`);
+            if (filterStatus !== FILTER_ALL) filterDescription.push(`Status: ${filterStatus}`);
             if (textSearchTerms.length > 0) filterDescription.push(`Search: "${textSearchTerms.join(', ')}"`);
             const activeThresholds = Object.entries(thresholdState).filter(([_, state]) => state.value > 0);
             if (activeThresholds.length > 0) {
@@ -329,20 +351,20 @@ PulseApp.ui.dashboard = (() => {
             }
             message += ".";
 
-            tableBody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500 dark:text-gray-400">${message}</td></tr>`;
+            tableBodyEl.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500 dark:text-gray-400">${message}</td></tr>`;
         }
 
         const statusBaseText = `Updated: ${new Date().toLocaleTimeString()}`;
         let statusFilterText = textSearchTerms.length > 0 ? ` | Search: "${textSearchTerms.join(', ')}"` : '';
-        const typeLabel = filterGuestType !== 'all' ? filterGuestType.toUpperCase() : '';
-        const statusLabel = filterStatus !== 'all' ? filterStatus : '';
+        const typeLabel = filterGuestType !== FILTER_ALL ? filterGuestType.toUpperCase() : '';
+        const statusLabel = filterStatus !== FILTER_ALL ? filterStatus : '';
         const otherFilters = [typeLabel, statusLabel].filter(Boolean).join('/');
         if (otherFilters) {
             statusFilterText += ` | ${otherFilters}`;
         }
         let statusCountText = ` | Showing ${visibleCount} guests`;
         if (groupByNode && visibleNodes.size > 0) statusCountText += ` across ${visibleNodes.size} nodes`;
-        statusElement.textContent = statusBaseText + statusFilterText + statusCountText;
+        statusElementEl.textContent = statusBaseText + statusFilterText + statusCountText;
 
         const mainSortColumn = sortStateMain.column;
         const mainHeader = document.querySelector(`#main-table th[data-sort="${mainSortColumn}"]`);
@@ -359,7 +381,7 @@ PulseApp.ui.dashboard = (() => {
 
     function createGuestRow(guest) {
         const row = document.createElement('tr');
-        row.className = `border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${guest.status === 'stopped' ? 'opacity-60 grayscale' : ''}`;
+        row.className = `border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${guest.status === STATUS_STOPPED ? 'opacity-60 grayscale' : ''}`;
         row.setAttribute('data-name', guest.name.toLowerCase());
         row.setAttribute('data-type', guest.type.toLowerCase());
         row.setAttribute('data-node', guest.node.toLowerCase());
@@ -373,7 +395,7 @@ PulseApp.ui.dashboard = (() => {
         let netInFormatted = '-';
         let netOutFormatted = '-';
 
-        if (guest.status === 'running') {
+        if (guest.status === STATUS_RUNNING) {
             const cpuPercent = Math.round(guest.cpu * 100);
             const memoryPercent = guest.memory;
 
@@ -381,7 +403,7 @@ PulseApp.ui.dashboard = (() => {
             
             // Simplified memoryTooltipText
             let memoryTooltipText = `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)} (${memoryPercent}%)`;
-            if (guest.type === 'VM' && guest.memorySource === 'guest' && guest.rawHostMemory !== null && guest.rawHostMemory !== undefined) {
+            if (guest.type === GUEST_TYPE_VM && guest.memorySource === 'guest' && guest.rawHostMemory !== null && guest.rawHostMemory !== undefined) {
                 // If guest source is used for the main display, append host's view for comparison.
                 memoryTooltipText += ` (Host: ${PulseApp.utils.formatBytes(guest.rawHostMemory)})`;
             }
@@ -392,20 +414,18 @@ PulseApp.ui.dashboard = (() => {
             cpuBarHTML = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
             memoryBarHTML = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
 
-            if (guest.type === 'CT') {
+            if (guest.type === GUEST_TYPE_CT) {
                 const diskPercent = guest.disk;
                 const diskTooltipText = guest.diskTotal ? `${PulseApp.utils.formatBytes(guest.diskCurrent)} / ${PulseApp.utils.formatBytes(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
                 const diskColorClass = PulseApp.utils.getUsageColor(diskPercent);
                 diskBarHTML = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
-            } else if (guest.type === 'VM') {
+            } else {
                 if (guest.diskTotal) {
                     const totalDiskFormatted = PulseApp.utils.formatBytes(guest.diskTotal);
                     diskBarHTML = `<span class="text-xs text-gray-700 dark:text-gray-200 truncate">${totalDiskFormatted}</span>`;
                 } else {
                      diskBarHTML = '-';
                 }
-            } else {
-                 diskBarHTML = '-';
             }
 
             diskReadFormatted = PulseApp.utils.formatSpeed(guest.diskread, 0);
@@ -414,16 +434,16 @@ PulseApp.ui.dashboard = (() => {
             netOutFormatted = PulseApp.utils.formatSpeed(guest.netout, 0);
           }
 
-          const typeIconClass = guest.type === 'VM'
+          const typeIconClass = guest.type === GUEST_TYPE_VM
               ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium'
               : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
-          const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guest.type === 'VM' ? 'VM' : 'LXC'}</span>`;
+          const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guest.type === GUEST_TYPE_VM ? GUEST_TYPE_VM : 'LXC'}</span>`;
 
           row.innerHTML = `
             <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
             <td class="p-1 px-1 text-center">${typeIcon}</td>
             <td class="p-1 px-2 text-center">${guest.id}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${guest.status === 'stopped' ? '-' : PulseApp.utils.formatUptime(guest.uptime)}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${guest.status === STATUS_STOPPED ? '-' : PulseApp.utils.formatUptime(guest.uptime)}</td>
             <td class="p-1 px-2">${cpuBarHTML}</td>
             <td class="p-1 px-2">${memoryBarHTML}</td>
             <td class="p-1 px-2">${diskBarHTML}</td>
