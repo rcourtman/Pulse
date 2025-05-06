@@ -2,6 +2,7 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.dashboard = (() => {
     let searchInput = null;
+    let guestMetricDragSnapshot = {}; // To store metrics during slider drag
 
     function init() {
         searchInput = document.getElementById('dashboard-search');
@@ -30,18 +31,26 @@ PulseApp.ui.dashboard = (() => {
             );
 
             if (validHistory.length < 2) return null;
+
             const oldest = validHistory[0];
             const newest = validHistory[validHistory.length - 1];
             const valueDiff = newest[key] - oldest[key];
-            const timeDiff = (newest.timestamp - oldest.timestamp) / 1000;
+            const timeDiffSeconds = (newest.timestamp - oldest.timestamp) / 1000;
 
-            if (timeDiff <= 0) return 0;
-            return valueDiff / timeDiff;
+            if (timeDiffSeconds <= 0) {
+                return null;
+            }
+
+            if (valueDiff < 0) {
+                return null;
+            }
+            
+            return valueDiff / timeDiffSeconds;
         }
 
         const processGuest = (guest, type) => {
             let avgCpu = 0, avgMem = 0, avgDisk = 0;
-            let avgDiskReadRate = 0, avgDiskWriteRate = 0, avgNetInRate = 0, avgNetOutRate = 0;
+            let avgDiskReadRate = null, avgDiskWriteRate = null, avgNetInRate = null, avgNetOutRate = null;
             let avgMemoryPercent = 'N/A', avgDiskPercent = 'N/A';
 
             const metricsData = PulseApp.state.get('metricsData') || [];
@@ -54,27 +63,60 @@ PulseApp.ui.dashboard = (() => {
 
             const guestUniqueId = guest.id;
 
-            if (guest.status === 'running' && metrics && metrics.current) {
-                const currentDataPoint = {
-                    timestamp: Date.now(),
-                    ...metrics.current
-                };
-                PulseApp.state.updateDashboardHistory(guestUniqueId, currentDataPoint);
-                const history = PulseApp.state.getDashboardHistory()[guestUniqueId] || [];
+            // Check for drag state and apply snapshot if active
+            const isDragging = PulseApp.ui.thresholds && PulseApp.ui.thresholds.isThresholdDragInProgress && PulseApp.ui.thresholds.isThresholdDragInProgress();
+            const snapshot = guestMetricDragSnapshot[guestUniqueId];
 
-                avgCpu = calculateAverage(history, 'cpu') ?? 0;
-                avgMem = calculateAverage(history, 'mem') ?? 0;
-                avgDisk = calculateAverage(history, 'disk') ?? 0;
-                avgDiskReadRate = calculateAverageRate(history, 'diskread') ?? 0;
-                avgDiskWriteRate = calculateAverageRate(history, 'diskwrite') ?? 0;
-                avgNetInRate = calculateAverageRate(history, 'netin') ?? 0;
-                avgNetOutRate = calculateAverageRate(history, 'netout') ?? 0;
-                avgMemoryPercent = (guest.maxmem > 0) ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
-                avgDiskPercent = (guest.maxdisk > 0) ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
+            if (isDragging && snapshot) {
+                avgDiskReadRate = snapshot.diskread;
+                avgDiskWriteRate = snapshot.diskwrite;
+                avgNetInRate = snapshot.netin;
+                avgNetOutRate = snapshot.netout;
+
+                // For other metrics, continue with live data or defaults if snapshot doesn't cover them
+                // or if we decide to only snapshot I/O rates.
+                // For now, let other metrics be calculated as usual even during drag.
+                if (guest.status === 'running' && metrics && metrics.current) {
+                    const currentDataPoint = {
+                        timestamp: Date.now(),
+                        ...metrics.current
+                    };
+                    PulseApp.state.updateDashboardHistory(guestUniqueId, currentDataPoint);
+                    const history = PulseApp.state.getDashboardHistory()[guestUniqueId] || [];
+                    avgCpu = calculateAverage(history, 'cpu') ?? 0;
+                    avgMem = calculateAverage(history, 'mem') ?? 0;
+                    avgDisk = calculateAverage(history, 'disk') ?? 0;
+                    // I/O rates are already set from snapshot if dragging
+                } else {
+                    PulseApp.state.clearDashboardHistoryEntry(guestUniqueId);
+                    // If not running, CPU/Mem/Disk also go to their defaults (0 or N/A)
+                }
 
             } else {
-                 PulseApp.state.clearDashboardHistoryEntry(guestUniqueId);
+                // Original logic if not dragging or no snapshot
+                if (guest.status === 'running' && metrics && metrics.current) {
+                    const currentDataPoint = {
+                        timestamp: Date.now(),
+                        ...metrics.current
+                    };
+                    PulseApp.state.updateDashboardHistory(guestUniqueId, currentDataPoint);
+                    const history = PulseApp.state.getDashboardHistory()[guestUniqueId] || [];
+
+                    avgCpu = calculateAverage(history, 'cpu') ?? 0;
+                    avgMem = calculateAverage(history, 'mem') ?? 0;
+                    avgDisk = calculateAverage(history, 'disk') ?? 0;
+                    avgDiskReadRate = calculateAverageRate(history, 'diskread');
+                    avgDiskWriteRate = calculateAverageRate(history, 'diskwrite');
+                    avgNetInRate = calculateAverageRate(history, 'netin');
+                    avgNetOutRate = calculateAverageRate(history, 'netout');
+                } else {
+                    PulseApp.state.clearDashboardHistoryEntry(guestUniqueId);
+                    // Rates remain null (will be N/A), others default
+                }
             }
+            
+            avgMemoryPercent = (guest.maxmem > 0 && typeof avgMem === 'number') ? Math.round(avgMem / guest.maxmem * 100) : 'N/A';
+            avgDiskPercent = (guest.maxdisk > 0 && typeof avgDisk === 'number') ? Math.round(avgDisk / guest.maxdisk * 100) : 'N/A';
 
             const name = guest.name || `${guest.type === 'qemu' ? 'VM' : 'CT'} ${guest.vmid}`;
             const uptimeFormatted = PulseApp.utils.formatUptime(guest.uptime);
@@ -341,10 +383,32 @@ PulseApp.ui.dashboard = (() => {
           return row;
       }
 
+    function snapshotGuestMetricsForDrag() {
+        guestMetricDragSnapshot = {}; // Clear previous snapshot
+        const currentDashboardData = PulseApp.state.get('dashboardData') || [];
+        currentDashboardData.forEach(guest => {
+            if (guest && guest.uniqueId) {
+                guestMetricDragSnapshot[guest.uniqueId] = {
+                    diskread: guest.diskread,
+                    diskwrite: guest.diskwrite,
+                    netin: guest.netin,
+                    netout: guest.netout
+                    // Optionally snapshot other metrics if they also show issues
+                };
+            }
+        });
+    }
+
+    function clearGuestMetricSnapshots() {
+        guestMetricDragSnapshot = {};
+    }
+
     return {
         init,
         refreshDashboardData,
         updateDashboardTable,
-        createGuestRow
+        createGuestRow,
+        snapshotGuestMetricsForDrag, // Export snapshot function
+        clearGuestMetricSnapshots    // Export clear function
     };
 })(); 

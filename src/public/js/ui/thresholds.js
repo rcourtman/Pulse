@@ -7,6 +7,7 @@ PulseApp.ui.thresholds = (() => {
     let sliders = {};
     let thresholdSelects = {};
     let startLogButton = null;
+    let isDraggingSlider = false;
 
     function init() {
         thresholdRow = document.getElementById('threshold-slider-row');
@@ -67,8 +68,36 @@ PulseApp.ui.thresholds = (() => {
                 });
 
                 const showTooltip = (event) => PulseApp.tooltips.updateSliderTooltip(event.target);
-                sliderElement.addEventListener('mousedown', showTooltip);
-                sliderElement.addEventListener('touchstart', showTooltip, { passive: true });
+                sliderElement.addEventListener('mousedown', (event) => {
+                    showTooltip(event);
+                    isDraggingSlider = true;
+                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
+                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
+                    }
+                });
+                document.addEventListener('mouseup', () => {
+                    if (isDraggingSlider) {
+                        isDraggingSlider = false;
+                        if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearGuestMetricSnapshots) {
+                            PulseApp.ui.dashboard.clearGuestMetricSnapshots();
+                        }
+                    }
+                });
+                sliderElement.addEventListener('touchstart', (event) => {
+                    showTooltip(event);
+                    isDraggingSlider = true;
+                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
+                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
+                    }
+                }, { passive: true });
+                document.addEventListener('touchend', () => {
+                    if (isDraggingSlider) {
+                        isDraggingSlider = false;
+                        if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearGuestMetricSnapshots) {
+                            PulseApp.ui.dashboard.clearGuestMetricSnapshots();
+                        }
+                    }
+                });
             } else {
                 console.warn(`Slider element not found for type: ${type}`);
             }
@@ -197,9 +226,15 @@ PulseApp.ui.thresholds = (() => {
         startLogButton.classList.toggle('hidden', !isAnyFilterActive);
     }
 
+    // Getter for dashboard.js to check drag state
+    function isThresholdDragInProgress() {
+        return isDraggingSlider;
+    }
+
     return {
         init,
         resetThresholds,
-        updateLogControlsVisibility
+        updateLogControlsVisibility,
+        isThresholdDragInProgress
     };
 })(); 
