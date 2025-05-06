@@ -737,25 +737,23 @@ perform_update() {
         print_warning "Could not find script path $SCRIPT_ABS_PATH to ensure executable permission."
     fi
 
-    print_info "Re-installing npm dependencies in $PULSE_DIR [root]..."
-    # This will install both production and development dependencies.
-    # For a production-only install, consider adding --omit=dev or similar flags if appropriate
-    # However, build:css might require devDependencies like tailwindcss, postcss, autoprefixer.
-    if ! npm install --unsafe-perm; then # Removed output redirection, run in PULSE_DIR
-        print_error "Failed to install npm dependencies in $PULSE_DIR. See npm output above for details."
-        # cd .. # Already in PULSE_DIR
-        exit 1 
+    print_info "Installing NPM dependencies in $PULSE_DIR (root project directory)..."
+    # This installs all dependencies defined in the root package.json (prod and dev)
+    # Dev dependencies like tailwindcss, postcss, autoprefixer are needed for build:css
+    if npm install --unsafe-perm; then # Run in PULSE_DIR, show output
+        print_success "NPM dependencies installed successfully in $PULSE_DIR."
     else
-        print_success "NPM dependencies installed in $PULSE_DIR."
+        print_error "Failed to install NPM dependencies in $PULSE_DIR. See npm output above."
+        exit 1
     fi
 
-    # Build CSS after all dependencies are installed in the root
     print_info "Building CSS assets in $PULSE_DIR..."
-    if ! npm run build:css; then # Removed output redirection, run in PULSE_DIR
-        print_error "Failed to build CSS assets during update. See output above."
-        print_warning "Continuing update despite CSS build failure."
+    if npm run build:css; then # Run in PULSE_DIR, show output
+        print_success "CSS assets built successfully."
     else
-        print_success "CSS assets built."
+        print_error "Failed to build CSS assets. See npm output above."
+        print_warning "Continuing update, but frontend may not display correctly."
+        # Decide if this should be a fatal error: exit 1
     fi
 
     set_permissions # Ensure permissions are correct after update and build
