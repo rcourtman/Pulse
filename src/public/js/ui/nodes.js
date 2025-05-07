@@ -55,11 +55,11 @@ PulseApp.ui.nodes = (() => {
               </span>
             </td>
             <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${node.node || 'N/A'}">${node.node || 'N/A'}</td>
-            <td class="p-1 px-2 text-right min-w-[200px]">${cpuBarHTML}</td>
-            <td class="p-1 px-2 text-right min-w-[200px]">${memoryBarHTML}</td>
-            <td class="p-1 px-2 text-right min-w-[200px]">${diskBarHTML}</td>
-            <td class="p-1 px-2 text-right whitespace-nowrap">${uptimeFormatted}</td>
-            <td class="p-1 px-2 text-right whitespace-nowrap">${normalizedLoadFormatted}</td>
+            <td class="p-1 px-2 min-w-[200px]">${cpuBarHTML}</td>
+            <td class="p-1 px-2 min-w-[200px]">${memoryBarHTML}</td>
+            <td class="p-1 px-2 min-w-[200px]">${diskBarHTML}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${uptimeFormatted}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${normalizedLoadFormatted}</td>
         `;
         return row;
     }

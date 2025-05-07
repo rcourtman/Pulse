@@ -132,11 +132,11 @@ PulseApp.ui.pbs = (() => {
               const row = document.createElement('tr');
               row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 ease-in-out';
               row.innerHTML = `
-                  <td class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
-                  <td class="px-4 py-2 text-sm text-center">${statusIcon}</td>
-                  <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
-                  <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
-                  <td class="px-4 py-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
+                  <td class="p-1 px-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
+                  <td class="p-1 px-2 text-sm">${statusIcon}</td>
+                  <td class="p-1 px-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
+                  <td class="p-1 px-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
+                  <td class="p-1 px-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
               `;
               tableBody.appendChild(row);
           });
@@ -159,11 +159,11 @@ PulseApp.ui.pbs = (() => {
                              const row = document.createElement('tr');
                              row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors duration-150 ease-in-out';
                              row.innerHTML = `
-                                 <td class="px-4 py-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
-                                 <td class="px-4 py-2 text-sm text-center">${statusIcon}</td>
-                                 <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
-                                 <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
-                                 <td class="px-4 py-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
+                                 <td class="p-1 px-2 text-sm text-gray-700 dark:text-gray-300">${target}</td>
+                                 <td class="p-1 px-2 text-sm">${statusIcon}</td>
+                                 <td class="p-1 px-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${startTime}</td>
+                                 <td class="p-1 px-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">${duration}</td>
+                                 <td class="p-1 px-2 text-xs font-mono text-gray-400 dark:text-gray-500 truncate" title="${upid}">${shortUpid}</td>
                              `;
                               tableBody.appendChild(row);
                           });
@@ -238,13 +238,13 @@ PulseApp.ui.pbs = (() => {
           <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Recent ${title} Tasks</h4>
           <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
               <table id="${tableId}" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                  <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-100 dark:bg-gray-700/50 sticky top-0">
-                      <tr>
-                          <th scope="col" class="px-4 py-2 text-left font-semibold">${idColumnHeader}</th>
-                          <th scope="col" class="px-4 py-2 text-left font-semibold">Status</th>
-                          <th scope="col" class="px-4 py-2 text-left font-semibold">Start Time</th>
-                          <th scope="col" class="px-4 py-2 text-left font-semibold">Duration</th>
-                          <th scope="col" class="px-4 py-2 text-left font-semibold">UPID</th>
+                  <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
+                      <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                          <th scope="col" class="p-1 px-2">${idColumnHeader}</th>
+                          <th scope="col" class="p-1 px-2">Status</th>
+                          <th scope="col" class="p-1 px-2">Start Time</th>
+                          <th scope="col" class="p-1 px-2">Duration</th>
+                          <th scope="col" class="p-1 px-2">UPID</th>
                       </tr>
                   </thead>
                   <tbody id="${tbodyId}" class="pbs-task-tbody divide-y divide-gray-200 dark:divide-gray-700">
@@ -360,7 +360,7 @@ PulseApp.ui.pbs = (() => {
                                 const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
                                 const row = document.createElement('tr');
                                 row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
-                                row.innerHTML = `<td class="px-4 py-2 whitespace-nowrap">${ds.name || 'N/A'}</td> <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${ds.path || 'N/A'}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${PulseApp.utils.formatBytes(usedBytes)}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${PulseApp.utils.formatBytes(availableBytes)}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${totalBytes > 0 ? PulseApp.utils.formatBytes(totalBytes) : 'N/A'}</td> <td class="px-4 py-2 text-center min-w-[150px]">${totalBytes > 0 ? PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-'}</td> <td class="px-4 py-2 text-center whitespace-nowrap">${gcStatusHtml}</td>`;
+                                row.innerHTML = `<td class="p-1 px-2 whitespace-nowrap">${ds.name || 'N/A'}</td> <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${ds.path || 'N/A'}</td> <td class="p-1 px-2 whitespace-nowrap">${PulseApp.utils.formatBytes(usedBytes)}</td> <td class="p-1 px-2 whitespace-nowrap">${PulseApp.utils.formatBytes(availableBytes)}</td> <td class="p-1 px-2 whitespace-nowrap">${totalBytes > 0 ? PulseApp.utils.formatBytes(totalBytes) : 'N/A'}</td> <td class="p-1 px-2 min-w-[150px]">${totalBytes > 0 ? PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-'}</td> <td class="p-1 px-2 whitespace-nowrap">${gcStatusHtml}</td>`;
                                 dsTableBody.appendChild(row);
                              });
                          }
@@ -428,15 +428,15 @@ PulseApp.ui.pbs = (() => {
                 <h4 class="text-md font-semibold mb-2 text-gray-700 dark:text-gray-300">Datastores</h4>
                 <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
                     <table id="pbs-ds-table-${instanceId}" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-                         <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-100 dark:bg-gray-700/50">
-                             <tr>
-                                 <th scope="col" class="px-4 py-2 text-left font-semibold dark:text-gray-300">Name</th>
-                                 <th scope="col" class="px-4 py-2 text-left font-semibold dark:text-gray-300">Path</th>
-                                 <th scope="col" class="px-4 py-2 text-right font-semibold dark:text-gray-300">Used</th>
-                                 <th scope="col" class="px-4 py-2 text-right font-semibold dark:text-gray-300">Available</th>
-                                 <th scope="col" class="px-4 py-2 text-right font-semibold dark:text-gray-300">Total</th>
-                                 <th scope="col" class="px-4 py-2 text-center font-semibold dark:text-gray-300">Usage</th>
-                                 <th scope="col" class="px-4 py-2 text-center font-semibold dark:text-gray-300">GC Status</th>
+                         <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
+                             <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                                 <th scope="col" class="p-1 px-2">Name</th>
+                                 <th scope="col" class="p-1 px-2">Path</th>
+                                 <th scope="col" class="p-1 px-2">Used</th>
+                                 <th scope="col" class="p-1 px-2">Available</th>
+                                 <th scope="col" class="p-1 px-2">Total</th>
+                                 <th scope="col" class="p-1 px-2">Usage</th>
+                                 <th scope="col" class="p-1 px-2">GC Status</th>
                              </tr>
                          </thead>
                         <tbody id="pbs-ds-tbody-${instanceId}" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
@@ -495,7 +495,7 @@ PulseApp.ui.pbs = (() => {
                             const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
                             const row = document.createElement('tr');
                             row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
-                            row.innerHTML = `<td class="px-4 py-2 whitespace-nowrap">${ds.name || 'N/A'}</td> <td class="px-4 py-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${ds.path || 'N/A'}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${PulseApp.utils.formatBytes(usedBytes)}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${PulseApp.utils.formatBytes(availableBytes)}</td> <td class="px-4 py-2 text-right whitespace-nowrap">${totalBytes > 0 ? PulseApp.utils.formatBytes(totalBytes) : 'N/A'}</td> <td class="px-4 py-2 text-center min-w-[150px]">${totalBytes > 0 ? PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-'}</td> <td class="px-4 py-2 text-center whitespace-nowrap">${gcStatusHtml}</td>`;
+                            row.innerHTML = `<td class="p-1 px-2 whitespace-nowrap">${ds.name || 'N/A'}</td> <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${ds.path || 'N/A'}</td> <td class="p-1 px-2 whitespace-nowrap">${PulseApp.utils.formatBytes(usedBytes)}</td> <td class="p-1 px-2 whitespace-nowrap">${PulseApp.utils.formatBytes(availableBytes)}</td> <td class="p-1 px-2 whitespace-nowrap">${totalBytes > 0 ? PulseApp.utils.formatBytes(totalBytes) : 'N/A'}</td> <td class="p-1 px-2 min-w-[150px]">${totalBytes > 0 ? PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-'}</td> <td class="p-1 px-2 whitespace-nowrap">${gcStatusHtml}</td>`;
                             dsTableBody.appendChild(row);
                           });
                       }

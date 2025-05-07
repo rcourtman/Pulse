@@ -101,14 +101,14 @@ PulseApp.ui.storage = (() => {
 
         const thead = document.createElement('thead');
         thead.innerHTML = `
-            <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
-              <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Storage</th>
-              <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Content</th>
-              <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Type</th>
-              <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Shared</th>
-              <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Usage</th>
-              <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Avail</th>
-              <th class="text-left p-2 px-3 font-semibold text-gray-700 dark:text-gray-300">Total</th>
+            <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0 z-10 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
+              <th class="p-1 px-2">Storage</th>
+              <th class="p-1 px-2">Content</th>
+              <th class="p-1 px-2">Type</th>
+              <th class="p-1 px-2">Shared</th>
+              <th class="p-1 px-2">Usage</th>
+              <th class="p-1 px-2">Avail</th>
+              <th class="p-1 px-2">Total</th>
             </tr>
           `;
         table.appendChild(thead);
@@ -124,7 +124,7 @@ PulseApp.ui.storage = (() => {
           const nodeHeaderRow = document.createElement('tr');
           nodeHeaderRow.className = 'bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs node-storage-header';
           nodeHeaderRow.innerHTML = `
-            <td colspan="7" class="p-1.5 px-3">
+            <td colspan="7" class="px-2 py-1">
               <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
               Node: ${nodeName}
             </td>`;
@@ -165,10 +165,10 @@ PulseApp.ui.storage = (() => {
                 <td class="p-1 px-2 whitespace-nowrap text-gray-900 dark:text-gray-100 font-medium">${store.storage || 'N/A'}</td>
                 <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs flex items-center">${contentBadges || '-'}</td>
                 <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${store.type || 'N/A'}</td>
-                <td class="p-1 px-2 whitespace-nowrap text-center storage-tooltip-trigger cursor-default" data-tooltip="${sharedIconTooltip}">${sharedIcon}</td>
+                <td class="p-1 px-2 whitespace-nowrap storage-tooltip-trigger cursor-default" data-tooltip="${sharedIconTooltip}">${sharedIcon}</td>
                 <td class="p-1 px-2 text-gray-600 dark:text-gray-300 min-w-[250px]">${usageBarHTML}</td>
-                <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-right">${PulseApp.utils.formatBytes(store.avail)}</td>
-                <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-right">${PulseApp.utils.formatBytes(store.total)}</td>
+                <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${PulseApp.utils.formatBytes(store.avail)}</td>
+                <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${PulseApp.utils.formatBytes(store.total)}</td>
             `;
             tbody.appendChild(row);
           });

@@ -225,13 +225,13 @@ PulseApp.ui.backups = (() => {
                 row.innerHTML = `
                     <td class="p-1 px-2 whitespace-nowrap text-center">${healthIndicator}</td>
                     <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
-                    <td class="p-1 px-2 text-center text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
-                    <td class="p-1 px-2 text-center">${typeIcon}</td>
+                    <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
+                    <td class="p-1 px-2">${typeIcon}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${latestBackupFormatted}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.pbsInstanceName}</td>
                     <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.datastoreName}</td>
-                    <td class="p-1 px-2 text-center text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
+                    <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
                 `;
                 visibleCount++;
             });

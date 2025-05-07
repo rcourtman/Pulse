@@ -441,16 +441,16 @@ PulseApp.ui.dashboard = (() => {
 
           row.innerHTML = `
             <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
-            <td class="p-1 px-1 text-center">${typeIcon}</td>
-            <td class="p-1 px-2 text-center">${guest.id}</td>
+            <td class="p-1 px-2">${typeIcon}</td>
+            <td class="p-1 px-2">${guest.id}</td>
             <td class="p-1 px-2 whitespace-nowrap">${guest.status === STATUS_STOPPED ? '-' : PulseApp.utils.formatUptime(guest.uptime)}</td>
             <td class="p-1 px-2">${cpuBarHTML}</td>
             <td class="p-1 px-2">${memoryBarHTML}</td>
             <td class="p-1 px-2">${diskBarHTML}</td>
-            <td class="p-1 px-2 text-right whitespace-nowrap">${diskReadFormatted}</td>
-            <td class="p-1 px-2 text-right whitespace-nowrap">${diskWriteFormatted}</td>
-            <td class="p-1 px-2 text-right whitespace-nowrap">${netInFormatted}</td>
-            <td class="p-1 px-2 text-right whitespace-nowrap">${netOutFormatted}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${diskReadFormatted}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${diskWriteFormatted}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${netInFormatted}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${netOutFormatted}</td>
           `;
 
           return row;
