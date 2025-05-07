@@ -92,7 +92,7 @@
       <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Loading data...</p>
     </div>
   </div>
-  <div class="container max-w-[95%] mx-auto">
+  <div class="container w-[95%] max-w-screen-xl mx-auto">
     <div class="header flex flex-row justify-between items-center mb-2">
       <div class="hidden md:block md:flex-1"></div>
       <div class="flex items-center gap-1 flex-none">
@@ -236,16 +236,16 @@
               <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
                 <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
                   <th class="sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
-                  <th class="p-1 px-1 text-center" style="width: 50px;">Type</th>
-                  <th class="sortable p-1 px-2 text-center" data-sort="id" style="width: 50px;">ID</th>
+                  <th class="p-1 px-2" style="width: 50px;">Type</th>
+                  <th class="sortable p-1 px-2" data-sort="id" style="width: 50px;">ID</th>
                   <th class="sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);">Uptime</th>
                   <th class="sortable p-1 px-2" data-sort="cpu" style="width: 110px;">CPU</th>
                   <th class="sortable p-1 px-2" data-sort="memory" style="width: 110px;">Memory</th>
                   <th class="sortable p-1 px-2" data-sort="disk" style="width: 110px;">Disk</th>
-                  <th class="sortable p-1 px-2 text-right" data-sort="diskread" style="width: 70px;">Read</th>
-                  <th class="sortable p-1 px-2 text-right" data-sort="diskwrite" style="width: 70px;">Write</th>
-                  <th class="sortable p-1 px-2 text-right" data-sort="netin" style="width: 70px;">Net In</th>
-                  <th class="sortable p-1 px-2 text-right" data-sort="netout" style="width: 70px;">Net Out</th>
+                  <th class="sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
+                  <th class="sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
+                  <th class="sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
+                  <th class="sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
                 </tr>
                 <tr id="threshold-slider-row" class="threshold-sliders text-xs border-t border-gray-200 dark:border-gray-700 hidden bg-white dark:bg-gray-800">
                   <th class="py-1 px-2 align-middle threshold-pattern-bg"></th>
@@ -352,11 +352,11 @@
                 <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
                     <th class="p-1 px-2 text-left" style="width: 80px;">Status</th>
                     <th class="sortable p-1 px-2" data-sort="id">Node</th>
-                    <th class="sortable p-1 px-2 text-right" data-sort="cpu" style="min-width: 150px;">CPU Usage</th>
-                    <th class="sortable p-1 px-2 text-right" data-sort="memory" style="min-width: 150px;">Memory Usage</th>
-                    <th class="sortable p-1 px-2 text-right" data-sort="disk" style="min-width: 150px;">Disk Usage</th>
-                    <th class="sortable p-1 px-2 text-right whitespace-nowrap" data-sort="uptime">Uptime</th>
-                    <th class="sortable p-1 px-2 text-right whitespace-nowrap" data-sort="loadnorm">Load (Norm)</th>
+                    <th class="sortable p-1 px-2" data-sort="cpu" style="min-width: 150px;">CPU Usage</th>
+                    <th class="sortable p-1 px-2" data-sort="memory" style="min-width: 150px;">Memory Usage</th>
+                    <th class="sortable p-1 px-2" data-sort="disk" style="min-width: 150px;">Disk Usage</th>
+                    <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="uptime">Uptime</th>
+                    <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="loadnorm">Load (Norm)</th>
                 </tr>
             </thead>
             <tbody id="nodes-table-body" class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -448,17 +448,17 @@
       <div id="backups-table-container" class="hidden space-y-2 mb-2">
         <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
           <table id="backups-overview-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-            <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-100 dark:bg-gray-700/50 sticky top-0">
-              <tr>
-                <th scope="col" class="sortable p-1 px-2 text-center font-semibold cursor-pointer select-none whitespace-nowrap w-[30px]" data-sort="backupHealthStatus"></th>
-                <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="guestName">Guest Name</th>
-                <th scope="col" class="sortable p-1 px-2 text-center font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="guestId">ID</th>
-                <th scope="col" class="sortable p-1 px-2 text-center font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="guestType">Type</th>
-                <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="node">Node</th>
-                <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="latestBackupTime">Latest Backup</th>
-                <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="pbsInstanceName">PBS Instance</th>
-                <th scope="col" class="sortable p-1 px-2 text-left font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="datastoreName">Datastore</th>
-                <th scope="col" class="sortable p-1 px-2 text-center font-semibold cursor-pointer select-none whitespace-nowrap" data-sort="totalBackups"># Backups</th>
+            <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
+              <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                <th scope="col" class="sortable p-1 px-2 text-center cursor-pointer select-none whitespace-nowrap w-[30px]" data-sort="backupHealthStatus"></th>
+                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestName">Guest Name</th>
+                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestId">ID</th>
+                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestType">Type</th>
+                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="node">Node</th>
+                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="latestBackupTime">Latest Backup</th>
+                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="pbsInstanceName">PBS Instance</th>
+                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="datastoreName">Datastore</th>
+                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="totalBackups"># Backups</th>
               </tr>
             </thead>
             <tbody id="backups-overview-tbody" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
