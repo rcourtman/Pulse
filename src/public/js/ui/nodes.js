@@ -2,6 +2,31 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.nodes = (() => {
 
+    function _createNodeCpuBarHtml(node) {
+        const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
+        const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent);
+        const cpuTooltipText = `${cpuPercent.toFixed(1)}%${node.maxcpu && node.maxcpu > 0 ? ` (${(node.cpu * node.maxcpu).toFixed(1)}/${node.maxcpu} cores)` : ''}`;
+        return PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
+    }
+
+    function _createNodeMemoryBarHtml(node) {
+        const memUsed = node.mem || 0;
+        const memTotal = node.maxmem || 0;
+        const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
+        const memColorClass = PulseApp.utils.getUsageColor(memPercent);
+        const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
+        return PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
+    }
+
+    function _createNodeDiskBarHtml(node) {
+        const diskUsed = node.disk || 0;
+        const diskTotal = node.maxdisk || 0;
+        const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0;
+        const diskColorClass = PulseApp.utils.getUsageColor(diskPercent);
+        const diskTooltipText = `${PulseApp.utils.formatBytes(diskUsed)} / ${PulseApp.utils.formatBytes(diskTotal)} (${diskPercent.toFixed(1)}%)`;
+        return PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+    }
+
     // Create a dedicated function for rendering a single node row
     function createNodeRow(node) {
         const row = document.createElement('tr');
@@ -13,25 +38,9 @@ PulseApp.ui.nodes = (() => {
             ? 'bg-green-500 dark:bg-green-400'
             : 'bg-red-500 dark:bg-red-400';
 
-        const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
-        const memUsed = node.mem || 0;
-        const memTotal = node.maxmem || 0;
-        const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
-        const diskUsed = node.disk || 0;
-        const diskTotal = node.maxdisk || 0;
-        const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0;
-
-        const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent);
-        const memColorClass = PulseApp.utils.getUsageColor(memPercent);
-        const diskColorClass = PulseApp.utils.getUsageColor(diskPercent);
-
-        const cpuTooltipText = `${cpuPercent.toFixed(1)}%${node.maxcpu && node.maxcpu > 0 ? ` (${(node.cpu * node.maxcpu).toFixed(1)}/${node.maxcpu} cores)` : ''}`;
-        const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
-        const diskTooltipText = `${PulseApp.utils.formatBytes(diskUsed)} / ${PulseApp.utils.formatBytes(diskTotal)} (${diskPercent.toFixed(1)}%)`;
-
-        const cpuBarHTML = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
-        const memoryBarHTML = PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
-        const diskBarHTML = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+        const cpuBarHTML = _createNodeCpuBarHtml(node);
+        const memoryBarHTML = _createNodeMemoryBarHtml(node);
+        const diskBarHTML = _createNodeDiskBarHtml(node);
 
         const uptimeFormatted = PulseApp.utils.formatUptime(node.uptime || 0);
         let normalizedLoadFormatted = 'N/A';
@@ -41,10 +50,10 @@ PulseApp.ui.nodes = (() => {
                 const normalizedLoad = load1m / node.maxcpu;
                 normalizedLoadFormatted = normalizedLoad.toFixed(2);
             } else {
-                console.warn(`[updateNodesTable] Node '${node.node}' has non-numeric loadavg[0]:`, node.loadavg[0]);
+                console.warn(`[createNodeRow] Node '${node.node}' has non-numeric loadavg[0]:`, node.loadavg[0]);
             }
         } else if (node.loadavg && node.maxcpu <= 0) {
-             console.warn(`[updateNodesTable] Node '${node.node}' has invalid maxcpu (${node.maxcpu}) for load normalization.`);
+             console.warn(`[createNodeRow] Node '${node.node}' has invalid maxcpu (${node.maxcpu}) for load normalization.`);
         }
 
         row.innerHTML = `
@@ -89,4 +98,4 @@ PulseApp.ui.nodes = (() => {
     return {
         updateNodesTable
     };
-})(); 
+})();
