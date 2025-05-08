@@ -12,7 +12,10 @@ PulseApp.ui.common = (() => {
         setupTableSorting('main-table');
         setupTableSorting('backups-overview-table');
 
-        setupEventListeners();
+        _setupDashboardFilterListeners();
+        _setupBackupFilterListeners();
+        _setupResetButtonListeners();
+        _setupGlobalKeydownListeners();
         applyInitialFilterUI();
         applyInitialSortUI();
     }
@@ -57,7 +60,7 @@ PulseApp.ui.common = (() => {
         }
     }
 
-    function setupEventListeners() {
+    function _setupDashboardFilterListeners() {
         document.querySelectorAll('input[name="group-filter"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 if (this.checked) {
@@ -101,7 +104,9 @@ PulseApp.ui.common = (() => {
         } else {
             console.warn('Element #dashboard-search not found - text filtering disabled.');
         }
+    }
 
+    function _setupBackupFilterListeners() {
         document.querySelectorAll('input[name="backups-type-filter"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 if (this.checked) {
@@ -121,24 +126,31 @@ PulseApp.ui.common = (() => {
                 }
             });
         });
+    }
 
+    function _setupResetButtonListeners() {
         const resetButton = document.getElementById('reset-filters-button');
         if (resetButton) {
             resetButton.addEventListener('click', resetDashboardView);
         } else {
             console.warn('Reset button #reset-filters-button not found.');
         }
+        // Note: Reset button for backups tab is handled within backups.js init
+    }
 
+    function _setupGlobalKeydownListeners() {
         document.addEventListener('keydown', function(event) {
             const activeElement = document.activeElement;
             const isSearchInputFocused = activeElement === searchInput || activeElement === backupsSearchInput;
             const isGeneralInputElement = !isSearchInputFocused && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.isContentEditable);
             const isMainActive = document.getElementById('main')?.classList.contains('active');
+            const isBackupsActive = document.getElementById('backups')?.classList.contains('active');
+
 
             if (event.key === 'Escape') {
-                if (document.getElementById('backups')?.contains(activeElement)) {
+                if (isBackupsActive && document.getElementById('backups')?.contains(activeElement)) {
                     PulseApp.ui.backups.resetBackupsView();
-                } else {
+                } else if (isMainActive) { // Only reset dashboard if main tab is active and not in backup context
                      resetDashboardView();
                 }
             } else if (isSearchInputFocused && event.key === 'Enter') {
@@ -147,15 +159,28 @@ PulseApp.ui.common = (() => {
             } else if (
                 !isSearchInputFocused &&
                 !isGeneralInputElement &&
-                isMainActive && // Only focus dashboard search if main tab is active
+                isMainActive && 
                 !event.metaKey &&
                 !event.ctrlKey &&
                 !event.altKey &&
                 event.key.length === 1 &&
                 event.key !== ' '
             ) {
-                if (searchInput) {
+                if (searchInput) { // Focus dashboard search if main tab is active
                     searchInput.focus();
+                }
+            } else if (
+                !isSearchInputFocused &&
+                !isGeneralInputElement &&
+                isBackupsActive &&
+                 !event.metaKey &&
+                !event.ctrlKey &&
+                !event.altKey &&
+                event.key.length === 1 &&
+                event.key !== ' '
+            ) {
+                 if (backupsSearchInput) { // Focus backups search if backups tab is active
+                    backupsSearchInput.focus();
                 }
             }
         });
@@ -279,4 +304,4 @@ PulseApp.ui.common = (() => {
         init,
         updateSortUI
     };
-})(); 
+})();
