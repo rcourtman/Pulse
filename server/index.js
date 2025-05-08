@@ -143,41 +143,32 @@ const io = new Server(server, {
   }
 });
 
-io.on('connection', (socket) => {
-  console.log('Client connected');
-  // Get the flag from state manager
-  const { isConfigPlaceholder: currentPlaceholderStatus } = stateManager.getState();
-  const currentState = stateManager.getState();
+function sendCurrentStateToSocket(socket) {
+  const fullCurrentState = stateManager.getState(); // This includes isConfigPlaceholder
+  const currentPlaceholderStatus = fullCurrentState.isConfigPlaceholder; // Extract for clarity if needed
 
   if (stateManager.hasData()) {
-      // Emit the flag from state manager
-      socket.emit('rawData', { ...currentState }); // getState now includes the flag
+    socket.emit('rawData', fullCurrentState);
   } else {
-      console.log('No data available yet on connect, sending initial state.');
-      // Emit the flag from state manager
-      socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
+    console.log('No data available yet, sending initial/loading state.');
+    socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
   }
+}
+
+io.on('connection', (socket) => {
+  console.log('Client connected');
+  sendCurrentStateToSocket(socket);
 
   socket.on('requestData', async () => {
     console.log('Client requested data');
     try {
-      // Get the flag from state manager
-      const { isConfigPlaceholder: currentPlaceholderStatus } = stateManager.getState();
-      const currentState = stateManager.getState();
-
-      if (stateManager.hasData()) {
-          // Emit the flag from state manager
-          socket.emit('rawData', { ...currentState }); // getState now includes the flag
-      } else {
-         console.log('No data available yet on request, sending loading state.');
-         // Emit the flag from state manager
-         socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
-         // Optionally trigger an immediate discovery cycle?
-         // runDiscoveryCycle(); // Be careful with triggering cycles on demand
-      }
+      sendCurrentStateToSocket(socket);
+      // Optionally trigger an immediate discovery cycle?
+      // runDiscoveryCycle(); // Be careful with triggering cycles on demand
     } catch (error) {
-      console.error('Error fetching data on client request:', error);
-      // Notify client of error?
+      console.error('Error processing requestData event:', error);
+      // Notify client of error? Consider emitting an error event to the specific socket
+      // socket.emit('requestError', { message: 'Failed to process your request.' });
     }
   });
 
