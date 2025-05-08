@@ -172,7 +172,7 @@ PulseApp.ui.pbs = (() => {
 
     const _createTaskTableRow = (task) => {
         const target = parsePbsTaskTarget(task);
-        const statusIcon = getPbsStatusIcon(task.status);
+        const statusIconHTML = getPbsStatusIcon(task.status);
         const startTime = task.startTime ? PulseApp.utils.formatPbsTimestamp(task.startTime) : 'N/A';
         const duration = task.duration !== null ? PulseApp.utils.formatDuration(task.duration) : 'N/A';
         const upid = task.upid || 'N/A';
@@ -180,13 +180,33 @@ PulseApp.ui.pbs = (() => {
 
         const row = document.createElement('tr');
         row.className = `${CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700} ${CSS_CLASSES.HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50} ${CSS_CLASSES.TRANSITION_COLORS} ${CSS_CLASSES.DURATION_150} ${CSS_CLASSES.EASE_IN_OUT}`;
-        row.innerHTML = `
-            <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}">${target}</td>
-            <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM}">${statusIcon}</td>
-            <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}">${startTime}</td>
-            <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}">${duration}</td>
-            <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MONO} ${CSS_CLASSES.TEXT_GRAY_400} dark:text-gray-500 ${CSS_CLASSES.TRUNCATE}" title="${upid}">${shortUpid}</td>
-        `;
+
+        const targetCell = document.createElement('td');
+        targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
+        targetCell.textContent = target;
+        row.appendChild(targetCell);
+
+        const statusCell = document.createElement('td');
+        statusCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM}`;
+        statusCell.innerHTML = statusIconHTML;
+        row.appendChild(statusCell);
+
+        const startTimeCell = document.createElement('td');
+        startTimeCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}`;
+        startTimeCell.textContent = startTime;
+        row.appendChild(startTimeCell);
+
+        const durationCell = document.createElement('td');
+        durationCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}`;
+        durationCell.textContent = duration;
+        row.appendChild(durationCell);
+
+        const upidCell = document.createElement('td');
+        upidCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MONO} ${CSS_CLASSES.TEXT_GRAY_400} dark:text-gray-500 ${CSS_CLASSES.TRUNCATE}`;
+        upidCell.title = upid;
+        upidCell.textContent = shortUpid;
+        row.appendChild(upidCell);
+
         return row;
     };
 
@@ -247,7 +267,11 @@ PulseApp.ui.pbs = (() => {
 
         if (showDetails && datastores) {
             if (datastores.length === 0) {
-                dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 text-sm text-gray-400 text-center">No PBS datastores found or accessible.</td></tr>`;
+                const row = dsTableBody.insertRow();
+                const cell = row.insertCell();
+                cell.colSpan = 7;
+                cell.className = `px-4 py-4 text-sm text-gray-400 text-center`;
+                cell.textContent = 'No PBS datastores found or accessible.';
             } else {
                 datastores.forEach(ds => {
                     const totalBytes = ds.total || 0;
@@ -257,14 +281,39 @@ PulseApp.ui.pbs = (() => {
                     const usageColor = PulseApp.utils.getUsageColor(usagePercent);
                     const usageText = totalBytes > 0 ? `${usagePercent}% (${PulseApp.utils.formatBytes(usedBytes)} of ${PulseApp.utils.formatBytes(totalBytes)})` : 'N/A';
                     const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
-                    const row = document.createElement('tr');
+
+                    const row = dsTableBody.insertRow();
                     row.className = `${CSS_CLASSES.HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50}`;
-                    row.innerHTML = `<td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP}">${ds.name || 'N/A'}</td> <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400}">${ds.path || 'N/A'}</td> <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP}">${PulseApp.utils.formatBytes(usedBytes)}</td> <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP}">${PulseApp.utils.formatBytes(availableBytes)}</td> <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP}">${totalBytes > 0 ? PulseApp.utils.formatBytes(totalBytes) : 'N/A'}</td> <td class="${CSS_CLASSES.P1_PX2}" style="min-width:150px">${totalBytes > 0 ? PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-'}</td> <td class="${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP}">${gcStatusHtml}</td>`;
-                    dsTableBody.appendChild(row);
+
+                    const createCell = (content, classNames = [], isHtml = false) => {
+                        const cell = row.insertCell();
+                        cell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP} ${classNames.join(' ')}`;
+                        if (isHtml) {
+                            cell.innerHTML = content;
+                        } else {
+                            cell.textContent = content;
+                        }
+                        return cell;
+                    };
+
+                    createCell(ds.name || 'N/A');
+                    createCell(ds.path || 'N/A', [CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400]);
+                    createCell(PulseApp.utils.formatBytes(usedBytes));
+                    createCell(PulseApp.utils.formatBytes(availableBytes));
+                    createCell(totalBytes > 0 ? PulseApp.utils.formatBytes(totalBytes) : 'N/A');
+
+                    const usageCell = createCell(totalBytes > 0 ? PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-', [], true);
+                    usageCell.style.minWidth = '150px';
+
+                    createCell(gcStatusHtml, [], true);
                 });
             }
         } else {
-            dsTableBody.innerHTML = `<tr><td colspan="7" class="px-4 py-4 ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_400} text-center">${statusText}</td></tr>`;
+            const row = dsTableBody.insertRow();
+            const cell = row.insertCell();
+            cell.colSpan = 7;
+            cell.className = `px-4 py-4 ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_400} text-center`;
+            cell.textContent = statusText;
         }
     };
 
@@ -327,48 +376,96 @@ PulseApp.ui.pbs = (() => {
           const lastOk = PulseApp.utils.formatPbsTimestamp(summary.lastOk);
           const lastFailed = PulseApp.utils.formatPbsTimestamp(summary.lastFailed);
           const failedStyle = (failed > 0) ? `${CSS_CLASSES.FONT_BOLD} ${CSS_CLASSES.TEXT_RED_600_DARK_RED_400}` : `${CSS_CLASSES.TEXT_RED_600_DARK_RED_400} ${CSS_CLASSES.FONT_SEMIBOLD}`;
-
           const highlightClass = (failed > 0) ? CSS_CLASSES.BORDER_L_4_RED_500_DARK_RED_400 : CSS_CLASSES.BORDER_L_4_TRANSPARENT;
+
           card.className = `${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} ${CSS_CLASSES.P3} ${CSS_CLASSES.BG_GRAY_100_50_DARK_BG_GRAY_700_50} ${highlightClass}`;
 
-          card.innerHTML = `
-              <h4 class="${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}">${title} (7d)</h4>
-              <div class="${CSS_CLASSES.SPACE_Y_1} ${CSS_CLASSES.TEXT_SM}">
-                  <div><span class="${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}">OK:</span> <span class="${CSS_CLASSES.ML1} ${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400} ${CSS_CLASSES.FONT_SEMIBOLD}">${ok}</span></div>
-                  <div><span class="${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}">Failed:</span> <span class="${CSS_CLASSES.ML1} ${failedStyle}">${failed}</span></div>
-                  <div><span class="${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}">Total:</span> <span class="${CSS_CLASSES.ML1} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} ${CSS_CLASSES.FONT_SEMIBOLD}">${total}</span></div>
-                  <div><span class="${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}">Last OK:</span> <span class="${CSS_CLASSES.ML1} ${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400} ${CSS_CLASSES.TEXT_XS}">${lastOk}</span></div>
-                  <div><span class="${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}">Last Fail:</span> <span class="${CSS_CLASSES.ML1} ${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400} ${CSS_CLASSES.TEXT_XS}">${lastFailed}</span></div>
-              </div>`;
+          const heading = document.createElement('h4');
+          heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
+          heading.textContent = `${title} (7d)`;
+          card.appendChild(heading);
+
+          const contentDiv = document.createElement('div');
+          contentDiv.className = `${CSS_CLASSES.SPACE_Y_1} ${CSS_CLASSES.TEXT_SM}`;
+
+          const createStatDiv = (label, value, valueClass = '') => {
+              const div = document.createElement('div');
+              const labelSpan = document.createElement('span');
+              labelSpan.className = `${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}`;
+              labelSpan.textContent = `${label}:`;
+              div.appendChild(labelSpan);
+
+              const valueSpan = document.createElement('span');
+              valueSpan.className = `${CSS_CLASSES.ML1} ${valueClass}`;
+              valueSpan.textContent = value;
+              div.appendChild(valueSpan);
+              return div;
+          };
+
+          contentDiv.appendChild(createStatDiv('OK', ok, `${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400} ${CSS_CLASSES.FONT_SEMIBOLD}`));
+          contentDiv.appendChild(createStatDiv('Failed', failed, failedStyle));
+          contentDiv.appendChild(createStatDiv('Total', total, `${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} ${CSS_CLASSES.FONT_SEMIBOLD}`));
+          contentDiv.appendChild(createStatDiv('Last OK', lastOk, `${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400} ${CSS_CLASSES.TEXT_XS}`));
+          contentDiv.appendChild(createStatDiv('Last Fail', lastFailed, `${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400} ${CSS_CLASSES.TEXT_XS}`));
+
+          card.appendChild(contentDiv);
           return card;
       };
 
-       const _createTaskTableHTML = (tableId, title, idColumnHeader) => {
-          const tbodyId = tableId.replace('-table-', '-tbody-'); // Keep this for now as it's specific
-          const toggleButtonContainerId = tableId.replace('-table', '-toggle-container'); // Keep this for now
-          return `
-          <h4 class="${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}">Recent ${title} Tasks</h4>
-          <div class="${CSS_CLASSES.OVERFLOW_X_AUTO} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED}">
-              <table id="${tableId}" class="${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}">
-                  <thead class="${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}">
-                      <tr class="${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TRACKING_WIDER} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}">
-                          <th scope="col" class="${CSS_CLASSES.P1_PX2}">${idColumnHeader}</th>
-                          <th scope="col" class="${CSS_CLASSES.P1_PX2}">Status</th>
-                          <th scope="col" class="${CSS_CLASSES.P1_PX2}">Start Time</th>
-                          <th scope="col" class="${CSS_CLASSES.P1_PX2}">Duration</th>
-                          <th scope="col" class="${CSS_CLASSES.P1_PX2}">UPID</th>
-                      </tr>
-                  </thead>
-                  <tbody id="${tbodyId}" class="${CSS_CLASSES.PBS_TASK_TBODY} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700}">
-                       <!-- Populated by JS -->
-                  </tbody>
-              </table>
-          </div>
-           <div id="${toggleButtonContainerId}" class="pbs-toggle-button-container ${CSS_CLASSES.PT1} ${CSS_CLASSES.TEXT_RIGHT}">
-                <button class="${CSS_CLASSES.PBS_SHOW_MORE} ${CSS_CLASSES.TEXT_BLUE_600_HOVER_BLUE_800_DARK_BLUE_400_DARK_HOVER_BLUE_300} ${CSS_CLASSES.HIDDEN}">Show More</button>
-                <p class="${CSS_CLASSES.PBS_NO_TASKS} ${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.TEXT_GRAY_400} dark:text-gray-500 ${CSS_CLASSES.HIDDEN} ${CSS_CLASSES.ITALIC}">No recent tasks found.</p>
-           </div>
-          `;
+      const _createTaskTableElement = (tableId, title, idColumnHeader) => {
+          const fragment = document.createDocumentFragment();
+
+          const heading = document.createElement('h4');
+          heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
+          heading.textContent = `Recent ${title} Tasks`;
+          fragment.appendChild(heading);
+
+          const tableContainer = document.createElement('div');
+          tableContainer.className = `${CSS_CLASSES.OVERFLOW_X_AUTO} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED}`;
+
+          const table = document.createElement('table');
+          table.id = tableId;
+          table.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}`;
+
+          const thead = document.createElement('thead');
+          thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+          const headerRow = document.createElement('tr');
+          headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TRACKING_WIDER} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
+
+          const headers = [idColumnHeader, 'Status', 'Start Time', 'Duration', 'UPID'];
+          headers.forEach(text => {
+              const th = document.createElement('th');
+              th.scope = 'col';
+              th.className = CSS_CLASSES.P1_PX2;
+              th.textContent = text;
+              headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+          table.appendChild(thead);
+
+          const tbody = document.createElement('tbody');
+          tbody.id = tableId.replace('-table-', '-tbody-');
+          tbody.className = `${CSS_CLASSES.PBS_TASK_TBODY} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700}`;
+          table.appendChild(tbody);
+          tableContainer.appendChild(table);
+          fragment.appendChild(tableContainer);
+
+          const toggleButtonContainer = document.createElement('div');
+          toggleButtonContainer.id = tableId.replace('-table', '-toggle-container');
+          toggleButtonContainer.className = `pbs-toggle-button-container ${CSS_CLASSES.PT1} ${CSS_CLASSES.TEXT_RIGHT}`;
+
+          const showMoreButton = document.createElement('button');
+          showMoreButton.className = `${CSS_CLASSES.PBS_SHOW_MORE} ${CSS_CLASSES.TEXT_BLUE_600_HOVER_BLUE_800_DARK_BLUE_400_DARK_HOVER_BLUE_300} ${CSS_CLASSES.HIDDEN}`;
+          showMoreButton.textContent = 'Show More';
+          toggleButtonContainer.appendChild(showMoreButton);
+
+          const noTasksMessage = document.createElement('p');
+          noTasksMessage.className = `${CSS_CLASSES.PBS_NO_TASKS} ${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.TEXT_GRAY_400} dark:text-gray-500 ${CSS_CLASSES.HIDDEN} ${CSS_CLASSES.ITALIC}`;
+          noTasksMessage.textContent = 'No recent tasks found.';
+          toggleButtonContainer.appendChild(noTasksMessage);
+
+          fragment.appendChild(toggleButtonContainer);
+          return fragment;
       };
 
       pbsArray.forEach((pbsInstance, index) => {
@@ -439,15 +536,111 @@ PulseApp.ui.pbs = (() => {
             if (health === 'ok') colorClass = CSS_CLASSES.BG_GREEN_500;
             else if (health === 'warning') colorClass = CSS_CLASSES.BG_YELLOW_500;
             else if (health === 'error') colorClass = CSS_CLASSES.BG_RED_500;
-            return `<span title="${title}" class="${CSS_CLASSES.INLINE_BLOCK} ${CSS_CLASSES.W_3} ${CSS_CLASSES.H_3} ${colorClass} ${CSS_CLASSES.ROUNDED_FULL} ${CSS_CLASSES.MR2} ${CSS_CLASSES.FLEX_SHRINK_0}"></span>`;
+            const span = document.createElement('span');
+            span.title = title;
+            span.className = `${CSS_CLASSES.INLINE_BLOCK} ${CSS_CLASSES.W_3} ${CSS_CLASSES.H_3} ${colorClass} ${CSS_CLASSES.ROUNDED_FULL} ${CSS_CLASSES.MR2} ${CSS_CLASSES.FLEX_SHRINK_0}`;
+            return span;
+        };
+
+        const _createPbsInstanceElement = (pbsInstanceData, instanceId, instanceName, overallHealth, healthTitle, showDetails, statusText) => {
+            const instanceWrapper = document.createElement('div');
+            instanceWrapper.className = `${CSS_CLASSES.PBS_INSTANCE_SECTION} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} p-4 mb-4 bg-gray-50/30 dark:bg-gray-800/30`;
+            instanceWrapper.id = ID_PREFIXES.PBS_INSTANCE + instanceId;
+
+            const headerDiv = document.createElement('div');
+            headerDiv.className = `${CSS_CLASSES.FLEX} ${CSS_CLASSES.JUSTIFY_BETWEEN} ${CSS_CLASSES.ITEMS_CENTER} ${CSS_CLASSES.MB3}`;
+            const instanceTitleElement = document.createElement('h3');
+            instanceTitleElement.className = `${CSS_CLASSES.TEXT_LG} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200} ${CSS_CLASSES.FLEX} ${CSS_CLASSES.ITEMS_CENTER}`;
+            instanceTitleElement.appendChild(_createHealthBadgeHTML(overallHealth, healthTitle));
+            instanceTitleElement.appendChild(document.createTextNode(instanceName));
+            headerDiv.appendChild(instanceTitleElement);
+            instanceWrapper.appendChild(headerDiv);
+
+            const detailsContainer = document.createElement('div');
+            detailsContainer.className = `${CSS_CLASSES.PBS_INSTANCE_DETAILS} ${CSS_CLASSES.SPACE_Y_4} ${showDetails ? '' : CSS_CLASSES.HIDDEN}`;
+            detailsContainer.id = ID_PREFIXES.PBS_DETAILS + instanceId;
+
+            const dsSection = document.createElement('div');
+            dsSection.id = ID_PREFIXES.PBS_DS_SECTION + instanceId;
+            const dsHeading = document.createElement('h4');
+            dsHeading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
+            dsHeading.textContent = 'Datastores';
+            dsSection.appendChild(dsHeading);
+            const dsTableContainer = document.createElement('div');
+            dsTableContainer.className = `${CSS_CLASSES.OVERFLOW_X_AUTO} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED}`;
+            const dsTable = document.createElement('table');
+            dsTable.id = ID_PREFIXES.PBS_DS_TABLE + instanceId;
+            dsTable.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}`;
+            const dsThead = document.createElement('thead');
+            dsThead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+            const dsHeaderRow = document.createElement('tr');
+            dsHeaderRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TRACKING_WIDER} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
+            ['Name', 'Path', 'Used', 'Available', 'Total', 'Usage', 'GC Status'].forEach(headerText => {
+                const th = document.createElement('th');
+                th.scope = 'col';
+                th.className = CSS_CLASSES.P1_PX2;
+                th.textContent = headerText;
+                dsHeaderRow.appendChild(th);
+            });
+            dsThead.appendChild(dsHeaderRow);
+            dsTable.appendChild(dsThead);
+            const dsTbody = document.createElement('tbody');
+            dsTbody.id = ID_PREFIXES.PBS_DS_TBODY + instanceId;
+            dsTbody.className = CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700;
+            dsTable.appendChild(dsTbody);
+            dsTableContainer.appendChild(dsTable);
+            dsSection.appendChild(dsTableContainer);
+            detailsContainer.appendChild(dsSection);
+
+            const summariesSection = document.createElement('div');
+            summariesSection.id = ID_PREFIXES.PBS_SUMMARIES_SECTION + instanceId;
+            summariesSection.className = `${CSS_CLASSES.GRID} ${CSS_CLASSES.GRID_COLS_1} ${CSS_CLASSES.MD_GRID_COLS_2} ${CSS_CLASSES.LG_GRID_COLS_4} ${CSS_CLASSES.GAP_4}`;
+            summariesSection.appendChild(_createSummaryCard('backup', 'Backups', pbsInstanceData.backupTasks));
+            summariesSection.appendChild(_createSummaryCard('verify', 'Verification', pbsInstanceData.verificationTasks));
+            summariesSection.appendChild(_createSummaryCard('sync', 'Sync', pbsInstanceData.syncTasks));
+            summariesSection.appendChild(_createSummaryCard('prune', 'Prune/GC', pbsInstanceData.pruneTasks));
+            detailsContainer.appendChild(summariesSection);
+
+            const recentBackupTasksSection = document.createElement('div');
+            recentBackupTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
+            recentBackupTasksSection.dataset.taskType = 'backup';
+            recentBackupTasksSection.appendChild(_createTaskTableElement(ID_PREFIXES.PBS_RECENT_BACKUP_TASKS_TABLE + instanceId, 'Backup', 'Guest'));
+            detailsContainer.appendChild(recentBackupTasksSection);
+
+            const recentVerifyTasksSection = document.createElement('div');
+            recentVerifyTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
+            recentVerifyTasksSection.dataset.taskType = 'verify';
+            recentVerifyTasksSection.appendChild(_createTaskTableElement(ID_PREFIXES.PBS_RECENT_VERIFY_TASKS_TABLE + instanceId, 'Verification', 'Guest/Group'));
+            detailsContainer.appendChild(recentVerifyTasksSection);
+
+            const recentSyncTasksSection = document.createElement('div');
+            recentSyncTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
+            recentSyncTasksSection.dataset.taskType = 'sync';
+            recentSyncTasksSection.appendChild(_createTaskTableElement(ID_PREFIXES.PBS_RECENT_SYNC_TASKS_TABLE + instanceId, 'Sync', 'Job ID'));
+            detailsContainer.appendChild(recentSyncTasksSection);
+
+            const recentPruneGcTasksSection = document.createElement('div');
+            recentPruneGcTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
+            recentPruneGcTasksSection.dataset.taskType = 'prunegc';
+            recentPruneGcTasksSection.appendChild(_createTaskTableElement(ID_PREFIXES.PBS_RECENT_PRUNEGC_TASKS_TABLE + instanceId, 'Prune/GC', 'Datastore/Group'));
+            detailsContainer.appendChild(recentPruneGcTasksSection);
+
+            instanceWrapper.appendChild(detailsContainer);
+
+            const dsTableBodyElement = instanceWrapper.querySelector(`#${ID_PREFIXES.PBS_DS_TBODY}${instanceId}`);
+            _populateDsTableBody(dsTableBodyElement, pbsInstanceData.datastores, statusText, showDetails);
+            _populateInstanceTaskSections(detailsContainer, instanceId, pbsInstanceData, statusText, showDetails);
+
+            return instanceWrapper;
         };
 
         if (instanceWrapper) {
             detailsContainer = instanceWrapper.querySelector(`#${ID_PREFIXES.PBS_DETAILS}${instanceId}`);
             instanceTitleElement = instanceWrapper.querySelector('h3');
-
             if (instanceTitleElement) {
-                instanceTitleElement.innerHTML = `${_createHealthBadgeHTML(overallHealth, healthTitle)}${instanceName}`;
+                instanceTitleElement.innerHTML = ''; // Clear existing content
+                instanceTitleElement.appendChild(_createHealthBadgeHTML(overallHealth, healthTitle));
+                instanceTitleElement.appendChild(document.createTextNode(instanceName));
             }
 
             if (detailsContainer) {
@@ -466,87 +659,10 @@ PulseApp.ui.pbs = (() => {
                 _populateInstanceTaskSections(detailsContainer, instanceId, pbsInstance, statusText, showDetails);
                 detailsContainer.classList.toggle(CSS_CLASSES.HIDDEN, !showDetails);
             }
-
         } else {
-            instanceWrapper = document.createElement('div');
-            instanceWrapper.className = `${CSS_CLASSES.PBS_INSTANCE_SECTION} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} p-4 mb-4 bg-gray-50/30 dark:bg-gray-800/30`;
-            instanceWrapper.id = instanceElementId;
-
-            const headerDiv = document.createElement('div');
-            headerDiv.className = `${CSS_CLASSES.FLEX} ${CSS_CLASSES.JUSTIFY_BETWEEN} ${CSS_CLASSES.ITEMS_CENTER} ${CSS_CLASSES.MB3}`;
-            instanceTitleElement = document.createElement('h3');
-            instanceTitleElement.className = `${CSS_CLASSES.TEXT_LG} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200} ${CSS_CLASSES.FLEX} ${CSS_CLASSES.ITEMS_CENTER}`;
-            instanceTitleElement.innerHTML = `${_createHealthBadgeHTML(overallHealth, healthTitle)}${instanceName}`;
-            headerDiv.appendChild(instanceTitleElement);
-            instanceWrapper.appendChild(headerDiv);
-
-            detailsContainer = document.createElement('div');
-            detailsContainer.className = `${CSS_CLASSES.PBS_INSTANCE_DETAILS} ${CSS_CLASSES.SPACE_Y_4} ${showDetails ? '' : CSS_CLASSES.HIDDEN}`;
-            detailsContainer.id = ID_PREFIXES.PBS_DETAILS + instanceId;
-
-            const dsSection = document.createElement('div');
-            dsSection.id = ID_PREFIXES.PBS_DS_SECTION + instanceId;
-            dsSection.innerHTML = `
-                <h4 class="${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}">Datastores</h4>
-                <div class="${CSS_CLASSES.OVERFLOW_X_AUTO} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED}">
-                    <table id="${ID_PREFIXES.PBS_DS_TABLE}${instanceId}" class="${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}">
-                         <thead class="${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}">
-                             <tr class="${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TRACKING_WIDER} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}">
-                                 <th scope="col" class="${CSS_CLASSES.P1_PX2}">Name</th>
-                                 <th scope="col" class="${CSS_CLASSES.P1_PX2}">Path</th>
-                                 <th scope="col" class="${CSS_CLASSES.P1_PX2}">Used</th>
-                                 <th scope="col" class="${CSS_CLASSES.P1_PX2}">Available</th>
-                                 <th scope="col" class="${CSS_CLASSES.P1_PX2}">Total</th>
-                                 <th scope="col" class="${CSS_CLASSES.P1_PX2}">Usage</th>
-                                 <th scope="col" class="${CSS_CLASSES.P1_PX2}">GC Status</th>
-                             </tr>
-                         </thead>
-                        <tbody id="${ID_PREFIXES.PBS_DS_TBODY}${instanceId}" class="${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700}"></tbody>
-                    </table>
-                </div>`;
-            detailsContainer.appendChild(dsSection);
-
-            const summariesSection = document.createElement('div');
-            summariesSection.id = ID_PREFIXES.PBS_SUMMARIES_SECTION + instanceId;
-            summariesSection.className = `${CSS_CLASSES.GRID} ${CSS_CLASSES.GRID_COLS_1} ${CSS_CLASSES.MD_GRID_COLS_2} ${CSS_CLASSES.LG_GRID_COLS_4} ${CSS_CLASSES.GAP_4}`;
-            summariesSection.appendChild(_createSummaryCard('backup', 'Backups', pbsInstance.backupTasks));
-            summariesSection.appendChild(_createSummaryCard('verify', 'Verification', pbsInstance.verificationTasks));
-            summariesSection.appendChild(_createSummaryCard('sync', 'Sync', pbsInstance.syncTasks));
-            summariesSection.appendChild(_createSummaryCard('prune', 'Prune/GC', pbsInstance.pruneTasks));
-            detailsContainer.appendChild(summariesSection);
-
-             const recentBackupTasksSection = document.createElement('div');
-             recentBackupTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
-             recentBackupTasksSection.dataset.taskType = 'backup';
-             recentBackupTasksSection.innerHTML = _createTaskTableHTML(ID_PREFIXES.PBS_RECENT_BACKUP_TASKS_TABLE + instanceId, 'Backup', 'Guest');
-             detailsContainer.appendChild(recentBackupTasksSection);
-
-             const recentVerifyTasksSection = document.createElement('div');
-             recentVerifyTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
-             recentVerifyTasksSection.dataset.taskType = 'verify';
-             recentVerifyTasksSection.innerHTML = _createTaskTableHTML(ID_PREFIXES.PBS_RECENT_VERIFY_TASKS_TABLE + instanceId, 'Verification', 'Guest/Group');
-             detailsContainer.appendChild(recentVerifyTasksSection);
-
-             const recentSyncTasksSection = document.createElement('div');
-             recentSyncTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
-             recentSyncTasksSection.dataset.taskType = 'sync';
-             recentSyncTasksSection.innerHTML = _createTaskTableHTML(ID_PREFIXES.PBS_RECENT_SYNC_TASKS_TABLE + instanceId, 'Sync', 'Job ID');
-             detailsContainer.appendChild(recentSyncTasksSection);
-
-             const recentPruneGcTasksSection = document.createElement('div');
-             recentPruneGcTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
-             recentPruneGcTasksSection.dataset.taskType = 'prunegc';
-             recentPruneGcTasksSection.innerHTML = _createTaskTableHTML(ID_PREFIXES.PBS_RECENT_PRUNEGC_TASKS_TABLE + instanceId, 'Prune/GC', 'Datastore/Group');
-             detailsContainer.appendChild(recentPruneGcTasksSection);
-
-            instanceWrapper.appendChild(detailsContainer);
+            instanceWrapper = _createPbsInstanceElement(pbsInstance, instanceId, instanceName, overallHealth, healthTitle, showDetails, statusText);
             container.appendChild(instanceWrapper);
-
-            dsTableBody = instanceWrapper.querySelector(`#${ID_PREFIXES.PBS_DS_TBODY}${instanceId}`);
-            _populateDsTableBody(dsTableBody, pbsInstance.datastores, statusText, showDetails);
-            _populateInstanceTaskSections(detailsContainer, instanceId, pbsInstance, statusText, showDetails);
         }
-
     });
 
     container.querySelectorAll(`.${CSS_CLASSES.PBS_INSTANCE_SECTION}`).forEach(el => {
