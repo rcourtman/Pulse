@@ -1,74 +1,46 @@
 const { processPbsTasks } = require('./pbsUtils'); // Assuming pbsUtils.js exists or will be created
 
-// Helper function reused from index.js (or import if shared)
+// Helper function to fetch data and handle common errors/warnings
+async function fetchNodeResource(apiClient, endpointId, nodeName, resourcePath, resourceName, expectArray = false, transformFn = null) {
+  try {
+    const response = await apiClient.get(`/nodes/${nodeName}/${resourcePath}`);
+    const data = response.data?.data;
+
+    if (data) {
+      if (expectArray && !Array.isArray(data)) {
+        console.warn(`[DataFetcher - ${endpointId}-${nodeName}] ${resourceName} data is not an array as expected.`);
+        return expectArray ? [] : null;
+      }
+      return transformFn ? transformFn(data) : data;
+    } else {
+      console.warn(`[DataFetcher - ${endpointId}-${nodeName}] ${resourceName} data missing or invalid format.`);
+      return expectArray ? [] : null;
+    }
+  } catch (error) {
+    console.error(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching ${resourceName}: ${error.message}`);
+    return expectArray ? [] : null; // Allow proceeding even if this resource fails
+  }
+}
+
 async function fetchDataForNode(apiClient, endpointId, nodeName) {
-  const nodeData = {
-    vms: [],
-    containers: [],
-    nodeStatus: {},
-    storage: []
-  };
-
-  // Fetch node status
-  try {
-    const statusResponse = await apiClient.get(`/nodes/${nodeName}/status`);
-    if (statusResponse.data?.data) {
-        nodeData.nodeStatus = statusResponse.data.data;
-    } else {
-        console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Node status data missing or invalid format.`);
-    }
-  } catch (error) {
-       console.error(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching node status: ${error.message}`);
-       // Allow proceeding even if status fails
-  }
-
-  // Fetch node storage
-  try {
-    const storageResponse = await apiClient.get(`/nodes/${nodeName}/storage`);
-    if (storageResponse.data?.data && Array.isArray(storageResponse.data.data)) {
-        nodeData.storage = storageResponse.data.data;
-    } else {
-        console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Node storage data missing or invalid format.`);
-    }
-  } catch (error) {
-      console.error(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching node storage: ${error.message}`);
-      // Allow proceeding even if storage fails
-  }
-
-
-  // --- Fetch VMs --- 
-  try {
-      const vmsResponse = await apiClient.get(`/nodes/${nodeName}/qemu`);
-      if (vmsResponse.data?.data && Array.isArray(vmsResponse.data.data)) {
-        nodeData.vms = vmsResponse.data.data.map(vm => ({ 
-            ...vm, node: nodeName, endpointId: endpointId, type: 'qemu' 
-        }));
-      }
-  } catch (error) {
-       console.error(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching VMs (qemu): ${error.message}`);
-       // Proceed without VMs if fetch fails
-  }
+  const nodeStatus = await fetchNodeResource(apiClient, endpointId, nodeName, 'status', 'Node status');
+  const storage = await fetchNodeResource(apiClient, endpointId, nodeName, 'storage', 'Node storage', true);
   
-  // --- Fetch containers --- 
-  try {
-      const ctsResponse = await apiClient.get(`/nodes/${nodeName}/lxc`);
-      if (ctsResponse.data?.data && Array.isArray(ctsResponse.data.data)) {
-         nodeData.containers = ctsResponse.data.data.map(ct => ({ 
-             ...ct, node: nodeName, endpointId: endpointId, type: 'lxc' 
-         }));
-      }
-  } catch (error) {
-       console.error(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching Containers (lxc): ${error.message}`);
-       // Proceed without containers if fetch fails
-  }
+  const vms = await fetchNodeResource(
+    apiClient, endpointId, nodeName, 'qemu', 'VMs (qemu)', true,
+    (data) => data.map(vm => ({ ...vm, node: nodeName, endpointId: endpointId, type: 'qemu' }))
+  );
 
+  const containers = await fetchNodeResource(
+    apiClient, endpointId, nodeName, 'lxc', 'Containers (lxc)', true,
+    (data) => data.map(ct => ({ ...ct, node: nodeName, endpointId: endpointId, type: 'lxc' }))
+  );
 
-  // Return all collected data, even if some parts failed.
   return {
-      vms: nodeData.vms,
-      containers: nodeData.containers,
-      nodeStatus: nodeData.nodeStatus,
-      storage: nodeData.storage,
+    vms: vms || [],
+    containers: containers || [],
+    nodeStatus: nodeStatus || {},
+    storage: storage || [],
   };
 }
 
@@ -123,39 +95,32 @@ async function fetchPveDiscoveryData(currentApiClients) {
                     const correspondingNodeInfo = nodes[index]; // Get the original info from /nodes
                     if (!correspondingNodeInfo || !correspondingNodeInfo.node) return;
 
-                    const baseNode = {
-                         // Explicit Defaults first:
-                         cpu: null,
-                         mem: null,
-                         disk: null,
-                         maxdisk: null,
-                         uptime: 0,
-                         loadavg: null,
-                         status: 'unknown',
-                         storage: [],
-                         // Explicitly copy known/expected fields from correspondingNodeInfo:
-                         node: correspondingNodeInfo.node,
-                         maxcpu: correspondingNodeInfo.maxcpu, // Assuming these exist
-                         maxmem: correspondingNodeInfo.maxmem,
-                         level: correspondingNodeInfo.level,
-                         // Set status based on correspondingNodeInfo, falling back to the default above:
-                         status: correspondingNodeInfo.status || 'unknown',
-                         // Set IDs:
-                         id: `${endpointName}-${correspondingNodeInfo.node}`,
-                         endpointId: endpointName,
+                    // Initialize finalNode with defaults and info from /nodes endpoint
+                    const finalNode = {
+                        cpu: null,
+                        mem: null,
+                        disk: null,
+                        maxdisk: null,
+                        uptime: 0,
+                        loadavg: null,
+                        storage: [],
+                        node: correspondingNodeInfo.node,
+                        maxcpu: correspondingNodeInfo.maxcpu,
+                        maxmem: correspondingNodeInfo.maxmem,
+                        level: correspondingNodeInfo.level,
+                        status: correspondingNodeInfo.status || 'unknown',
+                        id: `${endpointName}-${correspondingNodeInfo.node}`,
+                        endpointId: endpointName,
                     };
 
                     if (result.status === 'fulfilled' && result.value) {
-                        // --- Guest fetch succeeded --- 
                         const nodeData = result.value;
-                        const currentEndpointId = endpointId;
-                        endpointVms.push(...nodeData.vms.map(vm => ({...vm, endpointId: currentEndpointId, id: `${endpointName}-${vm.node}-${vm.vmid}`})));
-                        endpointContainers.push(...nodeData.containers.map(ct => ({...ct, endpointId: currentEndpointId, id: `${endpointName}-${ct.node}-${ct.vmid}`})));
- 
-                        // Build the final node object, merging status/storage or keeping defaults
-                        let finalNode = { ...baseNode }; // Copy base node
-                        // Only merge status if nodeData.nodeStatus is not empty
-                        if(nodeData.nodeStatus && Object.keys(nodeData.nodeStatus).length > 0) {
+                        const currentEndpointId = endpointId; // Renamed from endpointId to avoid conflict in map
+                        
+                        endpointVms.push(...(nodeData.vms || []).map(vm => ({ ...vm, endpointId: currentEndpointId, id: `${endpointName}-${vm.node}-${vm.vmid}` })));
+                        endpointContainers.push(...(nodeData.containers || []).map(ct => ({ ...ct, endpointId: currentEndpointId, id: `${endpointName}-${ct.node}-${ct.vmid}` })));
+
+                        if (nodeData.nodeStatus && Object.keys(nodeData.nodeStatus).length > 0) {
                             const statusData = nodeData.nodeStatus;
                             finalNode.cpu = statusData.cpu;
                             finalNode.mem = statusData.memory?.used || statusData.mem;
@@ -163,22 +128,22 @@ async function fetchPveDiscoveryData(currentApiClients) {
                             finalNode.maxdisk = statusData.rootfs?.total || statusData.maxdisk;
                             finalNode.uptime = statusData.uptime;
                             finalNode.loadavg = statusData.loadavg;
-                            finalNode.status = statusData.uptime > 0 ? 'online' : baseNode.status; // Use baseNode status if uptime is 0
+                            // Update status only if uptime indicates online, otherwise keep the status from /nodes
+                            if (statusData.uptime > 0) {
+                                finalNode.status = 'online';
+                            }
                         }
-                        finalNode.storage = nodeData.storage || baseNode.storage; // Use baseNode storage if nodeData.storage is missing
+                        finalNode.storage = nodeData.storage && nodeData.storage.length > 0 ? nodeData.storage : finalNode.storage;
                         
                         processedNodes.push(finalNode);
-                         
-                    } else { // Includes result.status === 'rejected' or other unexpected cases
-                         // --- Guest fetch failed OR nodeData missing --- 
-                         if (result.status === 'rejected') {
-                              console.error(`[DataFetcher - ${endpointName}] Error processing node ${correspondingNodeInfo.node}: ${result.reason?.message || result.reason}`);
-                         } else {
-                              // Handle cases where status is fulfilled but value might be invalid
-                              console.warn(`[DataFetcher - ${endpointName}] Unexpected result status for node ${correspondingNodeInfo.node}: ${result.status}`);
-                         }
-                         // Push the base node object (which has defaults correctly applied) 
-                         processedNodes.push(baseNode);
+                    } else {
+                        if (result.status === 'rejected') {
+                            console.error(`[DataFetcher - ${endpointName}] Error processing node ${correspondingNodeInfo.node}: ${result.reason?.message || result.reason}`);
+                        } else {
+                            console.warn(`[DataFetcher - ${endpointName}] Unexpected result status for node ${correspondingNodeInfo.node}: ${result.status}`);
+                        }
+                        // Push the node with defaults if fetching detailed data failed
+                        processedNodes.push(finalNode);
                     }
                 });
                 
@@ -363,38 +328,61 @@ async function fetchPbsData(currentPbsApiClients) {
     const pbsPromises = pbsClientIds.map(async (pbsClientId) => {
         const pbsClient = currentPbsApiClients[pbsClientId]; // { client, config }
         const instanceName = pbsClient.config.name;
-        let instanceData = { /* Initial structure */ };
+        // Initialize status and include identifiers early
+        let instanceData = { 
+            pbsEndpointId: pbsClientId, 
+            pbsInstanceName: instanceName, 
+            status: 'pending_initialization' 
+        };
 
         try {
+            console.log(`INFO: [DataFetcher - ${instanceName}] Starting fetch. Initial status: ${instanceData.status}`);
+
             const nodeName = pbsClient.config.nodeName || await fetchPbsNodeName(pbsClient);
+            console.log(`INFO: [DataFetcher - ${instanceName}] Determined nodeName: '${nodeName}'. Configured nodeName: '${pbsClient.config.nodeName}'`);
+
             if (nodeName && nodeName !== 'localhost' && !pbsClient.config.nodeName) {
                  pbsClient.config.nodeName = nodeName; // Store detected name back
+                 console.log(`INFO: [DataFetcher - ${instanceName}] Stored detected nodeName: '${nodeName}' to config.`);
             }
 
             if (nodeName && nodeName !== 'localhost') {
+                console.log(`INFO: [DataFetcher - ${instanceName}] Node name '${nodeName}' is valid. Proceeding with data fetch.`);
+
                 const datastoresResult = await fetchPbsDatastoreData(pbsClient);
                 const snapshotFetchPromises = datastoresResult.map(async (ds) => {
                     ds.snapshots = await fetchPbsDatastoreSnapshots(pbsClient, ds.name);
                     return ds;
                 });
                 instanceData.datastores = await Promise.all(snapshotFetchPromises);
-
+                console.log(`INFO: [DataFetcher - ${instanceName}] Datastores and snapshots fetched. Number of datastores: ${instanceData.datastores ? instanceData.datastores.length : 'N/A'}`);
+                
                 const allTasksResult = await fetchAllPbsTasksForProcessing(pbsClient, nodeName);
+                console.log(`INFO: [DataFetcher - ${instanceName}] Tasks fetched. Result error: ${allTasksResult.error}, Tasks found: ${allTasksResult.tasks ? allTasksResult.tasks.length : 'null'}`);
+
                 if (allTasksResult.tasks) {
+                    console.log(`INFO: [DataFetcher - ${instanceName}] Processing tasks...`);
                     const processedTasks = processPbsTasks(allTasksResult.tasks); // Assumes processPbsTasks is imported
                     instanceData = { ...instanceData, ...processedTasks }; // Merge task summaries
+                    console.log(`INFO: [DataFetcher - ${instanceName}] Tasks processed.`);
+                } else {
+                    console.warn(`WARN: [DataFetcher - ${instanceName}] No tasks to process or task fetching failed.`);
                 }
+                
                 instanceData.status = 'ok';
                 instanceData.nodeName = nodeName; // Ensure nodeName is set
+                console.log(`INFO: [DataFetcher - ${instanceName}] Successfully fetched all data. Status set to: ${instanceData.status}`);
             } else {
+                 console.warn(`WARN: [DataFetcher - ${instanceName}] Node name '${nodeName}' is invalid or 'localhost'. Throwing error.`);
                  throw new Error(`Could not determine node name for PBS instance ${instanceName}`);
             }
         } catch (pbsError) {
-            console.error(`ERROR: [DataFetcher] PBS fetch failed for ${instanceName}: ${pbsError.message}`);
+            console.error(`ERROR: [DataFetcher - ${instanceName}] PBS fetch failed (outer catch): ${pbsError.message}. Stack: ${pbsError.stack}`);
             instanceData.status = 'error';
+            console.log(`INFO: [DataFetcher - ${instanceName}] Status set to '${instanceData.status}' due to error.`);
         }
-        instanceData.pbsEndpointId = pbsClientId;
-        instanceData.pbsInstanceName = instanceName;
+        // pbsEndpointId and pbsInstanceName are already part of instanceData from initialization
+        console.log(`INFO: [DataFetcher - ${instanceName}] Finalizing instance data. Status: ${instanceData.status}, NodeName: ${instanceData.nodeName || 'N/A'}`);
         return instanceData;
     });
 
@@ -599,6 +587,51 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
     return allMetrics;
 }
 
+async function fetchQemuAgentMemoryInfo(apiClient, nodeName, vmid, guestName, endpointName, currentMetrics) {
+    try {
+        const agentMemInfoResponse = await apiClient.post(`/nodes/${nodeName}/qemu/${vmid}/agent/get-memory-block-info`, {});
+        
+        if (agentMemInfoResponse?.data?.data?.result) {
+            const agentMem = agentMemInfoResponse.data.data.result;
+            let guestMemoryDetails = null;
+
+            if (Array.isArray(agentMem) && agentMem.length > 0 && agentMem[0].hasOwnProperty('total') && agentMem[0].hasOwnProperty('free')) {
+                guestMemoryDetails = agentMem[0];
+            } else if (typeof agentMem === 'object' && agentMem !== null && agentMem.hasOwnProperty('total') && agentMem.hasOwnProperty('free')) {
+                guestMemoryDetails = agentMem;
+            }
+
+            if (guestMemoryDetails) {
+                currentMetrics.guest_mem_total_bytes = guestMemoryDetails.total;
+                currentMetrics.guest_mem_free_bytes = guestMemoryDetails.free;
+                currentMetrics.guest_mem_available_bytes = guestMemoryDetails.available;
+                currentMetrics.guest_mem_cached_bytes = guestMemoryDetails.cached;
+                currentMetrics.guest_mem_buffers_bytes = guestMemoryDetails.buffers;
+
+                if (guestMemoryDetails.available !== undefined) {
+                    currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.available;
+                } else if (guestMemoryDetails.cached !== undefined && guestMemoryDetails.buffers !== undefined) {
+                    currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free - guestMemoryDetails.cached - guestMemoryDetails.buffers;
+                } else {
+                    currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free;
+                }
+                console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory fetched: Actual Used: ${((currentMetrics.guest_mem_actual_used_bytes || 0) / (1024*1024)).toFixed(0)}MB`);
+            } else {
+                console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory command 'get-memory-block-info' response format not as expected. Data:`, agentMemInfoResponse.data.data);
+            }
+        } else {
+             console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory command 'get-memory-block-info' did not return expected data structure. Response:`, agentMemInfoResponse.data);
+        }
+    } catch (agentError) {
+        if (agentError.response && agentError.response.status === 500 && agentError.response.data && agentError.response.data.data && agentError.response.data.data.exitcode === -2) {
+             console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): QEMU Guest Agent not responsive or command 'get-memory-block-info' not available/supported. Error: ${agentError.message}`);
+        } else {
+             console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Error fetching guest agent memory info: ${agentError.message}. Status: ${agentError.response?.status}`);
+        }
+    }
+    return currentMetrics;
+}
+
 module.exports = {
     fetchDiscoveryData,
     fetchPbsData, // Keep exporting the real one
@@ -607,4 +640,4 @@ module.exports = {
     // fetchPbsNodeName,
     // fetchPbsDatastoreData,
     // fetchAllPbsTasksForProcessing
-}; 
+};
