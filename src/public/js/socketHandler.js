@@ -1,52 +1,60 @@
 PulseApp.socketHandler = (() => {
     let socket = null;
+    let uiUpdateCallback = () => { console.warn('[socketHandler] uiUpdateCallback not assigned.'); };
+    let loadingOverlayCallback = () => { console.warn('[socketHandler] loadingOverlayCallback not assigned.'); };
 
-    // Expose the UI update function reference
-    let updateAllUITablesRef = () => { 
-        console.warn('[socketHandler] updateAllUITablesRef is not yet assigned.');
-    };
-
-    function init(updateFunctionRef) {
+    function init(updateFunctionRef, overlayUpdateRef) {
         socket = io();
-        updateAllUITablesRef = updateFunctionRef; // Assign the function passed from main.js
+        uiUpdateCallback = updateFunctionRef;
+        loadingOverlayCallback = overlayUpdateRef;
 
         socket.on('connect', handleConnect);
         socket.on('disconnect', handleDisconnect);
         socket.on('initialState', handleInitialState);
         socket.on('rawData', handleRawData);
         socket.on('pbsInitialStatus', handlePbsInitialStatus);
-
-        socket.onAny((eventName, ...args) => {
+        socket.on('hotReload', () => {
+            console.log('[socketHandler] Hot reload requested. Reloading page...');
+            window.location.reload();
         });
+
+        // Optional: for debugging all events
+        // socket.onAny((eventName, ...args) => {
+        //     console.log(`[Socket Event Debug] Event: ${eventName}`, args);
+        // });
+    }
+
+    function updateConnectionStatusUI(isConnected) {
+        const connectionStatus = document.getElementById('connection-status');
+        if (!connectionStatus) return;
+
+        const statusText = isConnected ? 'Connected' : 'Disconnected';
+        const addClasses = isConnected 
+            ? ['connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300']
+            : ['disconnected', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300'];
+        const removeClasses = isConnected
+            ? ['disconnected', 'bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300']
+            : ['connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300', 'bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400'];
+
+        connectionStatus.textContent = statusText;
+        connectionStatus.classList.remove(...removeClasses);
+        connectionStatus.classList.add(...addClasses);
     }
 
     function handleConnect() {
-        const connectionStatus = document.getElementById('connection-status');
-        if (connectionStatus) {
-            connectionStatus.textContent = 'Connected';
-            connectionStatus.classList.remove('disconnected', 'bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300');
-            connectionStatus.classList.add('connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300');
+        updateConnectionStatusUI(true);
+        PulseApp.state.set('wasConnected', true);
+        requestFullData(); // Request data on new connection or reconnection
+        if (typeof loadingOverlayCallback === 'function') {
+            loadingOverlayCallback(); // Update overlay based on current state
         }
-        requestFullData();
     }
 
     function handleDisconnect(reason) {
-        const connectionStatus = document.getElementById('connection-status');
-        if (connectionStatus) {
-            connectionStatus.textContent = 'Disconnected';
-            connectionStatus.classList.remove('connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300');
-            connectionStatus.classList.add('disconnected', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300');
-        }
+        updateConnectionStatusUI(false);
         PulseApp.state.set('wasConnected', false);
-
-        const loadingOverlay = document.getElementById('loading-overlay');
-        if (loadingOverlay) {
-          const loadingText = loadingOverlay.querySelector('p');
-          if (loadingText) {
-              loadingText.textContent = 'Connection lost.';
-
-          }
-          loadingOverlay.style.display = 'flex';
+        if (typeof loadingOverlayCallback === 'function') {
+            loadingOverlayCallback(); // This should show the overlay with "Connection lost"
         }
     }
 
@@ -54,78 +62,45 @@ PulseApp.socketHandler = (() => {
         console.log('[socketHandler] Received initial state:', state);
         const isPlaceholder = state.isConfigPlaceholder || false;
         PulseApp.state.set('isConfigPlaceholder', isPlaceholder);
+        PulseApp.state.set('initialDataReceived', false); // Mark that full data hasn't arrived yet
 
-        // Ensure loading overlay is visible and set correct text
-        const loadingOverlay = document.getElementById('loading-overlay');
-        if (loadingOverlay) {
-            const loadingText = loadingOverlay.querySelector('p');
-            if (loadingText) {
-                loadingText.textContent = isPlaceholder ? 'Configuration Required' : 'Loading data...';
-            }
-            loadingOverlay.style.display = 'flex'; // Ensure visible
+        const statusText = document.getElementById('dashboard-status-text');
+        if (statusText) {
+            statusText.textContent = isPlaceholder ? 'Configuration Required' : 'Loading initial data...';
         }
-
-        if (state && state.loading) {
-             // Update status text (this is separate from overlay)
-             const statusText = document.getElementById('dashboard-status-text');
-             if (statusText) {
-                 statusText.textContent = isPlaceholder ? 'Configuration Required' : 'Loading initial data...';
-             }
+        
+        if (typeof loadingOverlayCallback === 'function') {
+            loadingOverlayCallback(); // Update overlay based on placeholder status and lack of data
         }
     }
 
     function handleRawData(jsonData) {
         try {
             const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
-            const isPlaceholder = data.isConfigPlaceholder || false;
-            PulseApp.state.set('isConfigPlaceholder', isPlaceholder);
-
+            
+            PulseApp.state.set('isConfigPlaceholder', data.isConfigPlaceholder || false);
             PulseApp.state.set('nodesData', data.nodes || []);
             PulseApp.state.set('vmsData', data.vms || []);
             PulseApp.state.set('containersData', data.containers || []);
+            PulseApp.state.set('metricsData', data.metrics || []); // Ensure metrics are always set
+            PulseApp.state.set('pbsDataArray', Array.isArray(data.pbs) ? data.pbs : []);
 
-            if (data.hasOwnProperty('metrics')) {
-                 PulseApp.state.set('metricsData', data.metrics || []);
-            } else {
-            }
-
-            if (data.hasOwnProperty('pbs')) {
-                PulseApp.state.set('pbsDataArray', Array.isArray(data.pbs) ? data.pbs : []);
-            } else {
-            }
-
-            if (PulseApp.ui && PulseApp.ui.tabs) {
+            if (PulseApp.ui?.tabs) {
                 PulseApp.ui.tabs.updateTabAvailability();
+            }
+
+            // Set initialDataReceived to true only after successfully processing raw data
+            PulseApp.state.set('initialDataReceived', true); 
+
+            if (typeof loadingOverlayCallback === 'function') {
+                loadingOverlayCallback(); // Hide overlay if not placeholder and data received
+            }
+
+            if (typeof uiUpdateCallback === 'function') {
+                uiUpdateCallback();
             } else {
-                console.warn('[socketHandler] PulseApp.ui.tabs not available for updateTabAvailability');
+                 console.error('[socketHandler] uiUpdateCallback is not a function!');
             }
-
-            if (!PulseApp.state.get('initialDataReceived')) {
-              PulseApp.state.set('initialDataReceived', true);
-            }
-
-            // Hide or update overlay based on config status AFTER data processing
-            const loadingOverlay = document.getElementById('loading-overlay');
-            if (loadingOverlay) {
-                if (isPlaceholder) {
-                    const loadingText = loadingOverlay.querySelector('p');
-                    if (loadingText) {
-                        loadingText.textContent = 'Configuration Required';
-                    }
-                    loadingOverlay.style.display = 'flex'; // Keep overlay visible
-                } else {
-                    loadingOverlay.style.display = 'none'; // Hide overlay on successful data load
-                }
-            }
-
-            // --- Trigger UI update after processing data --- 
-            if (typeof updateAllUITablesRef === 'function') {
-                updateAllUITablesRef();
-            } else {
-                 console.error('[socketHandler] updateAllUITablesRef is not a function!');
-            }
-            // --- END Trigger ---
-
         } catch (e) {
             console.error('Error processing received rawData:', e, jsonData);
         }
@@ -134,25 +109,26 @@ PulseApp.socketHandler = (() => {
     function handlePbsInitialStatus(pbsStatusArray) {
         if (Array.isArray(pbsStatusArray)) {
             const initialPbsData = pbsStatusArray.map(statusInfo => ({
-                ...statusInfo,
-                backupTasks: { recentTasks: [], summary: {} },
-                datastores: [],
-                verificationTasks: { summary: {} },
-                syncTasks: { summary: {} },
-                pruneTasks: { summary: {} },
-                nodeName: null
+                ...statusInfo, // Spread existing status info
+                // Initialize other fields if they might be missing from statusInfo
+                backupTasks: statusInfo.backupTasks || { recentTasks: [], summary: {} },
+                datastores: statusInfo.datastores || [],
+                verificationTasks: statusInfo.verificationTasks || { summary: {} },
+                syncTasks: statusInfo.syncTasks || { summary: {} },
+                pruneTasks: statusInfo.pruneTasks || { summary: {} },
+                nodeName: statusInfo.nodeName || null 
             }));
             PulseApp.state.set('pbsDataArray', initialPbsData);
+            // Don't set initialDataReceived here; wait for full rawData
 
-            if (PulseApp.ui && PulseApp.ui.pbs) {
+            if (PulseApp.ui?.pbs) {
                 PulseApp.ui.pbs.updatePbsInfo(initialPbsData);
-            } else {
-                console.warn('[socketHandler] PulseApp.ui.pbs not available for updatePbsInfo');
             }
-            if (PulseApp.ui && PulseApp.ui.tabs) {
+            if (PulseApp.ui?.tabs) {
                 PulseApp.ui.tabs.updateTabAvailability();
-            } else {
-                console.warn('[socketHandler] PulseApp.ui.tabs not available for updateTabAvailability');
+            }
+            if (typeof loadingOverlayCallback === 'function') {
+                loadingOverlayCallback(); // Update overlay, might still show "Loading..."
             }
         } else {
             console.warn('[socket] Received non-array data for pbsInitialStatus:', pbsStatusArray);
@@ -161,11 +137,10 @@ PulseApp.socketHandler = (() => {
 
     function requestFullData() {
         console.log('Requesting full data reload from server...');
-        // Remove overlay manipulation from here
-        if (socket) {
+        if (socket && socket.connected) { // Check if socket is connected before emitting
             socket.emit('requestData');
         } else {
-            console.error('Cannot request data: socket not initialized.');
+            console.error('Cannot request data: socket not initialized or not connected.');
         }
     }
 
@@ -178,4 +153,4 @@ PulseApp.socketHandler = (() => {
         requestFullData,
         isConnected
     };
-})(); 
+})();
