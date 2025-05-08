@@ -4,7 +4,6 @@ const state = {
   containers: [],
   metrics: [],
   pbs: [], // Array to hold data for each PBS instance
-  initialDataReceived: false, // Flag to track if initial discovery is done
   isConfigPlaceholder: false // Add this flag
 };
 
@@ -48,4 +47,4 @@ module.exports = {
   updateMetricsData,
   clearMetricsData,
   hasData,
-}; 
+};
