@@ -542,11 +542,7 @@ PulseApp.ui.pbs = (() => {
             return span;
         };
 
-        const _createPbsInstanceElement = (pbsInstanceData, instanceId, instanceName, overallHealth, healthTitle, showDetails, statusText) => {
-            const instanceWrapper = document.createElement('div');
-            instanceWrapper.className = `${CSS_CLASSES.PBS_INSTANCE_SECTION} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} p-4 mb-4 bg-gray-50/30 dark:bg-gray-800/30`;
-            instanceWrapper.id = ID_PREFIXES.PBS_INSTANCE + instanceId;
-
+        const _createInstanceHeaderDiv = (instanceName, overallHealth, healthTitle) => {
             const headerDiv = document.createElement('div');
             headerDiv.className = `${CSS_CLASSES.FLEX} ${CSS_CLASSES.JUSTIFY_BETWEEN} ${CSS_CLASSES.ITEMS_CENTER} ${CSS_CLASSES.MB3}`;
             const instanceTitleElement = document.createElement('h3');
@@ -554,12 +550,10 @@ PulseApp.ui.pbs = (() => {
             instanceTitleElement.appendChild(_createHealthBadgeHTML(overallHealth, healthTitle));
             instanceTitleElement.appendChild(document.createTextNode(instanceName));
             headerDiv.appendChild(instanceTitleElement);
-            instanceWrapper.appendChild(headerDiv);
+            return headerDiv;
+        };
 
-            const detailsContainer = document.createElement('div');
-            detailsContainer.className = `${CSS_CLASSES.PBS_INSTANCE_DETAILS} ${CSS_CLASSES.SPACE_Y_4} ${showDetails ? '' : CSS_CLASSES.HIDDEN}`;
-            detailsContainer.id = ID_PREFIXES.PBS_DETAILS + instanceId;
-
+        const _createDatastoreSectionElement = (instanceId) => {
             const dsSection = document.createElement('div');
             dsSection.id = ID_PREFIXES.PBS_DS_SECTION + instanceId;
             const dsHeading = document.createElement('h4');
@@ -590,8 +584,10 @@ PulseApp.ui.pbs = (() => {
             dsTable.appendChild(dsTbody);
             dsTableContainer.appendChild(dsTable);
             dsSection.appendChild(dsTableContainer);
-            detailsContainer.appendChild(dsSection);
+            return dsSection;
+        };
 
+        const _createSummariesSectionElement = (instanceId, pbsInstanceData) => {
             const summariesSection = document.createElement('div');
             summariesSection.id = ID_PREFIXES.PBS_SUMMARIES_SECTION + instanceId;
             summariesSection.className = `${CSS_CLASSES.GRID} ${CSS_CLASSES.GRID_COLS_1} ${CSS_CLASSES.MD_GRID_COLS_2} ${CSS_CLASSES.LG_GRID_COLS_4} ${CSS_CLASSES.GAP_4}`;
@@ -599,34 +595,48 @@ PulseApp.ui.pbs = (() => {
             summariesSection.appendChild(_createSummaryCard('verify', 'Verification', pbsInstanceData.verificationTasks));
             summariesSection.appendChild(_createSummaryCard('sync', 'Sync', pbsInstanceData.syncTasks));
             summariesSection.appendChild(_createSummaryCard('prune', 'Prune/GC', pbsInstanceData.pruneTasks));
-            detailsContainer.appendChild(summariesSection);
+            return summariesSection;
+        };
 
-            const recentBackupTasksSection = document.createElement('div');
-            recentBackupTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
-            recentBackupTasksSection.dataset.taskType = 'backup';
-            recentBackupTasksSection.appendChild(_createTaskTableElement(ID_PREFIXES.PBS_RECENT_BACKUP_TASKS_TABLE + instanceId, 'Backup', 'Guest'));
-            detailsContainer.appendChild(recentBackupTasksSection);
+        const _createAllTaskSectionsContainer = (instanceId) => {
+            const container = document.createElement('div'); // Or DocumentFragment
+            container.className = CSS_CLASSES.SPACE_Y_4; // Add some spacing between task sections
 
-            const recentVerifyTasksSection = document.createElement('div');
-            recentVerifyTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
-            recentVerifyTasksSection.dataset.taskType = 'verify';
-            recentVerifyTasksSection.appendChild(_createTaskTableElement(ID_PREFIXES.PBS_RECENT_VERIFY_TASKS_TABLE + instanceId, 'Verification', 'Guest/Group'));
-            detailsContainer.appendChild(recentVerifyTasksSection);
+            const taskDefinitions = [
+                { type: 'backup', title: 'Backup', idCol: 'Guest', tableIdPrefix: ID_PREFIXES.PBS_RECENT_BACKUP_TASKS_TABLE },
+                { type: 'verify', title: 'Verification', idCol: 'Guest/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_VERIFY_TASKS_TABLE },
+                { type: 'sync', title: 'Sync', idCol: 'Job ID', tableIdPrefix: ID_PREFIXES.PBS_RECENT_SYNC_TASKS_TABLE },
+                { type: 'prunegc', title: 'Prune/GC', idCol: 'Datastore/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_PRUNEGC_TASKS_TABLE }
+            ];
 
-            const recentSyncTasksSection = document.createElement('div');
-            recentSyncTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
-            recentSyncTasksSection.dataset.taskType = 'sync';
-            recentSyncTasksSection.appendChild(_createTaskTableElement(ID_PREFIXES.PBS_RECENT_SYNC_TASKS_TABLE + instanceId, 'Sync', 'Job ID'));
-            detailsContainer.appendChild(recentSyncTasksSection);
+            taskDefinitions.forEach(def => {
+                const taskSection = document.createElement('div');
+                taskSection.className = CSS_CLASSES.PBS_TASK_SECTION;
+                taskSection.dataset.taskType = def.type;
+                taskSection.appendChild(_createTaskTableElement(def.tableIdPrefix + instanceId, def.title, def.idCol));
+                container.appendChild(taskSection);
+            });
+            return container;
+        };
 
-            const recentPruneGcTasksSection = document.createElement('div');
-            recentPruneGcTasksSection.className = CSS_CLASSES.PBS_TASK_SECTION;
-            recentPruneGcTasksSection.dataset.taskType = 'prunegc';
-            recentPruneGcTasksSection.appendChild(_createTaskTableElement(ID_PREFIXES.PBS_RECENT_PRUNEGC_TASKS_TABLE + instanceId, 'Prune/GC', 'Datastore/Group'));
-            detailsContainer.appendChild(recentPruneGcTasksSection);
+        const _createPbsInstanceElement = (pbsInstanceData, instanceId, instanceName, overallHealth, healthTitle, showDetails, statusText) => {
+            const instanceWrapper = document.createElement('div');
+            instanceWrapper.className = `${CSS_CLASSES.PBS_INSTANCE_SECTION} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} p-4 mb-4 bg-gray-50/30 dark:bg-gray-800/30`;
+            instanceWrapper.id = ID_PREFIXES.PBS_INSTANCE + instanceId;
 
+            instanceWrapper.appendChild(_createInstanceHeaderDiv(instanceName, overallHealth, healthTitle));
+
+            const detailsContainer = document.createElement('div');
+            detailsContainer.className = `${CSS_CLASSES.PBS_INSTANCE_DETAILS} ${CSS_CLASSES.SPACE_Y_4} ${showDetails ? '' : CSS_CLASSES.HIDDEN}`;
+            detailsContainer.id = ID_PREFIXES.PBS_DETAILS + instanceId;
+
+            detailsContainer.appendChild(_createDatastoreSectionElement(instanceId));
+            detailsContainer.appendChild(_createSummariesSectionElement(instanceId, pbsInstanceData));
+            detailsContainer.appendChild(_createAllTaskSectionsContainer(instanceId));
+            
             instanceWrapper.appendChild(detailsContainer);
 
+            // Populate dynamic content after structure is built
             const dsTableBodyElement = instanceWrapper.querySelector(`#${ID_PREFIXES.PBS_DS_TBODY}${instanceId}`);
             _populateDsTableBody(dsTableBodyElement, pbsInstanceData.datastores, statusText, showDetails);
             _populateInstanceTaskSections(detailsContainer, instanceId, pbsInstanceData, statusText, showDetails);
