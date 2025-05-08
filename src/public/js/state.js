@@ -38,16 +38,27 @@ PulseApp.state = (() => {
         activeLoggingThresholds: null
     };
 
-    for (const type in internalState.thresholdState) {
-        if (savedThresholdState.hasOwnProperty(type)) {
-            if (internalState.thresholdState[type].hasOwnProperty('operator')) {
-                internalState.thresholdState[type].operator = savedThresholdState[type]?.operator || '>=';
-                internalState.thresholdState[type].input = savedThresholdState[type]?.input || '';
-            } else {
-                internalState.thresholdState[type].value = savedThresholdState[type]?.value || 0;
-            }
+    // Initialize thresholdState by merging saved state with defaults
+    Object.keys(internalState.thresholdState).forEach(type => {
+        const savedTypeState = savedThresholdState[type] || {};
+        if (internalState.thresholdState[type].hasOwnProperty('operator')) { // Assuming this structure means it's the advanced threshold type
+            internalState.thresholdState[type] = {
+                operator: savedTypeState.operator || '>=',
+                input: savedTypeState.input || '',
+                // Preserve any other default properties if they exist
+                ...internalState.thresholdState[type],
+                ...savedTypeState // This ensures saved values overwrite defaults but keeps other default props
+            };
+        } else { // Simple value threshold
+            internalState.thresholdState[type] = {
+                value: savedTypeState.value || 0,
+                // Preserve any other default properties
+                ...internalState.thresholdState[type],
+                ...savedTypeState
+            };
         }
-    }
+    });
+
 
     function saveFilterState() {
         const stateToSave = {
@@ -125,4 +136,4 @@ PulseApp.state = (() => {
             delete internalState.dashboardHistory[guestId];
         }
     };
-})(); 
+})();
