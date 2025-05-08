@@ -61,7 +61,8 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             return { nodes: [], vms: [], containers: [] };
         }
 
-        const guestPromises = nodes.map(node => fetchDataForNode(apiClientInstance, endpointName, node.node));
+        // Pass the correct endpointId to fetchDataForNode
+        const guestPromises = nodes.map(node => fetchDataForNode(apiClientInstance, endpointId, node.node)); 
         const guestResults = await Promise.allSettled(guestPromises);
 
         let endpointVms = [];
@@ -79,15 +80,15 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 maxmem: correspondingNodeInfo.maxmem,
                 level: correspondingNodeInfo.level,
                 status: correspondingNodeInfo.status || 'unknown',
-                id: `${endpointName}-${correspondingNodeInfo.node}`,
-                endpointId: endpointName, // Use the actual endpointName here
+                id: `${endpointId}-${correspondingNodeInfo.node}`, // Use endpointId for node ID
+                endpointId: endpointId, // Use endpointId for tagging node
             };
 
             if (result.status === 'fulfilled' && result.value) {
                 const nodeData = result.value;
-                // Use endpointName for constructing IDs
-                endpointVms.push(...(nodeData.vms || []).map(vm => ({ ...vm, endpointId: endpointName, id: `${endpointName}-${vm.node}-${vm.vmid}` })));
-                endpointContainers.push(...(nodeData.containers || []).map(ct => ({ ...ct, endpointId: endpointName, id: `${endpointName}-${ct.node}-${ct.vmid}` })));
+                // Use endpointId (the actual key) for constructing IDs and tagging
+                endpointVms.push(...(nodeData.vms || []).map(vm => ({ ...vm, endpointId: endpointId, id: `${endpointId}-${vm.node}-${vm.vmid}` })));
+                endpointContainers.push(...(nodeData.containers || []).map(ct => ({ ...ct, endpointId: endpointId, id: `${endpointId}-${ct.node}-${ct.vmid}` })));
 
                 if (nodeData.nodeStatus && Object.keys(nodeData.nodeStatus).length > 0) {
                     const statusData = nodeData.nodeStatus;
