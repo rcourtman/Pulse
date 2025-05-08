@@ -63,31 +63,45 @@ function initializePveClients(endpoints) {
       ? `${endpoint.host}/api2/json`
       : `https://${endpoint.host}:${endpoint.port}/api2/json`;
 
-    const apiClient = axios.create({
-      baseURL: baseURL,
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: !endpoint.allowSelfSignedCerts
-      }),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
-
-    // Use the extracted interceptor function
-    apiClient.interceptors.request.use(createPveAuthInterceptor(endpoint));
-
-    // Apply retry logic
-    axiosRetry(apiClient, {
-      retries: 3,
-      retryDelay: pveRetryDelayLogger.bind(null, endpoint.name),
-      retryCondition: pveRetryConditionChecker,
-    });
+    const authInterceptor = createPveAuthInterceptor(endpoint);
+    const retryConfig = {
+      retryDelayLogger: pveRetryDelayLogger.bind(null, endpoint.name),
+      retryConditionChecker: pveRetryConditionChecker,
+    };
+    
+    const apiClient = createApiClientInstance(baseURL, endpoint.allowSelfSignedCerts, authInterceptor, retryConfig);
 
     apiClients[endpoint.id] = { client: apiClient, config: endpoint };
     console.log(`INFO: Initialized PVE API client for endpoint: ${endpoint.name} (${endpoint.host})`);
   });
 
   return apiClients;
+}
+
+// Generic function to create an Axios API client instance
+function createApiClientInstance(baseURL, allowSelfSignedCerts, authInterceptor, retryConfig) {
+  const apiClient = axios.create({
+    baseURL: baseURL,
+    httpsAgent: new https.Agent({
+      rejectUnauthorized: !allowSelfSignedCerts
+    }),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+
+  if (authInterceptor) {
+    apiClient.interceptors.request.use(authInterceptor);
+  }
+
+  if (retryConfig) {
+    axiosRetry(apiClient, {
+      retries: retryConfig.retries || 3,
+      retryDelay: retryConfig.retryDelayLogger,
+      retryCondition: retryConfig.retryConditionChecker,
+    });
+  }
+  return apiClient;
 }
 
 /**
@@ -144,24 +158,15 @@ async function initializePbsClients(pbsConfigs) {
               const pbsBaseURL = config.host.includes('://')
                   ? `${config.host}/api2/json`
                   : `https://${config.host}:${config.port}/api2/json`;
+              
+              const authInterceptor = createPbsAuthInterceptor(config);
+              const retryConfig = {
+                retryDelayLogger: pbsRetryDelayLogger.bind(null, config.name),
+                retryConditionChecker: pbsRetryConditionChecker,
+              };
 
-              const pbsAxiosInstance = axios.create({
-                  baseURL: pbsBaseURL,
-                  httpsAgent: new https.Agent({
-                      rejectUnauthorized: !config.allowSelfSignedCerts
-                  }),
-                  headers: { 'Content-Type': 'application/json' }
-              });
-
-              // Use the extracted interceptor function
-              pbsAxiosInstance.interceptors.request.use(createPbsAuthInterceptor(config));
-
-              axiosRetry(pbsAxiosInstance, {
-                  retries: 3,
-                  retryDelay: pbsRetryDelayLogger.bind(null, config.name),
-                  retryCondition: pbsRetryConditionChecker,
-              });
-
+              const pbsAxiosInstance = createApiClientInstance(pbsBaseURL, config.allowSelfSignedCerts, authInterceptor, retryConfig);
+              
               clientData = { client: pbsAxiosInstance, config: config };
               console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)`);
           } else {
@@ -203,4 +208,4 @@ module.exports = {
   pveRetryConditionChecker,
   pbsRetryDelayLogger,
   pbsRetryConditionChecker,
-}; 
+};
