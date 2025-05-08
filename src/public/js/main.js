@@ -15,17 +15,31 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.pbs?.updatePbsInfo(pbsDataArray);
         PulseApp.ui.backups?.updateBackupsTab();
 
-        const loadingOverlay = document.getElementById('loading-overlay');
-        if (loadingOverlay && loadingOverlay.style.display !== 'none') {
-            if (PulseApp.socketHandler?.isConnected()) {
-                console.log('[UI Update] First data received, hiding loading overlay.');
-                loadingOverlay.style.display = 'none';
-            } else {
-                 console.log('[UI Update] Data received, but socket disconnected. Keeping loading overlay.');
-            }
-        }
+        updateLoadingOverlayVisibility(); // Call the helper function
 
         PulseApp.thresholds?.logging?.checkThresholdViolations();
+    }
+
+    function updateLoadingOverlayVisibility() {
+        const loadingOverlay = document.getElementById('loading-overlay');
+        if (!loadingOverlay) return;
+
+        const isConnected = PulseApp.socketHandler?.isConnected();
+        const initialDataReceived = PulseApp.state?.get('initialDataReceived');
+
+        if (loadingOverlay.style.display !== 'none') { // Only act if currently visible
+            if (isConnected && initialDataReceived) {
+                console.log('[UI Update] Data received and socket connected, hiding loading overlay.');
+                loadingOverlay.style.display = 'none';
+            } else if (!isConnected) {
+                console.log('[UI Update] Socket disconnected. Keeping loading overlay visible.');
+            }
+            // If initialDataReceived is false, or socket is connected but no data yet, overlay remains.
+        } else if (!isConnected && loadingOverlay.style.display === 'none') {
+            // If overlay is hidden but socket disconnects, re-show it.
+            console.log('[UI Update] Socket disconnected and overlay was hidden. Re-showing loading overlay.');
+            loadingOverlay.style.display = 'flex'; // Or 'block', or its original display type
+        }
     }
 
     function initializeModules() {
@@ -33,7 +47,9 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.config?.init?.();
         PulseApp.utils?.init?.();
         PulseApp.theme?.init?.();
-        PulseApp.socketHandler?.init?.(updateAllUITables);
+        // Ensure socketHandler.init receives both callbacks if it's designed to accept them
+        // If socketHandler.init only expects one, this might need adjustment in socketHandler.js
+        PulseApp.socketHandler?.init?.(updateAllUITables, updateLoadingOverlayVisibility); 
         PulseApp.tooltips?.init?.();
 
         PulseApp.ui = PulseApp.ui || {};
@@ -94,4 +110,4 @@ document.addEventListener('DOMContentLoaded', function() {
 
     initializeModules();
     fetchVersion();
-}); 
+});
