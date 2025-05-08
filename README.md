@@ -417,6 +417,38 @@ If enabled via the script, a cron job runs `./install-pulse.sh --update` Daily/W
 
 </details>
 
+### Running from Release Tarball
+
+For users who prefer not to use Docker or the LXC script, pre-packaged release tarballs are available.
+
+**Prerequisites:**
+- Node.js (Version 18.x or later recommended)
+- npm (comes with Node.js)
+- `tar` command (standard on Linux/macOS, available via tools like 7-Zip or WSL on Windows)
+
+**Steps:**
+
+1.  **Download:** Go to the [Pulse GitHub Releases page](https://github.com/rcourtman/Pulse/releases/latest). Download the `pulse-vX.Y.Z.tar.gz` file for the desired release.
+2.  **Extract:** Create a directory and extract the tarball:
+    ```bash
+    mkdir pulse-app
+    cd pulse-app
+    tar -xzf /path/to/downloaded/pulse-vX.Y.Z.tar.gz
+    # This creates a directory like pulse-vX.Y.Z/
+    cd pulse-vX.Y.Z
+    ```
+3.  **Configure:** Copy the environment file template and edit it with your details (see [Configuration](#️-configuration)):
+    ```bash
+    cp .env.example .env
+    nano .env # Or your preferred editor
+    ```
+4.  **Run:** Start the application using npm:
+    ```bash
+    npm start
+    ```
+    *(Note: The tarball includes pre-installed production dependencies, so `npm install` is not typically required unless you encounter issues.)*
+5.  **Access:** Open your browser to `http://<your-server-ip>:7655` (or the port configured in `.env`).
+
 ### ️ Running the Application (Node.js - Development)
 
 For development purposes or running directly from source, see the **[DEVELOPMENT.md](DEVELOPMENT.md)** guide. This involves cloning the repository, installing dependencies using `npm install` in both the root and `server` directories, and running `npm run dev` or `npm run start`.
@@ -441,7 +473,7 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Proxmox Backup Server:** Version 2.x or 3.x recommended (if monitored).
 - **Web Browser:** Modern evergreen browser.
 
-## 👋 Contributing
+## � Contributing
 
 Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md).
 
@@ -451,7 +483,7 @@ Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTIN
 *   **Local Communication:** Operates entirely between your environment and your Proxmox/PBS APIs.
 *   **Credential Handling:** Credentials are used only for API authentication and are not logged or sent elsewhere.
 
-## 📜 License
+## �📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.
 
