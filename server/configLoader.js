@@ -137,46 +137,67 @@ function loadConfiguration() {
     // --- Load All Proxmox Endpoint Configurations ---
     const endpoints = [];
 
-    // Load primary endpoint (index 0)
-    endpoints.push({
-        id: 'primary',
-        name: process.env.PROXMOX_NODE_NAME || process.env.PROXMOX_HOST,
-        host: process.env.PROXMOX_HOST,
-        port: process.env.PROXMOX_PORT || '8006',
-        tokenId: process.env.PROXMOX_TOKEN_ID,
-        tokenSecret: process.env.PROXMOX_TOKEN_SECRET,
-        enabled: process.env.PROXMOX_ENABLED !== 'false',
-        allowSelfSignedCerts: process.env.PROXMOX_ALLOW_SELF_SIGNED_CERTS !== 'false',
-    });
+    function createProxmoxEndpointConfig(idPrefix, index, hostEnv, portEnv, tokenIdEnv, tokenSecretEnv, enabledEnv, selfSignedEnv, nodeNameEnv) {
+        const host = process.env[hostEnv];
+        const tokenId = process.env[tokenIdEnv];
+        const tokenSecret = process.env[tokenSecretEnv];
+        const nodeName = process.env[nodeNameEnv];
 
+        // Basic validation for additional endpoints (primary is validated earlier)
+        if (index !== null && (!tokenId || !tokenSecret)) {
+            console.warn(`WARN: Skipping endpoint ${index || idPrefix} (Host: ${host}). Missing token ID or secret.`);
+            return null;
+        }
+        if (index !== null && placeholderValues.some(p => host.includes(p) || tokenId.includes(p) || tokenSecret.includes(p))) {
+            console.warn(`WARN: Skipping endpoint ${index || idPrefix} (Host: ${host}). Environment variables seem to contain placeholder values.`);
+            return null;
+        }
+        
+        return {
+            id: index ? `${idPrefix}_${index}` : idPrefix,
+            name: nodeName || host,
+            host: host,
+            port: process.env[portEnv] || '8006',
+            tokenId: tokenId,
+            tokenSecret: tokenSecret,
+            enabled: process.env[enabledEnv] !== 'false',
+            allowSelfSignedCerts: process.env[selfSignedEnv] !== 'false',
+        };
+    }
+
+    // Load primary endpoint (index null for helper)
+    const primaryEndpoint = createProxmoxEndpointConfig(
+        'primary', 
+        null, // No index for primary
+        'PROXMOX_HOST', 
+        'PROXMOX_PORT', 
+        'PROXMOX_TOKEN_ID', 
+        'PROXMOX_TOKEN_SECRET', 
+        'PROXMOX_ENABLED', 
+        'PROXMOX_ALLOW_SELF_SIGNED_CERTS',
+        'PROXMOX_NODE_NAME'
+    );
+    if (primaryEndpoint) { // Should always exist due to earlier checks, but good practice
+        endpoints.push(primaryEndpoint);
+    }
+    
     // Load additional Proxmox endpoints
     let i = 2;
     while (process.env[`PROXMOX_HOST_${i}`]) {
-        const host = process.env[`PROXMOX_HOST_${i}`];
-        const tokenId = process.env[`PROXMOX_TOKEN_ID_${i}`];
-        const tokenSecret = process.env[`PROXMOX_TOKEN_SECRET_${i}`];
-
-        if (!tokenId || !tokenSecret) {
-            console.warn(`WARN: Skipping endpoint ${i} (Host: ${host}). Missing PROXMOX_TOKEN_ID_${i} or PROXMOX_TOKEN_SECRET_${i}.`);
-            i++;
-            continue;
+        const additionalEndpoint = createProxmoxEndpointConfig(
+            'endpoint',
+            i,
+            `PROXMOX_HOST_${i}`,
+            `PROXMOX_PORT_${i}`,
+            `PROXMOX_TOKEN_ID_${i}`,
+            `PROXMOX_TOKEN_SECRET_${i}`,
+            `PROXMOX_ENABLED_${i}`,
+            `PROXMOX_ALLOW_SELF_SIGNED_CERTS_${i}`,
+            `PROXMOX_NODE_NAME_${i}`
+        );
+        if (additionalEndpoint) {
+            endpoints.push(additionalEndpoint);
         }
-        if (placeholderValues.some(p => host.includes(p) || tokenId.includes(p) || tokenSecret.includes(p))) {
-            console.warn(`WARN: Skipping endpoint ${i} (Host: ${host}). Environment variables seem to contain placeholder values.`);
-            i++;
-            continue;
-        }
-
-        endpoints.push({
-            id: `endpoint_${i}`,
-            name: process.env[`PROXMOX_NODE_NAME_${i}`] || host,
-            host: host,
-            port: process.env[`PROXMOX_PORT_${i}`] || '8006',
-            tokenId: tokenId,
-            tokenSecret: tokenSecret,
-            enabled: process.env[`PROXMOX_ENABLED_${i}`] !== 'false',
-            allowSelfSignedCerts: process.env[`PROXMOX_ALLOW_SELF_SIGNED_CERTS_${i}`] !== 'false',
-        });
         i++;
     }
 
@@ -222,4 +243,4 @@ function loadConfiguration() {
     return { endpoints, pbsConfigs, isConfigPlaceholder };
 }
 
-module.exports = { loadConfiguration, ConfigurationError }; // Export the function and error class 
+module.exports = { loadConfiguration, ConfigurationError }; // Export the function and error class
