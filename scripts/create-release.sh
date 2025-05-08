@@ -85,7 +85,7 @@ echo "Installing production dependencies in $STAGING_FULL_PATH..."
 # --- Create Tarball ---
 echo "Creating tarball: $TARBALL_NAME..."
 # Go into the parent of the directory to be tarred to avoid leading paths in tarball
-(cd "$STAGING_PARENT_DIR" && tar -czf "../../$TARBALL_NAME" "$RELEASE_DIR_NAME")
+(cd "$STAGING_PARENT_DIR" && tar -czf "../$TARBALL_NAME" "$RELEASE_DIR_NAME")
 
 # --- Cleanup ---
 echo "Cleaning up staging directory ($STAGING_PARENT_DIR)..."
