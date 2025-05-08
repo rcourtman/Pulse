@@ -41,7 +41,9 @@ PulseApp.ui.thresholds = (() => {
             console.warn('#toggle-thresholds-button not found.');
         }
 
-        setupThresholdListeners();
+        _setupSliderListeners();
+        _setupSelectListeners();
+        _setupDragEndListeners();
     }
 
     function applyInitialThresholdUI() {
@@ -57,52 +59,41 @@ PulseApp.ui.thresholds = (() => {
         }
     }
 
-    function setupThresholdListeners() {
+    function _handleThresholdDragStart(event) {
+        PulseApp.tooltips.updateSliderTooltip(event.target);
+        isDraggingSlider = true;
+        if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
+            PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
+        }
+    }
+
+    function _handleThresholdDragEnd() {
+        if (isDraggingSlider) {
+            isDraggingSlider = false;
+            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearGuestMetricSnapshots) {
+                PulseApp.ui.dashboard.clearGuestMetricSnapshots();
+            }
+        }
+    }
+
+    function _setupSliderListeners() {
         for (const type in sliders) {
-            if (sliders[type]) {
-                const sliderElement = sliders[type];
+            const sliderElement = sliders[type];
+            if (sliderElement) {
                 sliderElement.addEventListener('input', (event) => {
                     const value = event.target.value;
                     updateThreshold(type, value);
                     PulseApp.tooltips.updateSliderTooltip(event.target);
                 });
-
-                const showTooltip = (event) => PulseApp.tooltips.updateSliderTooltip(event.target);
-                sliderElement.addEventListener('mousedown', (event) => {
-                    showTooltip(event);
-                    isDraggingSlider = true;
-                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-                    }
-                });
-                document.addEventListener('mouseup', () => {
-                    if (isDraggingSlider) {
-                        isDraggingSlider = false;
-                        if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearGuestMetricSnapshots) {
-                            PulseApp.ui.dashboard.clearGuestMetricSnapshots();
-                        }
-                    }
-                });
-                sliderElement.addEventListener('touchstart', (event) => {
-                    showTooltip(event);
-                    isDraggingSlider = true;
-                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-                    }
-                }, { passive: true });
-                document.addEventListener('touchend', () => {
-                    if (isDraggingSlider) {
-                        isDraggingSlider = false;
-                        if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearGuestMetricSnapshots) {
-                            PulseApp.ui.dashboard.clearGuestMetricSnapshots();
-                        }
-                    }
-                });
+                sliderElement.addEventListener('mousedown', _handleThresholdDragStart);
+                sliderElement.addEventListener('touchstart', _handleThresholdDragStart, { passive: true });
             } else {
                 console.warn(`Slider element not found for type: ${type}`);
             }
         }
+    }
 
+    function _setupSelectListeners() {
         for (const type in thresholdSelects) {
             const selectElement = thresholdSelects[type];
             if (selectElement) {
@@ -110,9 +101,19 @@ PulseApp.ui.thresholds = (() => {
                     const value = event.target.value;
                     updateThreshold(type, value);
                 });
+            } else {
+                 console.warn(`Select element not found for type: ${type}`);
             }
         }
     }
+    
+    function _setupDragEndListeners() {
+        // Listen globally for drag end events
+        document.addEventListener('mouseup', _handleThresholdDragEnd);
+        document.addEventListener('touchend', _handleThresholdDragEnd);
+    }
+
+    // Old setupThresholdListeners function removed.
 
     function updateThreshold(type, value) {
         PulseApp.state.setThresholdValue(type, value);
@@ -139,34 +140,37 @@ PulseApp.ui.thresholds = (() => {
         }
     }
 
-    function updateThresholdIndicator() {
-        if (!thresholdBadge) return;
-
+    function _updateThresholdHeaderStyles(thresholdState) {
         const mainTableHeader = document.querySelector('#main-table thead');
-        if (!mainTableHeader) return;
+        if (!mainTableHeader) return 0; // Return 0 active count if header not found
 
-        const thresholdState = PulseApp.state.getThresholdState();
         let activeCount = 0;
+        const defaultColorClasses = ['text-gray-600', 'dark:text-gray-300'];
+        const activeColorClasses = ['text-blue-600', 'dark:text-blue-400'];
+
         for (const type in thresholdState) {
-            const defaultColorClasses = ['text-gray-600', 'dark:text-gray-300'];
-            const activeColorClasses = ['text-blue-600', 'dark:text-blue-400'];
             const headerCell = mainTableHeader.querySelector(`th[data-sort="${type}"]`);
+            if (!headerCell) continue; // Skip if header cell for this type doesn't exist
 
             if (thresholdState[type].value > 0) {
                 activeCount++;
-                if (headerCell) {
-                    headerCell.classList.add('threshold-active-header');
-                    headerCell.classList.remove(...defaultColorClasses);
-                    headerCell.classList.add(...activeColorClasses);
-                }
+                headerCell.classList.add('threshold-active-header');
+                headerCell.classList.remove(...defaultColorClasses);
+                headerCell.classList.add(...activeColorClasses);
             } else {
-                if (headerCell) {
-                    headerCell.classList.remove('threshold-active-header');
-                    headerCell.classList.remove(...activeColorClasses);
-                    headerCell.classList.add(...defaultColorClasses);
-                }
+                headerCell.classList.remove('threshold-active-header');
+                headerCell.classList.remove(...activeColorClasses);
+                headerCell.classList.add(...defaultColorClasses);
             }
         }
+        return activeCount;
+    }
+
+    function updateThresholdIndicator() {
+        if (!thresholdBadge) return;
+
+        const thresholdState = PulseApp.state.getThresholdState();
+        const activeCount = _updateThresholdHeaderStyles(thresholdState);
 
         if (activeCount > 0) {
             thresholdBadge.textContent = activeCount;
@@ -237,4 +241,4 @@ PulseApp.ui.thresholds = (() => {
         updateLogControlsVisibility,
         isThresholdDragInProgress
     };
-})(); 
+})();
