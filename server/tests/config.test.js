@@ -1,5 +1,11 @@
 const { loadConfiguration, ConfigurationError } = require('../configLoader');
 
+// Mock dotenv
+jest.mock('dotenv', () => ({
+  config: jest.fn(),
+}));
+const dotenv = require('dotenv'); // require after mock
+
 // Helper function to temporarily set environment variables for a test
 const setEnvVars = (vars) => {
   const originalEnv = { ...process.env }; // Store original env
@@ -359,6 +365,27 @@ describe('Configuration Loading (loadConfiguration)', () => {
     // Expect the final check in loadConfiguration to throw
     expect(() => loadConfiguration()).toThrow(ConfigurationError);
     expect(() => loadConfiguration()).toThrow(/No enabled Proxmox VE or PBS endpoints could be configured/);
+  });
+
+  // New Test Case for dotenv loading
+  test('should call dotenv.config() when NODE_ENV is not \'test\'', () => {
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development'; // Set to non-test environment
+
+    // Minimal valid PVE config to allow loadConfiguration to proceed far enough
+    setEnvVars({
+      PROXMOX_HOST: 'pve.example.com',
+      PROXMOX_TOKEN_ID: 'user@pam!pve',
+      PROXMOX_TOKEN_SECRET: 'secretpve',
+    });
+
+    loadConfiguration();
+
+    expect(dotenv.config).toHaveBeenCalled();
+
+    // Restore original NODE_ENV and clear mocks for other tests
+    process.env.NODE_ENV = originalNodeEnv;
+    dotenv.config.mockClear(); // Clear the mock for other tests
   });
 
 }); 

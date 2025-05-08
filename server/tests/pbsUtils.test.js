@@ -29,6 +29,7 @@ describe('PBS Utils - processPbsTasks', () => {
             { upid: 'B1', worker_type: 'backup', status: 'OK', starttime: now - 3600, endtime: now - 3500 },
             { upid: 'B2', type: 'backup', status: 'OK', starttime: now - 7200, endtime: now - 7100 },
             { upid: 'B3', worker_type: 'backup', status: 'FAILED', starttime: now - 100, endtime: now - 50 },
+            { upid: 'B4', worker_type: 'backup', status: 'ERROR', starttime: now - 40, endtime: now - 20 },
             // Verifications
             { upid: 'V1', worker_type: 'verify', status: 'OK', starttime: now - 500, endtime: now - 400 },
             { upid: 'V2', type: 'verificationjob', status: 'WARNING', starttime: now - 600, endtime: now - 550 }, // Treated as failed
@@ -47,11 +48,11 @@ describe('PBS Utils - processPbsTasks', () => {
 
         // Backup Summary
         expect(result.backupTasks.summary.ok).toBe(2);
-        expect(result.backupTasks.summary.failed).toBe(1);
-        expect(result.backupTasks.summary.total).toBe(3);
+        expect(result.backupTasks.summary.failed).toBe(2);
+        expect(result.backupTasks.summary.total).toBe(4);
         expect(result.backupTasks.summary.lastOk).toBe(now - 3500);
-        expect(result.backupTasks.summary.lastFailed).toBe(now - 50);
-        expect(result.backupTasks.recentTasks).toHaveLength(4); // B3, B1, R1, B2 (all backup tasks included)
+        expect(result.backupTasks.summary.lastFailed).toBe(now - 20);
+        expect(result.backupTasks.recentTasks).toHaveLength(5);
 
         // Verification Summary
         expect(result.verificationTasks.summary.ok).toBe(1);
@@ -185,6 +186,16 @@ describe('PBS Utils - processPbsTasks', () => {
         expect(result.pruneTasks.summary.total).toBe(2);
         expect(result.pruneTasks.recentTasks).toHaveLength(2);
         expect(result.pruneTasks.recentTasks.map(t => t.upid)).toEqual(['P1', 'G1']); // Sorted by start time
+    });
+
+    test('should return default structure for non-array input', () => {
+        const result = processPbsTasks({}); // Pass an object instead of an array
+        expect(result).toEqual({
+            backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+            verificationTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+            syncTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
+            pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } }
+        });
     });
 
 });

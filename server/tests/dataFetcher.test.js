@@ -206,6 +206,43 @@ describe('Data Fetcher', () => {
       consoleWarnSpy.mockRestore();
     });
 
+    test('should handle missing or invalid data.data for a node resource', async () => {
+      // Arrange: Use default mock client and a specific node name
+      const nodeName = 'node-missing-data-data';
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Mock the /nodes call to return the node
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: [{ node: nodeName, status: 'online' }] } }); // /nodes
+
+      // Mock the /status call to return data with null data.data (covers lines 108-113)
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: null } }); // status
+
+      // Mock other calls to succeed with empty data to allow the test to proceed
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: [] } }); // storage
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: [] } }); // qemu
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: [] } }); // lxc
+
+      // Act
+      const result = await fetchDiscoveryData(mockPveApiClient, mockPbsApiClient);
+
+      // Assert
+      // Verify the warning was logged by fetchNodeResource (covers line 109)
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        `[DataFetcher - primary-${nodeName}] Node status data missing or invalid format.`
+      );
+      // Verify that the node was still processed but status data is default (null/0)
+      expect(result.nodes).toHaveLength(1);
+      expect(result.nodes[0].node).toBe(nodeName);
+      expect(result.nodes[0].cpu).toBeNull(); // Should be null due to missing data.data
+      expect(result.nodes[0].uptime).toBe(0);
+      // Other fetches should have succeeded with empty data
+      expect(result.nodes[0].storage).toEqual([]);
+      expect(result.vms).toHaveLength(0);
+      expect(result.containers).toHaveLength(0);
+
+      consoleWarnSpy.mockRestore();
+    });
+
     test('should handle API error when fetching /nodes for an endpoint', async () => {
       // Arrange: Need to define specific mock clients for this test
       const mockPveClientInstance1 = { get: jest.fn() };
@@ -250,7 +287,7 @@ describe('Data Fetcher', () => {
        // Should still return data from the successful endpoint (as fetchDataForPveEndpoint returns empty on error)
       expect(result.nodes).toHaveLength(1);
       expect(result.nodes[0].node).toBe('node-pve2');
-      expect(result.nodes[0].endpointId).toBe('pve2'); // Check endpointName (from config.name)
+      expect(result.nodes[0].endpointId).toBe('secondary'); // Corrected expectation: Should be the endpointId from the mock client setup
       expect(result.vms).toHaveLength(0);
       expect(result.containers).toHaveLength(0);
       expect(result.pbs).toHaveLength(0);
@@ -335,7 +372,44 @@ describe('Data Fetcher', () => {
       expect(result.pbs).toEqual([]);
     });
 
-    // --- PBS Integration Tests --- 
+    test('should handle missing or invalid data.data for a node resource', async () => {
+      // Arrange: Use default mock client and a specific node name
+      const nodeName = 'node-missing-data-data';
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      // Mock the /nodes call to return the node
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: [{ node: nodeName, status: 'online' }] } }); // /nodes
+
+      // Mock the /status call to return data with null data.data (covers lines 108-113)
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: null } }); // status
+
+      // Mock other calls to succeed with empty data to allow the test to proceed
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: [] } }); // storage
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: [] } }); // qemu
+      mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: [] } }); // lxc
+
+      // Act
+      const result = await fetchDiscoveryData(mockPveApiClient, mockPbsApiClient);
+
+      // Assert
+      // Verify the warning was logged by fetchNodeResource (covers line 109)
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        `[DataFetcher - primary-${nodeName}] Node status data missing or invalid format.`
+      );
+      // Verify that the node was still processed but status data is default (null/0)
+      expect(result.nodes).toHaveLength(1);
+      expect(result.nodes[0].node).toBe(nodeName);
+      expect(result.nodes[0].cpu).toBeNull(); // Should be null due to missing data.data
+      expect(result.nodes[0].uptime).toBe(0);
+      // Other fetches should have succeeded with empty data
+      expect(result.nodes[0].storage).toEqual([]);
+      expect(result.vms).toHaveLength(0);
+      expect(result.containers).toHaveLength(0);
+
+      consoleWarnSpy.mockRestore();
+    });
+
+    // --- PBS Integration Tests ---
     test('should fetch PVE and PBS data correctly', async () => {
       // Arrange PVE (similar to happy path test, simplified)
       const nodeName = 'pve-node';
@@ -1694,6 +1768,55 @@ describe('Data Fetcher', () => {
         
         consoleWarnSpy.mockRestore();
       consoleErrorSpy.mockRestore();
+    });
+
+    test('should handle API error when fetching PBS tasks', async () => {
+        const pbsId = 'pbs-task-fetch-error';
+        const pbsNodeName = 'pbs-node-task-error';
+        const datastoreName = 'store-task-error';
+        const mockPbsClient = { get: jest.fn() };
+        const mockClients = { [pbsId]: { client: mockPbsClient, config: { name: 'PBS Task Fetch Error' } } };
+        const taskError = new Error('Simulated task fetch error');
+
+        mockPbsClient.get
+          .mockResolvedValueOnce({ data: { data: [{ node: pbsNodeName }] } }) // /nodes (succeeds)
+          .mockResolvedValueOnce({ data: { data: [{ store: datastoreName, total: 1, used: 0 }] } }) // /status/datastore-usage (succeeds)
+          .mockResolvedValueOnce({ data: { data: [] } }) // Snapshots (succeeds empty)
+          .mockRejectedValueOnce(taskError); // /nodes/{node}/tasks (FAILS)
+
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const result = await fetchPbsData(mockClients);
+
+        expect(result).toHaveLength(1);
+        expect(result[0]).toMatchObject({
+            pbsEndpointId: pbsId,
+            pbsInstanceName: 'PBS Task Fetch Error',
+            status: 'ok', // Status remains 'ok' as node and datastores (even if empty) fetched
+            nodeName: pbsNodeName,
+            datastores: [{ name: datastoreName, total: 1, used: 0, available: undefined, gcStatus: 'unknown' , snapshots: []}], // Datastore fetch succeeded
+        });
+        // Check that task-related properties are NOT added or are default due to fetch error
+        expect(result[0].backupTasks).toBeUndefined();
+        expect(result[0].verifyTasks).toBeUndefined();
+        expect(result[0].gcTasks).toBeUndefined();
+
+        // Verify API calls
+        expect(mockPbsClient.get).toHaveBeenCalledTimes(4); // nodes, usage, snapshots, tasks
+        expect(mockPbsClient.get).toHaveBeenCalledWith(`/nodes/${pbsNodeName}/tasks`, expect.any(Object)); // Check tasks call was attempted
+
+        // Verify error logging from fetchAllPbsTasksForProcessing's catch block (covers lines 264-265)
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
+            expect.stringContaining(`ERROR: [DataFetcher] Failed to fetch PBS task list for node ${pbsNodeName} (PBS Task Fetch Error): ${taskError.message}`)
+        );
+        // Verify the warning logged in fetchPbsData when tasks cannot be processed (covers line 341)
+         expect(consoleWarnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('WARN: [DataFetcher - PBS Task Fetch Error] No tasks to process or task fetching failed. Error flag: true, Tasks array: null')
+          );
+
+        consoleErrorSpy.mockRestore();
+        consoleWarnSpy.mockRestore();
     });
 
   }); // End describe fetchPbsData

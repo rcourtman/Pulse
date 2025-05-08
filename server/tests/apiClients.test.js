@@ -26,7 +26,7 @@ jest.mock('axios-retry', () => {
   };
 });
 
-const { initializeApiClients } = require('../apiClients');
+const { initializeApiClients, createApiClientInstance } = require('../apiClients');
 const { loadConfiguration } = require('../configLoader');
 const axios = require('axios'); // <-- Get the mocked axios
 const axiosRetry = require('axios-retry').default; // <-- Get the mocked default export
@@ -627,6 +627,77 @@ describe('API Client Helper Functions', () => {
     jest.clearAllMocks();
   });
 
+  // --- Tests for createApiClientInstance ---
+  describe('createApiClientInstance', () => {
+    const { createApiClientInstance } = require('../apiClients');
+    const axios = require('axios'); // Mocked axios
+    const axiosRetry = require('axios-retry').default; // Mocked axiosRetry
+
+    beforeEach(() => {
+      // Reset axios.create and axiosRetry mocks
+      axios.create.mockClear();
+      axiosRetry.mockClear();
+      // Reconfigure axios.create to return a mock instance with spied interceptors
+      axios.create.mockImplementation(() => ({
+        get: jest.fn(),
+        interceptors: {
+          request: { use: jest.fn() },
+          response: { use: jest.fn() }
+        }
+      }));
+    });
+
+    test('should create an instance with provided baseURL and httpsAgent config', () => {
+      const baseURL = 'https://test.com/api';
+      const allowSelfSignedCerts = true;
+      createApiClientInstance(baseURL, allowSelfSignedCerts);
+
+      expect(axios.create).toHaveBeenCalledTimes(1);
+      expect(axios.create).toHaveBeenCalledWith(expect.objectContaining({
+        baseURL: baseURL,
+        httpsAgent: expect.objectContaining({
+          options: expect.objectContaining({ rejectUnauthorized: false })
+        }),
+        headers: { 'Content-Type': 'application/json' }
+      }));
+    });
+
+    test('should call request.use when authInterceptor is provided', () => {
+      const mockInterceptor = jest.fn();
+      const apiClient = createApiClientInstance('https://test.com', false, mockInterceptor, null); // Pass null for retryConfig
+
+      expect(apiClient.interceptors.request.use).toHaveBeenCalledTimes(1);
+      expect(apiClient.interceptors.request.use).toHaveBeenCalledWith(mockInterceptor);
+    });
+
+    test('should NOT call request.use when authInterceptor is NOT provided', () => {
+      const apiClient = createApiClientInstance('https://test.com', false, null, null); // Pass null for both
+
+      expect(apiClient.interceptors.request.use).not.toHaveBeenCalled();
+    });
+
+    test('should call axiosRetry when retryConfig is provided', () => {
+      const mockRetryConfig = { retries: 5, retryDelayLogger: jest.fn(), retryConditionChecker: jest.fn() };
+      const apiClient = createApiClientInstance('https://test.com', false, null, mockRetryConfig);
+
+      expect(axiosRetry).toHaveBeenCalledTimes(1);
+      expect(axiosRetry).toHaveBeenCalledWith(apiClient, {
+        retries: mockRetryConfig.retries,
+        retryDelay: mockRetryConfig.retryDelayLogger, // Now correctly accesses the logger
+        retryCondition: mockRetryConfig.retryConditionChecker, // Now correctly accesses the checker
+      });
+    });
+
+    test('should NOT call axiosRetry when retryConfig is NOT provided', () => {
+      createApiClientInstance('https://test.com', false, null, null); // Pass null for both
+
+      expect(axiosRetry).not.toHaveBeenCalled();
+    });
+
+  });
+
+  // --- createPveAuthInterceptor Tests ---
+
   // --- createPveAuthInterceptor Tests ---
   describe('createPveAuthInterceptor', () => {
     const { createPveAuthInterceptor } = require('../apiClients');
@@ -679,6 +750,75 @@ describe('API Client Helper Functions', () => {
     });
     
     // Note: Add test for missing creds if validation doesn't happen before calling this
+  });
+
+  // --- Tests for createApiClientInstance ---
+  describe('createApiClientInstance', () => {
+    const { createApiClientInstance } = require('../apiClients');
+    const axios = require('axios'); // Mocked axios
+    const axiosRetry = require('axios-retry').default; // Mocked axiosRetry
+
+    beforeEach(() => {
+      // Reset axios.create and axiosRetry mocks
+      axios.create.mockClear();
+      axiosRetry.mockClear();
+      // Reconfigure axios.create to return a mock instance with spied interceptors
+      axios.create.mockImplementation(() => ({
+        get: jest.fn(),
+        interceptors: {
+          request: { use: jest.fn() },
+          response: { use: jest.fn() }
+        }
+      }));
+    });
+
+    test('should create an instance with provided baseURL and httpsAgent config', () => {
+      const baseURL = 'https://test.com/api';
+      const allowSelfSignedCerts = true;
+      createApiClientInstance(baseURL, allowSelfSignedCerts);
+
+      expect(axios.create).toHaveBeenCalledTimes(1);
+      expect(axios.create).toHaveBeenCalledWith(expect.objectContaining({
+        baseURL: baseURL,
+        httpsAgent: expect.objectContaining({
+          options: expect.objectContaining({ rejectUnauthorized: false })
+        }),
+        headers: { 'Content-Type': 'application/json' }
+      }));
+    });
+
+    test('should call request.use when authInterceptor is provided', () => {
+      const mockInterceptor = jest.fn();
+      const apiClient = createApiClientInstance('https://test.com', false, mockInterceptor, null); // Pass null for retryConfig
+
+      expect(apiClient.interceptors.request.use).toHaveBeenCalledTimes(1);
+      expect(apiClient.interceptors.request.use).toHaveBeenCalledWith(mockInterceptor);
+    });
+
+    test('should NOT call request.use when authInterceptor is NOT provided', () => {
+      const apiClient = createApiClientInstance('https://test.com', false, null, null); // Pass null for both
+
+      expect(apiClient.interceptors.request.use).not.toHaveBeenCalled();
+    });
+
+    test('should call axiosRetry when retryConfig is provided', () => {
+      const mockRetryConfig = { retries: 5, retryDelayLogger: jest.fn(), retryConditionChecker: jest.fn() };
+      const apiClient = createApiClientInstance('https://test.com', false, null, mockRetryConfig);
+
+      expect(axiosRetry).toHaveBeenCalledTimes(1);
+      expect(axiosRetry).toHaveBeenCalledWith(apiClient, {
+        retries: mockRetryConfig.retries,
+        retryDelay: mockRetryConfig.retryDelayLogger, // Now correctly accesses the logger
+        retryCondition: mockRetryConfig.retryConditionChecker, // Now correctly accesses the checker
+      });
+    });
+
+    test('should NOT call axiosRetry when retryConfig is NOT provided', () => {
+      createApiClientInstance('https://test.com', false, null, null); // Pass null for both
+
+      expect(axiosRetry).not.toHaveBeenCalled();
+    });
+
   });
 
   // --- pveRetryDelayLogger Tests ---
