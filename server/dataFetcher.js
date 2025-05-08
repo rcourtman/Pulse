@@ -45,13 +45,93 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
 }
 
 /**
+ * Fetches and processes discovery data for a single PVE endpoint.
+ * @param {string} endpointId - The unique ID of the PVE endpoint.
+ * @param {Object} apiClient - The initialized Axios client instance for this endpoint.
+ * @param {Object} config - The configuration object for this endpoint.
+ * @returns {Promise<Object>} - { nodes: Array, vms: Array, containers: Array } for this endpoint.
+ */
+async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
+    const endpointName = config.name || endpointId; // Use configured name or ID
+    try {
+        const nodesResponse = await apiClientInstance.get('/nodes');
+        const nodes = nodesResponse.data.data;
+        if (!nodes || !Array.isArray(nodes)) {
+            console.warn(`[DataFetcher - ${endpointName}] No nodes found or unexpected format.`);
+            return { nodes: [], vms: [], containers: [] };
+        }
+
+        const guestPromises = nodes.map(node => fetchDataForNode(apiClientInstance, endpointName, node.node));
+        const guestResults = await Promise.allSettled(guestPromises);
+
+        let endpointVms = [];
+        let endpointContainers = [];
+        let processedNodes = [];
+
+        guestResults.forEach((result, index) => {
+            const correspondingNodeInfo = nodes[index];
+            if (!correspondingNodeInfo || !correspondingNodeInfo.node) return;
+
+            const finalNode = {
+                cpu: null, mem: null, disk: null, maxdisk: null, uptime: 0, loadavg: null, storage: [],
+                node: correspondingNodeInfo.node,
+                maxcpu: correspondingNodeInfo.maxcpu,
+                maxmem: correspondingNodeInfo.maxmem,
+                level: correspondingNodeInfo.level,
+                status: correspondingNodeInfo.status || 'unknown',
+                id: `${endpointName}-${correspondingNodeInfo.node}`,
+                endpointId: endpointName, // Use the actual endpointName here
+            };
+
+            if (result.status === 'fulfilled' && result.value) {
+                const nodeData = result.value;
+                // Use endpointName for constructing IDs
+                endpointVms.push(...(nodeData.vms || []).map(vm => ({ ...vm, endpointId: endpointName, id: `${endpointName}-${vm.node}-${vm.vmid}` })));
+                endpointContainers.push(...(nodeData.containers || []).map(ct => ({ ...ct, endpointId: endpointName, id: `${endpointName}-${ct.node}-${ct.vmid}` })));
+
+                if (nodeData.nodeStatus && Object.keys(nodeData.nodeStatus).length > 0) {
+                    const statusData = nodeData.nodeStatus;
+                    finalNode.cpu = statusData.cpu;
+                    finalNode.mem = statusData.memory?.used || statusData.mem;
+                    finalNode.disk = statusData.rootfs?.used || statusData.disk;
+                    finalNode.maxdisk = statusData.rootfs?.total || statusData.maxdisk;
+                    finalNode.uptime = statusData.uptime;
+                    finalNode.loadavg = statusData.loadavg;
+                    if (statusData.uptime > 0) {
+                        finalNode.status = 'online';
+                    }
+                }
+                finalNode.storage = nodeData.storage && nodeData.storage.length > 0 ? nodeData.storage : finalNode.storage;
+                processedNodes.push(finalNode);
+            } else {
+                if (result.status === 'rejected') {
+                    console.error(`[DataFetcher - ${endpointName}] Error processing node ${correspondingNodeInfo.node}: ${result.reason?.message || result.reason}`);
+                } else {
+                    console.warn(`[DataFetcher - ${endpointName}] Unexpected result status for node ${correspondingNodeInfo.node}: ${result.status}`);
+                }
+                processedNodes.push(finalNode); // Push node with defaults on failure
+            }
+        });
+
+        return { nodes: processedNodes, vms: endpointVms, containers: endpointContainers };
+
+    } catch (error) {
+        const status = error.response?.status ? ` (Status: ${error.response.status})` : '';
+        console.error(`[DataFetcher - ${endpointName}] Error fetching PVE discovery data${status}: ${error.message}`);
+        // Return empty structure on endpoint-level failure
+        return { nodes: [], vms: [], containers: [] };
+    }
+}
+
+
+/**
  * Fetches structural PVE data: node list, statuses, VM/CT lists.
  * @param {Object} currentApiClients - Initialized PVE API clients.
  * @returns {Promise<Object>} - { nodes, vms, containers }
  */
 async function fetchPveDiscoveryData(currentApiClients) {
     const pveEndpointIds = Object.keys(currentApiClients);
-    let tempNodes = [], tempVms = [], tempContainers = [];
+    let allNodes = [], allVms = [], allContainers = [];
 
     if (pveEndpointIds.length === 0) {
         console.log("[DataFetcher] No PVE endpoints configured or initialized.");
@@ -59,136 +139,27 @@ async function fetchPveDiscoveryData(currentApiClients) {
     }
 
     console.log(`[DataFetcher] Fetching PVE discovery data for ${pveEndpointIds.length} endpoints...`);
-    const pvePromises = pveEndpointIds.map(endpointId =>
-        (async () => {
-            const { client: apiClientInstance, config } = currentApiClients[endpointId];
-            const endpointName = config.name || endpointId;
-            try {
-                const nodesResponse = await apiClientInstance.get('/nodes');
-                const nodes = nodesResponse.data.data;
-                if (!nodes || !Array.isArray(nodes)) {
-                    console.warn(`[DataFetcher - ${endpointName}] No nodes found or unexpected format.`);
-                    return { endpointId: endpointName, status: 'fulfilled', value: { nodes: [], vms: [], containers: [] } };
-                }
 
-                const guestPromises = nodes.map(node => fetchDataForNode(apiClientInstance, endpointName, node.node));
-                const guestResults = await Promise.allSettled(guestPromises);
+    const pvePromises = pveEndpointIds.map(endpointId => {
+        const { client: apiClientInstance, config } = currentApiClients[endpointId];
+        // Pass endpointId, client, and config to the helper
+        return fetchDataForPveEndpoint(endpointId, apiClientInstance, config);
+    });
 
-                let endpointVms = [];
-                let endpointContainers = [];
-                let processedNodes = []; // New array to store results
+    const pveResults = await Promise.all(pvePromises); // Wait for all endpoint fetches
 
-                // Initialize endpointNodes with basic info from the /nodes call
-                const defaultNode = {
-                    cpu: null,
-                    mem: null,
-                    disk: null,
-                    maxdisk: null,
-                    uptime: 0,
-                    loadavg: null,
-                    status: 'unknown', // Default status
-                    storage: [],       // Default storage
-                };
-
-                // Process guest results and merge status/storage into processedNodes
-                guestResults.forEach((result, index) => {
-                    const correspondingNodeInfo = nodes[index]; // Get the original info from /nodes
-                    if (!correspondingNodeInfo || !correspondingNodeInfo.node) return;
-
-                    // Initialize finalNode with defaults and info from /nodes endpoint
-                    const finalNode = {
-                        cpu: null,
-                        mem: null,
-                        disk: null,
-                        maxdisk: null,
-                        uptime: 0,
-                        loadavg: null,
-                        storage: [],
-                        node: correspondingNodeInfo.node,
-                        maxcpu: correspondingNodeInfo.maxcpu,
-                        maxmem: correspondingNodeInfo.maxmem,
-                        level: correspondingNodeInfo.level,
-                        status: correspondingNodeInfo.status || 'unknown',
-                        id: `${endpointName}-${correspondingNodeInfo.node}`,
-                        endpointId: endpointName,
-                    };
-
-                    if (result.status === 'fulfilled' && result.value) {
-                        const nodeData = result.value;
-                        const currentEndpointId = endpointId; // Renamed from endpointId to avoid conflict in map
-                        
-                        endpointVms.push(...(nodeData.vms || []).map(vm => ({ ...vm, endpointId: currentEndpointId, id: `${endpointName}-${vm.node}-${vm.vmid}` })));
-                        endpointContainers.push(...(nodeData.containers || []).map(ct => ({ ...ct, endpointId: currentEndpointId, id: `${endpointName}-${ct.node}-${ct.vmid}` })));
-
-                        if (nodeData.nodeStatus && Object.keys(nodeData.nodeStatus).length > 0) {
-                            const statusData = nodeData.nodeStatus;
-                            finalNode.cpu = statusData.cpu;
-                            finalNode.mem = statusData.memory?.used || statusData.mem;
-                            finalNode.disk = statusData.rootfs?.used || statusData.disk;
-                            finalNode.maxdisk = statusData.rootfs?.total || statusData.maxdisk;
-                            finalNode.uptime = statusData.uptime;
-                            finalNode.loadavg = statusData.loadavg;
-                            // Update status only if uptime indicates online, otherwise keep the status from /nodes
-                            if (statusData.uptime > 0) {
-                                finalNode.status = 'online';
-                            }
-                        }
-                        finalNode.storage = nodeData.storage && nodeData.storage.length > 0 ? nodeData.storage : finalNode.storage;
-                        
-                        processedNodes.push(finalNode);
-                    } else {
-                        if (result.status === 'rejected') {
-                            console.error(`[DataFetcher - ${endpointName}] Error processing node ${correspondingNodeInfo.node}: ${result.reason?.message || result.reason}`);
-                        } else {
-                            console.warn(`[DataFetcher - ${endpointName}] Unexpected result status for node ${correspondingNodeInfo.node}: ${result.status}`);
-                        }
-                        // Push the node with defaults if fetching detailed data failed
-                        processedNodes.push(finalNode);
-                    }
-                });
-                
-                // Return the newly constructed processedNodes array
-                return { endpointId: endpointName, status: 'fulfilled', value: { nodes: processedNodes, vms: endpointVms, containers: endpointContainers } };
-            } 
-            /* istanbul ignore next */ // Ignore this catch block - tested via side effects (logging, filtering)
-            catch (error) {
-                 // This catch block handles failures in the initial /nodes call
-                 const status = error.response?.status ? ` (Status: ${error.response.status})` : '';
-                 console.error(`[DataFetcher - ${endpointName}] Error fetching PVE discovery data${status}: ${error.message}`);
-                 // Return a specific structure indicating failure for THIS endpoint
-                 return { endpointId: endpointName, status: 'rejected', reason: error.message || String(error) };
-            }
-        })()
-    );
-
-    const pveOutcomes = await Promise.allSettled(pvePromises);
-    
-    // Aggregate results from all endpoints, including partially successful ones
-    pveOutcomes.forEach(endpointOutcome => {
-        if (endpointOutcome.status === 'fulfilled') {
-             if (endpointOutcome.value.status === 'fulfilled' && endpointOutcome.value.value) {
-                 const { nodes, vms, containers } = endpointOutcome.value.value;
-                 tempNodes.push(...nodes);
-                 if (vms && Array.isArray(vms)) {
-                     vms.forEach(vm => tempVms.push(vm));
-                 }
-                 if (containers && Array.isArray(containers)) {
-                     containers.forEach(ct => tempContainers.push(ct));
-                 }
-            } else if (endpointOutcome.value.status === 'rejected') {
-                // Log the reason for endpoint-level failure (e.g., /nodes failed)
-                 console.error(`[DataFetcher] PVE discovery failed for endpoint: ${endpointOutcome.value.endpointId}. Reason: ${endpointOutcome.value.reason}`);
-            }
-        } else { 
-            // This handles cases where the outer promise itself rejected (less likely with current structure)
-            const reason = endpointOutcome.reason?.message || endpointOutcome.reason;
-            // We might not know the endpoint ID here easily
-            console.error(`[DataFetcher] Unhandled error processing PVE endpoint: ${reason}`);
+    // Aggregate results from all endpoints
+    pveResults.forEach(result => {
+        if (result) { // Check if result is not null/undefined (error handled in helper)
+            allNodes.push(...(result.nodes || []));
+            allVms.push(...(result.vms || []));
+            allContainers.push(...(result.containers || []));
         }
     });
 
-    return { nodes: tempNodes, vms: tempVms, containers: tempContainers };
+    return { nodes: allNodes, vms: allVms, containers: allContainers };
 }
+
 
 // --- PBS Data Fetching Functions ---
 
@@ -360,13 +331,17 @@ async function fetchPbsData(currentPbsApiClients) {
                 const allTasksResult = await fetchAllPbsTasksForProcessing(pbsClient, nodeName);
                 console.log(`INFO: [DataFetcher - ${instanceName}] Tasks fetched. Result error: ${allTasksResult.error}, Tasks found: ${allTasksResult.tasks ? allTasksResult.tasks.length : 'null'}`);
 
-                if (allTasksResult.tasks) {
+                if (allTasksResult.tasks && !allTasksResult.error) {
                     console.log(`INFO: [DataFetcher - ${instanceName}] Processing tasks...`);
                     const processedTasks = processPbsTasks(allTasksResult.tasks); // Assumes processPbsTasks is imported
                     instanceData = { ...instanceData, ...processedTasks }; // Merge task summaries
                     console.log(`INFO: [DataFetcher - ${instanceName}] Tasks processed.`);
                 } else {
-                    console.warn(`WARN: [DataFetcher - ${instanceName}] No tasks to process or task fetching failed.`);
+                    console.warn(`WARN: [DataFetcher - ${instanceName}] No tasks to process or task fetching failed. Error flag: ${allTasksResult.error}, Tasks array: ${allTasksResult.tasks === null ? 'null' : (Array.isArray(allTasksResult.tasks) ? `array[${allTasksResult.tasks.length}]` : typeof allTasksResult.tasks)}`);
+                    // If tasks failed to fetch or process, ensure task-specific fields are not from a stale/default mock
+                    // instanceData.backupTasks = instanceData.backupTasks || []; // Or undefined/null if preferred by consumers
+                    // instanceData.verifyTasks = instanceData.verifyTasks || [];
+                    // instanceData.gcTasks = instanceData.gcTasks || [];
                 }
                 
                 instanceData.status = 'ok';
@@ -585,51 +560,6 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
 
     console.log(`[DataFetcher] Completed metrics fetch. Got data for ${allMetrics.length} guests.`);
     return allMetrics;
-}
-
-async function fetchQemuAgentMemoryInfo(apiClient, nodeName, vmid, guestName, endpointName, currentMetrics) {
-    try {
-        const agentMemInfoResponse = await apiClient.post(`/nodes/${nodeName}/qemu/${vmid}/agent/get-memory-block-info`, {});
-        
-        if (agentMemInfoResponse?.data?.data?.result) {
-            const agentMem = agentMemInfoResponse.data.data.result;
-            let guestMemoryDetails = null;
-
-            if (Array.isArray(agentMem) && agentMem.length > 0 && agentMem[0].hasOwnProperty('total') && agentMem[0].hasOwnProperty('free')) {
-                guestMemoryDetails = agentMem[0];
-            } else if (typeof agentMem === 'object' && agentMem !== null && agentMem.hasOwnProperty('total') && agentMem.hasOwnProperty('free')) {
-                guestMemoryDetails = agentMem;
-            }
-
-            if (guestMemoryDetails) {
-                currentMetrics.guest_mem_total_bytes = guestMemoryDetails.total;
-                currentMetrics.guest_mem_free_bytes = guestMemoryDetails.free;
-                currentMetrics.guest_mem_available_bytes = guestMemoryDetails.available;
-                currentMetrics.guest_mem_cached_bytes = guestMemoryDetails.cached;
-                currentMetrics.guest_mem_buffers_bytes = guestMemoryDetails.buffers;
-
-                if (guestMemoryDetails.available !== undefined) {
-                    currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.available;
-                } else if (guestMemoryDetails.cached !== undefined && guestMemoryDetails.buffers !== undefined) {
-                    currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free - guestMemoryDetails.cached - guestMemoryDetails.buffers;
-                } else {
-                    currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free;
-                }
-                console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory fetched: Actual Used: ${((currentMetrics.guest_mem_actual_used_bytes || 0) / (1024*1024)).toFixed(0)}MB`);
-            } else {
-                console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory command 'get-memory-block-info' response format not as expected. Data:`, agentMemInfoResponse.data.data);
-            }
-        } else {
-             console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory command 'get-memory-block-info' did not return expected data structure. Response:`, agentMemInfoResponse.data);
-        }
-    } catch (agentError) {
-        if (agentError.response && agentError.response.status === 500 && agentError.response.data && agentError.response.data.data && agentError.response.data.data.exitcode === -2) {
-             console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): QEMU Guest Agent not responsive or command 'get-memory-block-info' not available/supported. Error: ${agentError.message}`);
-        } else {
-             console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Error fetching guest agent memory info: ${agentError.message}. Status: ${agentError.response?.status}`);
-        }
-    }
-    return currentMetrics;
 }
 
 module.exports = {
