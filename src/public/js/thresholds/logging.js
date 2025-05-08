@@ -22,7 +22,7 @@ PulseApp.thresholds.logging = (() => {
         updateClearAllButtonVisibility(); // Initial check
     }
 
-    function startThresholdLogging() {
+    function _getLogCriteriaSnapshot() {
         const thresholdState = PulseApp.state.getThresholdState();
         const filterGuestType = PulseApp.state.get('filterGuestType');
         const filterStatus = PulseApp.state.get('filterStatus');
@@ -48,29 +48,33 @@ PulseApp.thresholds.logging = (() => {
 
         const snapshottedRawSearch = searchInput ? searchInput.value.toLowerCase() : '';
         const snapshottedSearchTerms = snapshottedRawSearch.split(',').map(term => term.trim()).filter(term => term);
-        let criteriaDescSearch = snapshottedSearchTerms.length > 0 ? `Search: "${snapshottedSearchTerms.join(', ')}"` : null;
+        const criteriaDescSearch = snapshottedSearchTerms.length > 0 ? `Search: "${snapshottedSearchTerms.join(', ')}"` : null;
+        
+        const fullCriteriaDesc = [criteriaDescFilters.join('; '), criteriaDescSearch, criteriaDescThresholds.length > 0 ? `Thresholds: ${criteriaDescThresholds.join(', ')}`: null].filter(Boolean).join('; ');
 
-        if (activeThresholdCount === 0 && snapshottedSearchTerms.length === 0 && criteriaDescFilters.length === 0) {
+        return {
+            snapshottedThresholds,
+            activeThresholdCount,
+            snapshottedFilterGuestType,
+            snapshottedFilterStatus,
+            snapshottedSearchTerms,
+            fullCriteriaDesc
+        };
+    }
+
+    function _validateLogCriteria(criteria) {
+        if (criteria.activeThresholdCount === 0 && criteria.snapshottedSearchTerms.length === 0 && (criteria.snapshottedFilterGuestType === 'all' && criteria.snapshottedFilterStatus === 'all')) {
             alert("Please set at least one threshold, enter search terms, or select a Type/Status filter before starting the log.");
             const toggleThresholdsButton = document.getElementById('toggle-thresholds-button');
-            if (toggleThresholdsButton && !PulseApp.state.get('isThresholdRowVisible') && activeThresholdCount === 0) {
+            if (toggleThresholdsButton && !PulseApp.state.get('isThresholdRowVisible') && criteria.activeThresholdCount === 0) {
                 toggleThresholdsButton.click();
             }
-            return;
+            return false;
         }
+        return true;
+    }
 
-        const sessionId = Date.now();
-        const startTime = new Date();
-        let fullCriteriaDesc = [criteriaDescFilters.join('; '), criteriaDescSearch, criteriaDescThresholds.length > 0 ? `Thresholds: ${criteriaDescThresholds.join(', ')}`: null].filter(Boolean).join('; ');
-        const sessionTitle = `Log @ ${startTime.toLocaleTimeString()}${fullCriteriaDesc ? ` (${fullCriteriaDesc})` : ''}`;
-
-        const logContentContainer = PulseApp.ui.tabs.addLogTab(sessionId, sessionTitle, fullCriteriaDesc);
-        if (!logContentContainer) return; // Stop if tab/content creation failed
-
-        const panel = document.createElement('div');
-        panel.id = `log-session-panel-${sessionId}`;
-        panel.className = 'log-session-panel border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 shadow-md';
-
+    function _createLogPanelHeader(sessionId, sessionTitle) {
         const header = document.createElement('div');
         header.className = 'log-session-header flex justify-between items-center p-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50 rounded-t';
 
@@ -89,13 +93,15 @@ PulseApp.thresholds.logging = (() => {
             if (panelToRemove) {
                 const panelSessionIdStr = panelToRemove.id.replace('log-session-panel-', '');
                 PulseApp.ui.tabs.removeLogTabAndContent(panelSessionIdStr);
-                // Stop session is handled implicitly by removeLogTabAndContent calling the tab close handler
             }
         };
 
         header.appendChild(titleSpan);
         header.appendChild(panelCloseButton);
+        return header;
+    }
 
+    function _createLogTableElement(sessionId) {
         const tableContainer = document.createElement('div');
         tableContainer.className = 'log-table-container p-2 max-h-96 overflow-y-auto';
 
@@ -125,24 +131,46 @@ PulseApp.thresholds.logging = (() => {
                  </tr>
             </tbody>
         `;
-
         tableContainer.appendChild(table);
-        panel.appendChild(header);
-        panel.appendChild(tableContainer);
-        logContentContainer.appendChild(panel); // Add the panel to the content area created by addLogTab
+        return tableContainer;
+    }
+
+    function startThresholdLogging() {
+        const criteria = _getLogCriteriaSnapshot();
+        if (!_validateLogCriteria(criteria)) {
+            return;
+        }
+
+        const sessionId = Date.now();
+        const startTime = new Date();
+        const sessionTitle = `Log @ ${startTime.toLocaleTimeString()}${criteria.fullCriteriaDesc ? ` (${criteria.fullCriteriaDesc})` : ''}`;
+
+        const logContentContainer = PulseApp.ui.tabs.addLogTab(sessionId, sessionTitle, criteria.fullCriteriaDesc);
+        if (!logContentContainer) return;
+
+        const panel = document.createElement('div');
+        panel.id = `log-session-panel-${sessionId}`;
+        panel.className = 'log-session-panel border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 shadow-md';
+
+        const headerElement = _createLogPanelHeader(sessionId, sessionTitle);
+        const tableElement = _createLogTableElement(sessionId);
+
+        panel.appendChild(headerElement);
+        panel.appendChild(tableElement);
+        logContentContainer.appendChild(panel);
 
         PulseApp.state.addActiveLogSession(sessionId, {
-            thresholds: snapshottedThresholds,
+            thresholds: criteria.snapshottedThresholds,
             startTime: startTime,
             entries: [],
             element: panel,
-            searchTerms: snapshottedSearchTerms,
-            filterGuestType: snapshottedFilterGuestType,
-            filterStatus: snapshottedFilterStatus
+            searchTerms: criteria.snapshottedSearchTerms,
+            filterGuestType: criteria.snapshottedFilterGuestType,
+            filterStatus: criteria.snapshottedFilterStatus
         });
 
-        console.log(`[Log Session ${sessionId}] Started. Thresholds:`, snapshottedThresholds);
-        updateClearAllButtonVisibility(); // Might hide the button if only active logs exist
+        console.log(`[Log Session ${sessionId}] Started. Thresholds:`, criteria.snapshottedThresholds);
+        updateClearAllButtonVisibility();
     }
 
     function stopThresholdLogging(sessionId, reason = 'manual') {
@@ -224,6 +252,125 @@ PulseApp.thresholds.logging = (() => {
          PulseApp.state.addLogEntry(sessionId, entry);
     }
 
+    function _guestMatchesSessionFilters(guest, session) {
+        const typeMatch = session.filterGuestType === 'all' ||
+                          (session.filterGuestType === 'vm' && guest.type === 'VM') ||
+                          (session.filterGuestType === 'lxc' && guest.type === 'CT');
+        if (!typeMatch) return false;
+
+        const statusMatch = session.filterStatus === 'all' || guest.status === session.filterStatus;
+        if (!statusMatch) return false;
+
+        const snapshottedSearch = session.searchTerms || [];
+        if (snapshottedSearch.length > 0) {
+            let guestMatchedSearch = false;
+            let nodeMatchedSearch = false;
+            snapshottedSearch.forEach(term => {
+                if (!guestMatchedSearch && (
+                    (guest.name && guest.name.toLowerCase().includes(term)) ||
+                    (guest.vmid && guest.vmid.toString().includes(term)) ||
+                    (guest.uniqueId && guest.uniqueId.toString().includes(term))
+                )) {
+                    guestMatchedSearch = true;
+                }
+                if (!nodeMatchedSearch && (
+                    (guest.node && guest.node.toLowerCase().includes(term))
+                )) {
+                    nodeMatchedSearch = true;
+                }
+            });
+            if (!(guestMatchedSearch || nodeMatchedSearch)) return false;
+        }
+        return true;
+    }
+
+    function _getGuestMetricValue(guest, metricType) {
+        switch (metricType) {
+            case 'cpu': return guest.cpu * 100;
+            case 'memory': return guest.memory;
+            case 'disk': return guest.disk;
+            case 'diskread': return guest.diskread;
+            case 'diskwrite': return guest.diskwrite;
+            case 'netin': return guest.netin;
+            case 'netout': return guest.netout;
+            default: return undefined;
+        }
+    }
+
+    function _guestMeetsAllThresholds(guest, sessionThresholds) {
+        for (const type in sessionThresholds) {
+            const thresholdValue = sessionThresholds[type];
+            if (thresholdValue <= 0) continue;
+
+            const guestValue = _getGuestMetricValue(guest, type);
+            if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) {
+                continue; // Skip if metric is not available for this guest or type
+            }
+
+            if (guestValue < thresholdValue) {
+                return false; // Does not meet this threshold
+            }
+        }
+        return true; // Meets all active thresholds
+    }
+
+    function _createLogEntryObject(guest, session, now) {
+        const metricsSnapshot = {
+            cpu: guest.cpu * 100,
+            mem: guest.memory,
+            disk: guest.disk,
+            diskRead: guest.diskread,
+            diskWrite: guest.diskwrite,
+            netIn: guest.netin,
+            netOut: guest.netout
+        };
+
+        let guestMatchedSearch = false;
+        let nodeMatchedSearch = false;
+        if (session.searchTerms && session.searchTerms.length > 0) {
+            session.searchTerms.forEach(term => {
+                if (!guestMatchedSearch && (
+                    (guest.name && guest.name.toLowerCase().includes(term)) ||
+                    (guest.vmid && guest.vmid.toString().includes(term)) ||
+                    (guest.uniqueId && guest.uniqueId.toString().includes(term))
+                )) {
+                    guestMatchedSearch = true;
+                }
+                if (!nodeMatchedSearch && (
+                    (guest.node && guest.node.toLowerCase().includes(term))
+                )) {
+                    nodeMatchedSearch = true;
+                }
+            });
+        }
+
+        return {
+            timestamp: now,
+            guestId: guest.vmid,
+            guestName: guest.name,
+            node: guest.node,
+            cpuFormatted: PulseApp.utils.formatThresholdValue('cpu', metricsSnapshot.cpu),
+            memFormatted: PulseApp.utils.formatThresholdValue('memory', metricsSnapshot.mem),
+            diskFormatted: PulseApp.utils.formatThresholdValue('disk', metricsSnapshot.disk),
+            diskReadFormatted: PulseApp.utils.formatThresholdValue('diskread', metricsSnapshot.diskRead),
+            diskWriteFormatted: PulseApp.utils.formatThresholdValue('diskwrite', metricsSnapshot.diskWrite),
+            netInFormatted: PulseApp.utils.formatThresholdValue('netin', metricsSnapshot.netIn),
+            netOutFormatted: PulseApp.utils.formatThresholdValue('netout', metricsSnapshot.netOut),
+            metricsRaw: metricsSnapshot,
+            activeThresholdKeys: Object.keys(session.thresholds),
+            guestMatchedSearch: guestMatchedSearch,
+            nodeMatchedSearch: nodeMatchedSearch
+        };
+    }
+
+    function _shouldAddLogEntry(session, newLogEntry, now) {
+        const lastEntry = session.entries.length > 0 ? session.entries[0] : null;
+        if (!lastEntry) return true; // Always add if it's the first entry
+
+        // Debounce: Don't add if the same guest triggered within the last second
+        return !(lastEntry.guestId === newLogEntry.guestId && (now.getTime() - lastEntry.timestamp.getTime()) < 1000);
+    }
+
     function checkThresholdViolations() {
         const activeSessions = PulseApp.state.getAllActiveLogSessions();
         if (Object.keys(activeSessions).length === 0) {
@@ -240,103 +387,14 @@ PulseApp.thresholds.logging = (() => {
                 const session = activeSessions[sessionId];
                 if (!session) return;
 
-                const typeMatch = session.filterGuestType === 'all' ||
-                                  (session.filterGuestType === 'vm' && guest.type === 'VM') ||
-                                  (session.filterGuestType === 'lxc' && guest.type === 'CT');
-                if (!typeMatch) return;
-
-                const statusMatch = session.filterStatus === 'all' || guest.status === session.filterStatus;
-                if (!statusMatch) return;
-
-                const snapshottedSearch = session.searchTerms || [];
-                let guestMatchedSearch = false;
-                let nodeMatchedSearch = false;
-                let overallSearchMatch = false;
-
-                if (snapshottedSearch.length > 0) {
-                    snapshottedSearch.forEach(term => {
-                        if (!guestMatchedSearch && (
-                            (guest.name && guest.name.toLowerCase().includes(term)) ||
-                            (guest.vmid && guest.vmid.toString().includes(term)) ||
-                            (guest.uniqueId && guest.uniqueId.toString().includes(term))
-                        )) {
-                            guestMatchedSearch = true;
-                        }
-                        if (!nodeMatchedSearch && (
-                            (guest.node && guest.node.toLowerCase().includes(term))
-                        )) {
-                            nodeMatchedSearch = true;
-                        }
-                    });
-                    overallSearchMatch = guestMatchedSearch || nodeMatchedSearch;
-                    if (!overallSearchMatch) return;
-                } else {
-                    overallSearchMatch = true;
+                if (!_guestMatchesSessionFilters(guest, session)) {
+                    return;
                 }
 
-                let meetsAllThresholds = true;
-                let violationDetails = [];
-
-                for (const type in session.thresholds) {
-                    const thresholdValue = session.thresholds[type];
-                    if (thresholdValue <= 0) continue;
-
-                    let guestValue;
-                    if (type === 'cpu') guestValue = guest.cpu * 100;
-                    else if (type === 'memory') guestValue = guest.memory;
-                    else if (type === 'disk') guestValue = guest.disk;
-                    else if (type === 'diskread') guestValue = guest.diskread;
-                    else if (type === 'diskwrite') guestValue = guest.diskwrite;
-                    else if (type === 'netin') guestValue = guest.netin;
-                    else if (type === 'netout') guestValue = guest.netout;
-                    else continue;
-
-                    if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) {
-                        continue;
-                    }
-
-                    if (guestValue < thresholdValue) {
-                        meetsAllThresholds = false;
-                        break;
-                    }
-                }
-
-                if (meetsAllThresholds) {
-                    const metricsSnapshot = {
-                        cpu: guest.cpu * 100,
-                        mem: guest.memory,
-                        disk: guest.disk,
-                        diskRead: guest.diskread,
-                        diskWrite: guest.diskwrite,
-                        netIn: guest.netin,
-                        netOut: guest.netout
-                    };
-
-                    const logEntry = {
-                        timestamp: now,
-                        guestId: guest.vmid,
-                        guestName: guest.name,
-                        node: guest.node,
-                        cpuFormatted: PulseApp.utils.formatThresholdValue('cpu', metricsSnapshot.cpu),
-                        memFormatted: PulseApp.utils.formatThresholdValue('memory', metricsSnapshot.mem),
-                        diskFormatted: PulseApp.utils.formatThresholdValue('disk', metricsSnapshot.disk),
-                        diskReadFormatted: PulseApp.utils.formatThresholdValue('diskread', metricsSnapshot.diskRead),
-                        diskWriteFormatted: PulseApp.utils.formatThresholdValue('diskwrite', metricsSnapshot.diskWrite),
-                        netInFormatted: PulseApp.utils.formatThresholdValue('netin', metricsSnapshot.netIn),
-                        netOutFormatted: PulseApp.utils.formatThresholdValue('netout', metricsSnapshot.netOut),
-                        metricsRaw: metricsSnapshot,
-                        activeThresholdKeys: Object.keys(session.thresholds),
-                        guestMatchedSearch: guestMatchedSearch,
-                        nodeMatchedSearch: nodeMatchedSearch
-                    };
-
-                    const lastEntry = session.entries.length > 0 ? session.entries[0] : null;
-                    if (!lastEntry ||
-                        !(lastEntry.guestId === logEntry.guestId &&
-                          (now.getTime() - lastEntry.timestamp.getTime()) < 1000)
-                       )
-                    {
-                          addLogRow(sessionId, logEntry);
+                if (_guestMeetsAllThresholds(guest, session.thresholds)) {
+                    const logEntry = _createLogEntryObject(guest, session, now);
+                    if (_shouldAddLogEntry(session, logEntry, now)) {
+                        addLogRow(sessionId, logEntry);
                     }
                 }
             });
@@ -395,4 +453,4 @@ PulseApp.thresholds.logging = (() => {
         checkThresholdViolations,
         updateClearAllButtonVisibility
     };
-})(); 
+})();
