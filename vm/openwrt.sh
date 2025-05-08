@@ -223,7 +223,7 @@ function exit-script() {
 }
 
 function default_settings() {
-  VMID=$NEXTID
+  VMID=$(get_valid_nextid)
   HN=openwrt
   CORE_COUNT="1"
   RAM_SIZE="256"
