@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scrollbar">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -115,7 +115,7 @@
         <div id="connection-status" class="status disconnected text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Disconnected</div>
       </div>
     </div>
-    <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap">
+    <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar">
       <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px flex items-center gap-1.5" data-tab="main">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
           <span class="hidden md:inline">Main</span>
@@ -218,7 +218,7 @@
             </div>
           </div>
 
-          <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+          <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
             <table id="main-table" class="w-full table-fixed text-sm">
                 <colgroup>
                   <col class="name-col" style="width: var(--name-col-width, 150px);">
@@ -346,7 +346,7 @@
     </div>
 
     <div id="nodes" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
-      <div class="table-container max-h-[80vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+      <div class="table-container max-h-[80vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
         <table id="nodes-table" class="w-full table-auto text-sm">
             <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
                 <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
@@ -369,7 +369,7 @@
     </div>
 
     <div id="storage" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
-      <div class="table-container max-h-[80vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
+      <div class="table-container max-h-[80vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
           <div id="storage-info-content">
             <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading storage data...</p>
           </div>
@@ -446,7 +446,7 @@
           </div>
       </div>
       <div id="backups-table-container" class="hidden space-y-2 mb-2">
-        <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
+        <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded scrollbar">
           <table id="backups-overview-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
             <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
               <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
@@ -474,7 +474,7 @@
   <div id="snapshot-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-50"><div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-3xl max-h-[80vh] flex flex-col"><div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 pb-3 mb-4"><h3 id="snapshot-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Snapshot Details</h3>
         <button id="snapshot-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
       </div>
-      <div id="snapshot-modal-body" class="overflow-y-auto flex-grow"><p>Loading snapshots...</p>
+      <div id="snapshot-modal-body" class="overflow-y-auto flex-grow scrollbar"><p>Loading snapshots...</p>
       </div>
     </div>
   </div>
