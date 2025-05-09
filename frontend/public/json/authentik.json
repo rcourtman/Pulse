@@ -20,7 +20,7 @@
             "script": "ct/authentik.sh",
             "resources": {
                 "cpu": 6,
-                "ram": 8192,
+                "ram": 10240,
                 "hdd": 12,
                 "os": "debian",
                 "version": "12"
@@ -33,7 +33,11 @@
     },
     "notes": [
         {
-            "text": "Authentik is very resource-heavy, it is recommended to use at least 8GB RAM anytime!",
+            "text": "Authentik is very resource-heavy, it is recommended to use at least 10GB RAM anytime!",
+            "type": "warning"
+        },
+        {
+            "text": "Some updates don't work due to massive dependency errors, it's recommended to do a backup before updating or a pg_dump and a new LXC.",
             "type": "warning"
         }
     ]
