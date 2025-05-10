@@ -278,30 +278,36 @@ PulseApp.ui.common = (() => {
     }
 
     function resetDashboardView() {
+        // Reset search
         if (searchInput) searchInput.value = '';
-        PulseApp.state.setSortState('main', 'id', 'asc');
 
-        const groupGroupedRadio = document.getElementById('group-grouped');
-        if(groupGroupedRadio) groupGroupedRadio.checked = true;
+        // Reset filters to defaults
         PulseApp.state.set('groupByNode', true);
-
-        const filterAllRadio = document.getElementById('filter-all');
-        if(filterAllRadio) filterAllRadio.checked = true;
+        document.getElementById('group-grouped').checked = true;
         PulseApp.state.set('filterGuestType', 'all');
-
-        const statusAllRadio = document.getElementById('filter-status-all');
-        if(statusAllRadio) statusAllRadio.checked = true;
+        document.getElementById('filter-all').checked = true;
         PulseApp.state.set('filterStatus', 'all');
+        document.getElementById('filter-status-all').checked = true;
 
-        PulseApp.ui.thresholds.resetThresholds();
+        // Reset thresholds
+        PulseApp.ui.thresholds.resetThresholds(); // This will also trigger a save
+
+        // Update table and save states
         PulseApp.ui.dashboard.updateDashboardTable();
-        if (searchInput) searchInput.blur();
-        PulseApp.ui.thresholds.updateLogControlsVisibility();
-        PulseApp.state.saveFilterState(); // Save reset state
+        PulseApp.state.saveFilterState(); // Thresholds are saved by its own reset
+        // Sort state is not reset by this action intentionally
+    }
+
+    function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td') {
+        const cellClasses = 'py-0.5 px-2 bg-gray-200 dark:bg-gray-700 subtle-stripes-light dark:subtle-stripes-dark text-left font-medium text-sm text-gray-700 dark:text-gray-300';
+        return `<${cellTag} colspan="${colspan}" class="${cellClasses}">${text}</${cellTag}>`;
     }
 
     return {
         init,
-        updateSortUI
+        updateSortUI,
+        setupTableSorting,
+        resetDashboardView,
+        generateNodeGroupHeaderCellHTML
     };
 })();

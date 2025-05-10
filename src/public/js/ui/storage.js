@@ -123,11 +123,7 @@ PulseApp.ui.storage = (() => {
 
           const nodeHeaderRow = document.createElement('tr');
           nodeHeaderRow.className = 'bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs node-storage-header';
-          nodeHeaderRow.innerHTML = `
-            <td colspan="7" class="px-2 py-1">
-              <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
-              Node: ${nodeName}
-            </td>`;
+          nodeHeaderRow.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(`Node: ${nodeName}`, 7, 'td');
           tbody.appendChild(nodeHeaderRow);
 
           if (nodeStorageData.length === 0) {
