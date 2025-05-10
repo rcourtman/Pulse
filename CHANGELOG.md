@@ -1,3 +1,23 @@
+## [3.6.1](https://github.com/rcourtman/Pulse/compare/v3.6.0...v3.6.1) (2025-05-10)
+
+### Features
+- Configure tailwind-scrollbar plugin and theme (6338e1c)
+- Add tailwind-scrollbar plugin for custom scrollbars (af8385e)
+
+### Bug Fixes
+- Correct syntax error and update tests (dataFetcher.js) (5facad7)
+- **scripts:** Update tarball creation path in create-release.sh (a5ba38c)
+
+### Chore
+- Set release version 3.6.1 (4ae11df)
+- Update package-lock.json (491e057)
+
+### Refactors
+- Update API client logic (dataFetcher.js) (d181af5)
+
+### Styling
+- Apply custom scrollbar style to main page and internal elements (7431f8a)
+
 ## [3.2.3](https://github.com/rcourtman/Pulse/compare/v3.2.2...v3.2.3) (2025-05-01) 
 
 ### Features
