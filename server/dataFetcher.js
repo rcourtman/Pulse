@@ -53,7 +53,60 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
  */
 async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
     const endpointName = config.name || endpointId; // Use configured name or ID
+    let endpointType = 'standalone'; // Default to standalone
+    let actualClusterName = config.name || endpointId; // Default identifier to endpoint name
+    let standaloneNodeName = null; // To store the name of the standalone node if applicable
+
     try {
+        // Attempt to determine if the endpoint is part of a multi-node cluster
+        try {
+            const clusterStatusResponse = await apiClientInstance.get('/cluster/status');
+
+            if (clusterStatusResponse.data && Array.isArray(clusterStatusResponse.data.data) && clusterStatusResponse.data.data.length > 0) {
+                const clusterInfoObject = clusterStatusResponse.data.data.find(item => item.type === 'cluster');
+                if (clusterInfoObject) {
+                    if (clusterInfoObject.nodes && clusterInfoObject.nodes > 1) {
+                        endpointType = 'cluster';
+                        actualClusterName = clusterInfoObject.name || actualClusterName; // Use actual cluster name if available
+                    } else {
+                        endpointType = 'standalone'; // Still standalone if nodes <= 1
+                        // Attempt to get the actual node name for the label if it's standalone
+                        const nodesListForEndpoint = (await apiClientInstance.get('/nodes')).data?.data;
+                        if (nodesListForEndpoint && nodesListForEndpoint.length > 0) {
+                            // For a standalone or single-node cluster, use its own node name as the identifier
+                            standaloneNodeName = nodesListForEndpoint[0].node;
+                        }
+                    }
+                } else {
+                    endpointType = 'standalone';
+                    const nodesListForEndpoint = (await apiClientInstance.get('/nodes')).data?.data;
+                    if (nodesListForEndpoint && nodesListForEndpoint.length > 0) {
+                        standaloneNodeName = nodesListForEndpoint[0].node;
+                    }
+                }
+            } else {
+                console.warn(`[DataFetcher - ${endpointName}] No nodes found or unexpected format.`);
+                endpointType = 'standalone'; // Fallback
+            }
+        } catch (clusterError) {
+            console.error(`[DataFetcher - ${endpointName}] Error fetching /cluster/status: ${clusterError.message}`, clusterError);
+            endpointType = 'standalone'; // Fallback
+            // Even on /cluster/status error, try to get node name if it's likely standalone
+            try {
+                const nodesListForEndpoint = (await apiClientInstance.get('/nodes')).data?.data;
+                if (nodesListForEndpoint && nodesListForEndpoint.length > 0) {
+                    standaloneNodeName = nodesListForEndpoint[0].node;
+                }
+            } catch (nodesError) {
+                console.error(`[DataFetcher - ${endpointName}] Also failed to fetch /nodes after /cluster/status error: ${nodesError.message}`);
+            }
+        }
+        
+        // Update actualClusterName if this is a standalone endpoint and we found a specific node name
+        if (endpointType === 'standalone' && standaloneNodeName) {
+            actualClusterName = standaloneNodeName;
+        }
+
         const nodesResponse = await apiClientInstance.get('/nodes');
         const nodes = nodesResponse.data.data;
         if (!nodes || !Array.isArray(nodes)) {
@@ -82,6 +135,8 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 status: correspondingNodeInfo.status || 'unknown',
                 id: `${endpointId}-${correspondingNodeInfo.node}`, // Use endpointId for node ID
                 endpointId: endpointId, // Use endpointId for tagging node
+                clusterIdentifier: actualClusterName, // Use actual cluster name or endpoint name
+                endpointType: endpointType, // Added to differentiate cluster vs standalone for labeling
             };
 
             if (result.status === 'fulfilled' && result.value) {
@@ -106,9 +161,9 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 processedNodes.push(finalNode);
             } else {
                 if (result.status === 'rejected') {
-                    console.error(`[DataFetcher - ${endpointName}] Error processing node ${correspondingNodeInfo.node}: ${result.reason?.message || result.reason}`);
+                    console.error(`[DataFetcher - ${endpointName}-${correspondingNodeInfo.node}] Error fetching Node status: ${result.reason?.message || result.reason}`);
                 } else {
-                    console.warn(`[DataFetcher - ${endpointName}] Unexpected result status for node ${correspondingNodeInfo.node}: ${result.status}`);
+                    console.warn(`[DataFetcher - ${endpointName}-${correspondingNodeInfo.node}] Unexpected result status: ${result.status}`);
                 }
                 processedNodes.push(finalNode); // Push node with defaults on failure
             }
