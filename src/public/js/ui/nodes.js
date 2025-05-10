@@ -79,20 +79,53 @@ PulseApp.ui.nodes = (() => {
             console.error('Critical element #nodes-table-body not found for nodes table update!');
             return;
         }
-        // tbody.innerHTML = ''; // Handled by renderTableBody
+        tbody.innerHTML = ''; // Clear previous content
+
+        if (!nodes || nodes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found or data unavailable</td></tr>';
+            return;
+        }
+
+        // Group nodes by clusterIdentifier
+        const clusters = nodes.reduce((acc, node) => {
+            const key = node.clusterIdentifier || 'Unknown Cluster'; // Fallback for safety
+            if (!acc[key]) {
+                acc[key] = [];
+            }
+            acc[key].push(node);
+            return acc;
+        }, {});
 
         const sortStateNodes = PulseApp.state.getSortState('nodes');
-        const dataToDisplay = PulseApp.utils.sortData(nodes, sortStateNodes.column, sortStateNodes.direction, 'nodes');
 
-        // if (dataToDisplay.length === 0) { // Handled by renderTableBody
-        //     tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found or data unavailable</td></tr>';
-        //     return;
-        // }
+        // Iterate over each cluster group
+        for (const clusterIdentifier in clusters) {
+            if (clusters.hasOwnProperty(clusterIdentifier)) {
+                const nodesInCluster = clusters[clusterIdentifier];
+                // All nodes in this group should have the same endpointType, so pick from the first.
+                // Default to 'standalone' if nodesInCluster is empty or endpointType is missing for some reason.
+                const endpointType = (nodesInCluster && nodesInCluster.length > 0 && nodesInCluster[0].endpointType) 
+                                     ? nodesInCluster[0].endpointType 
+                                     : 'standalone';
+                
+                const iconSvg = endpointType === 'cluster'
+                    ? PulseApp.ui.common.NODE_GROUP_CLUSTER_ICON_SVG
+                    : PulseApp.ui.common.NODE_GROUP_STANDALONE_ICON_SVG;
 
-        // Use the utility function
-        PulseApp.utils.renderTableBody(tbody, dataToDisplay, createNodeRow, "No nodes found or data unavailable", 7);
-        
-        // REMOVED: dataToDisplay.forEach(node => { ... tbody.appendChild(row); });
+                const clusterHeaderRow = document.createElement('tr');
+                // Applying base background, then overlaying with stripe pattern classes
+                clusterHeaderRow.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(clusterIdentifier, 7, 'th');
+                tbody.appendChild(clusterHeaderRow);
+
+                // Sort nodes within this cluster group
+                const sortedNodesInCluster = PulseApp.utils.sortData(nodesInCluster, sortStateNodes.column, sortStateNodes.direction, 'nodes');
+
+                sortedNodesInCluster.forEach(node => {
+                    const nodeRow = createNodeRow(node);
+                    tbody.appendChild(nodeRow);
+                });
+            }
+        }
     }
 
     return {
