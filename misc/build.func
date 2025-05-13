@@ -528,7 +528,37 @@ advanced_settings() {
     exit_script
   fi
 
-  BRIDGES=$( ip link show | grep -oP '(?<=: )vmbr\d+' | sort)
+
+  BRIDGES=""
+  IFACE_FILEPATH_LIST="/etc/network/interfaces"$'\n'$(find "/etc/network/interfaces.d/" -type f)
+  OLD_IFS=$IFS; IFS=$'\n'
+
+  for iface_filepath in ${IFACE_FILEPATH_LIST}; do
+    iface_indexes_tmpfile=$(mktemp -q -u '.iface-XXXX')
+
+    ( grep -Pn '^\s*iface' "${iface_filepath}" | cut -d':' -f1 && wc -l "${iface_filepath}" | cut -d' ' -f1 ) | \
+    awk 'FNR==1 {line=$0; next} {print line":"$0-1; line=$0}' > "${iface_indexes_tmpfile}"
+
+    if [ -f "${iface_indexes_tmpfile}" ]; then
+        while read -r pair; do
+            start=$(echo "${pair}" | cut -d':' -f1)
+            end=$(echo "${pair}" | cut -d':' -f2)
+
+            if awk "NR >= ${start} && NR <= ${end}" "${iface_filepath}" | grep -qP '^\s*bridge[-_](ports|stp|fd|vlan-aware|vids)\s+'; then
+                iface_name=$(sed "${start}q;d" "${iface_filepath}" | awk '{print $2}')
+                BRIDGES="${iface_name}"$'\n'"${BRIDGES}"
+            fi
+
+        done < "${iface_indexes_tmpfile}"
+        rm -f "${iface_indexes_tmpfile}"
+    fi
+
+  done
+
+  IFS=$OLD_IFS
+
+  BRIDGES=$(echo "$BRIDGES" | grep -v '^\s*$' | sort | uniq)
+
   if [[ -z "$BRIDGES" ]]; then
     BRG="vmbr0"
     echo -e "${BRIDGE}${BOLD}${DGN}Bridge: ${BGN}$BRG${CL}"
@@ -1368,7 +1398,7 @@ description() {
       <img src='https://img.shields.io/badge/&#x2615;-Buy us a coffee-blue' alt='spend Coffee' />
     </a>
   </p>
-  
+
   <span style='margin: 0 10px;'>
     <i class="fa fa-github fa-fw" style="color: #f5f5f5;"></i>
     <a href='https://github.com/community-scripts/ProxmoxVE' target='_blank' rel='noopener noreferrer' style='text-decoration: none; color: #00617f;'>GitHub</a>
