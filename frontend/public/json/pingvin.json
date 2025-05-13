@@ -35,6 +35,6 @@
     {
       "text": "Run `DATA_DIRECTORY=path-to-your-data-directory pm2 restart all --update-env` to update path to your data directory or to update environment variables.",
       "type": "info"
-    },
+    }
   ]
 }
