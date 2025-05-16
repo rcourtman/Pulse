@@ -625,11 +625,11 @@ describe('Data Fetcher', () => {
         
         // Check the second call for the /nodes failure after /cluster/status
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-          expect.stringContaining(`[DataFetcher - ${endpointConfig.name}] Also failed to fetch /nodes after /cluster/status error: ${storageError.message}`)
+          expect.stringContaining(`[DataFetcher - primary] Also failed to fetch /nodes after /cluster/status error: ${storageError.message}`)
         );
         // Third error log from the main catch block in fetchDataForPveEndpoint
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-          expect.stringContaining(`[DataFetcher - ${endpointConfig.name}] Error fetching PVE discovery data: ${storageError.message}`)
+          expect.stringContaining(`[DataFetcher - primary] Error fetching PVE discovery data: ${storageError.message}`)
         );
         expect(consoleErrorSpy).toHaveBeenCalledTimes(3);
 
