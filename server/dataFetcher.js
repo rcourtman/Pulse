@@ -320,11 +320,11 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
         return { tasks: null, error: true };
     }
     try {
-        const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
+        const sinceTimestamp = Math.floor((Date.now() - 14 * 24 * 60 * 60 * 1000) / 1000);
         const trimmedNodeName = nodeName.trim();
         const encodedNodeName = encodeURIComponent(trimmedNodeName);
         const response = await client.get(`/nodes/${encodedNodeName}/tasks`, {
-            params: { since: sinceTimestamp, limit: 1000, errors: 1 }
+            params: { since: sinceTimestamp, limit: 2500, errors: 1 }
         });
         const allTasks = response.data?.data ?? [];
         console.log(`INFO: [DataFetcher] Fetched ${allTasks.length} tasks from PBS node ${nodeName}.`);
