@@ -83,4 +83,7 @@ RELEASE_CHECKLIST.md
 # package-lock.json # Usually committed, but ignore if specified elsewhere
 server/package-lock.json
 yarn.lock
-pnpm-lock.yaml 
+pnpm-lock.yaml
+
+# Release tarballs
+*.tar.gz 
