@@ -109,17 +109,38 @@ PulseApp.ui.backups = (() => {
         // Calculate 7-day backup status (dot matrix)
         const last7DaysBackupStatus = [];
         for (let i = 6; i >= 0; i--) { // Iterate from 6 days ago to today
-            const dayStart = new Date(now);
-            dayStart.setDate(now.getDate() - i);
-            const dayStartTimestamp = Math.floor(dayStart.getTime() / 1000);
-            const dayEnd = new Date(dayStart);
-            dayEnd.setDate(dayStart.getDate() + 1);
-            const dayEndTimestamp = Math.floor(dayEnd.getTime() / 1000);
+            const dayTarget = new Date(now);
+            dayTarget.setDate(now.getDate() - i);
+            const dayStartTimestamp = Math.floor(dayTarget.getTime() / 1000);
+            
+            const dayEndTarget = new Date(dayTarget);
+            dayEndTarget.setDate(dayTarget.getDate() + 1);
+            const dayEndTimestamp = Math.floor(dayEndTarget.getTime() / 1000);
 
-            const backupOnThisDay = guestSnapshots.some(
-                snap => snap['backup-time'] >= dayStartTimestamp && snap['backup-time'] < dayEndTimestamp
+            let dailyStatus = 'none'; // Default to 'none'
+
+            // Check tasks for this day
+            const tasksOnThisDay = guestTasks.filter(task => 
+                task.startTime >= dayStartTimestamp && task.startTime < dayEndTimestamp
             );
-            last7DaysBackupStatus.push(backupOnThisDay);
+
+            const failedTaskOnThisDay = tasksOnThisDay.find(task => task.status !== 'OK');
+            const successfulTaskOnThisDay = tasksOnThisDay.find(task => task.status === 'OK');
+
+            if (failedTaskOnThisDay) {
+                dailyStatus = 'failed';
+            } else if (successfulTaskOnThisDay) {
+                dailyStatus = 'ok';
+            } else {
+                // If no tasks, check for snapshots as a fallback for successful backup indication
+                const snapshotOnThisDay = guestSnapshots.some(
+                    snap => snap['backup-time'] >= dayStartTimestamp && snap['backup-time'] < dayEndTimestamp
+                );
+                if (snapshotOnThisDay) {
+                    dailyStatus = 'ok';
+                }
+            }
+            last7DaysBackupStatus.push(dailyStatus);
         }
 
         return {
@@ -192,16 +213,21 @@ PulseApp.ui.backups = (() => {
         // Generate 7-day backup dots
         let sevenDayDots = '<div class="flex space-x-0.5" title="Last 7 days backup history (oldest to newest)">';
         if (guestStatus.last7DaysBackupStatus && guestStatus.last7DaysBackupStatus.length === 7) {
-            guestStatus.last7DaysBackupStatus.forEach(hasBackup => {
-                if (hasBackup) {
-                    sevenDayDots += '<span class="w-2 h-2 bg-green-500 rounded-full"></span>';
-                } else {
-                    sevenDayDots += '<span class="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full"></span>';
+            guestStatus.last7DaysBackupStatus.forEach(status => {
+                let dotClass = 'bg-gray-300 dark:bg-gray-600'; // Default for 'none'
+                let dotTitle = 'No backup';
+                if (status === 'ok') {
+                    dotClass = 'bg-green-500';
+                    dotTitle = 'Successful backup';
+                } else if (status === 'failed') {
+                    dotClass = 'bg-red-500';
+                    dotTitle = 'Failed backup';
                 }
+                sevenDayDots += `<span class="w-2 h-2 ${dotClass} rounded-full" title="${dotTitle}"></span>`;
             });
         } else {
             for (let i = 0; i < 7; i++) {
-                 sevenDayDots += '<span class="w-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full"></span>'; // Placeholder if data is missing
+                 sevenDayDots += '<span class="w-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full" title="Data unavailable"></span>'; // Placeholder if data is missing
             }
         }
         sevenDayDots += '</div>';
