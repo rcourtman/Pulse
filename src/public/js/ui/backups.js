@@ -196,15 +196,6 @@ PulseApp.ui.backups = (() => {
             ? PulseApp.utils.formatPbsTimestamp(guestStatus.latestBackupTime)
             : '<span class="text-gray-400">No backups found</span>';
 
-        let healthIndicator = '';
-        switch (guestStatus.backupHealthStatus) {
-            case 'ok': healthIndicator = '<span class="text-green-600 dark:text-green-400" title="OK">●</span>'; break;
-            case 'stale': healthIndicator = '<span class="text-yellow-600 dark:text-yellow-400" title="Stale">●</span>'; break;
-            case 'failed': healthIndicator = '<span class="text-red-600 dark:text-red-400 font-bold" title="Failed">✖</span>'; break;
-            case 'old': healthIndicator = '<span class="text-orange-600 dark:text-orange-400" title="Old">●</span>'; break;
-            case 'none': healthIndicator = '<span class="text-gray-400 dark:text-gray-500" title="None">-</span>'; break;
-        }
-
         const typeIconClass = guestStatus.guestType === 'VM'
             ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium'
             : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
@@ -233,7 +224,6 @@ PulseApp.ui.backups = (() => {
         sevenDayDots += '</div>';
 
         row.innerHTML = `
-            <td class="p-1 px-2 whitespace-nowrap text-center">${healthIndicator}</td>
             <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
             <td class="p-1 px-2">${typeIcon}</td>
