@@ -232,7 +232,7 @@ PulseApp.ui.backups = (() => {
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.pbsInstanceName}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.datastoreName}</td>
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-center">${sevenDayDots}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${sevenDayDots}</td>
         `;
         return row;
     }
