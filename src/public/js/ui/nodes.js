@@ -143,10 +143,18 @@ PulseApp.ui.nodes = (() => {
         function calculateOptimalColumns(numItems, defaultCols) {
             if (numItems <= 0) return defaultCols; // No items, use default or let it be empty
             if (defaultCols <= 1) return 1; // Cannot reduce further, or already 1
-            // If numItems is less than or equal to defaultCols, it will fit in one row, so use defaultCols.
-            if (numItems <= defaultCols) return defaultCols; 
-            // If numItems % defaultCols leaves a single orphan, reduce columns by 1.
+            // If numItems is less than or equal to defaultCols, use numItems as the column count.
+            if (numItems <= defaultCols) return numItems; 
+            
+            // Now numItems > defaultCols (multiple rows expected)
+            // Avoid a single orphan, but don't reduce to 1 column if defaultCols is 2.
             if (numItems % defaultCols === 1) {
+                if (defaultCols === 2) {
+                    // If default is 2 cols (sm), and we have an odd number of items (e.g., 3, 5),
+                    // use 2 columns to avoid stacking. (Results in 2 side-by-side, then 1 or more).
+                    return defaultCols; 
+                }
+                // For other defaultCols (>=3), reducing by 1 to avoid an orphan is fine.
                 return Math.max(1, defaultCols - 1); // Ensure at least 1 column
             }
             return defaultCols;
