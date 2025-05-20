@@ -16,7 +16,7 @@ PulseApp.utils = (() => {
         }[color] || 'bg-gray-500/50'; // Fallback progress color with opacity
 
         return `
-            <div class="relative w-full h-4 rounded overflow-hidden ${bgColorClass}">
+            <div class="relative w-full h-3.5 rounded overflow-hidden ${bgColorClass}">
                 <div class="absolute top-0 left-0 h-full ${progressColorClass}" style="width: ${percentage}%;"></div>
                 <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">${text}</span>
             </div>
