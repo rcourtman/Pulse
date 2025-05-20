@@ -429,6 +429,25 @@ PulseApp.ui.dashboard = (() => {
 
         const diskReadFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeed(guest.diskread, 0) : '-';
         const diskWriteFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeed(guest.diskwrite, 0) : '-';
+
+        // Icons and colors
+        const upArrow = '↑';
+        const downArrow = '↓';
+
+        let netInIcon = '';
+        let netOutIcon = '';
+
+        if (guest.status === STATUS_RUNNING) {
+            const netInActive = guest.netin > 0;
+            const netOutActive = guest.netout > 0;
+
+            netInIcon = `<span class="text-xs mr-1 ${netInActive ? 'text-green-500' : 'text-gray-400 dark:text-gray-500'}">${downArrow}</span>`;
+            netOutIcon = `<span class="text-xs mr-1 ${netOutActive ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}">${upArrow}</span>`;
+        } else {
+            netInIcon = `<span class="text-xs mr-1 text-gray-400 dark:text-gray-500">${downArrow}</span>`;
+            netOutIcon = `<span class="text-xs mr-1 text-gray-400 dark:text-gray-500">${upArrow}</span>`;
+        }
+        
         const netInFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeed(guest.netin, 0) : '-';
         const netOutFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeed(guest.netout, 0) : '-';
 
@@ -437,18 +456,26 @@ PulseApp.ui.dashboard = (() => {
             : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
         const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guest.type === GUEST_TYPE_VM ? GUEST_TYPE_VM : 'LXC'}</span>`;
 
+        let uptimeDisplay = '-';
+        if (guest.status === STATUS_RUNNING) {
+            uptimeDisplay = PulseApp.utils.formatUptime(guest.uptime);
+            if (guest.uptime < 3600) { // Less than 1 hour (3600 seconds)
+                uptimeDisplay = `<span class="text-orange-500">${uptimeDisplay}</span>`;
+            }
+        }
+
         row.innerHTML = `
             <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2">${guest.id}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${guest.status === STATUS_STOPPED ? '-' : PulseApp.utils.formatUptime(guest.uptime)}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${uptimeDisplay}</td>
             <td class="p-1 px-2">${cpuBarHTML}</td>
             <td class="p-1 px-2">${memoryBarHTML}</td>
             <td class="p-1 px-2">${diskBarHTML}</td>
             <td class="p-1 px-2 whitespace-nowrap">${diskReadFormatted}</td>
             <td class="p-1 px-2 whitespace-nowrap">${diskWriteFormatted}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${netInFormatted}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${netOutFormatted}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${netInIcon}${netInFormatted}</td>
+            <td class="p-1 px-2 whitespace-nowrap">${netOutIcon}${netOutFormatted}</td>
         `;
         return row;
     }
