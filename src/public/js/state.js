@@ -2,6 +2,7 @@ PulseApp.state = (() => {
     const savedSortState = JSON.parse(localStorage.getItem('pulseSortState')) || {};
     const savedFilterState = JSON.parse(localStorage.getItem('pulseFilterState')) || {};
     const savedThresholdState = JSON.parse(localStorage.getItem('pulseThresholdState')) || {};
+    const savedPbsShowDetails = JSON.parse(localStorage.getItem('pulsePbsShowDetails')) || {};
 
     let internalState = {
         nodesData: [],
@@ -35,7 +36,8 @@ PulseApp.state = (() => {
         },
         activeLogSessions: {},
         thresholdLogEntries: [],
-        activeLoggingThresholds: null
+        activeLoggingThresholds: null,
+        pbsShowDetails: savedPbsShowDetails
     };
 
     // Initialize thresholdState by merging saved state with defaults
@@ -79,6 +81,10 @@ PulseApp.state = (() => {
             backups: internalState.sortState.backups
         };
         localStorage.setItem('pulseSortState', JSON.stringify(stateToSave));
+    }
+
+    function savePbsShowDetailsState() {
+        localStorage.setItem('pulsePbsShowDetails', JSON.stringify(internalState.pbsShowDetails));
     }
 
     return {
@@ -134,6 +140,16 @@ PulseApp.state = (() => {
         },
         clearDashboardHistoryEntry: (guestId) => {
             delete internalState.dashboardHistory[guestId];
+        },
+        getPbShowDetailsState: (instanceId, defaultValue) => {
+            if (typeof internalState.pbsShowDetails[instanceId] === 'boolean') {
+                return internalState.pbsShowDetails[instanceId];
+            }
+            return defaultValue;
+        },
+        setPbShowDetailsState: (instanceId, value) => {
+            internalState.pbsShowDetails[instanceId] = !!value;
+            savePbsShowDetailsState();
         }
     };
 })();

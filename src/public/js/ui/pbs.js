@@ -102,7 +102,10 @@ PulseApp.ui.pbs = (() => {
         PBS_RECENT_VERIFY_TASKS_TBODY: 'pbs-recent-verify-tasks-tbody-',
         PBS_RECENT_SYNC_TASKS_TBODY: 'pbs-recent-sync-tasks-tbody-',
         PBS_RECENT_PRUNEGC_TASKS_TBODY: 'pbs-recent-prunegc-tasks-tbody-',
-        PBS_INSTANCES_CONTAINER: 'pbs-instances-container',
+        PBS_INSTANCES_CONTAINER: 'pbs-instances-container', // Kept for reference, not primary use now
+        PBS_SUB_TABS_NAV: 'pbs-sub-tabs-nav',
+        PBS_SUB_TABS_CONTENT: 'pbs-sub-tabs-content',
+        PBS_SUB_TAB_CONTENT_PANEL_PREFIX: 'pbs-instance-content-'
     };
 
     const DATA_ATTRIBUTES = {
@@ -355,7 +358,7 @@ PulseApp.ui.pbs = (() => {
         headerDiv.className = `${CSS_CLASSES.FLEX} ${CSS_CLASSES.JUSTIFY_BETWEEN} ${CSS_CLASSES.ITEMS_CENTER} ${CSS_CLASSES.MB3}`;
         const instanceTitleElement = document.createElement('h3');
         instanceTitleElement.className = `${CSS_CLASSES.TEXT_LG} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200} ${CSS_CLASSES.FLEX} ${CSS_CLASSES.ITEMS_CENTER}`;
-        instanceTitleElement.appendChild(_createHealthBadgeHTML(overallHealth, healthTitle));
+        // instanceTitleElement.appendChild(_createHealthBadgeHTML(overallHealth, healthTitle));
         instanceTitleElement.appendChild(document.createTextNode(instanceName));
         headerDiv.appendChild(instanceTitleElement);
         return headerDiv;
@@ -396,340 +399,166 @@ PulseApp.ui.pbs = (() => {
     };
 
     function updatePbsInfo(pbsArray) {
-      const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
-      if (!container) {
-          console.error(`PBS container element #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found!`);
-          return;
-      }
+        const pbsSubTabsNav = document.getElementById(ID_PREFIXES.PBS_SUB_TABS_NAV);
+        const pbsSubTabsContent = document.getElementById(ID_PREFIXES.PBS_SUB_TABS_CONTENT);
+        const pbsLoadingMessageEl = document.getElementById('pbs-loading-message'); 
 
-      if (!pbsArray || pbsArray.length === 0) {
-          container.innerHTML = '';
-          const placeholder = document.createElement('p');
-          placeholder.className = CSS_CLASSES.TEXT_GRAY_500_DARK_TEXT_GRAY_400_P4_TEXT_CENTER_TEXT_SM;
-          placeholder.textContent = 'Proxmox Backup Server integration is not configured.';
-          container.appendChild(placeholder);
-          return;
-      }
-
-      const loadingMessage = document.getElementById('pbs-loading-message'); // Assuming this ID is unique and used elsewhere
-      if (loadingMessage) {
-          loadingMessage.remove();
-      }
-
-      const notConfiguredBanner = container.querySelector('.pbs-not-configured-banner'); // Assuming this class is unique
-      if (notConfiguredBanner) {
-          notConfiguredBanner.remove();
-      }
-
-      const currentInstanceIds = new Set();
-
-      const _createPbsTaskHealthTable = (instanceId, pbsInstanceData) => {
-          const sectionDiv = document.createElement('div');
-          sectionDiv.id = ID_PREFIXES.PBS_SUMMARIES_SECTION + instanceId;
-          // Add a general class for styling this new section if needed, e.g., 'pbs-task-health-section'
-          sectionDiv.className = `pbs-task-health-section ${CSS_CLASSES.MB3}`; // Added margin-bottom for spacing
-
-          const heading = document.createElement('h4');
-          heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
-          heading.textContent = 'PBS Task Health (7d)';
-          sectionDiv.appendChild(heading);
-
-          const tableContainer = document.createElement('div');
-          // Make the tableContainer itself look more like a card
-          tableContainer.className = `${CSS_CLASSES.OVERFLOW_X_AUTO} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} ${CSS_CLASSES.BG_GRAY_50_DARK_BG_GRAY_800_30} p-3`; // Added background and padding
-          
-          const table = document.createElement('table');
-          table.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.TEXT_SM}`;
-          // Removed DIVIDE_Y from table itself, will rely on cell padding and borders if needed
-          
-          const thead = document.createElement('thead');
-          thead.className = `${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`; // Added background to header
-          const headerRow = document.createElement('tr');
-          headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TRACKING_WIDER} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
-
-          const headers = ['Task Type', 'Status', 'Last Successful Run', 'Last Failure'];
-          headers.forEach(text => {
-              const th = document.createElement('th');
-              th.scope = 'col';
-              th.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_LEFT}`; // Ensure left alignment for headers
-              th.textContent = text;
-              headerRow.appendChild(th);
-          });
-          thead.appendChild(headerRow);
-          table.appendChild(thead);
-
-          const tbody = document.createElement('tbody');
-          tbody.className = `pbs-task-health-tbody`;
-          
-          // Data for the table rows
-          const taskHealthData = [
-              { title: 'Backups', data: pbsInstanceData.backupTasks },
-              { title: 'Verification', data: pbsInstanceData.verificationTasks },
-              { title: 'Sync', data: pbsInstanceData.syncTasks },
-              { title: 'Prune/GC', data: pbsInstanceData.pruneTasks }
-          ];
-
-          taskHealthData.forEach(taskItem => {
-              const summary = taskItem.data?.summary || {};
-              const ok = summary.ok ?? '-';
-              const failed = summary.failed ?? 0; // Default to 0 for comparison
-              const total = summary.total ?? '-';
-              const lastOk = PulseApp.utils.formatPbsTimestamp(summary.lastOk);
-              const lastFailed = PulseApp.utils.formatPbsTimestamp(summary.lastFailed);
-
-              const row = tbody.insertRow();
-              // Remove left border highlighting - rely on text styling in Status cell
-              // if (failed > 0) {
-              //     row.className = CSS_CLASSES.BORDER_L_4_RED_500_DARK_RED_400; 
-              // } else {
-              //     row.className = CSS_CLASSES.BORDER_L_4_TRANSPARENT; 
-              // }
-              
-              // Ensure row still has its bottom border for separation
-              row.className = 'initial-row-class-if-any'; // Clear previous BORDER_L classes
-              row.classList.add(...CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700.split(' '));
-
-              const cellTaskType = row.insertCell();
-              cellTaskType.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}`;
-              cellTaskType.textContent = taskItem.title;
-
-              const cellStatus = row.insertCell();
-              cellStatus.className = CSS_CLASSES.P1_PX2;
-              const okHtml = `<span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">${ok} OK</span>`;
-              const failHtml = `<span class="${failed > 0 ? CSS_CLASSES.FONT_BOLD + ' ' + CSS_CLASSES.TEXT_RED_600_DARK_RED_400 : CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}">${failed} Fail</span>`;
-              cellStatus.innerHTML = `${okHtml} / ${failHtml}`;
-              
-              const cellLastOk = row.insertCell();
-              cellLastOk.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}`;
-              cellLastOk.textContent = lastOk;
-
-              const cellLastFail = row.insertCell();
-              cellLastFail.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}`;
-              cellLastFail.textContent = lastFailed;
-          });
-
-          table.appendChild(tbody);
-          tableContainer.appendChild(table);
-          sectionDiv.appendChild(tableContainer);
-          
-          return sectionDiv;
-      };
-
-      const _createTaskTableElement = (tableId, title, idColumnHeader) => {
-          const fragment = document.createDocumentFragment();
-
-          const heading = document.createElement('h4');
-          heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
-          heading.textContent = `Recent ${title} Tasks`;
-          fragment.appendChild(heading);
-
-          const tableContainer = document.createElement('div');
-          tableContainer.className = `${CSS_CLASSES.OVERFLOW_X_AUTO} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED}`;
-
-          const table = document.createElement('table');
-          table.id = tableId;
-          table.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}`;
-
-          const thead = document.createElement('thead');
-          thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
-          const headerRow = document.createElement('tr');
-          headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TRACKING_WIDER} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
-
-          const headers = [idColumnHeader, 'Status', 'Start Time', 'Duration', 'UPID'];
-          headers.forEach(text => {
-              const th = document.createElement('th');
-              th.scope = 'col';
-              th.className = CSS_CLASSES.P1_PX2;
-              th.textContent = text;
-              headerRow.appendChild(th);
-          });
-          thead.appendChild(headerRow);
-          table.appendChild(thead);
-
-          const tbody = document.createElement('tbody');
-          tbody.id = tableId.replace('-table-', '-tbody-');
-          tbody.className = `${CSS_CLASSES.PBS_TASK_TBODY} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700}`;
-          table.appendChild(tbody);
-          tableContainer.appendChild(table);
-          fragment.appendChild(tableContainer);
-
-          const toggleButtonContainer = document.createElement('div');
-          toggleButtonContainer.id = tableId.replace('-table', '-toggle-container');
-          toggleButtonContainer.className = `pbs-toggle-button-container ${CSS_CLASSES.PT1} ${CSS_CLASSES.TEXT_RIGHT}`;
-
-          const showMoreButton = document.createElement('button');
-          showMoreButton.className = `${CSS_CLASSES.PBS_SHOW_MORE} ${CSS_CLASSES.TEXT_BLUE_600_HOVER_BLUE_800_DARK_BLUE_400_DARK_HOVER_BLUE_300} ${CSS_CLASSES.HIDDEN}`;
-          showMoreButton.textContent = 'Show More';
-          toggleButtonContainer.appendChild(showMoreButton);
-
-          const noTasksMessage = document.createElement('p');
-          noTasksMessage.className = `${CSS_CLASSES.PBS_NO_TASKS} ${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.TEXT_GRAY_400} dark:text-gray-500 ${CSS_CLASSES.HIDDEN} ${CSS_CLASSES.ITALIC}`;
-          noTasksMessage.textContent = 'No recent tasks found.';
-          toggleButtonContainer.appendChild(noTasksMessage);
-
-          fragment.appendChild(toggleButtonContainer);
-          return fragment;
-      };
-
-      const _createSummariesSectionElement = (instanceId, pbsInstanceData) => {
-          // This function is now a wrapper for _createPbsTaskHealthTable
-          // The old grid layout is replaced by the single table.
-          return _createPbsTaskHealthTable(instanceId, pbsInstanceData);
-      };
-
-      const _createAllTaskSectionsContainer = (instanceId) => {
-          const container = document.createElement('div'); // Or DocumentFragment
-          container.className = CSS_CLASSES.SPACE_Y_4; // Add some spacing between task sections
-
-          const taskDefinitions = [
-              { type: 'backup', title: 'Backup', idCol: 'Guest', tableIdPrefix: ID_PREFIXES.PBS_RECENT_BACKUP_TASKS_TABLE },
-              { type: 'verify', title: 'Verification', idCol: 'Guest/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_VERIFY_TASKS_TABLE },
-              { type: 'sync', title: 'Sync', idCol: 'Job ID', tableIdPrefix: ID_PREFIXES.PBS_RECENT_SYNC_TASKS_TABLE },
-              { type: 'prunegc', title: 'Prune/GC', idCol: 'Datastore/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_PRUNEGC_TASKS_TABLE }
-          ];
-
-          taskDefinitions.forEach(def => {
-              const taskSection = document.createElement('div');
-              taskSection.className = CSS_CLASSES.PBS_TASK_SECTION;
-              taskSection.dataset.taskType = def.type;
-              taskSection.appendChild(_createTaskTableElement(def.tableIdPrefix + instanceId, def.title, def.idCol));
-              container.appendChild(taskSection);
-          });
-          return container;
-      };
-
-      const _createPbsInstanceElement = (pbsInstanceData, instanceId, instanceName, overallHealth, healthTitle, showDetails, statusText) => {
-          const instanceWrapper = document.createElement('div');
-          instanceWrapper.className = `${CSS_CLASSES.PBS_INSTANCE_SECTION} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} p-4 mb-4 bg-gray-50/30 dark:bg-gray-800/30`;
-          instanceWrapper.id = ID_PREFIXES.PBS_INSTANCE + instanceId;
-
-          instanceWrapper.appendChild(_createInstanceHeaderDiv(instanceName, overallHealth, healthTitle));
-
-          const detailsContainer = document.createElement('div');
-          detailsContainer.className = `${CSS_CLASSES.PBS_INSTANCE_DETAILS} ${CSS_CLASSES.SPACE_Y_4} ${showDetails ? '' : CSS_CLASSES.HIDDEN}`;
-          detailsContainer.id = ID_PREFIXES.PBS_DETAILS + instanceId;
-
-          detailsContainer.appendChild(_createDatastoreSectionElement(instanceId));
-          detailsContainer.appendChild(_createSummariesSectionElement(instanceId, pbsInstanceData));
-          detailsContainer.appendChild(_createAllTaskSectionsContainer(instanceId));
-          
-          instanceWrapper.appendChild(detailsContainer);
-
-          // Populate dynamic content after structure is built
-          const dsTableBodyElement = instanceWrapper.querySelector(`#${ID_PREFIXES.PBS_DS_TBODY}${instanceId}`);
-          _populateDsTableBody(dsTableBodyElement, pbsInstanceData.datastores, statusText, showDetails);
-          _populateInstanceTaskSections(detailsContainer, instanceId, pbsInstanceData, statusText, showDetails);
-
-          return instanceWrapper;
-      };
-
-      pbsArray.forEach((pbsInstance, index) => {
-        const rawInstanceId = pbsInstance.pbsEndpointId || `instance-${index}`;
-        const instanceId = PulseApp.utils.sanitizeForId(rawInstanceId);
-        const instanceName = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
-        const instanceElementId = ID_PREFIXES.PBS_INSTANCE + instanceId;
-        currentInstanceIds.add(instanceElementId);
-
-        let instanceWrapper = document.getElementById(instanceElementId);
-        let detailsContainer, dsTableBody, instanceTitleElement;
-
-        let statusText = 'Loading...';
-        let showDetails = false;
-        switch (pbsInstance.status) {
-            case 'configured':
-                statusText = `Configured, attempting connection...`;
-                break;
-            case 'ok':
-                statusText = `Status: OK`;
-                showDetails = true;
-                break;
-            case 'error':
-                statusText = `Error: ${pbsInstance.errorMessage || 'Connection failed'}`;
-                break;
-            default:
-                statusText = `Status: ${pbsInstance.status || 'Unknown'}`;
-                break;
+        if (!pbsSubTabsNav || !pbsSubTabsContent) {
+            console.error('[PBS UI] Sub-tab navigation or content area not found in HTML.');
+            if (pbsLoadingMessageEl) pbsLoadingMessageEl.textContent = 'UI Error: PBS tab structure missing.';
+            return;
         }
 
-        let overallHealth = 'ok';
-        let healthTitle = 'OK';
-        if (pbsInstance.status === 'error') {
-            overallHealth = 'error';
-            healthTitle = `Error: ${pbsInstance.errorMessage || 'Connection failed'}`;
-        } else if (pbsInstance.status !== 'ok') {
-            overallHealth = 'warning';
-            healthTitle = 'Connecting or unknown status';
-        } else {
-            const highUsageDatastore = (pbsInstance.datastores || []).find(ds => {
-                const totalBytes = ds.total || 0;
-                const usedBytes = ds.used || 0;
-                const usagePercent = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
-                return usagePercent > 85;
-            });
-            if (highUsageDatastore) {
-                overallHealth = 'warning';
-                healthTitle = `Warning: Datastore ${highUsageDatastore.name} usage high (${Math.round((highUsageDatastore.used / highUsageDatastore.total) * 100)}%)`;
+        pbsSubTabsNav.innerHTML = '';
+        pbsSubTabsContent.innerHTML = ''; 
+
+        const validPbsInstances = pbsArray ? pbsArray.filter(p => p && p.status !== 'error' && p.status !== 'pending_initialization') : [];
+
+        if (!pbsArray || pbsArray.length === 0 || validPbsInstances.length === 0) {
+            let message = 'No PBS instances configured or all are currently unavailable.';
+            if (!pbsArray || pbsArray.length === 0) {
+                message = 'No PBS instances configured.';
+            } else if (validPbsInstances.length === 0) {
+                message = 'Could not retrieve data from any configured PBS instances.';
+            }
+            
+            const messageElement = document.createElement('p');
+            messageElement.textContent = message;
+            messageElement.className = `${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400_P4_TEXT_CENTER_TEXT_SM}`;
+            pbsSubTabsContent.appendChild(messageElement);
+            return;
+        }
+
+        pbsArray.forEach((pbsInstanceData, index) => {
+            if (!pbsInstanceData || !pbsInstanceData.pbsEndpointId) {
+                console.warn('[PBS UI] Skipping PBS instance due to missing data or endpoint ID:', pbsInstanceData);
+                return; 
+            }
+            const instanceId = pbsInstanceData.pbsEndpointId;
+            const instanceName = pbsInstanceData.pbsInstanceName || `PBS ${index + 1}`;
+
+            const tabButton = document.createElement('button');
+            tabButton.textContent = instanceName;
+            tabButton.setAttribute('data-pbs-instance-id', instanceId);
+            tabButton.className = `pbs-sub-tab-button py-2 px-4 -mb-px border-b-2 border-transparent hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-500 dark:hover:border-blue-400 focus:outline-none text-sm font-medium text-gray-500 dark:text-gray-400`;
+
+            const contentPanel = document.createElement('div');
+            contentPanel.id = `${ID_PREFIXES.PBS_SUB_TAB_CONTENT_PANEL_PREFIX}${instanceId}`;
+            contentPanel.className = `pbs-instance-content-panel ${CSS_CLASSES.SPACE_Y_4}`;
+            if (index !== 0) { 
+                contentPanel.classList.add(CSS_CLASSES.HIDDEN);
             }
 
-            if (overallHealth !== 'error') {
-                const hasFailures = [
-                    pbsInstance.backupTasks,
-                    pbsInstance.verificationTasks,
-                    pbsInstance.syncTasks,
-                    pbsInstance.pruneTasks
-                ].some(taskGroup => (taskGroup?.summary?.failed ?? 0) > 0);
+            const overallHealth = pbsInstanceData.status === 'ok' ? 'ok' : (pbsInstanceData.status || 'error');
+            const healthTitle = pbsInstanceData.status === 'ok' ? 'Instance OK' : `Instance status: ${pbsInstanceData.status || 'Unknown'}`;
+            const showDetails = PulseApp.state.getPbShowDetailsState(instanceId, true); 
+            const statusText = (pbsInstanceData.status !== 'ok' && pbsInstanceData.status !== 'pending_initialization') ? `Instance reported status: ${pbsInstanceData.status}` : '';
 
-                if (hasFailures) {
-                    overallHealth = 'error';
-                    healthTitle = 'Error: One or more recent tasks failed';
+            _createPbsInstanceElement(pbsInstanceData, instanceId, instanceName, overallHealth, healthTitle, showDetails, statusText, contentPanel);
+
+            pbsSubTabsNav.appendChild(tabButton);
+            pbsSubTabsContent.appendChild(contentPanel);
+
+            // Add Click Listener to Tab Button
+            tabButton.addEventListener('click', () => {
+                // Deactivate all other tabs
+                pbsSubTabsNav.querySelectorAll('.pbs-sub-tab-button').forEach(btn => {
+                    btn.classList.remove('text-blue-600', 'dark:text-blue-300', 'border-blue-500', 'dark:border-blue-400', 'font-semibold');
+                    btn.classList.add('text-gray-500', 'dark:text-gray-400', 'border-transparent');
+                });
+                // Activate clicked tab
+                tabButton.classList.add('text-blue-600', 'dark:text-blue-300', 'border-blue-500', 'dark:border-blue-400', 'font-semibold');
+                tabButton.classList.remove('text-gray-500', 'dark:text-gray-400', 'border-transparent');
+
+                // Hide all content panels
+                pbsSubTabsContent.querySelectorAll('.pbs-instance-content-panel').forEach(panel => {
+                    panel.classList.add(CSS_CLASSES.HIDDEN);
+                });
+                // Show clicked tab's content panel
+                const targetPanelId = `${ID_PREFIXES.PBS_SUB_TAB_CONTENT_PANEL_PREFIX}${tabButton.getAttribute('data-pbs-instance-id')}`;
+                const targetPanel = document.getElementById(targetPanelId);
+                if (targetPanel) {
+                    targetPanel.classList.remove(CSS_CLASSES.HIDDEN);
                 }
-            }
+            });
+        });
+
+        // Activate the first tab by default if tabs were created
+        if (pbsSubTabsNav.firstChild && typeof pbsSubTabsNav.firstChild.click === 'function') {
+            pbsSubTabsNav.firstChild.click();
         }
+    }
 
-        if (instanceWrapper) {
-            detailsContainer = instanceWrapper.querySelector(`#${ID_PREFIXES.PBS_DETAILS}${instanceId}`);
-            instanceTitleElement = instanceWrapper.querySelector('h3');
-            if (instanceTitleElement) {
-                instanceTitleElement.innerHTML = ''; // Clear existing content
-                instanceTitleElement.appendChild(_createHealthBadgeHTML(overallHealth, healthTitle));
-                instanceTitleElement.appendChild(document.createTextNode(instanceName));
-            }
+    const _createAllTaskSectionsContainer = (instanceId) => {
+        // ... existing implementation ...
+    };
 
-            if (detailsContainer) {
-                 dsTableBody = detailsContainer.querySelector(`#${ID_PREFIXES.PBS_DS_TBODY}${instanceId}`);
-                 _populateDsTableBody(dsTableBody, pbsInstance.datastores, statusText, showDetails);
+    // MODIFIED: Added targetPanelElement argument, appends to it, returns instanceSection
+    const _createPbsInstanceElement = (pbsInstanceData, instanceId, instanceName, overallHealth, healthTitle, showDetails, statusText, targetPanelElement) => {
+        if (!targetPanelElement) {
+            console.error(`[PBS UI _createPbsInstanceElement] No targetPanelElement provided for instance ${instanceName} (${instanceId})`);
+            return null;
+        }
+        
+        targetPanelElement.innerHTML = ''; // Clear the target panel first
 
-                 const summariesSection = detailsContainer.querySelector(`#${ID_PREFIXES.PBS_SUMMARIES_SECTION}${instanceId}`);
-                 if (summariesSection) {
-                   summariesSection.innerHTML = '';
-                   summariesSection.appendChild(_createPbsTaskHealthTable(instanceId, pbsInstance));
-                 }
+        const instanceSection = document.createElement('div');
+        instanceSection.id = `${ID_PREFIXES.PBS_INSTANCE}${instanceId}`;
+        instanceSection.className = `${CSS_CLASSES.PBS_INSTANCE_SECTION} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} ${CSS_CLASSES.P3} ${CSS_CLASSES.BG_GRAY_100_50_DARK_BG_GRAY_700_50}`;
+        instanceSection.classList.toggle(CSS_CLASSES.BORDER_L_4_RED_500_DARK_RED_400, overallHealth === 'error');
+        instanceSection.classList.toggle(CSS_CLASSES.BORDER_L_4_TRANSPARENT, overallHealth !== 'error');
 
-                _populateInstanceTaskSections(detailsContainer, instanceId, pbsInstance, statusText, showDetails);
-                detailsContainer.classList.toggle(CSS_CLASSES.HIDDEN, !showDetails);
-            }
+        const headerDiv = _createInstanceHeaderDiv(instanceName, overallHealth, healthTitle);
+        instanceSection.appendChild(headerDiv);
+        
+        const detailsContainer = document.createElement('div');
+        detailsContainer.id = `${ID_PREFIXES.PBS_DETAILS}${instanceId}`;
+        detailsContainer.className = CSS_CLASSES.PBS_INSTANCE_DETAILS;
+        detailsContainer.classList.toggle(CSS_CLASSES.HIDDEN, !showDetails);
+
+        if (overallHealth === 'error' && statusText) {
+            const errorPara = document.createElement('p');
+            errorPara.className = `${CSS_CLASSES.TEXT_RED_500_DARK_RED_400} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.MB2}`;
+            errorPara.textContent = statusText;
+            detailsContainer.appendChild(errorPara);
+        } else if (pbsInstanceData && pbsInstanceData.status === 'ok') {
+            const dsSection = _createDatastoreSectionElement(instanceId);
+            _populateDsTableBody(dsSection.querySelector('tbody'), pbsInstanceData.datastores || [], statusText, showDetails);
+            detailsContainer.appendChild(dsSection);
+
+            const taskHealthTableSection = _createPbsTaskHealthTable(instanceId, pbsInstanceData);
+            detailsContainer.appendChild(taskHealthTableSection);
+            
+            const allTaskSectionsContainer = _createAllTaskSectionsContainer(instanceId);
+             _populateInstanceTaskSections(allTaskSectionsContainer, instanceId, pbsInstanceData, statusText, showDetails);
+            detailsContainer.appendChild(allTaskSectionsContainer);
+
+        } else if (pbsInstanceData && (pbsInstanceData.status === 'pending_initialization' || !pbsInstanceData.status)) {
+             const pendingMsg = document.createElement('p');
+             pendingMsg.textContent = `Data for ${instanceName} is still loading or initializing...`;
+             pendingMsg.className = `${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.TEXT_SM}`;
+             detailsContainer.appendChild(pendingMsg);
         } else {
-            instanceWrapper = _createPbsInstanceElement(pbsInstance, instanceId, instanceName, overallHealth, healthTitle, showDetails, statusText);
-            container.appendChild(instanceWrapper);
+            const noDataMsg = document.createElement('p');
+            noDataMsg.textContent = `No detailed data available for ${instanceName}.`;
+            noDataMsg.className = `${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.TEXT_SM}`;
+            detailsContainer.appendChild(noDataMsg);
         }
-    });
-
-    container.querySelectorAll(`.${CSS_CLASSES.PBS_INSTANCE_SECTION}`).forEach(el => {
-        if (!currentInstanceIds.has(el.id)) {
-            el.remove();
-        }
-    });
-
-  }
+        
+        instanceSection.appendChild(detailsContainer);
+        targetPanelElement.appendChild(instanceSection);
+        
+        return instanceSection;
+    };
 
     function initPbsEventListeners() {
         // Event listeners for "Show More" buttons are now handled within populatePbsTaskTable
         // to ensure they are attached correctly when tables are dynamically populated.
         // This function is kept if other PBS-specific global event listeners are needed in the future.
-        const pbsInstancesContainer = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
-        if (!pbsInstancesContainer) {
-            console.warn(`PBS instances container #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found. Some UI interactions might not work.`);
-        }
+        // const pbsInstancesContainer = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
+        // if (!pbsInstancesContainer) {
+        //     console.warn(`PBS instances container #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found. Some UI interactions might not work.`);
+        // }
     }
 
     return {
