@@ -63,9 +63,11 @@ PulseApp.ui.backups = (() => {
     function _determineGuestBackupStatus(guest, allSnapshots, allRecentBackupTasks) {
         const guestId = String(guest.vmid);
         const guestTypePve = guest.type === 'qemu' ? 'vm' : 'ct';
-        const now = Math.floor(Date.now() / 1000);
-        const sevenDaysAgo = now - (7 * 24 * 60 * 60);
-        const threeDaysAgo = now - (3 * 24 * 60 * 60);
+        const now = new Date(); // Use Date object for easier day calculations
+        now.setHours(0, 0, 0, 0); // Normalize to start of today
+
+        const threeDaysAgo = Math.floor(new Date(now).setDate(now.getDate() - 3) / 1000);
+        const sevenDaysAgoTimestamp = Math.floor(new Date(now).setDate(now.getDate() - 7) / 1000);
 
         const guestSnapshots = allSnapshots.filter(snap =>
             String(snap.backupVMID) === guestId && snap.backupType === guestTypePve
@@ -90,18 +92,34 @@ PulseApp.ui.backups = (() => {
             displayTimestamp = latestTask.startTime;
             if (latestTask.status === 'OK') {
                 if (latestTask.startTime >= threeDaysAgo) healthStatus = 'ok';
-                else if (latestTask.startTime >= sevenDaysAgo) healthStatus = 'stale';
+                else if (latestTask.startTime >= sevenDaysAgoTimestamp) healthStatus = 'stale';
                 else healthStatus = 'old';
             } else {
                 healthStatus = 'failed';
             }
         } else if (latestSnapshotTime) {
              if (latestSnapshotTime >= threeDaysAgo) healthStatus = 'ok';
-             else if (latestSnapshotTime >= sevenDaysAgo) healthStatus = 'stale';
+             else if (latestSnapshotTime >= sevenDaysAgoTimestamp) healthStatus = 'stale';
              else healthStatus = 'old';
         } else {
             healthStatus = 'none';
             displayTimestamp = null;
+        }
+
+        // Calculate 7-day backup status (dot matrix)
+        const last7DaysBackupStatus = [];
+        for (let i = 6; i >= 0; i--) { // Iterate from 6 days ago to today
+            const dayStart = new Date(now);
+            dayStart.setDate(now.getDate() - i);
+            const dayStartTimestamp = Math.floor(dayStart.getTime() / 1000);
+            const dayEnd = new Date(dayStart);
+            dayEnd.setDate(dayStart.getDate() + 1);
+            const dayEndTimestamp = Math.floor(dayEnd.getTime() / 1000);
+
+            const backupOnThisDay = guestSnapshots.some(
+                snap => snap['backup-time'] >= dayStartTimestamp && snap['backup-time'] < dayEndTimestamp
+            );
+            last7DaysBackupStatus.push(backupOnThisDay);
         }
 
         return {
@@ -114,7 +132,8 @@ PulseApp.ui.backups = (() => {
             pbsInstanceName: latestSnapshot?.pbsInstanceName || latestTask?.pbsInstanceName || 'N/A',
             datastoreName: latestSnapshot?.datastoreName || 'N/A',
             totalBackups: totalBackups,
-            backupHealthStatus: healthStatus
+            backupHealthStatus: healthStatus,
+            last7DaysBackupStatus: last7DaysBackupStatus
         };
     }
 
@@ -150,7 +169,7 @@ PulseApp.ui.backups = (() => {
 
     function _renderBackupTableRow(guestStatus) {
         const row = document.createElement('tr');
-        row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px ${guestStatus.guestPveStatus === 'stopped' ? 'opacity-60 grayscale' : ''}`;
+        row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px`;
 
         const latestBackupFormatted = guestStatus.latestBackupTime
             ? PulseApp.utils.formatPbsTimestamp(guestStatus.latestBackupTime)
@@ -170,6 +189,23 @@ PulseApp.ui.backups = (() => {
             : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
         const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guestStatus.guestType}</span>`;
 
+        // Generate 7-day backup dots
+        let sevenDayDots = '<div class="flex space-x-0.5" title="Last 7 days backup history (oldest to newest)">';
+        if (guestStatus.last7DaysBackupStatus && guestStatus.last7DaysBackupStatus.length === 7) {
+            guestStatus.last7DaysBackupStatus.forEach(hasBackup => {
+                if (hasBackup) {
+                    sevenDayDots += '<span class="w-2 h-2 bg-green-500 rounded-full"></span>';
+                } else {
+                    sevenDayDots += '<span class="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full"></span>';
+                }
+            });
+        } else {
+            for (let i = 0; i < 7; i++) {
+                 sevenDayDots += '<span class="w-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full"></span>'; // Placeholder if data is missing
+            }
+        }
+        sevenDayDots += '</div>';
+
         row.innerHTML = `
             <td class="p-1 px-2 whitespace-nowrap text-center">${healthIndicator}</td>
             <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
@@ -180,6 +216,7 @@ PulseApp.ui.backups = (() => {
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.pbsInstanceName}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.datastoreName}</td>
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-center">${sevenDayDots}</td>
         `;
         return row;
     }
