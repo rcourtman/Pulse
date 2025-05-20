@@ -1,3 +1,11 @@
+## [3.6.3](https://github.com/rcourtman/Pulse/compare/v3.6.1...v3.6.3) (2024-07-25)
+
+### Fixed
+- Node summary cards now correctly adjust their layout to fill available space when fewer than the maximum number of cards (e.g., 4) are displayed, improving responsiveness for varying node counts. This involved changes to JavaScript logic for column calculation and Tailwind CSS safelisting.
+
+### Docs
+- Updated `README.md` and `.env.example` to accurately reflect and document support for monitoring multiple Proxmox Backup Server (PBS) instances, including configuration examples for numbered PBS variables.
+
 ## [3.6.1](https://github.com/rcourtman/Pulse/compare/v3.6.0...v3.6.1) (2025-05-10)
 
 ### Features
