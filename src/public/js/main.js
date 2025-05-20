@@ -9,7 +9,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const nodesData = PulseApp.state.get('nodesData');
         const pbsDataArray = PulseApp.state.get('pbsDataArray');
 
-        PulseApp.ui.nodes?.updateNodesTable(nodesData);
+        // PulseApp.ui.nodes?.updateNodesTable(nodesData); // REMOVED - Nodes table is gone
+        PulseApp.ui.nodes?.updateNodeSummaryCards(nodesData);
         PulseApp.ui.dashboard?.updateDashboardTable();
         PulseApp.ui.storage?.updateStorageInfo();
         PulseApp.ui.pbs?.updatePbsInfo(pbsDataArray);
