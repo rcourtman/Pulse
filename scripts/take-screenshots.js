@@ -23,23 +23,9 @@ const sections = [
       }
     },
 
-    // Node View: Click tab, wait for table rows, capture nodes tab content
-    { name: '02-node-view',
-      screenshotTarget: '#nodes',
-      action: async (page) => {
-        console.log('  Action: Clicking Nodes tab');
-        await page.locator('[data-tab="nodes"]').click();
-        console.log('  Action: Waiting for nodes table to be visible');
-        await page.locator('#nodes #nodes-table').waitFor({ state: 'visible', timeout: 10000 });
-        console.log('  Action: Nodes table visible');
-        // Optional: wait for rows as well, though table visibility might be enough
-        // await page.locator('#nodes-table-body tr').first().waitFor({ state: 'visible', timeout: 10000 });
-      }
-    },
-
     // VM View: Click main tab, click VM filter, wait, capture main content
-    { name: '03-vm-container-view', // Renaming slightly as it shows filtered list
-      screenshotTarget: '#main',
+    { name: '02-vm-container-view', // Renumbered from 03
+      screenshotTarget: '#nested-tab-dashboard', // Changed from #main
       action: async (page) => {
         console.log('  Action: Clicking Main tab (if not already active)');
         // Ensure main tab is active first
@@ -59,11 +45,20 @@ const sections = [
         await vmFilterLabel.click(); // Click the label
         await page.waitForTimeout(1000);
         console.log('  Action: VM filter applied');
+
+        // Hide node summary cards
+        console.log('  Action: Hiding node summary cards');
+        await page.locator('#node-summary-cards-container').evaluate(element => element.style.display = 'none');
+      },
+      // Add a postAction to make the cards visible again
+      postAction: async (page) => {
+        console.log('  Action: Showing node summary cards');
+        await page.locator('#node-summary-cards-container').evaluate(element => element.style.display = ''); // Reset display
       }
     },
 
     // PBS View: Click tab, wait for PBS container content, capture PBS tab content
-    { name: '04-pbs-view',
+    { name: '03-pbs-view', // Renumbered from 04
       screenshotTarget: '#pbs',
       action: async (page) => {
         console.log('  Action: Clicking PBS tab');
@@ -78,7 +73,7 @@ const sections = [
     },
 
     // Backups View: Click tab, wait for table content, capture backups tab content
-    { name: '05-backups-view', // Added new section
+    { name: '04-backups-view', // Renumbered from 05
       screenshotTarget: '#backups',
       action: async (page) => {
         console.log('  Action: Clicking Backups tab');
@@ -91,8 +86,8 @@ const sections = [
     },
 
     // Threshold & Logging View: Toggle thresholds, set one, start log, capture main area
-    { name: '06-thresholds-logging', // New section
-      screenshotTarget: '#main', // Capture the main dashboard/log area
+    { name: '05-thresholds-logging', // Renumbered from 06
+      screenshotTarget: '#log-session-area', // Changed to capture the log entries area
       action: async (page) => {
         console.log('  Action: Ensuring Main tab is active');
         const mainTabIsActive = await page.locator('[data-tab="main"].active').isVisible();
@@ -121,12 +116,16 @@ const sections = [
         console.log('  Action: Clicking Start Log button');
         await page.locator('#start-log-button').click();
         console.log('  Action: Waiting for Log tab and content to appear');
+        // Ensure the log session area itself is made visible by the button click.
+        await page.locator('#log-session-area:not(.hidden)').waitFor({ state: 'visible', timeout: 10000 });
         await page.locator('.nested-tab[data-nested-tab^="log-session-"]').waitFor({ state: 'visible', timeout: 10000 });
         await page.locator('.log-session-panel').waitFor({ state: 'visible', timeout: 10000 });
         console.log('  Action: Log session started and visible');
         console.log('  Action: Waiting 8 seconds for potential log entries...');
         await page.waitForTimeout(8000); // Increase pause to 8 seconds
+        // Node summary cards are not part of the log view, so no need to hide/show them here.
       }
+      // No postAction needed here as we are not modifying shared elements like node-summary-cards for this specific screenshot
     },
 
     // { name: '06-task-view', url: '/#tasks', screenshotTarget: '#task-list-element', action: async (page) => { /* Navigate to task view if separate */ } }, // Uncomment and adjust if needed
@@ -249,6 +248,15 @@ async function takeScreenshots() {
                 }
 
                 console.log(`  Successfully captured ${section.name}`);
+
+                // Perform post-action if defined (e.g., to restore UI state)
+                if (section.postAction) {
+                    console.log(`  Performing post-action for ${section.name}...`);
+                    await section.postAction(page);
+                    // Optionally wait for UI to settle after post-action
+                    await page.waitForLoadState('networkidle', { timeout: 5000 }); 
+                    console.log('  Post-action completed and network idle.');
+                }
 
             } catch (error) {
                 console.error(`  Failed to capture section ${section.name}: ${error.message}`);

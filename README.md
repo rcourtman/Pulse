@@ -13,20 +13,17 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <details>
 <summary><strong>Click to view other UI tabs</strong></summary>
 
-**Nodes Tab:**
-![Nodes View](docs/images/02-node-view.png)
-
 **Main Tab (Filtered for VMs):**
-![VM Filtered View](docs/images/03-vm-container-view.png)
+![VM Filtered View](docs/images/02-vm-container-view.png)
 
 **PBS Tab:**
-![PBS View](docs/images/04-pbs-view.png)
+![PBS View](docs/images/03-pbs-view.png)
 
 **Backups Tab:**
-![Backups View](docs/images/05-backups-view.png)
+![Backups View](docs/images/04-backups-view.png)
 
 **Threshold Logging:**
-![Threshold Logging View](docs/images/06-thresholds-logging.png)
+![Threshold Logging View](docs/images/05-thresholds-logging.png)
 
 </details>
 
