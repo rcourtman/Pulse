@@ -159,8 +159,9 @@ Optional numbered variables also exist (e.g., `PROXMOX_ALLOW_SELF_SIGNED_CERTS_2
 
 #### Proxmox Backup Server (PBS) (Optional)
 
-To monitor a PBS instance:
+To monitor PBS instances:
 
+**Primary PBS Instance:**
 -   `PBS_HOST`: URL of your PBS server (e.g., `https://192.168.1.11:8007`).
 -   `PBS_TOKEN_ID`: Your PBS API Token ID (e.g., `user@pbs!tokenid`). See [Creating a Proxmox Backup Server API Token](#creating-a-proxmox-backup-server-api-token).
 -   `PBS_TOKEN_SECRET`: Your PBS API Token Secret.
@@ -168,10 +169,18 @@ To monitor a PBS instance:
 -   `PBS_ALLOW_SELF_SIGNED_CERTS`: Set to `true` for self-signed certificates. Defaults to `false`.
 -   `PBS_PORT`: PBS API port. Defaults to `8007`.
 
-*Note: Currently, only one PBS instance can be configured.*
+**Additional PBS Instances:**
+
+To monitor multiple PBS instances, add numbered variables, starting with `_2`:
+
+-   `PBS_HOST_2`, `PBS_TOKEN_ID_2`, `PBS_TOKEN_SECRET_2`
+-   `PBS_HOST_3`, `PBS_TOKEN_ID_3`, `PBS_TOKEN_SECRET_3`
+-   ...and so on.
+
+Optional numbered variables also exist for additional PBS instances (e.g., `PBS_NODE_NAME_2`, `PBS_ALLOW_SELF_SIGNED_CERTS_2`, `PBS_PORT_2`). Each PBS instance, whether primary or additional, requires its respective `PBS_NODE_NAME` or `PBS_NODE_NAME_n` to be set if API token authentication is used and the token cannot automatically discover the node name.
 
 <details>
-<summary><strong>Why <code>PBS_NODE_NAME</code> is Required (Click to Expand)</strong></summary>
+<summary><strong>Why <code>PBS_NODE_NAME</code> (or <code>PBS_NODE_NAME_n</code>) is Required (Click to Expand)</strong></summary>
 
 Pulse needs to query task lists specific to the PBS node (e.g., `/api2/json/nodes/{nodeName}/tasks`). It attempts to discover this node name automatically by querying `/api2/json/nodes`. However, this endpoint is often restricted for API tokens (returning a 403 Forbidden error), even for tokens with high privileges, unless the `Sys.Audit` permission is granted on the root path (`/`).
 
@@ -473,7 +482,7 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Proxmox Backup Server:** Version 2.x or 3.x recommended (if monitored).
 - **Web Browser:** Modern evergreen browser.
 
-## � Contributing
+## 📝 Contributing
 
 Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md).
 
@@ -483,7 +492,7 @@ Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTIN
 *   **Local Communication:** Operates entirely between your environment and your Proxmox/PBS APIs.
 *   **Credential Handling:** Credentials are used only for API authentication and are not logged or sent elsewhere.
 
-## �📜 License
+## 📜 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file.
 
