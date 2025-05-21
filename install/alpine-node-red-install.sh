@@ -29,13 +29,19 @@ msg_info "Installing Node-RED"
 npm install -g --unsafe-perm node-red
 msg_ok "Installed Node-RED"
 
+msg_info "Creating /home/nodered"
+mkdir -p /home/nodered
+chown -R nodered:users /home/nodered
+chmod 750 /home/nodered
+msg_ok "Created /home/nodered"
+
 msg_info "Creating Node-RED Service"
 service_path="/etc/init.d/nodered"
 
 echo '#!/sbin/openrc-run
 description="Node-RED Service"
 
-command="/usr/bin/node-red"
+command="/usr/local/bin/node-red"
 command_args="--max-old-space-size=128 -v"
 command_user="nodered"
 pidfile="/var/run/nodered.pid"
