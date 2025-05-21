@@ -28,6 +28,53 @@ PulseApp.ui.dashboard = (() => {
         searchInput = document.getElementById('dashboard-search');
         tableBodyEl = document.querySelector('#main-table tbody');
         statusElementEl = document.getElementById('dashboard-status-text');
+
+        document.addEventListener('keydown', (event) => {
+            // Handle Escape for resetting filters
+            if (event.key === 'Escape') {
+                const resetButton = document.getElementById('reset-filters-button');
+                if (resetButton) {
+                    resetButton.click(); // This will clear search and update table
+                }
+                return; // Done with Escape key
+            }
+
+            // General conditions to ignore this global listener:
+            // 1. If already typing in an input, textarea, or select element.
+            const targetElement = event.target;
+            const targetTagName = targetElement.tagName;
+            if (targetTagName === 'INPUT' || targetTagName === 'TEXTAREA' || targetTagName === 'SELECT') {
+                return;
+            }
+
+            // 2. If a modal is active (e.g., snapshot-modal prevents background interaction)
+            const snapshotModal = document.getElementById('snapshot-modal');
+            if (snapshotModal && !snapshotModal.classList.contains('hidden')) {
+                return;
+            }
+            // Add similar checks for other modals if they exist and should block this behavior.
+
+            if (searchInput) { // searchInput is the module-scoped variable
+                // For printable characters (letters, numbers, symbols, space)
+                // Check !event.ctrlKey && !event.metaKey to avoid conflict with browser/OS shortcuts.
+                if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
+                    if (document.activeElement !== searchInput) {
+                        searchInput.focus();
+                        event.preventDefault(); // Prevent default action (e.g., page scroll, find dialog)
+                        searchInput.value += event.key; // Append the typed character
+                        searchInput.dispatchEvent(new Event('input', { bubbles: true, cancelable: true })); // Trigger update
+                    }
+                    // If searchInput is already focused, browser handles the typing.
+                } else if (event.key === 'Backspace' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                    // For Backspace, if search not focused, focus it. Prevent default (e.g., browser back).
+                    if (document.activeElement !== searchInput) {
+                        searchInput.focus();
+                        event.preventDefault();
+                    }
+                    // If searchInput is already focused, browser handles Backspace.
+                }
+            }
+        });
     }
 
     function _calculateAverage(historyArray, key) {
