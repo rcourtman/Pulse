@@ -15,10 +15,10 @@ update_os
 
 msg_info "Installing Dependencies"
 $STD apk add --no-cache \
-    gpg \
-    git \
-    nodejs \
-    npm
+  gpg \
+  git \
+  nodejs \
+  npm
 msg_ok "Installed Dependencies"
 
 msg_info "Creating Node-RED User"
@@ -26,7 +26,7 @@ adduser -D -H -s /sbin/nologin -G users nodered
 msg_ok "Created Node-RED User"
 
 msg_info "Installing Node-RED"
-npm install -g --unsafe-perm node-red
+$STD npm install -g --unsafe-perm node-red
 msg_ok "Installed Node-RED"
 
 msg_info "Creating /home/nodered"
@@ -55,7 +55,7 @@ $STD rc-update add nodered default
 msg_ok "Created Node-RED Service"
 
 msg_info "Starting Node-RED"
-$STD service nodered start
+$STD rc-service nodered start
 msg_ok "Started Node-RED"
 
 motd_ssh
