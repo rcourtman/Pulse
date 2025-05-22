@@ -29,7 +29,8 @@
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "semver": "^7.7.2",
-    "socket.io": "^4.7.2"
+    "socket.io": "^4.7.2",
+    "sqlite3": "^5.1.7"
   },
   "_comment_tailwind_v3_reason": "Using Tailwind CSS v3 (3.4.4) due to build inconsistencies observed with v4 (specifically 4.1.4). v4 resulted in incorrectly purged CSS files when built within certain Linux environments (e.g., Proxmox LXC - Debian 12 x86_64), failing to detect dynamically added classes. v3.4.4 builds correctly.",
   "devDependencies": {
