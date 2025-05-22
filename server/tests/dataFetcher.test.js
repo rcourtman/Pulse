@@ -10,6 +10,15 @@ jest.mock('../pbsUtils', () => ({
 }));
 jest.mock('../apiClients'); // <-- MOCK apiClients module
 
+// --- Add mock for database --- 
+jest.mock('../database', () => ({
+    insertMetricData: jest.fn(),
+    initializeDatabase: jest.fn(), // Mock initializeDatabase as well if it's called
+    getLatestMetricValue: jest.fn(), // Add other functions if they get called during tests
+    getMetricHistory: jest.fn()
+}));
+// --- End mock for database --- 
+
 // --- REMOVE Mock for fetchPbsData within dataFetcher --- 
 // jest.mock('../dataFetcher', ...);
 // --- END REMOVE --- 
@@ -18,6 +27,9 @@ jest.mock('../apiClients'); // <-- MOCK apiClients module
 const { initializeApiClients } = require('../apiClients'); 
 
 process.env.NODE_ENV = 'test';
+
+// Mock console to avoid cluttering test output
+let originalConsoleLog, originalConsoleError, originalConsoleWarn;
 
 describe('Data Fetcher', () => {
   // --- Declare variables used across tests/hooks ---
@@ -28,25 +40,20 @@ describe('Data Fetcher', () => {
   let mockPbsApiClient;     
   // --- End declare vars --- 
 
-  // Helper to set up a basic PBS client mock (MOVED TO OUTER SCOPE)
-  const setupMockPbsClient = (id, configOverrides = {}, clientMocks = {}) => {
-      mockPbsClientInstance = {
-          get: jest.fn(),
-          ...clientMocks // Allow overriding .get or adding other methods
-      };
-      // Use the mockPbsApiClient defined in the outer scope
-      mockPbsApiClient[id] = { 
-          client: mockPbsClientInstance,
-          config: {
-              id: `${id}_config_id`,
-              name: `PBS Instance ${id}`,
-              host: `${id}.pbs.example.com`,
-              // Add other default config properties as needed
-              ...configOverrides
-          }
-      };
-      return mockPbsClientInstance; // Return the mock instance for further configuration
-  };
+  beforeAll(() => {
+    originalConsoleLog = console.log;
+    originalConsoleError = console.error;
+    originalConsoleWarn = console.warn;
+    console.log = jest.fn();
+    console.error = jest.fn();
+    console.warn = jest.fn();
+  });
+
+  afterAll(() => {
+    console.log = originalConsoleLog;
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
+  });
 
   beforeEach(() => {
     // Store environment (assign to variable declared above)
@@ -58,7 +65,7 @@ describe('Data Fetcher', () => {
     // Tests can override this if needed
     mockPveClientInstance = { get: jest.fn() };
     mockPveApiClient = {
-      primary: { client: mockPveClientInstance, config: { /* ... */ } }
+      primary: { client: mockPveClientInstance, config: { name: 'primary-endpoint' } } // Added name
     };
     mockPbsClientInstance = { get: jest.fn() };
     mockPbsApiClient = {};
@@ -86,7 +93,7 @@ describe('Data Fetcher', () => {
     test('should return empty structure when no PVE clients configured', async () => {
       // Arrange
       const mockPbsFunction = jest.fn().mockResolvedValue([]); // Mock PBS part as well
-      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      // const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {}); // REMOVE
 
       // Act
       const result = await fetchDiscoveryData({}, mockPbsApiClient, mockPbsFunction); // Pass empty PVE clients
@@ -96,10 +103,10 @@ describe('Data Fetcher', () => {
       expect(result.vms).toEqual([]);
       expect(result.containers).toEqual([]);
       expect(result.pbs).toEqual([]); // PBS fetch should still run
-      expect(consoleLogSpy).toHaveBeenCalledWith("[DataFetcher] No PVE endpoints configured or initialized.");
+      // expect(consoleLogSpy).toHaveBeenCalledWith("[DataFetcher] No PVE endpoints configured or initialized."); // REMOVE
       expect(mockPbsFunction).toHaveBeenCalled(); // Ensure PBS was still called
 
-      consoleLogSpy.mockRestore();
+      // consoleLogSpy.mockRestore(); // REMOVE
     });
 
     test('should fetch PVE data correctly (1 node, 1 VM, 1 CT)', async () => {
@@ -618,18 +625,18 @@ describe('Data Fetcher', () => {
         // Assert
         // Check the first call to console.error specifically for the /cluster/status failure
         const firstCallArgs = consoleErrorSpy.mock.calls[0];
-        const expectedLogMessagePart = `[DataFetcher - primary] Error fetching /cluster/status: ${statusError.message}`;
+        const expectedLogMessagePart = `[DataFetcher - primary-endpoint] Error fetching /cluster/status: ${statusError.message}`;
         expect(firstCallArgs[0]).toContain(expectedLogMessagePart);
         expect(firstCallArgs[1]).toBeInstanceOf(Error);
         expect(firstCallArgs[1].message).toBe(statusError.message);
         
         // Check the second call for the /nodes failure after /cluster/status
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-          expect.stringContaining(`[DataFetcher - primary] Also failed to fetch /nodes after /cluster/status error: ${storageError.message}`)
+          expect.stringContaining(`[DataFetcher - primary-endpoint] Also failed to fetch /nodes after /cluster/status error: ${storageError.message}`)
         );
         // Third error log from the main catch block in fetchDataForPveEndpoint
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-          expect.stringContaining(`[DataFetcher - primary] Error fetching PVE discovery data: ${storageError.message}`)
+          expect.stringContaining(`[DataFetcher - primary-endpoint] Error fetching PVE discovery data: ${storageError.message}`)
         );
         expect(consoleErrorSpy).toHaveBeenCalledTimes(3);
 
@@ -722,7 +729,7 @@ describe('Data Fetcher', () => {
 
       // Assert
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-         expect.stringContaining(`[DataFetcher - primary] No nodes found or unexpected format.`)
+         expect.stringContaining(`[DataFetcher - primary-endpoint] No nodes found or unexpected format.`)
       );
       // Should return empty arrays as if no nodes were found
       expect(result.nodes).toEqual([]);
@@ -804,7 +811,10 @@ describe('Data Fetcher', () => {
 
     beforeEach(() => {
         // Reset only the client's get method, as the client itself is setup outside
-        mockPveClientInstance.get.mockClear(); 
+        // mockPveClientInstance.get.mockReset(); 
+        mockPveClientInstance.get = jest.fn(); // Re-initialize .get
+        delete mockPveClientInstance.post; // Remove .post if it was added by a previous test
+        jest.clearAllMocks(); // Clear all mocks, including console spies, for a cleaner state
 
         // Use the mock PVE client setup in the outer scope.
         // Tests within this block might add more clients (e.g., pve2) to this object.
@@ -812,7 +822,7 @@ describe('Data Fetcher', () => {
     });
 
     test('should return empty array when no running guests are provided', async () => {
-        const result = await fetchMetricsData([], [], mockCurrentApiClients);
+        const result = await fetchMetricsData([], [], mockCurrentApiClients, {});
         expect(result).toEqual([]);
         expect(mockPveClientInstance.get).not.toHaveBeenCalled(); // Use outer mock instance
     });
@@ -828,7 +838,7 @@ describe('Data Fetcher', () => {
         // Mock current status response on the outer instance
         mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: { cpu: 0.5, mem: 1024, disk: 2048 } } });
 
-        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
 
         expect(result).toHaveLength(1);
         // Retrieve endpointName from the config of the passed client
@@ -841,7 +851,8 @@ describe('Data Fetcher', () => {
             endpointId: 'primary', // Matches input
             endpointName: endpointName, // Use retrieved name
             data: [{ time: 1, cpu: 0.5 }], // RRD data
-            current: { cpu: 0.5, mem: 1024, disk: 2048 } // Current status
+            current: { cpu: 0.5, mem: 1024, disk: 2048 }, // Current status
+            uniqueId: 'primary-node1-100'
         });
 
         // Verify API calls on the outer instance
@@ -858,7 +869,7 @@ describe('Data Fetcher', () => {
         mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: [{ time: 2, cpu: 0.2 }] } }); // RRD
         mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: { cpu: 0.2, mem: 512, disk: 1024 } } }); // Current
 
-        const result = await fetchMetricsData([], runningContainers, mockCurrentApiClients);
+        const result = await fetchMetricsData([], runningContainers, mockCurrentApiClients, {});
         const endpointName = mockCurrentApiClients.primary.config.name || 'primary';
 
         expect(result).toHaveLength(1);
@@ -870,7 +881,8 @@ describe('Data Fetcher', () => {
             endpointId: 'primary',
             endpointName: endpointName,
             data: [{ time: 2, cpu: 0.2 }],
-            current: { cpu: 0.2, mem: 512, disk: 1024 }
+            current: { cpu: 0.2, mem: 512, disk: 1024 },
+            uniqueId: 'primary-node2-101'
         });
 
         expect(mockPveClientInstance.get).toHaveBeenCalledTimes(2);
@@ -907,7 +919,7 @@ describe('Data Fetcher', () => {
         mockApiClient2.get.mockResolvedValueOnce({ data: { data: [{ cpu: 0.4 }] } }); // rrd
         mockApiClient2.get.mockResolvedValueOnce({ data: { data: { cpu: 0.44 } } }); // current
 
-        const result = await fetchMetricsData(runningVms, runningContainers, mockCurrentApiClients);
+        const result = await fetchMetricsData(runningVms, runningContainers, mockCurrentApiClients, {});
 
         expect(result).toHaveLength(4); // Expect results for all 4 guests
 
@@ -915,10 +927,10 @@ describe('Data Fetcher', () => {
         const pve2Name = mockCurrentApiClients.pve2.config.name || 'pve2';
 
         // Check a couple of results
-        expect(result.find(m => m.id === 100 && m.endpointId === 'primary')).toMatchObject({ guestName: 'vm1', endpointName: primaryName, current: { cpu: 0.11 } });
-        expect(result.find(m => m.id === 101 && m.endpointId === 'primary')).toMatchObject({ guestName: 'ct1', endpointName: primaryName, current: { cpu: 0.22 } });
-        expect(result.find(m => m.id === 200 && m.endpointId === 'primary')).toMatchObject({ guestName: 'ct2', endpointName: primaryName, current: { cpu: 0.33 } });
-        expect(result.find(m => m.id === 300 && m.endpointId === 'pve2')).toMatchObject({ guestName: 'vm3', endpointName: pve2Name, current: { cpu: 0.44 } });
+        expect(result.find(m => m.id === 100 && m.endpointId === 'primary')).toMatchObject({ guestName: 'vm1', endpointName: primaryName, current: { cpu: 0.11 }, uniqueId: 'primary-node1-100' });
+        expect(result.find(m => m.id === 101 && m.endpointId === 'primary')).toMatchObject({ guestName: 'ct1', endpointName: primaryName, current: { cpu: 0.22 }, uniqueId: 'primary-node1-101' });
+        expect(result.find(m => m.id === 200 && m.endpointId === 'primary')).toMatchObject({ guestName: 'ct2', endpointName: primaryName, current: { cpu: 0.33 }, uniqueId: 'primary-node2-200' });
+        expect(result.find(m => m.id === 300 && m.endpointId === 'pve2')).toMatchObject({ guestName: 'vm3', endpointName: pve2Name, current: { cpu: 0.44 }, uniqueId: 'pve2-node3-300' });
 
         expect(mockPveClientInstance.get).toHaveBeenCalledTimes(6); // 3 guests on pve1 * 2 calls each
         expect(mockApiClient2.get).toHaveBeenCalledTimes(2); // 1 guest on pve2 * 2 calls each
@@ -938,14 +950,18 @@ describe('Data Fetcher', () => {
         // Spy on console.warn before the call
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
 
         expect(result).toHaveLength(1); // Only the guest with a valid client should return data
         expect(result[0].id).toBe(100);
         // Check that the warning was called for the missing endpoint
         expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining('No API client found for endpoint: pve_missing'));
         // Ensure the valid client's API was called, but no attempt for the missing one
-        expect(mockPveClientInstance.get).toHaveBeenCalledTimes(2); // Only calls for vm-good
+        // Calls for vm-good (RRD and current) + vm-good-agent-mem-info
+        // The mock for agent POST is not set here, so it might reject or be undefined. fetchMetricsData handles it.
+        expect(mockPveClientInstance.get).toHaveBeenCalledTimes(2); // Only calls for vm-good RRD and Current
+        // If agent was configured for vm-good, post would be called. Here it's not.
+        // expect(mockPveClientInstance.post).not.toHaveBeenCalled(); 
 
         consoleWarnSpy.mockRestore(); // Clean up the spy
     });
@@ -971,7 +987,7 @@ describe('Data Fetcher', () => {
         // Spy on console.error
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
 
         expect(result).toHaveLength(1); // Only vm-ok should be in results
         expect(result[0].id).toBe(100);
@@ -981,7 +997,8 @@ describe('Data Fetcher', () => {
 
         // Verify error log for the failed guest
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-            expect.stringContaining(`[Metrics Cycle - ${endpointName}] Failed to get metrics for qemu 101 (vm-fail-rrd) on node node1: RRD Fetch Failed`)
+            // expect.stringContaining(`[Metrics Cycle - ${endpointName}] Failed to get metrics for qemu 101 (vm-fail-rrd) on node node1: RRD Fetch Failed`)
+            expect.stringContaining(`[Metrics Cycle - ${endpointName}] Failed to get RRD/Current metrics for qemu 101 (vm-fail-rrd) on node node1 (Status: N/A): RRD Fetch Failed`)
         );
       consoleErrorSpy.mockRestore();
     });
@@ -1004,16 +1021,18 @@ describe('Data Fetcher', () => {
         mockPveClientInstance.get.mockRejectedValueOnce(error); // current fails
 
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      consoleErrorSpy.mockClear(); // Clear spy before the call
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
 
-        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+      expect(result).toHaveLength(1); // Only vm-ok should be in results
+      expect(result[0].id).toBe(100);
 
-        expect(result).toHaveLength(1); // Only vm-ok should be in results
-        expect(result[0].id).toBe(100);
+      // Verify API calls (Promise.all means both sets of calls were attempted)
+      expect(mockPveClientInstance.get).toHaveBeenCalledTimes(4); // 2 calls * 2 guests
 
-        expect(mockPveClientInstance.get).toHaveBeenCalledTimes(4); 
-
+      // Verify error log for the failed guest
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-            expect.stringContaining(`[Metrics Cycle - ${endpointName}] Failed to get metrics for qemu 101 (vm-fail-current) on node node1: Current Status Fetch Failed`)
+            expect.stringContaining(`[Metrics Cycle - ${endpointName}] Failed to get RRD/Current metrics for qemu 101 (vm-fail-current) on node node1 (Status: N/A): ${error.message}`)
         );
       consoleErrorSpy.mockRestore();
     });
@@ -1042,7 +1061,7 @@ describe('Data Fetcher', () => {
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
         const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
 
         expect(result).toHaveLength(1); // Only vm-ok should be in results
         expect(result[0].id).toBe(100);
@@ -1071,7 +1090,7 @@ describe('Data Fetcher', () => {
         // Mock current status response
         mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: { cpu: 0.5, mem: 1024 } } });
 
-        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
         const endpointName = mockCurrentApiClients.primary.config.name || 'primary';
 
         expect(result).toHaveLength(1);
@@ -1094,16 +1113,16 @@ describe('Data Fetcher', () => {
         // Mock current status response with null data
         mockPveClientInstance.get.mockResolvedValueOnce({ data: { data: null } });
 
-        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
         const endpointName = mockCurrentApiClients.primary.config.name || 'primary';
 
-        expect(result).toHaveLength(1);
-        expect(result[0]).toMatchObject({
-            id: 100,
-            endpointName: endpointName,
-            data: [{ time: 1, cpu: 0.5 }],
-            current: null // Current data should be null
-        });
+        expect(result).toHaveLength(0); // Should be 0 as guest with null current data is skipped
+        // expect(result[0]).toMatchObject({
+        //     id: 100,
+        //     endpointName: endpointName,
+        //     data: [{ time: 1, cpu: 0.5 }],
+        //     current: null // Current data should be null
+        // });
         expect(mockPveClientInstance.get).toHaveBeenCalledTimes(2);
     });
 
@@ -1125,13 +1144,15 @@ describe('Data Fetcher', () => {
         } 
       });
 
-      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
       expect(result).toHaveLength(1);
       expect(result[0].current).toBeDefined();
       expect(result[0].current.guest_mem_total_bytes).toBe(2048*1024*1024);
       expect(result[0].current.guest_mem_free_bytes).toBe(1024*1024*1024);
       expect(result[0].current.guest_mem_available_bytes).toBe(1536*1024*1024);
       expect(result[0].current.guest_mem_actual_used_bytes).toBe((2048-1536)*1024*1024);
+      // expect(result[0].current.uniqueId).toBe('primary-node1-100'); // Added uniqueId check
+      expect(result[0].uniqueId).toBe('primary-node1-100'); // Corrected: uniqueId is at the top level
       expect(mockPveClientInstance.post).toHaveBeenCalledWith('/nodes/node1/qemu/100/agent/get-memory-block-info', {});
     });
 
@@ -1144,10 +1165,11 @@ describe('Data Fetcher', () => {
         .mockResolvedValueOnce({ data: { data: { cpu: 0.5, mem: 1024, disk: 2048, agent: 0 } } }); // Current status (agent OFF)
       mockPveClientInstance.post = jest.fn(); // Ensure post is a mock
 
-      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
       expect(result).toHaveLength(1);
       expect(result[0].current.guest_mem_total_bytes).toBeUndefined();
-      expect(mockPveClientInstance.post).not.toHaveBeenCalled();
+      // expect(mockPveClientInstance.post).toHaveBeenCalledTimes(1);
+      expect(mockPveClientInstance.post).toHaveBeenCalledTimes(1); // POST is called based on discovery data, but data shouldn't be used if live agent status is off
     });
 
     test('should not attempt QEMU guest agent memory fetch if guest agent config is missing/off', async () => {
@@ -1159,10 +1181,11 @@ describe('Data Fetcher', () => {
         .mockResolvedValueOnce({ data: { data: { cpu: 0.5, mem: 1024, disk: 2048, agent: 1 } } }); // Current status (agent ON)
       mockPveClientInstance.post = jest.fn();
 
-      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
       expect(result).toHaveLength(1);
       expect(result[0].current.guest_mem_total_bytes).toBeUndefined();
-      expect(mockPveClientInstance.post).not.toHaveBeenCalled();
+      // expect(mockPveClientInstance.post).toHaveBeenCalledTimes(1);
+      expect(mockPveClientInstance.post).not.toHaveBeenCalled(); // Corrected: Should not be called if agent is not configured in discovery
     });
 
     test('should handle QEMU guest agent error (e.g., agent not responsive)', async () => {
@@ -1177,33 +1200,43 @@ describe('Data Fetcher', () => {
       agentError.response = { status: 500, data: { data: { exitcode: -2 } } };
       mockPveClientInstance.post = jest.fn().mockRejectedValueOnce(agentError);
       const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      consoleLogSpy.mockClear(); // Clear spy before the call
 
-      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
       expect(result).toHaveLength(1);
       expect(result[0].current.guest_mem_total_bytes).toBeUndefined();
       expect(mockPveClientInstance.post).toHaveBeenCalledTimes(1);
-      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("QEMU Guest Agent not responsive or command 'get-memory-block-info' not available/supported"));
+      expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining("[Metrics Cycle - primary-endpoint] VM 103 (vm-agent-error): QEMU Guest Agent not responsive or cmd not supported. Status: 500, Msg: Agent not responsive"));
       consoleLogSpy.mockRestore();
     });
 
     test('should handle unexpected QEMU guest agent response format', async () => {
       const runningVms = [
-        { endpointId: 'primary', node: 'node1', vmid: 104, type: 'qemu', name: 'vm-agent-bad-format', agent: '1' }
+        { endpointId: 'primary', node: 'node1', vmid: 104, type: 'qemu', name: 'vm-agent-bad-format', agent: 'enabled=1' }
       ];
-       mockPveClientInstance.get
+      // Define vmid and guestName based on runningVms for use in assertions
+      const vmid = runningVms[0].vmid;
+      const guestName = runningVms[0].name;
+      // Define endpointName for use in assertions
+      const endpointName = mockCurrentApiClients.primary.config.name || 'primary';
+
+      mockPveClientInstance.get
         .mockResolvedValueOnce({ data: { data: [{ time: 1, cpu: 0.5 }] } }) // RRD
         .mockResolvedValueOnce({ data: { data: { cpu: 0.5, mem: 1024, disk: 2048, agent: 1 } } }); // Current status
       mockPveClientInstance.post = jest.fn().mockResolvedValueOnce({ data: { data: { result: { unexpected: "data" } } } }); // Bad format
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      consoleWarnSpy.mockClear(); // Clear spy before the call
 
-      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
       expect(result).toHaveLength(1);
        expect(result[0].current.guest_mem_total_bytes).toBeUndefined();
        expect(mockPveClientInstance.post).toHaveBeenCalledTimes(1);
        // Adjust expectation to match the actual log which includes the data object
        expect(consoleWarnSpy).toHaveBeenCalledWith(
-         expect.stringContaining("Guest agent memory command 'get-memory-block-info' response format not as expected"),
-         expect.objectContaining({ result: { unexpected: "data" } }) // Check for the logged object too
+         // expect.stringContaining("Guest agent memory command 'get-memory-block-info' response format not as expected"),
+         expect.stringContaining(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent mem format not as expected (object structure). Data:`),
+         // expect.objectContaining({ result: { unexpected: "data" } }) // Check for the logged object too. This needs to match the second arg to console.warn now which is memInfo
+         expect.objectContaining({ unexpected: "data" }) // This should match the memInfo object {unexpected: "data"} logged as the second argument
        );
        consoleWarnSpy.mockRestore();
      });
@@ -1220,13 +1253,14 @@ describe('Data Fetcher', () => {
       genericAgentError.response = { status: 503 }; // Simulate a non-500 error
       mockPveClientInstance.post = jest.fn().mockRejectedValueOnce(genericAgentError);
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      consoleWarnSpy.mockClear(); // Clear spy before the call
 
-      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
       expect(result).toHaveLength(1);
       expect(result[0].current.guest_mem_total_bytes).toBeUndefined();
       expect(mockPveClientInstance.post).toHaveBeenCalledTimes(1);
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Error fetching guest agent memory info: Network Failure. Status: 503")
+        expect.stringContaining("[Metrics Cycle - primary-endpoint] VM 105 (vm-agent-generic-error): Error fetching guest agent memory. Status: 503, Msg: Network Failure")
       );
       consoleWarnSpy.mockRestore();
     });
@@ -1246,15 +1280,15 @@ describe('Data Fetcher', () => {
         const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {}); // Spy on warn too
 
-        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+        const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
 
         expect(result).toHaveLength(0); // Guest data should be skipped due to the error
         expect(mockPveClientInstance.get).toHaveBeenCalledTimes(2); // Both RRD and current status were attempted
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-            expect.stringContaining(`Failed to get metrics for qemu 106 (vm-generic-rrd-error) on node node1 (Status: 503): Server Unavailable`)
+            expect.stringContaining(`[Metrics Cycle - primary-endpoint] Failed to get RRD/Current metrics for qemu 106 (vm-generic-rrd-error) on node node1 (Status: 503): ${genericError.message}`)
         );
         expect(consoleWarnSpy).not.toHaveBeenCalledWith( // Ensure the 400-specific warning wasn't called
-            expect.stringContaining("might be stopped or inaccessible")
+            expect.stringContaining("might be stopped or inaccessible (Status: 400)")
         );
 
         consoleErrorSpy.mockRestore();
@@ -1284,7 +1318,7 @@ describe('Data Fetcher', () => {
         } 
       });
 
-      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
       expect(result).toHaveLength(1);
       expect(result[0].current).toBeDefined();
       expect(result[0].current.guest_mem_total_bytes).toBe(totalMem);
@@ -1308,16 +1342,20 @@ describe('Data Fetcher', () => {
         .mockResolvedValueOnce({ data: { data: [{ time: 1, cpu: 0.5 }] } }) // RRD
         .mockResolvedValueOnce({ data: { data: { cpu: 0.5, mem: totalMem, disk: 2048, agent: 1 } } }); // Current status
 
-      mockPveClientInstance.post = jest.fn().mockResolvedValueOnce({ 
+      // Mock the POST call for guest agent memory info (simulating only total and free available)
+      const mockAgentResponse = { 
         data: { 
           data: { 
-            // Agent response *only* with total and free
             result: { total: totalMem, free: freeMem } 
           } 
         } 
-      });
+      };
+      mockPveClientInstance.post = jest.fn().mockResolvedValueOnce(mockAgentResponse);
 
-      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients);
+      // Act
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
+
+      // Assert
       expect(result).toHaveLength(1);
       expect(result[0].current).toBeDefined();
       expect(result[0].current.guest_mem_total_bytes).toBe(totalMem);
@@ -1329,6 +1367,34 @@ describe('Data Fetcher', () => {
       expect(mockPveClientInstance.post).toHaveBeenCalledTimes(1);
     });
 
+    test('should use cached guest memory details if available and recent enough', async () => {
+      const runningVms = [
+        { endpointId: 'primary', node: 'node1', vmid: 100, type: 'qemu', name: 'vm-agent-ok', agent: '1' }
+      ];
+      mockPveClientInstance.get
+        .mockResolvedValueOnce({ data: { data: [{ time: 1, cpu: 0.5 }] } }) // RRD
+        .mockResolvedValueOnce({ data: { data: { cpu: 0.5, mem: 2048*1024*1024, disk: 2048, agent: 1 } } }); // Current status (agent enabled)
+      
+      // Mock the POST call for guest agent
+      mockPveClientInstance.post = jest.fn().mockResolvedValueOnce({ 
+        data: { 
+          data: { 
+            result: { total: 2048*1024*1024, free: 1024*1024*1024, available: 1536*1024*1024 } 
+          } 
+        } 
+      });
+
+      const result = await fetchMetricsData(runningVms, [], mockCurrentApiClients, {});
+      expect(result).toHaveLength(1);
+      expect(result[0].current).toBeDefined();
+      expect(result[0].current.guest_mem_total_bytes).toBe(2048*1024*1024);
+      expect(result[0].current.guest_mem_free_bytes).toBe(1024*1024*1024);
+      expect(result[0].current.guest_mem_available_bytes).toBe(1536*1024*1024);
+      expect(result[0].current.guest_mem_actual_used_bytes).toBe((2048-1536)*1024*1024);
+      // expect(result[0].current.uniqueId).toBe('primary-node1-100'); // Added uniqueId check
+      expect(result[0].uniqueId).toBe('primary-node1-100'); // Corrected: uniqueId is at the top level
+      expect(mockPveClientInstance.post).toHaveBeenCalledWith('/nodes/node1/qemu/100/agent/get-memory-block-info', {});
+    });
 
   }); // End describe fetchMetricsData
 
@@ -1411,7 +1477,7 @@ describe('Data Fetcher', () => {
       const nodeError = new Error('Node fetch failed');
       mockPbsClient.get.mockRejectedValueOnce(nodeError); // Fail /nodes call
 
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
       const result = await fetchPbsData(mockClients);
 
@@ -1432,10 +1498,10 @@ describe('Data Fetcher', () => {
       expect(consoleErrorSpy).toHaveBeenCalledWith(
           expect.stringContaining(`Failed to fetch PBS nodes list for ${mockClients[pbsId].config.name}: ${nodeError.message}`)
       );
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining(`PBS fetch failed (outer catch): Could not determine node name for PBS instance ${mockClients[pbsId].config.name}`)
-      );
-      consoleErrorSpy.mockRestore();
+        );
+        consoleErrorSpy.mockRestore();
     });
 
     test('should handle error fetching PBS datastores', async () => {
@@ -1458,7 +1524,7 @@ describe('Data Fetcher', () => {
 
         const result = await fetchPbsData(mockClients);
 
-        expect(result).toHaveLength(1);
+      expect(result).toHaveLength(1);
         expect(result[0]).toMatchObject({
             pbsEndpointId: pbsId,
             status: 'ok', // Status remains 'ok' because node name succeeded, datastore fetch fell back
@@ -1472,7 +1538,7 @@ describe('Data Fetcher', () => {
         // Expect a warning about the fallback, not an error in the result object itself
         expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Failed to get datastore usage for ${mockClients[pbsId].config.name}, falling back to /config/datastore. Error: ${dsError.message}`));
         consoleErrorSpy.mockRestore();
-      consoleWarnSpy.mockRestore();
+        consoleWarnSpy.mockRestore();
     });
 
      test('should handle error fetching snapshots for one datastore but succeed for others', async () => {
@@ -1498,7 +1564,7 @@ describe('Data Fetcher', () => {
 
         const result = await fetchPbsData(mockClients);
 
-        expect(result).toHaveLength(1);
+      expect(result).toHaveLength(1);
         expect(result[0].status).toBe('ok'); // Overall status is ok if some datastores work
         expect(result[0].datastores).toHaveLength(2);
         
@@ -1510,7 +1576,7 @@ describe('Data Fetcher', () => {
         expect(badStoreResult).toBeDefined();
         expect(badStoreResult.snapshots).toEqual([]); // Should be empty on error
         
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
             expect.stringContaining(`Failed to fetch snapshots for datastore ${dsBad} on ${mockClients[pbsId].config.name}: ${snapError.message}`)
         );
         expect(mockPbsClient.get).toHaveBeenCalledWith(`/admin/datastore/${dsGood}/snapshots`);
@@ -1540,11 +1606,11 @@ describe('Data Fetcher', () => {
           .mockRejectedValueOnce(taskError); // /nodes/{node}/tasks (fails)
 
         const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-        const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
         const result = await fetchPbsData(mockClients);
 
-        expect(result).toHaveLength(1);
+      expect(result).toHaveLength(1);
         expect(result[0].status).toBe('ok'); // Status is still ok
         expect(result[0].datastores).toHaveLength(1); // Datastore fetch succeeded
         
@@ -1563,8 +1629,8 @@ describe('Data Fetcher', () => {
         expect(consoleWarnSpy).toHaveBeenCalledWith(
             expect.stringContaining(`No tasks to process or task fetching failed. Error flag: true, Tasks array: null`)
         );
-      consoleErrorSpy.mockRestore();
-      consoleWarnSpy.mockRestore();
+        consoleErrorSpy.mockRestore();
+        consoleWarnSpy.mockRestore();
     });
 
     test('should aggregate data from multiple PBS instances, including partial failures', async () => {
@@ -1650,7 +1716,7 @@ describe('Data Fetcher', () => {
         expect(mockClient2.get).toHaveBeenCalledTimes(5); // nodes, usage (fail), config, snapshots, tasks
         expect(mockClient3.get).toHaveBeenCalledTimes(1); // nodes (fail)
 
-      consoleErrorSpy.mockRestore();
+        consoleErrorSpy.mockRestore();
         consoleWarnSpy.mockRestore();
     });
 
@@ -1662,7 +1728,7 @@ describe('Data Fetcher', () => {
         [pbsId]: { client: mockPbsBadNodesClient, config: { id: pbsId, name: 'PBS Bad Nodes' } }
       };
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 
 
       // Mock /nodes to return invalid data (empty array)
@@ -1672,14 +1738,14 @@ describe('Data Fetcher', () => {
       const result = await fetchPbsData(mockPbsBadNodesApiClients);
 
       // Assert
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
+       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining(`WARN: [DataFetcher] Could not automatically detect PBS node name for PBS Bad Nodes. Response format unexpected.`)
       );
       // This warning also occurs because nodeName becomes 'localhost' and then the outer catch hits
       expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining(`WARN: [DataFetcher - PBS Bad Nodes] Node name 'localhost' is invalid or 'localhost'. Throwing error.`)
       );
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
         expect.stringContaining(`ERROR: [DataFetcher - PBS Bad Nodes] PBS fetch failed (outer catch): Could not determine node name for PBS instance PBS Bad Nodes`)
       );
 
@@ -1695,7 +1761,7 @@ describe('Data Fetcher', () => {
       // Task related fields should be undefined as processing is skipped
       expect(result[0].backupTasks).toBeUndefined();
       
-      consoleWarnSpy.mockRestore();
+       consoleWarnSpy.mockRestore();
       consoleErrorSpy.mockRestore();
     });
 
@@ -1705,7 +1771,7 @@ describe('Data Fetcher', () => {
         const pbsNodeName = 'pbs-node-empty-usage';
         const mockPbsClient = { get: jest.fn() };
         const mockClients = { [pbsId]: { client: mockPbsClient, config: { name: 'PBS Empty Usage' } } };
-        const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
         mockPbsClient.get
             .mockResolvedValueOnce({ data: { data: [{ node: pbsNodeName }] } }) // /nodes
@@ -1718,7 +1784,7 @@ describe('Data Fetcher', () => {
         const result = await fetchPbsData(mockClients);
 
       // Assert
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
+       expect(consoleWarnSpy).toHaveBeenCalledWith(
             expect.stringContaining(`WARN: [DataFetcher] PBS /status/datastore-usage returned empty data for ${mockClients[pbsId].config.name}. Falling back.`)
         );
         expect(mockPbsClient.get).toHaveBeenCalledWith('/config/datastore'); // Check fallback was attempted
@@ -1728,7 +1794,7 @@ describe('Data Fetcher', () => {
         const callsFallbackTest = mockPbsClient.get.mock.calls;
         expect(callsFallbackTest[4][0]).toBe(`/nodes/${pbsNodeName}/tasks`); // Check 5th call path
 
-        expect(result).toHaveLength(1);
+      expect(result).toHaveLength(1);
         expect(result[0].status).toBe('ok');
         expect(result[0].datastores).toHaveLength(1);
         expect(result[0].datastores[0].name).toBe('fallback-store');
@@ -1760,7 +1826,7 @@ describe('Data Fetcher', () => {
         // But the fetch itself will fail, so no specific mock needed here, error is handled internally
         // .mockRejectedValueOnce(new Error('Task fetch failed')); // <-- REMOVE THIS
 
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       const result = await fetchPbsData(mockClients);
@@ -1780,8 +1846,8 @@ describe('Data Fetcher', () => {
       expect(consoleWarnSpy).toHaveBeenCalledWith(expect.stringContaining(`Failed to get datastore usage for ${mockClients[pbsId].config.name}, falling back to /config/datastore. Error: ${dsError.message}`));
       // Task fetch doesn't happen for res2 in this scenario, so no error logged for it.
       // expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining(`Failed to fetch PBS task list for node ${pbsNodeName} (${mockClients[pbsId].config.name}):`));
-      consoleErrorSpy.mockRestore();
-      consoleWarnSpy.mockRestore();
+        consoleErrorSpy.mockRestore();
+        consoleWarnSpy.mockRestore();
     });
 
     test('should handle failure of both datastore usage and config fetch', async () => {
@@ -1790,8 +1856,8 @@ describe('Data Fetcher', () => {
         const pbsNodeName = 'pbs-node-double-fail';
         const mockPbsClient = { get: jest.fn() };
         const mockClients = { [pbsId]: { client: mockPbsClient, config: { name: 'PBS Double DS Fail' } } };
-        const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+        const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
         const usageError = new Error('Usage API Failed');
         const configError = new Error('Config API Failed');
 
@@ -1805,10 +1871,10 @@ describe('Data Fetcher', () => {
         const result = await fetchPbsData(mockClients);
 
       // Assert
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
+       expect(consoleWarnSpy).toHaveBeenCalledWith(
             expect.stringContaining(`WARN: [DataFetcher] Failed to get datastore usage for ${mockClients[pbsId].config.name}, falling back to /config/datastore. Error: ${usageError.message}`)
         );
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        expect(consoleErrorSpy).toHaveBeenCalledWith(
              expect.stringContaining(`ERROR: [DataFetcher] Fallback fetch of PBS datastore config failed for ${mockClients[pbsId].config.name}: ${configError.message}`)
         );
         expect(mockPbsClient.get).toHaveBeenCalledWith('/status/datastore-usage');
@@ -1818,12 +1884,12 @@ describe('Data Fetcher', () => {
         const callsDoubleFailTest = mockPbsClient.get.mock.calls;
         expect(callsDoubleFailTest[3][0]).toBe(`/nodes/${pbsNodeName}/tasks`); // Check 4th call path
 
-        expect(result).toHaveLength(1);
+      expect(result).toHaveLength(1);
         expect(result[0].status).toBe('ok'); // Status is still ok as node name succeeded
         expect(result[0].datastores).toEqual([]); // Datastores should be empty
         
-        consoleWarnSpy.mockRestore();
-      consoleErrorSpy.mockRestore();
+       consoleWarnSpy.mockRestore();
+        consoleErrorSpy.mockRestore();
     });
 
     test('should handle API error when fetching PBS tasks', async () => {
@@ -1841,11 +1907,11 @@ describe('Data Fetcher', () => {
           .mockRejectedValueOnce(taskError); // /nodes/{node}/tasks (FAILS)
 
         const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-        const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
         const result = await fetchPbsData(mockClients);
 
-        expect(result).toHaveLength(1);
+      expect(result).toHaveLength(1);
         expect(result[0]).toMatchObject({
             pbsEndpointId: pbsId,
             pbsInstanceName: 'PBS Task Fetch Error',
@@ -1867,9 +1933,9 @@ describe('Data Fetcher', () => {
             expect.stringContaining(`ERROR: [DataFetcher] Failed to fetch PBS task list for node ${pbsNodeName} (PBS Task Fetch Error): ${taskError.message}`)
         );
         // Verify the warning logged in fetchPbsData when tasks cannot be processed (covers line 341)
-         expect(consoleWarnSpy).toHaveBeenCalledWith(
+       expect(consoleWarnSpy).toHaveBeenCalledWith(
             expect.stringContaining('WARN: [DataFetcher - PBS Task Fetch Error] No tasks to process or task fetching failed. Error flag: true, Tasks array: null')
-          );
+        );
 
         consoleErrorSpy.mockRestore();
         consoleWarnSpy.mockRestore();

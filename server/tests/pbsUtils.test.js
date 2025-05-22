@@ -1,6 +1,24 @@
 const { processPbsTasks } = require('../pbsUtils');
 
+// Mock console to avoid cluttering test output
+let originalConsoleLog, originalConsoleError, originalConsoleWarn;
+
 describe('PBS Utils - processPbsTasks', () => {
+
+  beforeAll(() => {
+    originalConsoleLog = console.log;
+    originalConsoleError = console.error;
+    originalConsoleWarn = console.warn;
+    console.log = jest.fn();
+    console.error = jest.fn();
+    console.warn = jest.fn();
+  });
+
+  afterAll(() => {
+    console.log = originalConsoleLog;
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
+  });
 
     test('should return default structure for null input', () => {
         const result = processPbsTasks(null);

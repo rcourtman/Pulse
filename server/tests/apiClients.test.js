@@ -33,13 +33,27 @@ const axiosRetry = require('axios-retry').default; // <-- Get the mocked default
 // const proxmoxApi = require('proxmox-api'); // <-- Remove this
 
 // Mock console to avoid cluttering test output
-// jest.spyOn(console, 'log').mockImplementation(() => {});
-// jest.spyOn(console, 'error').mockImplementation(() => {});
+let originalConsoleLog, originalConsoleError, originalConsoleWarn;
 
 describe('API Clients Initialization', () => {
   let originalEnv;
   // Remove the shared mock instance definition from here
   // const mockAxiosInstance = { ... };
+
+  beforeAll(() => {
+    originalConsoleLog = console.log;
+    originalConsoleError = console.error;
+    originalConsoleWarn = console.warn;
+    console.log = jest.fn();
+    console.error = jest.fn();
+    console.warn = jest.fn();
+  });
+
+  afterAll(() => {
+    console.log = originalConsoleLog;
+    console.error = originalConsoleError;
+    console.warn = originalConsoleWarn;
+  });
 
   beforeEach(() => {
     originalEnv = { ...process.env };
