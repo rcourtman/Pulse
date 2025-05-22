@@ -89,3 +89,4 @@ pnpm-lock.yaml
 *.tar.gz 
 
 server/super_debug_output.txt 
+*.sqlite3 
