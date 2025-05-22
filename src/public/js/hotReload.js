@@ -8,7 +8,7 @@
   let wasConnected = false;
   socket.on('connect', function() {
     if (wasConnected) {
-      console.log('Reconnected - refreshing page');
+      // console.log('Reconnected - refreshing page');
       setTimeout(() => window.location.reload(), 500);
     }
     wasConnected = true;

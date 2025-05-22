@@ -169,7 +169,6 @@ PulseApp.thresholds.logging = (() => {
             filterStatus: criteria.snapshottedFilterStatus
         });
 
-        console.log(`[Log Session ${sessionId}] Started. Thresholds:`, criteria.snapshottedThresholds);
         updateClearAllButtonVisibility();
     }
 
@@ -179,8 +178,6 @@ PulseApp.thresholds.logging = (() => {
             console.warn(`Attempted to stop non-existent log session: ${sessionId}`);
             return;
         }
-
-        console.log(`[Log Session ${sessionId}] Stopping. Reason: ${reason}`);
 
         if (session.element) {
             const tableBody = session.element.querySelector(`#log-table-${sessionId} tbody`);

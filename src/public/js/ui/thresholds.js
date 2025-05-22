@@ -62,17 +62,11 @@ PulseApp.ui.thresholds = (() => {
     function _handleThresholdDragStart(event) {
         PulseApp.tooltips.updateSliderTooltip(event.target);
         isDraggingSlider = true;
-        if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
-            PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
-        }
     }
 
     function _handleThresholdDragEnd() {
         if (isDraggingSlider) {
             isDraggingSlider = false;
-            if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.clearGuestMetricSnapshots) {
-                PulseApp.ui.dashboard.clearGuestMetricSnapshots();
-            }
         }
     }
 
@@ -112,8 +106,6 @@ PulseApp.ui.thresholds = (() => {
         document.addEventListener('mouseup', _handleThresholdDragEnd);
         document.addEventListener('touchend', _handleThresholdDragEnd);
     }
-
-    // Old setupThresholdListeners function removed.
 
     function updateThreshold(type, value) {
         PulseApp.state.setThresholdValue(type, value);

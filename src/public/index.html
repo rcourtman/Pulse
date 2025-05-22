@@ -216,6 +216,9 @@
                   </label>
                 </div>
               </div>
+              <button id="toggle-graph-view-button" title="Toggle Graph View" class="p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+              </button>
             </div>
           </div>
 
@@ -246,7 +249,7 @@
                   <th class="sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
                   <th class="sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
                   <th class="sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
-                  <th class="sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
+                  <th class="sortable p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis" data-sort="netout" style="width: 70px;">Net Out</th>
                 </tr>
                 <tr id="threshold-slider-row" class="threshold-sliders text-xs border-t border-gray-200 dark:border-gray-700 hidden bg-white dark:bg-gray-800">
                   <th class="py-1 px-2 align-middle"></th>
@@ -477,7 +480,7 @@
   <script src="/js/thresholds/logging.js" defer></script>
   <script src="/js/hotReload.js" defer></script>
   <script src="/js/main.js" defer></script>
-
+  <div id="graph-tooltip" class="absolute hidden z-50 p-1.5 text-xs bg-gray-700 text-white rounded-md shadow-lg pointer-events-none"></div>
   <footer class="text-center text-xs text-gray-500 py-4">
     Pulse for Proxmox | Version: <a href="https://github.com/rcourtman/Pulse/releases" target="_blank" rel="noopener noreferrer" id="app-version" class="text-blue-600 dark:text-blue-400 hover:underline">loading...</a>
   </footer>

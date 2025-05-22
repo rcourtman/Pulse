@@ -8,7 +8,6 @@ PulseApp.ui.common = (() => {
         searchInput = document.getElementById('dashboard-search');
         backupsSearchInput = document.getElementById('backups-search');
 
-        setupTableSorting('nodes-table');
         setupTableSorting('main-table');
         setupTableSorting('backups-overview-table');
 
@@ -41,17 +40,11 @@ PulseApp.ui.common = (() => {
 
     function applyInitialSortUI() {
         const mainSortState = PulseApp.state.getSortState('main');
-        const nodesSortState = PulseApp.state.getSortState('nodes');
         const backupsSortState = PulseApp.state.getSortState('backups');
 
         const initialMainHeader = document.querySelector(`#main-table th[data-sort="${mainSortState.column}"]`);
         if (initialMainHeader) {
           updateSortUI('main-table', initialMainHeader);
-        }
-
-        const initialNodesHeader = document.querySelector(`#nodes-table th[data-sort="${nodesSortState.column}"]`);
-        if (initialNodesHeader) {
-          updateSortUI('nodes-table', initialNodesHeader);
         }
 
         const initialBackupsHeader = document.querySelector(`#backups-overview-table th[data-sort="${backupsSortState.column}"]`);

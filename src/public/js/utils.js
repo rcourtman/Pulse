@@ -125,14 +125,22 @@ PulseApp.utils = (() => {
         const effectiveDirection = direction || sortStates.direction;
 
         return [...data].sort((a, b) => {
-            let valA = a[column];
-            let valB = b[column];
+            let valA, valB;
+            let effectiveColumn = column;
+
+            if (column === 'netin') effectiveColumn = 'net_in_rate';
+            else if (column === 'netout') effectiveColumn = 'net_out_rate';
+            else if (column === 'diskread') effectiveColumn = 'disk_read_rate';
+            else if (column === 'diskwrite') effectiveColumn = 'disk_write_rate';
+
+            valA = a[effectiveColumn];
+            valB = b[effectiveColumn];
 
             if (column === 'id' || column === 'vmid' || column === 'guestId') {
                 valA = parseInt(valA, 10);
                 valB = parseInt(valB, 10);
             }
-             else if (column === 'name' || column === 'node' || column === 'guestName' || column === 'guestType' || column === 'pbsInstanceName' || column === 'datastoreName') {
+            else if (column === 'name' || column === 'node' || column === 'guestName' || column === 'guestType' || column === 'pbsInstanceName' || column === 'datastoreName') {
                 valA = String(valA || '').toLowerCase();
                 valB = String(valB || '').toLowerCase();
             }
@@ -144,7 +152,7 @@ PulseApp.utils = (() => {
                 valA = parseFloat(valA || 0);
                 valB = parseFloat(valB || 0);
             }
-             else if (column === 'latestBackupTime') {
+            else if (column === 'latestBackupTime') {
                 valA = parseInt(valA || 0, 10);
                 valB = parseInt(valB || 0, 10);
             }
@@ -206,4 +214,38 @@ PulseApp.utils = (() => {
         sortData,
         renderTableBody
     };
-})(); 
+})();
+
+PulseApp.utils.formatTimeAgo = (timestamp) => {
+    const now = Date.now();
+    const seconds = Math.round((now - timestamp) / 1000);
+
+    if (seconds < 5) {
+        return 'just now';
+    }
+
+    let interval = Math.floor(seconds / 31536000); // years
+    if (interval >= 1) {
+        return interval + (interval === 1 ? ' year' : ' years') + ' ago';
+    }
+    interval = Math.floor(seconds / 2592000); // months
+    if (interval >= 1) {
+        return interval + (interval === 1 ? ' month' : ' months') + ' ago';
+    }
+    interval = Math.floor(seconds / 86400); // days
+    if (interval >= 1) {
+        return interval + (interval === 1 ? ' day' : ' days') + ' ago';
+    }
+    interval = Math.floor(seconds / 3600); // hours
+    if (interval >= 1) {
+        return interval + (interval === 1 ? ' hour' : ' hours') + ' ago';
+    }
+    interval = Math.floor(seconds / 60); // minutes
+    if (interval >= 1) {
+        return interval + (interval === 1 ? ' min' : ' mins') + ' ago';
+    }
+    if (seconds < 0) { // For timestamps slightly in the future due to clock sync
+        return 'just now'; 
+    }
+    return Math.floor(seconds) + (seconds === 1 ? ' sec' : ' secs') + ' ago';
+}; 

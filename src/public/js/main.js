@@ -30,15 +30,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (loadingOverlay.style.display !== 'none') { // Only act if currently visible
             if (isConnected && initialDataReceived) {
-                console.log('[UI Update] Data received and socket connected, hiding loading overlay.');
+                // console.log('[UI Update] Data received and socket connected, hiding loading overlay.');
                 loadingOverlay.style.display = 'none';
             } else if (!isConnected) {
-                console.log('[UI Update] Socket disconnected. Keeping loading overlay visible.');
+                // console.log('[UI Update] Socket disconnected. Keeping loading overlay visible.');
             }
             // If initialDataReceived is false, or socket is connected but no data yet, overlay remains.
         } else if (!isConnected && loadingOverlay.style.display === 'none') {
             // If overlay is hidden but socket disconnects, re-show it.
-            console.log('[UI Update] Socket disconnected and overlay was hidden. Re-showing loading overlay.');
+            // console.log('[UI Update] Socket disconnected and overlay was hidden. Re-showing loading overlay.');
             loadingOverlay.style.display = 'flex'; // Or 'block', or its original display type
         }
     }

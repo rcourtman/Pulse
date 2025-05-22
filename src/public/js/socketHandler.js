@@ -14,7 +14,7 @@ PulseApp.socketHandler = (() => {
         socket.on('rawData', handleRawData);
         socket.on('pbsInitialStatus', handlePbsInitialStatus);
         socket.on('hotReload', () => {
-            console.log('[socketHandler] Hot reload requested. Reloading page...');
+            // console.log('[socketHandler] Hot reload requested. Reloading page...');
             window.location.reload();
         });
 
@@ -59,7 +59,7 @@ PulseApp.socketHandler = (() => {
     }
 
     function handleInitialState(state) {
-        console.log('[socketHandler] Received initial state:', state);
+        // console.log('[socketHandler] Received initial state:', state);
         const isPlaceholder = state.isConfigPlaceholder || false;
         PulseApp.state.set('isConfigPlaceholder', isPlaceholder);
         PulseApp.state.set('initialDataReceived', false); // Mark that full data hasn't arrived yet
@@ -136,7 +136,7 @@ PulseApp.socketHandler = (() => {
     }
 
     function requestFullData() {
-        console.log('Requesting full data reload from server...');
+        // console.log('Requesting full data reload from server...');
         if (socket && socket.connected) { // Check if socket is connected before emitting
             socket.emit('requestData');
         } else {
