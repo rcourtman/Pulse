@@ -87,3 +87,5 @@ pnpm-lock.yaml
 
 # Release tarballs
 *.tar.gz 
+
+server/super_debug_output.txt 
