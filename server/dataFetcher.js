@@ -1,4 +1,5 @@
 const { processPbsTasks } = require('./pbsUtils'); // Assuming pbsUtils.js exists or will be created
+const database = require('./database'); // Will be used by server/index.js, but good to be aware of
 
 // Helper function to fetch data and handle common errors/warnings
 async function fetchNodeResource(apiClient, endpointId, nodeName, resourcePath, resourceName, expectArray = false, transformFn = null) {
@@ -190,11 +191,11 @@ async function fetchPveDiscoveryData(currentApiClients) {
     let allNodes = [], allVms = [], allContainers = [];
 
     if (pveEndpointIds.length === 0) {
-        console.log("[DataFetcher] No PVE endpoints configured or initialized.");
+        // console.log("[DataFetcher] No PVE endpoints configured or initialized.");
         return { nodes: [], vms: [], containers: [] };
     }
 
-    console.log(`[DataFetcher] Fetching PVE discovery data for ${pveEndpointIds.length} endpoints...`);
+    // console.log(`[DataFetcher] Fetching PVE discovery data for ${pveEndpointIds.length} endpoints...`);
 
     const pvePromises = pveEndpointIds.map(endpointId => {
         const { client: apiClientInstance, config } = currentApiClients[endpointId];
@@ -347,11 +348,11 @@ async function fetchPbsData(currentPbsApiClients) {
     const pbsDataResults = [];
 
     if (pbsClientIds.length === 0) {
-        console.log("[DataFetcher] No PBS instances configured or initialized.");
+        // console.log("[DataFetcher] No PBS instances configured or initialized.");
         return pbsDataResults;
     }
 
-    console.log(`[DataFetcher] Fetching discovery data for ${pbsClientIds.length} PBS instances...`);
+    // console.log(`[DataFetcher] Fetching discovery data for ${pbsClientIds.length} PBS instances...`);
     const pbsPromises = pbsClientIds.map(async (pbsClientId) => {
         const pbsClient = currentPbsApiClients[pbsClientId]; // { client, config }
         const instanceName = pbsClient.config.name;
@@ -363,7 +364,7 @@ async function fetchPbsData(currentPbsApiClients) {
         };
 
         try {
-            console.log(`INFO: [DataFetcher - ${instanceName}] Starting fetch. Initial status: ${instanceData.status}`);
+            // console.log(`INFO: [DataFetcher - ${instanceName}] Starting fetch. Initial status: ${instanceData.status}`);
 
             const nodeName = pbsClient.config.nodeName || await fetchPbsNodeName(pbsClient);
             console.log(`INFO: [DataFetcher - ${instanceName}] Determined nodeName: '${nodeName}'. Configured nodeName: '${pbsClient.config.nodeName}'`);
@@ -437,7 +438,7 @@ async function fetchPbsData(currentPbsApiClients) {
  * @returns {Promise<Object>} - { nodes, vms, containers, pbs: pbsDataArray }
  */
 async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetchPbsDataInternal = fetchPbsData) {
-  console.log("[DataFetcher] Starting full discovery cycle...");
+  // console.log("[DataFetcher] Starting full discovery cycle...");
   
   // Fetch PVE and PBS data in parallel
   const [pveResult, pbsResult] = await Promise.all([
@@ -461,7 +462,7 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
       pbs: pbsResult || [] // pbsResult is already the array we need
   };
 
-  console.log(`[DataFetcher] Discovery cycle completed. Found: ${aggregatedResult.nodes.length} PVE nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} CTs, ${aggregatedResult.pbs.length} PBS instances.`);
+  // console.log(`[DataFetcher] Discovery cycle completed. Found: ${aggregatedResult.nodes.length} PVE nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} CTs, ${aggregatedResult.pbs.length} PBS instances.`);
   
   return aggregatedResult;
 }
@@ -471,13 +472,15 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
  * @param {Array} runningVms - Array of running VM objects.
  * @param {Array} runningContainers - Array of running Container objects.
  * @param {Object} currentApiClients - Initialized PVE API clients.
+ * @param {Object} metricAggregationBuffers - Object to store raw data for later aggregation.
  * @returns {Promise<Array>} - Array of metric data objects.
  */
-async function fetchMetricsData(runningVms, runningContainers, currentApiClients) {
-    console.log(`[DataFetcher] Starting metrics fetch for ${runningVms.length} VMs, ${runningContainers.length} Containers...`);
+async function fetchMetricsData(runningVms, runningContainers, currentApiClients, metricAggregationBuffers) {
+    // console.log(`[DataFetcher] Starting metrics fetch for ${runningVms.length} VMs, ${runningContainers.length} Containers...`);
     const allMetrics = [];
     const metricPromises = [];
     const guestsByEndpointNode = {};
+    const currentTime = Date.now(); // Use a single timestamp for all metrics fetched in this cycle
 
     // Group guests by endpointId and then by nodeName (existing logic)
     [...runningVms, ...runningContainers].forEach(guest => {
@@ -504,103 +507,192 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
             const guestsOnNode = guestsByEndpointNode[endpointId][nodeName];
             
             guestsOnNode.forEach(guestInfo => {
-                const { vmid, type, name: guestName, agent: guestAgentConfig } = guestInfo; // Destructure agent
+                const { vmid, type, name: guestName, agent: guestAgentConfigString } = guestInfo; // agent is a string like "enabled=1" or "1"
+                
                 metricPromises.push(
                     (async () => {
-                        try {
-                            const pathPrefix = type === 'qemu' ? 'qemu' : 'lxc';
-                            // Fetch RRD and Current Status data
-                            const [rrdDataResponse, currentDataResponse] = await Promise.all([
-                                apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { params: { timeframe: 'hour', cf: 'AVERAGE' } }),
-                                apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/status/current`)
-                            ]);
+                        const pathPrefix = type === 'qemu' ? 'qemu' : 'lxc';
+                        const baseGuestUrl = `/nodes/${nodeName}/${pathPrefix}/${vmid}`;
+                        const guestUniqueId = `${endpointId}-${nodeName}-${vmid}`;
+                        
+                        const individualMetricPromises = [];
 
-                            let currentMetrics = currentDataResponse?.data?.data || null;
+                        // --- RRD Data Promise ---
+                        individualMetricPromises.push(apiClientInstance.get(`${baseGuestUrl}/rrddata`, { params: { timeframe: 'hour', cf: 'MAX' } }));
+                        // --- Current Status Promise ---
+                        individualMetricPromises.push(apiClientInstance.get(`${baseGuestUrl}/status/current`));
+                        
+                        // --- Agent Memory Promise (QEMU only) ---
+                        const isQemuWithAgentEnabled = type === 'qemu' && guestAgentConfigString && (guestAgentConfigString.includes('enabled=1') || guestAgentConfigString === '1');
+                        if (isQemuWithAgentEnabled) {
+                            individualMetricPromises.push(apiClientInstance.post(`${baseGuestUrl}/agent/get-memory-block-info`, {}));
+                        }
 
-                            // --- QEMU Guest Agent Memory Fetch ---
-                            if (type === 'qemu' && currentMetrics && currentMetrics.agent === 1 && guestAgentConfig && (typeof guestAgentConfig === 'string' && (guestAgentConfig.startsWith('1') || guestAgentConfig.includes('enabled=1')))) {
-                                try {
-                                    // Prefer get-memory-block-info if available, fallback to get-osinfo for memory as some agents might provide it there.
-                                    // Proxmox API typically wraps agent command results in {"data": {"result": ...}} or {"data": ...}
-                                    // It's a POST request for these commands.
-                                    const agentMemInfoResponse = await apiClientInstance.post(`/nodes/${nodeName}/qemu/${vmid}/agent/get-memory-block-info`, {});
-                                    
-                                    if (agentMemInfoResponse?.data?.data?.result) { // QEMU specific result wrapper
-                                        const agentMem = agentMemInfoResponse.data.data.result;
-                                        // Standard qemu-guest-agent "get-memory-block-info" often returns an array of blocks.
-                                        // For simplicity, assuming the first block is the main one or aggregate.
-                                        // A more common detailed output might be from 'get-osinfo' or a specific 'memory-stats' if that exists.
-                                        // Let's look for common fields that would appear in 'free -m' like output.
-                                        // This is a common structure but might need adjustment based on actual agent output.
-                                        // Example from qga: {"total": <bytes>, "free": <bytes>, "available": <bytes>, "cached": <bytes>, "buffers": <bytes>}
-                                        // The Proxmox API might wrap this further, e.g. inside agentMemInfoResponse.data.data.result
-                                        
-                                        let guestMemoryDetails = null;
-                                        if (Array.isArray(agentMem) && agentMem.length > 0 && agentMem[0].hasOwnProperty('total') && agentMem[0].hasOwnProperty('free')) {
-                                            // If it's an array of memory info objects (less common for simple mem stats)
-                                            guestMemoryDetails = agentMem[0];
-                                        } else if (typeof agentMem === 'object' && agentMem !== null && agentMem.hasOwnProperty('total') && agentMem.hasOwnProperty('free')) {
-                                            // If it's a direct object with memory stats
-                                            guestMemoryDetails = agentMem;
-                                        }
+                        // Use Promise.allSettled to handle individual promise failures
+                        const results = await Promise.allSettled(individualMetricPromises);
+                        const rrdResult = results[0];
+                        const currentResult = results[1];
+                        const agentMemoryResult = isQemuWithAgentEnabled ? results[2] : null;
 
-                                        if (guestMemoryDetails) {
-                                            currentMetrics.guest_mem_total_bytes = guestMemoryDetails.total;
-                                            currentMetrics.guest_mem_free_bytes = guestMemoryDetails.free;
-                                            currentMetrics.guest_mem_available_bytes = guestMemoryDetails.available; // Important for "actual" used
-                                            currentMetrics.guest_mem_cached_bytes = guestMemoryDetails.cached;
-                                            currentMetrics.guest_mem_buffers_bytes = guestMemoryDetails.buffers;
+                        // --- Enhanced Debug Logging ---
+                        // console.log(`[DEBUG fetchMetricsDataLoop - ${guestName}] RRD Status: ${rrdResult.status}, Current Status: ${currentResult.status}, Agent Mem Status: ${agentMemoryResult ? agentMemoryResult.status : 'N/A (Not QEMU or no agent)'}`);
+                        // if (rrdResult.status === 'rejected') {
+                        //      console.log(`[DEBUG fetchMetricsDataLoop - ${guestName}] RRD Reason:`, rrdResult.reason?.message); //, rrdResult.reason);
+                        // }
+                        // if (currentResult.status === 'rejected') {
+                        //     console.log(`[DEBUG fetchMetricsDataLoop - ${guestName}] Current Reason:`, currentResult.reason?.message); //, currentResult.reason);
+                        // }
+                        // if (agentMemoryResult && agentMemoryResult.status === 'rejected') {
+                        //     console.log(`[DEBUG fetchMetricsDataLoop - ${guestName}] Agent Reason:`, agentMemoryResult.reason?.message); //, agentMemoryResult.reason);
+                        // }
+                        // --- End Enhanced Debug Logging ---
 
-                                            if (guestMemoryDetails.available !== undefined) {
-                                                currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.available;
-                                            } else if (guestMemoryDetails.cached !== undefined && guestMemoryDetails.buffers !== undefined) {
-                                                currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free - guestMemoryDetails.cached - guestMemoryDetails.buffers;
-                                            } else {
-                                                 currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free; // Fallback if only total & free
-                                            }
-                                            console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory fetched: Actual Used: ${((currentMetrics.guest_mem_actual_used_bytes || 0) / (1024*1024)).toFixed(0)}MB`);
-                                        } else {
-                                            console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory command 'get-memory-block-info' response format not as expected. Data:`, agentMemInfoResponse.data.data);
-                                        }
+                        // Check if essential data fetching failed
+                        if (rrdResult.status === 'rejected' || currentResult.status === 'rejected') {
+                            const reason = rrdResult.status === 'rejected' ? rrdResult.reason : currentResult.reason;
+                            if (reason.response && reason.response.status === 400) {
+                                console.warn(`[Metrics Cycle - ${endpointName}] Guest ${type} ${vmid} (${guestName}) on node ${nodeName} might be stopped or inaccessible (Status: 400). Skipping metrics.`);
+                            } else {
+                                // This is where the test 'should handle generic error fetching RRD/status data' expects a console.error
+                                console.error(`[Metrics Cycle - ${endpointName}] Failed to get RRD/Current metrics for ${type} ${vmid} (${guestName}) on node ${nodeName} (Status: ${reason.response?.status || 'N/A'}): ${reason.message}`);
+                            }
+                            // console.log(`[DEBUG fetchMetricsDataLoop - ${guestName}] Returning NULL due to RRD/Current rejection.`);
+                            return null; // Skip this guest
+                        }
+
+                        const rrdData = rrdResult.value?.data?.data || null;
+                        let currentMetricsData = currentResult.value?.data?.data || null; // 'let' because agent data might be added
+                        
+                        // If currentMetricsData is null even if the promise was fulfilled (e.g. empty response from API)
+                        if (!currentMetricsData) {
+                             console.warn(`[Metrics Cycle - ${endpointName}] Guest ${type} ${vmid} (${guestName}) on node ${nodeName} has no Current metrics data despite successful API call. RRD only is not sufficient. Skipping.`);
+                             // console.log(`[DEBUG fetchMetricsDataLoop - ${guestName}] Returning NULL due to no Current data post-fulfillment.`);
+                             return null;
+                        }
+
+                        // --- Process Agent Memory Info ---
+                        let guestMemoryDetails = null;
+                        const liveAgentStatusAvailable = currentResult.status === 'fulfilled' && currentResult.value?.data?.data;
+                        const liveAgentIsEnabled = liveAgentStatusAvailable && parseInt(currentResult.value.data.data.agent, 10) === 1;
+
+                        if (isQemuWithAgentEnabled && liveAgentIsEnabled && agentMemoryResult && agentMemoryResult.status === 'fulfilled' && agentMemoryResult.value.data && agentMemoryResult.value.data.data && agentMemoryResult.value.data.data.result) {
+                            guestMemoryDetails = agentMemoryResult.value.data.data.result;
+                            // console.log(`[DEBUG fetchMetricsDataLoop - ${guestName}] QEMU Agent memory details processed.`);
+                            if (guestMemoryDetails) {
+                                const memInfo = Array.isArray(guestMemoryDetails) && guestMemoryDetails.length > 0 ? guestMemoryDetails[0] : guestMemoryDetails;
+                                if (typeof memInfo === 'object' && memInfo !== null && memInfo.hasOwnProperty('total') && memInfo.hasOwnProperty('free')) {
+                                    currentMetricsData.guest_mem_total_bytes = memInfo.total;
+                                    currentMetricsData.guest_mem_free_bytes = memInfo.free;
+                                    currentMetricsData.guest_mem_available_bytes = memInfo.available;
+                                    currentMetricsData.guest_mem_cached_bytes = memInfo.cached;
+                                    currentMetricsData.guest_mem_buffers_bytes = memInfo.buffers;
+                                    if (memInfo.available !== undefined) {
+                                        currentMetricsData.guest_mem_actual_used_bytes = memInfo.total - memInfo.available;
+                                    } else if (memInfo.cached !== undefined && memInfo.buffers !== undefined) {
+                                        currentMetricsData.guest_mem_actual_used_bytes = memInfo.total - memInfo.free - memInfo.cached - memInfo.buffers;
                                     } else {
-                                         console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent memory command 'get-memory-block-info' did not return expected data structure. Response:`, agentMemInfoResponse.data);
+                                        currentMetricsData.guest_mem_actual_used_bytes = memInfo.total - memInfo.free;
                                     }
-                                } catch (agentError) {
-                                    if (agentError.response && agentError.response.status === 500 && agentError.response.data && agentError.response.data.data && agentError.response.data.data.exitcode === -2) {
-                                         // Expected error if agent is not running or command not supported.
-                                         console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): QEMU Guest Agent not responsive or command 'get-memory-block-info' not available/supported. Error: ${agentError.message}`);
-                                    } else {
-                                         console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Error fetching guest agent memory info: ${agentError.message}. Status: ${agentError.response?.status}`);
+                                } else {
+                                     console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Guest agent mem format not as expected (object structure). Data:`, memInfo);
+                                }
+                            }
+                        } else if (isQemuWithAgentEnabled && agentMemoryResult && agentMemoryResult.status === 'rejected') {
+                            const qemuAgentError = agentMemoryResult.reason;
+                            const agentErrorCode = qemuAgentError.response?.data?.data?.exitcode;
+                            const agentErrorMessage = qemuAgentError.message;
+                            const agentResponseStatus = qemuAgentError.response?.status;
+
+                            if (agentErrorCode === -2 || (agentResponseStatus === 500 && agentErrorMessage && agentErrorMessage.toLowerCase().includes('command not supported'))) {
+                                console.log(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): QEMU Guest Agent not responsive or cmd not supported. Status: ${agentResponseStatus || 'N/A'}, Msg: ${agentErrorMessage}`);
+                            } else {
+                                console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): Error fetching guest agent memory. Status: ${agentResponseStatus || 'N/A'}, Msg: ${agentErrorMessage}`);
+                            }
+                        } else if (isQemuWithAgentEnabled && liveAgentStatusAvailable && !liveAgentIsEnabled) {
+                            // Agent was enabled in discovery, but live status says it's off. Don't use agentMemoryResult.
+                            // console.log(`[DEBUG fetchMetricsDataLoop - ${guestName}] QEMU Agent was enabled in discovery but is now reported as OFF in current status. Skipping agent memory data.`);
+                        } else if (isQemuWithAgentEnabled && !agentMemoryResult) {
+                            // This case implies isQemuWithAgentEnabled was true, but there was no third promise result (e.g., results.length < 3)
+                            // This shouldn't happen if individualMetricPromises.push for agent was conditional on isQemuWithAgentEnabled
+                            console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} (${guestName}): QEMU Agent was enabled in discovery, but no agent memory result was obtained unexpectedly.`);
+                        }
+
+                        // If RRD or Current Status failed, skip this guest
+                        if (rrdResult.status === 'rejected' || currentResult.status === 'rejected') {
+                            // console.log(`[DEBUG fetchMetricsDataLoop - ${guestName}] Returning NULL due to RRD/Current rejection.`);
+                            return null; // Skip this guest
+                        }
+
+                        // Ensure buffer exists for this guest (for historical data aggregation)
+                        if (!metricAggregationBuffers[guestUniqueId]) {
+                            metricAggregationBuffers[guestUniqueId] = {};
+                        }
+                        const guestBuffer = metricAggregationBuffers[guestUniqueId];
+
+                        const addToBuffer = (metricKey, value) => {
+                            if (typeof value === 'number' && !isNaN(value)) {
+                                if (!guestBuffer[metricKey]) {
+                                    guestBuffer[metricKey] = [];
+                                }
+                                guestBuffer[metricKey].push({ timestamp: currentTime, value });
+                                if (guestBuffer[metricKey].length === 1) {
+                                    if (metricKey === 'cpu_usage_percent' || metricKey === 'memory_usage_percent' || metricKey === 'disk_usage_percent') {
+                                        database.insertMetricData(currentTime, guestUniqueId, metricKey, value, (err) => {
+                                            if (err) {
+                                                console.error(`[DataFetcher DEBUG] DB ERROR (immediate insert) for ${guestUniqueId} - ${metricKey}:`, err);
+                                            }
+                                        });
                                     }
                                 }
                             }
-                            // --- End QEMU Guest Agent Memory Fetch ---
-
-
-                            const metricData = {
-                                id: vmid,
-                                guestName: guestName, 
-                                node: nodeName,
-                                type: type,
-                                endpointId: endpointId, 
-                                endpointName: endpointName, 
-                                data: rrdDataResponse?.data?.data?.length > 0 ? rrdDataResponse.data.data : [],
-                                current: currentMetrics // This now potentially includes guest_mem_* fields
-                            };
-                            return metricData;
-                        } catch (err) {
-                            const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
-                            if (err.response && err.response.status === 400) {
-                                console.warn(`[Metrics Cycle - ${endpointName}] Guest ${type} ${vmid} (${guestName}) on node ${nodeName} might be stopped or inaccessible (Status: 400). Skipping metrics.`);
-                            } else {
-                                console.error(`[Metrics Cycle - ${endpointName}] Failed to get metrics for ${type} ${vmid} (${guestName}) on node ${nodeName}${status}: ${err.message}`);
-                            }
-                            return null; // Return null on error for this specific guest
+                        };
+                        
+                        // Process and buffer standard metrics
+                        if (currentMetricsData.cpu !== undefined) {
+                            addToBuffer('cpu_usage_percent', currentMetricsData.cpu * 100);
                         }
+                        if (currentMetricsData.mem !== undefined && currentMetricsData.maxmem !== undefined && currentMetricsData.maxmem > 0) {
+                            addToBuffer('memory_usage_percent', (currentMetricsData.mem / currentMetricsData.maxmem) * 100);
+                        }
+                         // Use guest_mem_actual_used_bytes if available from agent for host memory usage
+                        if (currentMetricsData.guest_mem_actual_used_bytes !== undefined && currentMetricsData.guest_mem_total_bytes !== undefined && currentMetricsData.guest_mem_total_bytes > 0) {
+                            addToBuffer('guest_memory_actual_usage_percent', (currentMetricsData.guest_mem_actual_used_bytes / currentMetricsData.guest_mem_total_bytes) * 100);
+                        }
+
+                        if (type === 'lxc' && currentMetricsData.disk !== undefined && currentMetricsData.maxdisk !== undefined && currentMetricsData.maxdisk > 0) {
+                            addToBuffer('disk_usage_percent', (currentMetricsData.disk / currentMetricsData.maxdisk) * 100);
+                        }
+                        if (currentMetricsData.diskread !== undefined) {
+                            addToBuffer('disk_read_total_bytes', currentMetricsData.diskread);
+                        }
+                        if (currentMetricsData.diskwrite !== undefined) {
+                            addToBuffer('disk_write_total_bytes', currentMetricsData.diskwrite);
+                        }
+                        if (currentMetricsData.netin !== undefined) {
+                            addToBuffer('net_in_total_bytes', currentMetricsData.netin);
+                        }
+                        if (currentMetricsData.netout !== undefined) {
+                            addToBuffer('net_out_total_bytes', currentMetricsData.netout);
+                        }
+                        
+                        // Return the structured metric data for this guest for real-time updates.
+                        // The historical data is managed via metricAggregationBuffers.
+                        return {
+                            id: vmid,
+                            node: nodeName,
+                            endpointId: endpointId, // Original endpointId for this guest
+                            endpointName: endpointName, // Configured name for the endpoint
+                            type: type,
+                            guestName: guestName, 
+                            uniqueId: guestUniqueId,
+                            data: rrdData || [], // Historical RRD data (if fetched successfully)
+                            current: currentMetricsData // Current status data, potentially augmented with agent info
+                        };
+                        // Removed the outer try-catch as Promise.allSettled handles individual failures,
+                        // and the main error conditions (RRD/Current failure) are handled above.
                     })()
                 );
             }); // End forEach guestInfo
-            // --- END ADDED ---
         } // End for nodeName
     } // End for endpointId
 
@@ -608,13 +700,24 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
     const metricResults = await Promise.allSettled(metricPromises);
 
     // Collect results (existing logic)
-    metricResults.forEach(result => {
-        if (result.status === 'fulfilled' && result.value) {
-            allMetrics.push(result.value);
+    // console.log(`[DEBUG fetchMetricsData End] Processing ${metricResults.length} metricResults...`); // Added log
+    metricResults.forEach((result, index) => {
+        // console.log(`[DEBUG fetchMetricsData End] Result ${index}: Status: ${result.status}`); // Added log
+        if (result.status === 'fulfilled') {
+            // console.log(`[DEBUG fetchMetricsData End] Result ${index} Value:`, result.value ? 'Exists' : 'null'); // Added log
+            if (result.value) { // Ensure value is not null (it would be if the inner async func returned null)
+                allMetrics.push(result.value);
+            } else {
+                // console.log(`[DEBUG fetchMetricsData End] Result ${index} had status fulfilled but value was null/falsy.`); // Added log
+            }
+        } else {
+            // console.log(`[DEBUG fetchMetricsData End] Result ${index} Rejected Reason:`, result.reason?.message); // Added log
+            // Individual promise rejections within the loop are already handled (logged, guest skipped).
+            // This .else here would only catch issues with the Promise.allSettled mechanism itself or unhandled errors from the outer loop structure, which are less likely.
         }
     });
 
-    console.log(`[DataFetcher] Completed metrics fetch. Got data for ${allMetrics.length} guests.`);
+    // console.log(`[DataFetcher] Metrics fetch completed. Aggregated ${allMetrics.length} valid guest metrics.`);
     return allMetrics;
 }
 
