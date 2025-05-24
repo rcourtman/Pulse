@@ -79,6 +79,90 @@
     .dark .threshold-pattern-bg {
         background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.04) 50%, rgba(255, 255, 255, 0.04) 75%, transparent 75%, transparent);
     }
+
+    /* Mini Chart Styles */
+    .usage-chart-container {
+        position: relative;
+        overflow: hidden;
+        border-radius: 3px;
+        background: rgba(0, 0, 0, 0.02);
+        height: 20px;
+        width: 100%;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .dark .usage-chart-container {
+        background: rgba(255, 255, 255, 0.02);
+    }
+    
+    .sparkline-container {
+        position: relative;
+        overflow: hidden;
+        border-radius: 2px;
+        background: rgba(0, 0, 0, 0.03);
+        height: 16px;
+        width: 100%;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .dark .sparkline-container {
+        background: rgba(255, 255, 255, 0.03);
+    }
+    
+    .mini-chart {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    
+    .mini-chart path {
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        transition: d 0.3s ease-out, stroke-dasharray 0.3s ease-out;
+    }
+
+    /* Charts mode styling */
+    .charts-mode #main-table .usage-col,
+    .charts-mode #main-table .net-disk-col {
+        /* Removed text-align: center to keep metrics left-aligned */
+    }
+    
+    /* Reduce padding in charts mode to maximize chart space */
+    .charts-mode #main-table .usage-col,
+    .charts-mode #main-table .net-disk-col {
+        padding: 2px 4px;
+    }
+    
+    .charts-mode .metric-text {
+        display: none;
+    }
+    
+    .charts-mode .metric-chart {
+        display: block;
+    }
+    
+    .metric-chart {
+        display: none;
+    }
+
+    /* Charts toggle button styling */
+    .charts-mode #toggle-charts-button {
+        background: rgba(59, 130, 246, 0.1);
+        color: #3b82f6;
+    }
+
+    /* Enhanced metric cell layouts */
+    .usage-col {
+        min-width: 120px;
+    }
+    
+    .net-disk-col {
+        min-width: 70px;
+    }
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
@@ -147,6 +231,13 @@
               <input type="text" id="dashboard-search" placeholder="Search Name, ID, Node (use ',' for OR)" class="flex-grow p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
               <button id="reset-filters-button" title="Reset Filters & Sort (Esc)" class="p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+              </button>
+              <button id="toggle-charts-button" title="Toggle Charts View" class="p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
               </button>
               <button id="toggle-thresholds-button" title="Toggle Threshold Filters" class="relative p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
                 <span class="relative inline-block">
@@ -225,30 +316,30 @@
                   <col class="name-col" style="width: var(--name-col-width, 150px);">
                   <col class="type-col" style="width: 50px;">
                   <col class="id-col" style="width: 50px;">
-                  <col class="uptime-col" style="width: var(--uptime-col-width, 80px);">
-                  <col class="usage-col" style="width: 150px;">
-                  <col class="usage-col" style="width: 150px;">
-                  <col class="usage-col" style="width: 150px;">
-                  <col class="net-disk-col" style="width: 80px;">
-                  <col class="net-disk-col" style="width: 80px;">
-                  <col class="net-disk-col" style="width: 80px;">
-                  <col class="net-disk-col" style="width: 80px;">
+                  <col class="uptime-col" style="width: var(--uptime-col-width, 80px);" title="Uptime">
+                  <col class="usage-col" style="width: 120px;">
+                  <col class="usage-col" style="width: 120px;">
+                  <col class="usage-col" style="width: 120px;">
+                  <col class="net-disk-col" style="width: 70px;">
+                  <col class="net-disk-col" style="width: 70px;">
+                  <col class="net-disk-col" style="width: 70px;">
+                  <col class="net-disk-col" style="width: 70px;">
                 </colgroup>
               <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
                 <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
                   <th class="sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
                   <th class="p-1 px-2" style="width: 50px;">Type</th>
                   <th class="sortable p-1 px-2" data-sort="id" style="width: 50px;">ID</th>
-                  <th class="sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);">Uptime</th>
-                  <th class="sortable p-1 px-2" data-sort="cpu" style="width: 110px;">CPU</th>
-                  <th class="sortable p-1 px-2" data-sort="memory" style="width: 110px;">Memory</th>
-                  <th class="sortable p-1 px-2" data-sort="disk" style="width: 110px;">Disk</th>
+                  <th class="sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
+                  <th class="sortable p-1 px-2" data-sort="cpu" style="width: 120px;">CPU</th>
+                  <th class="sortable p-1 px-2" data-sort="memory" style="width: 120px;">Memory</th>
+                  <th class="sortable p-1 px-2" data-sort="disk" style="width: 120px;">Disk</th>
                   <th class="sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
                   <th class="sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
                   <th class="sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
                   <th class="sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
                 </tr>
-                <tr id="threshold-slider-row" class="threshold-sliders text-xs border-t border-gray-200 dark:border-gray-700 hidden bg-white dark:bg-gray-800">
+                <tr id="threshold-slider-row" class="hidden mt-3 p-3 border rounded-md bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600">
                   <th class="py-1 px-2 align-middle"></th>
                   <th class="py-1 px-1 align-middle"></th>
                   <th class="py-1 px-2 align-middle"></th>
@@ -321,29 +412,7 @@
           <!-- Separator -->
           <hr class="border-gray-200 dark:border-gray-700 my-2">
 
-          <div id="log-controls-container" class="flex justify-start items-center gap-2 mt-2">
-                 <button
-                     id="start-log-button"
-                     class="px-2 py-1 text-xs rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 flex items-center h-7"
-                     title="Start New Threshold Log"
-                 >
-                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" y1="18" x2="12" y2="12"></line><line x1="9" y1="15" x2="15" y2="15"></line></svg>
-                     <span>Start Log</span>
-                 </button>
-                 <button id="clear-all-logs-button" class="hidden px-2 py-1 text-xs rounded bg-red-100 hover:bg-red-200 dark:bg-red-800/50 dark:hover:bg-red-700/50 text-red-700 dark:text-red-300 flex items-center h-7" title="Clear All Stopped Log Panels">
-                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
-                     <span>Clear Logs</span>
-                 </button>
-          </div>
       </div>
-
-      <div id="log-session-area" class="hidden mt-4 p-3 bg-white dark:bg-gray-800 rounded shadow border border-gray-200 dark:border-gray-700">
-        <div class="nested-tabs flex border-b border-gray-200 dark:border-gray-700 mb-2">
-        </div>
-        <div id="log-content-area" class="space-y-2">
-        </div>
-      </div>
-
     </div>
 
     <div id="storage" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
@@ -467,6 +536,7 @@
   <script src="/js/tooltips.js" defer></script>
   <script src="/js/socketHandler.js" defer></script>
   <script src="/js/tabs.js" defer></script>
+  <script src="/js/charts.js" defer></script>
   <script src="/js/ui/thresholds.js" defer></script>
   <script src="/js/ui/common.js" defer></script>
   <script src="/js/ui/nodes.js" defer></script>
@@ -474,7 +544,7 @@
   <script src="/js/ui/storage.js" defer></script>
   <script src="/js/ui/pbs.js" defer></script>
   <script src="/js/ui/backups.js" defer></script>
-  <script src="/js/thresholds/logging.js" defer></script>
+  <script src="/js/alertsHandler.js"></script>
   <script src="/js/hotReload.js" defer></script>
   <script src="/js/main.js" defer></script>
 
