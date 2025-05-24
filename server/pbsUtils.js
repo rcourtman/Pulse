@@ -16,12 +16,33 @@ function processPbsTasks(allTasks) {
         verify: 'verify',
         verificationjob: 'verify',
         verify_group: 'verify',
+        'verify-group': 'verify',
+        verification: 'verify',
         sync: 'sync',
+        syncjob: 'sync',
+        'sync-job': 'sync',
         garbage_collection: 'pruneGc',
-        prune: 'pruneGc'
+        'garbage-collection': 'pruneGc',
+        prune: 'pruneGc',
+        prunejob: 'pruneGc',
+        'prune-job': 'pruneGc',
+        gc: 'pruneGc'
     };
 
     const taskResults = categorizeAndCountTasks(allTasks, taskTypeMap);
+
+    // Warn if unmapped task types found (useful for production troubleshooting)
+    const unmappedTypes = new Set();
+    allTasks.forEach(task => {
+        const taskType = task.worker_type || task.type;
+        if (!taskTypeMap[taskType]) {
+            unmappedTypes.add(taskType);
+        }
+    });
+    
+    if (unmappedTypes.size > 0) {
+        console.warn('WARN: [pbsUtils] Unmapped PBS task types found:', Array.from(unmappedTypes));
+    }
 
     const createDetailedTask = (task) => ({
         upid: task.upid,
@@ -32,12 +53,21 @@ function processPbsTasks(allTasks) {
         startTime: task.starttime,
         endTime: task.endtime,
         duration: task.endtime && task.starttime ? task.endtime - task.starttime : null,
+        // Additional fields for error diagnosis
+        user: task.user,
+        exitCode: task.exitcode,
+        saved: task.saved || false,
+        // Preserve synthetic backup run fields
+        guest: task.guest,
+        pbsBackupRun: task.pbsBackupRun,
+        // Include raw task data for debugging if needed
+        _raw: task
     });
 
     const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
     
     const getRecentTasksList = (taskList, detailedTaskFn, sortFn, count = 20) => {
-        if (!taskList) return []; // Guard against undefined taskList
+        if (!taskList) return [];
         return taskList.map(detailedTaskFn).sort(sortFn).slice(0, count);
     };
 
@@ -45,8 +75,6 @@ function processPbsTasks(allTasks) {
     const recentVerifyTasks = getRecentTasksList(taskResults.verify.list, createDetailedTask, sortTasksDesc);
     const recentSyncTasks = getRecentTasksList(taskResults.sync.list, createDetailedTask, sortTasksDesc);
     const recentPruneGcTasks = getRecentTasksList(taskResults.pruneGc.list, createDetailedTask, sortTasksDesc);
-    
-    console.log(`INFO: [pbsUtils] Processed PBS Tasks - Backup: ${taskResults.backup.list.length}, Verify: ${taskResults.verify.list.length}, Sync: ${taskResults.sync.list.length}, Prune/GC: ${taskResults.pruneGc.list.length}`);
 
     // Helper function to create the summary object
     const createSummary = (category) => ({ 
@@ -85,8 +113,8 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
         pruneGc: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 }
     };
 
-    if (!allTasks || !Array.isArray(allTasks)) { // Added check for allTasks being an array
-        return results; // Return empty results if no tasks or invalid format
+    if (!allTasks || !Array.isArray(allTasks)) {
+        return results;
     }
 
     allTasks.forEach(task => {
@@ -97,19 +125,25 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
             const category = results[categoryKey];
             category.list.push(task);
 
-            const isOk = task.status === 'OK';
-            // Consider 'WARNING' or other non-OK statuses as failed for summary purposes if needed
-            const isFailed = task.status && task.status !== 'OK' && task.status !== 'running'; 
+            // Fixed status handling - be more specific about what counts as failed
+            const status = task.status || 'NO_STATUS';
+            const isRunning = status.includes('running') || status.includes('queued');
+            const isCompleted = status && !isRunning;
 
-            if (isOk) {
-                category.ok++;
-                if (task.endtime > category.lastOk) category.lastOk = task.endtime;
-            } else if (isFailed) {
-                category.failed++;
-                if (task.endtime > category.lastFailed) category.lastFailed = task.endtime;
+            if (isCompleted) {
+                if (status === 'OK') {
+                    category.ok++;
+                    if (task.endtime && task.endtime > category.lastOk) category.lastOk = task.endtime;
+                } else {
+                    // Everything that's not OK or running is considered failed
+                    // This includes: WARNING, WARNINGS:..., errors, connection errors, etc.
+                    category.failed++;
+                    if (task.endtime && task.endtime > category.lastFailed) category.lastFailed = task.endtime;
+                }
             }
         }
     });
+
     return results;
 }
 

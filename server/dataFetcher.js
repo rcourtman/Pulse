@@ -229,7 +229,6 @@ async function fetchPbsNodeName({ client, config }) {
         const response = await client.get('/nodes');
         if (response.data && response.data.data && response.data.data.length > 0) {
             const nodeName = response.data.data[0].node;
-            console.log(`INFO: [DataFetcher] Detected PBS node name: ${nodeName} for ${config.name}`);
             return nodeName;
         } else {
             console.warn(`WARN: [DataFetcher] Could not automatically detect PBS node name for ${config.name}. Response format unexpected.`);
@@ -247,22 +246,36 @@ async function fetchPbsNodeName({ client, config }) {
  * @returns {Promise<Array>} - Array of datastore objects.
  */
 async function fetchPbsDatastoreData({ client, config }) {
-    console.log(`INFO: [DataFetcher] Fetching PBS datastore data for ${config.name}...`);
     let datastores = [];
     try {
         const usageResponse = await client.get('/status/datastore-usage');
         const usageData = usageResponse.data?.data ?? [];
+        
         if (usageData.length > 0) {
-            console.log(`INFO: [DataFetcher] Fetched status for ${usageData.length} PBS datastores via /status/datastore-usage for ${config.name}.`);
-            // Map usage data correctly
-            datastores = usageData.map(ds => ({
-                name: ds.store, // <-- Ensure name is mapped from store
-                path: ds.path || 'N/A',
-                total: ds.total,
-                used: ds.used,
-                available: ds.avail,
-                gcStatus: ds['garbage-collection-status'] || 'unknown'
-            }));
+            // Map usage data correctly with deduplication factor
+            datastores = usageData.map(ds => {
+                let deduplicationFactor = null;
+                
+                // Calculate deduplication factor if available
+                const diskBytes = ds['gc-status']?.['disk-bytes'];
+                const indexDataBytes = ds['gc-status']?.['index-data-bytes'];
+                
+                if (diskBytes && indexDataBytes && diskBytes > 0) {
+                    deduplicationFactor = (indexDataBytes / diskBytes).toFixed(2);
+                }
+                
+                return {
+                    name: ds.store, // <-- Ensure name is mapped from store
+                    path: ds.path || 'N/A',
+                    total: ds.total,
+                    used: ds.used,
+                    available: ds.avail,
+                    gcStatus: ds['garbage-collection-status'] || 'unknown',
+                    deduplicationFactor: deduplicationFactor ? parseFloat(deduplicationFactor) : null,
+                    estimatedFullDate: ds['estimated-full-date'] || null,
+                    gcDetails: ds['gc-status'] || null
+                };
+            });
         } else {
             console.warn(`WARN: [DataFetcher] PBS /status/datastore-usage returned empty data for ${config.name}. Falling back.`);
             throw new Error("Empty data from /status/datastore-usage");
@@ -272,7 +285,6 @@ async function fetchPbsDatastoreData({ client, config }) {
         try {
             const configResponse = await client.get('/config/datastore');
             const datastoresConfig = configResponse.data?.data ?? [];
-             console.log(`INFO: [DataFetcher] Fetched config for ${datastoresConfig.length} PBS datastores (fallback) for ${config.name}.`);
              // Map config data correctly
              datastores = datastoresConfig.map(dsConfig => ({
                 name: dsConfig.name, // <-- Name comes directly from config
@@ -280,13 +292,15 @@ async function fetchPbsDatastoreData({ client, config }) {
                 total: null, 
                 used: null,
                 available: null,
-                gcStatus: 'unknown (config only)' 
+                gcStatus: 'unknown (config only)',
+                deduplicationFactor: null,
+                estimatedFullDate: null,
+                gcDetails: null
             }));
         } catch (configError) {
             console.error(`ERROR: [DataFetcher] Fallback fetch of PBS datastore config failed for ${config.name}: ${configError.message}`);
         }
     }
-    console.log(`INFO: [DataFetcher] Found ${datastores.length} datastores for ${config.name}.`);
     return datastores;
 }
 
@@ -308,31 +322,238 @@ async function fetchPbsDatastoreSnapshots({ client, config }, storeName) {
 }
 
 /**
- * Fetches all relevant tasks from PBS for later processing.
+ * Fetches all relevant backup data from PBS using the correct endpoints.
  * @param {Object} pbsClient - { client, config } object for the PBS instance.
  * @param {string} nodeName - The name of the PBS node.
- * @returns {Promise<Object>} - { tasks: Array | null, error: boolean }
+ * @returns {Promise<Object>} - { tasks: Array | null, error: boolean, deduplicationFactor: number }
  */
 async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
-    console.log(`INFO: [DataFetcher] Fetching PBS tasks for node ${nodeName} on ${config.name}...`);
     if (!nodeName) {
-        console.warn("WARN: [DataFetcher] Cannot fetch PBS task data without node name.");
+        console.warn("WARN: [DataFetcher] Cannot fetch PBS data without node name.");
         return { tasks: null, error: true };
     }
     try {
-        const sinceTimestamp = Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000);
-        const trimmedNodeName = nodeName.trim();
-        const encodedNodeName = encodeURIComponent(trimmedNodeName);
-        const response = await client.get(`/nodes/${encodedNodeName}/tasks`, {
-            params: { since: sinceTimestamp, limit: 2500, errors: 1 }
+        let allBackupTasks = [];
+        let deduplicationFactor = null;
+        
+        // Calculate 30-day cutoff timestamp
+        const thirtyDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+        
+        // Track backup runs by date and guest to avoid counting multiple snapshots per day
+        // Use a more comprehensive key to prevent any duplicates
+        const backupRunsByUniqueKey = new Map();
+        
+        // 1. Get deduplication factor from datastore status
+        try {
+            const datastoreStatusResponse = await client.get('/status/datastore-usage');
+            if (datastoreStatusResponse.data?.data?.length > 0) {
+                deduplicationFactor = datastoreStatusResponse.data.data[0]['deduplication-factor'];
+            }
+        } catch (dedupError) {
+            console.warn(`WARN: [DataFetcher] Could not fetch deduplication factor: ${dedupError.message}`);
+        }
+        
+        // 2. Create synthetic backup job runs from recent snapshots
+        try {
+            const datastoreResponse = await client.get('/config/datastore');
+            const datastores = datastoreResponse.data?.data || [];
+            
+            for (const datastore of datastores) {
+                const groupsResponse = await client.get(`/admin/datastore/${datastore.name}/groups`);
+                const groups = groupsResponse.data?.data || [];
+                
+                // For each backup group, get recent snapshots (30 days only)
+                for (const group of groups) {
+                    try {
+                        const snapshotsResponse = await client.get(`/admin/datastore/${datastore.name}/snapshots`, {
+                            params: {
+                                'backup-type': group['backup-type'],
+                                'backup-id': group['backup-id']
+                            }
+                        });
+                        const allSnapshots = snapshotsResponse.data?.data || [];
+                        
+                        // Filter snapshots to last 30 days only
+                        const recentSnapshots = allSnapshots.filter(snapshot => {
+                            return snapshot['backup-time'] >= thirtyDaysAgo;
+                        });
+                        
+                        // Group snapshots by day to represent daily backup job runs
+                        const snapshotsByDay = new Map();
+                        recentSnapshots.forEach(snapshot => {
+                            const backupDate = new Date(snapshot['backup-time'] * 1000);
+                            const dayKey = backupDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+                            
+                            if (!snapshotsByDay.has(dayKey)) {
+                                snapshotsByDay.set(dayKey, []);
+                            }
+                            snapshotsByDay.get(dayKey).push(snapshot);
+                        });
+                        
+                        // Convert daily snapshot groups to backup job runs
+                        snapshotsByDay.forEach((daySnapshots, dayKey) => {
+                            // Use the latest snapshot of the day as the representative backup run
+                            const latestSnapshot = daySnapshots.reduce((latest, current) => {
+                                return current['backup-time'] > latest['backup-time'] ? current : latest;
+                            });
+                            
+                            // Create a comprehensive unique key using snapshot data (not group data)
+                            const uniqueKey = `${dayKey}:${datastore.name}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}`;
+                            
+                            // Only create one backup run per unique key
+                            if (!backupRunsByUniqueKey.has(uniqueKey)) {
+                                // Create a backup job run entry
+                                const backupRun = {
+                                    type: 'backup',
+                                    status: 'OK', // PBS snapshots that exist are successful
+                                    starttime: latestSnapshot['backup-time'],
+                                    endtime: latestSnapshot['backup-time'] + 60,
+                                    node: nodeName,
+                                    guest: `${latestSnapshot['backup-type']}/${latestSnapshot['backup-id']}`,
+                                    guestType: latestSnapshot['backup-type'],
+                                    guestId: latestSnapshot['backup-id'],
+                                    upid: `BACKUP-RUN:${datastore.name}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}:${dayKey}`,
+                                    comment: latestSnapshot.comment || '',
+                                    size: latestSnapshot.size || 0,
+                                    owner: latestSnapshot.owner || 'unknown',
+                                    datastore: datastore.name,
+                                    verification: latestSnapshot.verification || null,
+                                    // Additional PBS-specific fields
+                                    pbsBackupRun: true,
+                                    backupDate: dayKey,
+                                    snapshotCount: daySnapshots.length,
+                                    protected: latestSnapshot.protected || false
+                                };
+                                
+                                backupRunsByUniqueKey.set(uniqueKey, backupRun);
+                            }
+                        });
+                        
+                    } catch (snapshotError) {
+                        console.warn(`WARN: [DataFetcher] Could not fetch snapshots for group ${group['backup-type']}/${group['backup-id']}: ${snapshotError.message}`);
+                    }
+                }
+            }
+            
+            console.log(`[DataFetcher] Created ${backupRunsByUniqueKey.size} unique backup runs from snapshots for ${config.name}`);
+            
+        } catch (datastoreError) {
+            console.error(`ERROR: [DataFetcher] Could not fetch datastore backup history: ${datastoreError.message}`);
+            return { tasks: null, error: true };
+        }
+        
+        // 3. Get administrative tasks (prune/GC/verify) from node endpoint
+        try {
+            const response = await client.get(`/nodes/${encodeURIComponent(nodeName.trim())}/tasks`, {
+                params: { errors: 1, limit: 1000 }
+            });
+            const allAdminTasks = response.data?.data || [];
+            
+            // Filter admin tasks to last 30 days
+            const recentAdminTasks = allAdminTasks.filter(task => task.starttime >= thirtyDaysAgo);
+            
+            // Separate real backup tasks (for enhancement only) from other admin tasks
+            const realBackupTasks = recentAdminTasks.filter(task => 
+                (task.worker_type === 'backup' || task.type === 'backup') && task.worker_id
+            );
+            const nonBackupAdminTasks = recentAdminTasks.filter(task => 
+                !((task.worker_type === 'backup' || task.type === 'backup') && task.worker_id)
+            );
+            
+            // Create a map of real backup tasks for enhancement (one per day/guest)
+            const realBackupTasksMap = new Map();
+            realBackupTasks.forEach(task => {
+                if (task.worker_id) {
+                    // Extract guest info from worker_id (format like "datastore:backup-type/backup-id")
+                    const parts = task.worker_id.split(':');
+                    if (parts.length >= 2) {
+                        const guestPart = parts[1];
+                        const guestMatch = guestPart.match(/^([^/]+)\/(.+)$/);
+                        if (guestMatch) {
+                            const guestType = guestMatch[1];
+                            const guestId = guestMatch[2];
+                            const dayKey = new Date(task.starttime * 1000).toISOString().split('T')[0];
+                            // Use the same unique key format as synthetic backup runs
+                            const datastoreName = parts[0] || 'unknown';
+                            const uniqueKey = `${dayKey}:${datastoreName}:${guestType}:${guestId}`;
+                            
+                            // If multiple real tasks for same backup, keep the one with latest time
+                            if (!realBackupTasksMap.has(uniqueKey) || task.starttime > realBackupTasksMap.get(uniqueKey).starttime) {
+                                realBackupTasksMap.set(uniqueKey, task);
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Enhance synthetic backup runs with real task details when available
+            const backupRuns = Array.from(backupRunsByUniqueKey.values());
+            
+            // Track used UPIDs to prevent enhancement duplicates
+            const usedUPIDs = new Set();
+            
+            const enhancedBackupRuns = backupRuns.map(run => {
+                const uniqueKey = `${run.backupDate}:${run.datastore}:${run.guestType}:${run.guestId}`;
+                const realTask = realBackupTasksMap.get(uniqueKey);
+                
+                if (realTask && !usedUPIDs.has(realTask.upid)) {
+                    // Mark this real UPID as used to prevent duplicates
+                    usedUPIDs.add(realTask.upid);
+                    
+                    // Enhance synthetic run with real task details
+                    return {
+                        ...run,
+                        // Use real task details for better accuracy
+                        starttime: realTask.starttime,
+                        endtime: realTask.endtime,
+                        duration: realTask.endtime && realTask.starttime ? realTask.endtime - realTask.starttime : null,
+                        status: realTask.status,
+                        upid: realTask.upid, // Use real UPID for enhanced runs
+                        user: realTask.user,
+                        exitcode: realTask.exitcode,
+                        // Mark as enhanced
+                        enhancedWithRealTask: true
+                    };
+                } else {
+                    // Keep synthetic run as-is for historical data or if UPID already used
+                    return run;
+                }
+            });
+            
+            // Add enhanced synthetic backup runs and non-backup admin tasks
+            allBackupTasks.push(...enhancedBackupRuns);
+            allBackupTasks.push(...nonBackupAdminTasks);
+            
+        } catch (adminError) {
+            console.warn(`WARN: [DataFetcher] Could not fetch administrative tasks: ${adminError.message}`);
+            
+            // If admin task fetching fails, add all synthetic backup runs for complete statistics
+            const backupRuns = Array.from(backupRunsByUniqueKey.values());
+            allBackupTasks.push(...backupRuns);
+        }
+        
+        // Final deduplication step based on UPID to prevent any remaining duplicates
+        const finalTasksMap = new Map();
+        
+        allBackupTasks.forEach(task => {
+            const taskKey = task.upid || `${task.type}-${task.node}-${task.starttime}-${task.guest || task.id}`;
+            if (!finalTasksMap.has(taskKey)) {
+                finalTasksMap.set(taskKey, task);
+            }
         });
-        const allTasks = response.data?.data ?? [];
-        console.log(`INFO: [DataFetcher] Fetched ${allTasks.length} tasks from PBS node ${nodeName}.`);
-        return { tasks: allTasks, error: false };
-    } 
-    /* istanbul ignore next */ // Ignore this catch block - tested via side effects (logging, return value check)
-    catch (error) {
-        console.error(`ERROR: [DataFetcher] Failed to fetch PBS task list for node ${nodeName} (${config.name}): ${error.message}`);
+        
+        const deduplicatedTasks = Array.from(finalTasksMap.values());
+        
+        console.log(`[DataFetcher] Final task count for ${config.name}: ${allBackupTasks.length} -> ${deduplicatedTasks.length} (removed ${allBackupTasks.length - deduplicatedTasks.length} duplicates)`);
+        
+        return { 
+            tasks: deduplicatedTasks, 
+            error: false, 
+            deduplicationFactor: deduplicationFactor ? parseFloat(deduplicationFactor) : null
+        };
+        
+    } catch (error) {
+        console.error(`ERROR: [DataFetcher] Failed to fetch PBS backup data: ${error.message}`);
         return { tasks: null, error: true };
     }
 }
@@ -351,7 +572,6 @@ async function fetchPbsData(currentPbsApiClients) {
         return pbsDataResults;
     }
 
-    console.log(`[DataFetcher] Fetching discovery data for ${pbsClientIds.length} PBS instances...`);
     const pbsPromises = pbsClientIds.map(async (pbsClientId) => {
         const pbsClient = currentPbsApiClients[pbsClientId]; // { client, config }
         const instanceName = pbsClient.config.name;
@@ -363,57 +583,45 @@ async function fetchPbsData(currentPbsApiClients) {
         };
 
         try {
-            console.log(`INFO: [DataFetcher - ${instanceName}] Starting fetch. Initial status: ${instanceData.status}`);
-
             const nodeName = pbsClient.config.nodeName || await fetchPbsNodeName(pbsClient);
-            console.log(`INFO: [DataFetcher - ${instanceName}] Determined nodeName: '${nodeName}'. Configured nodeName: '${pbsClient.config.nodeName}'`);
 
             if (nodeName && nodeName !== 'localhost' && !pbsClient.config.nodeName) {
                  pbsClient.config.nodeName = nodeName; // Store detected name back
-                 console.log(`INFO: [DataFetcher - ${instanceName}] Stored detected nodeName: '${nodeName}' to config.`);
             }
 
             if (nodeName && nodeName !== 'localhost') {
-                console.log(`INFO: [DataFetcher - ${instanceName}] Node name '${nodeName}' is valid. Proceeding with data fetch.`);
-
                 const datastoresResult = await fetchPbsDatastoreData(pbsClient);
                 const snapshotFetchPromises = datastoresResult.map(async (ds) => {
                     ds.snapshots = await fetchPbsDatastoreSnapshots(pbsClient, ds.name);
                     return ds;
                 });
                 instanceData.datastores = await Promise.all(snapshotFetchPromises);
-                console.log(`INFO: [DataFetcher - ${instanceName}] Datastores and snapshots fetched. Number of datastores: ${instanceData.datastores ? instanceData.datastores.length : 'N/A'}`);
+                
+                // Fetch PBS node status information (CPU, memory, disk usage)
+                instanceData.nodeStatus = await fetchPbsNodeStatus(pbsClient, nodeName);
+                
+                // Fetch PBS version and subscription information
+                instanceData.versionInfo = await fetchPbsVersionInfo(pbsClient);
                 
                 const allTasksResult = await fetchAllPbsTasksForProcessing(pbsClient, nodeName);
-                console.log(`INFO: [DataFetcher - ${instanceName}] Tasks fetched. Result error: ${allTasksResult.error}, Tasks found: ${allTasksResult.tasks ? allTasksResult.tasks.length : 'null'}`);
 
                 if (allTasksResult.tasks && !allTasksResult.error) {
-                    console.log(`INFO: [DataFetcher - ${instanceName}] Processing tasks...`);
                     const processedTasks = processPbsTasks(allTasksResult.tasks); // Assumes processPbsTasks is imported
                     instanceData = { ...instanceData, ...processedTasks }; // Merge task summaries
-                    console.log(`INFO: [DataFetcher - ${instanceName}] Tasks processed.`);
                 } else {
-                    console.warn(`WARN: [DataFetcher - ${instanceName}] No tasks to process or task fetching failed. Error flag: ${allTasksResult.error}, Tasks array: ${allTasksResult.tasks === null ? 'null' : (Array.isArray(allTasksResult.tasks) ? `array[${allTasksResult.tasks.length}]` : typeof allTasksResult.tasks)}`);
-                    // If tasks failed to fetch or process, ensure task-specific fields are not from a stale/default mock
-                    // instanceData.backupTasks = instanceData.backupTasks || []; // Or undefined/null if preferred by consumers
-                    // instanceData.verifyTasks = instanceData.verifyTasks || [];
-                    // instanceData.gcTasks = instanceData.gcTasks || [];
+                    console.warn(`WARN: [DataFetcher - ${instanceName}] No tasks to process or task fetching failed.`);
                 }
                 
                 instanceData.status = 'ok';
                 instanceData.nodeName = nodeName; // Ensure nodeName is set
-                console.log(`INFO: [DataFetcher - ${instanceName}] Successfully fetched all data. Status set to: ${instanceData.status}`);
             } else {
-                 console.warn(`WARN: [DataFetcher - ${instanceName}] Node name '${nodeName}' is invalid or 'localhost'. Throwing error.`);
+                 console.warn(`WARN: [DataFetcher - ${instanceName}] Node name '${nodeName}' is invalid or 'localhost'.`);
                  throw new Error(`Could not determine node name for PBS instance ${instanceName}`);
             }
         } catch (pbsError) {
-            console.error(`ERROR: [DataFetcher - ${instanceName}] PBS fetch failed (outer catch): ${pbsError.message}. Stack: ${pbsError.stack}`);
+            console.error(`ERROR: [DataFetcher - ${instanceName}] PBS fetch failed: ${pbsError.message}`);
             instanceData.status = 'error';
-            console.log(`INFO: [DataFetcher - ${instanceName}] Status set to '${instanceData.status}' due to error.`);
         }
-        // pbsEndpointId and pbsInstanceName are already part of instanceData from initialization
-        console.log(`INFO: [DataFetcher - ${instanceName}] Finalizing instance data. Status: ${instanceData.status}, NodeName: ${instanceData.nodeName || 'N/A'}`);
         return instanceData;
     });
 
@@ -423,7 +631,6 @@ async function fetchPbsData(currentPbsApiClients) {
             pbsDataResults.push(result.value);
         } else {
             console.error(`ERROR: [DataFetcher] Unhandled rejection fetching PBS data: ${result.reason}`);
-            // Optionally push a generic error object
         }
     });
     return pbsDataResults;
@@ -616,6 +823,90 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
 
     console.log(`[DataFetcher] Completed metrics fetch. Got data for ${allMetrics.length} guests.`);
     return allMetrics;
+}
+
+/**
+ * Fetches PBS node status information (CPU, memory, disk usage).
+ * @param {Object} pbsClient - { client, config } object for the PBS instance.
+ * @param {string} nodeName - The name of the PBS node.
+ * @returns {Promise<Object>} - Node status object with CPU, memory, disk info.
+ */
+async function fetchPbsNodeStatus({ client, config }, nodeName) {
+    try {
+        const response = await client.get(`/nodes/${encodeURIComponent(nodeName.trim())}/status`);
+        const statusData = response.data?.data || {};
+        
+        return {
+            cpu: statusData.cpu || null,
+            memory: {
+                total: statusData.memory?.total || null,
+                used: statusData.memory?.used || null,
+                free: statusData.memory?.free || null
+            },
+            swap: {
+                total: statusData.swap?.total || null,
+                used: statusData.swap?.used || null,
+                free: statusData.swap?.free || null
+            },
+            uptime: statusData.uptime || null,
+            loadavg: statusData.loadavg || null,
+            rootfs: {
+                total: statusData.rootfs?.total || null,
+                used: statusData.rootfs?.used || null,
+                avail: statusData.rootfs?.avail || null
+            },
+            boot_info: statusData.boot_info || null,
+            kversion: statusData.kversion || null
+        };
+    } catch (error) {
+        console.warn(`WARN: [DataFetcher] Failed to fetch PBS node status for ${config.name}: ${error.message}`);
+        return {
+            cpu: null,
+            memory: { total: null, used: null, free: null },
+            swap: { total: null, used: null, free: null },
+            uptime: null,
+            loadavg: null,
+            rootfs: { total: null, used: null, avail: null },
+            boot_info: null,
+            kversion: null
+        };
+    }
+}
+
+/**
+ * Fetches PBS version and subscription information.
+ * @param {Object} pbsClient - { client, config } object for the PBS instance.
+ * @returns {Promise<Object>} - Version and subscription info object.
+ */
+async function fetchPbsVersionInfo({ client, config }) {
+    try {
+        const versionResponse = await client.get('/version');
+        const versionData = versionResponse.data?.data || {};
+        
+        let subscriptionInfo = null;
+        try {
+            const subscriptionResponse = await client.get('/subscription');
+            subscriptionInfo = subscriptionResponse.data?.data || null;
+        } catch (subError) {
+            // Subscription endpoint might not be accessible or might not exist
+            console.warn(`WARN: [DataFetcher] Could not fetch subscription info for ${config.name}: ${subError.message}`);
+        }
+        
+        return {
+            version: versionData.version || null,
+            release: versionData.release || null,
+            repoid: versionData.repoid || null,
+            subscription: subscriptionInfo
+        };
+    } catch (error) {
+        console.warn(`WARN: [DataFetcher] Failed to fetch PBS version info for ${config.name}: ${error.message}`);
+        return {
+            version: null,
+            release: null,
+            repoid: null,
+            subscription: null
+        };
+    }
 }
 
 module.exports = {

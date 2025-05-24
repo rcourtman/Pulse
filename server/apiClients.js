@@ -82,6 +82,7 @@ function initializePveClients(endpoints) {
 function createApiClientInstance(baseURL, allowSelfSignedCerts, authInterceptor, retryConfig) {
   const apiClient = axios.create({
     baseURL: baseURL,
+    timeout: 30000, // 30 second timeout
     httpsAgent: new https.Agent({
       rejectUnauthorized: !allowSelfSignedCerts
     }),

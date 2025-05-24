@@ -3,6 +3,9 @@ require('dotenv').config(); // Load environment variables from .env file
 // Import the state manager FIRST
 const stateManager = require('./state');
 
+// Import metrics history system
+const metricsHistory = require('./metricsHistory');
+
 // --- BEGIN Configuration Loading using configLoader --- 
 const { loadConfiguration, ConfigurationError } = require('./configLoader');
 
@@ -76,6 +79,9 @@ const DISCOVERY_UPDATE_INTERVAL = parseInt(process.env.PULSE_DISCOVERY_INTERVAL_
 console.log(`INFO: Using Metric Update Interval: ${METRIC_UPDATE_INTERVAL}ms`);
 console.log(`INFO: Using Discovery Update Interval: ${DISCOVERY_UPDATE_INTERVAL}ms`);
 
+// Initialize enhanced state management
+stateManager.init();
+
 // Create Express app
 const app = express();
 const server = http.createServer(app); // Create HTTP server instance
@@ -108,6 +114,227 @@ app.get('/healthz', (req, res) => {
     res.status(200).send('OK');
 });
 
+// Enhanced health endpoint with detailed monitoring info
+app.get('/api/health', (req, res) => {
+    try {
+        const healthSummary = stateManager.getHealthSummary();
+        res.json(healthSummary);
+    } catch (error) {
+        console.error("Error in /api/health:", error);
+        res.status(500).json({ error: "Failed to fetch health information" });
+    }
+});
+
+// Performance metrics endpoint
+app.get('/api/performance', (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const performanceHistory = stateManager.getPerformanceHistory(limit);
+        const connectionHealth = stateManager.getConnectionHealth();
+        
+        res.json({
+            history: performanceHistory,
+            connections: connectionHealth,
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error("Error in /api/performance:", error);
+        res.status(500).json({ error: "Failed to fetch performance data" });
+    }
+});
+
+// Enhanced alerts endpoint with filtering
+app.get('/api/alerts', (req, res) => {
+    try {
+        const filters = {
+            severity: req.query.severity,
+            group: req.query.group,
+            node: req.query.node,
+            acknowledged: req.query.acknowledged === 'true' ? true : 
+                         req.query.acknowledged === 'false' ? false : undefined
+        };
+        
+        const alertInfo = {
+            active: stateManager.alertManager.getActiveAlerts(filters),
+            stats: stateManager.alertManager.getEnhancedAlertStats(),
+            rules: stateManager.alertManager.getRules()
+        };
+        
+        res.json(alertInfo);
+    } catch (error) {
+        console.error("Error in /api/alerts:", error);
+        res.status(500).json({ error: "Failed to fetch alert information" });
+    }
+});
+
+// Alert history endpoint with pagination and filtering
+app.get('/api/alerts/history', (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        const filters = {
+            severity: req.query.severity,
+            group: req.query.group,
+            node: req.query.node
+        };
+        
+        const history = stateManager.alertManager.getAlertHistory(limit, filters);
+        res.json({ history, timestamp: Date.now() });
+    } catch (error) {
+        console.error("Error in /api/alerts/history:", error);
+        res.status(500).json({ error: "Failed to fetch alert history" });
+    }
+});
+
+// Alert acknowledgment endpoint
+app.post('/api/alerts/:alertId/acknowledge', (req, res) => {
+    try {
+        const alertId = req.params.alertId;
+        const { userId = 'api-user', note = '' } = req.body;
+        
+        const success = stateManager.alertManager.acknowledgeAlert(alertId, userId, note);
+        
+        if (success) {
+            res.json({ success: true, message: "Alert acknowledged successfully" });
+        } else {
+            res.status(404).json({ error: "Alert not found" });
+        }
+    } catch (error) {
+        console.error("Error acknowledging alert:", error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Alert suppression endpoint
+app.post('/api/alerts/suppress', (req, res) => {
+    try {
+        const { ruleId, guestFilter = {}, duration = 3600000, reason = '' } = req.body;
+        
+        if (!ruleId) {
+            return res.status(400).json({ error: "ruleId is required" });
+        }
+        
+        const success = stateManager.alertManager.suppressAlert(ruleId, guestFilter, duration, reason);
+        
+        if (success) {
+            res.json({ success: true, message: "Alert rule suppressed successfully" });
+        } else {
+            res.status(400).json({ error: "Failed to suppress alert rule" });
+        }
+    } catch (error) {
+        console.error("Error suppressing alert:", error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Alert groups endpoint
+app.get('/api/alerts/groups', (req, res) => {
+    try {
+        const stats = stateManager.alertManager.getEnhancedAlertStats();
+        res.json({ groups: stats.groups });
+    } catch (error) {
+        console.error("Error in /api/alerts/groups:", error);
+        res.status(500).json({ error: "Failed to fetch alert groups" });
+    }
+});
+
+// Notification channels endpoint
+app.get('/api/alerts/channels', (req, res) => {
+    try {
+        const stats = stateManager.alertManager.getEnhancedAlertStats();
+        res.json({ channels: stats.channels });
+    } catch (error) {
+        console.error("Error in /api/alerts/channels:", error);
+        res.status(500).json({ error: "Failed to fetch notification channels" });
+    }
+});
+
+// Enhanced alert metrics endpoint
+app.get('/api/alerts/metrics', (req, res) => {
+    try {
+        const stats = stateManager.alertManager.getEnhancedAlertStats();
+        res.json({
+            metrics: stats.metrics,
+            summary: {
+                active: stats.active,
+                acknowledged: stats.acknowledged,
+                escalated: stats.escalated,
+                suppressed: stats.suppressedRules
+            },
+            trends: {
+                last24Hours: stats.last24Hours,
+                lastHour: stats.lastHour
+            },
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error("Error in /api/alerts/metrics:", error);
+        res.status(500).json({ error: "Failed to fetch alert metrics" });
+    }
+});
+
+// Alert rules management with filtering
+app.get('/api/alerts/rules', (req, res) => {
+    try {
+        const filters = {
+            group: req.query.group,
+            severity: req.query.severity
+        };
+        
+        const rules = stateManager.alertManager.getRules(filters);
+        res.json({ rules });
+    } catch (error) {
+        console.error("Error in /api/alerts/rules:", error);
+        res.status(500).json({ error: "Failed to fetch alert rules" });
+    }
+});
+
+// Create new alert rule
+app.post('/api/alerts/rules', (req, res) => {
+    try {
+        const rule = req.body;
+        const newRule = stateManager.alertManager.addRule(rule);
+        res.json({ success: true, message: "Rule added successfully", rule: newRule });
+    } catch (error) {
+        console.error("Error adding alert rule:", error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Update alert rule
+app.put('/api/alerts/rules/:id', (req, res) => {
+    try {
+        const ruleId = req.params.id;
+        const updates = req.body;
+        const success = stateManager.alertManager.updateRule(ruleId, updates);
+        
+        if (success) {
+            res.json({ success: true, message: "Rule updated successfully" });
+        } else {
+            res.status(404).json({ error: "Rule not found" });
+        }
+    } catch (error) {
+        console.error("Error updating alert rule:", error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
+// Delete alert rule
+app.delete('/api/alerts/rules/:id', (req, res) => {
+    try {
+        const ruleId = req.params.id;
+        const success = stateManager.alertManager.removeRule(ruleId);
+        
+        if (success) {
+            res.json({ success: true, message: "Rule removed successfully" });
+        } else {
+            res.status(404).json({ error: "Rule not found" });
+        }
+    } catch (error) {
+        console.error("Error removing alert rule:", error);
+        res.status(400).json({ error: error.message });
+    }
+});
+
 // Example API Route (Add your actual API routes here)
 app.get('/api/version', (req, res) => {
     try {
@@ -134,6 +361,37 @@ app.get('/api/storage', async (req, res) => {
     }
 });
 
+// Chart data API endpoint
+app.get('/api/charts', async (req, res) => {
+    try {
+        // Get current guest info for context
+        const currentState = stateManager.getState();
+        const guestInfoMap = {};
+        
+        // Build guest info map
+        [...(currentState.vms || []), ...(currentState.containers || [])].forEach(guest => {
+            const guestId = `${guest.endpointId}-${guest.node}-${guest.vmid}`;
+            guestInfoMap[guestId] = {
+                maxmem: guest.maxmem,
+                maxdisk: guest.maxdisk,
+                type: guest.type
+            };
+        });
+        
+        const chartData = metricsHistory.getAllGuestChartData(guestInfoMap);
+        const stats = metricsHistory.getStats();
+        
+        res.json({
+            data: chartData,
+            stats: stats,
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error("Error in /api/charts:", error);
+        res.status(500).json({ error: error.message || "Failed to fetch chart data." });
+    }
+});
+
 // --- WebSocket Setup ---
 const io = new Server(server, {
   // Optional: Configure CORS for Socket.IO if needed, separate from Express CORS
@@ -144,7 +402,7 @@ const io = new Server(server, {
 });
 
 function sendCurrentStateToSocket(socket) {
-  const fullCurrentState = stateManager.getState(); // This includes isConfigPlaceholder
+  const fullCurrentState = stateManager.getState(); // This includes isConfigPlaceholder and alerts
   const currentPlaceholderStatus = fullCurrentState.isConfigPlaceholder; // Extract for clarity if needed
 
   if (stateManager.hasData()) {
@@ -177,6 +435,19 @@ io.on('connection', (socket) => {
   });
 });
 
+// Set up alert event forwarding to connected clients
+stateManager.alertManager.on('alert', (alert) => {
+    if (io.engine.clientsCount > 0) {
+        io.emit('alert', alert);
+    }
+});
+
+stateManager.alertManager.on('alertResolved', (alert) => {
+    if (io.engine.clientsCount > 0) {
+        io.emit('alertResolved', alert);
+    }
+});
+
 // --- Global State Variables ---
 // These will hold the latest fetched data
 // let currentNodes = [];
@@ -202,6 +473,10 @@ let metricTimeoutId = null;
 async function runDiscoveryCycle() {
   if (isDiscoveryRunning) return;
   isDiscoveryRunning = true;
+  
+  const startTime = Date.now();
+  let errors = [];
+  
   try {
     if (Object.keys(apiClients).length === 0 && Object.keys(pbsApiClients).length === 0) {
         console.warn("[Discovery Cycle] API clients not initialized yet, skipping run.");
@@ -210,8 +485,10 @@ async function runDiscoveryCycle() {
     // Use imported fetchDiscoveryData
     const discoveryData = await fetchDiscoveryData(apiClients, pbsApiClients);
     
-    // Update state using the state manager
-    stateManager.updateDiscoveryData(discoveryData);
+    const duration = Date.now() - startTime;
+    
+    // Update state using the enhanced state manager
+    stateManager.updateDiscoveryData(discoveryData, duration, errors);
     // No need to store in global vars anymore
 
     // ... (logging summary) ...
@@ -224,6 +501,10 @@ async function runDiscoveryCycle() {
     }
   } catch (error) {
       console.error(`[Discovery Cycle] Error during execution: ${error.message}`, error.stack);
+      errors.push({ type: 'discovery', message: error.message, endpointId: 'general' });
+      
+      const duration = Date.now() - startTime;
+      stateManager.updateDiscoveryData({ nodes: [], vms: [], containers: [], pbs: [] }, duration, errors);
   } finally {
       isDiscoveryRunning = false;
       scheduleNextDiscovery();
@@ -237,6 +518,10 @@ async function runMetricCycle() {
     return;
   }
   isMetricsRunning = true;
+  
+  const startTime = Date.now();
+  let errors = [];
+  
   try {
     if (Object.keys(apiClients).length === 0) {
         console.warn("[Metrics Cycle] PVE API clients not initialized yet, skipping run.");
@@ -251,15 +536,26 @@ async function runMetricCycle() {
         // Use imported fetchMetricsData
         const fetchedMetrics = await fetchMetricsData(runningVms, runningContainers, apiClients);
 
-        // Update metrics state
+        const duration = Date.now() - startTime;
+
+        // Update metrics state with enhanced error tracking
         if (fetchedMetrics && fetchedMetrics.length >= 0) { // Allow empty array to clear metrics
-           stateManager.updateMetricsData(fetchedMetrics);
+           stateManager.updateMetricsData(fetchedMetrics, duration, errors);
+           
+           // Add metrics to history for charts
+           fetchedMetrics.forEach(metricData => {
+               if (metricData && metricData.current) {
+                   const guestId = `${metricData.endpointId}-${metricData.node}-${metricData.id}`;
+                   metricsHistory.addMetricData(guestId, metricData.current);
+               }
+           });
+           
            // Emit only metrics updates if needed, or rely on full rawData updates?
            // Consider emitting a smaller 'metricsUpdate' event if performance is key
            // io.emit('metricsUpdate', stateManager.getState().metrics);
         }
 
-        // Emit rawData with updated global state (which includes metrics and placeholder flag)
+        // Emit rawData with updated global state (which includes metrics, alerts, and placeholder flag)
         io.emit('rawData', stateManager.getState());
     } else {
         const currentMetrics = stateManager.getState().metrics;
@@ -275,6 +571,10 @@ async function runMetricCycle() {
     }
   } catch (error) {
       console.error(`[Metrics Cycle] Error during execution: ${error.message}`, error.stack);
+      errors.push({ type: 'metrics', message: error.message, endpointId: 'general' });
+      
+      const duration = Date.now() - startTime;
+      stateManager.updateMetricsData([], duration, errors);
   } finally {
       isMetricsRunning = false;
       scheduleNextMetric();
@@ -295,6 +595,72 @@ function scheduleNextMetric() {
 }
 // --- End Schedulers ---
 
+// Graceful shutdown handling
+let shutdownInProgress = false;
+
+function gracefulShutdown(signal) {
+    if (shutdownInProgress) {
+        console.log(`\nReceived ${signal} again, force exiting...`);
+        process.exit(1);
+    }
+    
+    shutdownInProgress = true;
+    console.log(`\n${signal} signal received: closing HTTP server and cleaning up...`);
+    
+    // Force exit after 5 seconds if graceful shutdown takes too long
+    const forceExitTimer = setTimeout(() => {
+        console.log('Force exiting after 5 seconds...');
+        process.exit(1);
+    }, 5000);
+    
+    // Clear timers
+    if (discoveryTimeoutId) clearTimeout(discoveryTimeoutId);
+    if (metricTimeoutId) clearTimeout(metricTimeoutId);
+    
+    // Close WebSocket connections
+    if (io) {
+        io.close();
+    }
+    
+    // Close server
+    server.close((err) => {
+        if (err) {
+            console.error('Error closing server:', err);
+        } else {
+            console.log('HTTP server closed.');
+        }
+        
+        // Cleanup state manager
+        try {
+            stateManager.destroy();
+        } catch (cleanupError) {
+            console.error('Error during state manager cleanup:', cleanupError);
+        }
+        
+        clearTimeout(forceExitTimer);
+        console.log('Cleanup completed. Exiting...');
+        process.exit(0);
+    });
+    
+    // If server.close doesn't call the callback (no active connections), 
+    // still proceed with cleanup after a short delay
+    setTimeout(() => {
+        if (shutdownInProgress) {
+            try {
+                stateManager.destroy();
+            } catch (cleanupError) {
+                console.error('Error during fallback state manager cleanup:', cleanupError);
+            }
+            clearTimeout(forceExitTimer);
+            console.log('Fallback cleanup completed. Exiting...');
+            process.exit(0);
+        }
+    }, 1000);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+
 // --- Start the server ---
 async function startServer() {
     try {
@@ -312,6 +678,11 @@ async function startServer() {
 
     server.listen(PORT, () => {
         console.log(`Server listening on port ${PORT}`);
+        console.log(`Enhanced monitoring with alerts enabled`);
+        console.log(`Health endpoint: http://localhost:${PORT}/api/health`);
+        console.log(`Performance metrics: http://localhost:${PORT}/api/performance`);
+        console.log(`Alerts API: http://localhost:${PORT}/api/alerts`);
+        
         // Schedule the first metric run *after* the initial discovery completes and server is listening
         scheduleNextMetric(); 
         // Setup hot reload in development mode

@@ -1,42 +1,348 @@
+const AlertManager = require('./alertManager');
+
 const state = {
   nodes: [],
   vms: [],
   containers: [],
   metrics: [],
   pbs: [], // Array to hold data for each PBS instance
-  isConfigPlaceholder: false // Add this flag
+  isConfigPlaceholder: false, // Add this flag
+  
+  // Enhanced monitoring data
+  performance: {
+    lastDiscoveryTime: null,
+    lastMetricsTime: null,
+    discoveryDuration: 0,
+    metricsDuration: 0,
+    errorCount: 0,
+    successCount: 0,
+    avgResponseTime: 0,
+    peakMemoryUsage: 0
+  },
+  
+  // Connection health tracking
+  connections: new Map(), // endpointId -> { status, lastSeen, errorCount, responseTime }
+  
+  // Runtime statistics
+  stats: {
+    totalGuests: 0,
+    runningGuests: 0,
+    stoppedGuests: 0,
+    totalNodes: 0,
+    healthyNodes: 0,
+    warningNodes: 0,
+    errorNodes: 0,
+    avgCpuUsage: 0,
+    avgMemoryUsage: 0,
+    avgDiskUsage: 0,
+    lastUpdated: null
+  }
 };
 
+// Initialize alert manager
+const alertManager = new AlertManager();
+
+// Track performance metrics
+let performanceHistory = [];
+const MAX_PERFORMANCE_HISTORY = 288; // 24 hours at 5-minute intervals
+
 function init() {
-  // Initialize or reset state if needed
+  console.log('[State Manager] Initializing enhanced state management...');
+  
+  // Set up alert event handlers
+  alertManager.on('alert', (alert) => {
+    // Could emit to websockets, send notifications, etc.
+    updateAlertStats();
+  });
+  
+  alertManager.on('alertResolved', (alert) => {
+    updateAlertStats();
+  });
+  
+  // Initialize performance tracking
+  state.performance.lastDiscoveryTime = Date.now();
+  state.performance.lastMetricsTime = Date.now();
+  
+  console.log('[State Manager] Enhanced state management initialized');
 }
 
 function getState() {
-  return { ...state }; // Return a shallow copy to prevent direct modification
+  return { ...state, alerts: getAlertInfo() }; // Include alert info in state
 }
 
-function updateDiscoveryData({ nodes, vms, containers, pbs }) {
-  state.nodes = nodes || [];
-  state.vms = vms || [];
-  state.containers = containers || [];
-  state.pbs = pbs || [];
-  // Keep existing metrics when discovery runs
+function updateDiscoveryData({ nodes, vms, containers, pbs }, duration = 0, errors = []) {
+  const startTime = Date.now();
+  
+  try {
+    // Update main data
+    state.nodes = nodes || [];
+    state.vms = vms || [];
+    state.containers = containers || [];
+    state.pbs = pbs || [];
+    
+    // Update performance metrics
+    state.performance.lastDiscoveryTime = startTime;
+    state.performance.discoveryDuration = duration;
+    
+    if (errors.length > 0) {
+      state.performance.errorCount += errors.length;
+      updateConnectionHealth(errors);
+    } else {
+      state.performance.successCount++;
+    }
+    
+    // Calculate runtime statistics
+    calculateRuntimeStats();
+    
+    // Track performance history
+    addPerformanceSnapshot('discovery', duration, errors.length);
+    
+    console.log(`[State Manager] Discovery update completed. Duration: ${duration}ms, Errors: ${errors.length}`);
+    
+  } catch (error) {
+    console.error('[State Manager] Error updating discovery data:', error);
+    state.performance.errorCount++;
+  }
 }
 
-function updateMetricsData(metrics) {
-  state.metrics = metrics || [];
+function updateMetricsData(metrics, duration = 0, errors = []) {
+  const startTime = Date.now();
+  
+  try {
+    state.metrics = metrics || [];
+    
+    // Update performance metrics
+    state.performance.lastMetricsTime = startTime;
+    state.performance.metricsDuration = duration;
+    
+    if (errors.length > 0) {
+      state.performance.errorCount += errors.length;
+      updateConnectionHealth(errors);
+    } else {
+      state.performance.successCount++;
+    }
+    
+    // Calculate average response time
+    updateAverageResponseTime(duration);
+    
+    // Check metrics against alert rules
+    checkAlertsForMetrics();
+    
+    // Update runtime statistics with latest metrics
+    calculateRuntimeStats();
+    
+    // Track performance history
+    addPerformanceSnapshot('metrics', duration, errors.length);
+    
+    console.log(`[State Manager] Metrics update completed. Duration: ${duration}ms, Metrics: ${metrics.length}, Errors: ${errors.length}`);
+    
+  } catch (error) {
+    console.error('[State Manager] Error updating metrics data:', error);
+    state.performance.errorCount++;
+  }
+}
+
+function calculateRuntimeStats() {
+  try {
+    const allGuests = [...state.vms, ...state.containers];
+    
+    // Guest statistics
+    state.stats.totalGuests = allGuests.length;
+    state.stats.runningGuests = allGuests.filter(g => g.status === 'running').length;
+    state.stats.stoppedGuests = allGuests.filter(g => g.status === 'stopped').length;
+    
+    // Node statistics
+    state.stats.totalNodes = state.nodes.length;
+    state.stats.healthyNodes = state.nodes.filter(n => n.status === 'online').length;
+    state.stats.warningNodes = state.nodes.filter(n => 
+      n.status === 'online' && (
+        (n.cpu && n.cpu > 80) || 
+        (n.mem && n.maxmem && (n.mem / n.maxmem) > 0.9)
+      )
+    ).length;
+    state.stats.errorNodes = state.nodes.filter(n => n.status !== 'online').length;
+    
+    // Average usage calculations
+    const runningGuests = allGuests.filter(g => g.status === 'running');
+    if (runningGuests.length > 0 && state.metrics.length > 0) {
+      let totalCpu = 0, totalMemory = 0, totalDisk = 0, count = 0;
+      
+      state.metrics.forEach(metric => {
+        if (metric.current) {
+          const guest = runningGuests.find(g => 
+            g.vmid === metric.id && g.node === metric.node && g.endpointId === metric.endpointId
+          );
+          if (guest) {
+            if (metric.current.cpu !== undefined) {
+              totalCpu += metric.current.cpu * 100;
+            }
+            if (metric.current.mem !== undefined && guest.maxmem) {
+              totalMemory += (metric.current.mem / guest.maxmem) * 100;
+            }
+            if (metric.current.disk !== undefined && guest.maxdisk) {
+              totalDisk += (metric.current.disk / guest.maxdisk) * 100;
+            }
+            count++;
+          }
+        }
+      });
+      
+      if (count > 0) {
+        state.stats.avgCpuUsage = Math.round(totalCpu / count);
+        state.stats.avgMemoryUsage = Math.round(totalMemory / count);
+        state.stats.avgDiskUsage = Math.round(totalDisk / count);
+      }
+    }
+    
+    state.stats.lastUpdated = Date.now();
+    
+  } catch (error) {
+    console.error('[State Manager] Error calculating runtime stats:', error);
+  }
+}
+
+function updateConnectionHealth(errors) {
+  errors.forEach(error => {
+    const endpointId = error.endpointId || 'unknown';
+    const connection = state.connections.get(endpointId) || {
+      status: 'healthy',
+      lastSeen: Date.now(),
+      errorCount: 0,
+      responseTime: 0
+    };
+    
+    connection.errorCount++;
+    connection.lastSeen = Date.now();
+    connection.status = connection.errorCount > 5 ? 'error' : 'warning';
+    
+    state.connections.set(endpointId, connection);
+  });
+}
+
+function updateAverageResponseTime(newDuration) {
+  const alpha = 0.1; // Exponential moving average factor
+  if (state.performance.avgResponseTime === 0) {
+    state.performance.avgResponseTime = newDuration;
+  } else {
+    state.performance.avgResponseTime = (alpha * newDuration) + ((1 - alpha) * state.performance.avgResponseTime);
+  }
+}
+
+function addPerformanceSnapshot(type, duration, errorCount) {
+  const snapshot = {
+    timestamp: Date.now(),
+    type,
+    duration,
+    errorCount,
+    memoryUsage: process.memoryUsage().heapUsed,
+    guestCount: state.stats.totalGuests,
+    nodeCount: state.stats.totalNodes
+  };
+  
+  performanceHistory.unshift(snapshot);
+  if (performanceHistory.length > MAX_PERFORMANCE_HISTORY) {
+    performanceHistory = performanceHistory.slice(0, MAX_PERFORMANCE_HISTORY);
+  }
+  
+  // Update peak memory usage
+  if (snapshot.memoryUsage > state.performance.peakMemoryUsage) {
+    state.performance.peakMemoryUsage = snapshot.memoryUsage;
+  }
+}
+
+function checkAlertsForMetrics() {
+  try {
+    const allGuests = [...state.vms, ...state.containers];
+    alertManager.checkMetrics(allGuests, state.metrics);
+  } catch (error) {
+    console.error('[State Manager] Error checking alerts:', error);
+  }
+}
+
+function updateAlertStats() {
+  // This could update dashboard counters, etc.
+  const alertStats = alertManager.getEnhancedAlertStats();
+  state.stats.activeAlerts = alertStats.active;
+  state.stats.alertsLast24h = alertStats.last24Hours;
+}
+
+function getAlertInfo() {
+  return {
+    active: alertManager.getActiveAlerts(),
+    stats: alertManager.getEnhancedAlertStats(),
+    rules: alertManager.getRules()
+  };
 }
 
 function clearMetricsData() {
   state.metrics = [];
+  console.log('[State Manager] Metrics data cleared');
 }
 
 function hasData() {
-    return state.nodes.length > 0 || state.vms.length > 0 || state.containers.length > 0 || state.pbs.length > 0;
+  return state.nodes.length > 0 || state.vms.length > 0 || state.containers.length > 0 || state.pbs.length > 0;
 }
 
 function setConfigPlaceholderStatus(isPlaceholder) {
-    state.isConfigPlaceholder = isPlaceholder;
+  state.isConfigPlaceholder = isPlaceholder;
+}
+
+function getPerformanceHistory(limit = 50) {
+  return performanceHistory.slice(0, limit);
+}
+
+function getConnectionHealth() {
+  const connections = {};
+  for (const [endpointId, health] of state.connections) {
+    connections[endpointId] = { ...health };
+  }
+  return connections;
+}
+
+function getHealthSummary() {
+  const now = Date.now();
+  const fiveMinutesAgo = now - (5 * 60 * 1000);
+  
+  // Recent performance
+  const recentSnapshots = performanceHistory.filter(s => s.timestamp >= fiveMinutesAgo);
+  const avgDuration = recentSnapshots.length > 0 
+    ? recentSnapshots.reduce((sum, s) => sum + s.duration, 0) / recentSnapshots.length 
+    : 0;
+  const recentErrors = recentSnapshots.reduce((sum, s) => sum + s.errorCount, 0);
+  
+  // Connection health
+  let healthyConnections = 0;
+  let totalConnections = state.connections.size;
+  for (const connection of state.connections.values()) {
+    if (connection.status === 'healthy') healthyConnections++;
+  }
+  
+  return {
+    overall: recentErrors === 0 && healthyConnections === totalConnections ? 'healthy' : 
+             recentErrors < 3 ? 'warning' : 'error',
+    performance: {
+      avgResponseTime: Math.round(avgDuration),
+      recentErrors,
+      memoryUsage: process.memoryUsage().heapUsed,
+      uptime: process.uptime()
+    },
+    connections: {
+      healthy: healthyConnections,
+      total: totalConnections
+    },
+    alerts: alertManager.getAlertStats(),
+    lastUpdate: state.stats.lastUpdated
+  };
+}
+
+// Graceful cleanup
+function destroy() {
+  console.log('[State Manager] Cleaning up...');
+  if (alertManager) {
+    alertManager.destroy();
+  }
+  state.connections.clear();
+  performanceHistory = [];
 }
 
 module.exports = {
@@ -47,4 +353,14 @@ module.exports = {
   updateMetricsData,
   clearMetricsData,
   hasData,
+  
+  // Enhanced monitoring functions
+  getPerformanceHistory,
+  getConnectionHealth,
+  getHealthSummary,
+  getAlertInfo,
+  destroy,
+  
+  // Alert manager access
+  alertManager
 };
