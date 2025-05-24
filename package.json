@@ -8,7 +8,7 @@
     "dev:server": "NODE_ENV=development node -r dotenv/config --env-file=.env server/index.js",
     "dev:css": "tailwindcss -c ./src/tailwind.config.js -i ./src/index.css -o ./src/public/output.css --watch",
     "build:css": "NODE_ENV=production tailwindcss -c ./src/tailwind.config.js -i ./src/index.css -o ./src/public/output.css",
-    "dev": "concurrently \"npm:dev:server\" \"npm:dev:css\"",
+    "dev": "concurrently --kill-others --kill-others-on-fail \"npm:dev:server\" \"npm:dev:css\"",
     "test": "cross-env NODE_ENV=test jest --coverage",
     "screenshot": "node scripts/take-screenshots.js"
   },
