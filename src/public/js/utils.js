@@ -1,8 +1,27 @@
 PulseApp.utils = (() => {
-    function getUsageColor(percentage) {
-        if (percentage >= 90) return 'red';
-        if (percentage >= 75) return 'yellow';
-        return 'green';
+    function getUsageColor(percentage, metric = 'generic') {
+        // Progress bars use traditional green/yellow/red with metric-specific thresholds
+        if (metric === 'cpu') {
+            // CPU: show color for significant usage
+            if (percentage >= 90) return 'red';
+            if (percentage >= 80) return 'yellow';
+            return 'green'; // Healthy green for normal CPU usage
+        } else if (metric === 'memory') {
+            // Memory: be more conservative due to critical nature
+            if (percentage >= 85) return 'red';
+            if (percentage >= 75) return 'yellow';
+            return 'green'; // Healthy green for normal memory usage
+        } else if (metric === 'disk') {
+            // Disk: can run higher before concerning
+            if (percentage >= 90) return 'red';
+            if (percentage >= 80) return 'yellow';
+            return 'green'; // Healthy green for normal disk usage
+        } else {
+            // Generic/legacy fallback (for other uses like storage, etc.)
+            if (percentage >= 90) return 'red';
+            if (percentage >= 75) return 'yellow';
+            return 'green'; // Keep green for non-dashboard usage
+        }
     }
 
     function createProgressTextBarHTML(percentage, text, color) {
@@ -35,6 +54,32 @@ PulseApp.utils = (() => {
         if (bytesPerSecond === null || bytesPerSecond === undefined) return 'N/A';
         if (bytesPerSecond < 1) return '0 B/s';
         return formatBytes(bytesPerSecond, decimals) + '/s';
+    }
+
+    function formatSpeedWithStyling(bytesPerSecond, decimals = 1) {
+        if (bytesPerSecond === null || bytesPerSecond === undefined) return 'N/A';
+        
+        let formattedSpeed;
+        if (bytesPerSecond < 1) {
+            formattedSpeed = '0 B/s';
+        } else {
+            formattedSpeed = formatBytes(bytesPerSecond, decimals) + '/s';
+        }
+        
+        // Use same absolute thresholds as chart logic
+        const mbps = bytesPerSecond / (1024 * 1024);
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        
+        let textClass = '';
+        if (mbps < 1) {
+            // Not noteworthy - use theme-adaptive dim gray
+            textClass = isDarkMode ? 'text-gray-400' : 'text-gray-300';
+        } else {
+            // Noteworthy - use normal text color
+            textClass = 'text-gray-800 dark:text-gray-200';
+        }
+        
+        return `<span class="${textClass}">${formattedSpeed}</span>`;
     }
 
     function formatUptime(seconds) {
@@ -197,6 +242,7 @@ PulseApp.utils = (() => {
         createProgressTextBarHTML,
         formatBytes,
         formatSpeed,
+        formatSpeedWithStyling,
         formatUptime,
         formatDuration,
         formatPbsTimestamp,

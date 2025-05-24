@@ -29,6 +29,17 @@ PulseApp.ui.dashboard = (() => {
         tableBodyEl = document.querySelector('#main-table tbody');
         statusElementEl = document.getElementById('dashboard-status-text');
 
+        // Initialize chart system
+        if (PulseApp.charts) {
+            PulseApp.charts.startChartUpdates();
+        }
+
+        // Initialize charts toggle
+        const chartsToggleButton = document.getElementById('toggle-charts-button');
+        if (chartsToggleButton) {
+            chartsToggleButton.addEventListener('click', toggleChartsMode);
+        }
+
         document.addEventListener('keydown', (event) => {
             // Handle Escape for resetting filters
             if (event.key === 'Escape') {
@@ -132,7 +143,12 @@ PulseApp.ui.dashboard = (() => {
             avgNetOutRate = snapshot.netout;
 
             if (guest.status === STATUS_RUNNING && metrics && metrics.current) {
-                const currentDataPoint = { timestamp: Date.now(), ...metrics.current };
+                const currentDataPoint = { 
+                    timestamp: Date.now(), 
+                    ...metrics.current,
+                    // Convert CPU to percentage for consistency
+                    cpu: (metrics.current.cpu || 0) * 100
+                };
                 PulseApp.state.updateDashboardHistory(guestUniqueId, currentDataPoint);
                 const history = PulseApp.state.getDashboardHistory()[guestUniqueId] || [];
                 avgCpu = _calculateAverage(history, 'cpu') ?? 0;
@@ -159,6 +175,7 @@ PulseApp.ui.dashboard = (() => {
                 const currentDataPoint = {
                     timestamp: Date.now(),
                     ...metrics.current,
+                    cpu: (metrics.current.cpu || 0) * 100,
                     effective_mem: currentMemForAvg,
                     effective_mem_total: currentMemTotalForDisplay,
                     effective_mem_source: effectiveMemorySource
@@ -236,8 +253,9 @@ PulseApp.ui.dashboard = (() => {
             if (uptimeFormatted.length > maxUptimeLength) maxUptimeLength = uptimeFormatted.length;
         });
 
-        const nameColWidth = Math.min(Math.max(maxNameLength * 8 + 16, 100), 300);
-        const uptimeColWidth = Math.max(maxUptimeLength * 7 + 16, 80);
+        // More aggressive space optimization
+        const nameColWidth = Math.min(Math.max(maxNameLength * 7 + 12, 80), 250);
+        const uptimeColWidth = Math.max(maxUptimeLength * 6.5 + 8, 40);
         const htmlElement = document.documentElement;
         if (htmlElement) {
             htmlElement.style.setProperty('--name-col-width', `${nameColWidth}px`);
@@ -280,7 +298,7 @@ PulseApp.ui.dashboard = (() => {
                 const state = thresholdState[type];
                 let guestValue;
 
-                if (type === METRIC_CPU) guestValue = guest.cpu * 100;
+                if (type === METRIC_CPU) guestValue = guest.cpu;
                 else if (type === METRIC_MEMORY) guestValue = guest.memory;
                 else if (type === METRIC_DISK) guestValue = guest.disk;
                 else if (type === METRIC_DISK_READ) guestValue = guest.diskread;
@@ -426,35 +444,71 @@ PulseApp.ui.dashboard = (() => {
         } else {
             console.warn('[Dashboard] PulseApp.ui.common not available for updateSortUI');
         }
+
+        // Update charts immediately after table is rendered, but only if in charts mode
+        const mainContainer = document.getElementById('main');
+        if (PulseApp.charts && visibleCount > 0 && mainContainer && mainContainer.classList.contains('charts-mode')) {
+            // Use requestAnimationFrame to ensure DOM is fully updated
+            requestAnimationFrame(() => {
+                PulseApp.charts.updateAllCharts();
+            });
+        }
     }
 
     function _createCpuBarHtml(guest) {
         if (guest.status !== STATUS_RUNNING) return '-';
-        const cpuPercent = Math.round(guest.cpu * 100);
-        const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus).toFixed(1)}/${guest.cpus} cores)` : ''}`;
-        const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent);
-        return PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
+        const cpuPercent = Math.round(guest.cpu);
+        const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus / 100).toFixed(1)}/${guest.cpus} cores)` : ''}`;
+        const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
+        
+        // Create both text and chart versions
+        const guestId = guest.uniqueId;
+        const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(guestId, 'cpu') : '';
+        
+        return `
+            <div class="metric-text">${progressBar}</div>
+            <div class="metric-chart">${chartHtml}</div>
+        `;
     }
 
     function _createMemoryBarHtml(guest) {
         if (guest.status !== STATUS_RUNNING) return '-';
-        const memoryPercent = guest.memory; // This is already a percentage
+        const memoryPercent = guest.memory;
         let memoryTooltipText = `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)} (${memoryPercent}%)`;
         if (guest.type === GUEST_TYPE_VM && guest.memorySource === 'guest' && guest.rawHostMemory !== null && guest.rawHostMemory !== undefined) {
             memoryTooltipText += ` (Host: ${PulseApp.utils.formatBytes(guest.rawHostMemory)})`;
         }
-        const memColorClass = PulseApp.utils.getUsageColor(memoryPercent);
-        return PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
+        const memColorClass = PulseApp.utils.getUsageColor(memoryPercent, 'memory');
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
+        
+        // Create both text and chart versions
+        const guestId = guest.uniqueId;
+        const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(guestId, 'memory') : '';
+        
+        return `
+            <div class="metric-text">${progressBar}</div>
+            <div class="metric-chart">${chartHtml}</div>
+        `;
     }
 
     function _createDiskBarHtml(guest) {
         if (guest.status !== STATUS_RUNNING) return '-';
         if (guest.type === GUEST_TYPE_CT) {
-            const diskPercent = guest.disk; // This is already a percentage
+            const diskPercent = guest.disk;
             const diskTooltipText = guest.diskTotal ? `${PulseApp.utils.formatBytes(guest.diskCurrent)} / ${PulseApp.utils.formatBytes(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
-            const diskColorClass = PulseApp.utils.getUsageColor(diskPercent);
-            return PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
-        } else { // For VMs, show total disk size, not a progress bar
+            const diskColorClass = PulseApp.utils.getUsageColor(diskPercent, 'disk');
+            const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+            
+            // Create both text and chart versions
+            const guestId = guest.uniqueId;
+            const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(guestId, 'disk') : '';
+            
+            return `
+                <div class="metric-text">${progressBar}</div>
+                <div class="metric-chart">${chartHtml}</div>
+            `;
+        } else {
             if (guest.diskTotal) {
                 return `<span class="text-xs text-gray-700 dark:text-gray-200 truncate">${PulseApp.utils.formatBytes(guest.diskTotal)}</span>`;
             }
@@ -474,29 +528,40 @@ PulseApp.ui.dashboard = (() => {
         const memoryBarHTML = _createMemoryBarHtml(guest);
         const diskBarHTML = _createDiskBarHtml(guest);
 
-        const diskReadFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeed(guest.diskread, 0) : '-';
-        const diskWriteFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeed(guest.diskwrite, 0) : '-';
+        const diskReadFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeedWithStyling(guest.diskread, 0) : '-';
+        const diskWriteFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeedWithStyling(guest.diskwrite, 0) : '-';
+        const netInFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeedWithStyling(guest.netin, 0) : '-';
+        const netOutFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeedWithStyling(guest.netout, 0) : '-';
 
-        // Icons and colors
-        const upArrow = '↑';
-        const downArrow = '↓';
-
-        let netInIcon = '';
-        let netOutIcon = '';
-
-        if (guest.status === STATUS_RUNNING) {
-            const netInActive = guest.netin > 0;
-            const netOutActive = guest.netout > 0;
-
-            netInIcon = `<span class="text-xs mr-1 ${netInActive ? 'text-green-500' : 'text-gray-400 dark:text-gray-500'}">${downArrow}</span>`;
-            netOutIcon = `<span class="text-xs mr-1 ${netOutActive ? 'text-red-500' : 'text-gray-400 dark:text-gray-500'}">${upArrow}</span>`;
-        } else {
-            netInIcon = `<span class="text-xs mr-1 text-gray-400 dark:text-gray-500">${downArrow}</span>`;
-            netOutIcon = `<span class="text-xs mr-1 text-gray-400 dark:text-gray-500">${upArrow}</span>`;
-        }
+        // Create I/O cells with both text and chart versions
+        const guestId = guest.uniqueId;
         
-        const netInFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeed(guest.netin, 0) : '-';
-        const netOutFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeed(guest.netout, 0) : '-';
+        let diskReadCell, diskWriteCell, netInCell, netOutCell;
+        
+        if (guest.status === STATUS_RUNNING && PulseApp.charts) {
+            // Text versions - clean, no arrows
+            const diskReadText = diskReadFormatted;
+            const diskWriteText = diskWriteFormatted;
+            const netInText = netInFormatted;
+            const netOutText = netOutFormatted;
+            
+            // Chart versions - clean, no arrows
+            const diskReadChart = PulseApp.charts.createSparklineHTML(guestId, 'diskread');
+            const diskWriteChart = PulseApp.charts.createSparklineHTML(guestId, 'diskwrite');
+            const netInChart = PulseApp.charts.createSparklineHTML(guestId, 'netin');
+            const netOutChart = PulseApp.charts.createSparklineHTML(guestId, 'netout');
+            
+            diskReadCell = `<div class="metric-text">${diskReadText}</div><div class="metric-chart">${diskReadChart}</div>`;
+            diskWriteCell = `<div class="metric-text">${diskWriteText}</div><div class="metric-chart">${diskWriteChart}</div>`;
+            netInCell = `<div class="metric-text">${netInText}</div><div class="metric-chart">${netInChart}</div>`;
+            netOutCell = `<div class="metric-text">${netOutText}</div><div class="metric-chart">${netOutChart}</div>`;
+        } else {
+            // Fallback to text only for stopped guests - no arrows
+            diskReadCell = diskReadFormatted;
+            diskWriteCell = diskWriteFormatted;
+            netInCell = netInFormatted;
+            netOutCell = netOutFormatted;
+        }
 
         const typeIconClass = guest.type === GUEST_TYPE_VM
             ? 'vm-icon bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 font-medium'
@@ -519,10 +584,10 @@ PulseApp.ui.dashboard = (() => {
             <td class="p-1 px-2">${cpuBarHTML}</td>
             <td class="p-1 px-2">${memoryBarHTML}</td>
             <td class="p-1 px-2">${diskBarHTML}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${diskReadFormatted}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${diskWriteFormatted}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${netInIcon}${netInFormatted}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${netOutIcon}${netOutFormatted}</td>
+            <td class="p-1 px-2">${diskReadCell}</td>
+            <td class="p-1 px-2">${diskWriteCell}</td>
+            <td class="p-1 px-2">${netInCell}</td>
+            <td class="p-1 px-2">${netOutCell}</td>
         `;
         return row;
     }
@@ -547,12 +612,35 @@ PulseApp.ui.dashboard = (() => {
         guestMetricDragSnapshot = {};
     }
 
+    function toggleChartsMode() {
+        const mainContainer = document.getElementById('main');
+        const button = document.getElementById('toggle-charts-button');
+        
+        if (mainContainer.classList.contains('charts-mode')) {
+            // Switch to metrics mode
+            mainContainer.classList.remove('charts-mode');
+            button.title = 'Toggle Charts View';
+        } else {
+            // Switch to charts mode  
+            mainContainer.classList.add('charts-mode');
+            button.title = 'Toggle Metrics View';
+            
+            // Immediately render charts when switching to charts mode
+            if (PulseApp.charts) {
+                requestAnimationFrame(() => {
+                    PulseApp.charts.updateAllCharts();
+                });
+            }
+        }
+    }
+
     return {
         init,
         refreshDashboardData,
         updateDashboardTable,
         createGuestRow,
         snapshotGuestMetricsForDrag, // Export snapshot function
-        clearGuestMetricSnapshots    // Export clear function
+        clearGuestMetricSnapshots,    // Export clear function
+        toggleChartsMode
     };
 })();

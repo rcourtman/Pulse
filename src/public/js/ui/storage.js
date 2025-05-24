@@ -1,29 +1,50 @@
 PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.storage = (() => {
+    // Cache for computed values to avoid recalculation
+    const contentBadgeCache = new Map();
+    const iconCache = new Map();
+    const contentBadgeHTMLCache = new Map(); // Cache for complete content badge HTML
 
     function getStorageTypeIcon(type) {
+        if (iconCache.has(type)) {
+            return iconCache.get(type);
+        }
+
+        let icon;
         switch(type) {
             case 'dir':
-                return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-yellow-600 dark:text-yellow-400"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>';
+                icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-yellow-600 dark:text-yellow-400"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>';
+                break;
             case 'lvm':
             case 'lvmthin':
-                return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-purple-600 dark:text-purple-400"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>';
+                icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-purple-600 dark:text-purple-400"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>';
+                break;
             case 'zfs':
             case 'zfspool':
-                 return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-red-600 dark:text-red-400"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>';
+                icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-red-600 dark:text-red-400"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>';
+                break;
             case 'nfs':
             case 'cifs':
-                 return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-blue-600 dark:text-blue-400"><path d="M16 17l5-5-5-5"></path><path d="M8 17l-5-5 5-5"></path></svg>';
+                icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-blue-600 dark:text-blue-400"><path d="M16 17l5-5-5-5"></path><path d="M8 17l-5-5 5-5"></path></svg>';
+                break;
             case 'cephfs':
             case 'rbd':
-                 return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-indigo-600 dark:text-indigo-400"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>';
+                icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-indigo-600 dark:text-indigo-400"><path d="M18 8h1a4 4 0 0 1 0 8h-1"></path><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path><line x1="6" y1="1" x2="6" y2="4"></line><line x1="10" y1="1" x2="10" y2="4"></line><line x1="14" y1="1" x2="14" y2="4"></line></svg>';
+                break;
             default:
-                return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-gray-500"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+                icon = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block mr-1 align-middle text-gray-500"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
         }
+        
+        iconCache.set(type, icon);
+        return icon;
     }
 
     function getContentBadgeDetails(contentType) {
+        if (contentBadgeCache.has(contentType)) {
+            return contentBadgeCache.get(contentType);
+        }
+
         let details = {
             badgeClass: 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300',
             tooltip: `Content type: ${contentType}`
@@ -55,7 +76,29 @@ PulseApp.ui.storage = (() => {
                  details.tooltip = 'Snippet files (e.g., cloud-init configs)';
                  break;
         }
+        
+        contentBadgeCache.set(contentType, details);
         return details;
+    }
+
+    function getContentBadgesHTML(contentString) {
+        if (!contentString) return '-';
+        
+        if (contentBadgeHTMLCache.has(contentString)) {
+            return contentBadgeHTMLCache.get(contentString);
+        }
+
+        const contentTypes = contentString.split(',').map(ct => ct.trim()).filter(ct => ct);
+        contentTypes.sort();
+        
+        const contentBadges = contentTypes.map(ct => {
+            const details = getContentBadgeDetails(ct);
+            return `<span data-tooltip="${details.tooltip}" class="storage-tooltip-trigger inline-block ${details.badgeClass} rounded px-1.5 py-0.5 text-xs font-medium mr-1 cursor-default">${ct}</span>`;
+        }).join('');
+
+        const result = contentBadges || '-';
+        contentBadgeHTMLCache.set(contentString, result);
+        return result;
     }
 
     function sortNodeStorageData(storageArray) {
@@ -82,9 +125,11 @@ PulseApp.ui.storage = (() => {
             return;
         }
 
+        // Pre-sort storage data for each node to avoid repeated sorting
         const storageByNode = nodes.reduce((acc, node) => {
             if (node && node.node) {
-                acc[node.node] = Array.isArray(node.storage) ? node.storage : [];
+                const storageData = Array.isArray(node.storage) ? node.storage : [];
+                acc[node.node] = sortNodeStorageData(storageData);
             }
             return acc;
         }, {});
@@ -119,7 +164,7 @@ PulseApp.ui.storage = (() => {
         const sortedNodeNames = Object.keys(storageByNode).sort((a, b) => a.localeCompare(b));
 
         sortedNodeNames.forEach(nodeName => {
-          const nodeStorageData = storageByNode[nodeName];
+          const nodeStorageData = storageByNode[nodeName]; // Already sorted
 
           const nodeHeaderRow = document.createElement('tr');
           nodeHeaderRow.className = 'bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs node-storage-header';
@@ -133,8 +178,8 @@ PulseApp.ui.storage = (() => {
             return;
           }
 
-          const sortedNodeStorageData = sortNodeStorageData(nodeStorageData);
-          sortedNodeStorageData.forEach(store => {
+          // Use pre-sorted data instead of sorting again
+          nodeStorageData.forEach(store => {
               const row = _createStorageRow(store);
               tbody.appendChild(row);
           });
@@ -156,19 +201,17 @@ PulseApp.ui.storage = (() => {
         const usageBarHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageTooltipText, usageColorClass);
 
         const sharedIconTooltip = store.shared === 1 ? 'Shared across cluster' : 'Local to node';
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        const localIconGrayClass = isDarkMode ? 'text-gray-400' : 'text-gray-300';
         const sharedIcon = store.shared === 1 ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block text-green-600 dark:text-green-400"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`
-            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block text-gray-400 dark:text-gray-500 opacity-50"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>`;
+            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ${localIconGrayClass} opacity-50"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>`;
 
-        const contentTypes = (store.content || '').split(',').map(ct => ct.trim()).filter(ct => ct);
-        contentTypes.sort();
-        const contentBadges = contentTypes.map(ct => {
-            const details = getContentBadgeDetails(ct);
-            return `<span data-tooltip="${details.tooltip}" class="storage-tooltip-trigger inline-block ${details.badgeClass} rounded px-1.5 py-0.5 text-xs font-medium mr-1 cursor-default">${ct}</span>`;
-        }).join('');
+        // Use cached content badge HTML instead of processing inline
+        const contentBadges = getContentBadgesHTML(store.content);
 
         row.innerHTML = `
             <td class="p-1 px-2 whitespace-nowrap text-gray-900 dark:text-gray-100 font-medium">${store.storage || 'N/A'}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs flex items-center">${contentBadges || '-'}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs flex items-center">${contentBadges}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${store.type || 'N/A'}</td>
             <td class="p-1 px-2 whitespace-nowrap storage-tooltip-trigger cursor-default" data-tooltip="${sharedIconTooltip}">${sharedIcon}</td>
             <td class="p-1 px-2 text-gray-600 dark:text-gray-300 min-w-[250px]">${usageBarHTML}</td>

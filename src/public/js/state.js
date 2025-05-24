@@ -19,8 +19,39 @@ PulseApp.state = (() => {
         backupsFilterHealth: savedFilterState.backupsFilterHealth || 'all',
         backupsFilterGuestType: savedFilterState.backupsFilterGuestType || 'all',
         backupsSearchTerm: '',
+        
+        // Enhanced monitoring data
+        alerts: {
+            active: [],
+            stats: {},
+            rules: []
+        },
+        performance: {
+            lastDiscoveryTime: null,
+            lastMetricsTime: null,
+            discoveryDuration: 0,
+            metricsDuration: 0,
+            errorCount: 0,
+            successCount: 0,
+            avgResponseTime: 0,
+            peakMemoryUsage: 0
+        },
+        stats: {
+            totalGuests: 0,
+            runningGuests: 0,
+            stoppedGuests: 0,
+            totalNodes: 0,
+            healthyNodes: 0,
+            warningNodes: 0,
+            errorNodes: 0,
+            avgCpuUsage: 0,
+            avgMemoryUsage: 0,
+            avgDiskUsage: 0,
+            lastUpdated: null
+        },
+        isConfigPlaceholder: false,
+        
         sortState: {
-            nodes: { column: null, direction: 'asc', ...(savedSortState.nodes || {}) },
             main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) },
             backups: { column: 'latestBackupTime', direction: 'desc', ...(savedSortState.backups || {}) }
         },
@@ -32,33 +63,27 @@ PulseApp.state = (() => {
             diskwrite:{ value: 0 },
             netin:    { value: 0 },
             netout:   { value: 0 }
-        },
-        activeLogSessions: {},
-        thresholdLogEntries: [],
-        activeLoggingThresholds: null
+        }
     };
 
     // Initialize thresholdState by merging saved state with defaults
     Object.keys(internalState.thresholdState).forEach(type => {
         const savedTypeState = savedThresholdState[type] || {};
-        if (internalState.thresholdState[type].hasOwnProperty('operator')) { // Assuming this structure means it's the advanced threshold type
+        if (internalState.thresholdState[type].hasOwnProperty('operator')) {
             internalState.thresholdState[type] = {
                 operator: savedTypeState.operator || '>=',
                 input: savedTypeState.input || '',
-                // Preserve any other default properties if they exist
                 ...internalState.thresholdState[type],
-                ...savedTypeState // This ensures saved values overwrite defaults but keeps other default props
+                ...savedTypeState
             };
-        } else { // Simple value threshold
+        } else {
             internalState.thresholdState[type] = {
                 value: savedTypeState.value || 0,
-                // Preserve any other default properties
                 ...internalState.thresholdState[type],
                 ...savedTypeState
             };
         }
     });
-
 
     function saveFilterState() {
         const stateToSave = {
@@ -74,11 +99,92 @@ PulseApp.state = (() => {
 
     function saveSortState() {
         const stateToSave = {
-            nodes: internalState.sortState.nodes,
             main: internalState.sortState.main,
             backups: internalState.sortState.backups
         };
         localStorage.setItem('pulseSortState', JSON.stringify(stateToSave));
+    }
+
+    function updateState(newData) {
+        try {
+            console.log('[State] Updating state with new data:', Object.keys(newData));
+            
+            // Update core data arrays
+            if (newData.nodes) internalState.nodesData = newData.nodes;
+            if (newData.vms) internalState.vmsData = newData.vms;
+            if (newData.containers) internalState.containersData = newData.containers;
+            if (newData.metrics) internalState.metricsData = newData.metrics;
+            if (newData.pbs) internalState.pbsDataArray = newData.pbs;
+            
+            // Update enhanced monitoring data
+            if (newData.alerts) {
+                internalState.alerts = {
+                    active: newData.alerts.active || [],
+                    stats: newData.alerts.stats || {},
+                    rules: newData.alerts.rules || []
+                };
+            }
+            
+            if (newData.performance) {
+                internalState.performance = { ...internalState.performance, ...newData.performance };
+            }
+            
+            if (newData.stats) {
+                internalState.stats = { ...internalState.stats, ...newData.stats };
+            }
+            
+            // Update configuration status
+            if (newData.hasOwnProperty('isConfigPlaceholder')) {
+                internalState.isConfigPlaceholder = newData.isConfigPlaceholder;
+            }
+            
+            // Combine VMs and containers for dashboard
+            internalState.dashboardData = [...internalState.vmsData, ...internalState.containersData];
+            
+            // Mark that we've received initial data
+            if (!internalState.initialDataReceived && internalState.dashboardData.length > 0) {
+                internalState.initialDataReceived = true;
+                console.log('[State] Initial data received and processed');
+            }
+            
+            // Update dashboard history for charts
+            updateDashboardHistoryFromMetrics();
+            
+        } catch (error) {
+            console.error('[State] Error updating state:', error);
+        }
+    }
+
+    function updateDashboardHistoryFromMetrics() {
+        try {
+            internalState.metricsData.forEach(metric => {
+                if (metric && metric.current) {
+                    const guestId = `${metric.endpointId}-${metric.node}-${metric.id}`;
+                    const dataPoint = {
+                        timestamp: Date.now(),
+                        cpu: metric.current.cpu * 100 || 0,
+                        memory: metric.current.mem || 0,
+                        disk: metric.current.disk || 0,
+                        diskread: metric.current.diskread || 0,
+                        diskwrite: metric.current.diskwrite || 0,
+                        netin: metric.current.netin || 0,
+                        netout: metric.current.netout || 0
+                    };
+                    
+                    if (!internalState.dashboardHistory[guestId] || !Array.isArray(internalState.dashboardHistory[guestId])) {
+                        internalState.dashboardHistory[guestId] = [];
+                    }
+                    
+                    const history = internalState.dashboardHistory[guestId];
+                    history.push(dataPoint);
+                    if (history.length > PulseApp.config.AVERAGING_WINDOW_SIZE) {
+                        history.shift();
+                    }
+                }
+            });
+        } catch (error) {
+            console.error('[State] Error updating dashboard history:', error);
+        }
     }
 
     return {
@@ -89,6 +195,11 @@ PulseApp.state = (() => {
                 saveFilterState();
             }
         },
+        
+        // Enhanced state management
+        updateState,
+        getFullState: () => ({ ...internalState }),
+        
         setSortState: (tableType, column, direction) => {
             if (internalState.sortState[tableType]) {
                 internalState.sortState[tableType] = { column, direction };
@@ -108,21 +219,6 @@ PulseApp.state = (() => {
                 console.warn(`Attempted to set threshold for unknown type: ${type}`);
             }
         },
-        getActiveLogSession: (sessionId) => internalState.activeLogSessions[sessionId],
-        getAllActiveLogSessions: () => internalState.activeLogSessions,
-        addActiveLogSession: (sessionId, sessionData) => {
-            internalState.activeLogSessions[sessionId] = sessionData;
-        },
-        removeActiveLogSession: (sessionId) => {
-            delete internalState.activeLogSessions[sessionId];
-        },
-        addLogEntry: (sessionId, entry) => {
-            if (internalState.activeLogSessions[sessionId]) {
-                internalState.activeLogSessions[sessionId].entries.push(entry);
-            } else {
-                console.warn(`Attempted to add log entry to non-existent session: ${sessionId}`);
-            }
-        },
         getDashboardHistory: () => internalState.dashboardHistory,
         updateDashboardHistory: (guestId, dataPoint) => {
             if (!internalState.dashboardHistory[guestId] || !Array.isArray(internalState.dashboardHistory[guestId])) {
@@ -134,6 +230,16 @@ PulseApp.state = (() => {
         },
         clearDashboardHistoryEntry: (guestId) => {
             delete internalState.dashboardHistory[guestId];
-        }
+        },
+        forceRefreshDashboard: () => {
+            if (PulseApp.socketHandler && typeof PulseApp.socketHandler.requestData === 'function') {
+                PulseApp.socketHandler.requestData();
+            }
+        },
+        
+        // Alert and performance data getters
+        getAlerts: () => internalState.alerts,
+        getPerformance: () => internalState.performance,
+        getStats: () => internalState.stats
     };
 })();

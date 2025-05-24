@@ -16,9 +16,16 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.pbs?.updatePbsInfo(pbsDataArray);
         PulseApp.ui.backups?.updateBackupsTab();
 
+        // Update tab availability based on PBS data
+        PulseApp.ui.tabs?.updateTabAvailability();
+
         updateLoadingOverlayVisibility(); // Call the helper function
 
         PulseApp.thresholds?.logging?.checkThresholdViolations();
+        
+        // Update alerts when state changes
+        const state = PulseApp.state.getFullState();
+        PulseApp.alerts?.updateAlertsFromState?.(state);
     }
 
     function updateLoadingOverlayVisibility() {
@@ -52,6 +59,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // If socketHandler.init only expects one, this might need adjustment in socketHandler.js
         PulseApp.socketHandler?.init?.(updateAllUITables, updateLoadingOverlayVisibility); 
         PulseApp.tooltips?.init?.();
+        PulseApp.alerts?.init?.();
 
         PulseApp.ui = PulseApp.ui || {};
         PulseApp.ui.tabs?.init?.();
@@ -64,7 +72,6 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.common?.init?.();
 
         PulseApp.thresholds = PulseApp.thresholds || {};
-        PulseApp.thresholds.logging?.init?.();
     }
 
     function validateCriticalElements() {

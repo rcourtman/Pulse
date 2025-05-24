@@ -102,9 +102,27 @@ PulseApp.tooltips = (() => {
         }
     }
 
+    function showTooltip(event, content) {
+        if (!tooltipElement) return;
+        
+        tooltipElement.innerHTML = content;
+        positionTooltip(event);
+        tooltipElement.classList.remove('hidden', 'opacity-0');
+        tooltipElement.classList.add('opacity-100');
+    }
+
+    function hideTooltip() {
+        if (tooltipElement) {
+            tooltipElement.classList.add('hidden', 'opacity-0');
+            tooltipElement.classList.remove('opacity-100');
+        }
+    }
+
     return {
         init,
         updateSliderTooltip,
-        hideSliderTooltip
+        hideSliderTooltip,
+        showTooltip,
+        hideTooltip
     };
 })(); 

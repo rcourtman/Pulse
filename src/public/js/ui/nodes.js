@@ -4,7 +4,7 @@ PulseApp.ui.nodes = (() => {
 
     function _createNodeCpuBarHtml(node) {
         const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
-        const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent);
+        const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
         const cpuTooltipText = `${cpuPercent.toFixed(1)}%${node.maxcpu && node.maxcpu > 0 ? ` (${(node.cpu * node.maxcpu).toFixed(1)}/${node.maxcpu} cores)` : ''}`;
         return PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
     }
@@ -13,7 +13,7 @@ PulseApp.ui.nodes = (() => {
         const memUsed = node.mem || 0;
         const memTotal = node.maxmem || 0;
         const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
-        const memColorClass = PulseApp.utils.getUsageColor(memPercent);
+        const memColorClass = PulseApp.utils.getUsageColor(memPercent, 'memory');
         const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
         return PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
     }
@@ -22,7 +22,7 @@ PulseApp.ui.nodes = (() => {
         const diskUsed = node.disk || 0;
         const diskTotal = node.maxdisk || 0;
         const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0;
-        const diskColorClass = PulseApp.utils.getUsageColor(diskPercent);
+        const diskColorClass = PulseApp.utils.getUsageColor(diskPercent, 'disk');
         const diskTooltipText = `${PulseApp.utils.formatBytes(diskUsed)} / ${PulseApp.utils.formatBytes(diskTotal)} (${diskPercent.toFixed(1)}%)`;
         return PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
     }
@@ -181,10 +181,11 @@ PulseApp.ui.nodes = (() => {
     function updateNodesTable(nodes) {
         const tbody = document.getElementById('nodes-table-body');
         if (!tbody) {
-            console.error('Critical element #nodes-table-body not found for nodes table update!');
+            // Node table doesn't exist in current UI - nodes are displayed as summary cards instead
+            console.log('[Nodes] Node table not found - using summary cards display instead');
             return;
         }
-        tbody.innerHTML = ''; // Clear previous content
+        tbody.innerHTML = '';
 
         if (!nodes || nodes.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found or data unavailable</td></tr>';
@@ -193,7 +194,7 @@ PulseApp.ui.nodes = (() => {
 
         // Group nodes by clusterIdentifier
         const clusters = nodes.reduce((acc, node) => {
-            const key = node.clusterIdentifier || 'Unknown Cluster'; // Fallback for safety
+            const key = node.clusterIdentifier || 'Unknown Cluster';
             if (!acc[key]) {
                 acc[key] = [];
             }
@@ -207,8 +208,6 @@ PulseApp.ui.nodes = (() => {
         for (const clusterIdentifier in clusters) {
             if (clusters.hasOwnProperty(clusterIdentifier)) {
                 const nodesInCluster = clusters[clusterIdentifier];
-                // All nodes in this group should have the same endpointType, so pick from the first.
-                // Default to 'standalone' if nodesInCluster is empty or endpointType is missing for some reason.
                 const endpointType = (nodesInCluster && nodesInCluster.length > 0 && nodesInCluster[0].endpointType) 
                                      ? nodesInCluster[0].endpointType 
                                      : 'standalone';
@@ -218,7 +217,6 @@ PulseApp.ui.nodes = (() => {
                     : PulseApp.ui.common.NODE_GROUP_STANDALONE_ICON_SVG;
 
                 const clusterHeaderRow = document.createElement('tr');
-                // Applying base background, then overlaying with stripe pattern classes
                 clusterHeaderRow.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(clusterIdentifier, 7, 'th');
                 tbody.appendChild(clusterHeaderRow);
 

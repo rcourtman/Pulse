@@ -57,33 +57,68 @@ PulseApp.ui.backups = (() => {
             )
         );
 
-        return { allGuests, initialDataReceived, allRecentBackupTasks, allSnapshots };
-    }
+        // Pre-index data by guest ID and type for performance
+        const tasksByGuest = new Map();
+        const snapshotsByGuest = new Map();
 
-    function _determineGuestBackupStatus(guest, allSnapshots, allRecentBackupTasks) {
-        const guestId = String(guest.vmid);
-        const guestTypePve = guest.type === 'qemu' ? 'vm' : 'ct';
-        const now = new Date(); // Use Date object for easier day calculations
-        now.setHours(0, 0, 0, 0); // Normalize to start of today
+        allRecentBackupTasks.forEach(task => {
+            const key = `${task.guestId}-${task.guestTypePbs}`;
+            if (!tasksByGuest.has(key)) tasksByGuest.set(key, []);
+            tasksByGuest.get(key).push(task);
+        });
+
+        allSnapshots.forEach(snap => {
+            const key = `${snap.backupVMID}-${snap.backupType}`;
+            if (!snapshotsByGuest.has(key)) snapshotsByGuest.set(key, []);
+            snapshotsByGuest.get(key).push(snap);
+        });
+
+        // Pre-calculate day boundaries for 7-day analysis
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const dayBoundaries = [];
+        for (let i = 6; i >= 0; i--) {
+            const dayStart = new Date(now);
+            dayStart.setDate(now.getDate() - i);
+            const dayEnd = new Date(dayStart);
+            dayEnd.setDate(dayStart.getDate() + 1);
+            dayBoundaries.push({
+                start: Math.floor(dayStart.getTime() / 1000),
+                end: Math.floor(dayEnd.getTime() / 1000)
+            });
+        }
 
         const threeDaysAgo = Math.floor(new Date(now).setDate(now.getDate() - 3) / 1000);
-        const sevenDaysAgoTimestamp = Math.floor(new Date(now).setDate(now.getDate() - 7) / 1000);
+        const sevenDaysAgo = Math.floor(new Date(now).setDate(now.getDate() - 7) / 1000);
 
-        const guestSnapshots = allSnapshots.filter(snap =>
-            String(snap.backupVMID) === guestId && snap.backupType === guestTypePve
-        );
-        const totalBackups = guestSnapshots.length;
-        const latestSnapshot = guestSnapshots.reduce((latest, snap) => {
-            return (!latest || (snap['backup-time'] && snap['backup-time'] > latest['backup-time'])) ? snap : latest;
-        }, null);
+        return { 
+            allGuests, 
+            initialDataReceived, 
+            tasksByGuest, 
+            snapshotsByGuest, 
+            dayBoundaries,
+            threeDaysAgo,
+            sevenDaysAgo
+        };
+    }
+
+    function _determineGuestBackupStatus(guest, guestSnapshots, guestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo) {
+        const guestId = String(guest.vmid);
+        
+        // Use pre-filtered data instead of filtering large arrays
+        const totalBackups = guestSnapshots ? guestSnapshots.length : 0;
+        const latestSnapshot = guestSnapshots && guestSnapshots.length > 0 
+            ? guestSnapshots.reduce((latest, snap) => {
+                return (!latest || (snap['backup-time'] && snap['backup-time'] > latest['backup-time'])) ? snap : latest;
+            }, null)
+            : null;
         const latestSnapshotTime = latestSnapshot ? latestSnapshot['backup-time'] : null;
 
-        const guestTasks = allRecentBackupTasks.filter(task =>
-            task.guestId === guestId && task.guestTypePbs === guestTypePve
-        );
-        const latestTask = guestTasks.reduce((latest, task) => {
-           return (!latest || (task.startTime && task.startTime > latest.startTime)) ? task : latest;
-        }, null);
+        const latestTask = guestTasks && guestTasks.length > 0
+            ? guestTasks.reduce((latest, task) => {
+               return (!latest || (task.startTime && task.startTime > latest.startTime)) ? task : latest;
+            }, null)
+            : null;
 
         let healthStatus = 'none';
         let displayTimestamp = latestSnapshotTime;
@@ -92,56 +127,50 @@ PulseApp.ui.backups = (() => {
             displayTimestamp = latestTask.startTime;
             if (latestTask.status === 'OK') {
                 if (latestTask.startTime >= threeDaysAgo) healthStatus = 'ok';
-                else if (latestTask.startTime >= sevenDaysAgoTimestamp) healthStatus = 'stale';
+                else if (latestTask.startTime >= sevenDaysAgo) healthStatus = 'stale';
                 else healthStatus = 'old';
             } else {
                 healthStatus = 'failed';
             }
         } else if (latestSnapshotTime) {
              if (latestSnapshotTime >= threeDaysAgo) healthStatus = 'ok';
-             else if (latestSnapshotTime >= sevenDaysAgoTimestamp) healthStatus = 'stale';
+             else if (latestSnapshotTime >= sevenDaysAgo) healthStatus = 'stale';
              else healthStatus = 'old';
         } else {
             healthStatus = 'none';
             displayTimestamp = null;
         }
 
-        // Calculate 7-day backup status (dot matrix)
-        const last7DaysBackupStatus = [];
-        for (let i = 6; i >= 0; i--) { // Iterate from 6 days ago to today
-            const dayTarget = new Date(now);
-            dayTarget.setDate(now.getDate() - i);
-            const dayStartTimestamp = Math.floor(dayTarget.getTime() / 1000);
-            
-            const dayEndTarget = new Date(dayTarget);
-            dayEndTarget.setDate(dayTarget.getDate() + 1);
-            const dayEndTimestamp = Math.floor(dayEndTarget.getTime() / 1000);
+        // Optimized 7-day backup status calculation using pre-calculated boundaries
+        const last7DaysBackupStatus = dayBoundaries.map(day => {
+            let dailyStatus = 'none';
 
-            let dailyStatus = 'none'; // Default to 'none'
-
-            // Check tasks for this day
-            const tasksOnThisDay = guestTasks.filter(task => 
-                task.startTime >= dayStartTimestamp && task.startTime < dayEndTimestamp
-            );
-
-            const failedTaskOnThisDay = tasksOnThisDay.find(task => task.status !== 'OK');
-            const successfulTaskOnThisDay = tasksOnThisDay.find(task => task.status === 'OK');
-
-            if (failedTaskOnThisDay) {
-                dailyStatus = 'failed';
-            } else if (successfulTaskOnThisDay) {
-                dailyStatus = 'ok';
-            } else {
-                // If no tasks, check for snapshots as a fallback for successful backup indication
-                const snapshotOnThisDay = guestSnapshots.some(
-                    snap => snap['backup-time'] >= dayStartTimestamp && snap['backup-time'] < dayEndTimestamp
+            // Check tasks for this day - using pre-filtered guest tasks
+            if (guestTasks) {
+                const failedTaskOnThisDay = guestTasks.find(task => 
+                    task.startTime >= day.start && task.startTime < day.end && task.status !== 'OK'
                 );
-                if (snapshotOnThisDay) {
+                const successfulTaskOnThisDay = guestTasks.find(task => 
+                    task.startTime >= day.start && task.startTime < day.end && task.status === 'OK'
+                );
+
+                if (failedTaskOnThisDay) {
+                    dailyStatus = 'failed';
+                } else if (successfulTaskOnThisDay) {
                     dailyStatus = 'ok';
+                } else if (guestSnapshots) {
+                    // Check snapshots as fallback - using pre-filtered guest snapshots
+                    const snapshotOnThisDay = guestSnapshots.some(
+                        snap => snap['backup-time'] >= day.start && snap['backup-time'] < day.end
+                    );
+                    if (snapshotOnThisDay) {
+                        dailyStatus = 'ok';
+                    }
                 }
             }
-            last7DaysBackupStatus.push(dailyStatus);
-        }
+
+            return dailyStatus;
+        });
 
         return {
             guestName: guest.name || `Guest ${guest.vmid}`,
@@ -269,7 +298,7 @@ PulseApp.ui.backups = (() => {
             return;
         }
 
-        const { allGuests, initialDataReceived, allRecentBackupTasks, allSnapshots } = _getInitialBackupData();
+        const { allGuests, initialDataReceived, tasksByGuest, snapshotsByGuest, dayBoundaries, threeDaysAgo, sevenDaysAgo } = _getInitialBackupData();
 
         if (!initialDataReceived) {
             loadingMsg.classList.remove('hidden');
@@ -288,7 +317,7 @@ PulseApp.ui.backups = (() => {
         }
         loadingMsg.classList.add('hidden');
 
-        const backupStatusByGuest = allGuests.map(guest => _determineGuestBackupStatus(guest, allSnapshots, allRecentBackupTasks));
+        const backupStatusByGuest = allGuests.map(guest => _determineGuestBackupStatus(guest, snapshotsByGuest.get(`${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`) || [], tasksByGuest.get(`${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`) || [], dayBoundaries, threeDaysAgo, sevenDaysAgo));
         const filteredBackupStatus = _filterBackupData(backupStatusByGuest, backupsSearchInput);
 
         const sortStateBackups = PulseApp.state.getSortState('backups');

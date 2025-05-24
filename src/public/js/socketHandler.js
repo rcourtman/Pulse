@@ -1,156 +1,392 @@
 PulseApp.socketHandler = (() => {
     let socket = null;
-    let uiUpdateCallback = () => { console.warn('[socketHandler] uiUpdateCallback not assigned.'); };
-    let loadingOverlayCallback = () => { console.warn('[socketHandler] loadingOverlayCallback not assigned.'); };
+    let isConnected = false;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+    const reconnectDelay = 2000; // 2 seconds
 
-    function init(updateFunctionRef, overlayUpdateRef) {
-        socket = io();
-        uiUpdateCallback = updateFunctionRef;
-        loadingOverlayCallback = overlayUpdateRef;
-
-        socket.on('connect', handleConnect);
-        socket.on('disconnect', handleDisconnect);
-        socket.on('initialState', handleInitialState);
-        socket.on('rawData', handleRawData);
-        socket.on('pbsInitialStatus', handlePbsInitialStatus);
-        socket.on('hotReload', () => {
-            console.log('[socketHandler] Hot reload requested. Reloading page...');
-            window.location.reload();
-        });
-
-        // Optional: for debugging all events
-        // socket.onAny((eventName, ...args) => {
-        //     console.log(`[Socket Event Debug] Event: ${eventName}`, args);
-        // });
+    function init() {
+        console.log('[Socket] Initializing socket connection...');
+        createSocket();
     }
 
-    function updateConnectionStatusUI(isConnected) {
-        const connectionStatus = document.getElementById('connection-status');
-        if (!connectionStatus) return;
+    function createSocket() {
+        if (socket) {
+            socket.removeAllListeners();
+            socket.disconnect();
+        }
 
-        const statusText = isConnected ? 'Connected' : 'Disconnected';
-        const addClasses = isConnected 
-            ? ['connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300']
-            : ['disconnected', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300'];
-        const removeClasses = isConnected
-            ? ['disconnected', 'bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400', 'bg-red-100', 'dark:bg-red-800/30', 'text-red-700', 'dark:text-red-300']
-            : ['connected', 'bg-green-100', 'dark:bg-green-800/30', 'text-green-700', 'dark:text-green-300', 'bg-gray-200', 'dark:bg-gray-700', 'text-gray-600', 'dark:text-gray-400'];
+        socket = io();
+        window.socket = socket; // Make socket available globally for alerts
 
-        connectionStatus.textContent = statusText;
-        connectionStatus.classList.remove(...removeClasses);
-        connectionStatus.classList.add(...addClasses);
+        setupEventListeners();
+    }
+
+    function setupEventListeners() {
+        socket.on('connect', handleConnect);
+        socket.on('disconnect', handleDisconnect);
+        socket.on('rawData', handleRawData);
+        socket.on('initialState', handleInitialState);
+        socket.on('requestError', handleRequestError);
+        
+        // Enhanced monitoring events
+        socket.on('alert', handleAlert);
+        socket.on('alertResolved', handleAlertResolved);
+        
+        // Development features
+        socket.on('hotReload', handleHotReload);
+
+        // Handle connection errors
+        socket.on('connect_error', handleConnectError);
+        socket.on('reconnect', handleReconnect);
+        socket.on('reconnect_error', handleReconnectError);
+        socket.on('reconnect_failed', handleReconnectFailed);
     }
 
     function handleConnect() {
-        updateConnectionStatusUI(true);
-        PulseApp.state.set('wasConnected', true);
-        requestFullData(); // Request data on new connection or reconnection
-        if (typeof loadingOverlayCallback === 'function') {
-            loadingOverlayCallback(); // Update overlay based on current state
-        }
+        console.log('[Socket] Connected to server');
+        isConnected = true;
+        reconnectAttempts = 0;
+        updateConnectionStatus('connected');
+        
+        // Request initial data
+        socket.emit('requestData');
     }
 
     function handleDisconnect(reason) {
-        updateConnectionStatusUI(false);
-        PulseApp.state.set('wasConnected', false);
-        if (typeof loadingOverlayCallback === 'function') {
-            loadingOverlayCallback(); // This should show the overlay with "Connection lost"
-        }
-    }
-
-    function handleInitialState(state) {
-        console.log('[socketHandler] Received initial state:', state);
-        const isPlaceholder = state.isConfigPlaceholder || false;
-        PulseApp.state.set('isConfigPlaceholder', isPlaceholder);
-        PulseApp.state.set('initialDataReceived', false); // Mark that full data hasn't arrived yet
-
-        const statusText = document.getElementById('dashboard-status-text');
-        if (statusText) {
-            statusText.textContent = isPlaceholder ? 'Configuration Required' : 'Loading initial data...';
-        }
+        console.log('[Socket] Disconnected from server:', reason);
+        isConnected = false;
+        updateConnectionStatus('disconnected');
         
-        if (typeof loadingOverlayCallback === 'function') {
-            loadingOverlayCallback(); // Update overlay based on placeholder status and lack of data
+        // If it's not a planned disconnect, try to reconnect
+        if (reason !== 'io client disconnect') {
+            attemptReconnect();
         }
     }
 
-    function handleRawData(jsonData) {
+    function handleRawData(data) {
         try {
-            const data = typeof jsonData === 'string' ? JSON.parse(jsonData) : jsonData;
+            // Update main application state
+            if (PulseApp.state) {
+                PulseApp.state.updateState(data);
+            }
             
-            PulseApp.state.set('isConfigPlaceholder', data.isConfigPlaceholder || false);
-            PulseApp.state.set('nodesData', data.nodes || []);
-            PulseApp.state.set('vmsData', data.vms || []);
-            PulseApp.state.set('containersData', data.containers || []);
-            PulseApp.state.set('metricsData', data.metrics || []); // Ensure metrics are always set
-            PulseApp.state.set('pbsDataArray', Array.isArray(data.pbs) ? data.pbs : []);
-
-            if (PulseApp.ui?.tabs) {
-                PulseApp.ui.tabs.updateTabAvailability();
+            // Update alerts system with new state
+            if (PulseApp.alerts && data.alerts) {
+                PulseApp.alerts.updateAlertsFromState(data);
             }
-
-            // Set initialDataReceived to true only after successfully processing raw data
-            PulseApp.state.set('initialDataReceived', true); 
-
-            if (typeof loadingOverlayCallback === 'function') {
-                loadingOverlayCallback(); // Hide overlay if not placeholder and data received
-            }
-
-            if (typeof uiUpdateCallback === 'function') {
-                uiUpdateCallback();
-            } else {
-                 console.error('[socketHandler] uiUpdateCallback is not a function!');
-            }
-        } catch (e) {
-            console.error('Error processing received rawData:', e, jsonData);
+            
+            // Process UI updates based on tab
+            updateUIFromData(data);
+            
+        } catch (error) {
+            console.error('[Socket] Error processing raw data:', error);
         }
     }
 
-    function handlePbsInitialStatus(pbsStatusArray) {
-        if (Array.isArray(pbsStatusArray)) {
-            const initialPbsData = pbsStatusArray.map(statusInfo => ({
-                ...statusInfo, // Spread existing status info
-                // Initialize other fields if they might be missing from statusInfo
-                backupTasks: statusInfo.backupTasks || { recentTasks: [], summary: {} },
-                datastores: statusInfo.datastores || [],
-                verificationTasks: statusInfo.verificationTasks || { summary: {} },
-                syncTasks: statusInfo.syncTasks || { summary: {} },
-                pruneTasks: statusInfo.pruneTasks || { summary: {} },
-                nodeName: statusInfo.nodeName || null 
-            }));
-            PulseApp.state.set('pbsDataArray', initialPbsData);
-            // Don't set initialDataReceived here; wait for full rawData
+    function handleInitialState(data) {
+        console.log('[Socket] Received initial state:', data);
+        
+        try {
+            if (PulseApp.state) {
+                PulseApp.state.updateState(data);
+            }
+            
+            updateUIFromData(data);
+            
+        } catch (error) {
+            console.error('[Socket] Error processing initial state:', error);
+        }
+    }
 
-            if (PulseApp.ui?.pbs) {
-                PulseApp.ui.pbs.updatePbsInfo(initialPbsData);
-            }
-            if (PulseApp.ui?.tabs) {
-                PulseApp.ui.tabs.updateTabAvailability();
-            }
-            if (typeof loadingOverlayCallback === 'function') {
-                loadingOverlayCallback(); // Update overlay, might still show "Loading..."
-            }
+    function handleRequestError(error) {
+        console.error('[Socket] Request error:', error);
+        updateConnectionStatus('error');
+    }
+
+    function handleAlert(alert) {
+        console.log('[Socket] Received alert:', alert);
+        
+        // Forward to alerts handler
+        if (PulseApp.alerts) {
+            // The alerts handler will be called directly from its socket listeners
+            // This is just for any additional processing
+        }
+    }
+
+    function handleAlertResolved(alert) {
+        console.log('[Socket] Alert resolved:', alert);
+        
+        // Forward to alerts handler
+        if (PulseApp.alerts) {
+            // The alerts handler will be called directly from its socket listeners
+            // This is just for any additional processing
+        }
+    }
+
+    function handleHotReload() {
+        console.log('[Socket] Hot reload triggered');
+        if (process.env.NODE_ENV === 'development') {
+            window.location.reload();
+        }
+    }
+
+    function handleConnectError(error) {
+        console.error('[Socket] Connection error:', error);
+        updateConnectionStatus('error');
+    }
+
+    function handleReconnect() {
+        console.log('[Socket] Reconnected successfully');
+        reconnectAttempts = 0;
+        updateConnectionStatus('connected');
+    }
+
+    function handleReconnectError(error) {
+        console.error('[Socket] Reconnection error:', error);
+        reconnectAttempts++;
+        updateConnectionStatus('reconnecting');
+    }
+
+    function handleReconnectFailed() {
+        console.error('[Socket] Reconnection failed - max attempts reached');
+        updateConnectionStatus('failed');
+    }
+
+    function attemptReconnect() {
+        if (reconnectAttempts < maxReconnectAttempts) {
+            reconnectAttempts++;
+            updateConnectionStatus('reconnecting');
+            
+            setTimeout(() => {
+                console.log(`[Socket] Attempting to reconnect... (${reconnectAttempts}/${maxReconnectAttempts})`);
+                socket.connect();
+            }, reconnectDelay * reconnectAttempts); // Exponential backoff
         } else {
-            console.warn('[socket] Received non-array data for pbsInitialStatus:', pbsStatusArray);
+            updateConnectionStatus('failed');
         }
     }
 
-    function requestFullData() {
-        console.log('Requesting full data reload from server...');
-        if (socket && socket.connected) { // Check if socket is connected before emitting
+    function updateConnectionStatus(status) {
+        const statusElement = document.getElementById('connection-status');
+        if (!statusElement) return;
+
+        // Clear previous classes
+        statusElement.className = statusElement.className
+            .replace(/\b(connected|disconnected|reconnecting|error|failed)\b/g, '')
+            .trim();
+
+        let statusText, statusClass;
+
+        switch (status) {
+            case 'connected':
+                statusText = 'Connected';
+                statusClass = 'connected text-xs px-2 py-1 rounded-full bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400';
+                break;
+            case 'disconnected':
+                statusText = 'Disconnected';
+                statusClass = 'disconnected text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+                break;
+            case 'reconnecting':
+                statusText = `Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`;
+                statusClass = 'reconnecting text-xs px-2 py-1 rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-600 dark:text-yellow-400 animate-pulse';
+                break;
+            case 'error':
+                statusText = 'Connection Error';
+                statusClass = 'error text-xs px-2 py-1 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400';
+                break;
+            case 'failed':
+                statusText = 'Connection Failed';
+                statusClass = 'failed text-xs px-2 py-1 rounded-full bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400';
+                break;
+            default:
+                statusText = 'Unknown';
+                statusClass = 'text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400';
+        }
+
+        statusElement.textContent = statusText;
+        statusElement.className = statusClass;
+    }
+
+    function updateUIFromData(data) {
+        try {
+            // Hide loading overlay when we receive data
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay && (data.nodes || data.vms || data.containers || data.pbs)) {
+                loadingOverlay.style.display = 'none';
+            }
+
+            // Update different UI sections based on current tab
+            const activeTab = document.querySelector('.tab.active');
+            if (!activeTab) return;
+
+            const tabName = activeTab.getAttribute('data-tab');
+
+            switch (tabName) {
+                case 'main':
+                    updateMainTab(data);
+                    break;
+                case 'storage':
+                    updateStorageTab(data);
+                    break;
+                case 'pbs':
+                    updatePbsTab(data);
+                    break;
+                case 'backups':
+                    updateBackupsTab(data);
+                    break;
+            }
+
+            // Update performance indicators if available
+            updatePerformanceIndicators(data);
+
+        } catch (error) {
+            console.error('[Socket] Error updating UI from data:', error);
+        }
+    }
+
+    function updateMainTab(data) {
+        try {
+            // Update node summary cards
+            if (PulseApp.ui && PulseApp.ui.nodes && data.nodes) {
+                PulseApp.ui.nodes.updateNodeSummaryCards(data.nodes);
+            }
+
+            // Update main dashboard
+            if (PulseApp.ui && PulseApp.ui.dashboard) {
+                PulseApp.ui.dashboard.updateDashboardTable();
+            }
+
+        } catch (error) {
+            console.error('[Socket] Error updating main tab:', error);
+        }
+    }
+
+    function updateStorageTab(data) {
+        try {
+            if (PulseApp.ui && PulseApp.ui.storage && data.nodes) {
+                PulseApp.ui.storage.updateStorageInfo();
+            }
+        } catch (error) {
+            console.error('[Socket] Error updating storage tab:', error);
+        }
+    }
+
+    function updatePbsTab(data) {
+        try {
+            if (PulseApp.ui && PulseApp.ui.pbs && data.pbs) {
+                PulseApp.ui.pbs.updatePbsInfo(data.pbs);
+            }
+        } catch (error) {
+            console.error('[Socket] Error updating PBS tab:', error);
+        }
+    }
+
+    function updateBackupsTab(data) {
+        try {
+            if (PulseApp.ui && PulseApp.ui.backups && data.pbs) {
+                PulseApp.ui.backups.updateBackupsTab();
+            }
+        } catch (error) {
+            console.error('[Socket] Error updating backups tab:', error);
+        }
+    }
+
+    function updatePerformanceIndicators(data) {
+        try {
+            // Update performance stats if available
+            if (data.stats) {
+                updateStatsDisplay(data.stats);
+            }
+
+            // Update any health indicators
+            if (data.performance) {
+                updateHealthDisplay(data.performance);
+            }
+
+        } catch (error) {
+            console.error('[Socket] Error updating performance indicators:', error);
+        }
+    }
+
+    function updateStatsDisplay(stats) {
+        // Update various stats in the UI
+        try {
+            const statusText = document.getElementById('dashboard-status-text');
+            if (statusText && stats.totalGuests !== undefined) {
+                const runningText = stats.runningGuests ? `${stats.runningGuests} running` : '0 running';
+                const stoppedText = stats.stoppedGuests ? `${stats.stoppedGuests} stopped` : '0 stopped';
+                statusText.textContent = `${stats.totalGuests} total guests (${runningText}, ${stoppedText})`;
+            }
+
+        } catch (error) {
+            console.error('[Socket] Error updating stats display:', error);
+        }
+    }
+
+    function updateHealthDisplay(performance) {
+        // Update health indicators in the UI
+        try {
+            // Could add health indicators to the header or other parts of the UI
+            // For now, this is just a placeholder for future enhancements
+
+        } catch (error) {
+            console.error('[Socket] Error updating health display:', error);
+        }
+    }
+
+    // Manual data request
+    function requestData() {
+        if (socket && isConnected) {
             socket.emit('requestData');
         } else {
-            console.error('Cannot request data: socket not initialized or not connected.');
+            console.warn('[Socket] Cannot request data - not connected');
         }
     }
 
-    function isConnected() {
-        return socket && socket.connected;
+    // Get connection status
+    function getConnectionStatus() {
+        return {
+            connected: isConnected,
+            reconnectAttempts,
+            socket: socket ? socket.id : null
+        };
     }
 
+    // Manual reconnect
+    function reconnect() {
+        if (socket) {
+            reconnectAttempts = 0;
+            socket.disconnect();
+            socket.connect();
+        }
+    }
+
+    // Cleanup
+    function destroy() {
+        if (socket) {
+            socket.removeAllListeners();
+            socket.disconnect();
+            socket = null;
+        }
+        isConnected = false;
+        window.socket = null;
+    }
+
+    // Public API
     return {
         init,
-        requestFullData,
-        isConnected
+        requestData,
+        getConnectionStatus,
+        reconnect,
+        destroy
     };
 })();
+
+// Auto-initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', PulseApp.socketHandler.init);
+} else {
+    PulseApp.socketHandler.init();
+}
+

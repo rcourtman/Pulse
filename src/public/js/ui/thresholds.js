@@ -6,14 +6,12 @@ PulseApp.ui.thresholds = (() => {
     let thresholdBadge = null;
     let sliders = {};
     let thresholdSelects = {};
-    let startLogButton = null;
     let isDraggingSlider = false;
 
     function init() {
         thresholdRow = document.getElementById('threshold-slider-row');
         toggleThresholdsButton = document.getElementById('toggle-thresholds-button');
         thresholdBadge = document.getElementById('threshold-count-badge');
-        startLogButton = document.getElementById('start-log-button');
 
         sliders = {
             cpu: document.getElementById('threshold-slider-cpu'),
@@ -30,7 +28,6 @@ PulseApp.ui.thresholds = (() => {
         applyInitialThresholdUI();
         updateThresholdIndicator();
         updateThresholdRowVisibility();
-        updateLogControlsVisibility();
 
         if (toggleThresholdsButton) {
             toggleThresholdsButton.addEventListener('click', () => {
@@ -113,8 +110,6 @@ PulseApp.ui.thresholds = (() => {
         document.addEventListener('touchend', _handleThresholdDragEnd);
     }
 
-    // Old setupThresholdListeners function removed.
-
     function updateThreshold(type, value) {
         PulseApp.state.setThresholdValue(type, value);
 
@@ -124,7 +119,6 @@ PulseApp.ui.thresholds = (() => {
             console.warn('[Thresholds] PulseApp.ui.dashboard not available for updateDashboardTable');
         }
         updateThresholdIndicator();
-        updateLogControlsVisibility();
     }
 
     function updateThresholdRowVisibility() {
@@ -196,38 +190,6 @@ PulseApp.ui.thresholds = (() => {
         PulseApp.state.set('isThresholdRowVisible', false);
         updateThresholdRowVisibility();
         updateThresholdIndicator();
-        updateLogControlsVisibility(); // Ensure log button visibility updates
-    }
-
-    function updateLogControlsVisibility() {
-        if (!startLogButton) return;
-
-        let isAnyFilterActive = false;
-        const thresholdState = PulseApp.state.getThresholdState();
-        const searchInput = document.getElementById('dashboard-search');
-        const filterGuestType = PulseApp.state.get('filterGuestType');
-        const filterStatus = PulseApp.state.get('filterStatus');
-
-        for (const type in thresholdState) {
-            if (thresholdState[type].value > 0) {
-                isAnyFilterActive = true;
-                break;
-            }
-        }
-
-        if (!isAnyFilterActive && searchInput && searchInput.value.trim() !== '') {
-            isAnyFilterActive = true;
-        }
-
-        if (!isAnyFilterActive && filterGuestType !== 'all') {
-            isAnyFilterActive = true;
-        }
-
-        if (!isAnyFilterActive && filterStatus !== 'all') {
-            isAnyFilterActive = true;
-        }
-
-        startLogButton.classList.toggle('hidden', !isAnyFilterActive);
     }
 
     // Getter for dashboard.js to check drag state
@@ -238,7 +200,6 @@ PulseApp.ui.thresholds = (() => {
     return {
         init,
         resetThresholds,
-        updateLogControlsVisibility,
         isThresholdDragInProgress
     };
 })();

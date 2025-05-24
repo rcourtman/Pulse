@@ -5,13 +5,15 @@ PulseApp.ui.tabs = (() => {
     let tabContents = [];
     let nestedTabsContainer = null;
     let nestedTabContentContainer = null;
+    let mainTabsContainer = null;
     let logSessionArea = null;
 
     function init() {
-        tabs = document.querySelectorAll('.tab');
+        tabs = Array.from(document.querySelectorAll('.tab'));
         tabContents = document.querySelectorAll('.tab-content');
         nestedTabsContainer = document.querySelector('.nested-tabs');
-        nestedTabContentContainer = document.querySelector('#log-content-area');
+        nestedTabContentContainer = document.getElementById('nested-tab-content-container');
+        mainTabsContainer = document.getElementById('main-tabs-container');
         logSessionArea = document.getElementById('log-session-area');
 
         // Initial styling pass for all tabs to ensure consistent look from the start
@@ -350,8 +352,6 @@ PulseApp.ui.tabs = (() => {
     return {
         init,
         activateNestedTab,
-        updateTabAvailability,
-        addLogTab,
-        removeLogTabAndContent
+        updateTabAvailability
     };
 })();
