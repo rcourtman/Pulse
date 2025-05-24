@@ -2,6 +2,10 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.pbs = (() => {
 
+    // Global state tracker for expanded PBS tasks
+    let expandedTaskState = new Set();
+    let expandedShowMoreState = new Set();
+
     const CSS_CLASSES = {
         TEXT_GREEN_500_DARK_GREEN_400: 'text-green-500 dark:text-green-400',
         TEXT_RED_500_DARK_RED_400: 'text-red-500 dark:text-red-400',
@@ -128,6 +132,20 @@ PulseApp.ui.pbs = (() => {
         }
     };
 
+    const getPbsStatusDisplay = (status) => {
+        if (status === 'OK') {
+            return `<span class="${CSS_CLASSES.TEXT_GREEN_500_DARK_GREEN_400}">✓ OK</span>`;
+        } else if (status === 'running') {
+            return `<span class="${CSS_CLASSES.INLINE_BLOCK} ${CSS_CLASSES.ANIMATE_SPIN} ${CSS_CLASSES.ROUNDED_FULL} ${CSS_CLASSES.H_3} ${CSS_CLASSES.W_3} ${CSS_CLASSES.BORDER_T_2} ${CSS_CLASSES.BORDER_B_2} ${CSS_CLASSES.BORDER_BLUE_500}" title="Running"></span> <span class="${CSS_CLASSES.TEXT_BLUE_600_DARK_BLUE_400}">Running</span>`;
+        } else if (status) {
+            // For failed tasks, show the full error message
+            const shortStatus = status.length > 50 ? `${status.substring(0, 47)}...` : status;
+            return `<span class="${CSS_CLASSES.TEXT_RED_500_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}" title="${status}">✗</span> <span class="${CSS_CLASSES.TEXT_RED_600_DARK_RED_400} ${CSS_CLASSES.TEXT_XS}" title="${status}">${shortStatus}</span>`;
+        } else {
+            return `<span class="${CSS_CLASSES.TEXT_GRAY_400}">? Unknown</span>`;
+        }
+    };
+
     const getPbsGcStatusText = (gcStatus) => {
       if (!gcStatus || gcStatus === 'unknown' || gcStatus === 'N/A') {
         return `<span class="${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.TEXT_GRAY_400}">-</span>`;
@@ -142,6 +160,11 @@ PulseApp.ui.pbs = (() => {
     };
 
     const parsePbsTaskTarget = (task) => {
+      // For synthetic backup run tasks, use the guest field directly
+      if (task.guest && task.pbsBackupRun) {
+          return task.guest;
+      }
+      
       const workerId = task.worker_id || task.id || '';
       const taskType = task.worker_type || task.type || '';
 
@@ -179,23 +202,49 @@ PulseApp.ui.pbs = (() => {
 
     const _createTaskTableRow = (task) => {
         const target = parsePbsTaskTarget(task);
-        const statusIconHTML = getPbsStatusIcon(task.status);
+        const statusDisplayHTML = getPbsStatusDisplay(task.status);
         const startTime = task.startTime ? PulseApp.utils.formatPbsTimestamp(task.startTime) : 'N/A';
         const duration = task.duration !== null ? PulseApp.utils.formatDuration(task.duration) : 'N/A';
         const upid = task.upid || 'N/A';
         const shortUpid = upid.length > 30 ? `${upid.substring(0, 15)}...${upid.substring(upid.length - 15)}` : upid;
 
         const row = document.createElement('tr');
-        row.className = `${CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700} ${CSS_CLASSES.HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50} ${CSS_CLASSES.TRANSITION_COLORS} ${CSS_CLASSES.DURATION_150} ${CSS_CLASSES.EASE_IN_OUT}`;
+        
+        // Add UPID as data attribute for tracking expanded state
+        row.dataset.upid = task.upid || '';
+        
+        // Add status-based row styling for better problem visibility
+        let rowClasses = `${CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700} ${CSS_CLASSES.TRANSITION_COLORS} ${CSS_CLASSES.DURATION_150} ${CSS_CLASSES.EASE_IN_OUT}`;
+        
+        const isFailed = task.status && task.status !== 'OK' && !task.status.toLowerCase().includes('running');
+        
+        if (isFailed) {
+            // Failed tasks get red background and cursor pointer if expandable
+            rowClasses += ` bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 cursor-pointer`;
+        } else if (task.status && task.status.toLowerCase().includes('running')) {
+            // Running tasks get blue background
+            rowClasses += ` bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30`;
+        } else {
+            // Normal hover for successful tasks
+            rowClasses += ` ${CSS_CLASSES.HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50}`;
+        }
+        
+        row.className = rowClasses;
 
         const targetCell = document.createElement('td');
         targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
-        targetCell.textContent = target;
+        
+        // Add expand indicator for failed tasks
+        if (isFailed) {
+            targetCell.innerHTML = `<span class="text-xs text-gray-400 mr-1">▶</span>${target}`;
+        } else {
+            targetCell.textContent = target;
+        }
         row.appendChild(targetCell);
 
         const statusCell = document.createElement('td');
-        statusCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM}`;
-        statusCell.innerHTML = statusIconHTML;
+        statusCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} min-w-48`;
+        statusCell.innerHTML = statusDisplayHTML;
         row.appendChild(statusCell);
 
         const startTimeCell = document.createElement('td');
@@ -214,7 +263,89 @@ PulseApp.ui.pbs = (() => {
         upidCell.textContent = shortUpid;
         row.appendChild(upidCell);
 
+        // Add click handler for failed tasks to show details
+        if (isFailed && !row.dataset.clickHandlerAttached) {
+            row.addEventListener('click', (event) => {
+                event.stopPropagation(); // Prevent event bubbling
+                event.preventDefault();  // Prevent any default behavior
+                
+                const upid = task.upid;
+                const existingDetailRow = row.nextElementSibling;
+                
+                if (existingDetailRow && existingDetailRow.classList.contains('task-detail-row')) {
+                    // Toggle existing detail row - collapse
+                    existingDetailRow.remove();
+                    targetCell.innerHTML = `<span class="text-xs text-gray-400 mr-1">▶</span>${target}`;
+                    expandedTaskState.delete(upid); // Remove from global state
+                } else {
+                    // Create and show detail row - expand
+                    const detailRow = _createTaskDetailRow(task);
+                    row.insertAdjacentElement('afterend', detailRow);
+                    targetCell.innerHTML = `<span class="text-xs text-gray-400 mr-1">▼</span>${target}`;
+                    expandedTaskState.add(upid); // Add to global state
+                }
+            });
+            
+            // Mark row as having click handler to prevent duplicates
+            row.dataset.clickHandlerAttached = 'true';
+        }
+
         return row;
+    };
+
+    const _createTaskDetailRow = (task) => {
+        const detailRow = document.createElement('tr');
+        detailRow.className = 'task-detail-row bg-red-25 dark:bg-red-950/10 border-b border-gray-200 dark:border-gray-700';
+        
+        const detailCell = document.createElement('td');
+        detailCell.colSpan = 5;
+        detailCell.className = 'px-6 py-4 bg-red-25 dark:bg-red-950/10';
+        
+        const detailContent = document.createElement('div');
+        detailContent.className = 'space-y-2 text-sm';
+        
+        // Error details section
+        const errorSection = document.createElement('div');
+        errorSection.innerHTML = `
+            <div class="font-semibold text-red-700 dark:text-red-300 mb-2">Error Details:</div>
+            <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded font-mono text-xs break-all">
+                ${task.status || 'No error message available'}
+            </div>
+        `;
+        detailContent.appendChild(errorSection);
+        
+        // Task info section
+        const infoSection = document.createElement('div');
+        infoSection.className = 'grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-600 dark:text-gray-400';
+        
+        const leftInfo = document.createElement('div');
+        leftInfo.innerHTML = `
+            <div><strong>Task Type:</strong> ${task.type || 'N/A'}</div>
+            <div><strong>Node:</strong> ${task.node || 'N/A'}</div>
+            <div><strong>Worker ID:</strong> ${task.id || 'N/A'}</div>
+            <div><strong>User:</strong> ${task.user || 'N/A'}</div>
+        `;
+        
+        const rightInfo = document.createElement('div');
+        const endTime = task.endTime ? PulseApp.utils.formatPbsTimestamp(task.endTime) : 'N/A';
+        const exitCodeDisplay = task.exitCode !== undefined ? task.exitCode : 'N/A';
+        const exitCodeClass = task.exitCode !== undefined && task.exitCode !== 0 ? 'text-red-600 dark:text-red-400 font-semibold' : '';
+        
+        rightInfo.innerHTML = `
+            <div><strong>Start Time:</strong> ${task.startTime ? PulseApp.utils.formatPbsTimestamp(task.startTime) : 'N/A'}</div>
+            <div><strong>End Time:</strong> ${endTime}</div>
+            <div><strong>Exit Code:</strong> <span class="${exitCodeClass}">${exitCodeDisplay}</span></div>
+            <div><strong>Full UPID:</strong> <span class="font-mono break-all">${task.upid || 'N/A'}</span></div>
+        `;
+        
+        infoSection.appendChild(leftInfo);
+        infoSection.appendChild(rightInfo);
+        detailContent.appendChild(infoSection);
+        
+        detailCell.appendChild(detailContent);
+        detailRow.appendChild(detailCell);
+        
+        return detailRow;
     };
 
     function populatePbsTaskTable(parentSectionElement, fullTasksArray) {
@@ -232,10 +363,61 @@ PulseApp.ui.pbs = (() => {
           return;
       }
 
+      const table = tableBody.closest('table');
+      const tableId = table?.id;
+      const isShowMoreExpanded = tableId ? expandedShowMoreState.has(tableId) : false;
+
+      // Use global expanded state instead of scanning DOM
       tableBody.innerHTML = '';
 
       const tasks = fullTasksArray || [];
-      let displayedTasks = tasks.slice(0, initialLimit);
+      
+      // Separate failed and successful tasks
+      const failedTasks = tasks.filter(task => task.status && task.status !== 'OK' && !task.status.toLowerCase().includes('running'));
+      const successfulTasks = tasks.filter(task => !task.status || task.status === 'OK' || task.status.toLowerCase().includes('running'));
+      
+      // Always show failed tasks first, then successful tasks up to limit
+      const prioritizedTasks = [...failedTasks, ...successfulTasks];
+      
+      // Determine which tasks to display based on "Show More" state
+      let displayedTasks;
+      if (isShowMoreExpanded) {
+          // If "Show More" was previously expanded, show all tasks
+          displayedTasks = prioritizedTasks;
+      } else {
+          // Otherwise, show limited tasks
+          displayedTasks = prioritizedTasks.slice(0, initialLimit);
+      }
+
+      // Update status indicator in header
+      if (tableId) {
+          const statusSpan = document.getElementById(`${tableId}-status`);
+          const prioritySpan = document.getElementById(`${tableId}-priority`);
+          
+          if (statusSpan) {
+              const runningTasks = tasks.filter(task => task.status && task.status.toLowerCase().includes('running')).length;
+              
+              let statusText = `(${tasks.length} total`;
+              if (failedTasks.length > 0) {
+                  statusText += `, <span class="text-red-600 dark:text-red-400 font-semibold">${failedTasks.length} failed</span>`;
+              }
+              if (runningTasks > 0) {
+                  statusText += `, <span class="text-blue-600 dark:text-blue-400">${runningTasks} running</span>`;
+              }
+              statusText += ')';
+              
+              statusSpan.innerHTML = statusText;
+          }
+          
+          // Show priority indicator if failed tasks exist and are being prioritized
+          if (prioritySpan) {
+              if (failedTasks.length > 0) {
+                  prioritySpan.classList.remove('hidden');
+              } else {
+                  prioritySpan.classList.add('hidden');
+              }
+          }
+      }
 
       if (tasks.length === 0) {
           if (noTasksMessage) noTasksMessage.classList.remove(CSS_CLASSES.HIDDEN);
@@ -244,25 +426,54 @@ PulseApp.ui.pbs = (() => {
           if (noTasksMessage) noTasksMessage.classList.add(CSS_CLASSES.HIDDEN);
 
           displayedTasks.forEach(task => {
-              tableBody.appendChild(_createTaskTableRow(task));
+              const taskRow = _createTaskTableRow(task);
+              tableBody.appendChild(taskRow);
+              
+              // Restore expanded state if this task was previously expanded
+              if (expandedTaskState.has(task.upid)) {
+                  const targetCell = taskRow.querySelector('td:first-child');
+                  const target = parsePbsTaskTarget(task);
+                  const detailRow = _createTaskDetailRow(task);
+                  taskRow.insertAdjacentElement('afterend', detailRow);
+                  targetCell.innerHTML = `<span class="text-xs text-gray-400 mr-1">▼</span>${target}`;
+              }
           });
 
           if (showMoreButton) {
-              if (tasks.length > initialLimit) {
+              if (prioritizedTasks.length > initialLimit) {
                   showMoreButton.classList.remove(CSS_CLASSES.HIDDEN);
-                  const remainingCount = tasks.length - initialLimit;
-                  showMoreButton.textContent = `Show More (${remainingCount} older)`;
-                  if (!showMoreButton.dataset.handlerAttached) {
-                      showMoreButton.addEventListener('click', () => {
-                          tasks.slice(initialLimit).forEach(task => {
-                              tableBody.appendChild(_createTaskTableRow(task));
-                          });
-                          showMoreButton.classList.add(CSS_CLASSES.HIDDEN);
-                      });
-                       showMoreButton.dataset.handlerAttached = 'true';
+                  
+                  // Update button text and state based on current expansion
+                  if (isShowMoreExpanded) {
+                      showMoreButton.textContent = 'Show Less';
+                  } else {
+                      const remainingCount = prioritizedTasks.length - initialLimit;
+                      showMoreButton.textContent = `Show More (${remainingCount} older)`;
                   }
+                  
+                  // Clear existing handlers and attach new one
+                  showMoreButton.replaceWith(showMoreButton.cloneNode(true));
+                  const newShowMoreButton = parentSectionElement.querySelector(`.${CSS_CLASSES.PBS_SHOW_MORE}`);
+                  
+                  newShowMoreButton.addEventListener('click', () => {
+                      if (tableId) {
+                          if (expandedShowMoreState.has(tableId)) {
+                              // Currently expanded, collapse it
+                              expandedShowMoreState.delete(tableId);
+                          } else {
+                              // Currently collapsed, expand it
+                              expandedShowMoreState.add(tableId);
+                          }
+                          // Re-populate with new state
+                          populatePbsTaskTable(parentSectionElement, fullTasksArray);
+                      }
+                  });
               } else {
                   showMoreButton.classList.add(CSS_CLASSES.HIDDEN);
+                  // Remove from state if there are no more tasks to show
+                  if (tableId && expandedShowMoreState.has(tableId)) {
+                      expandedShowMoreState.delete(tableId);
+                  }
               }
           }
       }
@@ -276,7 +487,7 @@ PulseApp.ui.pbs = (() => {
             if (datastores.length === 0) {
                 const row = dsTableBody.insertRow();
                 const cell = row.insertCell();
-                cell.colSpan = 7;
+                cell.colSpan = 8;
                 cell.className = `px-4 py-4 text-sm text-gray-400 text-center`;
                 cell.textContent = 'No PBS datastores found or accessible.';
             } else {
@@ -290,7 +501,15 @@ PulseApp.ui.pbs = (() => {
                     const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
 
                     const row = dsTableBody.insertRow();
-                    row.className = `${CSS_CLASSES.HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50}`;
+                    
+                    // Add critical usage highlighting
+                    let rowClass = `${CSS_CLASSES.HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50}`;
+                    if (usagePercent >= 95) {
+                        rowClass = 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30';
+                    } else if (usagePercent >= 85) {
+                        rowClass = 'bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30';
+                    }
+                    row.className = rowClass;
 
                     const createCell = (content, classNames = [], isHtml = false) => {
                         const cell = row.insertCell();
@@ -303,14 +522,38 @@ PulseApp.ui.pbs = (() => {
                         return cell;
                     };
 
-                    createCell(ds.name || 'N/A');
-                    createCell(ds.path || 'N/A', [CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400]);
-                    createCell(PulseApp.utils.formatBytes(usedBytes));
-                    createCell(PulseApp.utils.formatBytes(availableBytes));
-                    createCell(totalBytes > 0 ? PulseApp.utils.formatBytes(totalBytes) : 'N/A');
+                    // Add usage alert to name if critical
+                    let nameContent = ds.name || 'N/A';
+                    if (usagePercent >= 95) {
+                        nameContent = `⚠ ${nameContent} [CRITICAL: ${usagePercent}% full]`;
+                        createCell(nameContent, ['text-red-700', 'dark:text-red-300', 'font-semibold']);
+                    } else if (usagePercent >= 85) {
+                        nameContent = `⚠ ${nameContent} [WARNING: ${usagePercent}% full]`;
+                        createCell(nameContent, ['text-yellow-700', 'dark:text-yellow-300', 'font-semibold']);
+                    } else {
+                        createCell(nameContent);
+                    }
 
-                    const usageCell = createCell(totalBytes > 0 ? PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor) : '-', [], true);
+                    createCell(ds.path || 'N/A', [CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400]);
+                    
+                    // Simplified cell creation - the data is actually coming through correctly
+                    createCell(ds.used !== null ? PulseApp.utils.formatBytes(ds.used) : 'N/A');
+                    createCell(ds.available !== null ? PulseApp.utils.formatBytes(ds.available) : 'N/A');
+                    createCell(ds.total !== null ? PulseApp.utils.formatBytes(ds.total) : 'N/A');
+
+                    // Create usage cell with better formatting
+                    const usageCell = row.insertCell();
+                    usageCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP}`;
                     usageCell.style.minWidth = '150px';
+                    if (totalBytes > 0) {
+                        usageCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor);
+                    } else {
+                        usageCell.textContent = 'N/A';
+                    }
+
+                    // Add deduplication factor column
+                    const deduplicationText = ds.deduplicationFactor ? `${ds.deduplicationFactor}x` : 'N/A';
+                    createCell(deduplicationText, [CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400, CSS_CLASSES.FONT_SEMIBOLD]);
 
                     createCell(gcStatusHtml, [], true);
                 });
@@ -318,7 +561,7 @@ PulseApp.ui.pbs = (() => {
         } else {
             const row = dsTableBody.insertRow();
             const cell = row.insertCell();
-            cell.colSpan = 7;
+            cell.colSpan = 8;
             cell.className = `px-4 py-4 ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_400} text-center`;
             cell.textContent = statusText;
         }
@@ -382,7 +625,7 @@ PulseApp.ui.pbs = (() => {
         dsThead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
         const dsHeaderRow = document.createElement('tr');
         dsHeaderRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TRACKING_WIDER} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
-        ['Name', 'Path', 'Used', 'Available', 'Total', 'Usage', 'GC Status'].forEach(headerText => {
+        ['Name', 'Path', 'Used', 'Available', 'Total', 'Usage', 'Deduplication', 'GC Status'].forEach(headerText => {
             const th = document.createElement('th');
             th.scope = 'col';
             th.className = CSS_CLASSES.P1_PX2;
@@ -408,7 +651,7 @@ PulseApp.ui.pbs = (() => {
 
         const heading = document.createElement('h4');
         heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
-        heading.textContent = 'PBS Task Health (7d)';
+        heading.textContent = 'PBS Task Summary (Last 30 Days)';
         sectionDiv.appendChild(heading);
 
         const tableContainer = document.createElement('div');
@@ -451,7 +694,13 @@ PulseApp.ui.pbs = (() => {
             const lastFailed = PulseApp.utils.formatPbsTimestamp(summary.lastFailed);
 
             const row = tbody.insertRow();
-            row.className = CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700;
+            
+            // Add row highlighting for failed tasks
+            if (failed > 0) {
+                row.className = `${CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700} bg-red-50 dark:bg-red-900/20`;
+            } else {
+                row.className = CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700;
+            }
 
             const cellTaskType = row.insertCell();
             cellTaskType.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}`;
@@ -459,9 +708,20 @@ PulseApp.ui.pbs = (() => {
 
             const cellStatus = row.insertCell();
             cellStatus.className = CSS_CLASSES.P1_PX2;
-            const okHtml = `<span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">${ok} OK</span>`;
-            const failHtml = `<span class="${failed > 0 ? CSS_CLASSES.FONT_BOLD + ' ' + CSS_CLASSES.TEXT_RED_600_DARK_RED_400 : CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}">${failed} Fail</span>`;
-            cellStatus.innerHTML = `${okHtml} / ${failHtml}`;
+            
+            // More descriptive status text
+            let statusHtml = '';
+            if (failed > 0) {
+                statusHtml = `<span class="${CSS_CLASSES.TEXT_RED_600_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}">⚠ ${failed} FAILED</span>`;
+                if (ok > 0) {
+                    statusHtml += ` / <span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">${ok} OK</span>`;
+                }
+            } else if (ok > 0) {
+                statusHtml = `<span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">✓ All OK (${ok})</span>`;
+            } else {
+                statusHtml = `<span class="${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}">No recent tasks</span>`;
+            }
+            cellStatus.innerHTML = statusHtml;
             
             const cellLastOk = row.insertCell();
             cellLastOk.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}`;
@@ -469,7 +729,11 @@ PulseApp.ui.pbs = (() => {
 
             const cellLastFail = row.insertCell();
             cellLastFail.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}`;
-            cellLastFail.textContent = lastFailed;
+            if (failed > 0 && lastFailed !== '-') {
+                cellLastFail.innerHTML = `<span class="text-red-600 dark:text-red-400 font-semibold">${lastFailed}</span>`;
+            } else {
+                cellLastFail.textContent = lastFailed;
+            }
         });
 
         table.appendChild(tbody);
@@ -484,7 +748,7 @@ PulseApp.ui.pbs = (() => {
 
         const heading = document.createElement('h4');
         heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
-        heading.textContent = `Recent ${title} Tasks`;
+        heading.innerHTML = `Recent ${title} Tasks <span id="${tableId}-status" class="text-xs font-normal text-gray-500"></span><span id="${tableId}-priority" class="text-xs text-red-600 dark:text-red-400 ml-2 hidden">⚠ Failed tasks shown first</span>`;
         fragment.appendChild(heading);
 
         const tableContainer = document.createElement('div');
@@ -560,6 +824,82 @@ PulseApp.ui.pbs = (() => {
         return container;
     };
 
+    const _createPbsNodeStatusSection = (instanceId, pbsInstanceData) => {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.id = `pbs-node-status-section-${instanceId}`;
+        sectionDiv.className = `${CSS_CLASSES.MB3}`;
+
+        const heading = document.createElement('h4');
+        heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} mb-2 ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
+        heading.textContent = 'Server Status';
+        sectionDiv.appendChild(heading);
+
+        const statusContainer = document.createElement('div');
+        statusContainer.className = `${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} ${CSS_CLASSES.BG_GRAY_50_DARK_BG_GRAY_800_30} p-2`; // Reduced padding for a tighter overall look
+        
+        const nodeStatus = pbsInstanceData.nodeStatus || {};
+        const versionInfo = pbsInstanceData.versionInfo || {};
+        
+        const metricsRow = document.createElement('div');
+        metricsRow.className = 'flex flex-wrap -mx-px'; // Use negative margin to counteract border width on items
+
+        const createMetricBlock = (label, value, details, isLast = false) => {
+            const block = document.createElement('div');
+            let blockClasses = 'flex-1 px-2 py-1 text-center min-w-[80px]'; // min-width to prevent excessive squishing
+            if (!isLast) {
+                blockClasses += ' border-r border-gray-300 dark:border-gray-600';
+            }
+            block.className = blockClasses;
+            
+            let innerHTML = `<div class="text-xs text-gray-500 dark:text-gray-400">${label}</div>
+                             <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">${value}</div>`;
+            if (details) {
+                innerHTML += `<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${details}</div>`;
+            }
+            block.innerHTML = innerHTML;
+            return block;
+        };
+
+        const metricItems = [];
+
+        // PBS Version
+        if (versionInfo.version) {
+            const versionText = versionInfo.release ? `${versionInfo.version}-${versionInfo.release}` : versionInfo.version;
+            metricItems.push({ label: 'PBS VER', value: versionText });
+        }
+
+        // Uptime
+        if (nodeStatus.uptime) {
+            metricItems.push({ label: 'UPTIME', value: PulseApp.utils.formatUptime(nodeStatus.uptime) });
+        }
+
+        // CPU Usage
+        if (nodeStatus.cpu !== null && nodeStatus.cpu !== undefined) {
+            metricItems.push({ label: 'CPU', value: `${Math.round(nodeStatus.cpu * 100)}%` });
+        }
+        
+        // Memory Usage
+        if (nodeStatus.memory && nodeStatus.memory.total && nodeStatus.memory.used !== null) {
+            const memoryPercent = Math.round((nodeStatus.memory.used / nodeStatus.memory.total) * 100);
+            const memoryDetails = `(${PulseApp.utils.formatBytes(nodeStatus.memory.used)} / ${PulseApp.utils.formatBytes(nodeStatus.memory.total)})`;
+            metricItems.push({ label: 'MEMORY', value: `${memoryPercent}%`, details: memoryDetails });
+        }
+
+        // Load Average (1-min)
+        if (nodeStatus.loadavg && Array.isArray(nodeStatus.loadavg) && nodeStatus.loadavg.length >= 1) {
+            metricItems.push({ label: 'LOAD', value: nodeStatus.loadavg[0].toFixed(2) });
+        }
+
+        metricItems.forEach((item, index) => {
+            metricsRow.appendChild(createMetricBlock(item.label, item.value, item.details, index === metricItems.length - 1));
+        });
+        
+        statusContainer.appendChild(metricsRow);
+        sectionDiv.appendChild(statusContainer);
+        
+        return sectionDiv;
+    };
+
     const _createPbsInstanceElement = (pbsInstanceData, instanceId, instanceName, overallHealth, healthTitle, showDetails, statusText) => {
         const instanceWrapper = document.createElement('div');
         instanceWrapper.className = `${CSS_CLASSES.PBS_INSTANCE_SECTION} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} p-4 mb-4 bg-gray-50/30 dark:bg-gray-800/30`;
@@ -571,6 +911,7 @@ PulseApp.ui.pbs = (() => {
         detailsContainer.className = `${CSS_CLASSES.PBS_INSTANCE_DETAILS} ${CSS_CLASSES.SPACE_Y_4} ${showDetails ? '' : CSS_CLASSES.HIDDEN}`;
         detailsContainer.id = ID_PREFIXES.PBS_DETAILS + instanceId;
 
+        detailsContainer.appendChild(_createPbsNodeStatusSection(instanceId, pbsInstanceData));
         detailsContainer.appendChild(_createDatastoreSectionElement(instanceId));
         detailsContainer.appendChild(_createSummariesSectionElement(instanceId, pbsInstanceData));
         detailsContainer.appendChild(_createAllTaskSectionsContainer(instanceId));
