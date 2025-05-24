@@ -1,0 +1,812 @@
+PulseApp.alerts = (() => {
+    let activeAlerts = [];
+    let alertHistory = [];
+    let alertRules = [];
+    let alertGroups = [];
+    let alertMetrics = {};
+    let notificationContainer = null;
+    let alertsInitialized = false;
+    let alertDropdown = null;
+
+    // Configuration - More subtle and less intrusive
+    const MAX_NOTIFICATIONS = 3; // Reduced from 5
+    const NOTIFICATION_TIMEOUT = 5000; // Reduced from 10 seconds to 5
+    const ACKNOWLEDGED_CLEANUP_DELAY = 300000; // 5 minutes
+    const SEVERITY_COLORS = {
+        'critical': 'bg-red-500 border-red-600 text-white',
+        'warning': 'bg-yellow-500 border-yellow-600 text-white',
+        'info': 'bg-blue-500 border-blue-600 text-white',
+        'resolved': 'bg-green-500 border-green-600 text-white'
+    };
+
+    const SEVERITY_ICONS = {
+        'critical': `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>`,
+        'warning': `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>`,
+        'info': `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>`,
+        'resolved': `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>`
+    };
+
+    const GROUP_COLORS = {
+        'critical_alerts': '#ef4444',
+        'system_performance': '#f59e0b',
+        'storage_alerts': '#8b5cf6',
+        'availability_alerts': '#ef4444',
+        'network_alerts': '#10b981',
+        'custom': '#6b7280'
+    };
+
+    function init() {
+        if (alertsInitialized) return;
+        
+        console.log('[Alerts] Initializing subtle alerts system...');
+        
+        // Add a small delay to ensure DOM is fully ready
+        setTimeout(() => {
+            createNotificationContainer();
+            setupHeaderIndicator();
+            setupEventListeners();
+            loadInitialData();
+            
+            // Ensure button is visible after initialization
+            const indicator = document.getElementById('alerts-indicator');
+            if (indicator) {
+                console.log('[Alerts] Alerts indicator button created and visible');
+                updateHeaderIndicator(); // Initialize with current state
+            } else {
+                console.error('[Alerts] Failed to create alerts indicator button');
+            }
+        }, 100);
+        
+        alertsInitialized = true;
+    }
+
+    async function loadInitialData() {
+        console.log('[Alerts] Loading initial alert data...');
+        try {
+            const [alertsResponse, groupsResponse] = await Promise.all([
+                fetch('/api/alerts'),
+                fetch('/api/alerts/groups')
+            ]);
+            
+            if (alertsResponse.ok) {
+                const alertsData = await alertsResponse.json();
+                console.log('[Alerts] Raw alerts data:', alertsData);
+                activeAlerts = alertsData.active || [];
+                alertRules = alertsData.rules || [];
+                alertMetrics = alertsData.stats?.metrics || {};
+                console.log('[Alerts] Loaded active alerts:', activeAlerts);
+                updateHeaderIndicator();
+            } else {
+                console.error('[Alerts] Failed to fetch alerts:', alertsResponse.status);
+            }
+            
+            if (groupsResponse.ok) {
+                const groupsData = await groupsResponse.json();
+                alertGroups = groupsData.groups || [];
+            } else {
+                console.error('[Alerts] Failed to fetch groups:', groupsResponse.status);
+            }
+        } catch (error) {
+            console.error('[Alerts] Failed to load initial alert data:', error);
+        }
+    }
+
+    function createNotificationContainer() {
+        notificationContainer = document.createElement('div');
+        notificationContainer.id = 'pulse-notifications';
+        notificationContainer.className = 'fixed bottom-4 right-4 z-40 space-y-2 pointer-events-none';
+        notificationContainer.style.maxWidth = '280px';
+        document.body.appendChild(notificationContainer);
+    }
+
+    function setupHeaderIndicator() {
+        const connectionStatus = document.getElementById('connection-status');
+        if (connectionStatus) {
+            // Remove any existing alerts indicator to avoid duplicates
+            const existingIndicator = document.getElementById('alerts-indicator');
+            if (existingIndicator) {
+                existingIndicator.remove();
+            }
+            
+            const alertsIndicator = document.createElement('div');
+            alertsIndicator.id = 'alerts-indicator';
+            alertsIndicator.className = 'text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-pointer relative flex-shrink-0 transition-colors';
+            alertsIndicator.title = 'Click to view alerts';
+            alertsIndicator.textContent = '0';
+            
+            // Subtle styling that matches the header aesthetic
+            alertsIndicator.style.minWidth = '20px';
+            alertsIndicator.style.textAlign = 'center';
+            alertsIndicator.style.userSelect = 'none';
+            alertsIndicator.style.zIndex = '40';
+            alertsIndicator.style.fontSize = '10px';
+            alertsIndicator.style.lineHeight = '1';
+            
+            // Insert the indicator before the connection status
+            connectionStatus.parentNode.insertBefore(alertsIndicator, connectionStatus);
+            
+            // Create dropdown as a sibling, positioned relative to the header container
+            alertDropdown = document.createElement('div');
+            alertDropdown.id = 'alerts-dropdown';
+            alertDropdown.className = 'absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden hidden';
+            
+            // More compact positioning for the dropdown
+            alertDropdown.style.position = 'fixed';
+            alertDropdown.style.zIndex = '1000';
+            alertDropdown.style.top = '60px';
+            alertDropdown.style.right = '20px';
+            alertDropdown.style.maxWidth = '320px';
+            alertDropdown.style.maxHeight = '400px';
+            
+            // Append dropdown to body for better positioning control
+            document.body.appendChild(alertDropdown);
+            
+            console.log('[Alerts] Header indicator and dropdown created successfully');
+        } else {
+            console.error('[Alerts] connection-status element not found');
+        }
+    }
+
+    function setupEventListeners() {
+        // Wait for socket to be available and set up event listeners
+        const setupSocketListeners = () => {
+            if (window.socket && window.socket.connected) {
+                console.log('[Alerts] Setting up socket event listeners');
+                window.socket.on('alert', handleNewAlert);
+                window.socket.on('alertResolved', handleResolvedAlert);
+                return true;
+            }
+            return false;
+        };
+        
+        // Try to setup immediately, or wait for socket
+        if (!setupSocketListeners()) {
+            const checkSocket = setInterval(() => {
+                if (setupSocketListeners()) {
+                    clearInterval(checkSocket);
+                }
+            }, 100);
+            
+            // Give up after 10 seconds
+            setTimeout(() => clearInterval(checkSocket), 10000);
+        }
+
+        // Fixed click handler logic
+        document.addEventListener('click', (e) => {
+            const indicator = document.getElementById('alerts-indicator');
+            const dropdown = document.getElementById('alerts-dropdown');
+            
+            if (!indicator || !dropdown) return;
+            
+            // Debug logging
+            const clickedIndicator = indicator.contains(e.target);
+            const clickedDropdown = dropdown.contains(e.target);
+            
+            // If clicking the indicator (but not the dropdown), toggle dropdown
+            if (clickedIndicator && !clickedDropdown) {
+                console.log('[Alerts] Indicator clicked, toggling dropdown');
+                e.preventDefault();
+                e.stopPropagation();
+                toggleDropdown();
+                return;
+            }
+            
+            // If clicking inside the dropdown, do nothing (let dropdown handle its own clicks)
+            if (clickedDropdown) {
+                console.log('[Alerts] Dropdown content clicked');
+                return;
+            }
+            
+            // If clicking outside both indicator and dropdown, close dropdown
+            if (!clickedIndicator && !clickedDropdown && !dropdown.classList.contains('hidden')) {
+                console.log('[Alerts] Clicked outside, closing dropdown');
+                closeDropdown();
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeDropdown();
+            }
+        });
+    }
+
+    function toggleDropdown() {
+        if (!alertDropdown) return;
+        
+        if (alertDropdown.classList.contains('hidden')) {
+            openDropdown();
+        } else {
+            closeDropdown();
+        }
+    }
+
+    function openDropdown() {
+        if (!alertDropdown) return;
+        
+        // Update dropdown position based on current indicator position
+        const indicator = document.getElementById('alerts-indicator');
+        if (indicator) {
+            const rect = indicator.getBoundingClientRect();
+            alertDropdown.style.top = (rect.bottom + 8) + 'px';
+            alertDropdown.style.right = (window.innerWidth - rect.right) + 'px';
+        }
+        
+        alertDropdown.classList.remove('hidden');
+        updateDropdownContent();
+        console.log('[Alerts] Dropdown opened');
+    }
+
+    function closeDropdown() {
+        if (!alertDropdown) return;
+        
+        alertDropdown.classList.add('hidden');
+        console.log('[Alerts] Dropdown closed');
+    }
+
+    function updateDropdownContent() {
+        console.log('[Alerts] Updating dropdown content. Active alerts:', activeAlerts.length);
+        if (!alertDropdown) return;
+
+        const unacknowledgedAlerts = activeAlerts.filter(a => !a.acknowledged);
+        const acknowledgedAlerts = activeAlerts.filter(a => a.acknowledged);
+
+        // Check if acknowledged section was previously expanded
+        const acknowledgedSection = alertDropdown.querySelector('.acknowledged-alerts-content');
+        const wasExpanded = acknowledgedSection && !acknowledgedSection.classList.contains('hidden');
+        const scrollPosition = acknowledgedSection ? acknowledgedSection.scrollTop : 0;
+
+        if (activeAlerts.length === 0) {
+            alertDropdown.innerHTML = `
+                <div class="p-3 text-center text-gray-500 dark:text-gray-400">
+                    <svg class="w-6 h-6 mx-auto mb-1 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                        ${SEVERITY_ICONS.info}
+                    </svg>
+                    <p class="text-xs">No active alerts</p>
+                </div>
+            `;
+            return;
+        }
+
+        let content = '';
+
+        // Unacknowledged alerts section
+        if (unacknowledgedAlerts.length > 0) {
+            content += `
+                <div class="border-b border-gray-200 dark:border-gray-700 p-2">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-medium text-gray-900 dark:text-gray-100">
+                            ${unacknowledgedAlerts.length} alert${unacknowledgedAlerts.length !== 1 ? 's' : ''}
+                        </h3>
+                        <button onclick="console.log('[Alerts] Ack All button clicked'); PulseApp.alerts.markAllAsAcknowledged()" 
+                                class="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none">
+                            Ack All
+                        </button>
+                    </div>
+                </div>
+                <div class="max-h-64 overflow-y-auto">
+                    ${unacknowledgedAlerts.slice(0, 8).map(alert => createCompactAlertCard(alert, false)).join('')}
+                    ${unacknowledgedAlerts.length > 8 ? `
+                        <div class="p-2 text-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700">
+                            +${unacknowledgedAlerts.length - 8} more unacknowledged
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Acknowledged alerts section (collapsed, greyed out)
+        if (acknowledgedAlerts.length > 0) {
+            const acknowledgedSection = `
+                <div class="border-t border-gray-200 dark:border-gray-700">
+                    <button onclick="PulseApp.alerts.toggleAcknowledgedSection()" 
+                            class="w-full p-2 text-left text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700/50 flex items-center justify-between acknowledged-toggle">
+                        <span>${acknowledgedAlerts.length} acknowledged alert${acknowledgedAlerts.length !== 1 ? 's' : ''}</span>
+                        <svg class="w-3 h-3 transform transition-transform ${wasExpanded ? 'rotate-180' : ''}" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                        </svg>
+                    </button>
+                    <div class="acknowledged-alerts-content max-h-32 overflow-y-auto ${wasExpanded ? '' : 'hidden'}">
+                        ${acknowledgedAlerts.map(alert => createCompactAlertCard(alert, true)).join('')}
+                    </div>
+                </div>
+            `;
+            content += acknowledgedSection;
+        }
+
+        // If only acknowledged alerts exist
+        if (unacknowledgedAlerts.length === 0 && acknowledgedAlerts.length > 0) {
+            content = `
+                <div class="p-3 text-center text-gray-500 dark:text-gray-400">
+                    <svg class="w-6 h-6 mx-auto mb-1 text-green-300 dark:text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                        ${SEVERITY_ICONS.resolved}
+                    </svg>
+                    <p class="text-xs">All alerts acknowledged</p>
+                </div>
+                ${content}
+            `;
+        }
+
+        alertDropdown.innerHTML = content;
+        console.log('[Alerts] Dropdown content updated with', unacknowledgedAlerts.length, 'unacknowledged and', acknowledgedAlerts.length, 'acknowledged alerts');
+
+        // Restore scroll position if acknowledged section exists and was expanded
+        if (wasExpanded && scrollPosition > 0) {
+            const newAcknowledgedSection = alertDropdown.querySelector('.acknowledged-alerts-content');
+            if (newAcknowledgedSection) {
+                newAcknowledgedSection.scrollTop = scrollPosition;
+            }
+        }
+    }
+
+    function createCompactAlertCard(alert, acknowledged = false) {
+        const severityColor = alert.severity === 'critical' ? 'border-red-400' :
+                             alert.severity === 'warning' ? 'border-yellow-400' : 'border-blue-400';
+        
+        const severityBg = alert.severity === 'critical' ? 'bg-red-50 dark:bg-red-900/10' :
+                          alert.severity === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/10' : 'bg-blue-50 dark:bg-blue-900/10';
+        
+        // If acknowledged, heavily grey out the entire card
+        const cardClasses = acknowledged ? 
+            'border-l-2 border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30 p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0 opacity-60' :
+            `border-l-2 ${severityColor} ${severityBg} p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0`;
+        
+        const duration = Math.round((Date.now() - alert.triggeredAt) / 1000);
+        const durationStr = duration < 60 ? `${duration}s` : 
+                           duration < 3600 ? `${Math.round(duration/60)}m` : 
+                           `${Math.round(duration/3600)}h`;
+        
+        const icon = SEVERITY_ICONS[alert.severity] || SEVERITY_ICONS.info;
+        
+        let currentValueDisplay = '';
+        if (alert.metric === 'status') {
+            currentValueDisplay = alert.currentValue;
+        } else if (alert.metric === 'network_combined' || alert.currentValue === 'anomaly_detected') {
+            currentValueDisplay = 'Network anomaly';
+        } else if (typeof alert.currentValue === 'number') {
+            const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.metric);
+            currentValueDisplay = `${Math.round(alert.currentValue)}${isPercentageMetric ? '%' : ''}`;
+        } else {
+            currentValueDisplay = alert.currentValue;
+        }
+        
+        // Muted text classes for acknowledged alerts
+        const nameClass = acknowledged ? 'text-xs font-medium text-gray-500 dark:text-gray-500 truncate' : 'text-xs font-medium text-gray-900 dark:text-gray-100 truncate';
+        const valueClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500' : 'text-xs text-gray-500 dark:text-gray-400';
+        const ruleClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500 truncate' : 'text-xs text-gray-500 dark:text-gray-400 truncate';
+        
+        return `
+            <div class="${cardClasses}">
+                <div class="flex items-center space-x-2">
+                    <div class="flex-shrink-0 ${acknowledged ? 'opacity-50' : ''}">
+                        ${icon}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center space-x-1">
+                            <span class="${nameClass}">
+                                ${alert.guest.name}
+                            </span>
+                            <span class="${valueClass}">
+                                ${currentValueDisplay}
+                            </span>
+                            ${alert.escalated && !acknowledged ? '<span class="text-xs bg-red-500 text-white px-1 rounded">!</span>' : ''}
+                            ${acknowledged ? '<span class="text-xs bg-green-500/70 text-white px-1 rounded opacity-70">✓</span>' : ''}
+                        </div>
+                        <div class="${ruleClass}">
+                            ${alert.ruleName} • ${durationStr}${acknowledged ? ' • acknowledged' : ''}
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0 space-x-1">
+                        ${!acknowledged ? `
+                            <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}');" 
+                                    class="text-xs px-1 py-0.5 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none">
+                                ✓
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function handleNewAlert(alert) {
+        console.log('[Alerts] New alert:', alert);
+        
+        const existingIndex = activeAlerts.findIndex(a => 
+            a.ruleId === alert.ruleId && 
+            a.guest.vmid === alert.guest.vmid && 
+            a.guest.node === alert.guest.node
+        );
+        
+        if (existingIndex >= 0) {
+            activeAlerts[existingIndex] = alert;
+        } else {
+            activeAlerts.unshift(alert);
+        }
+        
+        updateHeaderIndicator();
+        
+        // Only show notifications for critical alerts or escalated alerts to reduce noise
+        const shouldShowNotification = alert.severity === 'critical' || alert.escalated;
+        if (shouldShowNotification) {
+            showNotification(alert, alert.severity);
+        }
+        
+        if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+            updateDropdownContent();
+        }
+        
+        document.dispatchEvent(new CustomEvent('pulseAlert', { detail: alert }));
+    }
+
+    function handleResolvedAlert(alert) {
+        console.log('[Alerts] Alert resolved:', alert);
+        
+        activeAlerts = activeAlerts.filter(a => 
+            !(a.guest.vmid === alert.guest.vmid && 
+              a.guest.node === alert.guest.node && 
+              a.ruleId === alert.ruleId)
+        );
+        
+        updateHeaderIndicator();
+        
+        // Only show resolved notifications for previously critical/escalated alerts
+        const shouldShowNotification = alert.severity === 'critical' || alert.escalated;
+        if (shouldShowNotification) {
+            showNotification(alert, 'resolved');
+        }
+        
+        if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+            updateDropdownContent();
+        }
+        
+        document.dispatchEvent(new CustomEvent('pulseAlertResolved', { detail: alert }));
+    }
+
+    function updateHeaderIndicator() {
+        const indicator = document.getElementById('alerts-indicator');
+        if (!indicator) return;
+
+        const unacknowledgedAlerts = activeAlerts.filter(a => !a.acknowledged);
+        const count = unacknowledgedAlerts.length;
+        const escalatedCount = unacknowledgedAlerts.filter(a => a.escalated).length;
+        
+        // Always show the button, just change its appearance based on unacknowledged alert count
+        let className = 'text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-pointer relative flex-shrink-0 transition-colors';
+        
+        if (count === 0) {
+            className = 'text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-pointer relative flex-shrink-0 transition-colors';
+        } else {
+            const hasCritical = unacknowledgedAlerts.some(a => a.severity === 'critical');
+            const hasWarnings = unacknowledgedAlerts.some(a => a.severity === 'warning');
+            const hasEscalated = escalatedCount > 0;
+            
+            if (hasEscalated) {
+                className = 'text-xs px-1.5 py-0.5 rounded bg-red-500 text-white cursor-pointer relative flex-shrink-0 transition-colors';
+            } else if (hasCritical) {
+                className = 'text-xs px-1.5 py-0.5 rounded bg-red-400 text-white cursor-pointer relative flex-shrink-0 transition-colors';
+            } else if (hasWarnings) {
+                className = 'text-xs px-1.5 py-0.5 rounded bg-yellow-400 text-white cursor-pointer relative flex-shrink-0 transition-colors';
+            } else {
+                className = 'text-xs px-1.5 py-0.5 rounded bg-blue-400 text-white cursor-pointer relative flex-shrink-0 transition-colors';
+            }
+        }
+        
+        indicator.className = className;
+        indicator.style.minWidth = '20px';
+        indicator.style.textAlign = 'center';
+        indicator.style.userSelect = 'none';
+        indicator.style.zIndex = '40';
+        indicator.style.fontSize = '10px';
+        indicator.style.lineHeight = '1';
+        
+        indicator.textContent = count === 0 ? '0' : `${count}`;
+        indicator.title = count === 0 ? 'No active alerts' : 
+                        `${count} unacknowledged alert${count !== 1 ? 's' : ''} - Click to view`;
+    }
+
+    function showNotification(alert, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `pointer-events-auto transform transition-all duration-200 ease-out opacity-0 translate-y-2 scale-95`;
+        
+        // More subtle styling with muted colors
+        const colorClasses = {
+            'critical': 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-700 dark:text-red-200',
+            'warning': 'bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-700 dark:text-yellow-200',
+            'info': 'bg-blue-50 border border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-200',
+            'resolved': 'bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-200'
+        };
+        
+        const colorClass = colorClasses[type] || colorClasses.info;
+        const icon = SEVERITY_ICONS[type] || SEVERITY_ICONS.info;
+        
+        const title = type === 'resolved' ? 'Resolved' : 
+                     alert.escalated ? 'Escalated' : 
+                     type === 'info' ? (alert.message && alert.message.includes('acknowledged') ? 'Success' : 'Alert') :
+                     'Alert';
+        
+        const message = alert.message || `${alert.guest?.name || 'Unknown'}`;
+        
+        notification.innerHTML = `
+            <div class="w-64 ${colorClass} shadow-sm rounded-lg pointer-events-auto overflow-hidden backdrop-blur-sm">
+                <div class="p-2">
+                    <div class="flex items-center gap-2">
+                        <div class="flex-shrink-0">
+                            ${icon}
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-xs font-medium leading-tight">${title}</p>
+                            <p class="text-xs opacity-80 leading-tight truncate">${message}</p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <button class="inline-flex text-current hover:opacity-70 focus:outline-none transition-opacity p-0.5" onclick="this.closest('.pointer-events-auto').remove()">
+                                <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        notificationContainer.appendChild(notification);
+
+        requestAnimationFrame(() => {
+            notification.className = notification.className.replace('opacity-0 translate-y-2 scale-95', 'opacity-100 translate-y-0 scale-100');
+        });
+
+        // Smarter timing: resolved alerts and acknowledgments disappear faster
+        const isLowPriority = type === 'resolved' || 
+                             (alert.message && alert.message.includes('acknowledged')) ||
+                             (alert.message && alert.message.includes('suppressed'));
+        
+        const timeoutDuration = isLowPriority ? 2500 : NOTIFICATION_TIMEOUT;
+
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.className = notification.className.replace('opacity-100 translate-y-0 scale-100', 'opacity-0 translate-y-2 scale-95');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.remove();
+                    }
+                }, 200);
+            }
+        }, timeoutDuration);
+
+        while (notificationContainer.children.length > MAX_NOTIFICATIONS) {
+            notificationContainer.removeChild(notificationContainer.firstChild);
+        }
+    }
+
+    async function acknowledgeAlert(alertId, ruleId) {
+        try {
+            console.log(`[Alerts] Attempting to acknowledge alert: ${alertId}`);
+            
+            const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: 'web-user', note: 'Acknowledged via web interface' })
+            });
+            
+            console.log(`[Alerts] Acknowledge response status: ${response.status}`);
+            
+            if (response.ok) {
+                const result = await response.json().catch(() => ({}));
+                console.log('[Alerts] Alert acknowledged successfully:', result);
+                
+                // Find and update the alert in local array
+                const alertIndex = activeAlerts.findIndex(a => a.id === alertId);
+                if (alertIndex >= 0) {
+                    activeAlerts[alertIndex].acknowledged = true;
+                    activeAlerts[alertIndex].acknowledgedAt = Date.now();
+                    
+                    // Schedule cleanup of this acknowledged alert after 5 minutes
+                    scheduleAcknowledgedCleanup(alertId);
+                    
+                    updateHeaderIndicator();
+                    if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+                        updateDropdownContent();
+                    }
+                }
+            } else {
+                const errorText = await response.text().catch(() => 'Unknown error');
+                console.error('[Alerts] Acknowledge failed with status:', response.status, errorText);
+                throw new Error(`Server responded with status ${response.status}: ${errorText}`);
+            }
+        } catch (error) {
+            console.error('[Alerts] Failed to acknowledge alert:', error);
+            // Only show notification for actual errors
+            showNotification({ message: `Failed to acknowledge alert: ${error.message}` }, 'warning');
+        }
+    }
+
+    function scheduleAcknowledgedCleanup(alertId) {
+        setTimeout(() => {
+            console.log(`[Alerts] Auto-removing acknowledged alert: ${alertId}`);
+            activeAlerts = activeAlerts.filter(a => a.id !== alertId);
+            updateHeaderIndicator();
+            if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+                updateDropdownContent();
+            }
+        }, ACKNOWLEDGED_CLEANUP_DELAY);
+    }
+
+    function toggleAcknowledgedSection() {
+        if (!alertDropdown) return;
+        
+        const content = alertDropdown.querySelector('.acknowledged-alerts-content');
+        const arrow = alertDropdown.querySelector('.acknowledged-toggle svg');
+        
+        if (content && arrow) {
+            const isHidden = content.classList.contains('hidden');
+            
+            if (isHidden) {
+                content.classList.remove('hidden');
+                arrow.classList.add('rotate-180');
+            } else {
+                content.classList.add('hidden');
+                arrow.classList.remove('rotate-180');
+            }
+            
+            console.log('[Alerts] Toggled acknowledged section:', isHidden ? 'opened' : 'closed');
+        }
+    }
+
+    async function suppressAlert(ruleId, node, vmid) {
+        try {
+            console.log(`[Alerts] Attempting to suppress alert: ${ruleId} for ${node}/${vmid}`);
+            
+            const response = await fetch('/api/alerts/suppress', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    ruleId,
+                    guestFilter: { node, vmid },
+                    duration: 3600000, // 1 hour
+                    reason: 'Suppressed via web interface'
+                })
+            });
+            
+            console.log(`[Alerts] Suppress response status: ${response.status}`);
+            
+            if (response.ok) {
+                const result = await response.json().catch(() => ({}));
+                console.log('[Alerts] Alert suppressed successfully:', result);
+                await loadInitialData();
+                if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+                    updateDropdownContent();
+                }
+            } else {
+                const errorText = await response.text().catch(() => 'Unknown error');
+                console.error('[Alerts] Suppress failed with status:', response.status, errorText);
+                throw new Error(`Server responded with status ${response.status}: ${errorText}`);
+            }
+        } catch (error) {
+            console.error('[Alerts] Failed to suppress alert:', error);
+            showNotification({ message: `Failed to suppress alert: ${error.message}` }, 'warning');
+        }
+    }
+
+    async function markAllAsAcknowledged() {
+        console.log('[Alerts] markAllAsAcknowledged called');
+        console.log('[Alerts] Current activeAlerts:', activeAlerts);
+        
+        // Debug: Show the actual alert objects
+        activeAlerts.forEach((alert, index) => {
+            console.log(`[Alerts] Alert ${index}:`, {
+                id: alert.id,
+                name: alert.guest?.name,
+                acknowledged: alert.acknowledged,
+                acknowledgedType: typeof alert.acknowledged
+            });
+        });
+        
+        const unacknowledgedAlerts = activeAlerts.filter(alert => !alert.acknowledged);
+        console.log('[Alerts] Unacknowledged alerts:', unacknowledgedAlerts);
+        
+        // Debug: Also try explicit filter
+        const explicitUnacknowledged = activeAlerts.filter(alert => alert.acknowledged === false);
+        console.log('[Alerts] Explicitly false acknowledged alerts:', explicitUnacknowledged);
+        
+        if (unacknowledgedAlerts.length === 0) {
+            console.log('[Alerts] No unacknowledged alerts found');
+            // Don't show annoying "no alerts" popup - user can see this visually
+            return;
+        }
+        
+        console.log(`[Alerts] Attempting to acknowledge ${unacknowledgedAlerts.length} alerts`);
+        
+        let successCount = 0;
+        let errorCount = 0;
+        
+        for (const alert of unacknowledgedAlerts) {
+            try {
+                console.log(`[Alerts] Acknowledging alert: ${alert.id}`);
+                
+                const response = await fetch(`/api/alerts/${alert.id}/acknowledge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        userId: 'bulk-operation', 
+                        note: 'Bulk acknowledged via dropdown' 
+                    })
+                });
+                
+                console.log(`[Alerts] Response for ${alert.id}:`, response.status, response.statusText);
+                
+                if (response.ok) {
+                    successCount++;
+                    // Update local alert
+                    const alertIndex = activeAlerts.findIndex(a => a.id === alert.id);
+                    if (alertIndex >= 0) {
+                        activeAlerts[alertIndex].acknowledged = true;
+                        activeAlerts[alertIndex].acknowledgedAt = Date.now();
+                        
+                        // Schedule cleanup of this acknowledged alert after 5 minutes
+                        scheduleAcknowledgedCleanup(alert.id);
+                        
+                        console.log(`[Alerts] Updated local alert ${alert.id} to acknowledged`);
+                    }
+                } else {
+                    errorCount++;
+                    const errorText = await response.text().catch(() => 'Unknown error');
+                    console.error(`[Alerts] Failed to acknowledge alert ${alert.id}:`, response.status, errorText);
+                }
+            } catch (error) {
+                errorCount++;
+                console.error(`[Alerts] Failed to acknowledge alert ${alert.id}:`, error);
+            }
+        }
+        
+        console.log(`[Alerts] Bulk acknowledge completed: ${successCount} success, ${errorCount} errors`);
+        
+        // Update UI
+        updateHeaderIndicator();
+        if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+            updateDropdownContent();
+        }
+        
+        // Only show notifications for errors - success is visual (alerts disappear/change)
+        if (errorCount > 0) {
+            showNotification({ 
+                message: `${errorCount} alerts failed to acknowledge` 
+            }, 'warning');
+        }
+        // No "success" notification needed - user can see alerts are acknowledged
+    }
+
+    function updateAlertsFromState(state) {
+        if (state && state.alerts) {
+            if (state.alerts.active) {
+                activeAlerts = state.alerts.active;
+                updateHeaderIndicator();
+                if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+                    updateDropdownContent();
+                }
+            }
+        }
+    }
+
+    // Public API
+    return {
+        init,
+        showNotification,
+        showAlertsDropdown: openDropdown,
+        hideAlertsDropdown: closeDropdown,
+        updateAlertsFromState,
+        acknowledgeAlert,
+        suppressAlert,
+        markAllAsAcknowledged,
+        toggleAcknowledgedSection,
+        getActiveAlerts: () => activeAlerts,
+        getAlertHistory: () => alertHistory
+    };
+})();
+
+// Auto-initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', PulseApp.alerts.init);
+} else {
+    PulseApp.alerts.init();
+}
