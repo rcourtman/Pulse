@@ -830,73 +830,100 @@ PulseApp.ui.pbs = (() => {
         sectionDiv.className = `${CSS_CLASSES.MB3}`;
 
         const heading = document.createElement('h4');
-        heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} mb-2 ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
+        heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
         heading.textContent = 'Server Status';
         sectionDiv.appendChild(heading);
 
-        const statusContainer = document.createElement('div');
-        statusContainer.className = `${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} ${CSS_CLASSES.BG_GRAY_50_DARK_BG_GRAY_800_30} p-2`; // Reduced padding for a tighter overall look
-        
-        const nodeStatus = pbsInstanceData.nodeStatus || {};
+        const tableContainer = document.createElement('div');
+        tableContainer.className = `${CSS_CLASSES.OVERFLOW_X_AUTO} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED}`;
+        const table = document.createElement('table');
+        table.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}`;
+
+        // Table header
+        const thead = document.createElement('thead');
+        thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+        const headerRow = document.createElement('tr');
+        headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TRACKING_WIDER} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
+        const headerClasses = [
+            'w-24 truncate', // PBS VER
+            'w-24 truncate', // Uptime
+            'min-w-[180px]', // CPU
+            'min-w-[180px]', // Mem
+            'w-16 truncate'  // Load
+        ];
+        ['PBS VER', 'Uptime', 'CPU', 'Mem', 'Load'].forEach((headerText, i) => {
+            const th = document.createElement('th');
+            th.scope = 'col';
+            th.className = `${CSS_CLASSES.P1_PX2} ${headerClasses[i]}`;
+            th.textContent = headerText;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        // Table body
+        const tbody = document.createElement('tbody');
+        tbody.className = CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700;
+        const valueRow = document.createElement('tr');
+
+        // PBS VER
         const versionInfo = pbsInstanceData.versionInfo || {};
-        
-        const metricsRow = document.createElement('div');
-        metricsRow.className = 'flex flex-wrap -mx-px'; // Use negative margin to counteract border width on items
-
-        const createMetricBlock = (label, value, details, isLast = false) => {
-            const block = document.createElement('div');
-            let blockClasses = 'flex-1 px-2 py-1 text-center min-w-[80px]'; // min-width to prevent excessive squishing
-            if (!isLast) {
-                blockClasses += ' border-r border-gray-300 dark:border-gray-600';
-            }
-            block.className = blockClasses;
-            
-            let innerHTML = `<div class="text-xs text-gray-500 dark:text-gray-400">${label}</div>
-                             <div class="text-sm font-semibold text-gray-900 dark:text-gray-100">${value}</div>`;
-            if (details) {
-                innerHTML += `<div class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">${details}</div>`;
-            }
-            block.innerHTML = innerHTML;
-            return block;
-        };
-
-        const metricItems = [];
-
-        // PBS Version
-        if (versionInfo.version) {
-            const versionText = versionInfo.release ? `${versionInfo.version}-${versionInfo.release}` : versionInfo.version;
-            metricItems.push({ label: 'PBS VER', value: versionText });
-        }
+        const versionText = versionInfo.version ? (versionInfo.release ? `${versionInfo.version}-${versionInfo.release}` : versionInfo.version) : '-';
+        const versionCell = document.createElement('td');
+        versionCell.className = `${CSS_CLASSES.P1_PX2} w-24 truncate`;
+        versionCell.title = versionText;
+        versionCell.textContent = versionText;
+        valueRow.appendChild(versionCell);
 
         // Uptime
-        if (nodeStatus.uptime) {
-            metricItems.push({ label: 'UPTIME', value: PulseApp.utils.formatUptime(nodeStatus.uptime) });
-        }
+        const nodeStatus = pbsInstanceData.nodeStatus || {};
+        const uptimeCell = document.createElement('td');
+        uptimeCell.className = `${CSS_CLASSES.P1_PX2} w-24 truncate`;
+        uptimeCell.textContent = nodeStatus.uptime ? PulseApp.utils.formatUptime(nodeStatus.uptime) : '-';
+        valueRow.appendChild(uptimeCell);
 
-        // CPU Usage
+        // CPU
+        const cpuCell = document.createElement('td');
+        cpuCell.className = `${CSS_CLASSES.P1_PX2} min-w-[180px]`;
         if (nodeStatus.cpu !== null && nodeStatus.cpu !== undefined) {
-            metricItems.push({ label: 'CPU', value: `${Math.round(nodeStatus.cpu * 100)}%` });
+            const cpuPercent = nodeStatus.cpu * 100;
+            const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
+            const cpuTooltipText = `${cpuPercent.toFixed(1)}%`;
+            cpuCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
+        } else {
+            cpuCell.textContent = '-';
         }
-        
-        // Memory Usage
+        valueRow.appendChild(cpuCell);
+
+        // Mem
+        const memCell = document.createElement('td');
+        memCell.className = `${CSS_CLASSES.P1_PX2} min-w-[180px]`;
         if (nodeStatus.memory && nodeStatus.memory.total && nodeStatus.memory.used !== null) {
-            const memoryPercent = Math.round((nodeStatus.memory.used / nodeStatus.memory.total) * 100);
-            const memoryDetails = `(${PulseApp.utils.formatBytes(nodeStatus.memory.used)} / ${PulseApp.utils.formatBytes(nodeStatus.memory.total)})`;
-            metricItems.push({ label: 'MEMORY', value: `${memoryPercent}%`, details: memoryDetails });
+            const memUsed = nodeStatus.memory.used;
+            const memTotal = nodeStatus.memory.total;
+            const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
+            const memColorClass = PulseApp.utils.getUsageColor(memPercent, 'memory');
+            const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
+            memCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
+        } else {
+            memCell.textContent = '-';
         }
+        valueRow.appendChild(memCell);
 
-        // Load Average (1-min)
+        // Load
+        const loadCell = document.createElement('td');
+        loadCell.className = `${CSS_CLASSES.P1_PX2} w-16 truncate`;
         if (nodeStatus.loadavg && Array.isArray(nodeStatus.loadavg) && nodeStatus.loadavg.length >= 1) {
-            metricItems.push({ label: 'LOAD', value: nodeStatus.loadavg[0].toFixed(2) });
+            loadCell.textContent = nodeStatus.loadavg[0].toFixed(2);
+        } else {
+            loadCell.textContent = '-';
         }
+        valueRow.appendChild(loadCell);
 
-        metricItems.forEach((item, index) => {
-            metricsRow.appendChild(createMetricBlock(item.label, item.value, item.details, index === metricItems.length - 1));
-        });
-        
-        statusContainer.appendChild(metricsRow);
-        sectionDiv.appendChild(statusContainer);
-        
+        tbody.appendChild(valueRow);
+        table.appendChild(tbody);
+        tableContainer.appendChild(table);
+        sectionDiv.appendChild(tableContainer);
         return sectionDiv;
     };
 
