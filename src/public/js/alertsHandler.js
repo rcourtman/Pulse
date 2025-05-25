@@ -429,7 +429,7 @@ PulseApp.alerts = (() => {
         // Only show notifications for critical alerts or escalated alerts to reduce noise
         const shouldShowNotification = alert.severity === 'critical' || alert.escalated;
         if (shouldShowNotification) {
-            showNotification(alert, alert.severity);
+            // showNotification(alert, alert.severity);
         }
         
         if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
@@ -453,7 +453,7 @@ PulseApp.alerts = (() => {
         // Only show resolved notifications for previously critical/escalated alerts
         const shouldShowNotification = alert.severity === 'critical' || alert.escalated;
         if (shouldShowNotification) {
-            showNotification(alert, 'resolved');
+            // showNotification(alert, 'resolved');
         }
         
         if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
@@ -617,7 +617,7 @@ PulseApp.alerts = (() => {
         } catch (error) {
             console.error('[Alerts] Failed to acknowledge alert:', error);
             // Only show notification for actual errors
-            showNotification({ message: `Failed to acknowledge alert: ${error.message}` }, 'warning');
+            // showNotification({ message: `Failed to acknowledge alert: ${error.message}` }, 'warning');
         }
     }
 
@@ -684,7 +684,7 @@ PulseApp.alerts = (() => {
             }
         } catch (error) {
             console.error('[Alerts] Failed to suppress alert:', error);
-            showNotification({ message: `Failed to suppress alert: ${error.message}` }, 'warning');
+            // showNotification({ message: `Failed to suppress alert: ${error.message}` }, 'warning');
         }
     }
 
@@ -769,9 +769,9 @@ PulseApp.alerts = (() => {
         
         // Only show notifications for errors - success is visual (alerts disappear/change)
         if (errorCount > 0) {
-            showNotification({ 
-                message: `${errorCount} alerts failed to acknowledge` 
-            }, 'warning');
+            // showNotification({ 
+            //     message: `${errorCount} alerts failed to acknowledge` 
+            // }, 'warning');
         }
         // No "success" notification needed - user can see alerts are acknowledged
     }

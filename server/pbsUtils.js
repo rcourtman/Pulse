@@ -41,7 +41,7 @@ function processPbsTasks(allTasks) {
     });
     
     if (unmappedTypes.size > 0) {
-        console.warn('WARN: [pbsUtils] Unmapped PBS task types found:', Array.from(unmappedTypes));
+        // console.warn('WARN: [pbsUtils] Unmapped PBS task types found:', Array.from(unmappedTypes));
     }
 
     const createDetailedTask = (task) => ({

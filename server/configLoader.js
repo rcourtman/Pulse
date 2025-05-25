@@ -50,7 +50,7 @@ function loadPbsConfig(index = null) {
         const parsedUrl = new URL(pbsHostUrl);
         pbsHostname = parsedUrl.hostname;
     } catch (e) {
-        console.warn(`WARN: Could not parse PBS_HOST URL "${pbsHostUrl}". Using full value as fallback name.`);
+        // console.warn(`WARN: Could not parse PBS_HOST URL "${pbsHostUrl}". Using full value as fallback name.`);
     }
 
     const pbsTokenId = process.env[tokenIdVar];
@@ -64,7 +64,7 @@ function loadPbsConfig(index = null) {
             pbsHostUrl.includes(p) || pbsTokenId.includes(p) || pbsTokenSecret.includes(p)
         );
         if (pbsPlaceholders.length > 0) {
-            console.warn(`WARN: Skipping PBS configuration ${index || 'primary'} (Token). Placeholder values detected for: ${pbsPlaceholders.join(', ')}`);
+            // console.warn(`WARN: Skipping PBS configuration ${index || 'primary'} (Token). Placeholder values detected for: ${pbsPlaceholders.join(', ')}`);
         } else {
             config = {
                 id: `${idPrefix}_token`,
@@ -78,10 +78,10 @@ function loadPbsConfig(index = null) {
                 allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
                 enabled: true
             };
-             console.log(`INFO: Found PBS configuration ${index || 'primary'} (API Token): ${config.name} (${config.host})`);
+             // console.log(`INFO: Found PBS configuration ${index || 'primary'} (API Token): ${config.name} (${config.host})`);
         }
     } else {
-         console.warn(`WARN: Partial PBS configuration found for ${hostVar}. Please set (${tokenIdVar} + ${tokenSecretVar}) along with ${hostVar}.`);
+         // console.warn(`WARN: Partial PBS configuration found for ${hostVar}. Please set (${tokenIdVar} + ${tokenSecretVar}) along with ${hostVar}.`);
     }
 
     if (config) {
@@ -131,7 +131,7 @@ function loadConfiguration() {
     // Set the flag if placeholders were detected (but don't throw error)
     if (placeholderVars.length > 0) {
         isConfigPlaceholder = true;
-        console.warn(`WARN: Primary Proxmox environment variables seem to contain placeholder values: ${placeholderVars.join(', ')}. Pulse may not function correctly until configured.`);
+        // console.warn(`WARN: Primary Proxmox environment variables seem to contain placeholder values: ${placeholderVars.join(', ')}. Pulse may not function correctly until configured.`);
     }
 
     // --- Load All Proxmox Endpoint Configurations ---
@@ -145,11 +145,11 @@ function loadConfiguration() {
 
         // Basic validation for additional endpoints (primary is validated earlier)
         if (index !== null && (!tokenId || !tokenSecret)) {
-            console.warn(`WARN: Skipping endpoint ${index || idPrefix} (Host: ${host}). Missing token ID or secret.`);
+            // console.warn(`WARN: Skipping endpoint ${index || idPrefix} (Host: ${host}). Missing token ID or secret.`);
             return null;
         }
         if (index !== null && placeholderValues.some(p => host.includes(p) || tokenId.includes(p) || tokenSecret.includes(p))) {
-            console.warn(`WARN: Skipping endpoint ${index || idPrefix} (Host: ${host}). Environment variables seem to contain placeholder values.`);
+            // console.warn(`WARN: Skipping endpoint ${index || idPrefix} (Host: ${host}). Environment variables seem to contain placeholder values.`);
             return null;
         }
         
@@ -202,7 +202,7 @@ function loadConfiguration() {
     }
 
     if (endpoints.length > 1) {
-        console.log(`INFO: Loaded configuration for ${endpoints.length} Proxmox endpoints.`);
+        // console.log(`INFO: Loaded configuration for ${endpoints.length} Proxmox endpoints.`);
     }
 
     // --- Load All PBS Configurations ---
@@ -226,9 +226,9 @@ function loadConfiguration() {
     }
 
     if (pbsConfigs.length > 0) {
-        console.log(`INFO: Loaded configuration for ${pbsConfigs.length} PBS instances.`);
+        // console.log(`INFO: Loaded configuration for ${pbsConfigs.length} PBS instances.`);
     } else {
-        console.log("INFO: No PBS instances configured.");
+        // console.log("INFO: No PBS instances configured.");
     }
 
     // --- Final Validation ---
@@ -238,7 +238,7 @@ function loadConfiguration() {
         throw new ConfigurationError('\n--- Configuration Error ---\nNo enabled Proxmox VE or PBS endpoints could be configured. Please check your .env file and environment variables.\n');
     }
 
-    console.log('INFO: Configuration loaded successfully.');
+    // console.log('INFO: Configuration loaded successfully.');
     // Return the flag along with endpoints and pbsConfigs
     return { endpoints, pbsConfigs, isConfigPlaceholder };
 }
