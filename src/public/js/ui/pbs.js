@@ -934,8 +934,9 @@ PulseApp.ui.pbs = (() => {
         tabContentArea.className = CSS_CLASSES.PBS_TAB_CONTENT_AREA;
 
         pbsArray.forEach((pbsInstance, index) => {
-            const rawInstanceId = pbsInstance.pbsEndpointId || `instance-${index}`;
-            const instanceId = PulseApp.utils.sanitizeForId(rawInstanceId);
+            let rawInstanceId = pbsInstance.pbsEndpointId || `instance-${index}`;
+            let instanceId = PulseApp.utils.sanitizeForId(rawInstanceId);
+            instanceId = `${instanceId}-${index}`;
             const instanceName = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
 
             const tabButton = document.createElement('button');
@@ -1062,7 +1063,8 @@ PulseApp.ui.pbs = (() => {
       if (pbsArray.length === 1) {
           const pbsInstance = pbsArray[0];
           const rawInstanceId = pbsInstance.pbsEndpointId || `instance-0`;
-          const instanceId = PulseApp.utils.sanitizeForId(rawInstanceId);
+          let instanceId = PulseApp.utils.sanitizeForId(rawInstanceId);
+          instanceId = `${instanceId}-0`;
           const instanceName = pbsInstance.pbsInstanceName || `PBS Instance 1`;
           
           const overallHealthAndTitle = _calculateOverallHealth(pbsInstance);
