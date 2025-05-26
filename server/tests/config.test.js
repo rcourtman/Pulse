@@ -390,4 +390,61 @@ describe('Configuration Loading (loadConfiguration)', () => {
     dotenv.config.mockClear(); // Clear the mock for other tests
   });
 
+  // Test Case 11: Placeholder detection with PROXMOX_TOKEN_ID in env
+  test('should insert PROXMOX_TOKEN_ID in correct position when placeholders detected', () => {
+    setEnvVars({
+      PROXMOX_HOST: 'your-proxmox-ip-or-hostname',
+      PROXMOX_TOKEN_ID: 'user@pam!token',
+      PROXMOX_TOKEN_SECRET: 'your-api-token-uuid', 
+    });
+
+    const config = loadConfiguration();
+    
+    // Should detect placeholders - the actual implementation includes PROXMOX_TOKEN_ID when it's set
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('WARN: Primary Proxmox environment variables seem to contain placeholder values: PROXMOX_HOST, PROXMOX_TOKEN_ID')
+    );
+    expect(config.isConfigPlaceholder).toBe(true);
+  });
+
+  // Test Case 12: Placeholder detection - TOKEN_ID not in list but exists
+  test('should add PROXMOX_TOKEN_ID at end if not in placeholder list but exists', () => {
+    // Only secret is a placeholder, but TOKEN_ID exists and should be added
+    setEnvVars({
+      PROXMOX_HOST: 'pve.example.com',
+      PROXMOX_TOKEN_ID: 'user@pam!mytoken',  // exists but not a placeholder
+      PROXMOX_TOKEN_SECRET: 'your-api-token-uuid',  // placeholder
+    });
+
+    const config = loadConfiguration();
+    
+    // Should detect the secret placeholder and add TOKEN_ID
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('your-api-token-uuid')
+    );
+    expect(config.isConfigPlaceholder).toBe(true);
+  });
+
+  // Test Case 13: Test line 138 - Add TOKEN_ID when no PROXMOX_HOST in placeholderVars
+  test('should push PROXMOX_TOKEN_ID when PROXMOX_HOST not in placeholder list', () => {
+    // Only PROXMOX_PORT is placeholder (not PROXMOX_HOST)
+    setEnvVars({
+      PROXMOX_HOST: 'pve.example.com',
+      PROXMOX_TOKEN_ID: 'user@pam!token',
+      PROXMOX_TOKEN_SECRET: 'secret123',
+      PROXMOX_PORT: 'your-port'  // placeholder that's not HOST/TOKEN_ID/TOKEN_SECRET
+    });
+
+    const config = loadConfiguration();
+    
+    // Should detect port placeholder and add TOKEN_ID to end since HOST not in list
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('PROXMOX_PORT')
+    );
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('PROXMOX_TOKEN_ID')
+    );
+    expect(config.isConfigPlaceholder).toBe(true);
+  });
+
 }); 
