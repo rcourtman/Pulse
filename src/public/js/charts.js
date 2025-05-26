@@ -119,6 +119,10 @@ PulseApp.charts = (() => {
     let chartDataCache = null;
     let lastChartFetch = 0;
     const CHART_FETCH_INTERVAL = 5000; // More responsive: every 5 seconds
+    
+    // Processing cache to avoid redundant downsampling
+    let processedDataCache = new Map(); // Key: `${guestId}-${metric}-${chartType}`, Value: processed data
+    let lastProcessedTimestamp = 0;
 
     function formatValue(value, metric) {
         if (metric === 'cpu' || metric === 'memory' || metric === 'disk') {
@@ -526,18 +530,27 @@ PulseApp.charts = (() => {
 
         const guestData = chartDataCache[guestId];
         
-        // Render usage charts (only if containers exist)
+        // Batch DOM checks for efficiency
+        const metricsToRender = [];
+        
+        // Check which charts exist in DOM
         ['cpu', 'memory', 'disk'].forEach(metric => {
-            const chartId = `chart-${guestId}-${metric}`;
-            const data = guestData[metric];
-            createOrUpdateChart(chartId, data, metric, 'mini');
+            if (document.getElementById(`chart-${guestId}-${metric}`)) {
+                metricsToRender.push({ metric, type: 'mini' });
+            }
         });
-
-        // Render I/O sparklines (only if containers exist)
+        
         ['diskread', 'diskwrite', 'netin', 'netout'].forEach(metric => {
+            if (document.getElementById(`chart-${guestId}-${metric}`)) {
+                metricsToRender.push({ metric, type: 'sparkline' });
+            }
+        });
+        
+        // Render only existing charts
+        metricsToRender.forEach(({ metric, type }) => {
             const chartId = `chart-${guestId}-${metric}`;
             const data = guestData[metric];
-            createOrUpdateChart(chartId, data, metric, 'sparkline');
+            createOrUpdateChart(chartId, data, metric, type);
         });
     }
 

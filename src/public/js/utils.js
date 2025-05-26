@@ -1,4 +1,17 @@
 PulseApp.utils = (() => {
+    // Debounce function to limit function calls
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
     function getUsageColor(percentage, metric = 'generic') {
         // Progress bars use traditional green/yellow/red with metric-specific thresholds
         if (metric === 'cpu') {

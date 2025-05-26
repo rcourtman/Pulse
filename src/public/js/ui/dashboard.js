@@ -353,6 +353,240 @@ PulseApp.ui.dashboard = (() => {
         return { visibleCount, visibleNodes };
     }
 
+    // Incremental table update using DOM diffing
+    function _updateTableIncremental(tableBody, sortedData, createRowFn, groupByNode) {
+        const existingRows = new Map();
+        const nodeHeaders = new Map();
+        let visibleCount = 0;
+        let visibleNodes = new Set();
+
+        // Build maps of existing rows and node headers
+        Array.from(tableBody.children).forEach(row => {
+            if (row.classList.contains('node-header')) {
+                const nodeText = row.querySelector('td').textContent.trim();
+                nodeHeaders.set(nodeText, row);
+            } else {
+                const guestId = row.getAttribute('data-id');
+                if (guestId) {
+                    existingRows.set(guestId, row);
+                }
+            }
+        });
+
+        if (groupByNode) {
+            // Group data by node
+            const nodeGroups = {};
+            sortedData.forEach(guest => {
+                const nodeName = guest.node || 'Unknown Node';
+                if (!nodeGroups[nodeName]) nodeGroups[nodeName] = [];
+                nodeGroups[nodeName].push(guest);
+            });
+
+            // Process each node group
+            let currentIndex = 0;
+            Object.keys(nodeGroups).sort().forEach(nodeName => {
+                visibleNodes.add(nodeName.toLowerCase());
+                
+                // Handle node header
+                let nodeHeader = nodeHeaders.get(nodeName);
+                if (!nodeHeader) {
+                    // Create new node header
+                    nodeHeader = document.createElement('tr');
+                    nodeHeader.className = 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs';
+                    nodeHeader.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td');
+                }
+                
+                // Move or insert node header at correct position
+                if (tableBody.children[currentIndex] !== nodeHeader) {
+                    tableBody.insertBefore(nodeHeader, tableBody.children[currentIndex] || null);
+                }
+                currentIndex++;
+
+                // Process guests in this node group
+                nodeGroups[nodeName].forEach(guest => {
+                    let guestRow = existingRows.get(guest.id);
+                    if (guestRow) {
+                        // Update existing row
+                        _updateGuestRow(guestRow, guest);
+                        existingRows.delete(guest.id);
+                    } else {
+                        // Create new row
+                        guestRow = createRowFn(guest);
+                    }
+                    
+                    if (guestRow) {
+                        // Move or insert at correct position
+                        if (tableBody.children[currentIndex] !== guestRow) {
+                            tableBody.insertBefore(guestRow, tableBody.children[currentIndex] || null);
+                        }
+                        currentIndex++;
+                        visibleCount++;
+                    }
+                });
+            });
+
+            // Remove unused node headers
+            nodeHeaders.forEach((header, nodeName) => {
+                if (!nodeGroups[nodeName] && header.parentNode) {
+                    header.remove();
+                }
+            });
+        } else {
+            // Non-grouped update
+            sortedData.forEach((guest, index) => {
+                visibleNodes.add((guest.node || 'Unknown Node').toLowerCase());
+                let guestRow = existingRows.get(guest.id);
+                
+                if (guestRow) {
+                    // Update existing row
+                    _updateGuestRow(guestRow, guest);
+                    existingRows.delete(guest.id);
+                } else {
+                    // Create new row
+                    guestRow = createRowFn(guest);
+                }
+                
+                if (guestRow) {
+                    // Move or insert at correct position
+                    if (tableBody.children[index] !== guestRow) {
+                        tableBody.insertBefore(guestRow, tableBody.children[index] || null);
+                    }
+                    visibleCount++;
+                }
+            });
+        }
+
+        // Remove any remaining unused rows
+        existingRows.forEach(row => {
+            if (row.parentNode) {
+                row.remove();
+            }
+        });
+
+        // Remove extra rows at the end
+        while (tableBody.children.length > (groupByNode ? visibleCount + visibleNodes.size : visibleCount)) {
+            tableBody.lastChild.remove();
+        }
+
+        return { visibleCount, visibleNodes };
+    }
+
+    // Update an existing guest row with new data
+    function _updateGuestRow(row, guest) {
+        // Update data attributes
+        row.setAttribute('data-name', guest.name.toLowerCase());
+        row.setAttribute('data-type', guest.type.toLowerCase());
+        row.setAttribute('data-node', guest.node.toLowerCase());
+        
+        // Update class for stopped state
+        if (guest.status === STATUS_STOPPED) {
+            row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 opacity-60 grayscale';
+        } else {
+            row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50';
+        }
+
+        // Update specific cells that might have changed
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 10) {
+            // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
+            
+            // Update name (cell 0) if changed
+            const nameCell = cells[0];
+            if (nameCell.textContent !== guest.name) {
+                nameCell.textContent = guest.name;
+                nameCell.title = guest.name;
+            }
+
+            // Update uptime (cell 3)
+            const uptimeCell = cells[3];
+            let newUptimeHTML = '-';
+            if (guest.status === STATUS_RUNNING) {
+                const formattedUptime = PulseApp.utils.formatUptime(guest.uptime);
+                if (guest.uptime < 3600) { // Less than 1 hour
+                    newUptimeHTML = `<span class="text-orange-500">${formattedUptime}</span>`;
+                } else {
+                    newUptimeHTML = formattedUptime;
+                }
+            }
+            if (uptimeCell.innerHTML !== newUptimeHTML) {
+                uptimeCell.innerHTML = newUptimeHTML;
+            }
+
+            // Update CPU (cell 4)
+            const cpuCell = cells[4];
+            const newCpuHTML = _createCpuBarHtml(guest);
+            if (cpuCell.innerHTML !== newCpuHTML) {
+                cpuCell.innerHTML = newCpuHTML;
+            }
+
+            // Update Memory (cell 5)
+            const memCell = cells[5];
+            const newMemHTML = _createMemoryBarHtml(guest);
+            if (memCell.innerHTML !== newMemHTML) {
+                memCell.innerHTML = newMemHTML;
+            }
+
+            // Update Disk (cell 6)
+            const diskCell = cells[6];
+            const newDiskHTML = _createDiskBarHtml(guest);
+            if (diskCell.innerHTML !== newDiskHTML) {
+                diskCell.innerHTML = newDiskHTML;
+            }
+
+            // Update I/O cells (7-10) if running
+            if (guest.status === STATUS_RUNNING) {
+                // Disk Read (cell 7)
+                const diskReadCell = cells[7];
+                const diskReadFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskread, 0);
+                const newDiskReadHTML = PulseApp.charts ? 
+                    `<div class="metric-text">${diskReadFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'diskread')}</div>` :
+                    diskReadFormatted;
+                if (diskReadCell.innerHTML !== newDiskReadHTML) {
+                    diskReadCell.innerHTML = newDiskReadHTML;
+                }
+
+                // Disk Write (cell 8)
+                const diskWriteCell = cells[8];
+                const diskWriteFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskwrite, 0);
+                const newDiskWriteHTML = PulseApp.charts ? 
+                    `<div class="metric-text">${diskWriteFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'diskwrite')}</div>` :
+                    diskWriteFormatted;
+                if (diskWriteCell.innerHTML !== newDiskWriteHTML) {
+                    diskWriteCell.innerHTML = newDiskWriteHTML;
+                }
+
+                // Net In (cell 9)
+                const netInCell = cells[9];
+                const netInFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netin, 0);
+                const newNetInHTML = PulseApp.charts ? 
+                    `<div class="metric-text">${netInFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'netin')}</div>` :
+                    netInFormatted;
+                if (netInCell.innerHTML !== newNetInHTML) {
+                    netInCell.innerHTML = newNetInHTML;
+                }
+
+                // Net Out (cell 10)
+                if (cells[10]) {
+                    const netOutCell = cells[10];
+                    const netOutFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netout, 0);
+                    const newNetOutHTML = PulseApp.charts ? 
+                        `<div class="metric-text">${netOutFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'netout')}</div>` :
+                        netOutFormatted;
+                    if (netOutCell.innerHTML !== newNetOutHTML) {
+                        netOutCell.innerHTML = newNetOutHTML;
+                    }
+                }
+            } else {
+                // Set I/O cells to '-' if not running
+                [7, 8, 9, 10].forEach(index => {
+                    if (cells[index] && cells[index].innerHTML !== '-') {
+                        cells[index].innerHTML = '-';
+                    }
+                });
+            }
+        }
+    }
+
     function _updateDashboardStatusMessage(statusElement, visibleCount, visibleNodes, groupByNode, filterGuestType, filterStatus, searchInput, thresholdState) {
         if (!statusElement) return;
         const textSearchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : [];
@@ -380,6 +614,10 @@ PulseApp.ui.dashboard = (() => {
     }
 
 
+    // Cache for previous table data to enable DOM diffing
+    let previousTableData = null;
+    let previousGroupByNode = null;
+
     function updateDashboardTable() {
         if (!tableBodyEl || !statusElementEl) {
             console.error('Dashboard table body or status element not found/initialized!');
@@ -401,15 +639,29 @@ PulseApp.ui.dashboard = (() => {
         let visibleCount = 0;
         let visibleNodes = new Set();
 
-        if (groupByNode) {
-            const groupRenderResult = _renderGroupedByNode(tableBodyEl, sortedData, createGuestRow);
-            visibleCount = groupRenderResult.visibleCount;
-            visibleNodes = groupRenderResult.visibleNodes;
+        // Check if we need a full rebuild (grouping mode changed or first render)
+        const needsFullRebuild = previousGroupByNode !== groupByNode || previousTableData === null;
+
+        if (needsFullRebuild) {
+            // Full rebuild
+            if (groupByNode) {
+                const groupRenderResult = _renderGroupedByNode(tableBodyEl, sortedData, createGuestRow);
+                visibleCount = groupRenderResult.visibleCount;
+                visibleNodes = groupRenderResult.visibleNodes;
+            } else {
+                PulseApp.utils.renderTableBody(tableBodyEl, sortedData, createGuestRow, "No matching guests found.", 11);
+                visibleCount = sortedData.length;
+                sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
+            }
+            previousGroupByNode = groupByNode;
         } else {
-            PulseApp.utils.renderTableBody(tableBodyEl, sortedData, createGuestRow, "No matching guests found.", 11);
-            visibleCount = sortedData.length;
-            sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
+            // Incremental update using DOM diffing
+            const result = _updateTableIncremental(tableBodyEl, sortedData, createGuestRow, groupByNode);
+            visibleCount = result.visibleCount;
+            visibleNodes = result.visibleNodes;
         }
+
+        previousTableData = sortedData;
 
         if (visibleCount === 0 && tableBodyEl) {
             let filterDescription = [];

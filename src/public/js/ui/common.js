@@ -94,12 +94,14 @@ PulseApp.ui.common = (() => {
         });
 
         if (searchInput) {
-            searchInput.addEventListener('input', function() {
+            const debouncedUpdate = debounce(function() {
                 PulseApp.ui.dashboard.updateDashboardTable();
                 if (PulseApp.ui.thresholds && typeof PulseApp.ui.thresholds.updateLogControlsVisibility === 'function') {
                     PulseApp.ui.thresholds.updateLogControlsVisibility();
                 }
-            });
+            }, 300);
+            
+            searchInput.addEventListener('input', debouncedUpdate);
         } else {
             console.warn('Element #dashboard-search not found - text filtering disabled.');
         }

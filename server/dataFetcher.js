@@ -1,4 +1,8 @@
 const { processPbsTasks } = require('./pbsUtils'); // Assuming pbsUtils.js exists or will be created
+const pLimit = require('p-limit');
+
+// Create a global limiter for API requests (5 concurrent requests per endpoint)
+const requestLimiter = pLimit(5);
 
 // Helper function to fetch data and handle common errors/warnings
 async function fetchNodeResource(apiClient, endpointId, nodeName, resourcePath, resourceName, expectArray = false, transformFn = null) {
@@ -114,8 +118,10 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             return { nodes: [], vms: [], containers: [] };
         }
 
-        // Pass the correct endpointId to fetchDataForNode
-        const guestPromises = nodes.map(node => fetchDataForNode(apiClientInstance, endpointId, node.node)); 
+        // Pass the correct endpointId to fetchDataForNode with concurrency limiting
+        const guestPromises = nodes.map(node => 
+            requestLimiter(() => fetchDataForNode(apiClientInstance, endpointId, node.node))
+        ); 
         const guestResults = await Promise.allSettled(guestPromises);
 
         let endpointVms = [];
