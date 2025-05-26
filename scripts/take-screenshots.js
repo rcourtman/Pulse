@@ -23,42 +23,8 @@ const sections = [
       }
     },
 
-    // VM View: Click main tab, click VM filter, wait, capture main content
-    { name: '02-vm-container-view', // Renumbered from 03
-      screenshotTarget: '#nested-tab-dashboard', // Changed from #main
-      action: async (page) => {
-        console.log('  Action: Clicking Main tab (if not already active)');
-        // Ensure main tab is active first
-        const mainTabIsActive = await page.locator('[data-tab="main"].active').isVisible();
-        if (!mainTabIsActive) {
-             await page.locator('[data-tab="main"]').click();
-             await page.waitForLoadState('networkidle', { timeout: 5000 });
-        }
-
-        // Wait for the VM filter button's LABEL to be visible before clicking
-        console.log('  Action: Waiting for VM filter label to be visible');
-        const vmFilterLabel = page.locator('label[for="filter-vm"]'); // Target the label now
-        await vmFilterLabel.waitFor({ state: 'visible', timeout: 15000 });
-        console.log('  Action: VM filter label visible');
-
-        console.log('  Action: Clicking VM filter label');
-        await vmFilterLabel.click(); // Click the label
-        await page.waitForTimeout(1000);
-        console.log('  Action: VM filter applied');
-
-        // Hide node summary cards
-        console.log('  Action: Hiding node summary cards');
-        await page.locator('#node-summary-cards-container').evaluate(element => element.style.display = 'none');
-      },
-      // Add a postAction to make the cards visible again
-      postAction: async (page) => {
-        console.log('  Action: Showing node summary cards');
-        await page.locator('#node-summary-cards-container').evaluate(element => element.style.display = ''); // Reset display
-      }
-    },
-
     // PBS View: Click tab, wait for PBS container content, capture PBS tab content
-    { name: '03-pbs-view', // Renumbered from 04
+    { name: '02-pbs-view', // Renumbered from 03
       screenshotTarget: '#pbs',
       action: async (page) => {
         console.log('  Action: Clicking PBS tab');
@@ -67,13 +33,24 @@ const sections = [
         // Wait for the main container within the PBS tab to be visible
         await page.locator('#pbs #pbs-instances-container').waitFor({ state: 'visible', timeout: 10000 });
         console.log('  Action: PBS container visible');
-         // Optional: wait for actual content rows if needed
-        // await page.locator('#pbs-instances-container > *').first().waitFor({ state: 'visible', timeout: 10000 });
+        
+        // Wait for PBS data to load - look for actual content, not loading message
+        console.log('  Action: Waiting for PBS data to load');
+        try {
+          // Wait for either a PBS table row or status content to appear
+          await page.locator('#pbs .pbs-status-table tbody tr, #pbs .pbs-datastore-table tbody tr').first().waitFor({ state: 'visible', timeout: 15000 });
+          console.log('  Action: PBS data loaded');
+        } catch (e) {
+          console.log('  Warning: PBS data may not be fully loaded');
+        }
+        
+        // Additional wait to ensure all data is rendered
+        await page.waitForTimeout(1000);
       }
     },
 
     // Backups View: Click tab, wait for table content, capture backups tab content
-    { name: '04-backups-view', // Renumbered from 05
+    { name: '03-backups-view', // Renumbered from 04
       screenshotTarget: '#backups',
       action: async (page) => {
         console.log('  Action: Clicking Backups tab');
@@ -85,16 +62,92 @@ const sections = [
       }
     },
     
-    // Storage View: Click tab, wait for table content, capture storage tab content
-    { name: '05-storage-view', // Renumbered
-      screenshotTarget: '#storage-info-content',
+    // Line Graph Toggle View: Click the charts toggle button to show charts
+    { name: '04-line-graph-toggle', 
+      screenshotTarget: '#nested-tab-dashboard',
       action: async (page) => {
-        await page.locator('[data-tab="storage"]').click();
-        await page.locator('#storage-info-content table').waitFor({ state: 'visible', timeout: 10000 }); // Wait for table to be populated
-        await page.waitForTimeout(500); // Allow animations/renders
+        console.log('  Action: Ensuring Main tab is active');
+        // Ensure main tab is active
+        const mainTabIsActive = await page.locator('[data-tab="main"].active').isVisible();
+        if (!mainTabIsActive) {
+             await page.locator('[data-tab="main"]').click();
+             await page.waitForLoadState('networkidle', { timeout: 5000 });
+        }
+
+        // Hide node summary cards
+        console.log('  Action: Hiding node summary cards');
+        await page.locator('#node-summary-cards-container').evaluate(element => element.style.display = 'none');
+
+        // Filter to show only LXC containers
+        console.log('  Action: Clicking LXC filter');
+        const lxcFilterLabel = page.locator('label[for="filter-lxc"]');
+        await lxcFilterLabel.waitFor({ state: 'visible', timeout: 10000 });
+        await lxcFilterLabel.click();
+        await page.waitForTimeout(500);
+
+        console.log('  Action: Clicking charts toggle button');
+        // Click the charts toggle button
+        const chartsToggle = page.locator('#toggle-charts-button');
+        await chartsToggle.waitFor({ state: 'visible', timeout: 10000 });
+        await chartsToggle.click();
+        
+        console.log('  Action: Waiting for charts to appear');
+        // Wait for charts to be visible
+        await page.waitForTimeout(2000); // Allow time for charts to render and data to load
+        
+        // Wait for the main container to have charts-mode class indicating charts are shown
+        console.log('  Action: Checking for charts mode');
+        await page.waitForFunction(() => {
+            const mainContainer = document.getElementById('main');
+            return mainContainer && mainContainer.classList.contains('charts-mode');
+        }, { timeout: 5000 });
+        
+        // Additional wait to ensure charts are fully rendered
+        await page.waitForTimeout(2000);
+        console.log('  Action: Charts are now visible');
+        
+        // Hover over a chart to show tooltip
+        console.log('  Action: Hovering over a chart to show tooltip');
+        try {
+            // Find the first visible chart element
+            const firstChart = page.locator('[id^="chart-"][id$="-cpu"] svg').first();
+            await firstChart.waitFor({ state: 'visible', timeout: 5000 });
+            
+            // Get the bounding box of the chart
+            const box = await firstChart.boundingBox();
+            if (box) {
+                // Move mouse to middle-right of the chart (where recent data points are)
+                const hoverX = box.x + (box.width * 0.8);
+                const hoverY = box.y + (box.height * 0.5);
+                
+                await page.mouse.move(hoverX, hoverY);
+                
+                // Wait for tooltip to appear
+                await page.waitForTimeout(500);
+                console.log('  Action: Tooltip should now be visible');
+            }
+        } catch (e) {
+            console.log('  Warning: Could not hover over chart for tooltip');
+        }
+      },
+      postAction: async (page) => {
+        console.log('  Action: Clicking charts toggle button again to hide charts');
+        // Toggle charts off again
+        const chartsToggle = page.locator('#toggle-charts-button');
+        await chartsToggle.click();
+        await page.waitForTimeout(500);
+        
+        // Reset filter to show all
+        console.log('  Action: Resetting filter to show all');
+        const allFilterLabel = page.locator('label[for="filter-all"]');
+        await allFilterLabel.click();
+        await page.waitForTimeout(500);
+        
+        // Show node summary cards again
+        console.log('  Action: Showing node summary cards');
+        await page.locator('#node-summary-cards-container').evaluate(element => element.style.display = '');
       }
     }
-    // { name: '06-task-view', url: '/#tasks', screenshotTarget: '#task-list-element', action: async (page) => { /* Navigate to task view if separate */ } }, // Uncomment and adjust if needed
 ];
 
 async function takeScreenshots() {
