@@ -6,7 +6,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Source: https://release-argus.io/
 
 APP="Argus"
-var_tags="${var_tags:-os}"
+var_tags="${var_tags:-watcher}"
 var_cpu="${var_cpu:-1}"
 var_ram="${var_ram:-512}"
 var_disk="${var_disk:-3}"
