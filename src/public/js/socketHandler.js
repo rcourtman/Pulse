@@ -274,8 +274,21 @@ PulseApp.socketHandler = (() => {
 
     function updatePbsTab(data) {
         try {
-            if (PulseApp.ui && PulseApp.ui.pbs && data.pbs) {
+            // Check if the new PBS data structure keys exist in the received data
+            // data.pbs is the array of PBS instances
+            // data.allPbsTasks and data.aggregatedPbsTaskSummary are top-level in the state
+            if (PulseApp.ui && PulseApp.ui.pbs && data.pbs) { // Ensure data.pbs exists
+                console.log('[Socket - PBS Tab] Received PBS data:', data.pbs);
+                console.log('[Socket - PBS Tab] Number of PBS instances:', data.pbs.length);
+                // PulseApp.ui.pbs.updatePbsInfo expects the array of PBS instances.
+                // Task data (allPbsTasks, aggregatedPbsTaskSummary) is available in PulseApp.state if needed by UI components directly.
+                // For now, updatePbsInfo primarily works with the pbs array.
                 PulseApp.ui.pbs.updatePbsInfo(data.pbs);
+            } else {
+                // Optional: Log if critical data for PBS tab is missing
+                if (!data.pbs) {
+                    console.warn('[Socket - PBS Tab] PBS data (data.pbs) not found in received socket data.');
+                }
             }
         } catch (error) {
             console.error('[Socket] Error updating PBS tab:', error);

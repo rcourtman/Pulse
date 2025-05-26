@@ -4,12 +4,17 @@
  * @returns {Object} - Object containing structured task data (backupTasks, verificationTasks, etc.).
  */
 function processPbsTasks(allTasks) {
-    if (!allTasks) return { // Return default structure if tasks are null
-        backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-        verificationTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-        syncTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-        pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } }
-    };
+    // Ensure input is an array; return empty structure if not
+    if (!Array.isArray(allTasks)) {
+        console.warn('[PBS Utils] processPbsTasks received non-array input:', allTasks);
+        return {
+            backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            verificationTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            syncTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            aggregatedPbsTaskSummary: { total: 0, ok: 0, failed: 0 },
+        };
+    }
 
     const taskTypeMap = {
         backup: 'backup',
@@ -53,22 +58,26 @@ function processPbsTasks(allTasks) {
         startTime: task.starttime,
         endTime: task.endtime,
         duration: task.endtime && task.starttime ? task.endtime - task.starttime : null,
-        // Additional fields for error diagnosis
         user: task.user,
         exitCode: task.exitcode,
+        exitStatus: task.exitstatus,
         saved: task.saved || false,
-        // Preserve synthetic backup run fields
-        guest: task.guest,
-        pbsBackupRun: task.pbsBackupRun,
-        // Include raw task data for debugging if needed
-        _raw: task
+        guest: task.guest || task.worker_id,
+        pbsBackupRun: task.pbsBackupRun
     });
 
     const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
     
     const getRecentTasksList = (taskList, detailedTaskFn, sortFn, count = 20) => {
         if (!taskList) return [];
-        return taskList.map(detailedTaskFn).sort(sortFn).slice(0, count);
+        const nowSec = Date.now() / 1000;
+        const thirtyDays = 30 * 24 * 60 * 60;
+        const recent = taskList.filter(task => {
+            // Include tasks without a starttime and tasks within last 30 days
+            if (task.starttime == null) return true;
+            return (nowSec - task.starttime) <= thirtyDays;
+        });
+        return recent.map(detailedTaskFn).sort(sortFn).slice(0, count);
     };
 
     const recentBackupTasks = getRecentTasksList(taskResults.backup.list, createDetailedTask, sortTasksDesc);

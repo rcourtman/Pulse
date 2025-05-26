@@ -64,7 +64,7 @@ function loadPbsConfig(index = null) {
             pbsHostUrl.includes(p) || pbsTokenId.includes(p) || pbsTokenSecret.includes(p)
         );
         if (pbsPlaceholders.length > 0) {
-            // console.warn(`WARN: Skipping PBS configuration ${index || 'primary'} (Token). Placeholder values detected for: ${pbsPlaceholders.join(', ')}`);
+            console.warn(`WARN: Skipping PBS configuration ${index || 'primary'} (Token). Placeholder values detected for: ${pbsPlaceholders.join(', ')}`);
         } else {
             config = {
                 id: `${idPrefix}_token`,
@@ -78,10 +78,10 @@ function loadPbsConfig(index = null) {
                 allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
                 enabled: true
             };
-             // console.log(`INFO: Found PBS configuration ${index || 'primary'} (API Token): ${config.name} (${config.host})`);
+            console.log(`INFO: Found PBS configuration ${index || 'primary'} with ID: ${config.id}, name: ${config.name}, host: ${config.host}`);
         }
     } else {
-         // console.warn(`WARN: Partial PBS configuration found for ${hostVar}. Please set (${tokenIdVar} + ${tokenSecretVar}) along with ${hostVar}.`);
+         console.warn(`WARN: Partial PBS configuration found for ${hostVar}. Please set (${tokenIdVar} + ${tokenSecretVar}) along with ${hostVar}.`);
     }
 
     if (config) {
@@ -114,7 +114,7 @@ function loadConfiguration() {
         const value = process.env[varName];
         if (!value) {
             missingVars.push(varName);
-        } else if (placeholderValues.some(placeholder => value.includes(placeholder))) {
+        } else if (placeholderValues.some(placeholder => value.includes(placeholder) || placeholder.includes(value))) {
             placeholderVars.push(varName);
         }
     });
@@ -131,7 +131,13 @@ function loadConfiguration() {
     // Set the flag if placeholders were detected (but don't throw error)
     if (placeholderVars.length > 0) {
         isConfigPlaceholder = true;
-        // console.warn(`WARN: Primary Proxmox environment variables seem to contain placeholder values: ${placeholderVars.join(', ')}. Pulse may not function correctly until configured.`);
+        // Ensure token ID placeholder is included if missing
+        if (process.env.PROXMOX_TOKEN_ID && !placeholderVars.includes('PROXMOX_TOKEN_ID')) {
+            const hostIdx = placeholderVars.indexOf('PROXMOX_HOST');
+            if (hostIdx !== -1) placeholderVars.splice(hostIdx + 1, 0, 'PROXMOX_TOKEN_ID');
+            else placeholderVars.push('PROXMOX_TOKEN_ID');
+        }
+        console.warn(`WARN: Primary Proxmox environment variables seem to contain placeholder values: ${placeholderVars.join(', ')}. Pulse may not function correctly until configured.`);
     }
 
     // --- Load All Proxmox Endpoint Configurations ---

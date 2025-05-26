@@ -5,6 +5,7 @@ PulseApp.ui.pbs = (() => {
     // Global state tracker for expanded PBS tasks
     let expandedTaskState = new Set();
     let expandedShowMoreState = new Set();
+    let selectedPbsTabIndex = 0; // Track selected PBS tab index globally
 
     const CSS_CLASSES = {
         TEXT_GREEN_500_DARK_GREEN_400: 'text-green-500 dark:text-green-400',
@@ -935,20 +936,36 @@ PulseApp.ui.pbs = (() => {
         instanceWrapper.appendChild(_createInstanceHeaderDiv(instanceName, overallHealth, healthTitle));
 
         const detailsContainer = document.createElement('div');
-        detailsContainer.className = `${CSS_CLASSES.PBS_INSTANCE_DETAILS} ${CSS_CLASSES.SPACE_Y_4} ${showDetails ? '' : CSS_CLASSES.HIDDEN}`;
+        const isError = pbsInstanceData.status === 'error';
+        detailsContainer.className = `${CSS_CLASSES.PBS_INSTANCE_DETAILS} ${CSS_CLASSES.SPACE_Y_4} ${(showDetails || isError) ? '' : CSS_CLASSES.HIDDEN}`;
         detailsContainer.id = ID_PREFIXES.PBS_DETAILS + instanceId;
 
-        detailsContainer.appendChild(_createPbsNodeStatusSection(instanceId, pbsInstanceData));
-        detailsContainer.appendChild(_createDatastoreSectionElement(instanceId));
-        detailsContainer.appendChild(_createSummariesSectionElement(instanceId, pbsInstanceData));
-        detailsContainer.appendChild(_createAllTaskSectionsContainer(instanceId));
+        if (isError) {
+            // If there's an error, just show the statusText prominently
+            const errorNoticeElement = document.createElement('div');
+            errorNoticeElement.className = 'p-4 text-center text-red-600 dark:text-red-400 font-semibold';
+            errorNoticeElement.textContent = statusText; // e.g., "Error: Connection failed"
+            detailsContainer.appendChild(errorNoticeElement);
+        } else if (showDetails) {
+            // If no error and showDetails is true, build and populate the full UI
+            detailsContainer.appendChild(_createPbsNodeStatusSection(instanceId, pbsInstanceData));
+            detailsContainer.appendChild(_createDatastoreSectionElement(instanceId));
+            detailsContainer.appendChild(_createSummariesSectionElement(instanceId, pbsInstanceData));
+            detailsContainer.appendChild(_createAllTaskSectionsContainer(instanceId));
+            
+            // Populate the created sections
+            const dsTableBodyElement = detailsContainer.querySelector(`#${ID_PREFIXES.PBS_DS_TBODY}${instanceId}`);
+            _populateDsTableBody(dsTableBodyElement, pbsInstanceData.datastores, statusText, showDetails);
+            _populateInstanceTaskSections(detailsContainer, instanceId, pbsInstanceData, statusText, showDetails);
+        } else {
+            // Fallback for non-error, non-detailed view (e.g., "Configured, attempting connection...")
+            const statusNoticeElement = document.createElement('div');
+            statusNoticeElement.className = 'p-4 text-center text-gray-500 dark:text-gray-400';
+            statusNoticeElement.textContent = statusText;
+            detailsContainer.appendChild(statusNoticeElement);
+        }
         
         instanceWrapper.appendChild(detailsContainer);
-
-        const dsTableBodyElement = instanceWrapper.querySelector(`#${ID_PREFIXES.PBS_DS_TBODY}${instanceId}`);
-        _populateDsTableBody(dsTableBodyElement, pbsInstanceData.datastores, statusText, showDetails);
-        _populateInstanceTaskSections(detailsContainer, instanceId, pbsInstanceData, statusText, showDetails);
-
         return instanceWrapper;
     };
     // END: Definitions for functions that _createPbsInstanceElement depends on
@@ -960,10 +977,17 @@ PulseApp.ui.pbs = (() => {
         const tabContentArea = document.createElement('div');
         tabContentArea.className = CSS_CLASSES.PBS_TAB_CONTENT_AREA;
 
+        let tabButtons = [];
         pbsArray.forEach((pbsInstance, index) => {
-            let rawInstanceId = pbsInstance.pbsEndpointId || `instance-${index}`;
-            let instanceId = PulseApp.utils.sanitizeForId(rawInstanceId);
-            instanceId = `${instanceId}-${index}`;
+            let baseId;
+            if (pbsInstance.pbsInstanceName) {
+                baseId = PulseApp.utils.sanitizeForId(pbsInstance.pbsInstanceName);
+            } else if (pbsInstance.pbsEndpointId) {
+                baseId = PulseApp.utils.sanitizeForId(pbsInstance.pbsEndpointId);
+            } else {
+                baseId = 'pbs-instance';
+            }
+            const instanceId = `${baseId}-${index}`;
             const instanceName = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
 
             const tabButton = document.createElement('button');
@@ -975,35 +999,53 @@ PulseApp.ui.pbs = (() => {
 
             tabButton.addEventListener('click', (event) => {
                 tabContainer.querySelectorAll('button').forEach(btn => {
-                    btn.classList.remove(CSS_CLASSES.PBS_TAB_BUTTON_ACTIVE);
+                    CSS_CLASSES.PBS_TAB_BUTTON_ACTIVE.split(' ').forEach(cls => btn.classList.remove(cls));
                 });
-                event.currentTarget.classList.add(CSS_CLASSES.PBS_TAB_BUTTON_ACTIVE);
+                CSS_CLASSES.PBS_TAB_BUTTON_ACTIVE.split(' ').forEach(cls => event.currentTarget.classList.add(cls));
 
                 tabContentArea.innerHTML = '';
 
-                const selectedInstanceData = pbsArray[parseInt(event.currentTarget.dataset.instanceIndex)];
+                const selectedIndex = parseInt(event.currentTarget.dataset.instanceIndex);
+                selectedPbsTabIndex = selectedIndex; // Update global selected tab index
+                const selectedInstanceData = pbsArray[selectedIndex];
+                
+                let selectedBaseId;
+                if (selectedInstanceData.pbsInstanceName) {
+                    selectedBaseId = PulseApp.utils.sanitizeForId(selectedInstanceData.pbsInstanceName);
+                } else if (selectedInstanceData.pbsEndpointId) {
+                    selectedBaseId = PulseApp.utils.sanitizeForId(selectedInstanceData.pbsEndpointId);
+                } else {
+                    selectedBaseId = 'pbs-instance';
+                }
+                const currentInstanceId = `${selectedBaseId}-${selectedIndex}`;
+                const currentInstanceName = selectedInstanceData.pbsInstanceName || `PBS Instance ${selectedIndex + 1}`;
+                
                 const overallHealthAndTitle = _calculateOverallHealth(selectedInstanceData);
                 const statusInfo = _getInstanceStatusInfo(selectedInstanceData);
 
                 const instanceElement = _createPbsInstanceElement(
                     selectedInstanceData,
-                    instanceId,
-                    instanceName,
+                    currentInstanceId,
+                    currentInstanceName,
                     overallHealthAndTitle.overallHealth,
                     overallHealthAndTitle.healthTitle,
                     statusInfo.showDetails,
                     statusInfo.statusText
                 );
+                
                 tabContentArea.appendChild(instanceElement);
             });
             tabContainer.appendChild(tabButton);
+            tabButtons.push(tabButton);
         });
 
         mainContainer.appendChild(tabContainer);
         mainContainer.appendChild(tabContentArea);
 
-        if (tabContainer.firstChild) {
-            tabContainer.firstChild.click();
+        // Auto-select the previously selected tab if possible, else the first tab
+        const safeIndex = Math.max(0, Math.min(selectedPbsTabIndex, tabButtons.length - 1));
+        if (tabButtons[safeIndex]) {
+            tabButtons[safeIndex].click();
         }
     }
 
@@ -1067,50 +1109,57 @@ PulseApp.ui.pbs = (() => {
     };
 
     function updatePbsInfo(pbsArray) {
-      const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
-      if (!container) {
-          console.error(`PBS container element #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found!`);
-          return;
-      }
-      container.innerHTML = '';
+        console.log('[PBS Debug] updatePbsInfo received pbsArray:', JSON.parse(JSON.stringify(pbsArray))); // Log the received PBS array
+        const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
+        if (!container) {
+            console.error(`PBS container element #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found!`);
+            return;
+        }
+        container.innerHTML = '';
 
-      const loadingMessage = document.getElementById('pbs-loading-message');
-      if (loadingMessage) {
-          loadingMessage.remove();
-      }
+        const loadingMessage = document.getElementById('pbs-loading-message');
+        if (loadingMessage) {
+            loadingMessage.remove();
+        }
 
-      if (!pbsArray || pbsArray.length === 0) {
-          const placeholder = document.createElement('p');
-          placeholder.className = CSS_CLASSES.TEXT_GRAY_500_DARK_TEXT_GRAY_400_P4_TEXT_CENTER_TEXT_SM;
-          placeholder.textContent = 'Proxmox Backup Server integration is not configured.';
-          container.appendChild(placeholder);
-          return;
-      }
+        if (!pbsArray || pbsArray.length === 0) {
+            const placeholder = document.createElement('p');
+            placeholder.className = CSS_CLASSES.TEXT_GRAY_500_DARK_TEXT_GRAY_400_P4_TEXT_CENTER_TEXT_SM;
+            placeholder.textContent = 'Proxmox Backup Server integration is not configured.';
+            container.appendChild(placeholder);
+            return;
+        }
 
-      if (pbsArray.length === 1) {
-          const pbsInstance = pbsArray[0];
-          const rawInstanceId = pbsInstance.pbsEndpointId || `instance-0`;
-          let instanceId = PulseApp.utils.sanitizeForId(rawInstanceId);
-          instanceId = `${instanceId}-0`;
-          const instanceName = pbsInstance.pbsInstanceName || `PBS Instance 1`;
-          
-          const overallHealthAndTitle = _calculateOverallHealth(pbsInstance);
-          const statusInfo = _getInstanceStatusInfo(pbsInstance);
+        if (pbsArray.length === 1) {
+            const pbsInstance = pbsArray[0];
+            let baseId;
+            if (pbsInstance.pbsInstanceName) {
+                baseId = PulseApp.utils.sanitizeForId(pbsInstance.pbsInstanceName);
+            } else if (pbsInstance.pbsEndpointId) {
+                baseId = PulseApp.utils.sanitizeForId(pbsInstance.pbsEndpointId);
+            } else {
+                baseId = 'pbs-instance';
+            }
+            const instanceId = `${baseId}-0`;
+            const instanceName = pbsInstance.pbsInstanceName || `PBS Instance 1`;
+            
+            const overallHealthAndTitle = _calculateOverallHealth(pbsInstance);
+            const statusInfo = _getInstanceStatusInfo(pbsInstance);
 
-          const instanceElement = _createPbsInstanceElement(
-              pbsInstance,
-              instanceId,
-              instanceName,
-              overallHealthAndTitle.overallHealth,
-              overallHealthAndTitle.healthTitle,
-              statusInfo.showDetails,
-              statusInfo.statusText
-          );
-          container.appendChild(instanceElement);
-      } else {
-          _createPbsInstanceTabs(pbsArray, container);
-      }
-  }
+            const instanceElement = _createPbsInstanceElement(
+                pbsInstance,
+                instanceId,
+                instanceName,
+                overallHealthAndTitle.overallHealth,
+                overallHealthAndTitle.healthTitle,
+                statusInfo.showDetails,
+                statusInfo.statusText
+            );
+            container.appendChild(instanceElement);
+        } else {
+            _createPbsInstanceTabs(pbsArray, container);
+        }
+    }
 
     function initPbsEventListeners() {
         const pbsInstancesContainer = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);

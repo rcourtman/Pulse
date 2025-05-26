@@ -5,10 +5,11 @@ describe('PBS Utils - processPbsTasks', () => {
     test('should return default structure for null input', () => {
         const result = processPbsTasks(null);
         expect(result).toEqual({
-            backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-            verificationTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-            syncTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-            pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } }
+            backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            verificationTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            syncTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            aggregatedPbsTaskSummary: { total: 0, ok: 0, failed: 0 },
         });
     });
 
@@ -18,7 +19,7 @@ describe('PBS Utils - processPbsTasks', () => {
             backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
             verificationTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
             syncTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-            pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } }
+            pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
         });
     });
 
@@ -80,44 +81,84 @@ describe('PBS Utils - processPbsTasks', () => {
     });
 
     test('should correctly format recent tasks', () => {
-        const now = Math.floor(Date.now() / 1000);
-        const tasks = [
-            { upid: 'B1', node: 'pbsnode', worker_type: 'backup', worker_id: 'vm/100', status: 'OK', starttime: now - 100, endtime: now - 50 },
-            { upid: 'B2', node: 'pbsnode', type: 'backup', id: 'ct/101', status: 'FAILED', starttime: now - 200, endtime: now - 150 },
-            { upid: 'B3', node: 'pbsnode', worker_type: 'backup', worker_id: 'vm/102', status: 'running', starttime: now - 10, endtime: null }, // Running task
+        const rawTasks = [
+            // Task older than 30 days (should be filtered out)
+            {
+                upid: 'B_OLD',
+                node: 'pbsnode',
+                type: 'backup',
+                worker_type: 'backup',
+                worker_id: 'vm/200',
+                starttime: Math.floor((Date.now() - 40 * 24 * 60 * 60 * 1000) / 1000), // 40 days ago
+                endtime: Math.floor((Date.now() - 40 * 24 * 60 * 60 * 1000) / 1000) + 60,
+                status: 'OK',
+            },
+            // Task within last 30 days
+            {
+                upid: 'B1',
+                node: 'pbsnode',
+                type: 'backup',
+                worker_type: 'backup',
+                worker_id: 'vm/100',
+                starttime: Math.floor((Date.now() - 10 * 24 * 60 * 60 * 1000) / 1000), // 10 days ago
+                endtime: Math.floor((Date.now() - 10 * 24 * 60 * 60 * 1000) / 1000) + 50,
+                status: 'OK',
+            },
+            // Another task within last 30 days
+            {
+                upid: 'V1',
+                node: 'pbsnode',
+                type: 'verify',
+                worker_type: 'verify',
+                worker_id: 'datastore1:group1', // Example worker_id for verify
+                starttime: Math.floor((Date.now() - 5 * 24 * 60 * 60 * 1000) / 1000), // 5 days ago
+                endtime: Math.floor((Date.now() - 5 * 24 * 60 * 60 * 1000) / 1000) + 30,
+                status: 'WARNING',
+                exitstatus: 'WARNING: some issues',
+            }
         ];
-        const result = processPbsTasks(tasks);
-        const recent = result.backupTasks.recentTasks;
 
-        expect(recent).toHaveLength(3);
-        // Check sorting (most recent first)
-        expect(recent[0].upid).toBe('B3');
-        expect(recent[1].upid).toBe('B1');
-        expect(recent[2].upid).toBe('B2');
+        const result = processPbsTasks(rawTasks);
+        const { recentTasks } = result.backupTasks; // Assuming backupTasks is structured like this
 
-        // Check formatting of one task
-        expect(recent[1]).toEqual({
-            upid: 'B1',
-            node: 'pbsnode',
-            type: 'backup',
-            id: 'vm/100',
-            status: 'OK',
-            startTime: now - 100,
-            endTime: now - 50,
-            duration: 50,
-        });
+        expect(recentTasks).toHaveLength(1); // Only B1 should be included
+        expect(recentTasks[0].upid).toBe('B1');
+        expect(recentTasks[0].node).toBe('pbsnode');
+        expect(recentTasks[0].type).toBe('backup');
+        expect(recentTasks[0].status).toBe('OK');
+        expect(recentTasks[0].duration).toBe(50); // starttime - endtime
+        expect(recentTasks[0].guest).toBe('vm/100'); // worker_id
+        // Add other expected properties based on the actual implementation of processPbsTasks
+        expect(recentTasks[0].startTime).toBe(rawTasks[1].starttime); // Check original start/end times are mapped
+        expect(recentTasks[0].endTime).toBe(rawTasks[1].endtime);
+        expect(recentTasks[0].exitCode).toBeUndefined(); // Assuming no exitcode for OK task
+        // expect(recentTasks[0]._raw).toBeDefined(); // If _raw is intentionally included
+        // If _raw is *not* intentionally included, we need to fix processPbsTasks
+        // For now, let's check for common fields expected in the output:
+        expect(recentTasks[0]).toHaveProperty('upid');
+        expect(recentTasks[0]).toHaveProperty('node');
+        expect(recentTasks[0]).toHaveProperty('type');
+        expect(recentTasks[0]).toHaveProperty('status');
+        expect(recentTasks[0]).toHaveProperty('duration');
+        expect(recentTasks[0]).toHaveProperty('guest');
+        expect(recentTasks[0]).toHaveProperty('startTime');
+        expect(recentTasks[0]).toHaveProperty('endTime');
+        // Check that _raw is NOT present if it's not intended
+        expect(recentTasks[0]._raw).toBeUndefined();
 
-        // Check running task formatting (null duration)
-        expect(recent[0]).toEqual({
-            upid: 'B3',
-            node: 'pbsnode',
-            type: 'backup',
-            id: 'vm/102',
-            status: 'running',
-            startTime: now - 10,
-            endTime: null,
-            duration: null,
-        });
+        const { recentTasks: verifyTasks } = result.verificationTasks; // Check verification tasks
+        expect(verifyTasks).toHaveLength(1); // Only V1 should be included
+        expect(verifyTasks[0].upid).toBe('V1');
+        expect(verifyTasks[0].status).toBe('WARNING');
+        expect(verifyTasks[0].duration).toBe(30);
+        expect(verifyTasks[0].exitStatus).toBe('WARNING: some issues'); // Assuming exitstatus is mapped
+        // Check that _raw is NOT present
+        expect(verifyTasks[0]._raw).toBeUndefined();
+
+        // Also check summaries if needed by this test
+        // expect(result.backupTasks.summary).toEqual(...);
+        // expect(result.verificationTasks.summary).toEqual(...);
+
     });
 
     test('should limit recent tasks to 20 by default', () => {
@@ -191,10 +232,11 @@ describe('PBS Utils - processPbsTasks', () => {
     test('should return default structure for non-array input', () => {
         const result = processPbsTasks({}); // Pass an object instead of an array
         expect(result).toEqual({
-            backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-            verificationTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-            syncTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } },
-            pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0, lastOk: null, lastFailed: null } }
+            backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            verificationTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            syncTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, total: 0 } },
+            aggregatedPbsTaskSummary: { total: 0, ok: 0, failed: 0 },
         });
     });
 

@@ -36,7 +36,14 @@ const state = {
     avgMemoryUsage: 0,
     avgDiskUsage: 0,
     lastUpdated: null
-  }
+  },
+  
+  // These were pbsInstances, allPbsTasks, aggregatedPbsTaskSummary.
+  // state.pbs now holds the primary list of PBS instances.
+  // Task-related data might be part of each PBS instance object in state.pbs,
+  // or handled separately if needed by the client for global views.
+  allPbsTasks: [], 
+  aggregatedPbsTaskSummary: {}
 };
 
 // Initialize alert manager
@@ -67,10 +74,32 @@ function init() {
 }
 
 function getState() {
-  return { ...state, alerts: getAlertInfo() }; // Include alert info in state
+  // Return a comprehensive state object
+  return {
+    nodes: state.nodes,
+    vms: state.vms,
+    containers: state.containers,
+    metrics: state.metrics, // Assuming metrics are updated elsewhere
+    pbs: state.pbs, // This is what's sent to the client and should now be correct
+    isConfigPlaceholder: state.isConfigPlaceholder,
+    
+    // Enhanced monitoring data
+    performance: state.performance,
+    connections: Object.fromEntries(state.connections), // Convert Map to object for serialization
+    stats: state.stats,
+    
+    // PBS specific data structures - these might be derived or directly set
+    // If they are part of each item in state.pbs, the client can aggregate them.
+    // If they are global summaries, ensure they are updated correctly in updateDiscoveryData.
+    allPbsTasks: state.allPbsTasks, 
+    aggregatedPbsTaskSummary: state.aggregatedPbsTaskSummary,
+    
+    // Alerts
+    alerts: getAlertInfo() // Corrected: Call the local getAlertInfo function
+  };
 }
 
-function updateDiscoveryData({ nodes, vms, containers, pbs }, duration = 0, errors = []) {
+function updateDiscoveryData({ nodes, vms, containers, pbs, allPbsTasks, aggregatedPbsTaskSummary }, duration = 0, errors = []) {
   const startTime = Date.now();
   
   try {
@@ -79,6 +108,18 @@ function updateDiscoveryData({ nodes, vms, containers, pbs }, duration = 0, erro
     state.vms = vms || [];
     state.containers = containers || [];
     state.pbs = pbs || [];
+    
+    // If the discovery data structure nests these under the main 'pbs' array (e.g., from fetchPbsData),
+    // they might not be separate top-level items in the discoveryData object passed here.
+    // If they are indeed separate, this update is fine.
+    // If they are part of the main 'pbs' array items, this might be redundant or need adjustment
+    // based on how fetchDiscoveryData structures the final object.
+    if (allPbsTasks !== undefined) { // Check for presence before assigning
+        state.allPbsTasks = allPbsTasks;
+    }
+    if (aggregatedPbsTaskSummary !== undefined) { // Check for presence before assigning
+        state.aggregatedPbsTaskSummary = aggregatedPbsTaskSummary;
+    }
     
     // Update performance metrics
     state.performance.lastDiscoveryTime = startTime;

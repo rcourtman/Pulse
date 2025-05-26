@@ -32,6 +32,10 @@ const restoreEnvVars = (originalEnv) => {
 // Set NODE_ENV to test *before* describing the suite
 process.env.NODE_ENV = 'test';
 
+// Mock console
+let consoleWarnSpy; // Declare spies outside beforeEach/afterEach
+let consoleLogSpy;
+
 describe('Configuration Loading (loadConfiguration)', () => {
   let originalEnv;
 
@@ -49,9 +53,9 @@ describe('Configuration Loading (loadConfiguration)', () => {
     // Restore NODE_ENV as it's crucial for the logic
     process.env.NODE_ENV = 'test'; 
     
-    // Mock console
-    jest.spyOn(console, 'warn').mockImplementation(() => {});
-    jest.spyOn(console, 'log').mockImplementation(() => {});
+    // Assign spies in beforeEach
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -65,7 +69,9 @@ describe('Configuration Loading (loadConfiguration)', () => {
     });
     // --- End restore ---
 
-    jest.restoreAllMocks(); // Restore console mocks
+    // Restore specific spies
+    consoleWarnSpy.mockRestore();
+    consoleLogSpy.mockRestore();
   });
 
   // Test Case 1: Minimal Valid PVE Config
@@ -114,9 +120,6 @@ describe('Configuration Loading (loadConfiguration)', () => {
     };
     setEnvVars(envSetup);
 
-    // Spy on console.warn before calling loadConfiguration
-    const consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-
     let config;
     // Expect no error to be thrown, but placeholders to be detected
     expect(() => {
@@ -124,12 +127,9 @@ describe('Configuration Loading (loadConfiguration)', () => {
     }).not.toThrow();
 
     expect(consoleWarnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('WARN: Primary Proxmox environment variables seem to contain placeholder values: PROXMOX_HOST, PROXMOX_TOKEN_SECRET')
+      expect.stringContaining('WARN: Primary Proxmox environment variables seem to contain placeholder values: PROXMOX_HOST, PROXMOX_TOKEN_ID, PROXMOX_TOKEN_SECRET')
     );
     expect(config.isConfigPlaceholder).toBe(true);
-
-    // Important: Restore the spy to avoid interference with other tests or console output
-    consoleWarnSpy.mockRestore();
   });
 
   // Test Case 4: Valid Primary + Additional Proxmox Endpoints
@@ -250,23 +250,26 @@ describe('Configuration Loading (loadConfiguration)', () => {
 
   test('should not add primary PBS config if host is set but tokens are missing', () => {
     setEnvVars({
-      // Minimal valid PVE
-      PROXMOX_HOST: 'pve.example.com',
+      PROXMOX_HOST: '192.168.1.100',
       PROXMOX_TOKEN_ID: 'user@pam!pve',
       PROXMOX_TOKEN_SECRET: 'secretpve',
-      // Valid PBS Host, but missing tokens
-      PBS_HOST: 'https://pbs.example.com:8007',
-      // PBS_TOKEN_ID: 'user@pbs!token', // Missing
-      // PBS_TOKEN_SECRET: 'secretpbs', // Missing
+      
+      PBS_HOST: 'pbs.example.com',
+      // Missing TOKEN_ID and TOKEN_SECRET for PBS
     });
 
-    const config = loadConfiguration();
-    expect(config.endpoints).toHaveLength(1); // PVE should still load
+    let config;
+    expect(() => {
+        config = loadConfiguration();
+    }).not.toThrow();
+
+    expect(config.endpoints).toHaveLength(1);
     expect(config.pbsConfigs).toHaveLength(0); // PBS should NOT load
-    // Check that the warning for partial config was logged (inside loadPbsConfig)
-    expect(console.warn).toHaveBeenCalledWith(
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
       expect.stringContaining('WARN: Partial PBS configuration found for PBS_HOST. Please set (PBS_TOKEN_ID + PBS_TOKEN_SECRET)')
     );
+     expect(consoleWarnSpy).toHaveBeenCalledTimes(1); // Only one warning expected from this test
   });
 
   // Test Case 8: Valid Primary + Additional PBS Configs
@@ -319,7 +322,6 @@ describe('Configuration Loading (loadConfiguration)', () => {
   // Test Case 9: Incomplete Additional PBS Endpoint (NEW TEST)
   test('should skip additional PBS endpoint if token details are missing but host is present', () => {
     setEnvVars({
-      // PVE
       PROXMOX_HOST: 'pve.example.com',
       PROXMOX_TOKEN_ID: 'user@pam!pve',
       PROXMOX_TOKEN_SECRET: 'secretpve',
@@ -343,7 +345,7 @@ describe('Configuration Loading (loadConfiguration)', () => {
     expect(config.pbsConfigs.map(p => p.host)).toEqual(['pbs1.example.com', 'pbs3.example.com']);
 
     // Check that the warning for the partial config _2 was logged
-    expect(console.warn).toHaveBeenCalledWith(
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
         expect.stringContaining('WARN: Partial PBS configuration found for PBS_HOST_2. Please set (PBS_TOKEN_ID_2 + PBS_TOKEN_SECRET_2)')
     );
     // Verify the config for PBS_HOST_2 was not added
