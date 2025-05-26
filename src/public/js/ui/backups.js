@@ -11,7 +11,7 @@ PulseApp.ui.backups = (() => {
         backupsTabContent = document.getElementById('backups');
 
         if (backupsSearchInput) {
-            const debouncedUpdate = debounce(updateBackupsTab, 300);
+            const debouncedUpdate = PulseApp.utils.debounce(updateBackupsTab, 300);
             backupsSearchInput.addEventListener('input', debouncedUpdate);
         } else {
             console.warn('Element #backups-search not found - backups text filtering disabled.');

@@ -263,6 +263,7 @@ PulseApp.utils = (() => {
         formatThresholdValue,
         getReadableThresholdCriteria,
         sortData,
-        renderTableBody
+        renderTableBody,
+        debounce
     };
 })(); 

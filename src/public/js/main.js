@@ -96,18 +96,29 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function fetchVersion() {
         const versionSpan = document.getElementById('app-version');
+        if (!versionSpan) {
+            console.error('Version span element not found');
+            return;
+        }
+        
         fetch('/api/version')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
-                if (versionSpan && data.version) {
+                console.log('Version data received:', data);
+                if (data.version) {
                     versionSpan.textContent = data.version;
+                } else {
+                    versionSpan.textContent = 'unknown';
                 }
             })
             .catch(error => {
                 console.error('Error fetching version:', error);
-                if (versionSpan) {
-                    versionSpan.textContent = 'error';
-                }
+                versionSpan.textContent = 'error';
             });
     }
 
@@ -117,5 +128,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     initializeModules();
+    
+    // Fetch version immediately and retry after a short delay if needed
+    console.log('[Main] Fetching version...');
     fetchVersion();
+    
+    // Also try again after DOM is fully ready and socket might be connected
+    setTimeout(() => {
+        const versionSpan = document.getElementById('app-version');
+        if (versionSpan && (versionSpan.textContent === 'loading...' || versionSpan.textContent === 'error')) {
+            console.log('[Main] Retrying version fetch...');
+            fetchVersion();
+        }
+    }, 2000);
 });

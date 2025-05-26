@@ -1,8 +1,24 @@
 const { processPbsTasks } = require('./pbsUtils'); // Assuming pbsUtils.js exists or will be created
-const pLimit = require('p-limit');
 
-// Create a global limiter for API requests (5 concurrent requests per endpoint)
-const requestLimiter = pLimit(5);
+let pLimit;
+let requestLimiter;
+let pLimitInitialized = false;
+
+async function initializePLimit() {
+  if (pLimitInitialized) return;
+  // Adding a try-catch for robustness, though module resolution should handle not found.
+  try {
+    const pLimitModule = await import('p-limit');
+    pLimit = pLimitModule.default;
+    requestLimiter = pLimit(5);
+    pLimitInitialized = true;
+  } catch (error) {
+    console.error("[DataFetcher] Failed to initialize p-limit:", error);
+    // Fallback to a no-op limiter or throw if critical
+    requestLimiter = (fn) => fn(); // Basic fallback: execute immediately
+    pLimitInitialized = true; // Mark as initialized to prevent retries
+  }
+}
 
 // Helper function to fetch data and handle common errors/warnings
 async function fetchNodeResource(apiClient, endpointId, nodeName, resourcePath, resourceName, expectArray = false, transformFn = null) {
@@ -56,6 +72,8 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
  * @returns {Promise<Object>} - { nodes: Array, vms: Array, containers: Array } for this endpoint.
  */
 async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
+    await initializePLimit(); // Ensure pLimit is initialized before use
+
     const endpointName = config.name || endpointId; // Use configured name or ID
     let endpointType = 'standalone'; // Default to standalone
     let actualClusterName = config.name || endpointId; // Default identifier to endpoint name

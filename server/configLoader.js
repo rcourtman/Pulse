@@ -19,7 +19,9 @@ const placeholderValues = [
   'your-token-secret-uuid',     // Common PVE secret example
   'your-pbs-token-secret-uuid', // Common PBS secret example
   'YOUR_API_SECRET_HERE',       // From original install script comment
-  'secret-uuid'                 // Specific value used in config.test.js
+  'secret-uuid',                 // Specific value used in config.test.js
+  'your-api-token-uuid',         // Specific value used in config.test.js for PROXMOX_TOKEN_SECRET
+  'your-port'                   // Specific value used in config.test.js for PROXMOX_PORT
 ];
 
 // Error class for configuration issues

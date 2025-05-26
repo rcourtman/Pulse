@@ -37,6 +37,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const cors = require('cors');
+const compression = require('compression');
 const { Server } = require('socket.io');
 const { URL } = require('url'); // <--- ADD: Import URL constructor
 const axiosRetry = require('axios-retry').default; // Import axios-retry
@@ -87,6 +88,18 @@ const app = express();
 const server = http.createServer(app); // Create HTTP server instance
 
 // Middleware
+app.use(compression({
+  filter: (req, res) => {
+    // Don't compress responses with this request header
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // Fallback to standard filter function
+    return compression.filter(req, res);
+  },
+  threshold: 1024, // Only compress if response is over 1KB
+  level: 6 // Compression level (1-9, 6 is good balance of speed vs compression)
+}));
 app.use(cors());
 app.use(express.json());
 

@@ -94,7 +94,7 @@ PulseApp.ui.common = (() => {
         });
 
         if (searchInput) {
-            const debouncedUpdate = debounce(function() {
+            const debouncedUpdate = PulseApp.utils.debounce(function() {
                 PulseApp.ui.dashboard.updateDashboardTable();
                 if (PulseApp.ui.thresholds && typeof PulseApp.ui.thresholds.updateLogControlsVisibility === 'function') {
                     PulseApp.ui.thresholds.updateLogControlsVisibility();

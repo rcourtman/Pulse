@@ -12,6 +12,17 @@ PulseApp.state = (() => {
         pbsDataArray: [],
         dashboardHistory: {},
         initialDataReceived: false,
+        
+        // Performance optimization: track what changed
+        lastUpdateHash: {},
+        changeTracking: {
+            nodes: false,
+            vms: false,
+            containers: false,
+            metrics: false,
+            pbs: false,
+            dashboard: false
+        },
         isThresholdRowVisible: false,
         groupByNode: savedFilterState.groupByNode ?? true,
         filterGuestType: savedFilterState.filterGuestType || 'all',
@@ -105,18 +116,59 @@ PulseApp.state = (() => {
         localStorage.setItem('pulseSortState', JSON.stringify(stateToSave));
     }
 
+    // Utility function to create hash of data for change detection
+    function createDataHash(data) {
+        if (!data) return null;
+        if (Array.isArray(data)) {
+            return data.length + '-' + (data.length > 0 ? JSON.stringify(data[0]) : '');
+        }
+        return JSON.stringify(data).substring(0, 100);
+    }
+    
     function updateState(newData) {
         try {
-            console.log('[State] Updating state with new data:', Object.keys(newData));
+            // Reset change tracking
+            Object.keys(internalState.changeTracking).forEach(key => {
+                internalState.changeTracking[key] = false;
+            });
             
-            // Update core data arrays
-            if (newData.nodes) internalState.nodesData = newData.nodes;
-            if (newData.vms) internalState.vmsData = newData.vms;
-            if (newData.containers) internalState.containersData = newData.containers;
-            if (newData.metrics) internalState.metricsData = newData.metrics;
-            if (newData.pbs) internalState.pbsDataArray = newData.pbs;
+            // Check what actually changed using hashing
+            const dataTypes = ['nodes', 'vms', 'containers', 'metrics', 'pbs'];
             
-            // Update enhanced monitoring data
+            dataTypes.forEach(type => {
+                if (newData[type]) {
+                    const newHash = createDataHash(newData[type]);
+                    const hasChanged = internalState.lastUpdateHash[type] !== newHash;
+                    
+                    if (hasChanged) {
+                        internalState.changeTracking[type] = true;
+                        internalState.lastUpdateHash[type] = newHash;
+                        
+                        // Update the data
+                        switch (type) {
+                            case 'nodes':
+                                internalState.nodesData = newData.nodes;
+                                break;
+                            case 'vms':
+                                internalState.vmsData = newData.vms;
+                                internalState.changeTracking.dashboard = true;
+                                break;
+                            case 'containers':
+                                internalState.containersData = newData.containers;
+                                internalState.changeTracking.dashboard = true;
+                                break;
+                            case 'metrics':
+                                internalState.metricsData = newData.metrics;
+                                break;
+                            case 'pbs':
+                                internalState.pbsDataArray = newData.pbs;
+                                break;
+                        }
+                    }
+                }
+            });
+            
+            // Only update enhanced monitoring data if provided
             if (newData.alerts) {
                 internalState.alerts = {
                     active: newData.alerts.active || [],
@@ -126,11 +178,13 @@ PulseApp.state = (() => {
             }
             
             if (newData.performance) {
-                internalState.performance = { ...internalState.performance, ...newData.performance };
+                // Incremental update for performance data
+                Object.assign(internalState.performance, newData.performance);
             }
             
             if (newData.stats) {
-                internalState.stats = { ...internalState.stats, ...newData.stats };
+                // Incremental update for stats
+                Object.assign(internalState.stats, newData.stats);
             }
             
             // Update configuration status
@@ -138,8 +192,10 @@ PulseApp.state = (() => {
                 internalState.isConfigPlaceholder = newData.isConfigPlaceholder;
             }
             
-            // Combine VMs and containers for dashboard
-            internalState.dashboardData = [...internalState.vmsData, ...internalState.containersData];
+            // Only recombine dashboard data if VMs or containers changed
+            if (internalState.changeTracking.dashboard) {
+                internalState.dashboardData = [...internalState.vmsData, ...internalState.containersData];
+            }
             
             // Mark that we've received initial data
             if (!internalState.initialDataReceived && internalState.dashboardData.length > 0) {
@@ -147,8 +203,10 @@ PulseApp.state = (() => {
                 console.log('[State] Initial data received and processed');
             }
             
-            // Update dashboard history for charts
-            updateDashboardHistoryFromMetrics();
+            // Only update dashboard history if metrics changed
+            if (internalState.changeTracking.metrics) {
+                updateDashboardHistoryFromMetrics();
+            }
             
         } catch (error) {
             console.error('[State] Error updating state:', error);
@@ -157,29 +215,51 @@ PulseApp.state = (() => {
 
     function updateDashboardHistoryFromMetrics() {
         try {
+            const timestamp = Date.now();
+            const windowSize = PulseApp.config?.AVERAGING_WINDOW_SIZE || 30;
+            
+            // Batch process metrics for efficiency
+            const updates = [];
+            
             internalState.metricsData.forEach(metric => {
                 if (metric && metric.current) {
                     const guestId = `${metric.endpointId}-${metric.node}-${metric.id}`;
-                    const dataPoint = {
-                        timestamp: Date.now(),
-                        cpu: metric.current.cpu * 100 || 0,
-                        memory: metric.current.mem || 0,
-                        disk: metric.current.disk || 0,
-                        diskread: metric.current.diskread || 0,
-                        diskwrite: metric.current.diskwrite || 0,
-                        netin: metric.current.netin || 0,
-                        netout: metric.current.netout || 0
-                    };
                     
-                    if (!internalState.dashboardHistory[guestId] || !Array.isArray(internalState.dashboardHistory[guestId])) {
-                        internalState.dashboardHistory[guestId] = [];
-                    }
+                    // Only create data point if values are meaningful
+                    const hasData = metric.current.cpu !== undefined || 
+                                   metric.current.mem !== undefined || 
+                                   metric.current.disk !== undefined;
                     
-                    const history = internalState.dashboardHistory[guestId];
-                    history.push(dataPoint);
-                    if (history.length > PulseApp.config.AVERAGING_WINDOW_SIZE) {
-                        history.shift();
+                    if (hasData) {
+                        updates.push({
+                            guestId,
+                            dataPoint: {
+                                timestamp,
+                                cpu: metric.current.cpu * 100 || 0,
+                                memory: metric.current.mem || 0,
+                                disk: metric.current.disk || 0,
+                                diskread: metric.current.diskread || 0,
+                                diskwrite: metric.current.diskwrite || 0,
+                                netin: metric.current.netin || 0,
+                                netout: metric.current.netout || 0
+                            }
+                        });
                     }
+                }
+            });
+            
+            // Apply all updates in one pass
+            updates.forEach(({ guestId, dataPoint }) => {
+                if (!internalState.dashboardHistory[guestId]) {
+                    internalState.dashboardHistory[guestId] = [];
+                }
+                
+                const history = internalState.dashboardHistory[guestId];
+                history.push(dataPoint);
+                
+                // Trim history efficiently
+                if (history.length > windowSize) {
+                    history.splice(0, history.length - windowSize);
                 }
             });
         } catch (error) {
@@ -240,6 +320,15 @@ PulseApp.state = (() => {
         // Alert and performance data getters
         getAlerts: () => internalState.alerts,
         getPerformance: () => internalState.performance,
-        getStats: () => internalState.stats
+        getStats: () => internalState.stats,
+        
+        // Change tracking utilities
+        hasChanged: (type) => internalState.changeTracking[type],
+        getChangeTracking: () => ({ ...internalState.changeTracking }),
+        clearChangeTracking: () => {
+            Object.keys(internalState.changeTracking).forEach(key => {
+                internalState.changeTracking[key] = false;
+            });
+        }
     };
 })();
