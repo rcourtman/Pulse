@@ -198,7 +198,7 @@ PulseApp.ui.storage = (() => {
         const usagePercent = store.total > 0 ? (store.used / store.total) * 100 : 0;
         const usageTooltipText = `${PulseApp.utils.formatBytes(store.used)} / ${PulseApp.utils.formatBytes(store.total)} (${usagePercent.toFixed(1)}%)`;
         const usageColorClass = PulseApp.utils.getUsageColor(usagePercent);
-        const usageBarHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageTooltipText, usageColorClass);
+        const usageBarHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageTooltipText, usageColorClass, `${usagePercent.toFixed(0)}%`);
 
         const sharedIconTooltip = store.shared === 1 ? 'Shared across cluster' : 'Local to node';
         const isDarkMode = document.documentElement.classList.contains('dark');

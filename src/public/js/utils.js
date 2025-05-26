@@ -37,7 +37,7 @@ PulseApp.utils = (() => {
         }
     }
 
-    function createProgressTextBarHTML(percentage, text, color) {
+    function createProgressTextBarHTML(percentage, text, color, simpleText = null) {
         // Always use a neutral background regardless of the progress color
         const bgColorClass = 'bg-gray-200 dark:bg-gray-700';
 
@@ -47,10 +47,16 @@ PulseApp.utils = (() => {
             green: 'bg-green-500/50 dark:bg-green-500/50'
         }[color] || 'bg-gray-500/50'; // Fallback progress color with opacity
 
+        // Use simpleText for narrow screens if provided, otherwise just show percentage
+        const mobileText = simpleText || `${percentage}%`;
+
         return `
             <div class="relative w-full h-3.5 rounded overflow-hidden ${bgColorClass}">
                 <div class="absolute top-0 left-0 h-full ${progressColorClass}" style="width: ${percentage}%;"></div>
-                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">${text}</span>
+                <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
+                    <span class="hidden sm:inline truncate px-1">${text}</span>
+                    <span class="inline sm:hidden">${mobileText}</span>
+                </span>
             </div>
         `;
     }

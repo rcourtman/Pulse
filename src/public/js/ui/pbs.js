@@ -547,7 +547,7 @@ PulseApp.ui.pbs = (() => {
                     usageCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP}`;
                     usageCell.style.minWidth = '150px';
                     if (totalBytes > 0) {
-                        usageCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor);
+                        usageCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor, `${usagePercent}%`);
                     } else {
                         usageCell.textContent = 'N/A';
                     }

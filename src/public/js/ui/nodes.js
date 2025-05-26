@@ -6,7 +6,7 @@ PulseApp.ui.nodes = (() => {
         const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
         const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
         const cpuTooltipText = `${cpuPercent.toFixed(1)}%${node.maxcpu && node.maxcpu > 0 ? ` (${(node.cpu * node.maxcpu).toFixed(1)}/${node.maxcpu} cores)` : ''}`;
-        return PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
+        return PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass, `${cpuPercent.toFixed(0)}%`);
     }
 
     function _createNodeMemoryBarHtml(node) {
@@ -15,7 +15,7 @@ PulseApp.ui.nodes = (() => {
         const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
         const memColorClass = PulseApp.utils.getUsageColor(memPercent, 'memory');
         const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
-        return PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
+        return PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass, `${memPercent.toFixed(0)}%`);
     }
 
     function _createNodeDiskBarHtml(node) {
@@ -24,7 +24,7 @@ PulseApp.ui.nodes = (() => {
         const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0;
         const diskColorClass = PulseApp.utils.getUsageColor(diskPercent, 'disk');
         const diskTooltipText = `${PulseApp.utils.formatBytes(diskUsed)} / ${PulseApp.utils.formatBytes(diskTotal)} (${diskPercent.toFixed(1)}%)`;
-        return PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+        return PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass, `${diskPercent.toFixed(0)}%`);
     }
 
     // Create a dedicated function for rendering a single node row

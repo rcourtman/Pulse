@@ -712,7 +712,7 @@ PulseApp.ui.dashboard = (() => {
         const cpuPercent = Math.round(guest.cpu);
         const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus / 100).toFixed(1)}/${guest.cpus} cores)` : ''}`;
         const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
-        const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass, `${cpuPercent}%`);
         
         // Create both text and chart versions
         const guestId = guest.uniqueId;
@@ -732,7 +732,7 @@ PulseApp.ui.dashboard = (() => {
             memoryTooltipText += ` (Host: ${PulseApp.utils.formatBytes(guest.rawHostMemory)})`;
         }
         const memColorClass = PulseApp.utils.getUsageColor(memoryPercent, 'memory');
-        const progressBar = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass);
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass, `${memoryPercent}%`);
         
         // Create both text and chart versions
         const guestId = guest.uniqueId;
@@ -750,7 +750,7 @@ PulseApp.ui.dashboard = (() => {
             const diskPercent = guest.disk;
             const diskTooltipText = guest.diskTotal ? `${PulseApp.utils.formatBytes(guest.diskCurrent)} / ${PulseApp.utils.formatBytes(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
             const diskColorClass = PulseApp.utils.getUsageColor(diskPercent, 'disk');
-            const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass);
+            const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass, `${diskPercent}%`);
             
             // Create both text and chart versions
             const guestId = guest.uniqueId;

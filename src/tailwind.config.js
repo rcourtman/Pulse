@@ -17,6 +17,12 @@ module.exports = {
     'xl:grid-cols-1', 'xl:grid-cols-2', 'xl:grid-cols-3', 'xl:grid-cols-4',
     'vm-icon',
     'ct-icon',
+    'hidden',
+    'inline',
+    'sm:hidden',
+    'sm:inline',
+    'truncate',
+    'px-1',
   ],
   theme: {
     extend: {},
