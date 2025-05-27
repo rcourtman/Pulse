@@ -95,13 +95,14 @@ PulseApp.ui.tabs = (() => {
 
             if (tabId === 'storage') {
                 if (PulseApp.ui && PulseApp.ui.storage) {
-                    PulseApp.ui.storage.updateStorageTab();
+                    PulseApp.ui.storage.updateStorageInfo();
                 }
             }
 
             if (tabId === 'pbs') {
                 if (PulseApp.ui && PulseApp.ui.pbs) {
-                    PulseApp.ui.pbs.updatePBSTab();
+                    const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+                    PulseApp.ui.pbs.updatePbsInfo(pbsDataArray);
                 }
             }
         }
