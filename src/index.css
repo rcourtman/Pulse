@@ -63,6 +63,20 @@ th.sortable:focus-visible {
   background-size: 10px 10px; /* Explicitly set for dark mode too */
 }
 
+/* Dynamic column widths for responsive tables */
+:root {
+  --name-col-width: 150px;
+  --uptime-col-width: 80px;
+  --pbs-name-col-width: 120px;
+  --pbs-path-col-width: 150px;
+  --backup-name-col-width: 150px;
+  --backup-node-col-width: 80px;
+  --backup-pbs-col-width: 100px;
+  --backup-ds-col-width: 100px;
+  --storage-name-col-width: 150px;
+  --storage-type-col-width: 80px;
+}
+
 /* Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
   * {

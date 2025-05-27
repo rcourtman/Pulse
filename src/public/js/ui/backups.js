@@ -5,6 +5,36 @@ PulseApp.ui.backups = (() => {
     let resetBackupsButton = null;
     let backupsTabContent = null;
 
+    function _initMobileScrollIndicators() {
+        const tableContainer = document.querySelector('#backups .table-container');
+        const scrollHint = document.querySelector('#backups .scroll-hint');
+        
+        if (!tableContainer || !scrollHint) return;
+        
+        let scrollHintTimer;
+        
+        // Hide scroll hint after 5 seconds or on first scroll
+        const hideScrollHint = () => {
+            if (scrollHint) {
+                scrollHint.style.display = 'none';
+            }
+        };
+        
+        scrollHintTimer = setTimeout(hideScrollHint, 5000);
+        
+        // Handle scroll events
+        tableContainer.addEventListener('scroll', () => {
+            hideScrollHint();
+            clearTimeout(scrollHintTimer);
+        }, { passive: true });
+        
+        // Also hide on table container click/touch
+        tableContainer.addEventListener('touchstart', () => {
+            hideScrollHint();
+            clearTimeout(scrollHintTimer);
+        }, { passive: true });
+    }
+
     function init() {
         backupsSearchInput = document.getElementById('backups-search');
         resetBackupsButton = document.getElementById('reset-backups-filters-button');
@@ -27,6 +57,11 @@ PulseApp.ui.backups = (() => {
                     resetBackupsView();
                 }
             });
+        }
+        
+        // Initialize mobile scroll indicators
+        if (window.innerWidth < 768) {
+            _initMobileScrollIndicators();
         }
     }
 
@@ -368,6 +403,40 @@ PulseApp.ui.backups = (() => {
 
         const sortStateBackups = PulseApp.state.getSortState('backups');
         const sortedBackupStatus = PulseApp.utils.sortData(filteredBackupStatus, sortStateBackups.column, sortStateBackups.direction, 'backups');
+
+        // Calculate dynamic column widths for responsive display
+        if (sortedBackupStatus.length > 0) {
+            let maxNameLength = 0;
+            let maxNodeLength = 0;
+            let maxPbsLength = 0;
+            let maxDsLength = 0;
+            
+            sortedBackupStatus.forEach(status => {
+                const nameLength = (status.guestName || '').length;
+                const nodeLength = (status.node || '').length;
+                const pbsLength = (status.pbsInstanceName || 'N/A').length;
+                const dsLength = (status.datastoreName || 'N/A').length;
+                
+                if (nameLength > maxNameLength) maxNameLength = nameLength;
+                if (nodeLength > maxNodeLength) maxNodeLength = nodeLength;
+                if (pbsLength > maxPbsLength) maxPbsLength = pbsLength;
+                if (dsLength > maxDsLength) maxDsLength = dsLength;
+            });
+            
+            // Set CSS variables for column widths with responsive limits
+            const nameColWidth = Math.min(Math.max(maxNameLength * 7 + 12, 80), 250);
+            const nodeColWidth = Math.max(maxNodeLength * 7 + 12, 60);
+            const pbsColWidth = Math.min(Math.max(maxPbsLength * 7 + 12, 80), 150);
+            const dsColWidth = Math.min(Math.max(maxDsLength * 7 + 12, 80), 150);
+            
+            const htmlElement = document.documentElement;
+            if (htmlElement) {
+                htmlElement.style.setProperty('--backup-name-col-width', `${nameColWidth}px`);
+                htmlElement.style.setProperty('--backup-node-col-width', `${nodeColWidth}px`);
+                htmlElement.style.setProperty('--backup-pbs-col-width', `${pbsColWidth}px`);
+                htmlElement.style.setProperty('--backup-ds-col-width', `${dsColWidth}px`);
+            }
+        }
 
         PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
             tableBody.innerHTML = '';

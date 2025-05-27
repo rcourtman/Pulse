@@ -6,6 +6,36 @@ PulseApp.ui.storage = (() => {
     const iconCache = new Map();
     const contentBadgeHTMLCache = new Map(); // Cache for complete content badge HTML
 
+    function _initMobileScrollIndicators() {
+        const tableContainer = document.querySelector('#storage .table-container');
+        const scrollHint = document.querySelector('#storage .scroll-hint');
+        
+        if (!tableContainer || !scrollHint) return;
+        
+        let scrollHintTimer;
+        
+        // Hide scroll hint after 5 seconds or on first scroll
+        const hideScrollHint = () => {
+            if (scrollHint) {
+                scrollHint.style.display = 'none';
+            }
+        };
+        
+        scrollHintTimer = setTimeout(hideScrollHint, 5000);
+        
+        // Handle scroll events
+        tableContainer.addEventListener('scroll', () => {
+            hideScrollHint();
+            clearTimeout(scrollHintTimer);
+        }, { passive: true });
+        
+        // Also hide on table container click/touch
+        tableContainer.addEventListener('touchstart', () => {
+            hideScrollHint();
+            clearTimeout(scrollHintTimer);
+        }, { passive: true });
+    }
+
     function getStorageTypeIcon(type) {
         if (iconCache.has(type)) {
             return iconCache.get(type);
@@ -179,6 +209,29 @@ PulseApp.ui.storage = (() => {
 
         const sortedNodeNames = Object.keys(storageByNode).sort((a, b) => a.localeCompare(b));
 
+        // Calculate dynamic column widths for responsive display
+        let maxStorageLength = 0;
+        let maxTypeLength = 0;
+        
+        sortedNodeNames.forEach(nodeName => {
+            const nodeStorageData = storageByNode[nodeName];
+            nodeStorageData.forEach(store => {
+                const storageLength = (store.storage || 'N/A').length;
+                const typeLength = (store.type || 'N/A').length;
+                if (storageLength > maxStorageLength) maxStorageLength = storageLength;
+                if (typeLength > maxTypeLength) maxTypeLength = typeLength;
+            });
+        });
+        
+        // Set CSS variables for column widths with responsive limits
+        const storageColWidth = Math.min(Math.max(maxStorageLength * 7 + 12, 100), 200);
+        const typeColWidth = Math.min(Math.max(maxTypeLength * 7 + 12, 60), 120);
+        const htmlElement = document.documentElement;
+        if (htmlElement) {
+            htmlElement.style.setProperty('--storage-name-col-width', `${storageColWidth}px`);
+            htmlElement.style.setProperty('--storage-type-col-width', `${typeColWidth}px`);
+        }
+
         sortedNodeNames.forEach(nodeName => {
           const nodeStorageData = storageByNode[nodeName]; // Already sorted
 
@@ -208,6 +261,11 @@ PulseApp.ui.storage = (() => {
         table.appendChild(thead);
         table.appendChild(tbody);
         contentDiv.appendChild(table);
+        
+        // Initialize mobile scroll indicators
+        if (window.innerWidth < 768) {
+            setTimeout(() => _initMobileScrollIndicators(), 100);
+        }
         }); // End of preserveScrollPosition
     }
 

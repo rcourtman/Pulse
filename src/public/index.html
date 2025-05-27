@@ -199,7 +199,28 @@
         .dark .table-container::-webkit-scrollbar-thumb {
             background: rgba(255, 255, 255, 0.3);
         }
-        
+    }
+    
+    /* Responsive column widths */
+    #main-table td:nth-child(1) { min-width: var(--name-col-width); }
+    #main-table td:nth-child(4) { min-width: var(--uptime-col-width); }
+    
+    #backups-overview-table td:nth-child(1) { min-width: var(--backup-name-col-width); }
+    #backups-overview-table td:nth-child(4) { min-width: var(--backup-node-col-width); }
+    #backups-overview-table td:nth-child(6) { min-width: var(--backup-pbs-col-width); }
+    #backups-overview-table td:nth-child(7) { min-width: var(--backup-ds-col-width); }
+    
+    .pbs-datastore-table td:nth-child(1) { min-width: var(--pbs-name-col-width); }
+    .pbs-datastore-table td:nth-child(2) { min-width: var(--pbs-path-col-width); }
+    
+    #storage-info-content table td:nth-child(1) { min-width: var(--storage-name-col-width); }
+    #storage-info-content table td:nth-child(3) { min-width: var(--storage-type-col-width); }
+    
+    /* Mobile optimizations for tables */
+    @media (max-width: 768px) {
+        .table-container {
+            position: relative;
+        }
     }
   </style>
 </head>
@@ -384,19 +405,19 @@
                   <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
                   <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
                 </colgroup>
-              <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
+              <thead class="bg-gray-100 dark:bg-gray-800">
                 <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                  <th class="sticky left-0 bg-gray-100 dark:bg-gray-800 z-20 sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
-                  <th class="p-1 px-2" style="width: 50px;">Type</th>
-                  <th class="sortable p-1 px-2" data-sort="id" style="width: 50px;">ID</th>
-                  <th class="sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
-                  <th class="sortable p-1 px-2" data-sort="cpu" style="width: 120px;">CPU</th>
-                  <th class="sortable p-1 px-2" data-sort="memory" style="width: 120px;">Memory</th>
-                  <th class="sortable p-1 px-2" data-sort="disk" style="width: 120px;">Disk</th>
-                  <th class="sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
-                  <th class="sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
-                  <th class="sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
-                  <th class="sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
+                  <th class="sticky left-0 top-0 bg-gray-100 dark:bg-gray-700 z-20 sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2" style="width: 50px;">Type</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="id" style="width: 50px;">ID</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="cpu" style="width: 120px;">CPU</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="memory" style="width: 120px;">Memory</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="disk" style="width: 120px;">Disk</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
                 </tr>
                 <tr id="threshold-slider-row" class="hidden mt-3 p-3 border rounded-md bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600">
                   <th class="py-1 px-2 align-middle"></th>
@@ -557,17 +578,17 @@
         </div>
         <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded scrollbar">
           <table id="backups-overview-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
-            <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
+            <thead class="bg-gray-100 dark:bg-gray-800">
               <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                <th scope="col" class="sticky left-0 bg-gray-100 dark:bg-gray-800 z-20 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestName">Guest Name</th>
-                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestId">ID</th>
-                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestType">Type</th>
-                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="node">Node</th>
-                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="latestBackupTime">Latest Backup</th>
-                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="pbsInstanceName">PBS Instance</th>
-                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="datastoreName">Datastore</th>
-                <th scope="col" class="sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="totalBackups"># Backups</th>
-                <th scope="col" class="p-1 px-2 text-center select-none whitespace-nowrap">7-Day History</th>
+                <th scope="col" class="sticky left-0 top-0 bg-gray-100 dark:bg-gray-700 z-20 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestName">Guest Name</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestId">ID</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestType">Type</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="node">Node</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="latestBackupTime">Latest Backup</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="pbsInstanceName">PBS Instance</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="datastoreName">Datastore</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="totalBackups"># Backups</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2 text-center select-none whitespace-nowrap">7-Day History</th>
               </tr>
             </thead>
             <tbody id="backups-overview-tbody" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>

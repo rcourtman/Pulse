@@ -121,6 +121,41 @@ PulseApp.ui.pbs = (() => {
         HANDLER_ATTACHED: 'data-handler-attached',
     };
 
+    function _initMobileScrollIndicators() {
+        const tableContainers = document.querySelectorAll('.pbs-table-container');
+        const scrollHints = document.querySelectorAll('.pbs-scroll-hint');
+        
+        if (!tableContainers.length || !scrollHints.length) return;
+        
+        tableContainers.forEach((container, index) => {
+            const scrollHint = scrollHints[index];
+            if (!scrollHint) return;
+            
+            let scrollHintTimer;
+            
+            // Hide scroll hint after 5 seconds or on first scroll
+            const hideScrollHint = () => {
+                if (scrollHint) {
+                    scrollHint.style.display = 'none';
+                }
+            };
+            
+            scrollHintTimer = setTimeout(hideScrollHint, 5000);
+            
+            // Handle scroll events
+            container.addEventListener('scroll', () => {
+                hideScrollHint();
+                clearTimeout(scrollHintTimer);
+            }, { passive: true });
+            
+            // Also hide on table container click/touch
+            container.addEventListener('touchstart', () => {
+                hideScrollHint();
+                clearTimeout(scrollHintTimer);
+            }, { passive: true });
+        });
+    }
+
     const getPbsStatusIcon = (status) => {
         if (status === 'OK') {
             return `<span class="${CSS_CLASSES.TEXT_GREEN_500_DARK_GREEN_400}" title="OK">✓</span>`;
@@ -233,7 +268,7 @@ PulseApp.ui.pbs = (() => {
         row.className = rowClasses;
 
         const targetCell = document.createElement('td');
-        targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
+        targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 bg-white dark:bg-gray-800 z-10`;
         
         // Add expand indicator for failed tasks
         if (isFailed) {
@@ -495,6 +530,28 @@ PulseApp.ui.pbs = (() => {
                                    dsTableBody.closest('.overflow-x-auto') ||
                                    dsTableBody.parentElement;
         
+        // Calculate dynamic column widths for responsive display
+        if (showDetails && datastores && datastores.length > 0) {
+            let maxNameLength = 0;
+            let maxPathLength = 0;
+            
+            datastores.forEach(ds => {
+                const nameLength = (ds.name || 'N/A').length;
+                const pathLength = (ds.path || 'N/A').length;
+                if (nameLength > maxNameLength) maxNameLength = nameLength;
+                if (pathLength > maxPathLength) maxPathLength = pathLength;
+            });
+            
+            // Set CSS variables for column widths with responsive limits
+            const nameColWidth = Math.min(Math.max(maxNameLength * 7 + 12, 80), 200);
+            const pathColWidth = Math.min(Math.max(maxPathLength * 7 + 12, 100), 250);
+            const htmlElement = document.documentElement;
+            if (htmlElement) {
+                htmlElement.style.setProperty('--pbs-name-col-width', `${nameColWidth}px`);
+                htmlElement.style.setProperty('--pbs-path-col-width', `${pathColWidth}px`);
+            }
+        }
+        
         PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
             dsTableBody.innerHTML = '';
 
@@ -541,15 +598,15 @@ PulseApp.ui.pbs = (() => {
                     let nameContent = ds.name || 'N/A';
                     if (usagePercent >= 95) {
                         nameContent = `⚠ ${nameContent} [CRITICAL: ${usagePercent}% full]`;
-                        createCell(nameContent, ['text-red-700', 'dark:text-red-300', 'font-semibold']);
+                        createCell(nameContent, ['text-red-700', 'dark:text-red-300', 'font-semibold', 'sticky', 'left-0', 'bg-white', 'dark:bg-gray-800', 'z-10']);
                     } else if (usagePercent >= 85) {
                         nameContent = `⚠ ${nameContent} [WARNING: ${usagePercent}% full]`;
-                        createCell(nameContent, ['text-yellow-700', 'dark:text-yellow-300', 'font-semibold']);
+                        createCell(nameContent, ['text-yellow-700', 'dark:text-yellow-300', 'font-semibold', 'sticky', 'left-0', 'bg-white', 'dark:bg-gray-800', 'z-10']);
                     } else {
-                        createCell(nameContent);
+                        createCell(nameContent, ['sticky', 'left-0', 'bg-white', 'dark:bg-gray-800', 'z-10']);
                     }
 
-                    createCell(ds.path || 'N/A', [CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400]);
+                    createCell(ds.path || 'N/A', [CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400, 'max-w-0', 'overflow-hidden', 'text-ellipsis']);
                     
                     // Simplified cell creation - the data is actually coming through correctly
                     createCell(ds.used !== null ? PulseApp.utils.formatBytes(ds.used) : 'N/A');
@@ -1173,6 +1230,11 @@ PulseApp.ui.pbs = (() => {
             container.appendChild(instanceElement);
         } else {
             _createPbsInstanceTabs(pbsArray, container);
+        }
+        
+        // Initialize mobile scroll indicators
+        if (window.innerWidth < 768) {
+            setTimeout(() => _initMobileScrollIndicators(), 100);
         }
     }
 
