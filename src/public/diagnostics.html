@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pulse Diagnostics</title>
+    <link rel="stylesheet" href="/output.css">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .status {
+            padding: 10px 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .status.loading {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .status.warning {
+            background: #fff3e0;
+            color: #f57c00;
+        }
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .section {
+            margin-bottom: 30px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .section-header {
+            background: #f5f5f5;
+            padding: 15px 20px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-header:hover {
+            background: #eeeeee;
+        }
+        .section-content {
+            padding: 20px;
+            display: none;
+        }
+        .section.expanded .section-content {
+            display: block;
+        }
+        .indicator {
+            font-size: 12px;
+            color: #666;
+        }
+        .recommendation {
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border-left: 4px solid;
+        }
+        .recommendation.critical {
+            background: #ffebee;
+            border-color: #f44336;
+        }
+        .recommendation.warning {
+            background: #fff3e0;
+            border-color: #ff9800;
+        }
+        .recommendation.info {
+            background: #e3f2fd;
+            border-color: #2196f3;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+        .success-icon {
+            color: #4caf50;
+        }
+        .error-icon {
+            color: #f44336;
+        }
+        .warning-icon {
+            color: #ff9800;
+        }
+        pre {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+        button {
+            background: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #1565c0;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .actions {
+            margin-bottom: 20px;
+        }
+        .copy-button {
+            background: #666;
+            font-size: 14px;
+            padding: 5px 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pulse Diagnostics</h1>
+        <p class="subtitle">Generate a comprehensive diagnostic report to help troubleshoot issues</p>
+        
+        <div class="actions">
+            <button id="runDiagnostics" onclick="runDiagnostics()">Run Diagnostics</button>
+            <button id="copyReport" onclick="copyReport()" style="display: none;">Copy Report</button>
+            <button id="downloadReport" onclick="downloadReport()" style="display: none;">Download Report</button>
+        </div>
+        
+        <div id="status" class="status" style="display: none;"></div>
+        
+        <div id="results" style="display: none;"></div>
+    </div>
+
+    <script>
+        let diagnosticData = null;
+
+        async function runDiagnostics() {
+            const statusEl = document.getElementById('status');
+            const resultsEl = document.getElementById('results');
+            const runButton = document.getElementById('runDiagnostics');
+            
+            // Reset UI
+            statusEl.className = 'status loading';
+            statusEl.textContent = 'Running diagnostics...';
+            statusEl.style.display = 'block';
+            resultsEl.style.display = 'none';
+            runButton.disabled = true;
+            
+            // Add a loading indicator after 2 seconds
+            let secondsWaiting = 0;
+            const progressInterval = setInterval(() => {
+                if (statusEl.className === 'status loading') {
+                    secondsWaiting++;
+                    if (secondsWaiting > 2) {
+                        statusEl.innerHTML = `
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div class="spinner" style="width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #1976d2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                                <span>Waiting for data to load... ${secondsWaiting}s</span>
+                            </div>
+                            ${secondsWaiting > 10 ? '<div style="font-size: 12px; margin-top: 5px; color: #666;">First run may take longer as initial data is being collected.</div>' : ''}
+                        `;
+                    }
+                }
+            }, 1000);
+            
+            // Add spinner animation
+            const style = document.createElement('style');
+            style.textContent = '@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }';
+            document.head.appendChild(style);
+            
+            try {
+                const response = await fetch('/api/diagnostics');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                diagnosticData = await response.json();
+                
+                // Clear progress indicator
+                clearInterval(progressInterval);
+                
+                // Show success status
+                statusEl.className = 'status success';
+                if (diagnosticData.summary.isTimingIssue) {
+                    if (diagnosticData.state.dataAge === null) {
+                        statusEl.textContent = `Warning: No data loaded yet (server uptime: ${Math.floor(diagnosticData.state.serverUptime)}s). Waiting for first discovery cycle to complete...`;
+                    } else {
+                        statusEl.textContent = `Warning: Server recently started (${Math.floor(diagnosticData.state.serverUptime)}s ago). Data may still be loading.`;
+                    }
+                    statusEl.className = 'status warning';
+                } else if (diagnosticData.summary.hasIssues) {
+                    statusEl.textContent = `Diagnostics complete. Found ${diagnosticData.summary.criticalIssues} critical issues and ${diagnosticData.summary.warnings} warnings.`;
+                } else {
+                    statusEl.textContent = 'Diagnostics complete. No critical issues found!';
+                }
+                
+                // Display results
+                displayResults(diagnosticData);
+                resultsEl.style.display = 'block';
+                
+                // Show action buttons
+                document.getElementById('copyReport').style.display = 'inline-block';
+                document.getElementById('downloadReport').style.display = 'inline-block';
+                
+            } catch (error) {
+                clearInterval(progressInterval);
+                statusEl.className = 'status error';
+                statusEl.textContent = `Error running diagnostics: ${error.message}`;
+            } finally {
+                runButton.disabled = false;
+            }
+        }
+
+        function displayResults(data) {
+            const resultsEl = document.getElementById('results');
+            
+            let html = '';
+            
+            // Errors section (if any)
+            if (data.errors && data.errors.length > 0) {
+                html += createSection('Diagnostic Errors', renderErrors(data.errors), true);
+            }
+            
+            // Recommendations section
+            if (data.recommendations && data.recommendations.length > 0) {
+                html += createSection('Recommendations', renderRecommendations(data.recommendations), true);
+            }
+            
+            // Configuration section
+            if (data.configuration) {
+                html += createSection('Configuration', renderConfiguration(data.configuration));
+            }
+            
+            // Permissions section (only if available)
+            if (data.permissions) {
+                html += createSection('API Token Permissions', renderPermissions(data.permissions));
+            }
+            
+            // Connectivity section (only if available)
+            if (data.connectivity) {
+                html += createSection('Connectivity', renderConnectivity(data.connectivity));
+            }
+            
+            // Data Flow section (only if available)
+            if (data.dataFlow) {
+                html += createSection('Data Flow', renderDataFlow(data.dataFlow));
+            }
+            
+            // System Information section
+            if (data.state || data.version) {
+                html += createSection('System Information', renderSystemInfo(data));
+            }
+            
+            // Raw Data section
+            html += createSection('Raw Diagnostic Data', `<pre>${JSON.stringify(data, null, 2)}</pre>`);
+            
+            resultsEl.innerHTML = html;
+            
+            // Add click handlers for sections
+            document.querySelectorAll('.section-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    header.parentElement.classList.toggle('expanded');
+                });
+            });
+        }
+
+        function createSection(title, content, expanded = false) {
+            return `
+                <div class="section ${expanded ? 'expanded' : ''}">
+                    <div class="section-header">
+                        <span>${title}</span>
+                        <span class="indicator">${expanded ? '▼' : '▶'}</span>
+                    </div>
+                    <div class="section-content">
+                        ${content}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderErrors(errors) {
+            return errors.map(err => `
+                <div class="recommendation critical">
+                    <strong>Error in ${err.step}:</strong> ${err.error}
+                </div>
+            `).join('');
+        }
+
+        function renderRecommendations(recommendations) {
+            if (recommendations.length === 0) {
+                return '<p style="color: green;">✓ No issues found - everything looks good!</p>';
+            }
+            
+            return recommendations.map(rec => `
+                <div class="recommendation ${rec.severity}">
+                    <strong>[${rec.severity.toUpperCase()}] ${rec.category}:</strong> ${rec.message}
+                </div>
+            `).join('');
+        }
+
+        function renderConfiguration(config) {
+            let html = '<h3>Proxmox VE Instances</h3>';
+            if (!config.proxmox || config.proxmox.length === 0) {
+                html += '<p>No Proxmox instances configured</p>';
+            } else {
+                html += '<table><tr><th>ID</th><th>Host</th><th>Name</th><th>Token Configured</th><th>Self-Signed</th></tr>';
+                config.proxmox.forEach(pve => {
+                    html += `<tr>
+                        <td>${pve.id}</td>
+                        <td>${pve.host}</td>
+                        <td>${pve.name}</td>
+                        <td>${pve.tokenConfigured ? 'Yes' : 'No'}</td>
+                        <td>${pve.selfSignedCerts ? 'Yes' : 'No'}</td>
+                    </tr>`;
+                });
+                html += '</table>';
+            }
+            
+            html += '<h3>PBS Instances</h3>';
+            if (!config.pbs || config.pbs.length === 0) {
+                html += '<p>No PBS instances configured</p>';
+            } else {
+                html += '<table><tr><th>ID</th><th>Host</th><th>Name</th><th>Node Name</th><th>Token Configured</th><th>Self-Signed</th></tr>';
+                config.pbs.forEach(pbs => {
+                    html += `<tr>
+                        <td>${pbs.id}</td>
+                        <td>${pbs.host}</td>
+                        <td>${pbs.name}</td>
+                        <td style="${pbs.node_name === 'NOT SET' ? 'color: red; font-weight: bold;' : ''}">${pbs.node_name}</td>
+                        <td>${pbs.tokenConfigured ? 'Yes' : 'No'}</td>
+                        <td>${pbs.selfSignedCerts ? 'Yes' : 'No'}</td>
+                    </tr>`;
+                });
+                html += '</table>';
+            }
+            
+            return html;
+        }
+
+        function renderPermissions(permissions) {
+            let html = '<h3>Proxmox VE Token Permissions</h3>';
+            if (!permissions.proxmox || permissions.proxmox.length === 0) {
+                html += '<p>No Proxmox permission checks available</p>';
+            } else {
+                html += '<table><tr><th>Instance</th><th>Connect</th><th>List Nodes</th><th>List VMs</th><th>List Containers</th><th>Node Stats</th><th>Errors</th></tr>';
+                permissions.proxmox.forEach(perm => {
+                    const checkIcon = (canDo) => canDo ? '<span class="success-icon">✓</span>' : '<span class="error-icon">✗</span>';
+                    html += `<tr>
+                        <td>${perm.name}<br><small>${perm.host}</small></td>
+                        <td>${checkIcon(perm.canConnect)}</td>
+                        <td>${checkIcon(perm.canListNodes)} ${perm.nodeCount ? `(${perm.nodeCount})` : ''}</td>
+                        <td>${checkIcon(perm.canListVMs)} ${perm.vmCount !== undefined ? `(${perm.vmCount})` : ''}</td>
+                        <td>${checkIcon(perm.canListContainers)} ${perm.containerCount !== undefined ? `(${perm.containerCount})` : ''}</td>
+                        <td>${checkIcon(perm.canGetNodeStats)}</td>
+                        <td><small>${perm.errors.length > 0 ? perm.errors.join('<br>') : 'None'}</small></td>
+                    </tr>`;
+                });
+                html += '</table>';
+            }
+            
+            html += '<h3>PBS Token Permissions</h3>';
+            if (!permissions.pbs || permissions.pbs.length === 0) {
+                html += '<p>No PBS permission checks available</p>';
+            } else {
+                html += '<table><tr><th>Instance</th><th>Connect</th><th>List Datastores</th><th>List Backups</th><th>Node Name</th><th>Errors</th></tr>';
+                permissions.pbs.forEach(perm => {
+                    const checkIcon = (canDo) => canDo ? '<span class="success-icon">✓</span>' : '<span class="error-icon">✗</span>';
+                    html += `<tr>
+                        <td>${perm.name}<br><small>${perm.host}</small></td>
+                        <td>${checkIcon(perm.canConnect)}</td>
+                        <td>${checkIcon(perm.canListDatastores)} ${perm.datastoreCount !== undefined ? `(${perm.datastoreCount})` : ''}</td>
+                        <td>${checkIcon(perm.canListBackups)} ${perm.backupCount !== undefined ? `(${perm.backupCount})` : ''}</td>
+                        <td style="${perm.node_name === 'NOT SET' ? 'color: red; font-weight: bold;' : ''}">${perm.node_name}</td>
+                        <td><small>${perm.errors.length > 0 ? perm.errors.join('<br>') : 'None'}</small></td>
+                    </tr>`;
+                });
+                html += '</table>';
+            }
+            
+            return html;
+        }
+
+        function renderConnectivity(connectivity) {
+            let html = '<h3>Proxmox VE Connectivity</h3>';
+            html += '<table><tr><th>Instance</th><th>Host</th><th>Status</th><th>Auth</th><th>Response Time</th><th>Error</th></tr>';
+            connectivity.proxmox.forEach(conn => {
+                html += `<tr>
+                    <td>${conn.index}</td>
+                    <td>${conn.host}</td>
+                    <td>${conn.reachable ? '<span class="success-icon">✓</span> Reachable' : '<span class="error-icon">✗</span> Unreachable'}</td>
+                    <td>${conn.authValid ? '<span class="success-icon">✓</span> Valid' : '<span class="error-icon">✗</span> Invalid'}</td>
+                    <td>${conn.responseTime ? conn.responseTime + 'ms' : '-'}</td>
+                    <td>${conn.error || '-'}</td>
+                </tr>`;
+            });
+            html += '</table>';
+            
+            html += '<h3>PBS Connectivity</h3>';
+            html += '<table><tr><th>Instance</th><th>Host</th><th>Status</th><th>Auth</th><th>Response Time</th><th>Error</th></tr>';
+            connectivity.pbs.forEach(conn => {
+                html += `<tr>
+                    <td>${conn.index}</td>
+                    <td>${conn.host}</td>
+                    <td>${conn.reachable ? '<span class="success-icon">✓</span> Reachable' : '<span class="error-icon">✗</span> Unreachable'}</td>
+                    <td>${conn.authValid ? '<span class="success-icon">✓</span> Valid' : '<span class="error-icon">✗</span> Invalid'}</td>
+                    <td>${conn.responseTime ? conn.responseTime + 'ms' : '-'}</td>
+                    <td>${conn.error || '-'}</td>
+                </tr>`;
+            });
+            html += '</table>';
+            
+            return html;
+        }
+
+        function renderDataFlow(dataFlow) {
+            let html = '<h3>Proxmox VE Data</h3>';
+            html += `<p>
+                Nodes: ${dataFlow.pve.nodes_count}<br>
+                Total Guests: ${dataFlow.pve.guests_count} (${dataFlow.pve.vms_count} VMs, ${dataFlow.pve.containers_count} Containers)
+            </p>`;
+            
+            html += '<h3>PBS Data</h3>';
+            html += `<p>
+                PBS Instances: ${dataFlow.pbs.instances_count}<br>
+                Total Datastores: ${dataFlow.pbs.datastores_total}<br>
+                Total Backups: ${dataFlow.pbs.backups_total}<br>
+                Total Tasks: ${dataFlow.pbs.tasks_total}
+            </p>`;
+            
+            if (dataFlow.pbs.backup_matching.length > 0) {
+                html += '<h3>Backup Matching Details</h3>';
+                html += '<table><tr><th>Instance</th><th>Node Name</th><th>Datastores</th><th>Backups</th><th>Matching</th><th>Sample Backups</th></tr>';
+                dataFlow.pbs.backup_matching.forEach(instance => {
+                    const samples = instance.sample_backups.slice(0, 3).map(b => b.backup_id).join('<br>');
+                    html += `<tr>
+                        <td>${instance.index}</td>
+                        <td>${instance.node_name}</td>
+                        <td>${instance.datastores_count}</td>
+                        <td>${instance.backups_count}</td>
+                        <td>${instance.matching_backups}</td>
+                        <td><small>${samples || '-'}</small></td>
+                    </tr>`;
+                });
+                html += '</table>';
+            }
+            
+            return html;
+        }
+
+        function renderSystemInfo(data) {
+            let html = '';
+            
+            if (data.version) {
+                html += '<h3>Version</h3>';
+                html += `<p>Pulse Version: ${data.version}</p>`;
+            }
+            
+            if (data.state) {
+                html += '<h3>Current State</h3>';
+                html += '<table>';
+                
+                if (data.state.lastUpdate) {
+                    html += `<tr><td>Last Update:</td><td>${new Date(data.state.lastUpdate).toLocaleString()}</td></tr>`;
+                }
+                
+                if (data.state.serverUptime) {
+                    html += `<tr><td>Server Uptime:</td><td>${Math.floor(data.state.serverUptime)} seconds</td></tr>`;
+                    
+                    // Show warning if server just started and no guests found
+                    if (data.state.serverUptime < 60 && data.state.guests && data.state.guests.total === 0) {
+                        html += `<tr><td colspan="2" style="color: orange; font-weight: bold;">⚠️ Server just started ${Math.floor(data.state.serverUptime)}s ago. Data may still be loading. Wait 30s and try again.</td></tr>`;
+                    }
+                }
+                
+                if (data.state.dataAge !== null) {
+                    html += `<tr><td>Data Age:</td><td>${data.state.dataAge} seconds</td></tr>`;
+                }
+                
+                if (data.state.nodes) {
+                    html += `<tr><td>Nodes:</td><td>${data.state.nodes.count} (${data.state.nodes.names.join(', ') || 'none'})</td></tr>`;
+                }
+                
+                if (data.state.guests) {
+                    html += `<tr><td>Total Guests:</td><td>${data.state.guests.total} (${data.state.guests.vms} VMs, ${data.state.guests.containers} Containers)</td></tr>`;
+                    html += `<tr><td>Guest Status:</td><td>${data.state.guests.running} running, ${data.state.guests.stopped} stopped</td></tr>`;
+                }
+                
+                if (data.state.pbs) {
+                    html += `<tr><td>PBS Instances:</td><td>${data.state.pbs.instances}</td></tr>`;
+                    html += `<tr><td>Total Backups:</td><td>${data.state.pbs.totalBackups}</td></tr>`;
+                    html += `<tr><td>Datastores:</td><td>${data.state.pbs.datastores}</td></tr>`;
+                    if (data.state.pbs.sampleBackupIds && data.state.pbs.sampleBackupIds.length > 0) {
+                        html += `<tr><td>Sample Backup IDs:</td><td>${data.state.pbs.sampleBackupIds.join(', ')}</td></tr>`;
+                    }
+                }
+                
+                if (data.state.alerts) {
+                    html += `<tr><td>Active Alerts:</td><td>${data.state.alerts.active}</td></tr>`;
+                }
+                
+                html += '</table>';
+            }
+            
+            return html;
+        }
+
+        function copyReport() {
+            if (!diagnosticData) return;
+            
+            const text = JSON.stringify(diagnosticData, null, 2);
+            navigator.clipboard.writeText(text).then(() => {
+                const button = document.getElementById('copyReport');
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            });
+        }
+
+        function downloadReport() {
+            if (!diagnosticData) return;
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            const filename = `pulse_diagnostics_${timestamp}.json`;
+            const text = JSON.stringify(diagnosticData, null, 2);
+            
+            const blob = new Blob([text], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Run diagnostics automatically on page load
+        window.addEventListener('load', () => {
+            runDiagnostics();
+        });
+    </script>
+</body>
+</html>

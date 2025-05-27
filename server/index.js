@@ -408,20 +408,6 @@ app.get('/api/charts', async (req, res) => {
     }
 });
 
-// Simple diagnostic endpoint for troubleshooting
-app.get('/api/diagnostics-simple', async (req, res) => {
-    try {
-        // Delete from require cache to force reload
-        delete require.cache[require.resolve('./diagnostics-simple')];
-        const SimpleDiagnosticTool = require('./diagnostics-simple');
-        const tool = new SimpleDiagnosticTool(stateManager, apiClients, pbsApiClients);
-        const report = await tool.runDiagnostics();
-        res.json(report);
-    } catch (error) {
-        console.error("Simple diagnostics error:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
 
 // Direct state inspection endpoint
 app.get('/api/diagnostics-state', (req, res) => {
@@ -482,9 +468,9 @@ app.get('/api/diagnostics/check', async (req, res) => {
         }
 
         // Run a quick check
-        delete require.cache[require.resolve('./diagnostics-fixed')];
-        const DiagnosticToolFixed = require('./diagnostics-fixed');
-        const diagnosticTool = new DiagnosticToolFixed(stateManager, metricsHistory, apiClients, pbsApiClients);
+        delete require.cache[require.resolve('./diagnostics')];
+        const DiagnosticTool = require('./diagnostics');
+        const diagnosticTool = new DiagnosticTool(stateManager, metricsHistory, apiClients, pbsApiClients);
         const report = await diagnosticTool.runDiagnostics();
         
         const hasIssues = report.recommendations && 
@@ -532,9 +518,9 @@ app.get('/api/diagnostics', async (req, res) => {
     try {
         console.log('Running diagnostics...');
         // Force reload the diagnostic module to get latest changes
-        delete require.cache[require.resolve('./diagnostics-fixed')];
-        const DiagnosticToolFixed = require('./diagnostics-fixed');
-        const diagnosticTool = new DiagnosticToolFixed(stateManager, metricsHistory, apiClients, pbsApiClients);
+        delete require.cache[require.resolve('./diagnostics')];
+        const DiagnosticTool = require('./diagnostics');
+        const diagnosticTool = new DiagnosticTool(stateManager, metricsHistory, apiClients, pbsApiClients);
         const report = await diagnosticTool.runDiagnostics();
         
         // Format the report for easy reading
