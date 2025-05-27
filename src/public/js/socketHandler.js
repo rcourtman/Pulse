@@ -247,6 +247,16 @@ PulseApp.socketHandler = (() => {
 
     function updateMainTab(data) {
         try {
+            // Capture scroll position of main table container before updates
+            const mainTableContainer = document.querySelector('.table-container');
+            let savedScrollTop = 0;
+            let savedScrollLeft = 0;
+            
+            if (mainTableContainer) {
+                savedScrollTop = mainTableContainer.scrollTop;
+                savedScrollLeft = mainTableContainer.scrollLeft;
+            }
+
             // Update node summary cards
             if (PulseApp.ui && PulseApp.ui.nodes && data.nodes) {
                 PulseApp.ui.nodes.updateNodeSummaryCards(data.nodes);
@@ -255,6 +265,33 @@ PulseApp.socketHandler = (() => {
             // Update main dashboard
             if (PulseApp.ui && PulseApp.ui.dashboard) {
                 PulseApp.ui.dashboard.updateDashboardTable();
+            }
+            
+            // Restore scroll position after updates
+            if (mainTableContainer && (savedScrollTop > 0 || savedScrollLeft > 0)) {
+                const restoreScroll = () => {
+                    mainTableContainer.scrollTop = savedScrollTop;
+                    mainTableContainer.scrollLeft = savedScrollLeft;
+                };
+                
+                // Multiple restoration attempts
+                setTimeout(restoreScroll, 0);
+                setTimeout(restoreScroll, 16);
+                setTimeout(restoreScroll, 50);
+                setTimeout(restoreScroll, 100);
+                requestAnimationFrame(restoreScroll);
+                
+                // Final verification
+                setTimeout(() => {
+                    if (Math.abs(mainTableContainer.scrollTop - savedScrollTop) > 10) {
+                        mainTableContainer.scrollTo({
+                            top: savedScrollTop,
+                            left: savedScrollLeft,
+                            behavior: 'instant'
+                        });
+                    } else {
+                    }
+                }, 200);
             }
 
         } catch (error) {
@@ -274,6 +311,79 @@ PulseApp.socketHandler = (() => {
 
     function updatePbsTab(data) {
         try {
+            // Check if mobile view
+            const isMobile = window.innerWidth < 768;
+            // Capture scroll positions of various containers before updates
+            const pbsTab = document.getElementById('pbsTab');
+            const pbsInstancesContainer = document.getElementById('pbs-instances-container');
+            const pbsTableContainer = document.querySelector('#pbsTab .table-container');
+            const pbsTaskTableContainer = document.querySelector('#pbs-tasks-table-container');
+            const mobileContainers = document.querySelectorAll('.mobile-single-instance, .mobile-pbs-accordion, .mobile-layout');
+            
+            // Store all scroll positions
+            const scrollPositions = new Map();
+            
+            // Capture main tab scroll
+            if (pbsTab) {
+                scrollPositions.set(pbsTab, {
+                    top: pbsTab.scrollTop,
+                    left: pbsTab.scrollLeft
+                });
+            }
+            
+            // Capture instances container scroll
+            if (pbsInstancesContainer) {
+                scrollPositions.set(pbsInstancesContainer, {
+                    top: pbsInstancesContainer.scrollTop,
+                    left: pbsInstancesContainer.scrollLeft
+                });
+            }
+            
+            // Capture table container scrolls
+            if (pbsTableContainer) {
+                scrollPositions.set(pbsTableContainer, {
+                    top: pbsTableContainer.scrollTop,
+                    left: pbsTableContainer.scrollLeft
+                });
+            }
+            
+            if (pbsTaskTableContainer) {
+                scrollPositions.set(pbsTaskTableContainer, {
+                    top: pbsTaskTableContainer.scrollTop,
+                    left: pbsTaskTableContainer.scrollLeft
+                });
+            }
+            
+            // Capture mobile container scrolls
+            mobileContainers.forEach((container, index) => {
+                scrollPositions.set(container, {
+                    top: container.scrollTop,
+                    left: container.scrollLeft
+                });
+            });
+            
+            // Also capture body scroll for mobile
+            if (isMobile) {
+                scrollPositions.set(document.body, {
+                    top: window.pageYOffset || document.documentElement.scrollTop,
+                    left: window.pageXOffset || document.documentElement.scrollLeft
+                });
+            }
+            
+            // Function to restore scroll positions
+            const restoreScroll = () => {
+                scrollPositions.forEach((position, element) => {
+                    if (position.top > 0 || position.left > 0) {
+                        if (element === document.body) {
+                            window.scrollTo(position.left, position.top);
+                        } else if (element && element.parentNode) {
+                            element.scrollTop = position.top;
+                            element.scrollLeft = position.left;
+                        }
+                    }
+                });
+            };
+            
             // Check if the new PBS data structure keys exist in the received data
             // data.pbs is the array of PBS instances
             // data.allPbsTasks and data.aggregatedPbsTaskSummary are top-level in the state
@@ -284,6 +394,13 @@ PulseApp.socketHandler = (() => {
                 // Task data (allPbsTasks, aggregatedPbsTaskSummary) is available in PulseApp.state if needed by UI components directly.
                 // For now, updatePbsInfo primarily works with the pbs array.
                 PulseApp.ui.pbs.updatePbsInfo(data.pbs);
+                
+                // Restore scroll positions with multiple timing strategies
+                setTimeout(restoreScroll, 0);
+                setTimeout(restoreScroll, 16);
+                setTimeout(restoreScroll, 50);
+                setTimeout(restoreScroll, 100);
+                requestAnimationFrame(restoreScroll);
             } else {
                 // Optional: Log if critical data for PBS tab is missing
                 if (!data.pbs) {

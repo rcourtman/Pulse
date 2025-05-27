@@ -222,6 +222,214 @@
             position: relative;
         }
     }
+
+    /* Mobile-specific PBS styles */
+    .tap-target {
+        min-height: 44px;
+        min-width: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: manipulation;
+    }
+
+    .mobile-task-card,
+    .mobile-datastore-card,
+    .mobile-task-detail-card {
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-task-card:active,
+    .mobile-datastore-card:active {
+        transform: scale(0.98);
+    }
+
+    @media (max-width: 768px) {
+        /* Hide desktop tables on mobile */
+        .mobile-layout .overflow-x-auto table {
+            display: none !important;
+        }
+        
+        /* Show mobile containers */
+        .mobile-layout .mobile-datastore-container,
+        .mobile-layout .mobile-task-container,
+        .mobile-layout .mobile-pbs-accordion {
+            display: block !important;
+        }
+        
+        /* Enhanced mobile scrolling */
+        .mobile-layout .overflow-x-auto {
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+        
+        /* Mobile table scroll indicator */
+        .mobile-layout .table-container::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 20px;
+            background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .dark .mobile-layout .table-container::after {
+            background: linear-gradient(to left, rgba(255,255,255,0.1), transparent);
+        }
+        
+        /* Mobile PBS tab improvements */
+        .mobile-layout .pbs-tab-container {
+            flex-wrap: wrap;
+            gap: 2px;
+        }
+        
+        .mobile-layout .pbs-tab-container button {
+            flex: 1;
+            min-width: 0;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+        }
+        
+        /* Mobile accordion animations */
+        .mobile-pbs-accordion .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        
+        .mobile-pbs-accordion .accordion-content.expanded {
+            max-height: 2000px;
+            transition: max-height 0.3s ease-in;
+        }
+        
+        /* Mobile summary card grid */
+        .mobile-pbs-summary {
+            gap: 8px;
+        }
+        
+        .summary-card {
+            min-height: 70px;
+        }
+        
+        /* Mobile task card enhancements */
+        .mobile-task-card .tap-target {
+            border-radius: 6px;
+        }
+        
+        /* Mobile datastore progress bars */
+        .mobile-datastore-card .progress-container {
+            height: 8px;
+        }
+        
+        /* Mobile text sizing adjustments */
+        .mobile-layout .text-xs {
+            font-size: 0.7rem;
+        }
+        
+        .mobile-layout .text-sm {
+            font-size: 0.8rem;
+        }
+        
+        /* Mobile spacing improvements */
+        .mobile-layout .space-y-2 > * + * {
+            margin-top: 0.375rem;
+        }
+        
+        .mobile-layout .space-y-3 > * + * {
+            margin-top: 0.5rem;
+        }
+        
+        .mobile-layout .space-y-4 > * + * {
+            margin-top: 0.75rem;
+        }
+        
+        /* Mobile error message handling */
+        .mobile-task-detail-card .break-all {
+            word-break: break-all;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        
+        /* Mobile progress bar animations */
+        .mobile-layout .transition-all {
+            transition-property: all;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 300ms;
+        }
+        
+        /* Mobile focus states */
+        .mobile-layout .tap-target:focus {
+            outline: 2px solid rgba(59, 130, 246, 0.5);
+            outline-offset: 2px;
+        }
+        
+        /* Mobile dark mode adjustments */
+        .dark .mobile-task-card,
+        .dark .mobile-datastore-card {
+            background-color: rgba(31, 41, 55, 0.7);
+        }
+        
+        .dark .mobile-task-detail-card {
+            background-color: rgba(127, 29, 29, 0.1);
+        }
+        
+        /* Mobile accordion header styling */
+        .mobile-pbs-accordion .tap-target {
+            text-align: left;
+            justify-content: flex-start;
+        }
+        
+        /* Mobile chevron rotation */
+        .mobile-pbs-accordion .chevron {
+            transition: transform 0.2s ease;
+        }
+        
+        .mobile-pbs-accordion .chevron.rotated {
+            transform: rotate(180deg);
+        }
+        
+        /* Mobile viewport adjustments */
+        .mobile-layout {
+            padding: 8px;
+        }
+        
+        /* Mobile button improvements */
+        .mobile-layout button {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        
+        /* Mobile scroll performance */
+        .mobile-layout .space-y-2,
+        .mobile-layout .space-y-3,
+        .mobile-layout .space-y-4 {
+            will-change: scroll-position;
+        }
+    }
+
+    /* Tablet-specific adjustments */
+    @media (min-width: 768px) and (max-width: 1024px) {
+        .mobile-pbs-summary {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        
+        .mobile-task-card,
+        .mobile-datastore-card {
+            max-width: none;
+        }
+    }
+
+    /* High DPI display optimizations */
+    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+        .mobile-layout .border {
+            border-width: 0.5px;
+        }
+    }
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">

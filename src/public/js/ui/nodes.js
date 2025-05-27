@@ -152,6 +152,10 @@ PulseApp.ui.nodes = (() => {
                                    container.closest('.overflow-x-auto') ||
                                    container.parentElement;
         
+        // Store current scroll position for both axes
+        const currentScrollLeft = scrollableContainer.scrollLeft || 0;
+        const currentScrollTop = scrollableContainer.scrollTop || 0;
+        
         PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
             container.innerHTML = ''; // Clear previous content
 
@@ -204,6 +208,14 @@ PulseApp.ui.nodes = (() => {
             container.appendChild(gridDiv);
         }
         }); // End of preserveScrollPosition
+        
+        // Additional scroll position restoration for both axes
+        if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
+            requestAnimationFrame(() => {
+                scrollableContainer.scrollLeft = currentScrollLeft;
+                scrollableContainer.scrollTop = currentScrollTop;
+            });
+        }
     }
 
     function createCondensedNodeCard(node) {
@@ -259,6 +271,10 @@ PulseApp.ui.nodes = (() => {
                                    tbody.closest('.overflow-x-auto') ||
                                    tbody.parentElement;
         
+        // Store current scroll position for both axes
+        const currentScrollLeft = scrollableContainer.scrollLeft || 0;
+        const currentScrollTop = scrollableContainer.scrollTop || 0;
+        
         PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
             tbody.innerHTML = '';
 
@@ -305,6 +321,14 @@ PulseApp.ui.nodes = (() => {
             }
         }
         }); // End of preserveScrollPosition
+        
+        // Additional scroll position restoration for both axes
+        if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
+            requestAnimationFrame(() => {
+                scrollableContainer.scrollLeft = currentScrollLeft;
+                scrollableContainer.scrollTop = currentScrollTop;
+            });
+        }
     }
 
     function init() {

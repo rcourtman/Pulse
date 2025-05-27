@@ -1,4 +1,6 @@
 const EventEmitter = require('events');
+const fs = require('fs').promises;
+const path = require('path');
 
 class AlertManager extends EventEmitter {
     constructor() {
@@ -20,11 +22,15 @@ class AlertManager extends EventEmitter {
         };
         
         this.maxHistorySize = 10000; // Increased for better analytics
+        this.acknowledgementsFile = path.join(__dirname, '../data/acknowledgements.json');
         
         // Initialize default configuration
         this.initializeDefaultRules();
         this.initializeNotificationChannels();
         this.initializeAlertGroups();
+        
+        // Load persisted acknowledgements
+        this.loadAcknowledgements();
         
         // Cleanup timer for resolved alerts
         this.cleanupInterval = setInterval(() => {
@@ -453,6 +459,10 @@ class AlertManager extends EventEmitter {
                 });
                 
                 this.emit('alertAcknowledged', alert);
+                
+                // Save acknowledgements to file
+                this.saveAcknowledgements();
+                
                 return true;
             }
         }
@@ -819,10 +829,17 @@ class AlertManager extends EventEmitter {
 
         // Clean up old acknowledgments
         const ackCutoff = Date.now() - (7 * 24 * 60 * 60 * 1000); // 1 week
+        let acknowledgementsChanged = false;
         for (const [key, ack] of this.acknowledgedAlerts) {
             if (ack.acknowledgedAt < ackCutoff) {
                 this.acknowledgedAlerts.delete(key);
+                acknowledgementsChanged = true;
             }
+        }
+        
+        // Save if acknowledgements were cleaned up
+        if (acknowledgementsChanged) {
+            this.saveAcknowledgements();
         }
     }
 
@@ -878,6 +895,47 @@ class AlertManager extends EventEmitter {
             return rules.filter(rule => rule.severity === filters.severity);
         }
         return rules;
+    }
+
+    async loadAcknowledgements() {
+        try {
+            const data = await fs.readFile(this.acknowledgementsFile, 'utf-8');
+            const acknowledgements = JSON.parse(data);
+            
+            // Restore acknowledgements to the map
+            for (const [key, ack] of Object.entries(acknowledgements)) {
+                this.acknowledgedAlerts.set(key, ack);
+            }
+            
+            console.log(`Loaded ${this.acknowledgedAlerts.size} persisted acknowledgements`);
+        } catch (error) {
+            if (error.code !== 'ENOENT') {
+                console.error('Error loading acknowledgements:', error);
+            }
+            // File doesn't exist yet, which is fine for first run
+        }
+    }
+    
+    async saveAcknowledgements() {
+        try {
+            // Ensure data directory exists
+            const dataDir = path.dirname(this.acknowledgementsFile);
+            await fs.mkdir(dataDir, { recursive: true });
+            
+            // Convert Map to plain object for JSON serialization
+            const acknowledgements = {};
+            for (const [key, ack] of this.acknowledgedAlerts) {
+                acknowledgements[key] = ack;
+            }
+            
+            await fs.writeFile(
+                this.acknowledgementsFile, 
+                JSON.stringify(acknowledgements, null, 2),
+                'utf-8'
+            );
+        } catch (error) {
+            console.error('Error saving acknowledgements:', error);
+        }
     }
 
     destroy() {

@@ -6,8 +6,43 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
+        // Global scroll preservation for all main scrollable containers
+        const allContainers = [
+            document.querySelector('.table-container'), // Main dashboard table
+            document.querySelector('#node-summary-cards-container'), // Node cards
+            document.querySelector('#storage-info-content'), // Storage tab
+            document.querySelector('#pbs-instances-container'), // PBS tab
+            document.querySelector('#backups-table-container'), // Backups tab
+            // Also find any overflow-x-auto or overflow-y-auto containers that might be scrolled
+            ...Array.from(document.querySelectorAll('.overflow-x-auto, .overflow-y-auto, [style*="overflow"]'))
+        ];
+        
+        const scrollableContainers = allContainers.filter((container, index, array) => {
+            // Remove duplicates and null containers
+            return container && array.indexOf(container) === index;
+        });
+        
+        // Capture all scroll positions before any updates
+        const scrollPositions = scrollableContainers.map(container => {
+            const position = {
+                element: container,
+                scrollLeft: container.scrollLeft,
+                scrollTop: container.scrollTop
+            };
+            if (position.scrollLeft > 0 || position.scrollTop > 0) {
+            }
+            return position;
+        });
+        
         const nodesData = PulseApp.state.get('nodesData');
         const pbsDataArray = PulseApp.state.get('pbsDataArray');
+
+        // Disable individual scroll preservation to avoid conflicts
+        const originalPreserveScrollPosition = PulseApp.utils.preserveScrollPosition;
+        PulseApp.utils.preserveScrollPosition = (element, updateFn) => {
+            // Just run the update function without scroll preservation
+            updateFn();
+        };
 
         // PulseApp.ui.nodes?.updateNodesTable(nodesData); // REMOVED - Nodes table is gone
         PulseApp.ui.nodes?.updateNodeSummaryCards(nodesData);
@@ -15,6 +50,9 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.storage?.updateStorageInfo();
         PulseApp.ui.pbs?.updatePbsInfo(pbsDataArray);
         PulseApp.ui.backups?.updateBackupsTab();
+        
+        // Restore the original function
+        PulseApp.utils.preserveScrollPosition = originalPreserveScrollPosition;
 
         // Update tab availability based on PBS data
         PulseApp.ui.tabs?.updateTabAvailability();
@@ -26,6 +64,48 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update alerts when state changes
         const state = PulseApp.state.getFullState();
         PulseApp.alerts?.updateAlertsFromState?.(state);
+        
+        // Simple and direct scroll preservation - just focus on main table
+        const mainTableContainer = document.querySelector('.table-container');
+        if (mainTableContainer) {
+            const savedScrollTop = mainTableContainer.scrollTop;
+            const savedScrollLeft = mainTableContainer.scrollLeft;
+            
+            if (savedScrollTop > 0 || savedScrollLeft > 0) {
+                // Use multiple restoration strategies
+                const restoreMainScroll = () => {
+                    mainTableContainer.scrollTop = savedScrollTop;
+                    mainTableContainer.scrollLeft = savedScrollLeft;
+                };
+                
+                // Try multiple timings
+                setTimeout(restoreMainScroll, 0);
+                setTimeout(restoreMainScroll, 10);
+                setTimeout(restoreMainScroll, 50);
+                setTimeout(restoreMainScroll, 100);
+                setTimeout(restoreMainScroll, 200);
+                requestAnimationFrame(restoreMainScroll);
+                requestAnimationFrame(() => setTimeout(restoreMainScroll, 0));
+                
+                // Also try using scrollTo method
+                setTimeout(() => {
+                    mainTableContainer.scrollTo(savedScrollLeft, savedScrollTop);
+                }, 50);
+                
+                setTimeout(() => {
+                    if (Math.abs(mainTableContainer.scrollTop - savedScrollTop) > 10) {
+                        // Try one more aggressive approach
+                        mainTableContainer.scrollTo({
+                            top: savedScrollTop,
+                            left: savedScrollLeft,
+                            behavior: 'instant'
+                        });
+                    } else {
+                    }
+                }, 300);
+            }
+        } else {
+        }
     }
 
     function updateLoadingOverlayVisibility() {
