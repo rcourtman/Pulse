@@ -138,6 +138,36 @@ Optional variables:
 -   `PORT`: Port for the Pulse server to listen on. Defaults to `7655`.
 -   *(Username/Password fallback exists but API Token is strongly recommended)*
 
+#### Alert System Configuration (Optional)
+
+Pulse includes a comprehensive alert system that monitors resource usage and system status:
+
+```env
+# Alert System Configuration
+ALERT_CPU_ENABLED=true
+ALERT_MEMORY_ENABLED=true
+ALERT_DISK_ENABLED=true
+ALERT_DOWN_ENABLED=true
+
+# Alert thresholds (percentages)
+ALERT_CPU_THRESHOLD=85
+ALERT_MEMORY_THRESHOLD=90
+ALERT_DISK_THRESHOLD=95
+
+# Alert durations (milliseconds - how long condition must persist)
+ALERT_CPU_DURATION=300000       # 5 minutes
+ALERT_MEMORY_DURATION=300000    # 5 minutes  
+ALERT_DISK_DURATION=600000      # 10 minutes
+ALERT_DOWN_DURATION=60000       # 1 minute
+```
+
+Alert features include:
+- Real-time notifications with toast messages
+- Multi-severity alerts (Critical, Warning, Resolved)
+- Duration-based triggering (alerts only fire after conditions persist)
+- Automatic resolution when conditions normalize
+- Alert history tracking
+
 ***Note:** For a Proxmox cluster, you only need to provide connection details for **one** node. Pulse automatically discovers other cluster members.*
 
 
@@ -461,6 +491,7 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - Lightweight monitoring for Proxmox VE nodes, VMs, and Containers.
 - Real-time status updates via WebSockets.
 - Simple, responsive web interface.
+- Advanced alert system with configurable thresholds and durations.
 - Efficient polling: Stops API polling when no clients are connected.
 - Docker support.
 - Multi-environment PVE monitoring support.
