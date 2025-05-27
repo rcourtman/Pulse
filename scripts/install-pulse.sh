@@ -596,6 +596,11 @@ perform_update() {
         cd ..
         return 1
     fi
+    
+    print_info "Cleaning untracked files and directories..."
+    if ! sudo -u "$PULSE_USER" git clean -fd; then
+        print_warning "Failed to clean untracked files, continuing anyway."
+    fi
 
     print_info "Fetching latest changes and tags from git [running as user $PULSE_USER]..."
     if ! sudo -u "$PULSE_USER" git fetch origin --tags --force; then
@@ -614,17 +619,24 @@ perform_update() {
     fi
 
     print_info "Checking out target version tag '$TARGET_TAG'..."
-    if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
+    if ! sudo -u "$PULSE_USER" git checkout -f "$TARGET_TAG"; then
         print_error "Failed to checkout tag '$TARGET_TAG'."
         [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
         cd ..
         return 1
     fi
+    
+    print_info "Verifying package.json was updated..."
+    local package_version=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+    local expected_version=$(echo "$TARGET_TAG" | sed 's/^v//')
+    if [ "$package_version" != "$expected_version" ] && [ "$package_version" != "unknown" ]; then
+        print_warning "package.json version ($package_version) does not match expected version ($expected_version)"
+        print_info "Forcing checkout to ensure all files are updated..."
+        sudo -u "$PULSE_USER" git checkout -f "$TARGET_TAG" -- .
+    fi
 
     local current_tag
     current_tag=$(sudo -u "$PULSE_USER" git describe --tags --exact-match HEAD 2>/dev/null)
-
-    print_info "Cleaning repository [removing untracked files]..."
 
     if [ -n "$script_backup_path" ] && [ -f "$script_backup_path" ]; then
         print_info "Restoring potentially updated installer script from backup..."
@@ -685,11 +697,27 @@ perform_update() {
         return 1
     fi
 
+    print_info "Performing post-update version verification..."
+    local installed_version=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+    local expected_version=$(echo "$TARGET_TAG" | sed 's/^v//')
+    
+    if [ "$installed_version" = "$expected_version" ]; then
+        print_success "Version verification passed: $installed_version"
+    elif [ "$installed_version" = "unknown" ]; then
+        print_warning "Could not verify installed version from package.json"
+    else
+        print_warning "Version mismatch detected!"
+        print_warning "Expected: $expected_version, Found: $installed_version"
+        print_warning "The application may not report the correct version."
+    fi
+    
     if [ -n "$current_tag" ]; then
       print_success "Pulse updated successfully to version $current_tag!"
     else
       print_success "Pulse updated successfully! [Could not confirm exact tag]"
     fi
+    
+    print_info "The application should now report version: $expected_version"
     return 0
 }
 
