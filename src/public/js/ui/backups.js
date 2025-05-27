@@ -254,7 +254,7 @@ PulseApp.ui.backups = (() => {
         sevenDayDots += '</div>';
 
         row.innerHTML = `
-            <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
@@ -299,6 +299,11 @@ PulseApp.ui.backups = (() => {
             console.error("UI elements for Backups tab not found!");
             return;
         }
+        
+        // Find the scrollable container
+        const scrollableContainer = PulseApp.utils.getScrollableParent(tableBody) || 
+                                   tableContainer.closest('.overflow-x-auto') ||
+                                   tableContainer;
 
         const { allGuests, initialDataReceived, tasksByGuest, snapshotsByGuest, dayBoundaries, threeDaysAgo, sevenDaysAgo } = _getInitialBackupData();
 
@@ -364,15 +369,16 @@ PulseApp.ui.backups = (() => {
         const sortStateBackups = PulseApp.state.getSortState('backups');
         const sortedBackupStatus = PulseApp.utils.sortData(filteredBackupStatus, sortStateBackups.column, sortStateBackups.direction, 'backups');
 
-        tableBody.innerHTML = '';
-        if (sortedBackupStatus.length > 0) {
-            sortedBackupStatus.forEach(guestStatus => {
-                const row = _renderBackupTableRow(guestStatus);
-                tableBody.appendChild(row);
-            });
-            noDataMsg.classList.add('hidden');
-            tableContainer.classList.remove('hidden');
-        } else {
+        PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
+            tableBody.innerHTML = '';
+            if (sortedBackupStatus.length > 0) {
+                sortedBackupStatus.forEach(guestStatus => {
+                    const row = _renderBackupTableRow(guestStatus);
+                    tableBody.appendChild(row);
+                });
+                noDataMsg.classList.add('hidden');
+                tableContainer.classList.remove('hidden');
+            } else {
             tableContainer.classList.add('hidden');
             let emptyMessage = "No backup information found for any guests.";
              if (backupStatusByGuest.length > 0 && filteredBackupStatus.length === 0) { // Data exists, but filters hide all
@@ -393,6 +399,7 @@ PulseApp.ui.backups = (() => {
             noDataMsg.textContent = emptyMessage;
             noDataMsg.classList.remove('hidden');
         }
+        }); // End of preserveScrollPosition
 
         const backupsSortColumn = sortStateBackups.column;
         const backupsHeader = document.querySelector(`#backups-overview-table th[data-sort="${backupsSortColumn}"]`);

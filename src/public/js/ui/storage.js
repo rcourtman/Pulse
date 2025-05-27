@@ -115,8 +115,16 @@ PulseApp.ui.storage = (() => {
     function updateStorageInfo() {
         const contentDiv = document.getElementById('storage-info-content');
         if (!contentDiv) return;
-        contentDiv.innerHTML = '';
-        contentDiv.className = '';
+        
+        // Find the scrollable container
+        const scrollableContainer = PulseApp.utils.getScrollableParent(contentDiv) || 
+                                   contentDiv.closest('.overflow-x-auto') ||
+                                   contentDiv.parentElement;
+        
+        // Preserve scroll position while updating
+        PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
+            contentDiv.innerHTML = '';
+            contentDiv.className = '';
 
         const nodes = PulseApp.state.get('nodesData') || [];
 
@@ -200,6 +208,7 @@ PulseApp.ui.storage = (() => {
         table.appendChild(thead);
         table.appendChild(tbody);
         contentDiv.appendChild(table);
+        }); // End of preserveScrollPosition
     }
 
     function _createStorageRow(store) {
@@ -222,7 +231,7 @@ PulseApp.ui.storage = (() => {
         const contentBadges = getContentBadgesHTML(store.content);
 
         row.innerHTML = `
-            <td class="p-1 px-2 whitespace-nowrap text-gray-900 dark:text-gray-100 font-medium">${store.storage || 'N/A'}</td>
+            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100">${store.storage || 'N/A'}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs flex items-center">${contentBadges}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${store.type || 'N/A'}</td>
             <td class="p-1 px-2 whitespace-nowrap storage-tooltip-trigger cursor-default" data-tooltip="${sharedIconTooltip}">${sharedIcon}</td>

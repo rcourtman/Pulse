@@ -285,6 +285,43 @@ PulseApp.utils = (() => {
     // Debounced version for resize events
     const updateProgressBarTextsDebounced = debounce(updateProgressBarTexts, 100);
 
+    // Scroll position preservation for table updates
+    function preserveScrollPosition(element, updateFn) {
+        if (!element) {
+            updateFn();
+            return;
+        }
+
+        // Save current scroll positions
+        const scrollLeft = element.scrollLeft;
+        const scrollTop = element.scrollTop;
+
+        // Execute the update function
+        updateFn();
+
+        // Restore scroll positions after a microtask to ensure DOM is updated
+        Promise.resolve().then(() => {
+            element.scrollLeft = scrollLeft;
+            element.scrollTop = scrollTop;
+        });
+    }
+
+    // Get the scrollable parent of a table
+    function getScrollableParent(element) {
+        if (!element) return null;
+        
+        let parent = element.parentElement;
+        while (parent) {
+            const style = window.getComputedStyle(parent);
+            if (style.overflowX === 'auto' || style.overflowX === 'scroll' ||
+                style.overflowY === 'auto' || style.overflowY === 'scroll') {
+                return parent;
+            }
+            parent = parent.parentElement;
+        }
+        return null;
+    }
+
     // Return the public API for this module
     return {
         sanitizeForId: (str) => str.replace(/[^a-zA-Z0-9-]/g, '-'),
@@ -303,6 +340,8 @@ PulseApp.utils = (() => {
         renderTableBody,
         debounce,
         updateProgressBarTexts,
-        updateProgressBarTextsDebounced
+        updateProgressBarTextsDebounced,
+        preserveScrollPosition,
+        getScrollableParent
     };
 })(); 

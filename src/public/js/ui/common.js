@@ -312,18 +312,13 @@ PulseApp.ui.common = (() => {
     function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td') {
         const baseClasses = 'py-0.5 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300';
         
-        // On mobile, create individual cells so first one can be sticky
-        if (window.innerWidth < 768) {
-            let html = `<${cellTag} class="${baseClasses} bg-gray-200 dark:bg-gray-700">${text}</${cellTag}>`;
-            // Add empty cells for remaining columns
-            for (let i = 1; i < colspan; i++) {
-                html += `<${cellTag} class="bg-gray-200 dark:bg-gray-700"></${cellTag}>`;
-            }
-            return html;
+        // Always create individual cells so first one can be sticky
+        let html = `<${cellTag} class="sticky left-0 bg-gray-200 dark:bg-gray-700 z-10 ${baseClasses}">${text}</${cellTag}>`;
+        // Add empty cells for remaining columns
+        for (let i = 1; i < colspan; i++) {
+            html += `<${cellTag} class="bg-gray-200 dark:bg-gray-700"></${cellTag}>`;
         }
-        
-        // Desktop: use colspan
-        return `<${cellTag} colspan="${colspan}" class="${baseClasses} bg-gray-200 dark:bg-gray-700 node-header-cell">${text}</${cellTag}>`;
+        return html;
     }
 
     return {

@@ -367,9 +367,15 @@ PulseApp.ui.pbs = (() => {
       const table = tableBody.closest('table');
       const tableId = table?.id;
       const isShowMoreExpanded = tableId ? expandedShowMoreState.has(tableId) : false;
+      
+      // Find the scrollable container
+      const scrollableContainer = PulseApp.utils.getScrollableParent(tableBody) || 
+                                 parentSectionElement.closest('.overflow-x-auto') ||
+                                 parentSectionElement;
 
       // Use global expanded state instead of scanning DOM
-      tableBody.innerHTML = '';
+      PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
+          tableBody.innerHTML = '';
 
       const tasks = fullTasksArray || [];
       
@@ -478,11 +484,19 @@ PulseApp.ui.pbs = (() => {
               }
           }
       }
+      }); // End of preserveScrollPosition
   }
 
     const _populateDsTableBody = (dsTableBody, datastores, statusText, showDetails) => {
         if (!dsTableBody) return;
-        dsTableBody.innerHTML = '';
+        
+        // Find the scrollable container
+        const scrollableContainer = PulseApp.utils.getScrollableParent(dsTableBody) || 
+                                   dsTableBody.closest('.overflow-x-auto') ||
+                                   dsTableBody.parentElement;
+        
+        PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
+            dsTableBody.innerHTML = '';
 
         if (showDetails && datastores) {
             if (datastores.length === 0) {
@@ -566,6 +580,7 @@ PulseApp.ui.pbs = (() => {
             cell.className = `px-4 py-4 ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_400} text-center`;
             cell.textContent = statusText;
         }
+        }); // End of preserveScrollPosition
     };
 
     const _populateInstanceTaskSections = (detailsContainer, instanceId, pbsInstance, statusText, showDetails) => {

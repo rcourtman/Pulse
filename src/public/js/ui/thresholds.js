@@ -10,7 +10,7 @@ PulseApp.ui.thresholds = (() => {
 
     function init() {
         thresholdRow = document.getElementById('threshold-slider-row');
-        toggleThresholdsButton = document.getElementById('toggle-thresholds-button');
+        toggleThresholdsButton = document.getElementById('toggle-thresholds-checkbox');
         thresholdBadge = document.getElementById('threshold-count-badge');
 
         sliders = {
@@ -30,12 +30,12 @@ PulseApp.ui.thresholds = (() => {
         updateThresholdRowVisibility();
 
         if (toggleThresholdsButton) {
-            toggleThresholdsButton.addEventListener('click', () => {
-                PulseApp.state.set('isThresholdRowVisible', !PulseApp.state.get('isThresholdRowVisible'));
+            toggleThresholdsButton.addEventListener('change', () => {
+                PulseApp.state.set('isThresholdRowVisible', toggleThresholdsButton.checked);
                 updateThresholdRowVisibility();
             });
         } else {
-            console.warn('#toggle-thresholds-button not found.');
+            console.warn('#toggle-thresholds-checkbox not found.');
         }
 
         _setupSliderListeners();
@@ -126,10 +126,8 @@ PulseApp.ui.thresholds = (() => {
         if (thresholdRow) {
             thresholdRow.classList.toggle('hidden', !isVisible);
             if (toggleThresholdsButton) {
-                toggleThresholdsButton.classList.toggle('bg-blue-100', isVisible);
-                toggleThresholdsButton.classList.toggle('dark:bg-blue-800/50', isVisible);
-                toggleThresholdsButton.classList.toggle('text-blue-700', isVisible);
-                toggleThresholdsButton.classList.toggle('dark:text-blue-300', isVisible);
+                // Update checkbox state to match visibility
+                toggleThresholdsButton.checked = isVisible;
             }
         }
     }

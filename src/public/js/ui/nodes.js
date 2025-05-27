@@ -64,7 +64,7 @@ PulseApp.ui.nodes = (() => {
                 <span class="capitalize">${statusText}</span>
               </span>
             </td>
-            <td class="p-1 px-2 whitespace-nowrap font-medium text-gray-900 dark:text-gray-100" title="${node.node || 'N/A'}">${node.node || 'N/A'}</td>
+            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100" title="${node.node || 'N/A'}">${node.node || 'N/A'}</td>
             <td class="p-1 px-2 min-w-[200px]">${cpuBarHTML}</td>
             <td class="p-1 px-2 min-w-[200px]">${memoryBarHTML}</td>
             <td class="p-1 px-2 min-w-[200px]">${diskBarHTML}</td>
@@ -147,7 +147,13 @@ PulseApp.ui.nodes = (() => {
             return;
         }
         
-        container.innerHTML = ''; // Clear previous content
+        // Find the scrollable container
+        const scrollableContainer = PulseApp.utils.getScrollableParent(container) || 
+                                   container.closest('.overflow-x-auto') ||
+                                   container.parentElement;
+        
+        PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
+            container.innerHTML = ''; // Clear previous content
 
         const numNodes = nodes.length;
         const isMobile = window.innerWidth < 640; // sm breakpoint
@@ -197,6 +203,7 @@ PulseApp.ui.nodes = (() => {
             });
             container.appendChild(gridDiv);
         }
+        }); // End of preserveScrollPosition
     }
 
     function createCondensedNodeCard(node) {
@@ -246,7 +253,14 @@ PulseApp.ui.nodes = (() => {
             console.log('[Nodes] Node table not found - using summary cards display instead');
             return;
         }
-        tbody.innerHTML = '';
+        
+        // Find the scrollable container
+        const scrollableContainer = PulseApp.utils.getScrollableParent(tbody) || 
+                                   tbody.closest('.overflow-x-auto') ||
+                                   tbody.parentElement;
+        
+        PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
+            tbody.innerHTML = '';
 
         if (!nodes || nodes.length === 0) {
             tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found or data unavailable</td></tr>';
@@ -290,6 +304,7 @@ PulseApp.ui.nodes = (() => {
                 });
             }
         }
+        }); // End of preserveScrollPosition
     }
 
     function init() {

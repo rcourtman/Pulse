@@ -67,9 +67,9 @@ PulseApp.ui.dashboard = (() => {
         }
 
         // Initialize charts toggle
-        const chartsToggleButton = document.getElementById('toggle-charts-button');
-        if (chartsToggleButton) {
-            chartsToggleButton.addEventListener('click', toggleChartsMode);
+        const chartsToggleCheckbox = document.getElementById('toggle-charts-checkbox');
+        if (chartsToggleCheckbox) {
+            chartsToggleCheckbox.addEventListener('change', toggleChartsMode);
         }
         
         // Initialize mobile scroll indicators
@@ -524,18 +524,21 @@ PulseApp.ui.dashboard = (() => {
         } else {
             row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50';
         }
-
+        
         // Update specific cells that might have changed
         const cells = row.querySelectorAll('td');
+        
+        // Ensure name cell keeps sticky styling even after row class updates
+        if (cells[0]) {
+            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0';
+        }
         if (cells.length >= 10) {
             // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
             
-            // Update name (cell 0)
-            const nameCell = cells[0];
-            
-            if (nameCell.textContent !== guest.name) {
-                nameCell.textContent = guest.name;
-                nameCell.title = guest.name;
+            // Update name (cell 0) content only (styling handled above)
+            if (cells[0].textContent !== guest.name) {
+                cells[0].textContent = guest.name;
+                cells[0].title = guest.name;
             }
             
             // Ensure ID cell (2) has proper classes
@@ -682,6 +685,11 @@ PulseApp.ui.dashboard = (() => {
             return;
         }
 
+        // Find the scrollable container
+        const scrollableContainer = PulseApp.utils.getScrollableParent(tableBodyEl) || 
+                                   document.querySelector('.table-container') ||
+                                   tableBodyEl.closest('.overflow-x-auto');
+
         // Show loading skeleton if no data yet
         const currentData = PulseApp.state.get('dashboardData');
         if (!currentData || currentData.length === 0) {
@@ -746,50 +754,56 @@ PulseApp.ui.dashboard = (() => {
             visibleCount = sortedData.length;
             sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
         } else if (needsFullRebuild) {
-            // Full rebuild for normal rendering
-            if (groupByNode) {
-                const groupRenderResult = _renderGroupedByNode(tableBodyEl, sortedData, createGuestRow);
-                visibleCount = groupRenderResult.visibleCount;
-                visibleNodes = groupRenderResult.visibleNodes;
-            } else {
-                PulseApp.utils.renderTableBody(tableBodyEl, sortedData, createGuestRow, "No matching guests found.", 11);
-                visibleCount = sortedData.length;
-                sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
-            }
+            // Full rebuild for normal rendering with scroll preservation
+            PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
+                if (groupByNode) {
+                    const groupRenderResult = _renderGroupedByNode(tableBodyEl, sortedData, createGuestRow);
+                    visibleCount = groupRenderResult.visibleCount;
+                    visibleNodes = groupRenderResult.visibleNodes;
+                } else {
+                    PulseApp.utils.renderTableBody(tableBodyEl, sortedData, createGuestRow, "No matching guests found.", 11);
+                    visibleCount = sortedData.length;
+                    sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
+                }
+            });
             previousGroupByNode = groupByNode;
         } else {
-            // Incremental update using DOM diffing
-            const result = _updateTableIncremental(tableBodyEl, sortedData, createGuestRow, groupByNode);
-            visibleCount = result.visibleCount;
-            visibleNodes = result.visibleNodes;
+            // Incremental update using DOM diffing with scroll preservation
+            PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
+                const result = _updateTableIncremental(tableBodyEl, sortedData, createGuestRow, groupByNode);
+                visibleCount = result.visibleCount;
+                visibleNodes = result.visibleNodes;
+            });
         }
 
         previousTableData = sortedData;
 
         if (visibleCount === 0 && tableBodyEl) {
-            const textSearchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : [];
-            const activeThresholds = Object.entries(thresholdState).filter(([_, state]) => state.value > 0);
-            const thresholdTexts = activeThresholds.map(([key, state]) => {
-                return `${PulseApp.utils.getReadableThresholdName(key)}>=${PulseApp.utils.formatThresholdValue(key, state.value)}`;
-            });
-            
-            const hasFilters = filterGuestType !== FILTER_ALL || filterStatus !== FILTER_ALL || textSearchTerms.length > 0 || activeThresholds.length > 0;
-            
-            if (PulseApp.ui.emptyStates) {
-                const context = {
-                    filterType: filterGuestType,
-                    filterStatus: filterStatus,
-                    searchTerms: textSearchTerms,
-                    thresholds: thresholdTexts
-                };
+            PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
+                const textSearchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : [];
+                const activeThresholds = Object.entries(thresholdState).filter(([_, state]) => state.value > 0);
+                const thresholdTexts = activeThresholds.map(([key, state]) => {
+                    return `${PulseApp.utils.getReadableThresholdName(key)}>=${PulseApp.utils.formatThresholdValue(key, state.value)}`;
+                });
                 
-                const emptyType = hasFilters ? 'no-results' : 'no-guests';
-                tableBodyEl.innerHTML = PulseApp.ui.emptyStates.createTableEmptyState(emptyType, context, 11);
-            } else {
-                // Fallback to simple message
-                let message = hasFilters ? "No guests match the current filters." : "No guests found.";
-                tableBodyEl.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500 dark:text-gray-400">${message}</td></tr>`;
-            }
+                const hasFilters = filterGuestType !== FILTER_ALL || filterStatus !== FILTER_ALL || textSearchTerms.length > 0 || activeThresholds.length > 0;
+                
+                if (PulseApp.ui.emptyStates) {
+                    const context = {
+                        filterType: filterGuestType,
+                        filterStatus: filterStatus,
+                        searchTerms: textSearchTerms,
+                        thresholds: thresholdTexts
+                    };
+                    
+                    const emptyType = hasFilters ? 'no-results' : 'no-guests';
+                    tableBodyEl.innerHTML = PulseApp.ui.emptyStates.createTableEmptyState(emptyType, context, 11);
+                } else {
+                    // Fallback to simple message
+                    let message = hasFilters ? "No guests match the current filters." : "No guests found.";
+                    tableBodyEl.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500 dark:text-gray-400">${message}</td></tr>`;
+                }
+            });
         }
         
         _updateDashboardStatusMessage(statusElementEl, visibleCount, visibleNodes, groupByNode, filterGuestType, filterStatus, searchInput, thresholdState);
@@ -943,7 +957,7 @@ PulseApp.ui.dashboard = (() => {
         }
 
         row.innerHTML = `
-            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title="${guest.name}">${guest.name}</td>
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title="${guest.name}">${guest.name}</td>
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2">${guest.id}</td>
             <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>
@@ -980,16 +994,13 @@ PulseApp.ui.dashboard = (() => {
 
     function toggleChartsMode() {
         const mainContainer = document.getElementById('main');
-        const button = document.getElementById('toggle-charts-button');
+        const checkbox = document.getElementById('toggle-charts-checkbox');
+        const label = checkbox ? checkbox.parentElement : null;
         
-        if (mainContainer.classList.contains('charts-mode')) {
-            // Switch to metrics mode
-            mainContainer.classList.remove('charts-mode');
-            button.title = 'Toggle Charts View';
-        } else {
+        if (checkbox && checkbox.checked) {
             // Switch to charts mode  
             mainContainer.classList.add('charts-mode');
-            button.title = 'Toggle Metrics View';
+            if (label) label.title = 'Toggle Metrics View';
             
             // Immediately render charts when switching to charts mode
             if (PulseApp.charts) {
@@ -997,6 +1008,10 @@ PulseApp.ui.dashboard = (() => {
                     PulseApp.charts.updateAllCharts();
                 });
             }
+        } else {
+            // Switch to metrics mode
+            mainContainer.classList.remove('charts-mode');
+            if (label) label.title = 'Toggle Charts View';
         }
     }
 
