@@ -293,6 +293,7 @@ PulseApp.ui.backups = (() => {
         const loadingMsg = document.getElementById('backups-loading-message');
         const noDataMsg = document.getElementById('backups-no-data-message');
         const statusTextElement = document.getElementById('backups-status-text');
+        const pbsSummaryElement = document.getElementById('pbs-instances-summary');
 
         if (!tableContainer || !tableBody || !loadingMsg || !noDataMsg || !statusTextElement) {
             console.error("UI elements for Backups tab not found!");
@@ -320,6 +321,45 @@ PulseApp.ui.backups = (() => {
 
         const backupStatusByGuest = allGuests.map(guest => _determineGuestBackupStatus(guest, snapshotsByGuest.get(`${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`) || [], tasksByGuest.get(`${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`) || [], dayBoundaries, threeDaysAgo, sevenDaysAgo));
         const filteredBackupStatus = _filterBackupData(backupStatusByGuest, backupsSearchInput);
+
+        // Calculate PBS instances summary - only show if multiple PBS instances
+        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+        const pbsSummaryDismissed = PulseApp.state.get('pbsSummaryDismissed') || false;
+        
+        if (pbsSummaryElement) {
+            if (pbsDataArray.length > 1 && !pbsSummaryDismissed) {
+                const pbsSummary = pbsDataArray.map(pbs => {
+                    const backupCount = (pbs.datastores || []).reduce((total, ds) => 
+                        total + (ds.snapshots ? ds.snapshots.length : 0), 0);
+                    return `${pbs.pbsInstanceName}: ${backupCount} backups`;
+                }).join(' | ');
+                
+                pbsSummaryElement.innerHTML = `
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <strong>PBS Instances (${pbsDataArray.length}):</strong> ${pbsSummary}
+                            <span class="text-gray-500 dark:text-gray-400 ml-2">• Showing aggregated backup data from all instances</span>
+                        </div>
+                        <button id="dismiss-pbs-summary" class="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 ml-4" title="Dismiss">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                        </button>
+                    </div>
+                `;
+                pbsSummaryElement.classList.remove('hidden');
+                
+                // Add dismiss handler
+                const dismissBtn = document.getElementById('dismiss-pbs-summary');
+                if (dismissBtn) {
+                    dismissBtn.addEventListener('click', () => {
+                        pbsSummaryElement.classList.add('hidden');
+                        PulseApp.state.set('pbsSummaryDismissed', true);
+                        PulseApp.state.saveFilterState();
+                    });
+                }
+            } else {
+                pbsSummaryElement.classList.add('hidden');
+            }
+        }
 
         const sortStateBackups = PulseApp.state.getSortState('backups');
         const sortedBackupStatus = PulseApp.utils.sortData(filteredBackupStatus, sortStateBackups.column, sortStateBackups.direction, 'backups');

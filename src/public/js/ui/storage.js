@@ -121,7 +121,11 @@ PulseApp.ui.storage = (() => {
         const nodes = PulseApp.state.get('nodesData') || [];
 
         if (!Array.isArray(nodes) || nodes.length === 0) {
-            contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No node or storage data available.</p>';
+            if (PulseApp.ui.emptyStates) {
+                contentDiv.innerHTML = PulseApp.ui.emptyStates.createEmptyState('no-storage');
+            } else {
+                contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No node or storage data available.</p>';
+            }
             return;
         }
 
@@ -137,7 +141,11 @@ PulseApp.ui.storage = (() => {
         const nodeKeys = Object.keys(storageByNode);
 
         if (nodeKeys.length === 0) {
-          contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data found associated with nodes.</p>';
+          if (PulseApp.ui.emptyStates) {
+              contentDiv.innerHTML = PulseApp.ui.emptyStates.createEmptyState('no-storage');
+          } else {
+              contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data found associated with nodes.</p>';
+          }
           return;
         }
 
@@ -173,7 +181,11 @@ PulseApp.ui.storage = (() => {
 
           if (nodeStorageData.length === 0) {
             const noDataRow = document.createElement('tr');
-            noDataRow.innerHTML = `<td colspan="7" class="p-2 px-3 text-sm text-gray-500 dark:text-gray-400 italic">No storage configured or found for this node.</td>`;
+            if (PulseApp.ui.emptyStates) {
+                noDataRow.innerHTML = `<td colspan="7" class="p-0">${PulseApp.ui.emptyStates.createEmptyState('no-storage')}</td>`;
+            } else {
+                noDataRow.innerHTML = `<td colspan="7" class="p-2 px-3 text-sm text-gray-500 dark:text-gray-400 italic">No storage configured or found for this node.</td>`;
+            }
             tbody.appendChild(noDataRow);
             return;
           }

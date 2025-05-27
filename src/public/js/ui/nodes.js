@@ -130,12 +130,18 @@ PulseApp.ui.nodes = (() => {
             console.error('Critical element #node-summary-cards-container not found for node summary cards update!');
             return;
         }
-        container.innerHTML = ''; // Clear previous content
-
+        
+        // Show loading skeletons if no data yet
         if (!nodes || nodes.length === 0) {
+            if (PulseApp.ui.loadingSkeletons) {
+                PulseApp.ui.loadingSkeletons.showNodeCardsSkeleton(container, 3);
+                return;
+            }
             container.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">No node data available for summary.</p>';
             return;
         }
+        
+        container.innerHTML = ''; // Clear previous content
 
         const numNodes = nodes.length;
 

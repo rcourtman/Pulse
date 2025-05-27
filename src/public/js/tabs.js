@@ -7,6 +7,7 @@ PulseApp.ui.tabs = (() => {
     let nestedTabContentContainer = null;
     let mainTabsContainer = null;
     let logSessionArea = null;
+    let loadedTabs = new Set();
 
     function init() {
         tabs = Array.from(document.querySelectorAll('.tab'));
@@ -40,19 +41,40 @@ PulseApp.ui.tabs = (() => {
                 }
             });
         }
+
+        // Mark main tab as loaded since it's shown by default
+        loadedTabs.add('main');
     }
 
     function activateMainTab(clickedTab, tabId) {
         if (clickedTab.classList.contains('pointer-events-none')) return;
 
-        tabs.forEach(t => styleMainTab(t, false)); // Use the helper
-        tabContents.forEach(content => content.classList.add('hidden'));
+        tabs.forEach(t => {
+            styleMainTab(t, false);
+            // Update ARIA attributes
+            t.setAttribute('aria-selected', 'false');
+            t.setAttribute('tabindex', '-1');
+        });
+        tabContents.forEach(content => {
+            content.classList.add('hidden');
+            content.setAttribute('aria-hidden', 'true');
+        });
 
-        styleMainTab(clickedTab, true); // Use the helper
+        styleMainTab(clickedTab, true);
+        // Update ARIA attributes for active tab
+        clickedTab.setAttribute('aria-selected', 'true');
+        clickedTab.setAttribute('tabindex', '0');
 
         const activeContent = document.getElementById(tabId);
         if (activeContent) {
             activeContent.classList.remove('hidden');
+            activeContent.setAttribute('aria-hidden', 'false');
+
+            // Lazy load tab content
+            if (!loadedTabs.has(tabId)) {
+                loadTabContent(tabId);
+                loadedTabs.add(tabId);
+            }
 
             if (tabId === 'main') {
                 activateNestedTab('nested-tab-dashboard');
@@ -68,6 +90,18 @@ PulseApp.ui.tabs = (() => {
                     PulseApp.ui.backups.updateBackupsTab();
                 } else {
                     console.warn('[Tabs] PulseApp.ui.backups not available for updateBackupsTab')
+                }
+            }
+
+            if (tabId === 'storage') {
+                if (PulseApp.ui && PulseApp.ui.storage) {
+                    PulseApp.ui.storage.updateStorageTab();
+                }
+            }
+
+            if (tabId === 'pbs') {
+                if (PulseApp.ui && PulseApp.ui.pbs) {
+                    PulseApp.ui.pbs.updatePBSTab();
                 }
             }
         }
@@ -349,9 +383,38 @@ PulseApp.ui.tabs = (() => {
         }
     }
 
+    function loadTabContent(tabId) {
+        // Load tab-specific data only when the tab is first accessed
+        switch(tabId) {
+            case 'main':
+                // Main tab is loaded by default
+                break;
+            case 'storage':
+                if (PulseApp.ui && PulseApp.ui.storage) {
+                    console.log(`[Tabs] Lazy loading ${tabId} content`);
+                    // Storage data is already fetched, just update the UI
+                }
+                break;
+            case 'backups':
+                if (PulseApp.ui && PulseApp.ui.backups) {
+                    console.log(`[Tabs] Lazy loading ${tabId} content`);
+                    // Backups data is fetched on demand in updateBackupsTab
+                }
+                break;
+            case 'pbs':
+                if (PulseApp.ui && PulseApp.ui.pbs) {
+                    console.log(`[Tabs] Lazy loading ${tabId} content`);
+                    // PBS data is already fetched, just update the UI
+                }
+                break;
+        }
+    }
+
     return {
         init,
         activateNestedTab,
-        updateTabAvailability
+        updateTabAvailability,
+        addLogTab,
+        removeLogTabAndContent
     };
 })();

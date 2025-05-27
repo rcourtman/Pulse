@@ -247,7 +247,12 @@ PulseApp.ui.common = (() => {
         const tableType = tableTypeMatch[1];
 
         tableElement.querySelectorAll('th.sortable').forEach(th => {
-          th.addEventListener('click', () => {
+          // Make sortable headers keyboard accessible
+          th.setAttribute('tabindex', '0');
+          th.setAttribute('role', 'button');
+          th.setAttribute('aria-label', `Sort by ${th.textContent.trim()}`);
+          
+          const handleSort = () => {
             const column = th.getAttribute('data-sort');
             if (!column) return;
 
@@ -271,6 +276,14 @@ PulseApp.ui.common = (() => {
             }
 
             updateSortUI(tableId, th);
+          };
+          
+          th.addEventListener('click', handleSort);
+          th.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleSort();
+            }
           });
         });
     }
@@ -297,7 +310,7 @@ PulseApp.ui.common = (() => {
     }
 
     function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td') {
-        const cellClasses = 'py-0.5 px-2 bg-gray-200 dark:bg-gray-700 subtle-stripes-light dark:subtle-stripes-dark text-left font-medium text-sm text-gray-700 dark:text-gray-300';
+        const cellClasses = 'py-0.5 px-2 bg-gray-200 dark:bg-gray-700 subtle-stripes-light dark:subtle-stripes-dark text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300';
         return `<${cellTag} colspan="${colspan}" class="${cellClasses}">${text}</${cellTag}>`;
     }
 

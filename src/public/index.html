@@ -188,7 +188,7 @@
           <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
         </div>
       <div class="header-controls flex justify-end items-center gap-4 md:flex-1">
-        <button id="theme-toggle-button" type="button" class="p-1 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none" aria-label="Toggle theme">
+        <button id="theme-toggle-button" type="button" class="p-1 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none" aria-label="Toggle theme">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
           </svg>
@@ -196,23 +196,23 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
           </svg>
         </button>
-        <div id="connection-status" class="status disconnected text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400">Disconnected</div>
+        <div id="connection-status" class="status disconnected text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300" role="status" aria-live="polite">Disconnected</div>
       </div>
     </div>
-    <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar">
-      <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px flex items-center gap-1.5" data-tab="main">
+    <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar" role="tablist" aria-label="Main navigation tabs">
+      <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px flex items-center gap-1.5" data-tab="main" role="tab" aria-selected="true" aria-controls="main" tabindex="0">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
           <span class="hidden md:inline">Main</span>
       </div>
-      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="storage">
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="storage" role="tab" aria-selected="false" aria-controls="storage" tabindex="-1">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
           <span class="hidden md:inline">Storage</span>
       </div>
-      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="backups">
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="backups" role="tab" aria-selected="false" aria-controls="backups" tabindex="-1">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
           <span class="hidden md:inline">Backups</span>
       </div>
-      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="pbs">
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="pbs" role="tab" aria-selected="false" aria-controls="pbs" tabindex="-1">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           <span class="hidden md:inline">PBS</span>
       </div>
@@ -228,18 +228,18 @@
 
           <div class="dashboard-filter flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
             <div class="dashboard-filter-controls flex-grow flex items-center gap-2">
-              <input type="text" id="dashboard-search" placeholder="Search Name, ID, Node (use ',' for OR)" class="flex-grow p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-              <button id="reset-filters-button" title="Reset Filters & Sort (Esc)" class="p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
+              <input type="text" id="dashboard-search" placeholder="Search Name, ID, Node (use ',' for OR)" aria-label="Search virtual machines and containers" class="flex-grow p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+              <button id="reset-filters-button" title="Reset Filters & Sort (Esc)" class="p-1.5 sm:p-1 h-9 w-9 sm:h-7 sm:w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
               </button>
-              <button id="toggle-charts-button" title="Toggle Charts View" class="p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
+              <button id="toggle-charts-button" title="Toggle Charts View" aria-label="Toggle between charts and metrics view" class="p-1.5 sm:p-1 h-9 w-9 sm:h-7 sm:w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto">
                   <line x1="18" y1="20" x2="18" y2="10"></line>
                   <line x1="12" y1="20" x2="12" y2="4"></line>
                   <line x1="6" y1="20" x2="6" y2="14"></line>
                 </svg>
               </button>
-              <button id="toggle-thresholds-button" title="Toggle Threshold Filters" class="relative p-1 h-7 w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
+              <button id="toggle-thresholds-button" title="Toggle Threshold Filters" aria-label="Toggle threshold filters panel" class="relative p-1.5 sm:p-1 h-9 w-9 sm:h-7 sm:w-7 flex-shrink-0 rounded text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none">
                 <span class="relative inline-block">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto">
                         <line x1="4" y1="21" x2="4" y2="14"></line>
@@ -260,12 +260,12 @@
               <div class="flex items-center gap-2">
                 <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                   <input type="radio" id="group-grouped" name="group-filter" value="grouped" class="hidden peer/grouped" checked>
-                  <label for="group-grouped" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/grouped:bg-blue-100 dark:peer-checked/grouped:bg-blue-800/50 peer-checked/grouped:text-blue-700 dark:peer-checked/grouped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                  <label for="group-grouped" class="flex items-center justify-center gap-1 px-3 py-1 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/grouped:bg-blue-100 dark:peer-checked/grouped:bg-blue-800/50 peer-checked/grouped:text-blue-700 dark:peer-checked/grouped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/></svg>
                     <span class="hidden md:inline">Grouped</span>
                   </label>
                   <input type="radio" id="group-list" name="group-filter" value="list" class="hidden peer/list">
-                  <label for="group-list" class="flex items-center justify-center gap-1 px-2 py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/list:bg-blue-100 dark:peer-checked/list:bg-blue-800/50 peer-checked/list:text-blue-700 dark:peer-checked/list:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                  <label for="group-list" class="flex items-center justify-center gap-1 px-3 py-1 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/list:bg-blue-100 dark:peer-checked/list:bg-blue-800/50 peer-checked/list:text-blue-700 dark:peer-checked/list:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
                     <span class="hidden md:inline">List</span>
                   </label>
@@ -311,7 +311,7 @@
           </div>
 
           <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
-            <table id="main-table" class="w-full table-fixed text-sm">
+            <table id="main-table" class="w-full table-fixed text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
                 <colgroup>
                   <col class="name-col" style="width: var(--name-col-width, 150px);">
                   <col class="type-col" style="width: 50px;">
@@ -326,18 +326,18 @@
                   <col class="net-disk-col" style="width: 70px;">
                 </colgroup>
               <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
-                <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
                   <th class="sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
                   <th class="p-1 px-2" style="width: 50px;">Type</th>
-                  <th class="sortable p-1 px-2" data-sort="id" style="width: 50px;">ID</th>
-                  <th class="sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
+                  <th class="sortable p-1 px-2 hidden sm:table-cell" data-sort="id" style="width: 50px;">ID</th>
+                  <th class="sortable p-1 px-2 hidden md:table-cell" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
                   <th class="sortable p-1 px-2" data-sort="cpu" style="width: 120px;">CPU</th>
                   <th class="sortable p-1 px-2" data-sort="memory" style="width: 120px;">Memory</th>
                   <th class="sortable p-1 px-2" data-sort="disk" style="width: 120px;">Disk</th>
-                  <th class="sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
-                  <th class="sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
-                  <th class="sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
-                  <th class="sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
+                  <th class="sortable p-1 px-2 hidden lg:table-cell" data-sort="diskread" style="width: 70px;">Read</th>
+                  <th class="sortable p-1 px-2 hidden lg:table-cell" data-sort="diskwrite" style="width: 70px;">Write</th>
+                  <th class="sortable p-1 px-2 hidden lg:table-cell" data-sort="netin" style="width: 70px;">Net In</th>
+                  <th class="sortable p-1 px-2 hidden lg:table-cell" data-sort="netout" style="width: 70px;">Net Out</th>
                 </tr>
                 <tr id="threshold-slider-row" class="hidden mt-3 p-3 border rounded-md bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600">
                   <th class="py-1 px-2 align-middle"></th>
@@ -493,6 +493,9 @@
           </div>
       </div>
       <div id="backups-table-container" class="hidden space-y-2 mb-2">
+        <div id="pbs-instances-summary" class="text-xs text-gray-600 dark:text-gray-400 mb-2 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+          <!-- PBS instances summary will be inserted here dynamically -->
+        </div>
         <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded scrollbar">
           <table id="backups-overview-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
             <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
@@ -531,6 +534,8 @@
   <!-- <script src="/app.js" defer></script> -->
   <script src="/js/config.js" defer></script>
   <script src="/js/state.js" defer></script>
+  <script src="/js/debounce.js" defer></script>
+  <script src="/js/virtual-scroll.js" defer></script>
   <script src="/js/utils.js" defer></script>
   <script src="/js/theme.js" defer></script>
   <script src="/js/tooltips.js" defer></script>
@@ -538,6 +543,9 @@
   <script src="/js/tabs.js" defer></script>
   <script src="/js/charts.js" defer></script>
   <script src="/js/ui/thresholds.js" defer></script>
+  <script src="/js/ui/empty-states.js" defer></script>
+  <script src="/js/ui/status-icons.js" defer></script>
+  <script src="/js/ui/loading-skeletons.js" defer></script>
   <script src="/js/ui/common.js" defer></script>
   <script src="/js/ui/nodes.js" defer></script>
   <script src="/js/ui/dashboard.js" defer></script>

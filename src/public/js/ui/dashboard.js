@@ -23,6 +23,8 @@ PulseApp.ui.dashboard = (() => {
     let guestMetricDragSnapshot = {}; // To store metrics during slider drag
     let tableBodyEl = null;
     let statusElementEl = null;
+    let virtualScroller = null;
+    const VIRTUAL_SCROLL_THRESHOLD = 100; // Use virtual scrolling for >100 items
 
     function init() {
         searchInput = document.getElementById('dashboard-search');
@@ -490,11 +492,22 @@ PulseApp.ui.dashboard = (() => {
         if (cells.length >= 10) {
             // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
             
-            // Update name (cell 0) if changed
+            // Update name (cell 0)
             const nameCell = cells[0];
+            
             if (nameCell.textContent !== guest.name) {
                 nameCell.textContent = guest.name;
                 nameCell.title = guest.name;
+            }
+            
+            // Ensure ID cell (2) has responsive classes
+            if (cells[2]) {
+                cells[2].className = 'p-1 px-2 hidden sm:table-cell';
+            }
+            
+            // Ensure uptime cell (3) has responsive classes
+            if (cells[3]) {
+                cells[3].className = 'p-1 px-2 whitespace-nowrap hidden md:table-cell';
             }
 
             // Update uptime (cell 3)
@@ -532,6 +545,13 @@ PulseApp.ui.dashboard = (() => {
             if (diskCell.innerHTML !== newDiskHTML) {
                 diskCell.innerHTML = newDiskHTML;
             }
+
+            // Ensure I/O cells (7-10) have responsive classes
+            [7, 8, 9, 10].forEach(index => {
+                if (cells[index]) {
+                    cells[index].className = 'p-1 px-2 hidden lg:table-cell';
+                }
+            });
 
             // Update I/O cells (7-10) if running
             if (guest.status === STATUS_RUNNING) {
@@ -624,6 +644,14 @@ PulseApp.ui.dashboard = (() => {
             return;
         }
 
+        // Show loading skeleton if no data yet
+        const currentData = PulseApp.state.get('dashboardData');
+        if (!currentData || currentData.length === 0) {
+            if (PulseApp.ui.loadingSkeletons && tableBodyEl) {
+                PulseApp.ui.loadingSkeletons.showTableSkeleton(tableBodyEl.closest('table'), 5, 11);
+            }
+        }
+
         refreshDashboardData();
 
         const dashboardData = PulseApp.state.get('dashboardData') || [];
@@ -642,8 +670,45 @@ PulseApp.ui.dashboard = (() => {
         // Check if we need a full rebuild (grouping mode changed or first render)
         const needsFullRebuild = previousGroupByNode !== groupByNode || previousTableData === null;
 
-        if (needsFullRebuild) {
-            // Full rebuild
+        // Destroy existing virtual scroller if switching modes or data size changes significantly
+        if (virtualScroller && (groupByNode || sortedData.length <= VIRTUAL_SCROLL_THRESHOLD)) {
+            virtualScroller.destroy();
+            virtualScroller = null;
+            // Restore normal table structure
+            const tableContainer = document.querySelector('.table-container');
+            if (tableContainer) {
+                tableContainer.style.height = '';
+                tableContainer.innerHTML = '<table id="main-table" class="w-full table-fixed text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers"><tbody></tbody></table>';
+                tableBodyEl = document.querySelector('#main-table tbody');
+            }
+        }
+
+        // Use virtual scrolling for large datasets when not grouped
+        if (!groupByNode && sortedData.length > VIRTUAL_SCROLL_THRESHOLD && PulseApp.virtualScroll) {
+            const tableContainer = document.querySelector('.table-container');
+            if (tableContainer && !virtualScroller) {
+                // Set fixed height for virtual scroll container
+                tableContainer.style.height = '600px';
+                virtualScroller = PulseApp.virtualScroll.createVirtualScroller(
+                    tableContainer,
+                    sortedData,
+                    (guest) => {
+                        const row = createGuestRow(guest);
+                        // Remove hover effects for virtual rows
+                        if (row) {
+                            row.style.borderBottom = '1px solid rgb(229 231 235)';
+                            row.classList.remove('hover:bg-gray-50', 'dark:hover:bg-gray-700/50');
+                        }
+                        return row;
+                    }
+                );
+            } else if (virtualScroller) {
+                virtualScroller.updateItems(sortedData);
+            }
+            visibleCount = sortedData.length;
+            sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
+        } else if (needsFullRebuild) {
+            // Full rebuild for normal rendering
             if (groupByNode) {
                 const groupRenderResult = _renderGroupedByNode(tableBodyEl, sortedData, createGuestRow);
                 visibleCount = groupRenderResult.visibleCount;
@@ -664,23 +729,29 @@ PulseApp.ui.dashboard = (() => {
         previousTableData = sortedData;
 
         if (visibleCount === 0 && tableBodyEl) {
-            let filterDescription = [];
-            if (filterGuestType !== FILTER_ALL) filterDescription.push(`Type: ${filterGuestType.toUpperCase()}`);
-            if (filterStatus !== FILTER_ALL) filterDescription.push(`Status: ${filterStatus}`);
             const textSearchTerms = searchInput ? searchInput.value.toLowerCase().split(',').map(term => term.trim()).filter(term => term) : [];
-            if (textSearchTerms.length > 0) filterDescription.push(`Search: "${textSearchTerms.join(', ')}"`);
-            
             const activeThresholds = Object.entries(thresholdState).filter(([_, state]) => state.value > 0);
-            if (activeThresholds.length > 0) {
-                const thresholdTexts = activeThresholds.map(([key, state]) => {
-                    return `${PulseApp.utils.getReadableThresholdName(key)}>=${PulseApp.utils.formatThresholdValue(key, state.value)}`;
-                });
-                filterDescription.push(`Thresholds: ${thresholdTexts.join(', ')}`);
+            const thresholdTexts = activeThresholds.map(([key, state]) => {
+                return `${PulseApp.utils.getReadableThresholdName(key)}>=${PulseApp.utils.formatThresholdValue(key, state.value)}`;
+            });
+            
+            const hasFilters = filterGuestType !== FILTER_ALL || filterStatus !== FILTER_ALL || textSearchTerms.length > 0 || activeThresholds.length > 0;
+            
+            if (PulseApp.ui.emptyStates) {
+                const context = {
+                    filterType: filterGuestType,
+                    filterStatus: filterStatus,
+                    searchTerms: textSearchTerms,
+                    thresholds: thresholdTexts
+                };
+                
+                const emptyType = hasFilters ? 'no-results' : 'no-guests';
+                tableBodyEl.innerHTML = PulseApp.ui.emptyStates.createTableEmptyState(emptyType, context, 11);
+            } else {
+                // Fallback to simple message
+                let message = hasFilters ? "No guests match the current filters." : "No guests found.";
+                tableBodyEl.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500 dark:text-gray-400">${message}</td></tr>`;
             }
-            let message = "No guests match the current filters";
-            if (filterDescription.length > 0) message += ` (${filterDescription.join('; ')})`;
-            message += ".";
-            tableBodyEl.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-gray-500 dark:text-gray-400">${message}</td></tr>`;
         }
         
         _updateDashboardStatusMessage(statusElementEl, visibleCount, visibleNodes, groupByNode, filterGuestType, filterStatus, searchInput, thresholdState);
@@ -831,15 +902,15 @@ PulseApp.ui.dashboard = (() => {
         row.innerHTML = `
             <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
             <td class="p-1 px-2">${typeIcon}</td>
-            <td class="p-1 px-2">${guest.id}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${uptimeDisplay}</td>
+            <td class="p-1 px-2 hidden sm:table-cell">${guest.id}</td>
+            <td class="p-1 px-2 whitespace-nowrap hidden md:table-cell">${uptimeDisplay}</td>
             <td class="p-1 px-2">${cpuBarHTML}</td>
             <td class="p-1 px-2">${memoryBarHTML}</td>
             <td class="p-1 px-2">${diskBarHTML}</td>
-            <td class="p-1 px-2">${diskReadCell}</td>
-            <td class="p-1 px-2">${diskWriteCell}</td>
-            <td class="p-1 px-2">${netInCell}</td>
-            <td class="p-1 px-2">${netOutCell}</td>
+            <td class="p-1 px-2 hidden lg:table-cell">${diskReadCell}</td>
+            <td class="p-1 px-2 hidden lg:table-cell">${diskWriteCell}</td>
+            <td class="p-1 px-2 hidden lg:table-cell">${netInCell}</td>
+            <td class="p-1 px-2 hidden lg:table-cell">${netOutCell}</td>
         `;
         return row;
     }

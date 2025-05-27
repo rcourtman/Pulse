@@ -27,9 +27,20 @@ PulseApp.tooltips = (() => {
     }
 
     function handleMouseOver(event) {
-        const target = event.target.closest('.metric-tooltip-trigger, .storage-tooltip-trigger');
+        const target = event.target.closest('[data-tooltip], .metric-tooltip-trigger, .storage-tooltip-trigger, .truncate');
         if (target) {
-            const tooltipText = target.getAttribute('data-tooltip');
+            let tooltipText = target.getAttribute('data-tooltip');
+            
+            // Auto-generate tooltip for truncated text
+            if (!tooltipText && target.classList.contains('truncate')) {
+                const fullText = target.textContent.trim();
+                const title = target.getAttribute('title');
+                // Only show tooltip if text is actually truncated
+                if ((title && title !== fullText) || target.scrollWidth > target.clientWidth) {
+                    tooltipText = title || fullText;
+                }
+            }
+            
             if (tooltipText && tooltipElement) {
                 tooltipElement.textContent = tooltipText;
                 positionTooltip(event);
