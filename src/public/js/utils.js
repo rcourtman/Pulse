@@ -39,23 +39,25 @@ PulseApp.utils = (() => {
 
     function createProgressTextBarHTML(percentage, text, color, simpleText = null) {
         // Always use a neutral background regardless of the progress color
-        const bgColorClass = 'bg-gray-200 dark:bg-gray-700';
+        const bgColorClass = 'bg-gray-200 dark:bg-gray-600';
 
         const progressColorClass = {
-            red: 'bg-red-500/50 dark:bg-red-500/50',
-            yellow: 'bg-yellow-500/50 dark:bg-yellow-500/50',
-            green: 'bg-green-500/50 dark:bg-green-500/50'
-        }[color] || 'bg-gray-500/50'; // Fallback progress color with opacity
+            red: 'bg-red-500/60 dark:bg-red-500/50',
+            yellow: 'bg-yellow-500/60 dark:bg-yellow-500/50',
+            green: 'bg-green-500/60 dark:bg-green-500/50'
+        }[color] || 'bg-gray-500/60 dark:bg-gray-500/50'; // Fallback progress color with opacity
 
         // Use simpleText for narrow screens if provided, otherwise just show percentage
         const mobileText = simpleText || `${percentage}%`;
+        
+        // Generate a unique ID for this progress bar to handle dynamic text switching
+        const uniqueId = `pb-${Math.random().toString(36).substr(2, 9)}`;
 
         return `
             <div class="relative w-full h-3.5 rounded overflow-hidden ${bgColorClass}">
                 <div class="absolute top-0 left-0 h-full ${progressColorClass}" style="width: ${percentage}%;"></div>
                 <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                    <span class="hidden sm:inline truncate px-1">${text}</span>
-                    <span class="inline sm:hidden">${mobileText}</span>
+                    <span class="progress-text-full truncate px-1" data-progress-id="${uniqueId}" data-full-text="${text.replace(/"/g, '&quot;')}" data-simple-text="${mobileText.replace(/"/g, '&quot;')}">${text}</span>
                 </span>
             </div>
         `;
@@ -254,6 +256,35 @@ PulseApp.utils = (() => {
         });
     }
 
+    // Function to check and update progress bar text based on available width
+    function updateProgressBarTexts() {
+        const progressTexts = document.querySelectorAll('.progress-text-full');
+        
+        progressTexts.forEach(span => {
+            const fullText = span.getAttribute('data-full-text');
+            const simpleText = span.getAttribute('data-simple-text');
+            
+            if (!fullText || !simpleText) return;
+            
+            // Check if the current text is overflowing
+            const parent = span.parentElement;
+            if (parent) {
+                // Temporarily set to full text to measure
+                span.textContent = fullText;
+                
+                // Check if text is truncated (scrollWidth > clientWidth)
+                if (span.scrollWidth > parent.clientWidth - 8) { // 8px for padding
+                    span.textContent = simpleText;
+                } else {
+                    span.textContent = fullText;
+                }
+            }
+        });
+    }
+    
+    // Debounced version for resize events
+    const updateProgressBarTextsDebounced = debounce(updateProgressBarTexts, 100);
+
     // Return the public API for this module
     return {
         sanitizeForId: (str) => str.replace(/[^a-zA-Z0-9-]/g, '-'),
@@ -270,6 +301,8 @@ PulseApp.utils = (() => {
         getReadableThresholdCriteria,
         sortData,
         renderTableBody,
-        debounce
+        debounce,
+        updateProgressBarTexts,
+        updateProgressBarTextsDebounced
     };
 })(); 

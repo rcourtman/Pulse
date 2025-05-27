@@ -327,67 +327,8 @@ PulseApp.charts = (() => {
             }
         });
 
-        // Touch events (mobile) - improved to prevent browser intervention
-        overlay.addEventListener('touchstart', (event) => {
-            // Only prevent default if the event is cancelable and we're actually interacting with the chart
-            if (event.cancelable && event.touches.length === 1) {
-                event.preventDefault(); // Prevent scrolling only when safe to do so
-            }
-            
-            const touch = event.touches[0];
-            // Create a synthetic event object for touch
-            const syntheticEvent = {
-                clientX: touch.clientX,
-                clientY: touch.clientY,
-                target: event.target
-            };
-            
-            // Change chart line to white on touch
-            const path = svg.querySelector('.chart-line');
-            if (path) {
-                path.setAttribute('data-original-color', path.getAttribute('stroke'));
-                // Use black for light mode, white for dark mode (same as mouse hover)
-                const isDarkMode = document.documentElement.classList.contains('dark');
-                const hoverColor = isDarkMode ? '#ffffff' : '#000000';
-                path.setAttribute('stroke', hoverColor);
-            }
-            
-            showTooltipForPosition(syntheticEvent, touch.clientX, touch.clientY);
-        }, { passive: false }); // Allow preventDefault when needed
-
-        overlay.addEventListener('touchmove', (event) => {
-            // Only prevent default if the event is cancelable and we have a single touch
-            if (event.cancelable && event.touches.length === 1) {
-                event.preventDefault(); // Prevent scrolling only when safe to do so
-            }
-            
-            const touch = event.touches[0];
-            // Create a synthetic event object for touch
-            const syntheticEvent = {
-                clientX: touch.clientX,
-                clientY: touch.clientY,
-                target: event.target
-            };
-            showTooltipForPosition(syntheticEvent, touch.clientX, touch.clientY);
-        }, { passive: false }); // Allow preventDefault when needed
-
-        overlay.addEventListener('touchend', () => {
-            // Restore original color
-            const path = svg.querySelector('.chart-line');
-            if (path) {
-                const originalColor = path.getAttribute('data-original-color');
-                if (originalColor) {
-                    path.setAttribute('stroke', originalColor);
-                }
-            }
-            
-            // Keep tooltip visible for a moment on mobile, then hide
-            setTimeout(() => {
-                if (PulseApp.tooltips) {
-                    PulseApp.tooltips.hideTooltip();
-                }
-            }, 2000); // Hide after 2 seconds
-        });
+        // Touch events disabled for now - they interfere with scrolling
+        // Charts will still work with mouse events on devices that support them
 
         svg.appendChild(overlay);
         
@@ -395,6 +336,8 @@ PulseApp.charts = (() => {
         overlay._chartData = chartData.slice(); // Create a copy to avoid reference issues
         overlay._metric = metric;
         overlay._config = config;
+        
+        // Remove the touch indicator - charts are discoverable enough without it
     }
 
     function updateChartPath(svg, chartData, config, metric, isNewChart = false, color) {

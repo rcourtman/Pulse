@@ -1,6 +1,7 @@
 PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.nodes = (() => {
+    let currentNodesData = null; // Store current nodes data for resize handling
 
     function _createNodeCpuBarHtml(node) {
         const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
@@ -131,6 +132,11 @@ PulseApp.ui.nodes = (() => {
             return;
         }
         
+        // Store nodes data for resize handling
+        if (nodes) {
+            currentNodesData = nodes;
+        }
+        
         // Show loading skeletons if no data yet
         if (!nodes || nodes.length === 0) {
             if (PulseApp.ui.loadingSkeletons) {
@@ -144,44 +150,93 @@ PulseApp.ui.nodes = (() => {
         container.innerHTML = ''; // Clear previous content
 
         const numNodes = nodes.length;
-
-        // Helper function to determine optimal columns to avoid a single orphan
-        function calculateOptimalColumns(numItems, defaultCols) {
-            if (numItems <= 0) return defaultCols; // No items, use default or let it be empty
-            if (defaultCols <= 1) return 1; // Cannot reduce further, or already 1
-            // If numItems is less than or equal to defaultCols, use numItems as the column count.
-            if (numItems <= defaultCols) return numItems; 
-            
-            // Now numItems > defaultCols (multiple rows expected)
-            // Avoid a single orphan, but don't reduce to 1 column if defaultCols is 2.
-            if (numItems % defaultCols === 1) {
-                if (defaultCols === 2) {
-                    // If default is 2 cols (sm), and we have an odd number of items (e.g., 3, 5),
-                    // use 2 columns to avoid stacking. (Results in 2 side-by-side, then 1 or more).
-                    return defaultCols; 
-                }
-                // For other defaultCols (>=3), reducing by 1 to avoid an orphan is fine.
-                return Math.max(1, defaultCols - 1); // Ensure at least 1 column
-            }
-            return defaultCols;
-        }
-
-        const smCols = calculateOptimalColumns(numNodes, 2);
-        const mdCols = calculateOptimalColumns(numNodes, 3);
-        const lgCols = calculateOptimalColumns(numNodes, 4);
-        const xlCols = calculateOptimalColumns(numNodes, 4); // Based on previous preference
-        
-        const gridDiv = document.createElement('div');
-        gridDiv.className = `grid grid-cols-1 sm:grid-cols-${smCols} md:grid-cols-${mdCols} lg:grid-cols-${lgCols} xl:grid-cols-${xlCols} gap-3`;
+        const isMobile = window.innerWidth < 640; // sm breakpoint
 
         // Sort nodes by name for consistent order in summary cards
         const sortedNodes = [...nodes].sort((a, b) => (a.node || '').localeCompare(b.node || ''));
 
-        sortedNodes.forEach(node => {
-            const cardElement = createNodeSummaryCard(node);
-            gridDiv.appendChild(cardElement);
-        });
-        container.appendChild(gridDiv);
+        if (isMobile) {
+            // Stack cards vertically on mobile with condensed layout
+            const stackDiv = document.createElement('div');
+            stackDiv.className = 'flex flex-col gap-2';
+
+            sortedNodes.forEach(node => {
+                const cardElement = createCondensedNodeCard(node);
+                stackDiv.appendChild(cardElement);
+            });
+            container.appendChild(stackDiv);
+            
+        } else {
+            // Use grid layout for desktop
+            // Helper function to determine optimal columns to avoid a single orphan
+            function calculateOptimalColumns(numItems, defaultCols) {
+                if (numItems <= 0) return defaultCols;
+                if (defaultCols <= 1) return 1;
+                if (numItems <= defaultCols) return numItems;
+                
+                if (numItems % defaultCols === 1) {
+                    if (defaultCols === 2) {
+                        return defaultCols;
+                    }
+                    return Math.max(1, defaultCols - 1);
+                }
+                return defaultCols;
+            }
+
+            const smCols = calculateOptimalColumns(numNodes, 2);
+            const mdCols = calculateOptimalColumns(numNodes, 3);
+            const lgCols = calculateOptimalColumns(numNodes, 4);
+            const xlCols = calculateOptimalColumns(numNodes, 4);
+            
+            const gridDiv = document.createElement('div');
+            gridDiv.className = `grid grid-cols-1 sm:grid-cols-${smCols} md:grid-cols-${mdCols} lg:grid-cols-${lgCols} xl:grid-cols-${xlCols} gap-3`;
+
+            sortedNodes.forEach(node => {
+                const cardElement = createNodeSummaryCard(node);
+                gridDiv.appendChild(cardElement);
+            });
+            container.appendChild(gridDiv);
+        }
+    }
+
+    function createCondensedNodeCard(node) {
+        const isOnline = node && node.uptime > 0;
+        const statusDotColor = isOnline ? 'text-green-500' : 'text-red-500';
+
+        const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
+        const memUsed = node.mem || 0;
+        const memTotal = node.maxmem || 0;
+        const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
+        const diskUsed = node.disk || 0;
+        const diskTotal = node.maxdisk || 0;
+        const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0;
+
+        const card = document.createElement('div');
+        card.className = 'bg-white dark:bg-gray-800 shadow-sm rounded-lg p-2 border border-gray-200 dark:border-gray-700';
+
+        card.innerHTML = `
+            <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center min-w-0">
+                    <span class="h-2 w-2 rounded-full ${statusDotColor} mr-1.5 flex-shrink-0"></span>
+                    <h3 class="font-semibold text-xs truncate">${node.node || 'Unknown'}</h3>
+                </div>
+                <div class="flex items-center gap-3 text-[10px] text-gray-600 dark:text-gray-400">
+                    <span class="flex items-center gap-1">
+                        <span class="font-medium">CPU</span>
+                        <span class="font-bold ${PulseApp.utils.getUsageColor(cpuPercent, 'cpu')}">${cpuPercent.toFixed(0)}%</span>
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <span class="font-medium">MEM</span>
+                        <span class="font-bold ${PulseApp.utils.getUsageColor(memPercent, 'memory')}">${memPercent.toFixed(0)}%</span>
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <span class="font-medium">DISK</span>
+                        <span class="font-bold ${PulseApp.utils.getUsageColor(diskPercent, 'disk')}">${diskPercent.toFixed(0)}%</span>
+                    </span>
+                </div>
+            </div>
+        `;
+        return card;
     }
 
     function updateNodesTable(nodes) {
@@ -237,7 +292,22 @@ PulseApp.ui.nodes = (() => {
         }
     }
 
+    function init() {
+        // Add resize listener for responsive behavior
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                // Re-render cards if we have data
+                if (currentNodesData) {
+                    updateNodeSummaryCards(currentNodesData);
+                }
+            }, 250); // Debounce resize events
+        });
+    }
+
     return {
+        init,
         updateNodesTable,
         updateNodeSummaryCards
     };

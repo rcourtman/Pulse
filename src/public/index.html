@@ -157,11 +157,161 @@
 
     /* Enhanced metric cell layouts */
     .usage-col {
-        min-width: 120px;
+        min-width: 100px;
     }
     
     .net-disk-col {
-        min-width: 70px;
+        min-width: 60px;
+    }
+    
+    /* Prevent text wrapping in all table cells */
+    #main-table td,
+    #main-table th {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Special handling for name column to enable ellipsis */
+    #main-table td:first-child {
+        max-width: 250px;
+    }
+    
+    /* Mobile table scroll styling */
+    @media (max-width: 768px) {
+        .table-container {
+            -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x proximity;
+        }
+        .table-container::-webkit-scrollbar {
+            height: 10px;
+        }
+        .table-container::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+        }
+        .dark .table-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .dark .table-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
+        /* ALL first cells are sticky on mobile */
+        #main-table td:first-child,
+        #main-table th:first-child {
+            position: sticky !important;
+            left: -2px; /* Shift left to cover gap */
+            z-index: 1;
+            padding-left: 10px; /* Add extra padding to compensate */
+        }
+        
+        /* Guest row first cells */
+        #main-table tbody tr:not(.node-header) td:first-child {
+            background: white;
+            background-clip: padding-box;
+            box-shadow: 2px 0 2px -1px rgba(0, 0, 0, 0.05);
+        }
+        .dark #main-table tbody tr:not(.node-header) td:first-child {
+            background: rgb(31 41 55);
+            background-clip: padding-box;
+            box-shadow: 2px 0 2px -1px rgba(0, 0, 0, 0.2);
+        }
+        #main-table tbody tr:not(.node-header):hover td:first-child {
+            background: rgb(249 250 251);
+        }
+        .dark #main-table tbody tr:not(.node-header):hover td:first-child {
+            background: rgb(55 65 81);
+        }
+        
+        /* Table header first cell */
+        #main-table thead th:first-child {
+            background: rgb(243 244 246);
+            background-clip: padding-box;
+            z-index: 11;
+            box-shadow: 2px 0 2px -1px rgba(0, 0, 0, 0.05);
+        }
+        .dark #main-table thead th:first-child {
+            background: rgb(55 65 81);
+            background-clip: padding-box;
+            box-shadow: 2px 0 2px -1px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* Node header first cell styling */
+        #main-table tr.node-header td:first-child {
+            z-index: 2;
+            background: rgb(229 231 235) !important;
+            background-clip: padding-box;
+            box-shadow: 2px 0 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .dark #main-table tr.node-header td:first-child {
+            background: rgb(75 85 99) !important;
+            background-clip: padding-box;
+            box-shadow: 2px 0 4px -2px rgba(0, 0, 0, 0.3);
+        }
+        
+        /* Ensure full coverage on sticky cells */
+        #main-table td:first-child,
+        #main-table th:first-child {
+            min-width: 140px;
+            position: relative;
+        }
+        
+        /* Solid edge on sticky columns to prevent bleed-through */
+        #main-table td:first-child::before,
+        #main-table th:first-child::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -20px; /* Extended further left */
+            right: -1px;
+            bottom: -1px;
+            background: inherit;
+            z-index: -1;
+        }
+        
+        /* Additional left coverage with after element */
+        #main-table td:first-child::after,
+        #main-table th:first-child::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -5px;
+            bottom: 0;
+            width: 5px;
+            background: inherit;
+            z-index: 1;
+        }
+        
+        /* Additional left edge coverage */
+        #main-table td:first-child,
+        #main-table th:first-child {
+            border-left: 2px solid;
+        }
+        #main-table tbody tr:not(.node-header) td:first-child {
+            border-left-color: white;
+        }
+        .dark #main-table tbody tr:not(.node-header) td:first-child {
+            border-left-color: rgb(31 41 55);
+        }
+        #main-table tr.node-header td:first-child {
+            border-left-color: rgb(229 231 235);
+        }
+        .dark #main-table tr.node-header td:first-child {
+            border-left-color: rgb(75 85 99);
+        }
+        #main-table thead th:first-child {
+            border-left-color: rgb(243 244 246);
+        }
+        .dark #main-table thead th:first-child {
+            border-left-color: rgb(55 65 81);
+        }
+        
+        /* Remove the old node header mobile handling since we're using individual cells now */
     }
   </style>
 </head>
@@ -317,33 +467,37 @@
           </div>
 
           <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
-            <table id="main-table" class="w-full table-fixed text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
+            <!-- Mobile scroll hint -->
+            <div class="fixed bottom-4 right-4 bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-full md:hidden animate-pulse shadow-lg z-50 pointer-events-none" id="scroll-hint" style="display: none;">
+                ← Swipe for more →
+            </div>
+            <table id="main-table" class="w-full min-w-[800px] table-auto text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
                 <colgroup>
-                  <col class="name-col" style="width: var(--name-col-width, 150px);">
+                  <col class="name-col" style="min-width: 140px; max-width: 250px;">
                   <col class="type-col" style="width: 50px;">
                   <col class="id-col" style="width: 50px;">
-                  <col class="uptime-col" style="width: var(--uptime-col-width, 80px);" title="Uptime">
-                  <col class="usage-col" style="width: 120px;">
-                  <col class="usage-col" style="width: 120px;">
-                  <col class="usage-col" style="width: 120px;">
-                  <col class="net-disk-col" style="width: 70px;">
-                  <col class="net-disk-col" style="width: 70px;">
-                  <col class="net-disk-col" style="width: 70px;">
-                  <col class="net-disk-col" style="width: 70px;">
+                  <col class="uptime-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
+                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
+                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
+                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
                 </colgroup>
               <thead class="sticky top-0 z-10 bg-gray-100 dark:bg-gray-800">
                 <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
                   <th class="sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
                   <th class="p-1 px-2" style="width: 50px;">Type</th>
-                  <th class="sortable p-1 px-2 hidden sm:table-cell" data-sort="id" style="width: 50px;">ID</th>
-                  <th class="sortable p-1 px-2 hidden md:table-cell" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
+                  <th class="sortable p-1 px-2" data-sort="id" style="width: 50px;">ID</th>
+                  <th class="sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
                   <th class="sortable p-1 px-2" data-sort="cpu" style="width: 120px;">CPU</th>
                   <th class="sortable p-1 px-2" data-sort="memory" style="width: 120px;">Memory</th>
                   <th class="sortable p-1 px-2" data-sort="disk" style="width: 120px;">Disk</th>
-                  <th class="sortable p-1 px-2 hidden lg:table-cell" data-sort="diskread" style="width: 70px;">Read</th>
-                  <th class="sortable p-1 px-2 hidden lg:table-cell" data-sort="diskwrite" style="width: 70px;">Write</th>
-                  <th class="sortable p-1 px-2 hidden lg:table-cell" data-sort="netin" style="width: 70px;">Net In</th>
-                  <th class="sortable p-1 px-2 hidden lg:table-cell" data-sort="netout" style="width: 70px;">Net Out</th>
+                  <th class="sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
+                  <th class="sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
+                  <th class="sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
+                  <th class="sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
                 </tr>
                 <tr id="threshold-slider-row" class="hidden mt-3 p-3 border rounded-md bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600">
                   <th class="py-1 px-2 align-middle"></th>
@@ -411,7 +565,7 @@
                 </tr>
               </tbody>
             </table>
-            </div>
+          </div>
 
           <span id="dashboard-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading dashboard data...</span>
 

@@ -26,6 +26,36 @@ PulseApp.ui.dashboard = (() => {
     let virtualScroller = null;
     const VIRTUAL_SCROLL_THRESHOLD = 100; // Use virtual scrolling for >100 items
 
+    function _initMobileScrollIndicators() {
+        const tableContainer = document.querySelector('.table-container');
+        const scrollHint = document.getElementById('scroll-hint');
+        
+        if (!tableContainer || !scrollHint) return;
+        
+        let scrollHintTimer;
+        
+        // Hide scroll hint after 5 seconds or on first scroll
+        const hideScrollHint = () => {
+            if (scrollHint) {
+                scrollHint.style.display = 'none';
+            }
+        };
+        
+        scrollHintTimer = setTimeout(hideScrollHint, 5000);
+        
+        // Handle scroll events
+        tableContainer.addEventListener('scroll', () => {
+            hideScrollHint();
+            clearTimeout(scrollHintTimer);
+        }, { passive: true });
+        
+        // Also hide on table container click/touch
+        tableContainer.addEventListener('touchstart', () => {
+            hideScrollHint();
+            clearTimeout(scrollHintTimer);
+        }, { passive: true });
+    }
+
     function init() {
         searchInput = document.getElementById('dashboard-search');
         tableBodyEl = document.querySelector('#main-table tbody');
@@ -41,6 +71,14 @@ PulseApp.ui.dashboard = (() => {
         if (chartsToggleButton) {
             chartsToggleButton.addEventListener('click', toggleChartsMode);
         }
+        
+        // Initialize mobile scroll indicators
+        if (window.innerWidth < 768) {
+            _initMobileScrollIndicators();
+        }
+        
+        // Add resize listener for progress bar text updates
+        window.addEventListener('resize', PulseApp.utils.updateProgressBarTextsDebounced);
 
         document.addEventListener('keydown', (event) => {
             // Handle Escape for resetting filters
@@ -500,14 +538,14 @@ PulseApp.ui.dashboard = (() => {
                 nameCell.title = guest.name;
             }
             
-            // Ensure ID cell (2) has responsive classes
+            // Ensure ID cell (2) has proper classes
             if (cells[2]) {
-                cells[2].className = 'p-1 px-2 hidden sm:table-cell';
+                cells[2].className = 'p-1 px-2';
             }
             
-            // Ensure uptime cell (3) has responsive classes
+            // Ensure uptime cell (3) has proper classes
             if (cells[3]) {
-                cells[3].className = 'p-1 px-2 whitespace-nowrap hidden md:table-cell';
+                cells[3].className = 'p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis';
             }
 
             // Update uptime (cell 3)
@@ -546,10 +584,10 @@ PulseApp.ui.dashboard = (() => {
                 diskCell.innerHTML = newDiskHTML;
             }
 
-            // Ensure I/O cells (7-10) have responsive classes
+            // Ensure I/O cells (7-10) have proper classes
             [7, 8, 9, 10].forEach(index => {
                 if (cells[index]) {
-                    cells[index].className = 'p-1 px-2 hidden lg:table-cell';
+                    cells[index].className = 'p-1 px-2';
                 }
             });
 
@@ -678,7 +716,7 @@ PulseApp.ui.dashboard = (() => {
             const tableContainer = document.querySelector('.table-container');
             if (tableContainer) {
                 tableContainer.style.height = '';
-                tableContainer.innerHTML = '<table id="main-table" class="w-full table-fixed text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers"><tbody></tbody></table>';
+                tableContainer.innerHTML = '<table id="main-table" class="w-full min-w-[800px] table-auto text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers"><tbody></tbody></table>';
                 tableBodyEl = document.querySelector('#main-table tbody');
             }
         }
@@ -776,6 +814,11 @@ PulseApp.ui.dashboard = (() => {
                 PulseApp.charts.updateAllCharts();
             });
         }
+        
+        // Update progress bar texts based on available width
+        requestAnimationFrame(() => {
+            PulseApp.utils.updateProgressBarTexts();
+        });
     }
 
     function _createCpuBarHtml(guest) {
@@ -900,17 +943,17 @@ PulseApp.ui.dashboard = (() => {
         }
 
         row.innerHTML = `
-            <td class="p-1 px-2 whitespace-nowrap truncate" title="${guest.name}">${guest.name}</td>
+            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title="${guest.name}">${guest.name}</td>
             <td class="p-1 px-2">${typeIcon}</td>
-            <td class="p-1 px-2 hidden sm:table-cell">${guest.id}</td>
-            <td class="p-1 px-2 whitespace-nowrap hidden md:table-cell">${uptimeDisplay}</td>
+            <td class="p-1 px-2">${guest.id}</td>
+            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>
             <td class="p-1 px-2">${cpuBarHTML}</td>
             <td class="p-1 px-2">${memoryBarHTML}</td>
             <td class="p-1 px-2">${diskBarHTML}</td>
-            <td class="p-1 px-2 hidden lg:table-cell">${diskReadCell}</td>
-            <td class="p-1 px-2 hidden lg:table-cell">${diskWriteCell}</td>
-            <td class="p-1 px-2 hidden lg:table-cell">${netInCell}</td>
-            <td class="p-1 px-2 hidden lg:table-cell">${netOutCell}</td>
+            <td class="p-1 px-2">${diskReadCell}</td>
+            <td class="p-1 px-2">${diskWriteCell}</td>
+            <td class="p-1 px-2">${netInCell}</td>
+            <td class="p-1 px-2">${netOutCell}</td>
         `;
         return row;
     }
