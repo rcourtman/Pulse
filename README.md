@@ -491,6 +491,7 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - Lightweight monitoring for Proxmox VE nodes, VMs, and Containers.
 - Real-time status updates via WebSockets.
 - Simple, responsive web interface.
+- Built-in diagnostic tool with API permission testing and troubleshooting guidance.
 - Advanced alert system with configurable thresholds and durations.
 - Efficient polling: Stops API polling when no clients are connected.
 - Docker support.
@@ -536,17 +537,24 @@ If you find Pulse useful, consider supporting its development:
 
 ### Diagnostic Tool
 
-Pulse includes a built-in diagnostic tool to help troubleshoot configuration and connectivity issues:
+Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot configuration and connectivity issues:
 
 **Web Interface (Recommended):**
-- Click the diagnostics icon (computer monitor) in the header
-- Or navigate to `http://your-pulse-host:7655/diagnostics.html`
-- The tool will automatically run diagnostics and display:
-  - Configuration validation
-  - Connectivity tests
-  - Permission checks
-  - Data flow analysis
-  - Specific recommendations for any issues found
+- The diagnostics icon appears automatically in the header when issues are detected
+- Click the icon or navigate to `http://your-pulse-host:7655/diagnostics.html`
+- The tool will automatically run diagnostics and provide:
+  - **API Token Permission Testing** - Tests actual API permissions for VMs, containers, nodes, and datastores
+  - **Configuration Validation** - Verifies all connection settings and required parameters
+  - **Real-time Connectivity Tests** - Tests live connections to Proxmox VE and PBS instances
+  - **Data Flow Analysis** - Shows discovered nodes, VMs, containers, and backup data
+  - **Specific Actionable Recommendations** - Detailed guidance for fixing any issues found
+
+**Key Features:**
+- Tests use the same API endpoints as the main application for accuracy
+- Provides exact permission requirements (e.g., `VM.Audit` on `/` for Proxmox)
+- Shows counts of discovered resources (VMs, containers, nodes, backups)
+- Identifies common misconfigurations like missing `PBS_NODE_NAME`
+- Export diagnostic reports for support or troubleshooting
 
 **Command Line:**
 ```bash
