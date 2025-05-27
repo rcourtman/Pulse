@@ -534,8 +534,31 @@ If you find Pulse useful, consider supporting its development:
 
 ## ❓ Troubleshooting
 
-Common connection issues:
+### Diagnostic Tool
 
+Pulse includes a built-in diagnostic tool to help troubleshoot configuration and connectivity issues:
+
+**Web Interface (Recommended):**
+- Click the diagnostics icon (computer monitor) in the header
+- Or navigate to `http://your-pulse-host:7655/diagnostics.html`
+- The tool will automatically run diagnostics and display:
+  - Configuration validation
+  - Connectivity tests
+  - Permission checks
+  - Data flow analysis
+  - Specific recommendations for any issues found
+
+**Command Line:**
+```bash
+# If using the source code:
+./scripts/diagnostics.sh
+
+# The script will generate a detailed report and save it to a timestamped file
+```
+
+### Common Issues
+
+*   **Empty Backups Tab:** Usually caused by missing `PBS_NODE_NAME` in your configuration. SSH to your PBS server and run `hostname` to find the correct value.
 *   **Pulse Application Logs:** Check container logs (`docker logs pulse_monitor`) or service logs (`sudo journalctl -u pulse-monitor.service -f`) for errors (401 Unauthorized, 403 Forbidden, connection refused, timeout).
 *   **`.env` Configuration:** Verify `PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`, and `PROXMOX_ALLOW_SELF_SIGNED_CERTS`. For PBS, also check `PBS_HOST`, `PBS_TOKEN_ID`, `PBS_TOKEN_SECRET`, `PBS_ALLOW_SELF_SIGNED_CERTS`, and especially **`PBS_NODE_NAME`**. Ensure no placeholder values remain.
 *   **Network Connectivity:** Can the machine running Pulse reach the PVE/PBS hostnames/IPs and ports (usually 8006 for PVE, 8007 for PBS)? Check firewalls.
