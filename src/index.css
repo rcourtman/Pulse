@@ -77,6 +77,11 @@ th.sortable:focus-visible {
   --storage-type-col-width: 80px;
 }
 
+/* Make sticky name column respond to row hover - use opaque colors */
+tr:hover td.sticky {
+  @apply bg-gray-50 dark:bg-gray-700 !important;
+}
+
 /* Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
   * {

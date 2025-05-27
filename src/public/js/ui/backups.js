@@ -255,7 +255,7 @@ PulseApp.ui.backups = (() => {
 
     function _renderBackupTableRow(guestStatus) {
         const row = document.createElement('tr');
-        row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px`;
+        row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
 
         const latestBackupFormatted = guestStatus.latestBackupTime
             ? PulseApp.utils.formatPbsTimestamp(guestStatus.latestBackupTime)
@@ -339,6 +339,10 @@ PulseApp.ui.backups = (() => {
         const scrollableContainer = PulseApp.utils.getScrollableParent(tableBody) || 
                                    tableContainer.closest('.overflow-x-auto') ||
                                    tableContainer;
+
+        // Store current scroll position for both axes
+        const currentScrollLeft = scrollableContainer.scrollLeft || 0;
+        const currentScrollTop = scrollableContainer.scrollTop || 0;
 
         const { allGuests, initialDataReceived, tasksByGuest, snapshotsByGuest, dayBoundaries, threeDaysAgo, sevenDaysAgo } = _getInitialBackupData();
 
@@ -469,6 +473,14 @@ PulseApp.ui.backups = (() => {
             noDataMsg.classList.remove('hidden');
         }
         }); // End of preserveScrollPosition
+        
+        // Additional scroll position restoration for horizontal scrolling
+        if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
+            requestAnimationFrame(() => {
+                scrollableContainer.scrollLeft = currentScrollLeft;
+                scrollableContainer.scrollTop = currentScrollTop;
+            });
+        }
 
         const backupsSortColumn = sortStateBackups.column;
         const backupsHeader = document.querySelector(`#backups-overview-table th[data-sort="${backupsSortColumn}"]`);

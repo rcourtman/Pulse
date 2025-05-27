@@ -57,9 +57,29 @@ PulseApp.ui.dashboard = (() => {
     }
 
     function init() {
-        searchInput = document.getElementById('dashboard-search');
-        tableBodyEl = document.querySelector('#main-table tbody');
-        statusElementEl = document.getElementById('dashboard-status-text');
+        // Attempt to find elements, with fallback retry mechanism
+        function findElements() {
+            searchInput = document.getElementById('dashboard-search');
+            tableBodyEl = document.querySelector('#main-table tbody');
+            statusElementEl = document.getElementById('dashboard-status-text');
+            
+            return tableBodyEl && statusElementEl;
+        }
+        
+        // Try to find elements immediately
+        if (!findElements()) {
+            console.warn('[Dashboard] Critical elements not found on first attempt, retrying...');
+            // Retry after a short delay in case DOM is still loading
+            setTimeout(() => {
+                if (!findElements()) {
+                    console.error('[Dashboard] Critical elements still not found after retry. Dashboard may not function properly.');
+                    console.error('[Dashboard] Missing elements:', {
+                        tableBodyEl: !!tableBodyEl,
+                        statusElementEl: !!statusElementEl
+                    });
+                }
+            }, 100);
+        }
 
         // Initialize chart system
         if (PulseApp.charts) {
@@ -518,12 +538,8 @@ PulseApp.ui.dashboard = (() => {
         row.setAttribute('data-type', guest.type.toLowerCase());
         row.setAttribute('data-node', guest.node.toLowerCase());
         
-        // Update class for stopped state
-        if (guest.status === STATUS_STOPPED) {
-            row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 opacity-60 grayscale';
-        } else {
-            row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50';
-        }
+        // Update class - same styling for both stopped and running
+        row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
         
         // Update specific cells that might have changed
         const cells = row.querySelectorAll('td');
@@ -690,6 +706,10 @@ PulseApp.ui.dashboard = (() => {
                                    document.querySelector('.table-container') ||
                                    tableBodyEl.closest('.overflow-x-auto');
 
+        // Store current scroll position for both axes
+        const currentScrollLeft = scrollableContainer.scrollLeft || 0;
+        const currentScrollTop = scrollableContainer.scrollTop || 0;
+
         // Show loading skeleton if no data yet
         const currentData = PulseApp.state.get('dashboardData');
         if (!currentData || currentData.length === 0) {
@@ -749,7 +769,19 @@ PulseApp.ui.dashboard = (() => {
                     }
                 );
             } else if (virtualScroller) {
+                // Preserve scroll position during virtual scroller updates
+                const containerScrollTop = tableContainer.scrollTop;
+                const containerScrollLeft = tableContainer.scrollLeft;
+                
                 virtualScroller.updateItems(sortedData);
+                
+                // Restore scroll position for virtual scroller
+                if (containerScrollTop > 0 || containerScrollLeft > 0) {
+                    requestAnimationFrame(() => {
+                        tableContainer.scrollTop = containerScrollTop;
+                        tableContainer.scrollLeft = containerScrollLeft;
+                    });
+                }
             }
             visibleCount = sortedData.length;
             sortedData.forEach(guest => visibleNodes.add((guest.node || 'Unknown Node').toLowerCase()));
@@ -833,6 +865,14 @@ PulseApp.ui.dashboard = (() => {
         requestAnimationFrame(() => {
             PulseApp.utils.updateProgressBarTexts();
         });
+        
+        // Additional scroll position restoration for both axes
+        if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
+            requestAnimationFrame(() => {
+                scrollableContainer.scrollLeft = currentScrollLeft;
+                scrollableContainer.scrollTop = currentScrollTop;
+            });
+        }
     }
 
     function _createCpuBarHtml(guest) {
@@ -898,7 +938,7 @@ PulseApp.ui.dashboard = (() => {
 
     function createGuestRow(guest) {
         const row = document.createElement('tr');
-        row.className = `border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 ${guest.status === STATUS_STOPPED ? 'opacity-60 grayscale' : ''}`;
+        row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
         row.setAttribute('data-name', guest.name.toLowerCase());
         row.setAttribute('data-type', guest.type.toLowerCase());
         row.setAttribute('data-node', guest.node.toLowerCase());

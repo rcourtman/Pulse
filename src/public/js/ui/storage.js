@@ -151,6 +151,10 @@ PulseApp.ui.storage = (() => {
                                    contentDiv.closest('.overflow-x-auto') ||
                                    contentDiv.parentElement;
         
+        // Store current scroll position for both axes
+        const currentScrollLeft = scrollableContainer.scrollLeft || 0;
+        const currentScrollTop = scrollableContainer.scrollTop || 0;
+        
         // Preserve scroll position while updating
         PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
             contentDiv.innerHTML = '';
@@ -267,12 +271,20 @@ PulseApp.ui.storage = (() => {
             setTimeout(() => _initMobileScrollIndicators(), 100);
         }
         }); // End of preserveScrollPosition
+        
+        // Additional scroll position restoration for horizontal scrolling
+        if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
+            requestAnimationFrame(() => {
+                scrollableContainer.scrollLeft = currentScrollLeft;
+                scrollableContainer.scrollTop = currentScrollTop;
+            });
+        }
     }
 
     function _createStorageRow(store) {
         const row = document.createElement('tr');
         const isDisabled = store.enabled === 0 || store.active === 0;
-        row.className = `transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700/60 hover:shadow-md hover:-translate-y-px ${isDisabled ? 'opacity-50 grayscale-[50%]' : ''}`;
+        row.className = `border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 ${isDisabled ? 'opacity-50 grayscale-[50%]' : ''}`;
 
         const usagePercent = store.total > 0 ? (store.used / store.total) * 100 : 0;
         const usageTooltipText = `${PulseApp.utils.formatBytes(store.used)} / ${PulseApp.utils.formatBytes(store.total)} (${usagePercent.toFixed(1)}%)`;

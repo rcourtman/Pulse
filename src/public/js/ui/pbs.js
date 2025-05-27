@@ -121,6 +121,27 @@ PulseApp.ui.pbs = (() => {
         HANDLER_ATTACHED: 'data-handler-attached',
     };
 
+    // Mobile detection and responsive utilities
+    function isMobileView() {
+        return window.innerWidth < 768;
+    }
+
+    function isTabletView() {
+        return window.innerWidth >= 768 && window.innerWidth < 1024;
+    }
+
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
     function _initMobileScrollIndicators() {
         const tableContainers = document.querySelectorAll('.pbs-table-container');
         const scrollHints = document.querySelectorAll('.pbs-scroll-hint');
@@ -236,6 +257,155 @@ PulseApp.ui.pbs = (() => {
       return displayTarget;
     };
 
+    // Mobile-friendly task card component
+    const _createMobileTaskCard = (task) => {
+        const target = parsePbsTaskTarget(task);
+        const statusDisplayHTML = getPbsStatusDisplay(task.status);
+        const startTime = task.startTime ? PulseApp.utils.formatPbsTimestamp(task.startTime) : 'N/A';
+        const duration = task.duration !== null ? PulseApp.utils.formatDuration(task.duration) : 'N/A';
+        const upid = task.upid || 'N/A';
+        const shortUpid = upid.length > 30 ? `${upid.substring(0, 15)}...${upid.substring(upid.length - 15)}` : upid;
+
+        const card = document.createElement('div');
+        card.className = 'mobile-task-card p-3 border border-gray-200 dark:border-gray-700 rounded-lg mb-3 bg-white dark:bg-gray-800 transition-all duration-200';
+        
+        // Add UPID as data attribute for tracking expanded state
+        card.dataset.upid = task.upid || '';
+        
+        // Add status-based styling for better problem visibility
+        const isFailed = task.status && task.status !== 'OK' && !task.status.toLowerCase().includes('running');
+        
+        if (isFailed) {
+            card.classList.add('border-red-300', 'dark:border-red-600', 'bg-red-50', 'dark:bg-red-900/10');
+        } else if (task.status && task.status.toLowerCase().includes('running')) {
+            card.classList.add('border-blue-300', 'dark:border-blue-600', 'bg-blue-50', 'dark:bg-blue-900/10');
+        }
+
+        // Create card header
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'flex justify-between items-start mb-3';
+        
+        const targetElement = document.createElement('div');
+        targetElement.className = 'font-medium text-sm truncate pr-2 flex-1';
+        if (isFailed) {
+            targetElement.innerHTML = `<span class="text-xs text-gray-400 mr-1">▶</span>${target}`;
+        } else {
+            targetElement.textContent = target;
+        }
+        
+        const statusElement = document.createElement('div');
+        statusElement.className = 'flex-shrink-0 text-sm';
+        statusElement.innerHTML = statusDisplayHTML;
+        
+        cardHeader.appendChild(targetElement);
+        cardHeader.appendChild(statusElement);
+        card.appendChild(cardHeader);
+
+        // Create card details grid
+        const detailsGrid = document.createElement('div');
+        detailsGrid.className = 'grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-400';
+        
+        detailsGrid.innerHTML = `
+            <div>
+                <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">Start Time</div>
+                <div class="truncate">${startTime}</div>
+            </div>
+            <div>
+                <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">Duration</div>
+                <div class="truncate">${duration}</div>
+            </div>
+        `;
+        
+        card.appendChild(detailsGrid);
+
+        // Add UPID info if space allows
+        if (upid !== 'N/A') {
+            const upidElement = document.createElement('div');
+            upidElement.className = 'mt-2 text-xs text-gray-500 dark:text-gray-500';
+            upidElement.innerHTML = `<span class="font-medium">UPID:</span> <span class="font-mono break-all">${shortUpid}</span>`;
+            upidElement.title = upid;
+            card.appendChild(upidElement);
+        }
+
+        // Add expand button for failed tasks
+        if (isFailed) {
+            const expandButton = document.createElement('button');
+            expandButton.className = 'mt-3 w-full py-2 px-3 text-xs text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-600 rounded bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors tap-target';
+            expandButton.textContent = 'Show Error Details ▼';
+            
+            expandButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                event.preventDefault();
+                
+                const upid = task.upid;
+                const existingDetailCard = card.nextElementSibling;
+                
+                if (existingDetailCard && existingDetailCard.classList.contains('mobile-task-detail-card')) {
+                    // Toggle existing detail card - collapse
+                    existingDetailCard.remove();
+                    expandButton.textContent = 'Show Error Details ▼';
+                    targetElement.innerHTML = `<span class="text-xs text-gray-400 mr-1">▶</span>${target}`;
+                    expandedTaskState.delete(upid);
+                } else {
+                    // Create and show detail card - expand
+                    const detailCard = _createMobileTaskDetailCard(task);
+                    card.insertAdjacentElement('afterend', detailCard);
+                    expandButton.textContent = 'Hide Error Details ▲';
+                    targetElement.innerHTML = `<span class="text-xs text-gray-400 mr-1">▼</span>${target}`;
+                    expandedTaskState.add(upid);
+                }
+            });
+            
+            card.appendChild(expandButton);
+        }
+
+        return card;
+    };
+
+    // Mobile task detail card component
+    const _createMobileTaskDetailCard = (task) => {
+        const detailCard = document.createElement('div');
+        detailCard.className = 'mobile-task-detail-card p-4 border border-red-200 dark:border-red-600 rounded-lg mb-3 bg-red-25 dark:bg-red-950/10';
+        
+        const detailContent = document.createElement('div');
+        detailContent.className = 'space-y-3 text-sm';
+        
+        // Error details section
+        const errorSection = document.createElement('div');
+        errorSection.innerHTML = `
+            <div class="font-semibold text-red-700 dark:text-red-300 mb-2">Error Details:</div>
+            <div class="bg-gray-100 dark:bg-gray-800 p-3 rounded font-mono text-xs break-all overflow-x-auto">
+                ${task.status || 'No error message available'}
+            </div>
+        `;
+        detailContent.appendChild(errorSection);
+        
+        // Task info section
+        const infoSection = document.createElement('div');
+        infoSection.className = 'space-y-2 text-xs text-gray-600 dark:text-gray-400';
+        
+        const endTime = task.endTime ? PulseApp.utils.formatPbsTimestamp(task.endTime) : 'N/A';
+        const exitCodeDisplay = task.exitCode !== undefined ? task.exitCode : 'N/A';
+        const exitCodeClass = task.exitCode !== undefined && task.exitCode !== 0 ? 'text-red-600 dark:text-red-400 font-semibold' : '';
+        
+        infoSection.innerHTML = `
+            <div class="grid grid-cols-1 gap-2">
+                <div><strong>Task Type:</strong> ${task.type || 'N/A'}</div>
+                <div><strong>Node:</strong> ${task.node || 'N/A'}</div>
+                <div><strong>User:</strong> ${task.user || 'N/A'}</div>
+                <div><strong>Start Time:</strong> ${task.startTime ? PulseApp.utils.formatPbsTimestamp(task.startTime) : 'N/A'}</div>
+                <div><strong>End Time:</strong> ${endTime}</div>
+                <div><strong>Exit Code:</strong> <span class="${exitCodeClass}">${exitCodeDisplay}</span></div>
+                <div><strong>Full UPID:</strong> <span class="font-mono break-all">${task.upid || 'N/A'}</span></div>
+            </div>
+        `;
+        
+        detailContent.appendChild(infoSection);
+        detailCard.appendChild(detailContent);
+        
+        return detailCard;
+    };
+
     const _createTaskTableRow = (task) => {
         const target = parsePbsTaskTarget(task);
         const statusDisplayHTML = getPbsStatusDisplay(task.status);
@@ -262,7 +432,7 @@ PulseApp.ui.pbs = (() => {
             rowClasses += ` bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30`;
         } else {
             // Normal hover for successful tasks
-            rowClasses += ` ${CSS_CLASSES.HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50}`;
+            rowClasses += ` hover:bg-gray-50 dark:hover:bg-gray-700`;
         }
         
         row.className = rowClasses;
@@ -408,6 +578,10 @@ PulseApp.ui.pbs = (() => {
                                  parentSectionElement.closest('.overflow-x-auto') ||
                                  parentSectionElement;
 
+      // Store current scroll position for both axes
+      const currentScrollLeft = scrollableContainer.scrollLeft || 0;
+      const currentScrollTop = scrollableContainer.scrollTop || 0;
+
       // Use global expanded state instead of scanning DOM
       PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
           tableBody.innerHTML = '';
@@ -520,7 +694,138 @@ PulseApp.ui.pbs = (() => {
           }
       }
       }); // End of preserveScrollPosition
+      
+      // Additional scroll position restoration for horizontal scrolling
+      if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
+          requestAnimationFrame(() => {
+              scrollableContainer.scrollLeft = currentScrollLeft;
+              scrollableContainer.scrollTop = currentScrollTop;
+          });
+      }
   }
+
+    // Mobile-friendly datastore card component
+    const _createMobileDatastoreCard = (ds) => {
+        const totalBytes = ds.total || 0;
+        const usedBytes = ds.used || 0;
+        const availableBytes = (ds.available !== null && ds.available !== undefined) ? ds.available : (totalBytes > 0 ? totalBytes - usedBytes : 0);
+        const usagePercent = totalBytes > 0 ? Math.round((usedBytes / totalBytes) * 100) : 0;
+        const usageColor = PulseApp.utils.getUsageColor(usagePercent);
+        const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
+
+        const card = document.createElement('div');
+        card.className = `mobile-datastore-card p-4 border border-gray-200 dark:border-gray-700 rounded-lg mb-3 bg-white dark:bg-gray-800 transition-all duration-200`;
+        
+        // Add critical usage highlighting
+        if (usagePercent >= 95) {
+            card.classList.add('border-red-300', 'dark:border-red-600', 'bg-red-50', 'dark:bg-red-900/10');
+        } else if (usagePercent >= 85) {
+            card.classList.add('border-yellow-300', 'dark:border-yellow-600', 'bg-yellow-50', 'dark:bg-yellow-900/10');
+        }
+
+        // Create card header with name and usage
+        const cardHeader = document.createElement('div');
+        cardHeader.className = 'flex justify-between items-start mb-3';
+        
+        const nameElement = document.createElement('div');
+        nameElement.className = 'font-medium text-sm flex-1 pr-2';
+        
+        let nameContent = ds.name || 'N/A';
+        if (usagePercent >= 95) {
+            nameElement.innerHTML = `<span class="text-red-700 dark:text-red-300">⚠ ${nameContent}</span><div class="text-xs text-red-600 dark:text-red-400 font-normal mt-1">CRITICAL: ${usagePercent}% full</div>`;
+        } else if (usagePercent >= 85) {
+            nameElement.innerHTML = `<span class="text-yellow-700 dark:text-yellow-300">⚠ ${nameContent}</span><div class="text-xs text-yellow-600 dark:text-yellow-400 font-normal mt-1">WARNING: ${usagePercent}% full</div>`;
+        } else {
+            nameElement.textContent = nameContent;
+        }
+        
+        const usageElement = document.createElement('div');
+        usageElement.className = 'text-right flex-shrink-0';
+        usageElement.innerHTML = `
+            <div class="text-lg font-semibold ${usageColor.replace('bg-', 'text-').replace('-500', '-600').replace('-400', '-500')}">${usagePercent}%</div>
+            <div class="text-xs text-gray-500 dark:text-gray-400">${PulseApp.utils.formatBytes(usedBytes)}</div>
+        `;
+        
+        cardHeader.appendChild(nameElement);
+        cardHeader.appendChild(usageElement);
+        card.appendChild(cardHeader);
+
+        // Progress bar
+        const progressContainer = document.createElement('div');
+        progressContainer.className = 'w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-3';
+        
+        const progressBar = document.createElement('div');
+        progressBar.className = `h-3 rounded-full transition-all duration-300 ${usageColor}`;
+        progressBar.style.width = `${Math.min(usagePercent, 100)}%`;
+        
+        progressContainer.appendChild(progressBar);
+        card.appendChild(progressContainer);
+
+        // Storage details grid
+        const detailsGrid = document.createElement('div');
+        detailsGrid.className = 'grid grid-cols-2 gap-3 text-xs text-gray-600 dark:text-gray-400 mb-3';
+        
+        detailsGrid.innerHTML = `
+            <div>
+                <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">Used</div>
+                <div class="truncate">${ds.used !== null ? PulseApp.utils.formatBytes(ds.used) : 'N/A'}</div>
+            </div>
+            <div>
+                <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">Available</div>
+                <div class="truncate">${ds.available !== null ? PulseApp.utils.formatBytes(ds.available) : 'N/A'}</div>
+            </div>
+            <div>
+                <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">Total</div>
+                <div class="truncate">${ds.total !== null ? PulseApp.utils.formatBytes(ds.total) : 'N/A'}</div>
+            </div>
+            <div>
+                <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">Deduplication</div>
+                <div class="truncate font-semibold">${ds.deduplicationFactor ? `${ds.deduplicationFactor}x` : 'N/A'}</div>
+            </div>
+        `;
+        
+        card.appendChild(detailsGrid);
+
+        // Path and GC status
+        const metaInfo = document.createElement('div');
+        metaInfo.className = 'space-y-2 text-xs text-gray-500 dark:text-gray-500';
+        
+        metaInfo.innerHTML = `
+            <div class="truncate"><span class="font-medium">Path:</span> ${ds.path || 'N/A'}</div>
+            <div><span class="font-medium">GC Status:</span> ${gcStatusHtml}</div>
+        `;
+        
+        card.appendChild(metaInfo);
+
+        return card;
+    };
+
+    // Mobile container for datastore cards
+    const _createMobileDatastoreContainer = (datastores, statusText, showDetails) => {
+        const container = document.createElement('div');
+        container.className = 'mobile-datastore-container space-y-3';
+        
+        if (showDetails && datastores) {
+            if (datastores.length === 0) {
+                const emptyCard = document.createElement('div');
+                emptyCard.className = 'p-4 text-center text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700';
+                emptyCard.textContent = 'No PBS datastores found or accessible.';
+                container.appendChild(emptyCard);
+            } else {
+                datastores.forEach(ds => {
+                    const card = _createMobileDatastoreCard(ds);
+                    container.appendChild(card);
+                });
+            }
+        } else {
+            const statusCard = document.createElement('div');
+            statusCard.className = 'p-4 text-center text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700';
+            statusCard.textContent = statusText;
+            container.appendChild(statusCard);
+        }
+        
+        return container;
+    };
 
     const _populateDsTableBody = (dsTableBody, datastores, statusText, showDetails) => {
         if (!dsTableBody) return;
@@ -529,6 +834,10 @@ PulseApp.ui.pbs = (() => {
         const scrollableContainer = PulseApp.utils.getScrollableParent(dsTableBody) || 
                                    dsTableBody.closest('.overflow-x-auto') ||
                                    dsTableBody.parentElement;
+        
+        // Store current scroll position for both axes
+        const currentScrollLeft = scrollableContainer.scrollLeft || 0;
+        const currentScrollTop = scrollableContainer.scrollTop || 0;
         
         // Calculate dynamic column widths for responsive display
         if (showDetails && datastores && datastores.length > 0) {
@@ -638,6 +947,14 @@ PulseApp.ui.pbs = (() => {
             cell.textContent = statusText;
         }
         }); // End of preserveScrollPosition
+        
+        // Additional scroll position restoration for horizontal scrolling
+        if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
+            requestAnimationFrame(() => {
+                scrollableContainer.scrollLeft = currentScrollLeft;
+                scrollableContainer.scrollTop = currentScrollTop;
+            });
+        }
     };
 
     const _populateInstanceTaskSections = (detailsContainer, instanceId, pbsInstance, statusText, showDetails) => {
@@ -1042,6 +1359,356 @@ PulseApp.ui.pbs = (() => {
     };
     // END: Definitions for functions that _createPbsInstanceElement depends on
 
+    // Mobile summary cards component
+    const _createMobilePbsSummary = (pbsInstance) => {
+        const summary = document.createElement('div');
+        summary.className = 'mobile-pbs-summary grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4';
+        
+        // Calculate task summary
+        const taskTypes = [
+            pbsInstance.backupTasks,
+            pbsInstance.verificationTasks,
+            pbsInstance.syncTasks,
+            pbsInstance.pruneTasks
+        ];
+        
+        let totalTasks = 0;
+        let failedTasks = 0;
+        let runningTasks = 0;
+        
+        taskTypes.forEach(taskGroup => {
+            if (taskGroup?.summary) {
+                totalTasks += (taskGroup.summary.ok || 0) + (taskGroup.summary.failed || 0);
+                failedTasks += taskGroup.summary.failed || 0;
+            }
+            if (taskGroup?.recentTasks) {
+                runningTasks += taskGroup.recentTasks.filter(task => 
+                    task.status && task.status.toLowerCase().includes('running')
+                ).length;
+            }
+        });
+        
+        const datastoreCount = pbsInstance.datastores?.length || 0;
+        const criticalDatastores = (pbsInstance.datastores || []).filter(ds => {
+            const usagePercent = ds.total > 0 ? Math.round((ds.used / ds.total) * 100) : 0;
+            return usagePercent >= 95;
+        }).length;
+        
+        // Server status
+        const nodeStatus = pbsInstance.nodeStatus || {};
+        const isServerHealthy = pbsInstance.status === 'ok';
+        
+        summary.innerHTML = `
+            <div class="summary-card p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center border border-gray-200 dark:border-gray-600">
+                <div class="text-lg font-semibold ${failedTasks > 0 ? 'text-red-600 dark:text-red-400' : runningTasks > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${totalTasks}</div>
+                <div class="text-xs text-gray-600 dark:text-gray-400">Tasks</div>
+                ${failedTasks > 0 ? `<div class="text-xs text-red-600 dark:text-red-400 font-medium">${failedTasks} failed</div>` : ''}
+                ${runningTasks > 0 ? `<div class="text-xs text-blue-600 dark:text-blue-400 font-medium">${runningTasks} running</div>` : ''}
+            </div>
+            <div class="summary-card p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center border border-gray-200 dark:border-gray-600">
+                <div class="text-lg font-semibold ${criticalDatastores > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}">${datastoreCount}</div>
+                <div class="text-xs text-gray-600 dark:text-gray-400">Datastores</div>
+                ${criticalDatastores > 0 ? `<div class="text-xs text-red-600 dark:text-red-400 font-medium">${criticalDatastores} critical</div>` : ''}
+            </div>
+            <div class="summary-card p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center border border-gray-200 dark:border-gray-600">
+                <div class="text-lg font-semibold ${isServerHealthy ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
+                    ${isServerHealthy ? '✓' : '✗'}
+                </div>
+                <div class="text-xs text-gray-600 dark:text-gray-400">Server</div>
+                <div class="text-xs ${isServerHealthy ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">${isServerHealthy ? 'Online' : 'Error'}</div>
+            </div>
+            <div class="summary-card p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center border border-gray-200 dark:border-gray-600">
+                <div class="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                    ${nodeStatus.uptime ? PulseApp.utils.formatUptime(nodeStatus.uptime) : '-'}
+                </div>
+                <div class="text-xs text-gray-600 dark:text-gray-400">Uptime</div>
+            </div>
+        `;
+        
+        return summary;
+    };
+
+    // Mobile accordion component for PBS instances
+    const _createMobileInstanceAccordion = (pbsArray, mainContainer) => {
+        const accordionContainer = document.createElement('div');
+        accordionContainer.className = 'mobile-pbs-accordion space-y-3';
+        
+        pbsArray.forEach((pbsInstance, index) => {
+            let baseId;
+            if (pbsInstance.pbsInstanceName) {
+                baseId = PulseApp.utils.sanitizeForId(pbsInstance.pbsInstanceName);
+            } else if (pbsInstance.pbsEndpointId) {
+                baseId = PulseApp.utils.sanitizeForId(pbsInstance.pbsEndpointId);
+            } else {
+                baseId = 'pbs-instance';
+            }
+            const instanceId = `${baseId}-${index}`;
+            const instanceName = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
+            
+            const accordion = document.createElement('div');
+            accordion.className = 'border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden';
+            
+            // Accordion header
+            const header = document.createElement('button');
+            header.className = 'w-full p-4 text-left bg-gray-50 dark:bg-gray-700/50 flex justify-between items-center tap-target hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
+            header.dataset.instanceIndex = index;
+            
+            const headerContent = document.createElement('div');
+            headerContent.className = 'flex-1';
+            
+            // Instance name and status
+            const overallHealthAndTitle = _calculateOverallHealth(pbsInstance);
+            const statusInfo = _getInstanceStatusInfo(pbsInstance);
+            
+            let statusIcon = '✓';
+            let statusClass = 'text-green-600 dark:text-green-400';
+            
+            if (pbsInstance.status === 'error') {
+                statusIcon = '✗';
+                statusClass = 'text-red-600 dark:text-red-400';
+            } else if (pbsInstance.status !== 'ok') {
+                statusIcon = '⚪';
+                statusClass = 'text-yellow-600 dark:text-yellow-400';
+            }
+            
+            headerContent.innerHTML = `
+                <div class="flex items-center gap-2 mb-1">
+                    <span class="${statusClass} text-sm">${statusIcon}</span>
+                    <span class="font-medium text-sm">${instanceName}</span>
+                </div>
+                <div class="text-xs text-gray-500 dark:text-gray-400 truncate">${statusInfo.statusText}</div>
+            `;
+            
+            const chevron = document.createElement('span');
+            chevron.className = 'text-gray-400 transition-transform duration-200';
+            chevron.innerHTML = '▼';
+            
+            header.appendChild(headerContent);
+            header.appendChild(chevron);
+            
+            // Accordion content
+            const content = document.createElement('div');
+            content.className = 'hidden border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800';
+            content.dataset.instanceId = instanceId;
+            
+            // Toggle functionality
+            header.addEventListener('click', () => {
+                const isExpanded = !content.classList.contains('hidden');
+                
+                if (isExpanded) {
+                    // Collapse
+                    content.classList.add('hidden');
+                    chevron.style.transform = 'rotate(0deg)';
+                } else {
+                    // Expand
+                    content.classList.remove('hidden');
+                    chevron.style.transform = 'rotate(180deg)';
+                    
+                    // Populate content if not already done
+                    if (content.children.length === 0) {
+                        const contentDiv = document.createElement('div');
+                        contentDiv.className = 'p-4 space-y-4';
+                        
+                        if (statusInfo.showDetails) {
+                            // Add mobile summary
+                            contentDiv.appendChild(_createMobilePbsSummary(pbsInstance));
+                            
+                            // Add sections based on mobile layout
+                            contentDiv.appendChild(_createMobileNodeStatusSection(instanceId, pbsInstance));
+                            contentDiv.appendChild(_createMobileDatastoreSection(instanceId, pbsInstance, statusInfo));
+                            contentDiv.appendChild(_createMobileTaskSections(instanceId, pbsInstance, statusInfo));
+                        } else {
+                            const statusNotice = document.createElement('div');
+                            statusNotice.className = 'p-4 text-center text-gray-500 dark:text-gray-400';
+                            statusNotice.textContent = statusInfo.statusText;
+                            contentDiv.appendChild(statusNotice);
+                        }
+                        
+                        content.appendChild(contentDiv);
+                    }
+                }
+            });
+            
+            accordion.appendChild(header);
+            accordion.appendChild(content);
+            accordionContainer.appendChild(accordion);
+        });
+        
+        mainContainer.appendChild(accordionContainer);
+    };
+
+    // Mobile sections
+    const _createMobileNodeStatusSection = (instanceId, pbsInstance) => {
+        const section = document.createElement('div');
+        section.className = 'mobile-node-status space-y-2';
+        
+        const heading = document.createElement('h4');
+        heading.className = 'text-sm font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 pb-1';
+        heading.textContent = 'Server Status';
+        section.appendChild(heading);
+        
+        const nodeStatus = pbsInstance.nodeStatus || {};
+        const versionInfo = pbsInstance.versionInfo || {};
+        
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-2 gap-3 text-xs';
+        
+        grid.innerHTML = `
+            <div>
+                <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">Version</div>
+                <div class="text-gray-600 dark:text-gray-400">${versionInfo.version ? (versionInfo.release ? `${versionInfo.version}-${versionInfo.release}` : versionInfo.version) : '-'}</div>
+            </div>
+            <div>
+                <div class="font-medium text-gray-700 dark:text-gray-300 mb-1">Load Avg</div>
+                <div class="text-gray-600 dark:text-gray-400">${nodeStatus.loadavg && Array.isArray(nodeStatus.loadavg) && nodeStatus.loadavg.length >= 1 ? nodeStatus.loadavg[0].toFixed(2) : '-'}</div>
+            </div>
+        `;
+        
+        section.appendChild(grid);
+        
+        // CPU and Memory with progress bars
+        if (nodeStatus.cpu !== null && nodeStatus.cpu !== undefined) {
+            const cpuPercent = nodeStatus.cpu * 100;
+            const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
+            
+            const cpuDiv = document.createElement('div');
+            cpuDiv.className = 'space-y-1';
+            cpuDiv.innerHTML = `
+                <div class="flex justify-between text-xs">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">CPU Usage</span>
+                    <span class="text-gray-600 dark:text-gray-400">${cpuPercent.toFixed(1)}%</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div class="h-2 rounded-full transition-all duration-300 ${cpuColorClass}" style="width: ${cpuPercent}%"></div>
+                </div>
+            `;
+            section.appendChild(cpuDiv);
+        }
+        
+        if (nodeStatus.memory && nodeStatus.memory.total && nodeStatus.memory.used !== null) {
+            const memUsed = nodeStatus.memory.used;
+            const memTotal = nodeStatus.memory.total;
+            const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
+            const memColorClass = PulseApp.utils.getUsageColor(memPercent, 'memory');
+            
+            const memDiv = document.createElement('div');
+            memDiv.className = 'space-y-1';
+            memDiv.innerHTML = `
+                <div class="flex justify-between text-xs">
+                    <span class="font-medium text-gray-700 dark:text-gray-300">Memory Usage</span>
+                    <span class="text-gray-600 dark:text-gray-400">${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)}</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div class="h-2 rounded-full transition-all duration-300 ${memColorClass}" style="width: ${memPercent}%"></div>
+                </div>
+            `;
+            section.appendChild(memDiv);
+        }
+        
+        return section;
+    };
+
+    const _createMobileDatastoreSection = (instanceId, pbsInstance, statusInfo) => {
+        const section = document.createElement('div');
+        section.className = 'mobile-datastore-section space-y-2';
+        
+        const heading = document.createElement('h4');
+        heading.className = 'text-sm font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 pb-1';
+        heading.textContent = 'Datastores';
+        section.appendChild(heading);
+        
+        const datastoreContainer = _createMobileDatastoreContainer(
+            pbsInstance.datastores, 
+            statusInfo.statusText, 
+            statusInfo.showDetails
+        );
+        section.appendChild(datastoreContainer);
+        
+        return section;
+    };
+
+    const _createMobileTaskSections = (instanceId, pbsInstance, statusInfo) => {
+        const section = document.createElement('div');
+        section.className = 'mobile-task-sections space-y-4';
+        
+        const taskTypes = [
+            { type: 'backup', title: 'Backup Tasks', data: pbsInstance.backupTasks },
+            { type: 'verify', title: 'Verification Tasks', data: pbsInstance.verificationTasks },
+            { type: 'sync', title: 'Sync Tasks', data: pbsInstance.syncTasks },
+            { type: 'prunegc', title: 'Prune/GC Tasks', data: pbsInstance.pruneTasks }
+        ];
+        
+        taskTypes.forEach(taskType => {
+            if (statusInfo.showDetails && taskType.data?.recentTasks?.length > 0) {
+                const taskSection = document.createElement('div');
+                taskSection.className = 'space-y-2';
+                
+                const heading = document.createElement('h5');
+                heading.className = 'text-sm font-semibold text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700 pb-1';
+                
+                // Add task count and status
+                const recentTasks = taskType.data.recentTasks || [];
+                const failedTasks = recentTasks.filter(task => task.status && task.status !== 'OK' && !task.status.toLowerCase().includes('running'));
+                const runningTasks = recentTasks.filter(task => task.status && task.status.toLowerCase().includes('running'));
+                
+                let statusText = `${taskType.title} (${recentTasks.length})`;
+                if (failedTasks.length > 0) {
+                    statusText += ` - ${failedTasks.length} failed`;
+                }
+                if (runningTasks.length > 0) {
+                    statusText += ` - ${runningTasks.length} running`;
+                }
+                
+                heading.textContent = statusText;
+                taskSection.appendChild(heading);
+                
+                const taskContainer = _createMobileTaskContainer(recentTasks);
+                taskSection.appendChild(taskContainer);
+                
+                section.appendChild(taskSection);
+            }
+        });
+        
+        return section;
+    };
+
+    const _createMobileTaskContainer = (tasks) => {
+        const container = document.createElement('div');
+        container.className = 'mobile-task-container space-y-2';
+        
+        // Show failed tasks first, then others (up to limit)
+        const failedTasks = tasks.filter(task => task.status && task.status !== 'OK' && !task.status.toLowerCase().includes('running'));
+        const otherTasks = tasks.filter(task => !task.status || task.status === 'OK' || task.status.toLowerCase().includes('running'));
+        const prioritizedTasks = [...failedTasks, ...otherTasks];
+        
+        // Limit to 5 tasks on mobile for better performance
+        const displayTasks = prioritizedTasks.slice(0, 5);
+        
+        displayTasks.forEach(task => {
+            const taskCard = _createMobileTaskCard(task);
+            container.appendChild(taskCard);
+        });
+        
+        if (prioritizedTasks.length > 5) {
+            const moreButton = document.createElement('button');
+            moreButton.className = 'w-full py-2 px-3 text-xs text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-600 rounded bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors';
+            moreButton.textContent = `Show ${prioritizedTasks.length - 5} More Tasks`;
+            
+            moreButton.addEventListener('click', () => {
+                const remainingTasks = prioritizedTasks.slice(5);
+                remainingTasks.forEach(task => {
+                    const taskCard = _createMobileTaskCard(task);
+                    container.insertBefore(taskCard, moreButton);
+                });
+                moreButton.remove();
+            });
+            
+            container.appendChild(moreButton);
+        }
+        
+        return container;
+    };
+
     function _createPbsInstanceTabs(pbsArray, mainContainer) {
         const tabContainer = document.createElement('div');
         tabContainer.className = CSS_CLASSES.PBS_TAB_CONTAINER;
@@ -1180,6 +1847,57 @@ PulseApp.ui.pbs = (() => {
         return { overallHealth, healthTitle };
     };
 
+    // Layout update function for responsive design
+    function updatePbsLayoutForViewport() {
+        const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
+        if (!container) return;
+        
+        const isMobile = isMobileView();
+        
+        if (isMobile) {
+            container.classList.add('mobile-layout');
+            
+            // Hide desktop tables and show mobile containers
+            const tables = container.querySelectorAll('table');
+            tables.forEach(table => {
+                table.style.display = 'none';
+                
+                // Find or create mobile alternative
+                const tableContainer = table.closest('.table-container') || table.parentElement;
+                if (tableContainer) {
+                    let mobileContainer = tableContainer.querySelector('.mobile-datastore-container, .mobile-task-container');
+                    
+                    // If no mobile container exists, we'll need to recreate the data
+                    if (!mobileContainer && table.id && table.id.includes('ds-table')) {
+                        // This is a datastore table, create mobile version
+                        const dsTableBody = table.querySelector('tbody');
+                        if (dsTableBody && dsTableBody.children.length > 0) {
+                            // Extract data from existing table and create mobile cards
+                            const instanceId = table.id.replace(ID_PREFIXES.PBS_DS_TABLE, '');
+                            mobileContainer = document.createElement('div');
+                            mobileContainer.className = 'mobile-datastore-container space-y-3';
+                            tableContainer.appendChild(mobileContainer);
+                        }
+                    }
+                }
+            });
+            
+        } else {
+            container.classList.remove('mobile-layout');
+            
+            // Show desktop tables and hide mobile containers
+            const tables = container.querySelectorAll('table');
+            tables.forEach(table => {
+                table.style.display = '';
+            });
+            
+            const mobileContainers = container.querySelectorAll('.mobile-datastore-container, .mobile-task-container');
+            mobileContainers.forEach(mobileContainer => {
+                mobileContainer.style.display = 'none';
+            });
+        }
+    }
+
     function updatePbsInfo(pbsArray) {
         console.log('[PBS Debug] updatePbsInfo received pbsArray:', JSON.parse(JSON.stringify(pbsArray))); // Log the received PBS array
         const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
@@ -1202,6 +1920,9 @@ PulseApp.ui.pbs = (() => {
             return;
         }
 
+        // Determine layout based on viewport and number of instances
+        const isMobile = isMobileView();
+        
         if (pbsArray.length === 1) {
             const pbsInstance = pbsArray[0];
             let baseId;
@@ -1218,23 +1939,55 @@ PulseApp.ui.pbs = (() => {
             const overallHealthAndTitle = _calculateOverallHealth(pbsInstance);
             const statusInfo = _getInstanceStatusInfo(pbsInstance);
 
-            const instanceElement = _createPbsInstanceElement(
-                pbsInstance,
-                instanceId,
-                instanceName,
-                overallHealthAndTitle.overallHealth,
-                overallHealthAndTitle.healthTitle,
-                statusInfo.showDetails,
-                statusInfo.statusText
-            );
-            container.appendChild(instanceElement);
+            if (isMobile) {
+                // Use mobile single instance layout
+                container.classList.add('mobile-layout');
+                const mobileWrapper = document.createElement('div');
+                mobileWrapper.className = 'mobile-single-instance space-y-4';
+                
+                // Add mobile summary at top
+                if (statusInfo.showDetails) {
+                    mobileWrapper.appendChild(_createMobilePbsSummary(pbsInstance));
+                    mobileWrapper.appendChild(_createMobileNodeStatusSection(instanceId, pbsInstance));
+                    mobileWrapper.appendChild(_createMobileDatastoreSection(instanceId, pbsInstance, statusInfo));
+                    mobileWrapper.appendChild(_createMobileTaskSections(instanceId, pbsInstance, statusInfo));
+                } else {
+                    const statusCard = document.createElement('div');
+                    statusCard.className = 'p-4 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700';
+                    statusCard.textContent = statusInfo.statusText;
+                    mobileWrapper.appendChild(statusCard);
+                }
+                
+                container.appendChild(mobileWrapper);
+            } else {
+                // Use desktop single instance layout
+                const instanceElement = _createPbsInstanceElement(
+                    pbsInstance,
+                    instanceId,
+                    instanceName,
+                    overallHealthAndTitle.overallHealth,
+                    overallHealthAndTitle.healthTitle,
+                    statusInfo.showDetails,
+                    statusInfo.statusText
+                );
+                container.appendChild(instanceElement);
+            }
         } else {
-            _createPbsInstanceTabs(pbsArray, container);
+            // Multiple instances
+            if (isMobile) {
+                container.classList.add('mobile-layout');
+                _createMobileInstanceAccordion(pbsArray, container);
+            } else {
+                _createPbsInstanceTabs(pbsArray, container);
+            }
         }
         
-        // Initialize mobile scroll indicators
-        if (window.innerWidth < 768) {
-            setTimeout(() => _initMobileScrollIndicators(), 100);
+        // Initialize mobile features
+        if (isMobile) {
+            setTimeout(() => {
+                _initMobileScrollIndicators();
+                updatePbsLayoutForViewport();
+            }, 100);
         }
     }
 
@@ -1242,11 +1995,26 @@ PulseApp.ui.pbs = (() => {
         const pbsInstancesContainer = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
         if (!pbsInstancesContainer) {
             console.warn(`PBS instances container #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found. Some UI interactions might not work.`);
+            return;
         }
+        
+        // Listen for viewport changes to switch layouts
+        const debouncedLayoutUpdate = debounce(updatePbsLayoutForViewport, 250);
+        window.addEventListener('resize', debouncedLayoutUpdate);
+        window.addEventListener('orientationchange', () => {
+            // Orientation change needs a slight delay to get correct dimensions
+            setTimeout(debouncedLayoutUpdate, 100);
+        });
+        
+        // Initial layout setup
+        updatePbsLayoutForViewport();
     }
 
     return {
         updatePbsInfo,
-        initPbsEventListeners
+        initPbsEventListeners,
+        updatePbsLayoutForViewport,
+        isMobileView,
+        isTabletView
     };
 })();
