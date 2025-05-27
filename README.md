@@ -26,17 +26,49 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
+## 🚀 Quick Start
+
+Choose your preferred installation method:
+
+### 📦 **Easiest: Proxmox Community Scripts (Recommended)**
+**One-command installation in a new LXC container:**
+```bash
+bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
+```
+This will create a new LXC container and install Pulse automatically. Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE/scripts?id=pulse) for details.
+
+### 🐳 **Docker Compose (Pre-built Image)**
+**For existing Docker hosts:**
+```bash
+mkdir pulse-config && cd pulse-config
+# Create .env file with your Proxmox details (see Configuration section)
+# Create docker-compose.yml (see Docker section)
+docker compose up -d
+```
+
+### 🛠️ **Manual LXC Installation**
+**For existing LXC containers:**
+```bash
+curl -sLO https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh
+chmod +x install-pulse.sh
+sudo ./install-pulse.sh
+```
+
+---
+
 ## 📋 Table of Contents
-- [Quick Start (Docker Compose - Recommended)](#-quick-start-docker-compose---recommended)
-- [Development Setup (Docker Compose)](#-development-setup-docker-compose)
+- [Quick Start](#-quick-start)
+- [Prerequisites](#-prerequisites)
 - [Configuration](#️-configuration)
   - [Environment Variables](#environment-variables)
   - [Creating a Proxmox API Token](#creating-a-proxmox-api-token)
   - [Creating a Proxmox Backup Server API Token](#creating-a-proxmox-backup-server-api-token)
   - [Required Permissions](#required-permissions)
-- [Deployment](#-deployment)
-  - [Docker Compose](#running-with-docker-compose)
-  - [LXC Installation Script](#-running-with-lxc-installation-script)
+- [Deployment Options](#-deployment-options)
+  - [Proxmox Community Scripts](#proxmox-community-scripts-automated-lxc)
+  - [Docker Compose](#docker-compose-recommended-for-existing-hosts)
+  - [Manual LXC Installation](#manual-lxc-installation)
+  - [Development Setup](#development-setup-docker-compose)
   - [Node.js (Development)](#️-running-the-application-nodejs-development)
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
@@ -47,9 +79,48 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 - [Support](#-support)
 - [Troubleshooting](#-troubleshooting)
 
-## 🚀 Quick Start (Docker Compose - Recommended)
+## ✅ Prerequisites
 
-This is the **easiest and recommended** way to run Pulse using the pre-built image from Docker Hub.
+Before installing Pulse, ensure you have:
+
+**For Proxmox VE:**
+- [ ] Proxmox VE 7.x or 8.x running
+- [ ] Admin access to create API tokens
+- [ ] Network connectivity between Pulse and Proxmox (ports 8006/8007)
+
+**For Pulse Installation:**
+- [ ] **Community Scripts**: Just a Proxmox host (handles everything automatically)
+- [ ] **Docker**: Docker & Docker Compose installed
+- [ ] **Manual LXC**: Existing Debian/Ubuntu LXC with internet access
+
+---
+
+## 🚀 Deployment Options
+
+### Proxmox Community Scripts (Automated LXC)
+
+**✨ Easiest method - fully automated LXC creation and setup:**
+
+```bash
+bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
+```
+
+This script will:
+- Create a new LXC container automatically
+- Install all dependencies (Node.js, npm, etc.)
+- Download and configure Pulse
+- Set up systemd service
+- Guide you through Proxmox API token setup
+
+**After installation:** Access Pulse at `http://<lxc-ip>:7655`
+
+Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE/scripts?id=pulse) for more details.
+
+---
+
+### Docker Compose (Recommended for Existing Hosts)
+
+**For existing Docker hosts - uses pre-built image:**
 
 **Prerequisites:**
 - Docker ([Install Docker](https://docs.docker.com/engine/install/))
@@ -103,7 +174,64 @@ This is the **easiest and recommended** way to run Pulse using the pre-built ima
 
 ---
 
-## 🚀 Development Setup (Docker Compose)
+### Manual LXC Installation
+
+**For existing Debian/Ubuntu LXC containers:**
+
+**Prerequisites:**
+- A running Proxmox VE host
+- An existing Debian or Ubuntu LXC container with network access to Proxmox
+    - *Tip: Use [Community Scripts](https://community-scripts.github.io/ProxmoxVE/scripts?id=debian) to easily create one: `bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/debian.sh)"`*
+
+**Steps:**
+
+1.  **Access LXC Console:** Log in to your LXC container (usually as `root`).
+2.  **Download and Run Script:**
+    ```bash
+    # Ensure you are in a suitable directory, like /root or /tmp
+    curl -sLO https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh
+    chmod +x install-pulse.sh
+    ./install-pulse.sh
+    ```
+3.  **Follow Prompts:** The script guides you through:
+    *   Installing dependencies (`git`, `curl`, `nodejs`, `npm`, `sudo`).
+    *   Entering your Proxmox Host URL, API Token ID, Secret, and self-signed cert preference.
+    *   (Optional) Entering PBS connection details if desired.
+    *   Setting up Pulse as a `systemd` service (`pulse-monitor.service`).
+    *   Optionally enabling automatic updates via cron.
+4.  **Access Pulse:** The script will display the URL (e.g., `http://<LXC-IP-ADDRESS>:7655`).
+
+<details>
+<summary><strong>Updating and Managing the LXC Installation (Click to Expand)</strong></summary>
+
+**Updating Pulse:**
+
+Re-run the script from the directory where you downloaded it:
+```bash
+./install-pulse.sh
+```
+Or run non-interactively (e.g., for cron):
+```bash
+./install-pulse.sh --update
+```
+
+**Managing the Pulse Service:**
+
+Use standard `systemctl` commands:
+*   Check Status: `sudo systemctl status pulse-monitor.service`
+*   Stop Service: `sudo systemctl stop pulse-monitor.service`
+*   Start Service: `sudo systemctl start pulse-monitor.service`
+*   View Logs: `sudo journalctl -u pulse-monitor.service -f`
+*   Enable/Disable on Boot: `sudo systemctl enable/disable pulse-monitor.service`
+
+**Automatic Updates:**
+If enabled via the script, a cron job runs `./install-pulse.sh --update` Daily/Weekly/Monthly. Logs are in `/var/log/pulse_update.log`. Manage with `sudo crontab -l -u root` or `sudo crontab -e -u root`.
+
+</details>
+
+---
+
+### Development Setup (Docker Compose)
 
 Use this method if you have cloned the repository and want to build and run the application from the local source code.
 
@@ -291,165 +419,6 @@ If monitoring PBS, create a token within the PBS interface.
     </details>
 -   **Proxmox Backup Server:** The `Audit` role assigned at path `/` with `Propagate` enabled is recommended.
 
-## 🚀 Deployment
-
-Choose one of the following methods to deploy Pulse.
-
-### Running with Docker Compose
-
-Using Docker Compose is the recommended way for most users.
-
-**Prerequisites:**
-- Docker ([Install Docker](https://docs.docker.com/engine/install/))
-- Docker Compose ([Install Docker Compose](https://docs.docker.com/compose/install/))
-
-**Steps:**
-
-1.  **Create a Directory:** Make a directory on your Docker host where Pulse configuration will live:
-    ```bash
-    mkdir pulse-config
-    cd pulse-config
-    ```
-2.  **Create `.env` file:** Create a file named `.env` in this directory and add your Proxmox connection details. See [Configuration](#️-configuration) for details and required permissions. Minimally, you need:
-    ```env
-    # .env file
-    PROXMOX_HOST=https://your-proxmox-ip:8006
-    PROXMOX_TOKEN_ID=your_user@pam!your_token_id
-    PROXMOX_TOKEN_SECRET=your_secret_uuid_here
-    # Optional: Set to true if using self-signed certs
-    # PROXMOX_ALLOW_SELF_SIGNED_CERTS=true
-    # Optional: Add PBS details if desired
-    # PBS_HOST=https://your-pbs-ip:8007
-    # PBS_NODE_NAME=your-pbs-node-hostname # Important! See config docs.
-    # PBS_TOKEN_ID=pbs_user@pbs!token_id
-    # PBS_TOKEN_SECRET=pbs_secret_uuid_here
-    # PBS_ALLOW_SELF_SIGNED_CERTS=true
-    ```
-3.  **Create `docker-compose.yml` file:** Create a file named `docker-compose.yml` in the same directory with the following content:
-    ```yaml
-    # docker-compose.yml
-    services:
-      pulse-server:
-        image: rcourtman/pulse:latest # Pulls the latest pre-built image
-        container_name: pulse
-        restart: unless-stopped
-        ports:
-          # Map host port 7655 to container port 7655
-          # Change the left side (e.g., "8081:7655") if 7655 is busy on your host
-          - "7655:7655"
-        env_file:
-          - .env # Load environment variables from .env file
-        # Optional: Uncomment to map a volume for potential future config/log persistence
-        # volumes:
-        #   - ./data:/data
-    ```
-4.  **Run:** Start the container:
-    ```bash
-    docker compose up -d
-    ```
-5.  **Access:** Open your browser to `http://<your-docker-host-ip>:7655`.
-
-**Stopping:**
-```bash
-docker compose down
-```
-
-*Note: Restart the container (`docker compose down && docker compose up -d`) if you change `.env` after starting.*
-
-<details>
-<summary><strong>Alternative: Inline Variables in `docker-compose.yml` (Click to Expand)</strong></summary>
-
-You can define environment variables directly in `docker-compose.yml` instead of using `.env`. **Replace placeholder values** before running `docker compose up -d`.
-
-```yaml
-version: '3.8'
-
-services:
-  pulse:
-    image: rcourtman/pulse:latest
-    container_name: pulse_monitor
-    restart: unless-stopped
-    ports:
-      - "7655:7655" # Map container port 7655 to host port 7655
-    environment:
-      # --- Required Proxmox Connection Details ---
-      PROXMOX_HOST: "https://your-proxmox-ip-or-hostname:8006"
-      PROXMOX_TOKEN_ID: "your-user@pam!your-token-name"
-      PROXMOX_TOKEN_SECRET: "your-api-token-secret-uuid"
-
-      # --- Optional Settings ---
-      PROXMOX_ALLOW_SELF_SIGNED_CERTS: "false"
-      # PBS_HOST: "https://your-pbs-ip:8007"
-      # PBS_TOKEN_ID: "your-pbs-user@pbs!token"
-      # PBS_TOKEN_SECRET: "your-pbs-secret"
-      # PBS_NODE_NAME: "your-pbs-hostname"
-
-    # Optional: Mount a local directory for potential future config needs
-    # volumes:
-    #   - ./pulse_config:/config
-
-networks:
-  default:
-    driver: bridge
-```
-
-</details>
-
-### Running with LXC Installation Script
-
-An installation script is available for setting up Pulse inside an **existing** Debian/Ubuntu-based Proxmox VE LXC container.
-
-**Prerequisites:**
-- A running Proxmox VE host.
-- An existing Debian or Ubuntu LXC container with network access to Proxmox.
-    - *Tip: Use [Community Scripts](https://community-scripts.github.io/ProxmoxVE/scripts?id=debian) to easily create one: `bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/debian.sh)"`*
-
-**Steps:**
-
-1.  **Access LXC Console:** Log in to your LXC container (usually as `root`).
-2.  **Download and Run Script:**
-    ```bash
-    # Ensure you are in a suitable directory, like /root or /tmp
-    curl -sLO https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh
-    chmod +x install-pulse.sh
-    ./install-pulse.sh
-    ```
-3.  **Follow Prompts:** The script guides you through:
-    *   Installing dependencies (`git`, `curl`, `nodejs`, `npm`, `sudo`).
-    *   Entering your Proxmox Host URL, API Token ID, Secret, and self-signed cert preference.
-    *   (Optional) Entering PBS connection details if desired.
-    *   Setting up Pulse as a `systemd` service (`pulse-monitor.service`).
-    *   Optionally enabling automatic updates via cron.
-4.  **Access Pulse:** The script will display the URL (e.g., `http://<LXC-IP-ADDRESS>:7655`).
-
-<details>
-<summary><strong>Updating and Managing the LXC Installation (Click to Expand)</strong></summary>
-
-**Updating Pulse:**
-
-Re-run the script from the directory where you downloaded it:
-```bash
-./install-pulse.sh
-```
-Or run non-interactively (e.g., for cron):
-```bash
-./install-pulse.sh --update
-```
-
-**Managing the Pulse Service:**
-
-Use standard `systemctl` commands:
-*   Check Status: `sudo systemctl status pulse-monitor.service`
-*   Stop Service: `sudo systemctl stop pulse-monitor.service`
-*   Start Service: `sudo systemctl start pulse-monitor.service`
-*   View Logs: `sudo journalctl -u pulse-monitor.service -f`
-*   Enable/Disable on Boot: `sudo systemctl enable/disable pulse-monitor.service`
-
-**Automatic Updates:**
-If enabled via the script, a cron job runs `./install-pulse.sh --update` Daily/Weekly/Monthly. Logs are in `/var/log/pulse_update.log`. Manage with `sudo crontab -l -u root` or `sudo crontab -e -u root`.
-
-</details>
-
 ### Running from Release Tarball
 
 For users who prefer not to use Docker or the LXC script, pre-packaged release tarballs are available.
@@ -534,6 +503,38 @@ If you find Pulse useful, consider supporting its development:
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 ## ❓ Troubleshooting
+
+### 🔧 Quick Fixes
+
+**Can't access Pulse after installation?**
+```bash
+# Check if service is running
+sudo systemctl status pulse-monitor.service
+
+# Check what's listening on port 7655
+sudo netstat -tlnp | grep 7655
+
+# View recent logs
+sudo journalctl -u pulse-monitor.service -f
+```
+
+**Empty dashboard or "No data" errors?**
+1. **Check API Token:** Verify your `PROXMOX_TOKEN_ID` and `PROXMOX_TOKEN_SECRET` are correct
+2. **Test connectivity:** Can you ping your Proxmox host from where Pulse is running?
+3. **Check permissions:** Ensure token has `PVEAuditor` role on path `/` with `Propagate` enabled
+
+**"Empty Backups Tab" with PBS configured?**
+- Add `PBS_NODE_NAME=your-pbs-hostname` to your `.env` file
+- Find hostname with: `ssh root@your-pbs-ip hostname`
+
+**Docker container won't start?**
+```bash
+# Check container logs
+docker logs pulse
+
+# Restart container
+docker compose down && docker compose up -d
+```
 
 ### Diagnostic Tool
 
