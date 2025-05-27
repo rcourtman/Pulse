@@ -254,20 +254,18 @@
             
             let html = '';
             
-            // Add sanitization notice if data is sanitized
-            if (data._sanitized) {
-                html += `
-                    <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
-                        <h3 style="margin: 0 0 10px 0; color: #1976d2;">🛡️ Privacy Protected</h3>
-                        <p style="margin: 0; font-size: 14px; color: #1565c0;">
-                            ${data._sanitized.notice}
-                        </p>
-                        <p style="margin: 10px 0 0 0; font-size: 12px; color: #1976d2; font-weight: bold;">
-                            ✅ This report is safe to share in GitHub issues or support requests
-                        </p>
-                    </div>
-                `;
-            }
+            // Show notice about sensitive data
+            html += `
+                <div style="background: #fff3e0; border: 1px solid #ff9800; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
+                    <h3 style="margin: 0 0 10px 0; color: #f57c00;">⚠️ Sensitive Data Visible</h3>
+                    <p style="margin: 0; font-size: 14px; color: #e65100;">
+                        This page displays real hostnames, IPs, and other potentially sensitive information for diagnostic purposes.
+                    </p>
+                    <p style="margin: 10px 0 0 0; font-size: 12px; color: #e65100; font-weight: bold;">
+                        📋 When you copy or download this report, all sensitive data will be automatically sanitized for safe sharing.
+                    </p>
+                </div>
+            `;
             
             // Errors section (if any)
             if (data.errors && data.errors.length > 0) {
@@ -557,10 +555,179 @@
             return html;
         }
 
+        function sanitizeUrl(url) {
+            if (!url) return url;
+            
+            // Remove protocol if present
+            let sanitized = url.replace(/^https?:\/\//, '');
+            
+            // Replace IP addresses
+            sanitized = sanitized.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[IP-ADDRESS]');
+            
+            // Replace hostnames (anything before port or path)
+            sanitized = sanitized.replace(/^[^:/]+/, '[HOSTNAME]');
+            
+            // Replace ports
+            sanitized = sanitized.replace(/:\d+/, ':[PORT]');
+            
+            return sanitized;
+        }
+        
+        function sanitizeErrorMessage(errorMsg) {
+            if (!errorMsg) return errorMsg;
+            
+            // Remove potential IP addresses, hostnames, and ports
+            let sanitized = errorMsg
+                .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '[IP-ADDRESS]')
+                .replace(/https?:\/\/[^\/\s:]+(?::\d+)?/g, '[HOSTNAME]')
+                .replace(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/g, '[HOSTNAME]')
+                .replace(/:\d{4,5}\b/g, ':[PORT]');
+                
+            return sanitized;
+        }
+        
+        function sanitizeRecommendationMessage(message) {
+            if (!message) return message;
+            
+            // Replace specific hostnames and IPs in common recommendation patterns
+            let sanitized = message
+                .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[IP-ADDRESS]')
+                .replace(/https?:\/\/[^\/\s:]+/g, '[HOSTNAME]')
+                .replace(/host\s*'[^']+'/g, "host '[HOSTNAME]'")
+                .replace(/host\s*"[^"]+"/g, 'host "[HOSTNAME]"')
+                .replace(/node\s+'[^']+'/g, "node '[NODE-NAME]'")
+                .replace(/node\s+"[^"]+"/g, 'node "[NODE-NAME]"')
+                .replace(/:\d{4,5}\b/g, ':[PORT]');
+                
+            return sanitized;
+        }
+
+        function sanitizeReport(report) {
+            // Deep clone the report to avoid modifying the original
+            const sanitized = JSON.parse(JSON.stringify(report));
+            
+            // Sanitize configuration section
+            if (sanitized.configuration) {
+                if (sanitized.configuration.proxmox) {
+                    sanitized.configuration.proxmox = sanitized.configuration.proxmox.map(pve => ({
+                        ...pve,
+                        host: sanitizeUrl(pve.host),
+                        // Remove potentially sensitive fields, keep only structure info
+                        tokenConfigured: pve.tokenConfigured,
+                        selfSignedCerts: pve.selfSignedCerts
+                    }));
+                }
+                
+                if (sanitized.configuration.pbs) {
+                    sanitized.configuration.pbs = sanitized.configuration.pbs.map(pbs => ({
+                        ...pbs,
+                        host: sanitizeUrl(pbs.host),
+                        // Remove potentially sensitive fields, keep only structure info
+                        tokenConfigured: pbs.tokenConfigured,
+                        selfSignedCerts: pbs.selfSignedCerts,
+                        node_name: pbs.node_name
+                    }));
+                }
+            }
+            
+            // Sanitize permissions section
+            if (sanitized.permissions) {
+                if (sanitized.permissions.proxmox) {
+                    sanitized.permissions.proxmox = sanitized.permissions.proxmox.map(perm => ({
+                        ...perm,
+                        host: sanitizeUrl(perm.host),
+                        name: sanitizeUrl(perm.name),
+                        // Keep diagnostic info but sanitize error messages
+                        errors: perm.errors ? perm.errors.map(err => sanitizeErrorMessage(err)) : []
+                    }));
+                }
+                
+                if (sanitized.permissions.pbs) {
+                    sanitized.permissions.pbs = sanitized.permissions.pbs.map(perm => ({
+                        ...perm,
+                        host: sanitizeUrl(perm.host),
+                        name: sanitizeUrl(perm.name),
+                        // Keep diagnostic info but sanitize error messages
+                        errors: perm.errors ? perm.errors.map(err => sanitizeErrorMessage(err)) : []
+                    }));
+                }
+            }
+            
+            // Sanitize state section
+            if (sanitized.state) {
+                // Remove potentially sensitive node names, keep only counts and structure
+                if (sanitized.state.nodes && sanitized.state.nodes.names) {
+                    sanitized.state.nodes.names = sanitized.state.nodes.names.map((name, index) => `node-${index + 1}`);
+                }
+                
+                // Remove specific backup IDs, keep only counts
+                if (sanitized.state.pbs && sanitized.state.pbs.sampleBackupIds) {
+                    sanitized.state.pbs.sampleBackupIds = sanitized.state.pbs.sampleBackupIds.map((id, index) => `backup-${index + 1}`);
+                }
+            }
+            
+            // Sanitize recommendations
+            if (sanitized.recommendations) {
+                sanitized.recommendations = sanitized.recommendations.map(rec => ({
+                    ...rec,
+                    message: sanitizeRecommendationMessage(rec.message)
+                }));
+            }
+            
+            // Sanitize connectivity section
+            if (sanitized.connectivity) {
+                if (sanitized.connectivity.proxmox) {
+                    sanitized.connectivity.proxmox = sanitized.connectivity.proxmox.map(conn => ({
+                        ...conn,
+                        host: sanitizeUrl(conn.host),
+                        error: conn.error ? sanitizeErrorMessage(conn.error) : conn.error
+                    }));
+                }
+                
+                if (sanitized.connectivity.pbs) {
+                    sanitized.connectivity.pbs = sanitized.connectivity.pbs.map(conn => ({
+                        ...conn,
+                        host: sanitizeUrl(conn.host),
+                        error: conn.error ? sanitizeErrorMessage(conn.error) : conn.error
+                    }));
+                }
+            }
+            
+            // Sanitize dataFlow section
+            if (sanitized.dataFlow && sanitized.dataFlow.pbs && sanitized.dataFlow.pbs.backup_matching) {
+                sanitized.dataFlow.pbs.backup_matching = sanitized.dataFlow.pbs.backup_matching.map(instance => ({
+                    ...instance,
+                    sample_backups: instance.sample_backups ? instance.sample_backups.map((backup, idx) => ({
+                        ...backup,
+                        backup_id: `backup-${idx + 1}`
+                    })) : []
+                }));
+            }
+            
+            // Sanitize errors section
+            if (sanitized.errors) {
+                sanitized.errors = sanitized.errors.map(err => ({
+                    ...err,
+                    error: sanitizeErrorMessage(err.error)
+                }));
+            }
+            
+            // Add notice about sanitization
+            sanitized._sanitized = {
+                notice: "This diagnostic report has been sanitized for safe sharing. Hostnames, IPs, node names, and backup IDs have been anonymized while preserving structural information needed for troubleshooting.",
+                timestamp: new Date().toISOString()
+            };
+            
+            return sanitized;
+        }
+
         function copyReport() {
             if (!diagnosticData) return;
             
-            const text = JSON.stringify(diagnosticData, null, 2);
+            // Sanitize the data before copying
+            const sanitizedData = sanitizeReport(diagnosticData);
+            const text = JSON.stringify(sanitizedData, null, 2);
+            
             navigator.clipboard.writeText(text).then(() => {
                 const button = document.getElementById('copyReport');
                 const originalText = button.textContent;
@@ -576,9 +743,11 @@
         function downloadReport() {
             if (!diagnosticData) return;
             
+            // Sanitize the data before downloading
+            const sanitizedData = sanitizeReport(diagnosticData);
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
             const filename = `pulse_diagnostics_${timestamp}.json`;
-            const text = JSON.stringify(diagnosticData, null, 2);
+            const text = JSON.stringify(sanitizedData, null, 2);
             
             const blob = new Blob([text], { type: 'application/json' });
             const url = URL.createObjectURL(blob);

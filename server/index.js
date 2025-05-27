@@ -43,6 +43,7 @@ const cors = require('cors');
 const compression = require('compression');
 const { Server } = require('socket.io');
 const { URL } = require('url'); // <--- ADD: Import URL constructor
+const axios = require('axios');
 const axiosRetry = require('axios-retry').default; // Import axios-retry
 
 // Development specific dependencies
@@ -351,16 +352,77 @@ app.delete('/api/alerts/rules/:id', (req, res) => {
     }
 });
 
-// Example API Route (Add your actual API routes here)
-app.get('/api/version', (req, res) => {
+// Version check functionality
+let latestVersionCache = null;
+let lastVersionCheck = 0;
+const VERSION_CHECK_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+
+async function checkLatestVersion() {
+    const now = Date.now();
+    
+    // Return cached version if still fresh
+    if (latestVersionCache && (now - lastVersionCheck) < VERSION_CHECK_INTERVAL) {
+        return latestVersionCache;
+    }
+    
+    try {
+        const response = await axios.get('https://api.github.com/repos/rcourtman/Pulse/releases/latest', {
+            timeout: 5000,
+            headers: {
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        });
+        
+        if (response.data && response.data.tag_name) {
+            // Remove 'v' prefix if present
+            const version = response.data.tag_name.replace(/^v/, '');
+            latestVersionCache = version;
+            lastVersionCheck = now;
+            return version;
+        }
+    } catch (error) {
+        console.error('Error checking latest version:', error.message);
+    }
+    
+    return null;
+}
+
+// Version API endpoint
+app.get('/api/version', async (req, res) => {
     try {
         const packageJson = require('../package.json');
-        res.json({ version: packageJson.version || 'N/A' });
+        const currentVersion = packageJson.version || 'N/A';
+        
+        // Check for latest version
+        const latestVersion = await checkLatestVersion();
+        
+        res.json({ 
+            version: currentVersion,
+            latestVersion: latestVersion,
+            updateAvailable: latestVersion && latestVersion !== currentVersion && 
+                            compareVersions(latestVersion, currentVersion) > 0
+        });
     } catch (error) {
-         console.error("Error reading package.json for version:", error);
+         console.error("Error in version endpoint:", error);
          res.status(500).json({ error: "Could not retrieve version" });
     }
 });
+
+// Simple version comparison function
+function compareVersions(v1, v2) {
+    const parts1 = v1.split('.').map(Number);
+    const parts2 = v2.split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+        const part1 = parts1[i] || 0;
+        const part2 = parts2[i] || 0;
+        
+        if (part1 > part2) return 1;
+        if (part1 < part2) return -1;
+    }
+    
+    return 0;
+}
 
 app.get('/api/storage', async (req, res) => {
     try {

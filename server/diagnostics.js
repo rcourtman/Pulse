@@ -98,8 +98,8 @@ class DiagnosticTool {
             console.error('Error generating recommendations:', e);
         }
 
-        // Sanitize sensitive data before returning
-        return this.sanitizeReport(report);
+        // Return unsanitized report - sanitization will be done client-side for copy/download
+        return report;
     }
 
     sanitizeReport(report) {
@@ -232,7 +232,7 @@ class DiagnosticTool {
                 const permCheck = {
                     id: id,
                     name: clientObj.config?.name || id,
-                    host: this.sanitizeUrl(clientObj.config?.host),
+                    host: clientObj.config?.host,
                     canConnect: false,
                     canListNodes: false,
                     canListVMs: false,
@@ -357,7 +357,7 @@ class DiagnosticTool {
                 const permCheck = {
                     id: id,
                     name: clientObj.config?.name || id,
-                    host: this.sanitizeUrl(clientObj.config?.host),
+                    host: clientObj.config?.host,
                     node_name: clientObj.config?.nodeName || clientObj.config?.node_name || 'NOT SET',
                     canConnect: false,
                     canListDatastores: false,
@@ -445,7 +445,7 @@ class DiagnosticTool {
                 if (!id.startsWith('pbs_') && clientObj && clientObj.config) {
                     config.proxmox.push({
                         id: id,
-                        host: this.sanitizeUrl(clientObj.config.host),
+                        host: clientObj.config.host,
                         name: clientObj.config.name || id,
                         port: clientObj.config.port || '8006',
                         tokenConfigured: !!clientObj.config.tokenId,
@@ -464,7 +464,7 @@ class DiagnosticTool {
                     const nodeName = clientObj.config.nodeName || clientObj.config.node_name;
                     config.pbs.push({
                         id: id,
-                        host: this.sanitizeUrl(clientObj.config.host),
+                        host: clientObj.config.host,
                         name: clientObj.config.name || id,
                         port: clientObj.config.port || '8007',
                         node_name: nodeName || 'NOT SET',

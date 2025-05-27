@@ -163,7 +163,7 @@ PulseApp.ui.storage = (() => {
         const thead = document.createElement('thead');
         thead.innerHTML = `
             <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0 z-10 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
-              <th class="p-1 px-2">Storage</th>
+              <th class="sticky left-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2">Storage</th>
               <th class="p-1 px-2">Content</th>
               <th class="p-1 px-2">Type</th>
               <th class="p-1 px-2">Shared</th>
@@ -231,7 +231,7 @@ PulseApp.ui.storage = (() => {
         const contentBadges = getContentBadgesHTML(store.content);
 
         row.innerHTML = `
-            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100">${store.storage || 'N/A'}</td>
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100">${store.storage || 'N/A'}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs flex items-center">${contentBadges}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${store.type || 'N/A'}</td>
             <td class="p-1 px-2 whitespace-nowrap storage-tooltip-trigger cursor-default" data-tooltip="${sharedIconTooltip}">${sharedIcon}</td>

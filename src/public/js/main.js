@@ -112,6 +112,40 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('Version data received:', data);
                 if (data.version) {
                     versionSpan.textContent = data.version;
+                    
+                    // Check if update is available
+                    if (data.updateAvailable && data.latestVersion) {
+                        // Check if update indicator already exists
+                        const existingIndicator = document.getElementById('update-indicator');
+                        if (!existingIndicator) {
+                            // Create update indicator
+                            const updateIndicator = document.createElement('span');
+                            updateIndicator.id = 'update-indicator';
+                            updateIndicator.className = 'ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+                            updateIndicator.innerHTML = `
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"/>
+                                </svg>
+                                v${data.latestVersion} available
+                            `;
+                            updateIndicator.title = 'Click to view the latest release';
+                            updateIndicator.style.cursor = 'pointer';
+                            updateIndicator.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                window.open('https://github.com/rcourtman/Pulse/releases/latest', '_blank');
+                            });
+                            
+                            // Insert after version link
+                            versionSpan.parentNode.insertBefore(updateIndicator, versionSpan.nextSibling);
+                        }
+                    } else {
+                        // Remove update indicator if no update available
+                        const existingIndicator = document.getElementById('update-indicator');
+                        if (existingIndicator) {
+                            existingIndicator.remove();
+                        }
+                    }
                 } else {
                     versionSpan.textContent = 'unknown';
                 }
@@ -141,4 +175,10 @@ document.addEventListener('DOMContentLoaded', function() {
             fetchVersion();
         }
     }, 2000);
+    
+    // Periodically check for updates (every 6 hours)
+    setInterval(() => {
+        console.log('[Main] Checking for version updates...');
+        fetchVersion();
+    }, 6 * 60 * 60 * 1000);
 });
