@@ -23,6 +23,10 @@ module.exports = {
     'sm:inline',
     'truncate',
     'px-1',
+    'table-cell',
+    'sm:table-cell',
+    'md:table-cell',
+    'lg:table-cell',
   ],
   theme: {
     extend: {},
