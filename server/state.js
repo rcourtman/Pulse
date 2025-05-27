@@ -371,7 +371,7 @@ function getHealthSummary() {
       healthy: healthyConnections,
       total: totalConnections
     },
-    alerts: alertManager.getAlertStats(),
+    alerts: alertManager.getEnhancedAlertStats(),
     lastUpdate: state.stats.lastUpdated
   };
 }
