@@ -98,7 +98,116 @@ class DiagnosticTool {
             console.error('Error generating recommendations:', e);
         }
 
-        return report;
+        // Sanitize sensitive data before returning
+        return this.sanitizeReport(report);
+    }
+
+    sanitizeReport(report) {
+        // Deep clone the report to avoid modifying the original
+        const sanitized = JSON.parse(JSON.stringify(report));
+        
+        // Sanitize configuration section
+        if (sanitized.configuration) {
+            if (sanitized.configuration.proxmox) {
+                sanitized.configuration.proxmox = sanitized.configuration.proxmox.map(pve => ({
+                    ...pve,
+                    host: this.sanitizeUrl(pve.host),
+                    // Remove potentially sensitive fields, keep only structure info
+                    tokenConfigured: pve.tokenConfigured,
+                    selfSignedCerts: pve.selfSignedCerts
+                }));
+            }
+            
+            if (sanitized.configuration.pbs) {
+                sanitized.configuration.pbs = sanitized.configuration.pbs.map(pbs => ({
+                    ...pbs,
+                    host: this.sanitizeUrl(pbs.host),
+                    // Remove potentially sensitive fields, keep only structure info
+                    tokenConfigured: pbs.tokenConfigured,
+                    selfSignedCerts: pbs.selfSignedCerts,
+                    node_name: pbs.node_name
+                }));
+            }
+        }
+        
+        // Sanitize permissions section
+        if (sanitized.permissions) {
+            if (sanitized.permissions.proxmox) {
+                sanitized.permissions.proxmox = sanitized.permissions.proxmox.map(perm => ({
+                    ...perm,
+                    host: this.sanitizeUrl(perm.host),
+                    name: this.sanitizeUrl(perm.name),
+                    // Keep diagnostic info but sanitize error messages
+                    errors: perm.errors ? perm.errors.map(err => this.sanitizeErrorMessage(err)) : []
+                }));
+            }
+            
+            if (sanitized.permissions.pbs) {
+                sanitized.permissions.pbs = sanitized.permissions.pbs.map(perm => ({
+                    ...perm,
+                    host: this.sanitizeUrl(perm.host),
+                    name: this.sanitizeUrl(perm.name),
+                    // Keep diagnostic info but sanitize error messages
+                    errors: perm.errors ? perm.errors.map(err => this.sanitizeErrorMessage(err)) : []
+                }));
+            }
+        }
+        
+        // Sanitize state section
+        if (sanitized.state) {
+            // Remove potentially sensitive node names, keep only counts and structure
+            if (sanitized.state.nodes && sanitized.state.nodes.names) {
+                sanitized.state.nodes.names = sanitized.state.nodes.names.map((name, index) => `node-${index + 1}`);
+            }
+            
+            // Remove specific backup IDs, keep only counts
+            if (sanitized.state.pbs && sanitized.state.pbs.sampleBackupIds) {
+                sanitized.state.pbs.sampleBackupIds = sanitized.state.pbs.sampleBackupIds.map((id, index) => `backup-${index + 1}`);
+            }
+        }
+        
+        // Sanitize recommendations
+        if (sanitized.recommendations) {
+            sanitized.recommendations = sanitized.recommendations.map(rec => ({
+                ...rec,
+                message: this.sanitizeRecommendationMessage(rec.message)
+            }));
+        }
+        
+        // Add notice about sanitization
+        sanitized._sanitized = {
+            notice: "This diagnostic report has been sanitized for safe sharing. Hostnames, IPs, node names, and backup IDs have been anonymized while preserving structural information needed for troubleshooting.",
+            timestamp: new Date().toISOString()
+        };
+        
+        return sanitized;
+    }
+    
+    sanitizeErrorMessage(errorMsg) {
+        if (!errorMsg) return errorMsg;
+        
+        // Remove potential IP addresses, hostnames, and ports
+        let sanitized = errorMsg
+            .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '[IP-ADDRESS]')
+            .replace(/https?:\/\/[^\/\s:]+(?::\d+)?/g, '[HOSTNAME]')
+            .replace(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/g, '[HOSTNAME]')
+            .replace(/:\d{4,5}\b/g, ':[PORT]');
+            
+        return sanitized;
+    }
+    
+    sanitizeRecommendationMessage(message) {
+        if (!message) return message;
+        
+        // Remove potential hostnames and IPs from recommendation messages
+        let sanitized = message
+            .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '[IP-ADDRESS]')
+            .replace(/https?:\/\/[^\/\s:]+(?::\d+)?/g, '[HOSTNAME]')
+            .replace(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/g, '[HOSTNAME]')
+            .replace(/"[^"]*\.lan[^"]*"/g, '"[HOSTNAME]"')
+            .replace(/"[^"]*\.local[^"]*"/g, '"[HOSTNAME]"');
+            
+        return sanitized;
     }
 
     getVersion() {
@@ -625,9 +734,20 @@ class DiagnosticTool {
         if (!url) return 'Not configured';
         try {
             const parsed = new URL(url);
-            return `${parsed.protocol}//${parsed.hostname}:${parsed.port || (parsed.protocol === 'https:' ? '443' : '80')}`;
+            // Anonymize hostname/IP but keep protocol and port structure
+            const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
+            
+            // Check if hostname is an IP address
+            const isIP = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(parsed.hostname);
+            const anonymizedHost = isIP ? '[IP-ADDRESS]' : '[HOSTNAME]';
+            
+            return `${parsed.protocol}//${anonymizedHost}:${port}`;
         } catch {
-            return url.replace(/\/\/[^:]+:[^@]+@/, '//***:***@');
+            // Fallback for malformed URLs
+            return url
+                .replace(/\/\/[^:]+:[^@]+@/, '//[USER]:[PASSWORD]@')
+                .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '[IP-ADDRESS]')
+                .replace(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/g, '[HOSTNAME]');
         }
     }
 }

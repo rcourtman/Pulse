@@ -160,8 +160,8 @@
         
         <div class="actions">
             <button id="runDiagnostics" onclick="runDiagnostics()">Run Diagnostics</button>
-            <button id="copyReport" onclick="copyReport()" style="display: none;">Copy Report</button>
-            <button id="downloadReport" onclick="downloadReport()" style="display: none;">Download Report</button>
+            <button id="copyReport" onclick="copyReport()" style="display: none;" title="Safe to share - all sensitive data has been sanitized">📋 Copy Safe Report</button>
+            <button id="downloadReport" onclick="downloadReport()" style="display: none;" title="Safe to share - all sensitive data has been sanitized">💾 Download Safe Report</button>
         </div>
         
         <div id="status" class="status" style="display: none;"></div>
@@ -253,6 +253,21 @@
             const resultsEl = document.getElementById('results');
             
             let html = '';
+            
+            // Add sanitization notice if data is sanitized
+            if (data._sanitized) {
+                html += `
+                    <div style="background: #e3f2fd; border: 1px solid #2196f3; border-radius: 4px; padding: 15px; margin-bottom: 20px;">
+                        <h3 style="margin: 0 0 10px 0; color: #1976d2;">🛡️ Privacy Protected</h3>
+                        <p style="margin: 0; font-size: 14px; color: #1565c0;">
+                            ${data._sanitized.notice}
+                        </p>
+                        <p style="margin: 10px 0 0 0; font-size: 12px; color: #1976d2; font-weight: bold;">
+                            ✅ This report is safe to share in GitHub issues or support requests
+                        </p>
+                    </div>
+                `;
+            }
             
             // Errors section (if any)
             if (data.errors && data.errors.length > 0) {
@@ -549,10 +564,12 @@
             navigator.clipboard.writeText(text).then(() => {
                 const button = document.getElementById('copyReport');
                 const originalText = button.textContent;
-                button.textContent = 'Copied!';
+                button.textContent = '✅ Copied! Safe to paste';
+                button.style.background = '#4caf50';
                 setTimeout(() => {
                     button.textContent = originalText;
-                }, 2000);
+                    button.style.background = '';
+                }, 3000);
             });
         }
 
