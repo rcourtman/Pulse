@@ -188,6 +188,12 @@
           <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
         </div>
       <div class="header-controls flex justify-end items-center gap-4 md:flex-1">
+        <a id="diagnostics-icon" href="/diagnostics.html" target="_blank" class="hidden p-1 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none relative" title="Run Diagnostics" aria-label="Run diagnostics">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <span id="diagnostics-badge" class="absolute -top-1 -right-1 h-2 w-2 bg-red-500 rounded-full hidden animate-pulse"></span>
+        </a>
         <button id="theme-toggle-button" type="button" class="p-1 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none" aria-label="Toggle theme">
           <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 block dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
@@ -533,6 +539,64 @@
   <script>window.PulseApp = {};</script>
   <!-- <script src="/app.js" defer></script> -->
   <script src="/js/config.js" defer></script>
+  <script>
+    // Diagnostic icon visibility checker
+    (function() {
+      const checkDiagnostics = async () => {
+        try {
+          const response = await fetch('/api/diagnostics/check');
+          if (response.ok) {
+            const data = await response.json();
+            const icon = document.getElementById('diagnostics-icon');
+            const badge = document.getElementById('diagnostics-badge');
+            
+            if (data.hasIssues) {
+              icon.classList.remove('hidden');
+              if (data.severity === 'error') {
+                badge.classList.remove('hidden');
+              } else {
+                badge.classList.add('hidden');
+              }
+              
+              // Update tooltip with issue count
+              if (data.issueCount) {
+                icon.title = `Run Diagnostics (${data.issueCount} issue${data.issueCount > 1 ? 's' : ''} detected)`;
+              }
+            } else {
+              icon.classList.add('hidden');
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check diagnostics:', error);
+        }
+      };
+      
+      // Check immediately after DOM loads
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', checkDiagnostics);
+      } else {
+        checkDiagnostics();
+      }
+      
+      // Check periodically
+      setInterval(checkDiagnostics, 300000); // Every 5 minutes
+      
+      // Also check when socket reconnects
+      if (window.io) {
+        const checkOnConnect = () => {
+          const socket = window.PulseApp?.socket;
+          if (socket) {
+            socket.on('connect', () => {
+              setTimeout(checkDiagnostics, 5000); // Check 5 seconds after connection
+            });
+          } else {
+            setTimeout(checkOnConnect, 100);
+          }
+        };
+        checkOnConnect();
+      }
+    })();
+  </script>
   <script src="/js/state.js" defer></script>
   <script src="/js/debounce.js" defer></script>
   <script src="/js/virtual-scroll.js" defer></script>

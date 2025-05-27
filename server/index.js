@@ -6,6 +6,9 @@ const stateManager = require('./state');
 // Import metrics history system
 const metricsHistory = require('./metricsHistory');
 
+// Import diagnostic tool
+const DiagnosticTool = require('./diagnostics');
+
 // --- BEGIN Configuration Loading using configLoader --- 
 const { loadConfiguration, ConfigurationError } = require('./configLoader');
 
@@ -402,6 +405,159 @@ app.get('/api/charts', async (req, res) => {
     } catch (error) {
         console.error("Error in /api/charts:", error);
         res.status(500).json({ error: error.message || "Failed to fetch chart data." });
+    }
+});
+
+// Simple diagnostic endpoint for troubleshooting
+app.get('/api/diagnostics-simple', async (req, res) => {
+    try {
+        // Delete from require cache to force reload
+        delete require.cache[require.resolve('./diagnostics-simple')];
+        const SimpleDiagnosticTool = require('./diagnostics-simple');
+        const tool = new SimpleDiagnosticTool(stateManager, apiClients, pbsApiClients);
+        const report = await tool.runDiagnostics();
+        res.json(report);
+    } catch (error) {
+        console.error("Simple diagnostics error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Direct state inspection endpoint
+app.get('/api/diagnostics-state', (req, res) => {
+    try {
+        const state = stateManager.getState();
+        const summary = {
+            timestamp: new Date().toISOString(),
+            last_update: state.lastUpdate,
+            update_age_seconds: state.lastUpdate ? Math.floor((Date.now() - new Date(state.lastUpdate).getTime()) / 1000) : null,
+            guests_count: state.guests?.length || 0,
+            nodes_count: state.nodes?.length || 0,
+            pbs_count: state.pbs?.length || 0,
+            sample_guests: state.guests?.slice(0, 5).map(g => ({
+                vmid: g.vmid,
+                name: g.name,
+                type: g.type,
+                status: g.status
+            })) || [],
+            sample_backups: [],
+            errors: state.errors || []
+        };
+        
+        // Get sample backups
+        if (state.pbs && Array.isArray(state.pbs)) {
+            state.pbs.forEach(pbsInstance => {
+                if (pbsInstance.datastores) {
+                    pbsInstance.datastores.forEach(ds => {
+                        if (ds.snapshots && ds.snapshots.length > 0) {
+                            ds.snapshots.slice(0, 5).forEach(snap => {
+                                summary.sample_backups.push({
+                                    store: ds.store,
+                                    backup_id: snap['backup-id'],
+                                    backup_type: snap['backup-type'],
+                                    backup_time: new Date(snap['backup-time'] * 1000).toISOString()
+                                });
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        
+        res.json(summary);
+    } catch (error) {
+        console.error("State inspection error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Quick diagnostic check endpoint
+app.get('/api/diagnostics/check', async (req, res) => {
+    try {
+        // Use cached result if available and recent
+        const cacheKey = 'diagnosticCheck';
+        const cached = global.diagnosticCache?.[cacheKey];
+        if (cached && (Date.now() - cached.timestamp) < 60000) { // Cache for 1 minute
+            return res.json(cached.result);
+        }
+
+        // Run a quick check
+        delete require.cache[require.resolve('./diagnostics-fixed')];
+        const DiagnosticToolFixed = require('./diagnostics-fixed');
+        const diagnosticTool = new DiagnosticToolFixed(stateManager, metricsHistory, apiClients, pbsApiClients);
+        const report = await diagnosticTool.runDiagnostics();
+        
+        const hasIssues = report.recommendations && 
+            report.recommendations.some(r => r.severity === 'critical' || r.severity === 'warning');
+        
+        const result = {
+            hasIssues,
+            criticalCount: report.recommendations?.filter(r => r.severity === 'critical').length || 0,
+            warningCount: report.recommendations?.filter(r => r.severity === 'warning').length || 0
+        };
+        
+        // Cache the result
+        if (!global.diagnosticCache) global.diagnosticCache = {};
+        global.diagnosticCache[cacheKey] = { timestamp: Date.now(), result };
+        
+        res.json(result);
+    } catch (error) {
+        console.error("Error in diagnostic check:", error);
+        res.json({ hasIssues: false }); // Don't show icon on error
+    }
+});
+
+// Raw state endpoint - shows everything
+app.get('/api/raw-state', (req, res) => {
+    const state = stateManager.getState();
+    const rawState = stateManager.state || {};
+    res.json({
+        lastUpdate: state.lastUpdate,
+        statsLastUpdated: state.stats?.lastUpdated,
+        rawStateLastUpdated: rawState.stats?.lastUpdated,
+        guestsLength: state.guests?.length,
+        rawGuestsLength: rawState.guests?.length,
+        guestsType: Array.isArray(state.guests) ? 'array' : typeof state.guests,
+        allKeys: Object.keys(state),
+        rawKeys: Object.keys(rawState),
+        serverUptime: process.uptime(),
+        // Sample guest to see structure
+        firstGuest: state.guests?.[0],
+        rawFirstGuest: rawState.guests?.[0]
+    });
+});
+
+// --- Diagnostic Endpoint ---
+app.get('/api/diagnostics', async (req, res) => {
+    try {
+        console.log('Running diagnostics...');
+        // Force reload the diagnostic module to get latest changes
+        delete require.cache[require.resolve('./diagnostics-fixed')];
+        const DiagnosticToolFixed = require('./diagnostics-fixed');
+        const diagnosticTool = new DiagnosticToolFixed(stateManager, metricsHistory, apiClients, pbsApiClients);
+        const report = await diagnosticTool.runDiagnostics();
+        
+        // Format the report for easy reading
+        const formattedReport = {
+            ...report,
+            summary: {
+                hasIssues: report.recommendations && report.recommendations.some(r => r.severity === 'critical'),
+                criticalIssues: report.recommendations ? report.recommendations.filter(r => r.severity === 'critical').length : 0,
+                warnings: report.recommendations ? report.recommendations.filter(r => r.severity === 'warning').length : 0,
+                info: report.recommendations ? report.recommendations.filter(r => r.severity === 'info').length : 0,
+                isTimingIssue: report.state && report.state.dataAge === null && report.state.serverUptime < 90
+            }
+        };
+        
+        res.json(formattedReport);
+    } catch (error) {
+        console.error("Error running diagnostics:", error);
+        console.error("Stack trace:", error.stack);
+        res.status(500).json({ 
+            error: "Failed to run diagnostics", 
+            details: error.message,
+            stack: error.stack
+        });
     }
 });
 
