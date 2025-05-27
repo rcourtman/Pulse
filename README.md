@@ -554,7 +554,8 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 - Provides exact permission requirements (e.g., `VM.Audit` on `/` for Proxmox)
 - Shows counts of discovered resources (VMs, containers, nodes, backups)
 - Identifies common misconfigurations like missing `PBS_NODE_NAME`
-- Export diagnostic reports for support or troubleshooting
+- **Privacy Protected**: Automatically sanitizes hostnames, IPs, and sensitive data before export
+- Export diagnostic reports safe for sharing in GitHub issues or support requests
 
 **Command Line:**
 ```bash
