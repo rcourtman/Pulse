@@ -301,11 +301,11 @@ prompt_for_branch_selection() {
     local branches
     if [ -d "$PULSE_DIR" ]; then
         cd "$PULSE_DIR" || return 1
-        branches=$(sudo -u "$PULSE_USER" git ls-remote --heads origin | grep -E 'feature/|hotfix/|dev/' | sed 's|.*refs/heads/||' | sort)
+        branches=$(sudo -u "$PULSE_USER" git ls-remote --heads origin | { grep -E 'feature/|hotfix/|dev/' || true; } | sed 's|.*refs/heads/||' | sort)
         cd - >/dev/null
     else
         # For fresh installations, fetch from remote
-        branches=$(git ls-remote --heads https://github.com/rcourtman/Pulse.git | grep -E 'feature/|hotfix/|dev/' | sed 's|.*refs/heads/||' | sort)
+        branches=$(git ls-remote --heads https://github.com/rcourtman/Pulse.git | { grep -E 'feature/|hotfix/|dev/' || true; } | sed 's|.*refs/heads/||' | sort)
     fi
     
     if [ -z "$branches" ]; then
@@ -358,7 +358,7 @@ check_installation_status_and_determine_action() {
             if [ -d "$PULSE_DIR/.git" ]; then
                  cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; INSTALL_MODE="error"; return; }
                  print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
-                 if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH"; then
+                 if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH" 2>/dev/null; then
                      TARGET_BRANCH="$SPECIFIED_BRANCH"
                      print_info "Will update to branch: $TARGET_BRANCH"
                  else
@@ -416,7 +416,7 @@ check_installation_status_and_determine_action() {
                      fi
                 elif [ -n "$SPECIFIED_BRANCH" ]; then
                     print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
-                    if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH"; then
+                    if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH" 2>/dev/null; then
                         TARGET_BRANCH="$SPECIFIED_BRANCH"
                         print_info "Will switch to branch: $TARGET_BRANCH"
                         INSTALL_MODE="update"
@@ -445,7 +445,7 @@ check_installation_status_and_determine_action() {
                  fi
             elif [ -n "$SPECIFIED_BRANCH" ]; then
                 print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
-                if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH"; then
+                if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH" 2>/dev/null; then
                     TARGET_BRANCH="$SPECIFIED_BRANCH"
                     print_info "Will switch to branch: $TARGET_BRANCH"
                     INSTALL_MODE="update"
@@ -942,7 +942,7 @@ perform_remove() {
 
     for service_name in "${potential_services[@]}"; do
         local service_file_path="/etc/systemd/system/$service_name"
-        if systemctl list-units --full -all | grep -q "$service_name"; then
+        if systemctl list-units --full -all | grep -q "$service_name" 2>/dev/null; then
             print_info "Stopping service $service_name..."
             systemctl stop "$service_name" > /dev/null 2>&1
 
