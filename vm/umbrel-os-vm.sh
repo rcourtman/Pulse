@@ -442,7 +442,7 @@ fi
 
 msg_info "Decompressing $FILE with progress${CL}\n"
 FILE_IMG="${FILE%.xz}"
-SIZE=$(xz --robot -l "$FILE" &>/dev/null | awk -F '\t' '/^totals/ { print $5 }') &>/dev/null
+SIZE=$(xz --robot -l "$FILE" | awk -F '\t' '/^totals/ { print $5 }') &>/dev/null
 xz -dc "$FILE" | pv -s "$SIZE" -N "Extracting" >"$FILE_IMG"
 msg_ok "Decompressed to ${CL}${BL}${FILE%.xz}${CL}"
 
