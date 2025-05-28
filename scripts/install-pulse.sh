@@ -296,6 +296,45 @@ get_current_local_tag() {
     echo "$current_tag"
 }
 
+prompt_for_branch_selection() {
+    print_info "Fetching available feature branches..."
+    local branches
+    if [ -d "$PULSE_DIR" ]; then
+        cd "$PULSE_DIR" || return 1
+        branches=$(sudo -u "$PULSE_USER" git ls-remote --heads origin | grep -E 'feature/|hotfix/|dev/' | sed 's|.*refs/heads/||' | sort)
+        cd - >/dev/null
+    else
+        # For fresh installations, fetch from remote
+        branches=$(git ls-remote --heads https://github.com/rcourtman/Pulse.git | grep -E 'feature/|hotfix/|dev/' | sed 's|.*refs/heads/||' | sort)
+    fi
+    
+    if [ -z "$branches" ]; then
+        print_warning "No development branches found."
+        return 1
+    fi
+    
+    echo "Available development branches:"
+    local i=1
+    local branch_array=()
+    while IFS= read -r branch; do
+        echo "  $i) $branch"
+        branch_array+=("$branch")
+        i=$((i+1))
+    done <<< "$branches"
+    echo "  $i) Cancel"
+    
+    read -p "Select a branch to install [1-$i]: " choice
+    
+    if [ "$choice" = "$i" ]; then
+        return 1
+    elif [ "$choice" -ge 1 ] && [ "$choice" -lt "$i" ]; then
+        SPECIFIED_BRANCH="${branch_array[$((choice-1))]}"
+        return 0
+    else
+        print_error "Invalid choice."
+        return 1
+    fi
+}
 
 check_installation_status_and_determine_action() {
     if [ -n "$MODE_UPDATE" ]; then
@@ -431,14 +470,22 @@ check_installation_status_and_determine_action() {
                     echo -e "Choose an action:"
                     echo -e "  1) Manage automatic updates"
                     echo -e "  2) Re-install current version $current_tag"
-                    echo -e "  3) Remove Pulse"
-                    echo -e "  4) Cancel"
-                    read -p "Enter your choice [1-4]: " user_choice
+                    echo -e "  3) Test a feature branch"
+                    echo -e "  4) Remove Pulse"
+                    echo -e "  5) Cancel"
+                    read -p "Enter your choice [1-5]: " user_choice
                     case $user_choice in
                         1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
                         2) INSTALL_MODE="update" ;;
-                        3) INSTALL_MODE="remove" ;;
-                        4) INSTALL_MODE="cancel" ;;
+                        3) 
+                            if prompt_for_branch_selection; then
+                                INSTALL_MODE="update"
+                            else
+                                INSTALL_MODE="cancel"
+                            fi
+                            ;;
+                        4) INSTALL_MODE="remove" ;;
+                        5) INSTALL_MODE="cancel" ;;
                         *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                     esac
                 fi
@@ -474,15 +521,23 @@ check_installation_status_and_determine_action() {
                  else
                       echo "Choose an action:"
                       echo "  1) Update Pulse to the latest version $TARGET_TAG"
-                      echo "  2) Remove Pulse"
-                      echo "  3) Cancel"
-                      echo "  4) Manage automatic updates"
-                      read -p "Enter your choice [1-4]: " user_choice
+                      echo "  2) Test a feature branch"
+                      echo "  3) Remove Pulse"
+                      echo "  4) Cancel"
+                      echo "  5) Manage automatic updates"
+                      read -p "Enter your choice [1-5]: " user_choice
                       case $user_choice in
                           1) INSTALL_MODE="update" ;;
-                          2) INSTALL_MODE="remove" ;;
-                          3) INSTALL_MODE="cancel" ;;
-                          4) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
+                          2) 
+                              if prompt_for_branch_selection; then
+                                  INSTALL_MODE="update"
+                              else
+                                  INSTALL_MODE="cancel"
+                              fi
+                              ;;
+                          3) INSTALL_MODE="remove" ;;
+                          4) INSTALL_MODE="cancel" ;;
+                          5) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
                           *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                       esac
                  fi
@@ -506,11 +561,19 @@ check_installation_status_and_determine_action() {
         else
             echo "Choose an action:"
             echo "  1) Install Pulse [latest version]"
-            echo "  2) Cancel"
-            read -p "Enter your choice [1-2]: " user_choice
+            echo "  2) Test a feature branch"
+            echo "  3) Cancel"
+            read -p "Enter your choice [1-3]: " user_choice
             case $user_choice in
                 1) INSTALL_MODE="install" ;;
-                2) INSTALL_MODE="cancel" ;;
+                2) 
+                    if prompt_for_branch_selection; then
+                        INSTALL_MODE="install"
+                    else
+                        INSTALL_MODE="cancel"
+                    fi
+                    ;;
+                3) INSTALL_MODE="cancel" ;;
                 *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
             esac
         fi
