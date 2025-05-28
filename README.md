@@ -29,14 +29,20 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <details>
 <summary><strong>Click to view mobile interface</strong></summary>
 
-**Mobile Dashboard:**
-![Mobile Dashboard](docs/images/05-mobile-dashboard.png)
-
-**Mobile PBS View:**
-![Mobile PBS View](docs/images/06-mobile-pbs-view.png)
-
-**Mobile Backups View:**
-![Mobile Backups View](docs/images/07-mobile-backups-view.png)
+<div align="center">
+<table>
+<tr>
+<td align="center"><strong>Mobile Dashboard</strong></td>
+<td align="center"><strong>Mobile PBS View</strong></td>
+<td align="center"><strong>Mobile Backups View</strong></td>
+</tr>
+<tr>
+<td><img src="docs/images/05-mobile-dashboard.png" alt="Mobile Dashboard" width="250"/></td>
+<td><img src="docs/images/06-mobile-pbs-view.png" alt="Mobile PBS View" width="250"/></td>
+<td><img src="docs/images/07-mobile-backups-view.png" alt="Mobile Backups View" width="250"/></td>
+</tr>
+</table>
+</div>
 
 </details>
 
