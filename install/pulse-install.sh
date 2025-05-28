@@ -34,7 +34,7 @@ RELEASE=$(curl -fsSL https://api.github.com/repos/rcourtman/Pulse/releases/lates
 temp_file=$(mktemp)
 mkdir -p /opt/pulse-proxmox
 curl -fsSL "https://github.com/rcourtman/Pulse/releases/download/v${RELEASE}/pulse-v${RELEASE}.tar.gz" -o "$temp_file"
-tar zxf "$temp_file" --strip-components=1 -C /opt/pulse-proxmox
+tar zxf "$temp_file" --strip-components=1 -C /opt/pulse-proxmox 2> >(grep -v 'LIBARCHIVE.xattr.com.apple.provenance' >&2)
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed Pulse"
 
