@@ -13,14 +13,26 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <details>
 <summary><strong>Click to view other UI tabs</strong></summary>
 
-**PBS Tab:**
-![PBS View](docs/images/02-pbs-view.png)
-
-**Backups Tab:**
-![Backups View](docs/images/03-backups-view.png)
-
-**Line Graph Toggle:**
-![Line Graph Toggle View](docs/images/04-line-graph-toggle.png)
+<div align="center">
+<table>
+<tr>
+<td align="center"><strong>PBS Tab</strong></td>
+<td align="center"><strong>Backups Tab</strong></td>
+</tr>
+<tr>
+<td><img src="docs/images/02-pbs-view.png" alt="PBS View" width="400"/></td>
+<td><img src="docs/images/03-backups-view.png" alt="Backups View" width="400"/></td>
+</tr>
+<tr>
+<td align="center"><strong>Line Graph Toggle</strong></td>
+<td></td>
+</tr>
+<tr>
+<td><img src="docs/images/04-line-graph-toggle.png" alt="Line Graph Toggle View" width="400"/></td>
+<td></td>
+</tr>
+</table>
+</div>
 
 </details>
 
