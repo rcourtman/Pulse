@@ -244,18 +244,91 @@ PulseApp.ui.backups = (() => {
             return dailyStatus;
         });
 
-        // Determine backup source and location
+        // Determine backup source and location with support for multiple PBS instances
         let backupSource = 'N/A';
+        let backupSourceTitle = '';
         let backupLocation = 'N/A';
+        let backupLocationTitle = '';
         
-        if (latestSnapshot || latestTask) {
-            const source = latestSnapshot?.source || latestTask?.source;
+        if (guestSnapshots && guestSnapshots.length > 0) {
+            // Separate PBS and PVE snapshots
+            const pbsSnapshots = guestSnapshots.filter(s => s.source === 'pbs');
+            const pveSnapshots = guestSnapshots.filter(s => s.source === 'pve');
+            
+            if (pbsSnapshots.length > 0 && pveSnapshots.length > 0) {
+                // Mixed sources
+                backupSource = `Mixed (PBS+PVE)`;
+                backupSourceTitle = `${pbsSnapshots.length} PBS backups, ${pveSnapshots.length} PVE backups`;
+                
+                // For location, show both PBS datastores and PVE storages
+                const pbsDatastores = [...new Set(pbsSnapshots.map(s => s.datastoreName).filter(Boolean))];
+                const pveStorages = [...new Set(pveSnapshots.map(s => s.storage).filter(Boolean))];
+                const allLocations = [...pbsDatastores, ...pveStorages];
+                
+                if (allLocations.length === 1) {
+                    backupLocation = allLocations[0];
+                } else if (allLocations.length > 1) {
+                    backupLocation = `Multiple (${allLocations.length})`;
+                    backupLocationTitle = allLocations.join(', ');
+                }
+            } else if (pbsSnapshots.length > 0) {
+                // Only PBS backups - use enhanced PBS logic
+                const pbsInstances = [...new Set(pbsSnapshots.map(s => s.pbsInstanceName).filter(Boolean))];
+                const datastores = [...new Set(pbsSnapshots.map(s => s.datastoreName).filter(Boolean))];
+                
+                // Group backups by PBS instance for detailed info
+                const backupsByPbs = {};
+                pbsSnapshots.forEach(snap => {
+                    if (snap.pbsInstanceName) {
+                        if (!backupsByPbs[snap.pbsInstanceName]) {
+                            backupsByPbs[snap.pbsInstanceName] = { count: 0, datastores: new Set() };
+                        }
+                        backupsByPbs[snap.pbsInstanceName].count++;
+                        if (snap.datastoreName) {
+                            backupsByPbs[snap.pbsInstanceName].datastores.add(snap.datastoreName);
+                        }
+                    }
+                });
+                
+                if (pbsInstances.length === 1) {
+                    backupSource = pbsInstances[0];
+                } else if (pbsInstances.length > 1) {
+                    backupSource = `Multiple PBS (${pbsInstances.length})`;
+                    const details = pbsInstances.map(pbs => {
+                        const info = backupsByPbs[pbs];
+                        return `${pbs}: ${info.count} backups`;
+                    }).join(', ');
+                    backupSourceTitle = details;
+                }
+                
+                if (datastores.length === 1) {
+                    backupLocation = datastores[0];
+                } else if (datastores.length > 1) {
+                    backupLocation = `Multiple (${datastores.length})`;
+                    backupLocationTitle = datastores.join(', ');
+                }
+            } else if (pveSnapshots.length > 0) {
+                // Only PVE backups
+                backupSource = 'PVE';
+                const storages = [...new Set(pveSnapshots.map(s => s.storage).filter(Boolean))];
+                
+                if (storages.length === 1) {
+                    backupLocation = storages[0];
+                } else if (storages.length > 1) {
+                    backupLocation = `Multiple (${storages.length})`;
+                    backupLocationTitle = storages.join(', ');
+                } else {
+                    backupLocation = 'Local';
+                }
+            }
+        } else if (latestTask) {
+            // Fallback to task data if no snapshots
+            const source = latestTask.source;
             if (source === 'pbs') {
-                backupSource = latestSnapshot?.pbsInstanceName || latestTask?.pbsInstanceName || 'PBS';
-                backupLocation = latestSnapshot?.datastoreName || 'N/A';
+                backupSource = latestTask.pbsInstanceName || 'PBS';
             } else if (source === 'pve') {
                 backupSource = 'PVE';
-                backupLocation = latestSnapshot?.storage || latestTask?.node || 'Local';
+                backupLocation = latestTask.node || 'Local';
             }
         }
 
@@ -267,7 +340,9 @@ PulseApp.ui.backups = (() => {
             guestPveStatus: guest.status,
             latestBackupTime: displayTimestamp,
             pbsInstanceName: backupSource,
+            pbsInstanceTitle: backupSourceTitle,
             datastoreName: backupLocation,
+            datastoreTitle: backupLocationTitle,
             totalBackups: totalBackups,
             backupHealthStatus: healthStatus,
             last7DaysBackupStatus: last7DaysBackupStatus,
@@ -359,8 +434,8 @@ PulseApp.ui.backups = (() => {
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${latestBackupFormatted}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.pbsInstanceName}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.datastoreName}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400" ${guestStatus.pbsInstanceTitle ? `title="${guestStatus.pbsInstanceTitle}"` : ''}>${guestStatus.pbsInstanceName}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400" ${guestStatus.datastoreTitle ? `title="${guestStatus.datastoreTitle}"` : ''}>${guestStatus.datastoreName}</td>
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
             <td class="p-1 px-2 text-center">${snapshotCell}</td>
             <td class="p-1 px-2 whitespace-nowrap">${sevenDayDots}</td>
