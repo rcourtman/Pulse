@@ -13,11 +13,6 @@ setting_up_container
 network_check
 update_os
 
-msg_info "Installing Dependencies"
-$STD apt-get install -y \
-  gnupg
-msg_ok "Installed Dependencies"
-
 msg_info "Setup ${APPLICATION}"
 tmp_file=$(mktemp)
 RELEASE=$(curl -s https://api.github.com/repos/meilisearch/meilisearch/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
@@ -48,7 +43,7 @@ if [[ ${prompt,,} =~ ^(y|yes)$ ]]; then
   mkdir -p /opt/meilisearch-ui
   RELEASE_UI=$(curl -s https://api.github.com/repos/riccox/meilisearch-ui/releases/latest | grep "tag_name" | awk '{print substr($2, 2, length($2)-3) }')
   curl -fsSL "https://github.com/riccox/meilisearch-ui/archive/refs/tags/${RELEASE_UI}.zip" -o "$tmp_file"
-  unzip -q "$tmp_file" -d "$tmp_dir"
+  $STD unzip "$tmp_file" -d "$tmp_dir"
   mv "$tmp_dir"/*/* /opt/meilisearch-ui/
   cd /opt/meilisearch-ui
   sed -i 's|const hash = execSync("git rev-parse HEAD").toString().trim();|const hash = "unknown";|' /opt/meilisearch-ui/vite.config.ts
