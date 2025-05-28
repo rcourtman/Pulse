@@ -24,6 +24,22 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
 </details>
 
+### 📱 Mobile Screenshots
+
+<details>
+<summary><strong>Click to view mobile interface</strong></summary>
+
+**Mobile Dashboard:**
+![Mobile Dashboard](docs/images/05-mobile-dashboard.png)
+
+**Mobile PBS View:**
+![Mobile PBS View](docs/images/06-mobile-pbs-view.png)
+
+**Mobile Backups View:**
+![Mobile Backups View](docs/images/07-mobile-backups-view.png)
+
+</details>
+
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
 
 ## 🚀 Quick Start

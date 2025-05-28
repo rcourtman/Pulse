@@ -1569,7 +1569,12 @@ PulseApp.ui.pbs = (() => {
         // CPU and Memory with progress bars
         if (nodeStatus.cpu !== null && nodeStatus.cpu !== undefined) {
             const cpuPercent = nodeStatus.cpu * 100;
-            const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
+            const cpuColor = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
+            const cpuColorClass = {
+                red: 'bg-red-500/60 dark:bg-red-500/50',
+                yellow: 'bg-yellow-500/60 dark:bg-yellow-500/50',
+                green: 'bg-green-500/60 dark:bg-green-500/50'
+            }[cpuColor] || 'bg-gray-500/60 dark:bg-gray-500/50';
             
             const cpuDiv = document.createElement('div');
             cpuDiv.className = 'space-y-1';
@@ -1589,7 +1594,12 @@ PulseApp.ui.pbs = (() => {
             const memUsed = nodeStatus.memory.used;
             const memTotal = nodeStatus.memory.total;
             const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
-            const memColorClass = PulseApp.utils.getUsageColor(memPercent, 'memory');
+            const memColor = PulseApp.utils.getUsageColor(memPercent, 'memory');
+            const memColorClass = {
+                red: 'bg-red-500/60 dark:bg-red-500/50',
+                yellow: 'bg-yellow-500/60 dark:bg-yellow-500/50',
+                green: 'bg-green-500/60 dark:bg-green-500/50'
+            }[memColor] || 'bg-gray-500/60 dark:bg-gray-500/50';
             
             const memDiv = document.createElement('div');
             memDiv.className = 'space-y-1';
