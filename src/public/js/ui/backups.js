@@ -173,9 +173,15 @@ PulseApp.ui.backups = (() => {
         
         // Get guest snapshots from pveBackups
         const pveBackups = PulseApp.state.get('pveBackups') || {};
-        const guestSnapshotCount = (pveBackups.guestSnapshots || [])
-            .filter(snap => snap.vmid === guest.vmid)
+        const allSnapshots = pveBackups.guestSnapshots || [];
+        const guestSnapshotCount = allSnapshots
+            .filter(snap => parseInt(snap.vmid, 10) === parseInt(guest.vmid, 10))
             .length;
+        
+        // Debug logging for troubleshooting
+        if (guest.vmid === 100 || allSnapshots.some(s => s.vmid == 100)) {
+            console.log(`[Backups Debug] Guest ${guest.vmid}: Found ${guestSnapshotCount} snapshots out of ${allSnapshots.length} total`);
+        }
         
         // Use pre-filtered data instead of filtering large arrays
         const totalBackups = guestSnapshots ? guestSnapshots.length : 0;
@@ -244,35 +250,20 @@ PulseApp.ui.backups = (() => {
             return dailyStatus;
         });
 
-        // Determine backup source and location with support for multiple PBS instances
-        let backupSource = 'N/A';
-        let backupSourceTitle = '';
-        let backupLocation = 'N/A';
-        let backupLocationTitle = '';
+        // Calculate separate PBS and PVE backup information
+        let pbsBackupCount = 0;
+        let pbsBackupInfo = '';
+        let pveBackupCount = 0; 
+        let pveBackupInfo = '';
         
         if (guestSnapshots && guestSnapshots.length > 0) {
             // Separate PBS and PVE snapshots
             const pbsSnapshots = guestSnapshots.filter(s => s.source === 'pbs');
             const pveSnapshots = guestSnapshots.filter(s => s.source === 'pve');
             
-            if (pbsSnapshots.length > 0 && pveSnapshots.length > 0) {
-                // Mixed sources
-                backupSource = `Mixed (PBS+PVE)`;
-                backupSourceTitle = `${pbsSnapshots.length} PBS backups, ${pveSnapshots.length} PVE backups`;
-                
-                // For location, show both PBS datastores and PVE storages
-                const pbsDatastores = [...new Set(pbsSnapshots.map(s => s.datastoreName).filter(Boolean))];
-                const pveStorages = [...new Set(pveSnapshots.map(s => s.storage).filter(Boolean))];
-                const allLocations = [...pbsDatastores, ...pveStorages];
-                
-                if (allLocations.length === 1) {
-                    backupLocation = allLocations[0];
-                } else if (allLocations.length > 1) {
-                    backupLocation = `Multiple (${allLocations.length})`;
-                    backupLocationTitle = allLocations.join(', ');
-                }
-            } else if (pbsSnapshots.length > 0) {
-                // Only PBS backups - use enhanced PBS logic
+            // Calculate PBS backup information
+            if (pbsSnapshots.length > 0) {
+                pbsBackupCount = pbsSnapshots.length;
                 const pbsInstances = [...new Set(pbsSnapshots.map(s => s.pbsInstanceName).filter(Boolean))];
                 const datastores = [...new Set(pbsSnapshots.map(s => s.datastoreName).filter(Boolean))];
                 
@@ -291,44 +282,48 @@ PulseApp.ui.backups = (() => {
                 });
                 
                 if (pbsInstances.length === 1) {
-                    backupSource = pbsInstances[0];
+                    pbsBackupInfo = `${pbsInstances[0]} (${datastores.join(', ')})`;
                 } else if (pbsInstances.length > 1) {
-                    backupSource = `Multiple PBS (${pbsInstances.length})`;
                     const details = pbsInstances.map(pbs => {
                         const info = backupsByPbs[pbs];
-                        return `${pbs}: ${info.count} backups`;
-                    }).join(', ');
-                    backupSourceTitle = details;
+                        const dsArray = Array.from(info.datastores);
+                        return `${pbs}: ${info.count} on ${dsArray.join(', ')}`;
+                    }).join(' | ');
+                    pbsBackupInfo = details;
                 }
-                
-                if (datastores.length === 1) {
-                    backupLocation = datastores[0];
-                } else if (datastores.length > 1) {
-                    backupLocation = `Multiple (${datastores.length})`;
-                    backupLocationTitle = datastores.join(', ');
-                }
-            } else if (pveSnapshots.length > 0) {
-                // Only PVE backups
-                backupSource = 'PVE';
+            }
+            
+            // Calculate PVE backup information
+            if (pveSnapshots.length > 0) {
+                pveBackupCount = pveSnapshots.length;
                 const storages = [...new Set(pveSnapshots.map(s => s.storage).filter(Boolean))];
                 
                 if (storages.length === 1) {
-                    backupLocation = storages[0];
+                    pveBackupInfo = storages[0];
                 } else if (storages.length > 1) {
-                    backupLocation = `Multiple (${storages.length})`;
-                    backupLocationTitle = storages.join(', ');
+                    pveBackupInfo = storages.join(', ');
                 } else {
-                    backupLocation = 'Local';
+                    pveBackupInfo = 'Local storage';
                 }
             }
-        } else if (latestTask) {
-            // Fallback to task data if no snapshots
-            const source = latestTask.source;
-            if (source === 'pbs') {
-                backupSource = latestTask.pbsInstanceName || 'PBS';
-            } else if (source === 'pve') {
-                backupSource = 'PVE';
-                backupLocation = latestTask.node || 'Local';
+        }
+        
+        // Include task data for counts if no snapshots but tasks exist
+        if (guestTasks && guestTasks.length > 0) {
+            const pbsTasks = guestTasks.filter(t => t.source === 'pbs');
+            const pveTasks = guestTasks.filter(t => t.source === 'pve');
+            
+            if (pbsBackupCount === 0 && pbsTasks.length > 0) {
+                // No PBS snapshots but have PBS tasks - show as recent activity
+                const pbsInstances = [...new Set(pbsTasks.map(t => t.pbsInstanceName).filter(Boolean))];
+                if (pbsInstances.length > 0) {
+                    pbsBackupInfo = `Recent activity on ${pbsInstances.join(', ')}`;
+                }
+            }
+            
+            if (pveBackupCount === 0 && pveTasks.length > 0) {
+                // No PVE backups but have PVE tasks - show as recent activity
+                pveBackupInfo = 'Recent activity';
             }
         }
 
@@ -339,10 +334,10 @@ PulseApp.ui.backups = (() => {
             node: guest.node,
             guestPveStatus: guest.status,
             latestBackupTime: displayTimestamp,
-            pbsInstanceName: backupSource,
-            pbsInstanceTitle: backupSourceTitle,
-            datastoreName: backupLocation,
-            datastoreTitle: backupLocationTitle,
+            pbsBackups: pbsBackupCount,
+            pbsBackupInfo: pbsBackupInfo,
+            pveBackups: pveBackupCount,
+            pveBackupInfo: pveBackupInfo,
             totalBackups: totalBackups,
             backupHealthStatus: healthStatus,
             last7DaysBackupStatus: last7DaysBackupStatus,
@@ -416,14 +411,33 @@ PulseApp.ui.backups = (() => {
         }
         sevenDayDots += '</div>';
 
+        // Create PBS backup cell with visual indicator
+        let pbsBackupCell = '';
+        if (guestStatus.pbsBackups > 0) {
+            const pbsIcon = '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full mr-1" title="PBS Backup"></span>';
+            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${guestStatus.pbsBackupInfo ? `title="${guestStatus.pbsBackupInfo}"` : ''}>${pbsIcon}${guestStatus.pbsBackups}</span>`;
+        } else {
+            pbsBackupCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
+        }
+
+        // Create PVE backup cell with visual indicator  
+        let pveBackupCell = '';
+        if (guestStatus.pveBackups > 0) {
+            const pveIcon = '<span class="inline-block w-2 h-2 bg-orange-500 rounded-full mr-1" title="PVE Backup"></span>';
+            pveBackupCell = `<span class="text-orange-700 dark:text-orange-300" ${guestStatus.pveBackupInfo ? `title="${guestStatus.pveBackupInfo}"` : ''}>${pveIcon}${guestStatus.pveBackups}</span>`;
+        } else {
+            pveBackupCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
+        }
+
         // Create snapshot button or count display
         let snapshotCell = '';
         if (guestStatus.snapshotCount > 0) {
+            const snapshotIcon = '<span class="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1" title="VM/CT Snapshot"></span>';
             snapshotCell = `<button class="text-blue-600 dark:text-blue-400 hover:underline view-snapshots-btn" 
                 data-vmid="${guestStatus.guestId}" 
                 data-node="${guestStatus.node}"
                 data-endpoint="${guestStatus.endpointId}"
-                data-type="${guestStatus.guestType.toLowerCase()}">${guestStatus.snapshotCount}</button>`;
+                data-type="${guestStatus.guestType.toLowerCase()}">${snapshotIcon}${guestStatus.snapshotCount}</button>`;
         } else {
             snapshotCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }
@@ -434,9 +448,8 @@ PulseApp.ui.backups = (() => {
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${latestBackupFormatted}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400" ${guestStatus.pbsInstanceTitle ? `title="${guestStatus.pbsInstanceTitle}"` : ''}>${guestStatus.pbsInstanceName}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400" ${guestStatus.datastoreTitle ? `title="${guestStatus.datastoreTitle}"` : ''}>${guestStatus.datastoreName}</td>
-            <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
+            <td class="p-1 px-2 text-center">${pbsBackupCell}</td>
+            <td class="p-1 px-2 text-center">${pveBackupCell}</td>
             <td class="p-1 px-2 text-center">${snapshotCell}</td>
             <td class="p-1 px-2 whitespace-nowrap">${sevenDayDots}</td>
         `;
@@ -711,7 +724,7 @@ PulseApp.ui.backups = (() => {
         // Get snapshots from state
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         const snapshots = (pveBackups.guestSnapshots || [])
-            .filter(snap => snap.vmid === vmid)
+            .filter(snap => parseInt(snap.vmid, 10) === parseInt(vmid, 10))
             .sort((a, b) => (b.snaptime || 0) - (a.snaptime || 0));
         
         if (snapshots.length === 0) {

@@ -705,6 +705,10 @@ async function fetchGuestSnapshots(apiClient, endpointId, nodeName, vmid, type) 
         const response = await apiClient.get(`/nodes/${nodeName}/${endpoint}/${vmid}/snapshot`);
         const snapshots = response.data?.data || [];
         
+        if (snapshots.length > 0) {
+            console.log(`[DataFetcher] Found ${snapshots.length} snapshots for ${type} ${vmid} on node ${nodeName}`);
+        }
+        
         // Filter out the 'current' snapshot which is not a real snapshot
         return snapshots
             .filter(snap => snap.name !== 'current')
@@ -714,13 +718,16 @@ async function fetchGuestSnapshots(apiClient, endpointId, nodeName, vmid, type) 
                 snaptime: snap.snaptime,
                 vmstate: snap.vmstate || false,
                 parent: snap.parent,
-                vmid: vmid,
+                vmid: parseInt(vmid, 10),
                 type: type,
                 node: nodeName,
                 endpointId: endpointId
             }));
     } catch (error) {
         // Guest might not exist or snapshots not supported
+        if (error.response?.status !== 404) {
+            console.warn(`[DataFetcher] Error fetching snapshots for ${type} ${vmid}: ${error.message}`);
+        }
         return [];
     }
 }
@@ -931,7 +938,7 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
       pveBackups: pveBackups // Add PVE backup data
   };
 
-  console.log(`[DataFetcher] Discovery cycle completed. Found: ${aggregatedResult.nodes.length} PVE nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} CTs, ${aggregatedResult.pbs.length} PBS instances, ${pveBackups.backupTasks.length} PVE backup tasks.`);
+  console.log(`[DataFetcher] Discovery cycle completed. Found: ${aggregatedResult.nodes.length} PVE nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} CTs, ${aggregatedResult.pbs.length} PBS instances, ${pveBackups.backupTasks.length} PVE backup tasks, ${pveBackups.guestSnapshots.length} guest snapshots.`);
   
   return aggregatedResult;
 }
