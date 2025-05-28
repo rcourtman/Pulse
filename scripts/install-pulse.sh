@@ -82,7 +82,7 @@ print_warning() {
 }
 
 print_error() {
-  echo -e "\033[1;31m[ERROR]\033[0m $1 >&2"
+  echo -e "\033[1;31m[ERROR]\033[0m $1" >&2
 }
 
 check_root() {
