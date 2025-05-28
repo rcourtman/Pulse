@@ -414,6 +414,20 @@ check_installation_status_and_determine_action() {
                          4) INSTALL_MODE="cancel" ;;
                          *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                      esac
+                elif [ -n "$SPECIFIED_BRANCH" ]; then
+                    echo -e "Choose an action:"
+                    echo -e "  1) Install branch $SPECIFIED_BRANCH (for testing)"
+                    echo -e "  2) Remove Pulse"
+                    echo -e "  3) Cancel"
+                    echo -e "  4) Manage automatic updates"
+                    read -p "Enter your choice [1-4]: " user_choice
+                    case $user_choice in
+                        1) INSTALL_MODE="update" ;;
+                        2) INSTALL_MODE="remove" ;;
+                        3) INSTALL_MODE="cancel" ;;
+                        4) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
+                        *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+                    esac
                 else
                     echo -e "Choose an action:"
                     echo -e "  1) Manage automatic updates"
