@@ -152,7 +152,6 @@ const sections = [
 const mobileSections = [
     // Mobile Dashboard
     { name: '05-mobile-dashboard', 
-      fullPage: true,
       mobile: true,
       action: async (page) => {
           console.log('  Action: Waiting for mobile dashboard content to load...');
@@ -183,7 +182,6 @@ const mobileSections = [
 
     // Mobile Backups View
     { name: '07-mobile-backups-view',
-      screenshotTarget: '#backups',
       mobile: true,
       action: async (page) => {
         console.log('  Action: Clicking Backups tab (mobile)');
