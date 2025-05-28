@@ -584,6 +584,148 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
 }
 
 /**
+ * Fetches PVE backup tasks (vzdump) for a specific node.
+ * @param {Object} apiClient - The PVE API client instance.
+ * @param {string} endpointId - The endpoint identifier.
+ * @param {string} nodeName - The name of the node.
+ * @returns {Promise<Array>} - Array of backup task objects.
+ */
+async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
+    try {
+        const response = await apiClient.get(`/nodes/${nodeName}/tasks`, {
+            params: { 
+                typefilter: 'vzdump',
+                limit: 1000
+            }
+        });
+        const tasks = response.data?.data || [];
+        
+        // Calculate 30-day cutoff timestamp
+        const thirtyDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+        
+        // Filter to last 30 days and transform to match PBS backup task format
+        return tasks
+            .filter(task => task.starttime >= thirtyDaysAgo)
+            .map(task => {
+                // Extract guest info from task description or ID
+                let guestId = null;
+                let guestType = null;
+                
+                // Try to extract from task description (e.g., "vzdump VM 100")
+                const vmMatch = task.type?.match(/VM\s+(\d+)/i) || task.id?.match(/VM\s+(\d+)/i);
+                const ctMatch = task.type?.match(/CT\s+(\d+)/i) || task.id?.match(/CT\s+(\d+)/i);
+                
+                if (vmMatch) {
+                    guestId = vmMatch[1];
+                    guestType = 'vm';
+                } else if (ctMatch) {
+                    guestId = ctMatch[1];
+                    guestType = 'ct';
+                } else if (task.id) {
+                    // Try to extract from task ID format
+                    const idMatch = task.id.match(/vzdump-(\w+)-(\d+)/);
+                    if (idMatch) {
+                        guestType = idMatch[1] === 'qemu' ? 'vm' : 'ct';
+                        guestId = idMatch[2];
+                    }
+                }
+                
+                return {
+                    type: 'backup',
+                    status: task.status || 'unknown',
+                    starttime: task.starttime,
+                    endtime: task.endtime || (task.starttime + 60),
+                    node: nodeName,
+                    guest: guestId ? `${guestType}/${guestId}` : task.id,
+                    guestType: guestType,
+                    guestId: guestId,
+                    upid: task.upid,
+                    user: task.user || 'unknown',
+                    // PVE-specific fields
+                    pveBackupTask: true,
+                    endpointId: endpointId,
+                    taskType: 'vzdump'
+                };
+            });
+    } catch (error) {
+        console.error(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching PVE backup tasks: ${error.message}`);
+        return [];
+    }
+}
+
+/**
+ * Fetches storage content (backup files) for a specific storage.
+ * @param {Object} apiClient - The PVE API client instance.
+ * @param {string} endpointId - The endpoint identifier.
+ * @param {string} nodeName - The name of the node.
+ * @param {string} storage - The storage name.
+ * @returns {Promise<Array>} - Array of backup file objects.
+ */
+async function fetchStorageBackups(apiClient, endpointId, nodeName, storage) {
+    try {
+        const response = await apiClient.get(`/nodes/${nodeName}/storage/${storage}/content`, {
+            params: { content: 'backup' }
+        });
+        const backups = response.data?.data || [];
+        
+        // Transform to a consistent format
+        return backups.map(backup => ({
+            volid: backup.volid,
+            size: backup.size,
+            vmid: backup.vmid,
+            ctime: backup.ctime,
+            format: backup.format,
+            notes: backup.notes,
+            protected: backup.protected || false,
+            storage: storage,
+            node: nodeName,
+            endpointId: endpointId
+        }));
+    } catch (error) {
+        // Storage might not support backups or might be inaccessible
+        if (error.response?.status !== 501) { // 501 = not implemented
+            console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching backups from storage ${storage}: ${error.message}`);
+        }
+        return [];
+    }
+}
+
+/**
+ * Fetches VM/CT snapshots for a specific guest.
+ * @param {Object} apiClient - The PVE API client instance.
+ * @param {string} endpointId - The endpoint identifier.
+ * @param {string} nodeName - The name of the node.
+ * @param {string} vmid - The VM/CT ID.
+ * @param {string} type - 'qemu' or 'lxc'.
+ * @returns {Promise<Array>} - Array of snapshot objects.
+ */
+async function fetchGuestSnapshots(apiClient, endpointId, nodeName, vmid, type) {
+    try {
+        const endpoint = type === 'qemu' ? 'qemu' : 'lxc';
+        const response = await apiClient.get(`/nodes/${nodeName}/${endpoint}/${vmid}/snapshot`);
+        const snapshots = response.data?.data || [];
+        
+        // Filter out the 'current' snapshot which is not a real snapshot
+        return snapshots
+            .filter(snap => snap.name !== 'current')
+            .map(snap => ({
+                name: snap.name,
+                description: snap.description,
+                snaptime: snap.snaptime,
+                vmstate: snap.vmstate || false,
+                parent: snap.parent,
+                vmid: vmid,
+                type: type,
+                node: nodeName,
+                endpointId: endpointId
+            }));
+    } catch (error) {
+        // Guest might not exist or snapshots not supported
+        return [];
+    }
+}
+
+/**
  * Fetches and processes all data for configured PBS instances.
  * @param {Object} currentPbsApiClients - Initialized PBS API clients.
  * @returns {Promise<Array>} - Array of processed data objects for each PBS instance.
@@ -670,11 +812,90 @@ async function fetchPbsData(currentPbsApiClients) {
 }
 
 /**
+ * Fetches PVE backup data (backup tasks, storage backups, and snapshots).
+ * @param {Object} currentApiClients - Initialized PVE API clients.
+ * @param {Array} nodes - Array of node objects.
+ * @param {Array} vms - Array of VM objects.
+ * @param {Array} containers - Array of container objects.
+ * @returns {Promise<Object>} - { backupTasks, storageBackups, guestSnapshots }
+ */
+async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
+    const allBackupTasks = [];
+    const allStorageBackups = [];
+    const allGuestSnapshots = [];
+    
+    if (!nodes || nodes.length === 0) {
+        return { backupTasks: [], storageBackups: [], guestSnapshots: [] };
+    }
+    
+    // Fetch backup tasks and storage backups for each node
+    const nodeBackupPromises = nodes.map(async node => {
+        const endpointId = node.endpointId;
+        const nodeName = node.node;
+        
+        if (!currentApiClients[endpointId]) {
+            console.warn(`[DataFetcher] No API client found for endpoint: ${endpointId}`);
+            return;
+        }
+        
+        const { client: apiClient } = currentApiClients[endpointId];
+        
+        // Fetch backup tasks for this node
+        const backupTasks = await fetchPveBackupTasks(apiClient, endpointId, nodeName);
+        allBackupTasks.push(...backupTasks);
+        
+        // Fetch backups from each storage on this node
+        if (node.storage && Array.isArray(node.storage)) {
+            const storagePromises = node.storage
+                .filter(storage => storage.content && storage.content.includes('backup'))
+                .map(storage => fetchStorageBackups(apiClient, endpointId, nodeName, storage.storage));
+            
+            const storageResults = await Promise.allSettled(storagePromises);
+            storageResults.forEach(result => {
+                if (result.status === 'fulfilled' && result.value) {
+                    allStorageBackups.push(...result.value);
+                }
+            });
+        }
+    });
+    
+    // Fetch snapshots for all VMs and containers
+    const guestSnapshotPromises = [];
+    
+    [...vms, ...containers].forEach(guest => {
+        const endpointId = guest.endpointId;
+        const nodeName = guest.node;
+        const vmid = guest.vmid;
+        const type = guest.type || (vms.includes(guest) ? 'qemu' : 'lxc');
+        
+        if (currentApiClients[endpointId]) {
+            const { client: apiClient } = currentApiClients[endpointId];
+            guestSnapshotPromises.push(
+                fetchGuestSnapshots(apiClient, endpointId, nodeName, vmid, type)
+                    .then(snapshots => allGuestSnapshots.push(...snapshots))
+                    .catch(err => {
+                        // Silently handle errors for individual guests
+                    })
+            );
+        }
+    });
+    
+    // Wait for all promises to complete
+    await Promise.allSettled([...nodeBackupPromises, ...guestSnapshotPromises]);
+    
+    return {
+        backupTasks: allBackupTasks,
+        storageBackups: allStorageBackups,
+        guestSnapshots: allGuestSnapshots
+    };
+}
+
+/**
  * Fetches structural data: PVE nodes/VMs/CTs and all PBS data.
  * @param {Object} currentApiClients - Initialized PVE clients.
  * @param {Object} currentPbsApiClients - Initialized PBS clients.
  * @param {Function} [_fetchPbsDataInternal=fetchPbsData] - Internal override for testing.
- * @returns {Promise<Object>} - { nodes, vms, containers, pbs: pbsDataArray }
+ * @returns {Promise<Object>} - { nodes, vms, containers, pbs: pbsDataArray, pveBackups }
  */
 async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetchPbsDataInternal = fetchPbsData) {
   // console.log("[DataFetcher] Starting full discovery cycle...");
@@ -694,14 +915,23 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
       return [{ nodes: [], vms: [], containers: [] }, []]; 
   });
 
+  // Now fetch PVE backup data using the discovered nodes, VMs, and containers
+  const pveBackups = await fetchPveBackupData(
+      currentApiClients, 
+      pveResult.nodes || [], 
+      pveResult.vms || [], 
+      pveResult.containers || []
+  );
+
   const aggregatedResult = {
       nodes: pveResult.nodes || [],
       vms: pveResult.vms || [],
       containers: pveResult.containers || [],
-      pbs: pbsResult || [] // pbsResult is already the array we need
+      pbs: pbsResult || [], // pbsResult is already the array we need
+      pveBackups: pveBackups // Add PVE backup data
   };
 
-  console.log(`[DataFetcher] Discovery cycle completed. Found: ${aggregatedResult.nodes.length} PVE nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} CTs, ${aggregatedResult.pbs.length} PBS instances.`);
+  console.log(`[DataFetcher] Discovery cycle completed. Found: ${aggregatedResult.nodes.length} PVE nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} CTs, ${aggregatedResult.pbs.length} PBS instances, ${pveBackups.backupTasks.length} PVE backup tasks.`);
   
   return aggregatedResult;
 }

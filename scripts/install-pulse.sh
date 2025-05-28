@@ -434,6 +434,28 @@ check_installation_status_and_determine_action() {
                     TARGET_TAG="$latest_tag"
                 fi
             fi
+
+            if [ -n "$SPECIFIED_VERSION_TAG" ]; then
+                 if check_remote_tag_exists "$SPECIFIED_VERSION_TAG"; then
+                     TARGET_TAG="$SPECIFIED_VERSION_TAG"
+                     print_info "Will target specified version: $TARGET_TAG"
+                     INSTALL_MODE="update"
+                 else
+                     INSTALL_MODE="error"; cd ..; return
+                 fi
+            elif [ -n "$SPECIFIED_BRANCH" ]; then
+                print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
+                if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH"; then
+                    TARGET_BRANCH="$SPECIFIED_BRANCH"
+                    print_info "Will switch to branch: $TARGET_BRANCH"
+                    INSTALL_MODE="update"
+                else
+                    print_error "Remote branch '$SPECIFIED_BRANCH' not found."
+                    INSTALL_MODE="error"; cd ..; return
+                fi
+            else
+                TARGET_TAG="$latest_tag"
+            fi
             cd ..
 
             if [ "$INSTALL_MODE" = "uptodate" ]; then

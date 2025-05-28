@@ -63,35 +63,65 @@ PulseApp.ui.backups = (() => {
         if (window.innerWidth < 768) {
             _initMobileScrollIndicators();
         }
+        
+        // Initialize snapshot modal handlers
+        _initSnapshotModal();
     }
 
     function _getInitialBackupData() {
         const vmsData = PulseApp.state.get('vmsData') || [];
         const containersData = PulseApp.state.get('containersData') || [];
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+        const pveBackups = PulseApp.state.get('pveBackups') || {};
         const initialDataReceived = PulseApp.state.get('initialDataReceived');
         const allGuests = [...vmsData, ...containersData];
 
-        const allRecentBackupTasks = pbsDataArray.flatMap(pbs =>
+        // Combine PBS and PVE backup tasks
+        const pbsBackupTasks = pbsDataArray.flatMap(pbs =>
             (pbs.backupTasks?.recentTasks || []).map(task => ({
                 ...task,
                 guestId: task.id?.split('/')[1] || null,
                 guestTypePbs: task.id?.split('/')[0] || null,
-                pbsInstanceName: pbs.pbsInstanceName
+                pbsInstanceName: pbs.pbsInstanceName,
+                source: 'pbs'
             }))
         );
 
-        const allSnapshots = pbsDataArray.flatMap(pbsInstance =>
+        const pveBackupTasks = (pveBackups.backupTasks || []).map(task => ({
+            ...task,
+            guestId: task.guestId,
+            guestTypePbs: task.guestType,
+            startTime: task.starttime,
+            source: 'pve'
+        }));
+
+        const allRecentBackupTasks = [...pbsBackupTasks, ...pveBackupTasks];
+
+        // Combine PBS snapshots and PVE storage backups
+        const pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
             (pbsInstance.datastores || []).flatMap(ds =>
                 (ds.snapshots || []).map(snap => ({
                     ...snap,
                     pbsInstanceName: pbsInstance.pbsInstanceName,
                     datastoreName: ds.name,
                     backupType: snap['backup-type'],
-                    backupVMID: snap['backup-id']
+                    backupVMID: snap['backup-id'],
+                    source: 'pbs'
                 }))
             )
         );
+
+        const pveStorageBackups = (pveBackups.storageBackups || []).map(backup => ({
+            'backup-time': backup.ctime,
+            backupType: backup.vmid ? 'vm' : 'ct', // Guess based on context
+            backupVMID: backup.vmid,
+            size: backup.size,
+            protected: backup.protected,
+            storage: backup.storage,
+            source: 'pve'
+        }));
+
+        const allSnapshots = [...pbsSnapshots, ...pveStorageBackups];
 
         // Pre-index data by guest ID and type for performance
         const tasksByGuest = new Map();
@@ -140,6 +170,12 @@ PulseApp.ui.backups = (() => {
 
     function _determineGuestBackupStatus(guest, guestSnapshots, guestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo) {
         const guestId = String(guest.vmid);
+        
+        // Get guest snapshots from pveBackups
+        const pveBackups = PulseApp.state.get('pveBackups') || {};
+        const guestSnapshotCount = (pveBackups.guestSnapshots || [])
+            .filter(snap => snap.vmid === guest.vmid)
+            .length;
         
         // Use pre-filtered data instead of filtering large arrays
         const totalBackups = guestSnapshots ? guestSnapshots.length : 0;
@@ -208,6 +244,21 @@ PulseApp.ui.backups = (() => {
             return dailyStatus;
         });
 
+        // Determine backup source and location
+        let backupSource = 'N/A';
+        let backupLocation = 'N/A';
+        
+        if (latestSnapshot || latestTask) {
+            const source = latestSnapshot?.source || latestTask?.source;
+            if (source === 'pbs') {
+                backupSource = latestSnapshot?.pbsInstanceName || latestTask?.pbsInstanceName || 'PBS';
+                backupLocation = latestSnapshot?.datastoreName || 'N/A';
+            } else if (source === 'pve') {
+                backupSource = 'PVE';
+                backupLocation = latestSnapshot?.storage || latestTask?.node || 'Local';
+            }
+        }
+
         return {
             guestName: guest.name || `Guest ${guest.vmid}`,
             guestId: guest.vmid,
@@ -215,11 +266,13 @@ PulseApp.ui.backups = (() => {
             node: guest.node,
             guestPveStatus: guest.status,
             latestBackupTime: displayTimestamp,
-            pbsInstanceName: latestSnapshot?.pbsInstanceName || latestTask?.pbsInstanceName || 'N/A',
-            datastoreName: latestSnapshot?.datastoreName || 'N/A',
+            pbsInstanceName: backupSource,
+            datastoreName: backupLocation,
             totalBackups: totalBackups,
             backupHealthStatus: healthStatus,
-            last7DaysBackupStatus: last7DaysBackupStatus
+            last7DaysBackupStatus: last7DaysBackupStatus,
+            snapshotCount: guestSnapshotCount,
+            endpointId: guest.endpointId
         };
     }
 
@@ -288,6 +341,18 @@ PulseApp.ui.backups = (() => {
         }
         sevenDayDots += '</div>';
 
+        // Create snapshot button or count display
+        let snapshotCell = '';
+        if (guestStatus.snapshotCount > 0) {
+            snapshotCell = `<button class="text-blue-600 dark:text-blue-400 hover:underline view-snapshots-btn" 
+                data-vmid="${guestStatus.guestId}" 
+                data-node="${guestStatus.node}"
+                data-endpoint="${guestStatus.endpointId}"
+                data-type="${guestStatus.guestType.toLowerCase()}">${guestStatus.snapshotCount}</button>`;
+        } else {
+            snapshotCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
+        }
+
         row.innerHTML = `
             <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
@@ -297,6 +362,7 @@ PulseApp.ui.backups = (() => {
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.pbsInstanceName}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.datastoreName}</td>
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.totalBackups}</td>
+            <td class="p-1 px-2 text-center">${snapshotCell}</td>
             <td class="p-1 px-2 whitespace-nowrap">${sevenDayDots}</td>
         `;
         return row;
@@ -509,6 +575,114 @@ PulseApp.ui.backups = (() => {
 
         updateBackupsTab();
         PulseApp.state.saveFilterState(); // Save reset state
+    }
+
+    function _initSnapshotModal() {
+        const modal = document.getElementById('snapshot-modal');
+        const modalClose = document.getElementById('snapshot-modal-close');
+        const modalBody = document.getElementById('snapshot-modal-body');
+        const modalTitle = document.getElementById('snapshot-modal-title');
+        
+        if (!modal || !modalClose || !modalBody) {
+            console.warn('[Backups] Snapshot modal elements not found');
+            return;
+        }
+        
+        // Close modal on click outside or close button
+        modalClose.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        });
+        
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        });
+        
+        // Handle snapshot button clicks
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('view-snapshots-btn')) {
+                const vmid = e.target.dataset.vmid;
+                const node = e.target.dataset.node;
+                const endpoint = e.target.dataset.endpoint;
+                const type = e.target.dataset.type;
+                
+                _showSnapshotModal(vmid, node, endpoint, type);
+            }
+        });
+    }
+    
+    function _showSnapshotModal(vmid, node, endpoint, type) {
+        const modal = document.getElementById('snapshot-modal');
+        const modalBody = document.getElementById('snapshot-modal-body');
+        const modalTitle = document.getElementById('snapshot-modal-title');
+        
+        if (!modal || !modalBody || !modalTitle) return;
+        
+        // Get guest info
+        const vmsData = PulseApp.state.get('vmsData') || [];
+        const containersData = PulseApp.state.get('containersData') || [];
+        const guest = [...vmsData, ...containersData].find(g => g.vmid === vmid);
+        const guestName = guest?.name || `Guest ${vmid}`;
+        
+        modalTitle.textContent = `Snapshots for ${guestName} (${type.toUpperCase()} ${vmid})`;
+        modalBody.innerHTML = '<p class="text-gray-500 dark:text-gray-400">Loading snapshots...</p>';
+        
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        // Get snapshots from state
+        const pveBackups = PulseApp.state.get('pveBackups') || {};
+        const snapshots = (pveBackups.guestSnapshots || [])
+            .filter(snap => snap.vmid === vmid)
+            .sort((a, b) => (b.snaptime || 0) - (a.snaptime || 0));
+        
+        if (snapshots.length === 0) {
+            modalBody.innerHTML = '<p class="text-gray-500 dark:text-gray-400">No snapshots found for this guest.</p>';
+            return;
+        }
+        
+        // Build snapshot table
+        let html = `
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Name</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Created</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Description</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">RAM</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+        `;
+        
+        snapshots.forEach(snap => {
+            const created = snap.snaptime 
+                ? new Date(snap.snaptime * 1000).toLocaleString()
+                : 'Unknown';
+            const hasRam = snap.vmstate ? 'Yes' : 'No';
+            const description = snap.description || '-';
+            
+            html += `
+                <tr>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">${snap.name}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${created}</td>
+                    <td class="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">${description}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${hasRam}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        modalBody.innerHTML = html;
     }
 
     return {

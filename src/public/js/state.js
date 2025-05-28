@@ -10,6 +10,11 @@ PulseApp.state = (() => {
         metricsData: [],
         dashboardData: [],
         pbsDataArray: [],
+        pveBackups: { // Add PVE backup data
+            backupTasks: [],
+            storageBackups: [],
+            guestSnapshots: []
+        },
         dashboardHistory: {},
         initialDataReceived: false,
         
@@ -133,7 +138,7 @@ PulseApp.state = (() => {
             });
             
             // Check what actually changed using hashing
-            const dataTypes = ['nodes', 'vms', 'containers', 'metrics', 'pbs'];
+            const dataTypes = ['nodes', 'vms', 'containers', 'metrics', 'pbs', 'pveBackups'];
             
             dataTypes.forEach(type => {
                 if (newData[type]) {
@@ -162,6 +167,9 @@ PulseApp.state = (() => {
                                 break;
                             case 'pbs':
                                 internalState.pbsDataArray = newData.pbs;
+                                break;
+                            case 'pveBackups':
+                                internalState.pveBackups = newData.pveBackups;
                                 break;
                         }
                     }
