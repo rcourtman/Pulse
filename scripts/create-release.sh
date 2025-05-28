@@ -34,8 +34,8 @@ mkdir -p "$STAGING_FULL_PATH"
 # --- Build Step ---
 echo "Building CSS..."
 npm run build:css
-if [ ! -f "src/public/output.css" ]; then
-    echo "Error: src/public/output.css not found after build. Aborting."
+if [ ! -f "src/index.css" ]; then
+    echo "Error: src/index.css not found after build. Aborting."
     exit 1
 fi
 
@@ -46,10 +46,15 @@ echo "Copying application files to $STAGING_FULL_PATH..."
 echo "Copying server files..."
 rsync -av --progress server/ "$STAGING_FULL_PATH/server/" --exclude 'tests/'
 
-# Public files (including built CSS and other assets)
-echo "Copying public files..."
+# Source files (including built CSS, Tailwind config, and public assets)
+echo "Copying source files..."
 mkdir -p "$STAGING_FULL_PATH/src" # Ensure parent directory exists
 rsync -av --progress src/public/ "$STAGING_FULL_PATH/src/public/"
+
+# Copy CSS build files and config
+cp src/index.css "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/index.css not found"
+cp src/tailwind.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/tailwind.config.js not found"
+cp src/postcss.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/postcss.config.js not found"
 
 # Root files
 echo "Copying root files..."
@@ -82,6 +87,22 @@ echo "Installing production dependencies in $STAGING_FULL_PATH..."
 # --ignore-scripts prevents any package's own postinstall scripts from running during this build phase.
 # If your production dependencies have essential postinstall scripts, you might remove --ignore-scripts.
 
+# --- Verify Essential Files ---
+echo "Verifying essential files for tarball installation..."
+MISSING_FILES=""
+[ ! -f "$STAGING_FULL_PATH/package.json" ] && MISSING_FILES="$MISSING_FILES package.json"
+[ ! -f "$STAGING_FULL_PATH/.env.example" ] && MISSING_FILES="$MISSING_FILES .env.example"
+[ ! -f "$STAGING_FULL_PATH/server/index.js" ] && MISSING_FILES="$MISSING_FILES server/index.js"
+[ ! -f "$STAGING_FULL_PATH/src/index.css" ] && MISSING_FILES="$MISSING_FILES src/index.css"
+[ ! -d "$STAGING_FULL_PATH/node_modules" ] && MISSING_FILES="$MISSING_FILES node_modules/"
+
+if [ -n "$MISSING_FILES" ]; then
+    echo "Error: Missing essential files for tarball installation:$MISSING_FILES"
+    echo "The install script expects these files to be present in the tarball."
+    exit 1
+fi
+echo "✅ All essential files verified for tarball installation."
+
 # --- Create Tarball ---
 echo "Creating tarball: $TARBALL_NAME..."
 # Go into the parent of the directory to be tarred to avoid leading paths in tarball
@@ -95,11 +116,23 @@ echo ""
 echo "----------------------------------------------------"
 echo "Release tarball created: $TARBALL_NAME"
 echo "----------------------------------------------------"
-echo "To use the tarball:"
-echo "1. Copy $TARBALL_NAME to the target server."
-echo "2. Extract: tar -xzf $TARBALL_NAME"
-echo "3. Navigate into the directory: cd $RELEASE_DIR_NAME"
-echo "4. Copy .env.example to .env and configure it: cp .env.example .env"
-echo "5. Start the application: npm start (or node server/index.js)"
-echo "   (If scripts/install-pulse.sh is provided, consult it for specific setup steps)"
+echo "📦 This tarball includes:"
+echo "   ✅ Pre-built CSS assets"
+echo "   ✅ Production npm dependencies"
+echo "   ✅ All server and client files"
+echo "   ✅ Installation scripts"
+echo ""
+echo "🚀 Installation options:"
+echo "1. RECOMMENDED: Use the install script (faster, automated):"
+echo "   curl -sLO https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
+echo "   chmod +x install-pulse.sh"
+echo "   sudo ./install-pulse.sh"
+echo "   (The script will automatically use this tarball for faster installation)"
+echo ""
+echo "2. Manual installation:"
+echo "   - Copy $TARBALL_NAME to target server"
+echo "   - Extract: tar -xzf $TARBALL_NAME"
+echo "   - Navigate: cd $RELEASE_DIR_NAME"
+echo "   - Configure: cp .env.example .env && edit .env"
+echo "   - Start: npm start"
 echo "----------------------------------------------------"

@@ -296,6 +296,251 @@ get_current_local_tag() {
     echo "$current_tag"
 }
 
+check_release_exists() {
+    local tag_to_check=$1
+    if [ -z "$tag_to_check" ]; then return 1; fi
+    
+    print_info "Checking if release '$tag_to_check' has available assets..."
+    local release_url="https://api.github.com/repos/rcourtman/Pulse/releases/tags/$tag_to_check"
+    
+    if command -v curl >/dev/null 2>&1; then
+        if curl -sSf "$release_url" >/dev/null 2>&1; then
+            print_info "Release '$tag_to_check' found with assets."
+            return 0
+        fi
+    fi
+    
+    print_warning "Release '$tag_to_check' not found or no assets available."
+    return 1
+}
+
+download_and_extract_tarball() {
+    local tag=$1
+    local target_dir=$2
+    
+    if [ -z "$tag" ] || [ -z "$target_dir" ]; then
+        print_error "download_and_extract_tarball: Missing required parameters."
+        return 1
+    fi
+    
+    local tarball_url="https://github.com/rcourtman/Pulse/archive/refs/tags/$tag.tar.gz"
+    local temp_tarball="/tmp/pulse-$tag.tar.gz"
+    local temp_extract_dir="/tmp/pulse-extract-$$"
+    
+    print_info "Downloading Pulse $tag tarball..."
+    if ! curl -sL "$tarball_url" -o "$temp_tarball"; then
+        print_error "Failed to download tarball from $tarball_url"
+        return 1
+    fi
+    
+    print_info "Extracting tarball..."
+    mkdir -p "$temp_extract_dir"
+    if ! tar -xzf "$temp_tarball" -C "$temp_extract_dir" --strip-components=1; then
+        print_error "Failed to extract tarball"
+        rm -f "$temp_tarball"
+        rm -rf "$temp_extract_dir"
+        return 1
+    fi
+    
+    # Create target directory if it doesn't exist
+    if [ ! -d "$target_dir" ]; then
+        mkdir -p "$target_dir"
+        chown "$PULSE_USER":"$PULSE_USER" "$target_dir"
+    fi
+    
+    # Move extracted content to target directory
+    print_info "Installing files to $target_dir..."
+    if ! cp -r "$temp_extract_dir"/* "$target_dir/"; then
+        print_error "Failed to copy files to target directory"
+        rm -f "$temp_tarball"
+        rm -rf "$temp_extract_dir"
+        return 1
+    fi
+    
+    # Set proper ownership
+    chown -R "$PULSE_USER":"$PULSE_USER" "$target_dir"
+    
+    # Cleanup
+    rm -f "$temp_tarball"
+    rm -rf "$temp_extract_dir"
+    
+    print_success "Tarball extracted and installed successfully."
+    return 0
+}
+
+perform_tarball_update() {
+    if [ -z "$TARGET_TAG" ]; then
+        print_error "Target version tag not determined. Cannot update via tarball."
+        return 1
+    fi
+    
+    print_info "Attempting to update Pulse to version $TARGET_TAG using tarball..."
+    
+    local script_backup_path="/tmp/${SCRIPT_NAME}.bak"
+    if [ -n "$SCRIPT_ABS_PATH" ] && [ -f "$SCRIPT_ABS_PATH" ]; then
+        print_info "Backing up current installer script to $script_backup_path..."
+        if cp "$SCRIPT_ABS_PATH" "$script_backup_path"; then
+             print_success "Installer script backed up."
+        else
+             print_warning "Failed to back up installer script."
+             script_backup_path=""
+        fi
+    else
+        script_backup_path=""
+    fi
+
+    # Check if release exists before proceeding
+    if ! check_release_exists "$TARGET_TAG"; then
+        print_warning "Release tarball not available for $TARGET_TAG, falling back to git..."
+        [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
+        return 1
+    fi
+    
+    # Backup current installation directory
+    local backup_dir="/tmp/pulse-backup-$(date +%s)"
+    if [ -d "$PULSE_DIR" ]; then
+        print_info "Backing up current installation..."
+        if ! cp -r "$PULSE_DIR" "$backup_dir"; then
+            print_warning "Failed to backup current installation, continuing anyway..."
+        fi
+    fi
+    
+    # Download and extract new version
+    if download_and_extract_tarball "$TARGET_TAG" "$PULSE_DIR"; then
+        cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; return 1; }
+        
+        # Restore installer script if we backed it up
+        if [ -n "$script_backup_path" ] && [ -f "$script_backup_path" ]; then
+            print_info "Restoring potentially updated installer script from backup..."
+            if cp "$script_backup_path" "$PULSE_DIR/scripts/$SCRIPT_NAME"; then
+                print_success "Installer script restored."
+            fi
+            rm -f "$script_backup_path"
+        fi
+        
+        # The tarball should already include built assets, but ensure permissions are correct
+        print_info "Setting permissions for $PULSE_DIR..."
+        chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR"
+        chmod +x "$PULSE_DIR/scripts/$SCRIPT_NAME" 2>/dev/null || true
+        
+        # Check if node_modules exists in tarball, if not, install dependencies
+        if [ ! -d "$PULSE_DIR/node_modules" ]; then
+            print_info "Installing NPM dependencies in $PULSE_DIR (root project directory)..."
+            if npm install --omit=dev --silent >/dev/null 2>&1; then
+                print_success "NPM dependencies installed successfully in $PULSE_DIR."
+            else
+                print_error "Failed to install NPM dependencies in $PULSE_DIR."
+                if [ -d "$backup_dir" ]; then
+                    print_info "Restoring from backup..."
+                    rm -rf "$PULSE_DIR"
+                    mv "$backup_dir" "$PULSE_DIR"
+                fi
+                return 1
+            fi
+        else
+            print_info "NPM dependencies already present in tarball."
+        fi
+        
+        # Always check if CSS assets need building for tarball updates
+        print_info "Verifying CSS assets in $PULSE_DIR..."
+        if [ ! -f "$PULSE_DIR/src/index.css" ]; then
+            print_info "CSS file missing, building CSS assets..."
+            if npm run build:css --silent >/dev/null 2>&1; then
+                print_success "CSS assets built successfully."
+            else
+                print_warning "Failed to build CSS assets. Frontend may not display correctly."
+            fi
+        elif [ -f "$PULSE_DIR/src/tailwind.config.js" ] && [ "$PULSE_DIR/src/tailwind.config.js" -nt "$PULSE_DIR/src/index.css" ]; then
+            print_info "CSS assets outdated, rebuilding..."
+            if npm run build:css --silent >/dev/null 2>&1; then
+                print_success "CSS assets built successfully."
+            else
+                print_warning "Failed to rebuild CSS assets. Using existing CSS file."
+            fi
+        else
+            print_info "CSS assets already present and up-to-date."
+        fi
+        
+        # Cleanup backup if successful
+        [ -d "$backup_dir" ] && rm -rf "$backup_dir"
+        
+        print_success "Tarball update completed successfully."
+        return 0
+    else
+        print_error "Failed to download/extract tarball."
+        
+        # Restore backup if available
+        if [ -d "$backup_dir" ]; then
+            print_info "Restoring from backup..."
+            rm -rf "$PULSE_DIR"
+            mv "$backup_dir" "$PULSE_DIR"
+        fi
+        
+        [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
+        return 1
+    fi
+}
+
+perform_tarball_install() {
+    if [ -z "$TARGET_TAG" ]; then
+        print_error "Target version tag not determined. Cannot install via tarball."
+        return 1
+    fi
+    
+    print_info "Installing Pulse $TARGET_TAG using tarball..."
+    
+    # Check if release exists before proceeding
+    if ! check_release_exists "$TARGET_TAG"; then
+        print_warning "Release tarball not available for $TARGET_TAG, falling back to git..."
+        return 1
+    fi
+    
+    # Download and extract
+    if download_and_extract_tarball "$TARGET_TAG" "$PULSE_DIR"; then
+        cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; return 1; }
+        
+        # The tarball should already include built assets, but check if we need to install dependencies
+        if [ ! -d "$PULSE_DIR/node_modules" ]; then
+            print_info "Installing NPM dependencies in $PULSE_DIR (root project directory)..."
+            if npm install --omit=dev --silent >/dev/null 2>&1; then
+                print_success "NPM dependencies installed successfully in $PULSE_DIR."
+            else
+                print_error "Failed to install NPM dependencies in $PULSE_DIR."
+                return 1
+            fi
+        else
+            print_info "NPM dependencies already present in tarball."
+        fi
+        
+        # Always check if CSS assets need building for tarball installs
+        print_info "Verifying CSS assets in $PULSE_DIR..."
+        if [ ! -f "$PULSE_DIR/src/index.css" ]; then
+            print_info "CSS file missing, building CSS assets..."
+            if npm run build:css --silent >/dev/null 2>&1; then
+                print_success "CSS assets built successfully."
+            else
+                print_error "Failed to build CSS assets."
+                return 1
+            fi
+        elif [ -f "$PULSE_DIR/src/tailwind.config.js" ] && [ "$PULSE_DIR/src/tailwind.config.js" -nt "$PULSE_DIR/src/index.css" ]; then
+            print_info "CSS assets outdated, rebuilding..."
+            if npm run build:css --silent >/dev/null 2>&1; then
+                print_success "CSS assets built successfully."
+            else
+                print_warning "Failed to rebuild CSS assets. Using existing CSS file."
+            fi
+        else
+            print_info "CSS assets already present and up-to-date."
+        fi
+        
+        print_success "Tarball installation completed successfully."
+        return 0
+    else
+        print_error "Failed to install from tarball."
+        return 1
+    fi
+}
+
 prompt_for_branch_selection() {
     print_info "Fetching available feature branches..."
     local branches
@@ -381,8 +626,15 @@ check_installation_status_and_determine_action() {
                 fi
                 cd ..
             else
-                 print_error "Cannot determine latest version tag: Pulse directory $PULSE_DIR not found."
-                 INSTALL_MODE="error"; return
+                 print_info "Pulse directory $PULSE_DIR not found. Switching to installation mode."
+                 INSTALL_MODE="install"
+                 # Determine latest tag for fresh installation
+                 TARGET_TAG=$(git ls-remote --tags --sort='-version:refname' https://github.com/rcourtman/Pulse.git | grep 'refs/tags/v' | head -n 1 | sed 's/.*refs\/tags\///' | sed 's/\^{}.*//')
+                 if [ -z "$TARGET_TAG" ]; then
+                     print_error "Could not determine latest release tag for installation."
+                     INSTALL_MODE="error"; return
+                 fi
+                 print_info "Will install latest version: $TARGET_TAG"
             fi
         fi
         return 0
@@ -753,8 +1005,17 @@ perform_update() {
         return 1
     fi
     
+    # For version tags, try tarball first, then fall back to git
     if [ -n "$TARGET_TAG" ]; then
         print_info "Attempting to update Pulse to version $TARGET_TAG..."
+        
+        # Try tarball update first
+        if perform_tarball_update; then
+            return 0
+        fi
+        
+        # Fall back to git update
+        print_info "Tarball update failed, falling back to git update..."
     else
         print_info "Attempting to update Pulse to branch $TARGET_BRANCH..."
         print_warning "⚠️  Branch installations are for testing only and may be unstable!"
@@ -1512,63 +1773,91 @@ case "$INSTALL_MODE" in
                  fi
             fi
 
-            print_info "Cloning Pulse repository into $PULSE_DIR..."
-            if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
-                print_success "Repository cloned successfully."
-                cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR after clone."; exit 1; }
-                chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR" || print_warning "Failed initial chown after clone."
-            else
-                print_error "Failed to clone repository."
-                exit 1
-            fi
-
+            # For branch installations, use git clone
             if [ -n "$TARGET_BRANCH" ]; then
-                print_info "Checking out branch '$TARGET_BRANCH'..."
-                if ! sudo -u "$PULSE_USER" git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"; then
-                     print_error "Failed to checkout branch '$TARGET_BRANCH' after cloning."
-                     cd ..; exit 1
+                print_info "Cloning Pulse repository into $PULSE_DIR for branch installation..."
+                if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
+                    print_success "Repository cloned successfully."
+                    cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR after clone."; exit 1; }
+                    chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR" || print_warning "Failed initial chown after clone."
+                    
+                    print_info "Checking out branch '$TARGET_BRANCH'..."
+                    if ! sudo -u "$PULSE_USER" git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"; then
+                         print_error "Failed to checkout branch '$TARGET_BRANCH' after cloning."
+                         cd ..; exit 1
+                    fi
+                    print_success "Checked out branch $TARGET_BRANCH."
+                    print_warning "⚠️  Branch installation is for testing only and may be unstable!"
+                else
+                    print_error "Failed to clone repository."
+                    exit 1
                 fi
-                print_success "Checked out branch $TARGET_BRANCH."
-                print_warning "⚠️  Branch installation is for testing only and may be unstable!"
-            elif [ -z "$TARGET_TAG" ]; then
-                TARGET_TAG=$(get_latest_remote_tag)
-                if [ $? -ne 0 ] || [ -z "$TARGET_TAG" ]; then
-                     print_error "Could not determine latest release tag to install."
-                     cd ..; exit 1
-                fi
-                print_info "Determined latest version tag: $TARGET_TAG"
-                
-                print_info "Checking out target version tag '$TARGET_TAG'..."
-                if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
-                     print_error "Failed to checkout tag '$TARGET_TAG' after cloning."
-                     cd ..; exit 1
-                fi
-                print_success "Checked out version $TARGET_TAG."
             else
-                print_info "Checking out target version tag '$TARGET_TAG'..."
-                if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
-                     print_error "Failed to checkout tag '$TARGET_TAG' after cloning."
-                     cd ..; exit 1
+                # For version tag installations, try tarball first
+                if [ -z "$TARGET_TAG" ]; then
+                    # Need to determine latest tag - use git ls-remote for this
+                    print_info "Determining latest release version..."
+                    latest_tag=$(git ls-remote --tags --sort='-version:refname' https://github.com/rcourtman/Pulse.git | grep 'refs/tags/v' | head -n 1 | sed 's/.*refs\/tags\///' | sed 's/\^{}.*//')
+                    if [ -z "$latest_tag" ]; then
+                         print_error "Could not determine latest release tag to install."
+                         exit 1
+                    fi
+                    TARGET_TAG="$latest_tag"
+                    print_info "Determined latest version tag: $TARGET_TAG"
                 fi
-                print_success "Checked out version $TARGET_TAG."
+                
+                # Try tarball installation first
+                TARBALL_INSTALL_SUCCESS=false
+                if perform_tarball_install; then
+                    print_info "Installation completed using tarball."
+                    TARBALL_INSTALL_SUCCESS=true
+                else
+                    # Fall back to git clone
+                    print_info "Tarball installation failed, falling back to git clone..."
+                    
+                    print_info "Cloning Pulse repository into $PULSE_DIR..."
+                    if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
+                        print_success "Repository cloned successfully."
+                        cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR after clone."; exit 1; }
+                        chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR" || print_warning "Failed initial chown after clone."
+                        
+                        print_info "Checking out target version tag '$TARGET_TAG'..."
+                        if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
+                             print_error "Failed to checkout tag '$TARGET_TAG' after cloning."
+                             cd ..; exit 1
+                        fi
+                        print_success "Checked out version $TARGET_TAG."
+                    else
+                        print_error "Failed to clone repository."
+                        exit 1
+                    fi
+                fi
             fi
             cd ..
 
-            print_info "Installing NPM dependencies in $PULSE_DIR..."
-            cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before npm install"; exit 1; }
-            if ! npm install --unsafe-perm --silent; then
-                print_error "Failed to install NPM dependencies. See output above."
-                exit 1
+            # Skip npm install and CSS build if tarball installation was successful
+            # (tarball should already include these)
+            if [ "$TARBALL_INSTALL_SUCCESS" != "true" ]; then
+                print_info "Installing NPM dependencies in $PULSE_DIR..."
+                cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before npm install"; exit 1; }
+                if ! npm install --unsafe-perm --silent; then
+                    print_error "Failed to install NPM dependencies. See output above."
+                    exit 1
+                else
+                    print_success "NPM dependencies installed."
+                fi
+                
+                print_info "Building CSS assets in $PULSE_DIR..."
+                if ! npm run build:css --silent; then
+                    print_error "Failed to build CSS assets. See output above."
+                    exit 1
+                else
+                    print_success "CSS assets built."
+                fi
             else
-                print_success "NPM dependencies installed."
-            fi
-            
-            print_info "Building CSS assets in $PULSE_DIR..."
-            if ! npm run build:css --silent; then
-                print_error "Failed to build CSS assets. See output above."
-                exit 1
-            else
-                print_success "CSS assets built."
+                # Ensure we're in the right directory for subsequent operations
+                cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR"; exit 1; }
+                print_info "Skipping npm install and CSS build (already included in tarball)."
             fi
 
             set_permissions || exit 1
