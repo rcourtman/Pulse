@@ -119,14 +119,12 @@ PulseApp.ui.storage = (() => {
         }
 
         const contentTypes = contentString.split(',').map(ct => ct.trim()).filter(ct => ct);
-        contentTypes.sort();
         
-        const contentBadges = contentTypes.map(ct => {
-            const details = getContentBadgeDetails(ct);
-            return `<span data-tooltip="${details.tooltip}" class="storage-tooltip-trigger inline-block ${details.badgeClass} rounded px-1.5 py-0.5 text-xs font-medium mr-1 cursor-default">${ct}</span>`;
-        }).join('');
-
-        const result = contentBadges || '-';
+        // Simplify display - just show comma-separated list with subtle styling
+        const result = contentTypes.length > 0 
+            ? `<span class="text-gray-500 dark:text-gray-400">${contentTypes.join(', ')}</span>`
+            : '-';
+            
         contentBadgeHTMLCache.set(contentString, result);
         return result;
     }
@@ -140,6 +138,89 @@ PulseApp.ui.storage = (() => {
             return nameA.localeCompare(nameB);
         });
         return sortedArray;
+    }
+
+    let currentSortOrder = 'name'; // 'name', 'usage-asc', 'usage-desc'
+
+    function calculateStorageSummary(nodes) {
+        let totalUsed = 0;
+        let totalAvailable = 0;
+        let totalCapacity = 0;
+        let storageCount = 0;
+        let criticalCount = 0;
+        let warningCount = 0;
+
+        nodes.forEach(node => {
+            if (node && node.storage && Array.isArray(node.storage)) {
+                node.storage.forEach(store => {
+                    if (store.enabled !== 0 && store.active !== 0) {
+                        totalUsed += store.used || 0;
+                        totalAvailable += store.avail || 0;
+                        totalCapacity += store.total || 0;
+                        storageCount++;
+                        
+                        const usagePercent = store.total > 0 ? (store.used / store.total) * 100 : 0;
+                        if (usagePercent >= 90) criticalCount++;
+                        else if (usagePercent >= 80) warningCount++;
+                    }
+                });
+            }
+        });
+
+        return {
+            totalUsed,
+            totalAvailable,
+            totalCapacity,
+            storageCount,
+            criticalCount,
+            warningCount,
+            usagePercent: totalCapacity > 0 ? (totalUsed / totalCapacity) * 100 : 0
+        };
+    }
+
+    function createStorageSummaryCard(summary) {
+        const usageColorClass = PulseApp.utils.getUsageColor(summary.usagePercent);
+        
+        return `
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div class="flex-1">
+                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Storage Summary</h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                            <div>
+                                <div class="text-gray-500 dark:text-gray-400">Total Storage</div>
+                                <div class="font-medium text-gray-900 dark:text-gray-100">${summary.storageCount}</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-500 dark:text-gray-400">Total Capacity</div>
+                                <div class="font-medium text-gray-900 dark:text-gray-100">${PulseApp.utils.formatBytes(summary.totalCapacity)}</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-500 dark:text-gray-400">Used</div>
+                                <div class="font-medium text-gray-900 dark:text-gray-100">${PulseApp.utils.formatBytes(summary.totalUsed)}</div>
+                            </div>
+                            <div>
+                                <div class="text-gray-500 dark:text-gray-400">Available</div>
+                                <div class="font-medium text-gray-900 dark:text-gray-100">${PulseApp.utils.formatBytes(summary.totalAvailable)}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex-1 max-w-sm">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="text-xs text-gray-600 dark:text-gray-400">Overall Usage</span>
+                            <span class="text-xs font-medium ${usageColorClass}">${summary.usagePercent.toFixed(1)}%</span>
+                        </div>
+                        ${PulseApp.utils.createProgressTextBarHTML(summary.usagePercent, '', usageColorClass, '')}
+                        ${summary.criticalCount > 0 || summary.warningCount > 0 ? `
+                            <div class="flex gap-3 mt-2 text-xs">
+                                ${summary.criticalCount > 0 ? `<span class="text-red-600 dark:text-red-400">● ${summary.criticalCount} critical</span>` : ''}
+                                ${summary.warningCount > 0 ? `<span class="text-yellow-600 dark:text-yellow-400">● ${summary.warningCount} warning</span>` : ''}
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     function updateStorageInfo() {
@@ -171,11 +252,32 @@ PulseApp.ui.storage = (() => {
             return;
         }
 
-        // Pre-sort storage data for each node to avoid repeated sorting
+        const container = document.createElement('div');
+
+        // Pre-sort storage data for each node
         const storageByNode = nodes.reduce((acc, node) => {
             if (node && node.node) {
-                const storageData = Array.isArray(node.storage) ? node.storage : [];
-                acc[node.node] = sortNodeStorageData(storageData);
+                let storageData = Array.isArray(node.storage) ? [...node.storage] : [];
+                
+                // Apply current sort order
+                if (currentSortOrder === 'usage-desc') {
+                    storageData.sort((a, b) => {
+                        const percentA = a.total > 0 ? (a.used / a.total) * 100 : 0;
+                        const percentB = b.total > 0 ? (b.used / b.total) * 100 : 0;
+                        return percentB - percentA; // Descending
+                    });
+                } else if (currentSortOrder === 'usage-asc') {
+                    storageData.sort((a, b) => {
+                        const percentA = a.total > 0 ? (a.used / a.total) * 100 : 0;
+                        const percentB = b.total > 0 ? (b.used / b.total) * 100 : 0;
+                        return percentA - percentB; // Ascending
+                    });
+                } else {
+                    // Default name sort
+                    storageData = sortNodeStorageData(storageData);
+                }
+                
+                acc[node.node] = storageData;
             }
             return acc;
         }, {});
@@ -184,34 +286,66 @@ PulseApp.ui.storage = (() => {
 
         if (nodeKeys.length === 0) {
           if (PulseApp.ui.emptyStates) {
-              contentDiv.innerHTML = PulseApp.ui.emptyStates.createEmptyState('no-storage');
+              container.innerHTML += PulseApp.ui.emptyStates.createEmptyState('no-storage');
           } else {
-              contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data found associated with nodes.</p>';
+              container.innerHTML += '<p class="text-gray-500 dark:text-gray-400 p-4 text-center">No storage data found associated with nodes.</p>';
           }
+          contentDiv.appendChild(container);
           return;
         }
 
+        const sortedNodeNames = Object.keys(storageByNode).sort((a, b) => a.localeCompare(b));
+
+        // Add node storage summary cards
+        const summaryCardsContainer = document.createElement('div');
+        summaryCardsContainer.className = 'mb-3';
+        
+        const cardsGrid = document.createElement('div');
+        cardsGrid.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3';
+        
+        sortedNodeNames.forEach(nodeName => {
+            const nodeStorageData = storageByNode[nodeName];
+            if (nodeStorageData.length > 0) {
+                const card = createNodeStorageSummaryCard(nodeName, nodeStorageData);
+                cardsGrid.appendChild(card);
+            }
+        });
+        
+        summaryCardsContainer.appendChild(cardsGrid);
+        container.appendChild(summaryCardsContainer);
+
+        // Table view with scroll container
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'table-container max-h-[80vh] overflow-y-auto overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar';
+        
         const table = document.createElement('table');
         table.className = 'w-full text-sm border-collapse table-auto min-w-full';
 
-        const thead = document.createElement('thead');
-        thead.innerHTML = `
-            <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0 z-10 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
-              <th class="sticky left-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2">Storage</th>
-              <th class="p-1 px-2">Content</th>
-              <th class="p-1 px-2">Type</th>
-              <th class="p-1 px-2">Shared</th>
-              <th class="p-1 px-2">Usage</th>
-              <th class="p-1 px-2">Avail</th>
-              <th class="p-1 px-2">Total</th>
-            </tr>
-          `;
-        table.appendChild(thead);
+            const thead = document.createElement('thead');
+            const sortIndicator = (order) => {
+                if (currentSortOrder === order) {
+                    return order === 'usage-desc' ? ' ↓' : ' ↑';
+                }
+                return '';
+            };
+            
+            thead.innerHTML = `
+                <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0 z-10 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
+                  <th class="sticky left-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2">Storage</th>
+                  <th class="p-1 px-2">Content</th>
+                  <th class="p-1 px-2">Type</th>
+                  <th class="p-1 px-2">Shared</th>
+                  <th class="p-1 px-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" id="usage-sort-header">
+                    Usage${sortIndicator('usage-desc')}${sortIndicator('usage-asc')}
+                  </th>
+                  <th class="p-1 px-2">Avail</th>
+                  <th class="p-1 px-2">Total</th>
+                </tr>
+              `;
+            table.appendChild(thead);
 
-        const tbody = document.createElement('tbody');
-        tbody.className = 'divide-y divide-gray-200 dark:divide-gray-600';
-
-        const sortedNodeNames = Object.keys(storageByNode).sort((a, b) => a.localeCompare(b));
+            const tbody = document.createElement('tbody');
+            tbody.className = 'divide-y divide-gray-200 dark:divide-gray-600';
 
         // Calculate dynamic column widths for responsive display
         let maxStorageLength = 0;
@@ -255,16 +389,33 @@ PulseApp.ui.storage = (() => {
             return;
           }
 
-          // Use pre-sorted data instead of sorting again
+          // Use pre-sorted data
           nodeStorageData.forEach(store => {
               const row = _createStorageRow(store);
               tbody.appendChild(row);
           });
         });
 
-        table.appendChild(thead);
         table.appendChild(tbody);
-        contentDiv.appendChild(table);
+        tableContainer.appendChild(table);
+        container.appendChild(tableContainer);
+        contentDiv.appendChild(container);
+        
+        // Add click handler for sort
+        const usageSortHeader = document.getElementById('usage-sort-header');
+        if (usageSortHeader) {
+            usageSortHeader.addEventListener('click', () => {
+                // Cycle through sort orders: name -> usage-desc -> usage-asc -> name
+                if (currentSortOrder === 'name') {
+                    currentSortOrder = 'usage-desc';
+                } else if (currentSortOrder === 'usage-desc') {
+                    currentSortOrder = 'usage-asc';
+                } else {
+                    currentSortOrder = 'name';
+                }
+                updateStorageInfo();
+            });
+        }
         
         // Initialize mobile scroll indicators
         if (window.innerWidth < 768) {
@@ -281,30 +432,173 @@ PulseApp.ui.storage = (() => {
         }
     }
 
+    function createNodeStorageSummaryCard(nodeName, storageList) {
+        const card = document.createElement('div');
+        card.className = 'bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 border border-gray-200 dark:border-gray-700 flex flex-col gap-1';
+        
+        // Get active storages and sort by usage percentage
+        const activeStorages = [];
+        
+        storageList.forEach(store => {
+            if (store.enabled !== 0 && store.active !== 0 && store.total > 0) {
+                const usagePercent = (store.used / store.total) * 100;
+                activeStorages.push({
+                    name: store.storage,
+                    total: store.total,
+                    used: store.used || 0,
+                    avail: store.avail || 0,
+                    usagePercent: usagePercent,
+                    shared: store.shared === 1,
+                    type: store.type
+                });
+            }
+        });
+        
+        // Sort by usage percentage (most full first)
+        activeStorages.sort((a, b) => b.usagePercent - a.usagePercent);
+        
+        // Count warnings/critical
+        let criticalCount = 0;
+        let warningCount = 0;
+        activeStorages.forEach(s => {
+            if (s.usagePercent >= 90) criticalCount++;
+            else if (s.usagePercent >= 80) warningCount++;
+        });
+        
+        card.innerHTML = `
+            <div class="flex justify-between items-center">
+                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">${nodeName}</h3>
+                <div class="flex items-center gap-1">
+                    ${criticalCount > 0 ? `<span class="text-[10px] text-red-600 dark:text-red-400">● ${criticalCount}</span>` : ''}
+                    ${warningCount > 0 ? `<span class="text-[10px] text-yellow-600 dark:text-yellow-400">● ${warningCount}</span>` : ''}
+                    <span class="text-xs text-gray-500 dark:text-gray-400">${activeStorages.length}</span>
+                </div>
+            </div>
+            ${activeStorages.map(storage => {
+                const color = PulseApp.utils.getUsageColor(storage.usagePercent);
+                const progressColorClass = {
+                    red: 'bg-red-500/60 dark:bg-red-500/50',
+                    yellow: 'bg-yellow-500/60 dark:bg-yellow-500/50',
+                    green: 'bg-green-500/60 dark:bg-green-500/50'
+                }[color] || 'bg-gray-500/60 dark:bg-gray-500/50';
+                
+                return `
+                    <div class="text-[10px] text-gray-600 dark:text-gray-400">
+                        <div class="flex items-center gap-1 mb-0.5">
+                            <span class="font-medium truncate flex-1">${storage.name}:</span>
+                            ${storage.shared ? '<span class="text-[9px] text-green-600 dark:text-green-400">●</span>' : ''}
+                            <span class="text-[9px]">${storage.usagePercent.toFixed(0)}%</span>
+                        </div>
+                        <div class="relative w-full h-1 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600">
+                            <div class="absolute top-0 left-0 h-full ${progressColorClass} rounded-full" style="width: ${storage.usagePercent}%;"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        `;
+        
+        return card;
+    }
+
+
+    function createStorageCard(store, nodeName) {
+        const usagePercent = store.total > 0 ? (store.used / store.total) * 100 : 0;
+        const isWarning = usagePercent >= 80 && usagePercent < 90;
+        const isCritical = usagePercent >= 90;
+        const isDisabled = store.enabled === 0 || store.active === 0;
+        
+        const usageColorClass = PulseApp.utils.getUsageColor(usagePercent);
+        const usageBarHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, '', usageColorClass, `${usagePercent.toFixed(0)}%`);
+        
+        let cardClasses = 'bg-white dark:bg-gray-800 shadow-md rounded-lg p-3 border border-gray-200 dark:border-gray-700 flex flex-col gap-2 transition-all duration-150 ease-out hover:shadow-lg hover:-translate-y-0.5';
+        if (isDisabled) {
+            cardClasses += ' opacity-50 grayscale-[50%]';
+        }
+        if (isCritical) {
+            cardClasses += ' ring-2 ring-red-500 border-red-500';
+        } else if (isWarning) {
+            cardClasses += ' ring-1 ring-yellow-500 border-yellow-500';
+        }
+        
+        const contentTypes = store.content ? store.content.split(',').map(ct => ct.trim()).filter(ct => ct) : [];
+        const sharedBadge = store.shared === 1 
+            ? '<span class="text-[10px] bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 rounded">Shared</span>' 
+            : '';
+        
+        const card = document.createElement('div');
+        card.className = cardClasses;
+        
+        card.innerHTML = `
+            <div class="flex justify-between items-start">
+                <div class="flex-1 min-w-0">
+                    <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate" title="${store.storage || 'N/A'}">${store.storage || 'N/A'}</h3>
+                    <div class="text-[10px] text-gray-500 dark:text-gray-400">${nodeName}</div>
+                </div>
+                <div class="flex items-center gap-1">
+                    ${sharedBadge}
+                    ${isCritical ? '<span class="w-2 h-2 bg-red-500 rounded-full"></span>' : (isWarning ? '<span class="w-2 h-2 bg-yellow-500 rounded-full"></span>' : '')}
+                </div>
+            </div>
+            
+            <div class="space-y-1">
+                <div class="flex justify-between text-[11px] text-gray-600 dark:text-gray-400">
+                    <span>Type: ${store.type || 'N/A'}</span>
+                    <span class="${usageColorClass} font-medium">${usagePercent.toFixed(0)}%</span>
+                </div>
+                ${usageBarHTML}
+                <div class="flex justify-between text-[11px] text-gray-600 dark:text-gray-400">
+                    <span>${PulseApp.utils.formatBytes(store.used)} used</span>
+                    <span>${PulseApp.utils.formatBytes(store.avail)} free</span>
+                </div>
+            </div>
+            
+            ${contentTypes.length > 0 ? `
+                <div class="text-[10px] text-gray-500 dark:text-gray-400 pt-1 border-t border-gray-100 dark:border-gray-700">
+                    <span class="font-medium">Content:</span> ${contentTypes.join(', ')}
+                </div>
+            ` : ''}
+        `;
+        
+        return card;
+    }
+
     function _createStorageRow(store) {
         const row = document.createElement('tr');
         const isDisabled = store.enabled === 0 || store.active === 0;
-        row.className = `border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 ${isDisabled ? 'opacity-50 grayscale-[50%]' : ''}`;
-
         const usagePercent = store.total > 0 ? (store.used / store.total) * 100 : 0;
+        const isWarning = usagePercent >= 80 && usagePercent < 90;
+        const isCritical = usagePercent >= 90;
+        
+        let rowClasses = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        if (isDisabled) {
+            rowClasses += ' opacity-50 grayscale-[50%]';
+        }
+        if (isCritical) {
+            rowClasses += ' bg-red-50 dark:bg-red-900/10';
+        } else if (isWarning) {
+            rowClasses += ' bg-yellow-50 dark:bg-yellow-900/10';
+        }
+        row.className = rowClasses;
+
         const usageTooltipText = `${PulseApp.utils.formatBytes(store.used)} / ${PulseApp.utils.formatBytes(store.total)} (${usagePercent.toFixed(1)}%)`;
         const usageColorClass = PulseApp.utils.getUsageColor(usagePercent);
         const usageBarHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageTooltipText, usageColorClass, `${usagePercent.toFixed(0)}%`);
 
-        const sharedIconTooltip = store.shared === 1 ? 'Shared across cluster' : 'Local to node';
-        const isDarkMode = document.documentElement.classList.contains('dark');
-        const localIconGrayClass = isDarkMode ? 'text-gray-400' : 'text-gray-300';
-        const sharedIcon = store.shared === 1 ? `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block text-green-600 dark:text-green-400"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>`
-            : `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block ${localIconGrayClass} opacity-50"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>`;
+        const sharedText = store.shared === 1 
+            ? '<span class="text-green-600 dark:text-green-400 text-xs">Shared</span>' 
+            : '<span class="text-gray-400 dark:text-gray-500 text-xs">Local</span>';
 
         // Use cached content badge HTML instead of processing inline
         const contentBadges = getContentBadgesHTML(store.content);
 
+        const warningBadge = isCritical ? ' <span class="inline-block w-2 h-2 bg-red-500 rounded-full ml-1"></span>' : 
+                            (isWarning ? ' <span class="inline-block w-2 h-2 bg-yellow-500 rounded-full ml-1"></span>' : '');
+
         row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100">${store.storage || 'N/A'}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs flex items-center">${contentBadges}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${store.type || 'N/A'}</td>
-            <td class="p-1 px-2 whitespace-nowrap storage-tooltip-trigger cursor-default" data-tooltip="${sharedIconTooltip}">${sharedIcon}</td>
+            <td class="sticky left-0 ${isCritical ? 'bg-red-50 dark:bg-red-900/10' : (isWarning ? 'bg-yellow-50 dark:bg-yellow-900/10' : 'bg-white dark:bg-gray-800')} z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100">${store.storage || 'N/A'}${warningBadge}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${contentBadges}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${store.type || 'N/A'}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-center">${sharedText}</td>
             <td class="p-1 px-2 text-gray-600 dark:text-gray-300 min-w-[250px]">${usageBarHTML}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${PulseApp.utils.formatBytes(store.avail)}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${PulseApp.utils.formatBytes(store.total)}</td>
