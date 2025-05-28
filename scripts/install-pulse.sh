@@ -17,6 +17,8 @@ MODE_UPDATE=""
 INSTALL_MODE=""  
 SPECIFIED_VERSION_TAG=""
 TARGET_TAG=""
+SPECIFIED_BRANCH=""
+TARGET_BRANCH=""
 INSTALLER_WAS_REEXECUTED=false
 
 if command -v readlink &> /dev/null && readlink -f "$0" &> /dev/null; then
@@ -48,9 +50,24 @@ while [[ "$#" -gt 0 ]]; do
                 exit 1
             fi
             ;;
+        --branch)
+            if [[ -n "$2" ]] && [[ "$2" != --* ]]; then
+                SPECIFIED_BRANCH="$2"
+                shift 2
+            else
+                echo "Error: --branch requires a branch name [e.g., feature/pve-backups]" >&2
+                exit 1
+            fi
+            ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
 done
+
+# Validate that both --version and --branch aren't specified
+if [[ -n "$SPECIFIED_VERSION_TAG" ]] && [[ -n "$SPECIFIED_BRANCH" ]]; then
+    echo "Error: Cannot specify both --version and --branch. Please choose one." >&2
+    exit 1
+fi
 
 print_info() {
   echo -e "\033[1;34m[INFO]\033[0m $1"
@@ -298,6 +315,23 @@ check_installation_status_and_determine_action() {
                 print_error "Cannot validate specified version tag: Pulse directory $PULSE_DIR not found."
                 INSTALL_MODE="error"; return
             fi
+        elif [ -n "$SPECIFIED_BRANCH" ]; then
+            if [ -d "$PULSE_DIR/.git" ]; then
+                 cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; INSTALL_MODE="error"; return; }
+                 print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
+                 if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH"; then
+                     TARGET_BRANCH="$SPECIFIED_BRANCH"
+                     print_info "Will update to branch: $TARGET_BRANCH"
+                 else
+                     print_error "Remote branch '$SPECIFIED_BRANCH' not found."
+                     INSTALL_MODE="error"
+                     cd ..; return
+                 fi
+                 cd ..
+            else
+                print_error "Cannot validate specified branch: Pulse directory $PULSE_DIR not found."
+                INSTALL_MODE="error"; return
+            fi
         else
             if [ -d "$PULSE_DIR/.git" ]; then
                 cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; INSTALL_MODE="error"; return; }
@@ -349,6 +383,16 @@ check_installation_status_and_determine_action() {
                  else
                      INSTALL_MODE="error"; cd ..; return
                  fi
+            elif [ -n "$SPECIFIED_BRANCH" ]; then
+                print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
+                if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH"; then
+                    TARGET_BRANCH="$SPECIFIED_BRANCH"
+                    print_info "Will switch to branch: $TARGET_BRANCH"
+                    INSTALL_MODE="update"
+                else
+                    print_error "Remote branch '$SPECIFIED_BRANCH' not found."
+                    INSTALL_MODE="error"; cd ..; return
+                fi
             else
                 TARGET_TAG="$latest_tag"
             fi
@@ -427,6 +471,10 @@ check_installation_status_and_determine_action() {
         if [ -n "$SPECIFIED_VERSION_TAG" ]; then
             TARGET_TAG="$SPECIFIED_VERSION_TAG"
             print_info "Will attempt to install specified version: $TARGET_TAG"
+            INSTALL_MODE="install"
+        elif [ -n "$SPECIFIED_BRANCH" ]; then
+            TARGET_BRANCH="$SPECIFIED_BRANCH"
+            print_info "Will attempt to install from branch: $TARGET_BRANCH"
             INSTALL_MODE="install"
         else
             echo "Choose an action:"
@@ -566,11 +614,18 @@ create_pulse_user() {
 
 
 perform_update() {
-    if [ -z "$TARGET_TAG" ]; then
-        print_error "Target version tag not determined. Cannot update."
+    if [ -z "$TARGET_TAG" ] && [ -z "$TARGET_BRANCH" ]; then
+        print_error "Target version tag or branch not determined. Cannot update."
         return 1
     fi
-    print_info "Attempting to update Pulse to version $TARGET_TAG..."
+    
+    if [ -n "$TARGET_TAG" ]; then
+        print_info "Attempting to update Pulse to version $TARGET_TAG..."
+    else
+        print_info "Attempting to update Pulse to branch $TARGET_BRANCH..."
+        print_warning "⚠️  Branch installations are for testing only and may be unstable!"
+    fi
+    
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
     local script_backup_path="/tmp/${SCRIPT_NAME}.bak"
@@ -602,37 +657,60 @@ perform_update() {
         print_warning "Failed to clean untracked files, continuing anyway."
     fi
 
-    print_info "Fetching latest changes and tags from git [running as user $PULSE_USER]..."
-    if ! sudo -u "$PULSE_USER" git fetch origin --tags --force; then
-        print_error "Failed to fetch latest changes/tags from git."
-        [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
-        cd ..
-        return 1
-    fi
+    print_info "Fetching latest changes from git [running as user $PULSE_USER]..."
+    if [ -n "$TARGET_TAG" ]; then
+        if ! sudo -u "$PULSE_USER" git fetch origin --tags --force; then
+            print_error "Failed to fetch latest changes/tags from git."
+            [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
+            cd ..
+            return 1
+        fi
+        
+        if ! sudo -u "$PULSE_USER" git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
+             print_error "Target tag '$TARGET_TAG' could not be found locally after fetch."
+             print_error "It might have been deleted remotely or there was a fetch issue."
+             [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
+             cd ..
+             return 1
+        fi
 
-    if ! sudo -u "$PULSE_USER" git rev-parse "$TARGET_TAG" >/dev/null 2>&1; then
-         print_error "Target tag '$TARGET_TAG' could not be found locally after fetch."
-         print_error "It might have been deleted remotely or there was a fetch issue."
-         [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
-         cd ..
-         return 1
-    fi
-
-    print_info "Checking out target version tag '$TARGET_TAG'..."
-    if ! sudo -u "$PULSE_USER" git checkout -f "$TARGET_TAG"; then
-        print_error "Failed to checkout tag '$TARGET_TAG'."
-        [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
-        cd ..
-        return 1
-    fi
-    
-    print_info "Verifying package.json was updated..."
-    local package_version=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
-    local expected_version=$(echo "$TARGET_TAG" | sed 's/^v//')
-    if [ "$package_version" != "$expected_version" ] && [ "$package_version" != "unknown" ]; then
-        print_warning "package.json version ($package_version) does not match expected version ($expected_version)"
-        print_info "Forcing checkout to ensure all files are updated..."
-        sudo -u "$PULSE_USER" git checkout -f "$TARGET_TAG" -- .
+        print_info "Checking out target version tag '$TARGET_TAG'..."
+        if ! sudo -u "$PULSE_USER" git checkout -f "$TARGET_TAG"; then
+            print_error "Failed to checkout tag '$TARGET_TAG'."
+            [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
+            cd ..
+            return 1
+        fi
+        
+        print_info "Verifying package.json was updated..."
+        local package_version=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+        local expected_version=$(echo "$TARGET_TAG" | sed 's/^v//')
+        if [ "$package_version" != "$expected_version" ] && [ "$package_version" != "unknown" ]; then
+            print_warning "package.json version ($package_version) does not match expected version ($expected_version)"
+            print_info "Forcing checkout to ensure all files are updated..."
+            sudo -u "$PULSE_USER" git checkout -f "$TARGET_TAG" -- .
+        fi
+    else
+        # Branch checkout
+        if ! sudo -u "$PULSE_USER" git fetch origin "$TARGET_BRANCH"; then
+            print_error "Failed to fetch branch '$TARGET_BRANCH' from git."
+            [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
+            cd ..
+            return 1
+        fi
+        
+        print_info "Checking out branch '$TARGET_BRANCH'..."
+        if ! sudo -u "$PULSE_USER" git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"; then
+            print_error "Failed to checkout branch '$TARGET_BRANCH'."
+            [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
+            cd ..
+            return 1
+        fi
+        
+        print_info "Pulling latest changes from branch..."
+        if ! sudo -u "$PULSE_USER" git pull origin "$TARGET_BRANCH"; then
+            print_warning "Failed to pull latest changes, continuing with current state"
+        fi
     fi
 
     local current_tag
@@ -697,27 +775,39 @@ perform_update() {
         return 1
     fi
 
-    print_info "Performing post-update version verification..."
-    local installed_version=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
-    local expected_version=$(echo "$TARGET_TAG" | sed 's/^v//')
-    
-    if [ "$installed_version" = "$expected_version" ]; then
-        print_success "Version verification passed: $installed_version"
-    elif [ "$installed_version" = "unknown" ]; then
-        print_warning "Could not verify installed version from package.json"
+    if [ -n "$TARGET_TAG" ]; then
+        print_info "Performing post-update version verification..."
+        local installed_version=$(node -p "require('./package.json').version" 2>/dev/null || echo "unknown")
+        local expected_version=$(echo "$TARGET_TAG" | sed 's/^v//')
+        
+        if [ "$installed_version" = "$expected_version" ]; then
+            print_success "Version verification passed: $installed_version"
+        elif [ "$installed_version" = "unknown" ]; then
+            print_warning "Could not verify installed version from package.json"
+        else
+            print_warning "Version mismatch detected!"
+            print_warning "Expected: $expected_version, Found: $installed_version"
+            print_warning "The application may not report the correct version."
+        fi
+        
+        if [ -n "$current_tag" ]; then
+          print_success "Pulse updated successfully to version $current_tag!"
+        else
+          print_success "Pulse updated successfully! [Could not confirm exact tag]"
+        fi
+        
+        print_info "The application should now report version: $expected_version"
     else
-        print_warning "Version mismatch detected!"
-        print_warning "Expected: $expected_version, Found: $installed_version"
-        print_warning "The application may not report the correct version."
+        # Branch update
+        local current_branch=$(sudo -u "$PULSE_USER" git rev-parse --abbrev-ref HEAD 2>/dev/null)
+        local current_commit=$(sudo -u "$PULSE_USER" git rev-parse --short HEAD 2>/dev/null)
+        
+        print_success "Pulse updated successfully to branch: $current_branch!"
+        if [ -n "$current_commit" ]; then
+            print_info "Current commit: $current_commit"
+        fi
+        print_warning "⚠️  Running from branch - version reporting may show development version"
     fi
-    
-    if [ -n "$current_tag" ]; then
-      print_success "Pulse updated successfully to version $current_tag!"
-    else
-      print_success "Pulse updated successfully! [Could not confirm exact tag]"
-    fi
-    
-    print_info "The application should now report version: $expected_version"
     return 0
 }
 
@@ -1197,9 +1287,16 @@ final_instructions() {
     fi
 
     local final_tag=""
+    local final_branch=""
+    local final_commit=""
+    
     if [ -d "$PULSE_DIR/.git" ]; then
-        cd "$PULSE_DIR" || print_warning "Could not cd to $PULSE_DIR to get final tag."
+        cd "$PULSE_DIR" || print_warning "Could not cd to $PULSE_DIR to get version info."
         final_tag=$(get_current_local_tag)
+        if [ -z "$final_tag" ]; then
+            final_branch=$(sudo -u "$PULSE_USER" git rev-parse --abbrev-ref HEAD 2>/dev/null)
+            final_commit=$(sudo -u "$PULSE_USER" git rev-parse --short HEAD 2>/dev/null)
+        fi
         cd ..
     fi
 
@@ -1207,6 +1304,12 @@ final_instructions() {
     print_success "Pulse for Proxmox VE installation/update complete!"
     if [ -n "$final_tag" ]; then
         print_success "Current version installed: $final_tag"
+    elif [ -n "$final_branch" ]; then
+        print_success "Running from branch: $final_branch"
+        if [ -n "$final_commit" ]; then
+            print_info "Current commit: $final_commit"
+        fi
+        print_warning "⚠️  This is a test/development branch - not for production use!"
     fi
     echo "-------------------------------------------------------------"
     print_info "You should be able to access the Pulse dashboard at:"
@@ -1285,21 +1388,36 @@ case "$INSTALL_MODE" in
                 exit 1
             fi
 
-            if [ -z "$TARGET_TAG" ]; then
+            if [ -n "$TARGET_BRANCH" ]; then
+                print_info "Checking out branch '$TARGET_BRANCH'..."
+                if ! sudo -u "$PULSE_USER" git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"; then
+                     print_error "Failed to checkout branch '$TARGET_BRANCH' after cloning."
+                     cd ..; exit 1
+                fi
+                print_success "Checked out branch $TARGET_BRANCH."
+                print_warning "⚠️  Branch installation is for testing only and may be unstable!"
+            elif [ -z "$TARGET_TAG" ]; then
                 TARGET_TAG=$(get_latest_remote_tag)
                 if [ $? -ne 0 ] || [ -z "$TARGET_TAG" ]; then
                      print_error "Could not determine latest release tag to install."
                      cd ..; exit 1
                 fi
                 print_info "Determined latest version tag: $TARGET_TAG"
+                
+                print_info "Checking out target version tag '$TARGET_TAG'..."
+                if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
+                     print_error "Failed to checkout tag '$TARGET_TAG' after cloning."
+                     cd ..; exit 1
+                fi
+                print_success "Checked out version $TARGET_TAG."
+            else
+                print_info "Checking out target version tag '$TARGET_TAG'..."
+                if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
+                     print_error "Failed to checkout tag '$TARGET_TAG' after cloning."
+                     cd ..; exit 1
+                fi
+                print_success "Checked out version $TARGET_TAG."
             fi
-
-            print_info "Checking out target version tag '$TARGET_TAG'..."
-            if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
-                 print_error "Failed to checkout tag '$TARGET_TAG' after cloning."
-                 cd ..; exit 1
-            fi
-            print_success "Checked out version $TARGET_TAG."
             cd ..
 
             print_info "Installing NPM dependencies in $PULSE_DIR..."
