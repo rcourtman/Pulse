@@ -6,7 +6,17 @@
 
 source /dev/stdin <<<$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
 
-APP="Umbrel OS VM"
+function header_info {
+  clear
+  cat <<"EOF"
+   __  __          __              __   ____  _____    _    ____  ___
+  / / / /___ ___  / /_  ________  / /  / __ \/ ___/   | |  / /  |/  /
+ / / / / __ `__ \/ __ \/ ___/ _ \/ /  / / / /\__ \    | | / / /|_/ / 
+/ /_/ / / / / / / /_/ / /  /  __/ /  / /_/ /___/ /    | |/ / /  / /  
+\____/_/ /_/ /_/_.___/_/   \___/_/   \____//____/     |___/_/  /_/   
+                                                                     
+EOF
+}
 header_info
 echo -e "\n Loading..."
 GEN_MAC=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
