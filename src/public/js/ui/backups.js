@@ -219,35 +219,71 @@ PulseApp.ui.backups = (() => {
             displayTimestamp = null;
         }
 
-        // Optimized 7-day backup status calculation using pre-calculated boundaries
-        const last7DaysBackupStatus = dayBoundaries.map(day => {
+        // Enhanced 7-day backup status calculation with detailed activity info
+        const last7DaysBackupStatus = dayBoundaries.map((day, index) => {
             let dailyStatus = 'none';
+            let activityDetails = [];
 
             // Check tasks for this day - using pre-filtered guest tasks
             if (guestTasks) {
-                const failedTaskOnThisDay = guestTasks.find(task => 
+                const failedTasksOnThisDay = guestTasks.filter(task => 
                     task.startTime >= day.start && task.startTime < day.end && task.status !== 'OK'
                 );
-                const successfulTaskOnThisDay = guestTasks.find(task => 
+                const successfulTasksOnThisDay = guestTasks.filter(task => 
                     task.startTime >= day.start && task.startTime < day.end && task.status === 'OK'
                 );
 
-                if (failedTaskOnThisDay) {
+                // Add task details
+                successfulTasksOnThisDay.forEach(task => {
+                    const source = task.source === 'pbs' ? 'PBS' : 'PVE';
+                    const location = task.source === 'pbs' ? task.pbsInstanceName : 'Local';
+                    activityDetails.push(`✓ ${source} backup${location ? ` (${location})` : ''}`);
+                });
+
+                failedTasksOnThisDay.forEach(task => {
+                    const source = task.source === 'pbs' ? 'PBS' : 'PVE';
+                    const location = task.source === 'pbs' ? task.pbsInstanceName : 'Local';
+                    activityDetails.push(`✗ ${source} backup failed${location ? ` (${location})` : ''}`);
+                });
+
+                if (failedTasksOnThisDay.length > 0) {
                     dailyStatus = 'failed';
-                } else if (successfulTaskOnThisDay) {
+                } else if (successfulTasksOnThisDay.length > 0) {
                     dailyStatus = 'ok';
-                } else if (guestSnapshots) {
-                    // Check snapshots as fallback - using pre-filtered guest snapshots
-                    const snapshotOnThisDay = guestSnapshots.some(
-                        snap => snap['backup-time'] >= day.start && snap['backup-time'] < day.end
-                    );
-                    if (snapshotOnThisDay) {
-                        dailyStatus = 'ok';
-                    }
                 }
             }
 
-            return dailyStatus;
+            // Check for backup storage activity (snapshots/backups created)
+            if (guestSnapshots && dailyStatus === 'none') {
+                const snapshotsOnThisDay = guestSnapshots.filter(
+                    snap => snap['backup-time'] >= day.start && snap['backup-time'] < day.end
+                );
+                
+                if (snapshotsOnThisDay.length > 0) {
+                    snapshotsOnThisDay.forEach(snap => {
+                        if (snap.source === 'pbs') {
+                            activityDetails.push(`✓ PBS backup stored (${snap.pbsInstanceName})`);
+                        } else if (snap.source === 'pve') {
+                            activityDetails.push(`✓ PVE backup stored (${snap.storage || 'Local'})`);
+                        }
+                    });
+                    dailyStatus = 'ok';
+                }
+            }
+
+            // Create day label for tooltip
+            const dayDate = new Date(day.start * 1000);
+            const dayLabel = dayDate.toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric' 
+            });
+
+            return {
+                status: dailyStatus,
+                details: activityDetails.length > 0 ? activityDetails.join('\n') : 'No backup activity',
+                date: dayLabel
+            };
         });
 
         // Calculate separate PBS and PVE backup information
@@ -389,24 +425,24 @@ PulseApp.ui.backups = (() => {
             : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
         const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guestStatus.guestType}</span>`;
 
-        // Generate 7-day backup dots
-        let sevenDayDots = '<div class="flex space-x-0.5" title="Last 7 days backup history (oldest to newest)">';
+        // Generate 7-day backup dots with enhanced tooltips
+        let sevenDayDots = '<div class="flex space-x-0.5">';
         if (guestStatus.last7DaysBackupStatus && guestStatus.last7DaysBackupStatus.length === 7) {
-            guestStatus.last7DaysBackupStatus.forEach(status => {
+            guestStatus.last7DaysBackupStatus.forEach(dayInfo => {
                 let dotClass = 'bg-gray-300 dark:bg-gray-600'; // Default for 'none'
-                let dotTitle = 'No backup';
-                if (status === 'ok') {
+                let dotTitle = `${dayInfo.date}: ${dayInfo.details}`;
+                
+                if (dayInfo.status === 'ok') {
                     dotClass = 'bg-green-500';
-                    dotTitle = 'Successful backup';
-                } else if (status === 'failed') {
+                } else if (dayInfo.status === 'failed') {
                     dotClass = 'bg-red-500';
-                    dotTitle = 'Failed backup';
                 }
+                
                 sevenDayDots += `<span class="w-2 h-2 ${dotClass} rounded-full" title="${dotTitle}"></span>`;
             });
         } else {
             for (let i = 0; i < 7; i++) {
-                 sevenDayDots += '<span class="w-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full" title="Data unavailable"></span>'; // Placeholder if data is missing
+                 sevenDayDots += '<span class="w-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-full" title="Data unavailable"></span>';
             }
         }
         sevenDayDots += '</div>';

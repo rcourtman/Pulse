@@ -796,7 +796,7 @@
                 <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap text-center" data-sort="pbsBackups">PBS Backups</th>
                 <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap text-center" data-sort="pveBackups">PVE Backups</th>
                 <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2 text-center select-none whitespace-nowrap">Snapshots</th>
-                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2 text-center select-none whitespace-nowrap">7-Day History</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2 text-center select-none whitespace-nowrap" title="Backup Activity History - Shows backup success (green), failure (red), or no backup activity (gray) for the last 7 days">7-Day History</th>
               </tr>
             </thead>
             <tbody id="backups-overview-tbody" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
@@ -804,7 +804,30 @@
         </div>
         <p id="backups-no-data-message" class="text-gray-500 dark:text-gray-400 p-4 text-center hidden">No backup data found matching filters.</p>
       </div>
-      <span id="backups-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading backup status...</span>
+      <div class="flex flex-wrap items-center gap-4 justify-between">
+        <span id="backups-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading backup status...</span>
+        <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-3">
+          <span class="flex items-center gap-1">
+            <span class="w-2 h-2 bg-purple-500 rounded-full"></span>PBS
+          </span>
+          <span class="flex items-center gap-1">
+            <span class="w-2 h-2 bg-orange-500 rounded-full"></span>PVE
+          </span>
+          <span class="flex items-center gap-1">
+            <span class="w-2 h-2 bg-blue-500 rounded-full"></span>Snapshots
+          </span>
+          <span class="mx-2">•</span>
+          <span class="flex items-center gap-1">
+            <span class="w-2 h-2 bg-green-500 rounded-full"></span>Success
+          </span>
+          <span class="flex items-center gap-1">
+            <span class="w-2 h-2 bg-red-500 rounded-full"></span>Failed
+          </span>
+          <span class="flex items-center gap-1">
+            <span class="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full"></span>No Activity
+          </span>
+        </div>
+      </div>
     </div>
   </div>
   <div id="custom-tooltip" class="custom-tooltip absolute hidden z-50 px-2 py-1 text-xs text-white bg-gray-900/90 rounded shadow-lg pointer-events-none transition-opacity duration-100"></div>
