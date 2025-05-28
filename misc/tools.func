@@ -246,7 +246,7 @@ install_mariadb() {
 
   local CURRENT_VERSION=""
   if command -v mariadb >/dev/null; then
-    CURRENT_VERSION="$(mariadb --version | grep -oP 'Ver\s+\K[0-9]+\.[0-9]+')"
+    CURRENT_VERSION=$(mariadb --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
   fi
 
   if [[ "$CURRENT_VERSION" == "$MARIADB_VERSION" ]]; then
