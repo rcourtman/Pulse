@@ -34,5 +34,28 @@ chown -R nodered:users /home/nodered
 chmod 750 /home/nodered
 msg_ok "Created /home/nodered"
 
+msg_info "Creating Node-RED Service"
+service_path="/etc/init.d/nodered"
+
+echo '#!/sbin/openrc-run
+description="Node-RED Service"
+
+command="/usr/local/bin/node-red"
+command_args="--max-old-space-size=128 -v"
+command_user="nodered"
+pidfile="/var/run/nodered.pid"
+command_background="yes"
+
+depend() {
+    use net
+}' >$service_path
+
+chmod +x $service_path
+msg_ok "Created Node-RED Service"
+
+msg_info "Starting Node-RED"
+$STD rc-service nodered start
+msg_ok "Started Node-RED"
+
 motd_ssh
 customize
