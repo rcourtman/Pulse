@@ -1041,7 +1041,7 @@ PulseApp.ui.pbs = (() => {
 
         const heading = document.createElement('h4');
         heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
-        heading.textContent = 'PBS Task Summary (Last 30 Days)';
+        heading.textContent = 'PBS Task Summary';
         sectionDiv.appendChild(heading);
 
         const tableContainer = document.createElement('div');

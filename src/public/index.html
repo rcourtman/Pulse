@@ -717,6 +717,33 @@
     </div>
     <div id="backups" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
       <p id="backups-loading-message" class="text-gray-500 dark:text-gray-400 p-4 text-center mb-2">Loading backup status overview...</p>
+      
+      <!-- Consolidated Backup Summary -->
+      <div id="backup-summary-container" class="hidden mb-4">
+        <!-- Consolidated backup summary will be inserted here -->
+      </div>
+      
+      <!-- Hidden: Node backup cards (replaced by consolidated summary) -->
+      <div id="node-backup-cards" class="hidden mb-3">
+        <!-- No longer used - replaced by consolidated summary -->
+      </div>
+      
+      <!-- Backup History Visualization -->
+      <div id="backup-visualization-section" class="hidden mb-6 space-y-4">
+        <!-- Hidden: Summary cards (replaced by consolidated summary) -->
+        <div id="backup-summary-cards-container" class="hidden">
+          <!-- No longer used - replaced by consolidated summary -->
+        </div>
+        <div id="backup-calendar-container" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300">Backup History Calendar</h3>
+          </div>
+          <div id="backup-calendar-heatmap">
+            <!-- Calendar heatmap will be inserted here -->
+          </div>
+        </div>
+      </div>
+      
       <div class="backups-filter flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
           <div class="dashboard-filter-controls flex-grow flex items-center gap-2">
             <input type="text" id="backups-search" placeholder="Search Name, ID, Node (use ',' for OR)" class="flex-grow min-w-[200px] max-w-full p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
@@ -808,13 +835,13 @@
         <span id="backups-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading backup status...</span>
         <div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-3">
           <span class="flex items-center gap-1">
-            <span class="w-2 h-2 bg-purple-500 rounded-full"></span>PBS
+            <span class="w-2 h-2 bg-green-500 rounded-full"></span>PBS
           </span>
           <span class="flex items-center gap-1">
-            <span class="w-2 h-2 bg-orange-500 rounded-full"></span>PVE
+            <span class="w-2 h-2 bg-yellow-400 rounded-full"></span>PVE
           </span>
           <span class="flex items-center gap-1">
-            <span class="w-2 h-2 bg-blue-500 rounded-full"></span>Snapshots
+            <span class="w-2 h-2 bg-blue-400 rounded-full"></span>Snapshots
           </span>
           <span class="mx-2">•</span>
           <span class="flex items-center gap-1">
@@ -920,6 +947,8 @@
   <script src="/js/ui/dashboard.js" defer></script>
   <script src="/js/ui/storage.js" defer></script>
   <script src="/js/ui/pbs.js" defer></script>
+  <script src="/js/ui/backup-summary-cards.js" defer></script>
+  <script src="/js/ui/calendar-heatmap.js" defer></script>
   <script src="/js/ui/backups.js" defer></script>
   <script src="/js/alertsHandler.js"></script>
   <script src="/js/hotReload.js" defer></script>
