@@ -511,6 +511,11 @@ class DiagnosticTool {
                     datastores: 0,
                     sampleBackupIds: []
                 },
+                pveBackups: {
+                    backupTasks: state.pveBackups?.backupTasks?.length || 0,
+                    storageBackups: state.pveBackups?.storageBackups?.length || 0,
+                    guestSnapshots: state.pveBackups?.guestSnapshots?.length || 0
+                },
                 performance: {
                     lastDiscoveryTime: stats.lastDiscoveryCycleTime || 'N/A',
                     lastMetricsTime: stats.lastMetricsCycleTime || 'N/A'
@@ -698,6 +703,22 @@ class DiagnosticTool {
                     severity: 'warning',
                     category: 'PBS Data',
                     message: 'PBS is configured but no backups were found. Verify that backups exist in your PBS datastores and that the API token has permission to read them.'
+                });
+            }
+        }
+        
+        // Check PVE backups
+        if (report.state && report.state.pveBackups) {
+            const totalPveBackups = (report.state.pveBackups.backupTasks || 0) + 
+                                  (report.state.pveBackups.storageBackups || 0);
+            const totalPveSnapshots = report.state.pveBackups.guestSnapshots || 0;
+            
+            // If no PBS configured but PVE backups exist, that's fine
+            if ((!report.state.pbs || report.state.pbs.instances === 0) && totalPveBackups > 0) {
+                report.recommendations.push({
+                    severity: 'info',
+                    category: 'Backup Status',
+                    message: `Found ${totalPveBackups} PVE backups and ${totalPveSnapshots} VM/CT snapshots. Note: PBS is not configured, showing only local PVE backups.`
                 });
             }
         }

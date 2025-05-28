@@ -6,6 +6,11 @@ const state = {
   containers: [],
   metrics: [],
   pbs: [], // Array to hold data for each PBS instance
+  pveBackups: { // Add PVE backup data
+    backupTasks: [],
+    storageBackups: [],
+    guestSnapshots: []
+  },
   isConfigPlaceholder: false, // Add this flag
   
   // Enhanced monitoring data
@@ -81,6 +86,7 @@ function getState() {
     containers: state.containers,
     metrics: state.metrics, // Assuming metrics are updated elsewhere
     pbs: state.pbs, // This is what's sent to the client and should now be correct
+    pveBackups: state.pveBackups, // Add PVE backup data
     isConfigPlaceholder: state.isConfigPlaceholder,
     
     // Enhanced monitoring data
@@ -99,7 +105,7 @@ function getState() {
   };
 }
 
-function updateDiscoveryData({ nodes, vms, containers, pbs, allPbsTasks, aggregatedPbsTaskSummary }, duration = 0, errors = []) {
+function updateDiscoveryData({ nodes, vms, containers, pbs, pveBackups, allPbsTasks, aggregatedPbsTaskSummary }, duration = 0, errors = []) {
   const startTime = Date.now();
   
   try {
@@ -108,6 +114,15 @@ function updateDiscoveryData({ nodes, vms, containers, pbs, allPbsTasks, aggrega
     state.vms = vms || [];
     state.containers = containers || [];
     state.pbs = pbs || [];
+    
+    // Update PVE backup data
+    if (pveBackups) {
+      state.pveBackups = {
+        backupTasks: pveBackups.backupTasks || [],
+        storageBackups: pveBackups.storageBackups || [],
+        guestSnapshots: pveBackups.guestSnapshots || []
+      };
+    }
     
     // If the discovery data structure nests these under the main 'pbs' array (e.g., from fetchPbsData),
     // they might not be separate top-level items in the discoveryData object passed here.
