@@ -13,9 +13,8 @@ const OVERLAY_SELECTOR = '#loading-overlay';
 // Define the sections to capture
 // Placeholder selectors/navigation logic will need refinement
 const sections = [
-    // Dashboard: Wait for guest row, capture FULL page
+    // Dashboard: Wait for guest row, capture viewport for consistency
     { name: '01-dashboard', 
-      fullPage: true, 
       action: async (page) => {
           console.log('  Action: Waiting for dashboard content to load (checking for removal of loading text)...');
           // Wait for the first row that DOES NOT contain the loading text TD
@@ -24,9 +23,8 @@ const sections = [
       }
     },
 
-    // PBS View: Click tab, wait for PBS container content, capture PBS tab content
-    { name: '02-pbs-view', // Renumbered from 03
-      screenshotTarget: '#pbs',
+    // PBS View: Click tab, wait for PBS container content, capture viewport
+    { name: '02-pbs-view',
       action: async (page) => {
         console.log('  Action: Clicking PBS tab');
         await page.locator('[data-tab="pbs"]').click();
@@ -46,13 +44,12 @@ const sections = [
         }
         
         // Additional wait to ensure all data is rendered
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(500);
       }
     },
 
-    // Backups View: Click tab, wait for table content, capture backups tab content
-    { name: '03-backups-view', // Renumbered from 04
-      screenshotTarget: '#backups',
+    // Backups View: Click tab, wait for table content, capture viewport
+    { name: '03-backups-view',
       action: async (page) => {
         console.log('  Action: Clicking Backups tab');
         await page.locator('[data-tab="backups"]').click();
@@ -62,10 +59,31 @@ const sections = [
         console.log('  Action: Backups table row visible');
       }
     },
+
+    // Storage View: Click tab, wait for storage content, capture viewport
+    { name: '04-storage-view',
+      action: async (page) => {
+        console.log('  Action: Clicking Storage tab');
+        await page.locator('[data-tab="storage"]').click();
+        console.log('  Action: Waiting for storage container to be visible');
+        // Wait for the storage container to be visible
+        await page.locator('#storage').waitFor({ state: 'visible', timeout: 10000 });
+        console.log('  Action: Storage container visible');
+        
+        // Wait for storage data to load
+        try {
+          await page.locator('#storage .storage-table tbody tr').first().waitFor({ state: 'visible', timeout: 15000 });
+          console.log('  Action: Storage data loaded');
+        } catch (e) {
+          console.log('  Warning: Storage data may not be fully loaded');
+        }
+        
+        await page.waitForTimeout(500);
+      }
+    },
     
     // Line Graph Toggle View: Click the charts toggle button to show charts
-    { name: '04-line-graph-toggle', 
-      screenshotTarget: '#nested-tab-dashboard',
+    { name: '05-line-graph-toggle', 
       action: async (page) => {
         console.log('  Action: Ensuring Main tab is active');
         // Ensure main tab is active
@@ -151,7 +169,7 @@ const sections = [
 // Mobile sections - similar to desktop but with mobile-specific adjustments
 const mobileSections = [
     // Mobile Dashboard
-    { name: '05-mobile-dashboard', 
+    { name: '06-mobile-dashboard', 
       mobile: true,
       action: async (page) => {
           console.log('  Action: Waiting for mobile dashboard content to load...');
@@ -161,7 +179,7 @@ const mobileSections = [
     },
 
     // Mobile PBS View
-    { name: '06-mobile-pbs-view',
+    { name: '07-mobile-pbs-view',
       mobile: true,
       action: async (page) => {
         console.log('  Action: Clicking PBS tab (mobile)');
@@ -181,7 +199,7 @@ const mobileSections = [
     },
 
     // Mobile Backups View
-    { name: '07-mobile-backups-view',
+    { name: '08-mobile-backups-view',
       mobile: true,
       action: async (page) => {
         console.log('  Action: Clicking Backups tab (mobile)');

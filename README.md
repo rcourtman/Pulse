@@ -11,8 +11,9 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 ### 📸 Screenshots
 
 <details>
-<summary><strong>Click to view other UI tabs</strong></summary>
+<summary><strong>Click to view more screenshots</strong></summary>
 
+**Desktop Views:**
 <div align="center">
 <table>
 <tr>
@@ -24,23 +25,17 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <td><img src="docs/images/03-backups-view.png" alt="Backups View" width="400"/></td>
 </tr>
 <tr>
+<td align="center"><strong>Storage Tab</strong></td>
 <td align="center"><strong>Line Graph Toggle</strong></td>
-<td></td>
 </tr>
 <tr>
-<td><img src="docs/images/04-line-graph-toggle.png" alt="Line Graph Toggle View" width="400"/></td>
-<td></td>
+<td><img src="docs/images/04-storage-view.png" alt="Storage View" width="400"/></td>
+<td><img src="docs/images/05-line-graph-toggle.png" alt="Line Graph Toggle View" width="400"/></td>
 </tr>
 </table>
 </div>
 
-</details>
-
-### 📱 Mobile Screenshots
-
-<details>
-<summary><strong>Click to view mobile interface</strong></summary>
-
+**Mobile Views:**
 <div align="center">
 <table>
 <tr>
@@ -49,9 +44,9 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <td align="center"><strong>Mobile Backups View</strong></td>
 </tr>
 <tr>
-<td><img src="docs/images/05-mobile-dashboard.png" alt="Mobile Dashboard" width="250"/></td>
-<td><img src="docs/images/06-mobile-pbs-view.png" alt="Mobile PBS View" width="250"/></td>
-<td><img src="docs/images/07-mobile-backups-view.png" alt="Mobile Backups View" width="250"/></td>
+<td><img src="docs/images/06-mobile-dashboard.png" alt="Mobile Dashboard" width="250"/></td>
+<td><img src="docs/images/07-mobile-pbs-view.png" alt="Mobile PBS View" width="250"/></td>
+<td><img src="docs/images/08-mobile-backups-view.png" alt="Mobile Backups View" width="250"/></td>
 </tr>
 </table>
 </div>
