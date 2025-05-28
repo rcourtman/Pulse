@@ -40,17 +40,11 @@ function update_script() {
     temp_file=$(mktemp)
     mkdir -p /opt/pulse-proxmox
     rm -rf /opt/pulse-proxmox/*
-    curl -fsSL "https://github.com/rcourtman/Pulse/archive/refs/tags/v${RELEASE}.tar.gz" -o "$temp_file"
+    curl -fsSL "https://github.com/rcourtman/Pulse/releases/download/v${RELEASE}/pulse-v${RELEASE}.tar.gz" -o "$temp_file"
     tar zxf "$temp_file" --strip-components=1 -C /opt/pulse-proxmox
     if [[ -f /tmp/.env.backup.pulse ]]; then
       mv /tmp/.env.backup.pulse /opt/pulse-proxmox/.env
     fi
-    cd /opt/pulse-proxmox
-    $STD npm install --unsafe-perm
-    cd /opt/pulse-proxmox/server
-    $STD npm install --unsafe-perm
-    cd /opt/pulse-proxmox
-    $STD npm run build:css
     echo "${RELEASE}" >/opt/${APP}_version.txt
     msg_ok "Updated Pulse to ${RELEASE}"
 
