@@ -293,6 +293,7 @@ Optional variables:
 -   `PROXMOX_NODE_NAME`: A display name for this endpoint in the UI (defaults to `PROXMOX_HOST`).
 -   `PROXMOX_ALLOW_SELF_SIGNED_CERTS`: Set to `true` if your Proxmox server uses self-signed SSL certificates. Defaults to `false`.
 -   `PORT`: Port for the Pulse server to listen on. Defaults to `7655`.
+-   `BACKUP_HISTORY_DAYS`: Number of days of backup history to display (defaults to `365` for full year calendar view).
 -   *(Username/Password fallback exists but API Token is strongly recommended)*
 
 #### Alert System Configuration (Optional)

@@ -364,8 +364,9 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
         let allBackupTasks = [];
         let deduplicationFactor = null;
         
-        // Calculate 30-day cutoff timestamp
-        const thirtyDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+        // Calculate cutoff timestamp - default to 365 days for calendar view
+        const backupHistoryDays = parseInt(process.env.BACKUP_HISTORY_DAYS || '365');
+        const thirtyDaysAgo = Math.floor((Date.now() - backupHistoryDays * 24 * 60 * 60 * 1000) / 1000);
         
         // Track backup runs by date and guest to avoid counting multiple snapshots per day
         // Use a more comprehensive key to prevent any duplicates
@@ -390,7 +391,7 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                 const groupsResponse = await client.get(`/admin/datastore/${datastore.name}/groups`);
                 const groups = groupsResponse.data?.data || [];
                 
-                // For each backup group, get recent snapshots (30 days only)
+                // For each backup group, get snapshots within history period
                 for (const group of groups) {
                     try {
                         const snapshotsResponse = await client.get(`/admin/datastore/${datastore.name}/snapshots`, {
@@ -401,7 +402,7 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                         });
                         const allSnapshots = snapshotsResponse.data?.data || [];
                         
-                        // Filter snapshots to last 30 days only
+                        // Filter snapshots to configured history period
                         const recentSnapshots = allSnapshots.filter(snapshot => {
                             return snapshot['backup-time'] >= thirtyDaysAgo;
                         });
@@ -477,7 +478,7 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             });
             const allAdminTasks = response.data?.data || [];
             
-            // Filter admin tasks to last 30 days
+            // Filter admin tasks to configured history period
             const recentAdminTasks = allAdminTasks.filter(task => task.starttime >= thirtyDaysAgo);
             
             // Separate real backup tasks (for enhancement only) from other admin tasks
@@ -600,10 +601,11 @@ async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
         });
         const tasks = response.data?.data || [];
         
-        // Calculate 30-day cutoff timestamp
-        const thirtyDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+        // Calculate cutoff timestamp - default to 365 days for calendar view
+        const backupHistoryDays = parseInt(process.env.BACKUP_HISTORY_DAYS || '365');
+        const thirtyDaysAgo = Math.floor((Date.now() - backupHistoryDays * 24 * 60 * 60 * 1000) / 1000);
         
-        // Filter to last 30 days and transform to match PBS backup task format
+        // Filter to configured history period and transform to match PBS backup task format
         return tasks
             .filter(task => task.starttime >= thirtyDaysAgo)
             .map(task => {
