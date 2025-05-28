@@ -366,35 +366,34 @@ check_installation_status_and_determine_action() {
                 print_info "Current installed version tag: ${current_tag:-Not on a tag}"
                 print_info "Latest available version tag: $latest_tag"
 
-                if [ -n "$current_tag" ] && [ "$current_tag" = "$latest_tag" ]; then
+                # Check for specific version/branch requests first
+                if [ -n "$SPECIFIED_VERSION_TAG" ]; then
+                     if check_remote_tag_exists "$SPECIFIED_VERSION_TAG"; then
+                         TARGET_TAG="$SPECIFIED_VERSION_TAG"
+                         print_info "Will target specified version: $TARGET_TAG"
+                         INSTALL_MODE="update"
+                     else
+                         INSTALL_MODE="error"; cd ..; return
+                     fi
+                elif [ -n "$SPECIFIED_BRANCH" ]; then
+                    print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
+                    if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH"; then
+                        TARGET_BRANCH="$SPECIFIED_BRANCH"
+                        print_info "Will switch to branch: $TARGET_BRANCH"
+                        INSTALL_MODE="update"
+                    else
+                        print_error "Remote branch '$SPECIFIED_BRANCH' not found."
+                        INSTALL_MODE="error"; cd ..; return
+                    fi
+                elif [ -n "$current_tag" ] && [ "$current_tag" = "$latest_tag" ]; then
                     print_info "Pulse is already installed and up-to-date with the latest release $latest_tag."
                     INSTALL_MODE="uptodate"
+                    TARGET_TAG="$latest_tag"
                 else
                     print_warning "Pulse is installed, but an update to $latest_tag is available."
                     INSTALL_MODE="update"
+                    TARGET_TAG="$latest_tag"
                 fi
-            fi
-
-            if [ -n "$SPECIFIED_VERSION_TAG" ]; then
-                 if check_remote_tag_exists "$SPECIFIED_VERSION_TAG"; then
-                     TARGET_TAG="$SPECIFIED_VERSION_TAG"
-                     print_info "Will target specified version: $TARGET_TAG"
-                     INSTALL_MODE="update"
-                 else
-                     INSTALL_MODE="error"; cd ..; return
-                 fi
-            elif [ -n "$SPECIFIED_BRANCH" ]; then
-                print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
-                if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH"; then
-                    TARGET_BRANCH="$SPECIFIED_BRANCH"
-                    print_info "Will switch to branch: $TARGET_BRANCH"
-                    INSTALL_MODE="update"
-                else
-                    print_error "Remote branch '$SPECIFIED_BRANCH' not found."
-                    INSTALL_MODE="error"; cd ..; return
-                fi
-            else
-                TARGET_TAG="$latest_tag"
             fi
             cd ..
 
