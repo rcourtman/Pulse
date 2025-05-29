@@ -57,6 +57,9 @@ const sections = [
         // Wait for the first row in the backups table body
         await page.locator('#backups-overview-tbody tr').first().waitFor({ state: 'visible', timeout: 15000 }); 
         console.log('  Action: Backups table row visible');
+        // Additional wait for backups data to fully load and render
+        console.log('  Action: Waiting additional time for backups data to fully render');
+        await page.waitForTimeout(2000);
       }
     },
 
@@ -207,6 +210,9 @@ const mobileSections = [
         console.log('  Action: Waiting for backups table row to be visible (mobile)');
         await page.locator('#backups-overview-tbody tr').first().waitFor({ state: 'visible', timeout: 15000 }); 
         console.log('  Action: Backups table row visible (mobile)');
+        // Additional wait for backups data to fully load and render
+        console.log('  Action: Waiting additional time for backups data to fully render (mobile)');
+        await page.waitForTimeout(2000);
       }
     }
 ];
