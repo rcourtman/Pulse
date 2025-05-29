@@ -459,19 +459,9 @@ perform_tarball_update() {
         # Always check if CSS assets need building for tarball updates
         print_info "Verifying CSS assets in $PULSE_DIR..."
         if [ ! -f "$PULSE_DIR/src/index.css" ]; then
-            print_info "CSS file missing, building CSS assets..."
-            if npm run build:css --silent >/dev/null 2>&1; then
-                print_success "CSS assets built successfully."
-            else
-                print_warning "Failed to build CSS assets. Frontend may not display correctly."
-            fi
+            print_warning "CSS file missing in tarball - this should not happen. Using existing output.css file."
         elif [ -f "$PULSE_DIR/src/tailwind.config.js" ] && [ "$PULSE_DIR/src/tailwind.config.js" -nt "$PULSE_DIR/src/index.css" ]; then
-            print_info "CSS assets outdated, rebuilding..."
-            if npm run build:css --silent >/dev/null 2>&1; then
-                print_success "CSS assets built successfully."
-            else
-                print_warning "Failed to rebuild CSS assets. Using existing CSS file."
-            fi
+            print_info "CSS config newer than source, but skipping rebuild for tarball installation (CSS should be pre-built)."
         else
             print_info "CSS assets already present and up-to-date."
         fi
@@ -577,20 +567,9 @@ perform_tarball_install() {
         # Always check if CSS assets need building for tarball installs
         print_info "Verifying CSS assets in $PULSE_DIR..."
         if [ ! -f "$PULSE_DIR/src/index.css" ]; then
-            print_info "CSS file missing, building CSS assets..."
-            if npm run build:css --silent >/dev/null 2>&1; then
-                print_success "CSS assets built successfully."
-            else
-                print_error "Failed to build CSS assets."
-                return 1
-            fi
+            print_warning "CSS source file missing in tarball - this should not happen. Using pre-built output.css file."
         elif [ -f "$PULSE_DIR/src/tailwind.config.js" ] && [ "$PULSE_DIR/src/tailwind.config.js" -nt "$PULSE_DIR/src/index.css" ]; then
-            print_info "CSS assets outdated, rebuilding..."
-            if npm run build:css --silent >/dev/null 2>&1; then
-                print_success "CSS assets built successfully."
-            else
-                print_warning "Failed to rebuild CSS assets. Using existing CSS file."
-            fi
+            print_info "CSS config newer than source, but skipping rebuild for tarball installation (CSS should be pre-built)."
         else
             print_info "CSS assets already present and up-to-date."
         fi
