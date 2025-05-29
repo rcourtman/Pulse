@@ -456,36 +456,42 @@ perform_tarball_update() {
             print_info "NPM dependencies already present in tarball."
         fi
         
-        # Always check if CSS assets need building for tarball updates
+        # Always check if CSS assets are valid after tarball extraction
         print_info "Verifying CSS assets in $PULSE_DIR..."
         
         # Check if output.css exists and is valid (not corrupted with HTML content)
-        css_needs_fix=false
         if [ ! -f "$PULSE_DIR/src/public/output.css" ]; then
-            print_warning "output.css file is missing - will be restored from tarball"
-            css_needs_fix=true
+            print_error "Critical: output.css file is missing after tarball extraction. This indicates a problem with the tarball or extraction process."
+            # Try to re-extract just the CSS file as a fallback
+            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-${TARGET_TAG#v}.tar.gz" | tar -xzf - --to-stdout "pulse-${TARGET_TAG#v}/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
+                print_success "CSS file recovered using direct extraction."
+            else
+                print_error "Failed to recover CSS file. Frontend may not display correctly."
+            fi
         elif [ ! -s "$PULSE_DIR/src/public/output.css" ]; then
-            print_warning "output.css file is empty - will be restored from tarball"
-            css_needs_fix=true
+            print_error "Critical: output.css file is empty after tarball extraction."
+            # Try to re-extract just the CSS file as a fallback
+            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-${TARGET_TAG#v}.tar.gz" | tar -xzf - --to-stdout "pulse-${TARGET_TAG#v}/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
+                print_success "CSS file recovered using direct extraction."
+            else
+                print_error "Failed to recover CSS file. Frontend may not display correctly."
+            fi
         elif head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
-            print_warning "output.css contains HTML instead of CSS (corrupted from previous installation issue) - will be restored from tarball"
-            css_needs_fix=true
-        fi
-        
-        if [ "$css_needs_fix" = "true" ]; then
-            # The tarball extraction should have already provided a good CSS file
-            # but let's verify it was properly extracted
-            if [ -f "$PULSE_DIR/src/public/output.css" ] && [ -s "$PULSE_DIR/src/public/output.css" ]; then
-                if ! head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
-                    print_success "CSS assets restored from tarball."
+            print_warning "output.css contains HTML instead of CSS - attempting to recover from tarball..."
+            # Try to re-extract just the CSS file as a fallback
+            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-${TARGET_TAG#v}.tar.gz" | tar -xzf - --to-stdout "pulse-${TARGET_TAG#v}/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
+                # Verify the recovery worked
+                if [ -s "$PULSE_DIR/src/public/output.css" ] && ! head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
+                    print_success "CSS file recovered and verified."
+                    chown "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR/src/public/output.css"
                 else
-                    print_error "Failed to restore CSS assets from tarball - CSS file still corrupted."
+                    print_error "CSS recovery failed. Frontend may not display correctly."
                 fi
             else
-                print_error "Failed to restore CSS assets from tarball - CSS file missing or empty."
+                print_error "Failed to recover CSS file. Frontend may not display correctly."
             fi
         else
-            print_info "CSS assets verified and ready."
+            print_success "CSS assets verified and ready."
         fi
         
         # Restore user data after successful tarball extraction
