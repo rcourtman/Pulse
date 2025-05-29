@@ -101,6 +101,7 @@ sudo ./install-pulse.sh
   - [Node.js (Development)](#️-running-the-application-nodejs-development)
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
+- [Updating Pulse](#-updating-pulse)
 - [Contributing](#-contributing)
 - [Privacy](#-privacy)
 - [License](#-license)
@@ -230,33 +231,7 @@ Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE
     *   Optionally enabling automatic updates via cron.
 4.  **Access Pulse:** The script will display the URL (e.g., `http://<LXC-IP-ADDRESS>:7655`).
 
-<details>
-<summary><strong>Updating and Managing the LXC Installation (Click to Expand)</strong></summary>
-
-**Updating Pulse:**
-
-Re-run the script from the directory where you downloaded it:
-```bash
-./install-pulse.sh
-```
-Or run non-interactively (e.g., for cron):
-```bash
-./install-pulse.sh --update
-```
-
-**Managing the Pulse Service:**
-
-Use standard `systemctl` commands:
-*   Check Status: `sudo systemctl status pulse-monitor.service`
-*   Stop Service: `sudo systemctl stop pulse-monitor.service`
-*   Start Service: `sudo systemctl start pulse-monitor.service`
-*   View Logs: `sudo journalctl -u pulse-monitor.service -f`
-*   Enable/Disable on Boot: `sudo systemctl enable/disable pulse-monitor.service`
-
-**Automatic Updates:**
-If enabled via the script, a cron job runs `./install-pulse.sh --update` Daily/Weekly/Monthly. Logs are in `/var/log/pulse_update.log`. Manage with `sudo crontab -l -u root` or `sudo crontab -e -u root`.
-
-</details>
+For update instructions, see the [Updating Pulse](#-updating-pulse) section.
 
 ---
 
@@ -503,6 +478,78 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Proxmox VE:** Version 7.x or 8.x recommended.
 - **Proxmox Backup Server:** Version 2.x or 3.x recommended (if monitored).
 - **Web Browser:** Modern evergreen browser.
+
+## 🔄 Updating Pulse
+
+### Community Scripts LXC Installation
+
+If you installed using the Community Scripts method, simply re-run the original installation command:
+
+```bash
+bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"
+```
+
+The script will detect the existing installation and update it automatically.
+
+### Docker Compose Installation
+
+To update a Docker Compose installation:
+
+```bash
+cd /path/to/your/pulse-config
+docker compose pull
+docker compose up -d
+```
+
+This pulls the latest image and recreates the container with the new version.
+
+### Manual LXC Installation
+
+If you used the manual installation script, update by re-running it:
+
+```bash
+# Navigate to where you downloaded the script
+cd /path/to/script/directory
+./install-pulse.sh
+```
+
+Or run non-interactively (useful for automated updates):
+
+```bash
+./install-pulse.sh --update
+```
+
+**Managing the Service:**
+- Check status: `sudo systemctl status pulse-monitor.service`
+- View logs: `sudo journalctl -u pulse-monitor.service -f`
+- Restart: `sudo systemctl restart pulse-monitor.service`
+
+**Automatic Updates:**
+If you enabled automatic updates during installation, they run via cron. Check logs in `/var/log/pulse_update.log`.
+
+### Release Tarball Installation
+
+To update a tarball installation:
+
+1. Download the latest release from [GitHub Releases](https://github.com/rcourtman/Pulse/releases/latest)
+2. Stop the current application
+3. Extract the new tarball to a new directory
+4. Copy your existing `.env` file to the new directory
+5. Start the application: `npm start`
+
+### Development/Source Installation
+
+If running from source code:
+
+```bash
+cd /path/to/pulse
+git pull origin main
+npm install
+npm run build:css
+npm run start    # or your preferred restart method
+```
+
+**Note:** The development setup only requires npm install in the root directory, not in a separate server directory.
 
 ## 📝 Contributing
 
