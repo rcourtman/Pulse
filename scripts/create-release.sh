@@ -1,6 +1,11 @@
 #!/bin/bash
 set -e # Exit immediately if a command exits with a non-zero status.
 
+# This script creates a release tarball for Pulse
+# Note: COPYFILE_DISABLE=1 is used when creating the tarball to prevent
+# macOS extended attributes from being included, which would cause
+# "Ignoring unknown extended header keyword" warnings on extraction
+
 # --- Configuration ---
 # Attempt to get version from package.json
 PACKAGE_VERSION=$(node -p "require('./package.json').version")
@@ -106,7 +111,8 @@ echo "✅ All essential files verified for tarball installation."
 # --- Create Tarball ---
 echo "Creating tarball: $TARBALL_NAME..."
 # Go into the parent of the directory to be tarred to avoid leading paths in tarball
-(cd "$STAGING_PARENT_DIR" && tar -czf "../$TARBALL_NAME" "$RELEASE_DIR_NAME")
+# COPYFILE_DISABLE=1 prevents macOS from adding extended attributes that cause warnings
+(cd "$STAGING_PARENT_DIR" && COPYFILE_DISABLE=1 tar -czf "../$TARBALL_NAME" "$RELEASE_DIR_NAME")
 
 # --- Cleanup ---
 echo "Cleaning up staging directory ($STAGING_PARENT_DIR)..."
