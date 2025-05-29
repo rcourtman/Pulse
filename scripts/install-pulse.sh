@@ -1832,7 +1832,7 @@ case "$INSTALL_MODE" in
             print_info "Starting installation..."
 
             if [ -n "$SPECIFIED_VERSION_TAG" ]; then
-                 if ! git ls-remote --tags --exit-code origin "refs/tags/$SPECIFIED_VERSION_TAG"; then
+                 if ! git ls-remote --tags --exit-code https://github.com/rcourtman/Pulse.git "refs/tags/$SPECIFIED_VERSION_TAG"; then
                      print_error "Specified version tag '$SPECIFIED_VERSION_TAG' not found on remote repository."
                      exit 1
                  else
