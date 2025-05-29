@@ -323,7 +323,7 @@ download_and_extract_tarball() {
         return 1
     fi
     
-    local tarball_url="https://github.com/rcourtman/Pulse/archive/refs/tags/$tag.tar.gz"
+    local tarball_url="https://github.com/rcourtman/Pulse/releases/download/$tag/pulse-${tag#v}.tar.gz"
     local temp_tarball="/tmp/pulse-$tag.tar.gz"
     local temp_extract_dir="/tmp/pulse-extract-$$"
     
