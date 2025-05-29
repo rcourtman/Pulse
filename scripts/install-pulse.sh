@@ -1047,9 +1047,35 @@ perform_update() {
         return 1
     fi
     
+    # Backup .env file before cleaning to preserve user configuration
+    local env_backup_path=""
+    if [ -f "$PULSE_DIR/.env" ]; then
+        env_backup_path="/tmp/.env.backup.$$"
+        print_info "Backing up .env file to preserve user configuration..."
+        if cp "$PULSE_DIR/.env" "$env_backup_path"; then
+            print_success ".env file backed up temporarily."
+        else
+            print_warning "Failed to backup .env file. Configuration may be lost."
+            env_backup_path=""
+        fi
+    fi
+    
     print_info "Cleaning untracked files and directories..."
     if ! sudo -u "$PULSE_USER" git clean -fd; then
         print_warning "Failed to clean untracked files, continuing anyway."
+    fi
+    
+    # Restore .env file after cleaning
+    if [ -n "$env_backup_path" ] && [ -f "$env_backup_path" ]; then
+        print_info "Restoring .env file..."
+        if cp "$env_backup_path" "$PULSE_DIR/.env"; then
+            chown "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR/.env"
+            chmod 600 "$PULSE_DIR/.env"
+            print_success ".env file restored successfully."
+        else
+            print_warning "Failed to restore .env file from backup."
+        fi
+        rm -f "$env_backup_path"
     fi
 
     print_info "Fetching latest changes from git [running as user $PULSE_USER]..."
