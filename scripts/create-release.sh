@@ -44,6 +44,10 @@ if [ ! -f "src/public/output.css" ]; then
     exit 1
 fi
 
+# --- Strip Extended Attributes First ---
+echo "Stripping macOS extended attributes from source files..."
+find . -type f \( -name "*.js" -o -name "*.json" -o -name "*.md" -o -name "*.css" -o -name "*.html" -o -name "*.sh" \) -exec xattr -c {} \; 2>/dev/null || true
+
 # --- Copy Application Files ---
 echo "Copying application files to $STAGING_FULL_PATH..."
 
@@ -107,6 +111,10 @@ if [ -n "$MISSING_FILES" ]; then
     exit 1
 fi
 echo "✅ All essential files verified for tarball installation."
+
+# --- Final Extended Attributes Cleanup ---
+echo "Final cleanup: Stripping extended attributes from staging directory..."
+find "$STAGING_PARENT_DIR" -type f -exec xattr -c {} \; 2>/dev/null || true
 
 # --- Create Tarball ---
 echo "Creating tarball: $TARBALL_NAME..."
