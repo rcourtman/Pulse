@@ -1,6 +1,6 @@
 {
   "name": "pulse",
-  "version": "3.12.3-dev.0",
+  "version": "3.12.3",
   "description": "A lightweight monitoring application for Proxmox VE.",
   "main": "server/index.js",
   "scripts": {
@@ -51,5 +51,8 @@
     "transformIgnorePatterns": [
       "/node_modules/(?!p-limit|yocto-queue)/"
     ]
+  },
+  "overrides": {
+    "glob": "^10.4.5"
   }
 }

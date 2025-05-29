@@ -619,21 +619,10 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
         
         const deduplicatedTasks = Array.from(finalTasksMap.values());
         
-        // Debug logging for PBS task processing
+        // Simplified logging for PBS task processing
         const failedTasks = deduplicatedTasks.filter(task => task.status !== 'OK');
         if (failedTasks.length > 0) {
-            console.log(`[PBS Tasks Debug] Found ${failedTasks.length} failed tasks for ${config.name}:`, 
-                failedTasks.map(task => ({
-                    guestId: task.guestId,
-                    guestType: task.guestType,
-                    status: task.status,
-                    starttime: task.starttime,
-                    upid: task.upid,
-                    failureTask: task.failureTask || false
-                }))
-            );
-        } else {
-            console.log(`[PBS Tasks Debug] No failed tasks found for ${config.name}. Total tasks: ${deduplicatedTasks.length}`);
+            console.log(`[PBS Tasks] Found ${failedTasks.length} failed tasks for ${config.name}`);
         }
         
         // console.log(`[DataFetcher] Final task count for ${config.name}: ${allBackupTasks.length} -> ${deduplicatedTasks.length} (removed ${allBackupTasks.length - deduplicatedTasks.length} duplicates)`); // Removed verbose log
