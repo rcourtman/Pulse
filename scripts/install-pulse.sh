@@ -350,12 +350,16 @@ download_and_extract_tarball() {
     
     # Move extracted content to target directory
     print_info "Installing files to $target_dir..."
+    # Enable dotglob to include hidden files like .env.example
+    shopt -s dotglob
     if ! cp -r "$temp_extract_dir"/* "$target_dir/"; then
         print_error "Failed to copy files to target directory"
+        shopt -u dotglob
         rm -f "$temp_tarball"
         rm -rf "$temp_extract_dir"
         return 1
     fi
+    shopt -u dotglob
     
     # Set proper ownership
     chown -R "$PULSE_USER":"$PULSE_USER" "$target_dir"
