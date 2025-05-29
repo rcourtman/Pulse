@@ -87,7 +87,7 @@ PulseApp.ui.tabs = (() => {
 
             if (tabId === 'backups') {
                 if (PulseApp.ui && PulseApp.ui.backups) {
-                    PulseApp.ui.backups.updateBackupsTab();
+                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action since they switched tabs
                 } else {
                     console.warn('[Tabs] PulseApp.ui.backups not available for updateBackupsTab')
                 }
@@ -392,19 +392,16 @@ PulseApp.ui.tabs = (() => {
                 break;
             case 'storage':
                 if (PulseApp.ui && PulseApp.ui.storage) {
-                    console.log(`[Tabs] Lazy loading ${tabId} content`);
                     // Storage data is already fetched, just update the UI
                 }
                 break;
             case 'backups':
                 if (PulseApp.ui && PulseApp.ui.backups) {
-                    console.log(`[Tabs] Lazy loading ${tabId} content`);
                     // Backups data is fetched on demand in updateBackupsTab
                 }
                 break;
             case 'pbs':
                 if (PulseApp.ui && PulseApp.ui.pbs) {
-                    console.log(`[Tabs] Lazy loading ${tabId} content`);
                     // PBS data is already fetched, just update the UI
                 }
                 break;

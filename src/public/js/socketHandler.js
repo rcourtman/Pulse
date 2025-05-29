@@ -6,7 +6,6 @@ PulseApp.socketHandler = (() => {
     const reconnectDelay = 2000; // 2 seconds
 
     function init() {
-        console.log('[Socket] Initializing socket connection...');
         createSocket();
     }
 
@@ -44,7 +43,6 @@ PulseApp.socketHandler = (() => {
     }
 
     function handleConnect() {
-        console.log('[Socket] Connected to server');
         isConnected = true;
         reconnectAttempts = 0;
         updateConnectionStatus('connected');
@@ -54,7 +52,6 @@ PulseApp.socketHandler = (() => {
     }
 
     function handleDisconnect(reason) {
-        console.log('[Socket] Disconnected from server:', reason);
         isConnected = false;
         updateConnectionStatus('disconnected');
         
@@ -85,7 +82,6 @@ PulseApp.socketHandler = (() => {
     }
 
     function handleInitialState(data) {
-        console.log('[Socket] Received initial state:', data);
         
         try {
             if (PulseApp.state) {
@@ -105,7 +101,6 @@ PulseApp.socketHandler = (() => {
     }
 
     function handleAlert(alert) {
-        console.log('[Socket] Received alert:', alert);
         
         // Forward to alerts handler
         if (PulseApp.alerts) {
@@ -115,7 +110,6 @@ PulseApp.socketHandler = (() => {
     }
 
     function handleAlertResolved(alert) {
-        console.log('[Socket] Alert resolved:', alert);
         
         // Forward to alerts handler
         if (PulseApp.alerts) {
@@ -125,7 +119,6 @@ PulseApp.socketHandler = (() => {
     }
 
     function handleHotReload() {
-        console.log('[Socket] Hot reload triggered');
         if (process.env.NODE_ENV === 'development') {
             window.location.reload();
         }
@@ -137,7 +130,6 @@ PulseApp.socketHandler = (() => {
     }
 
     function handleReconnect() {
-        console.log('[Socket] Reconnected successfully');
         reconnectAttempts = 0;
         updateConnectionStatus('connected');
     }
@@ -159,7 +151,6 @@ PulseApp.socketHandler = (() => {
             updateConnectionStatus('reconnecting');
             
             setTimeout(() => {
-                console.log(`[Socket] Attempting to reconnect... (${reconnectAttempts}/${maxReconnectAttempts})`);
                 socket.connect();
             }, reconnectDelay * reconnectAttempts); // Exponential backoff
         } else {
@@ -388,8 +379,6 @@ PulseApp.socketHandler = (() => {
             // data.pbs is the array of PBS instances
             // data.allPbsTasks and data.aggregatedPbsTaskSummary are top-level in the state
             if (PulseApp.ui && PulseApp.ui.pbs && data.pbs) { // Ensure data.pbs exists
-                console.log('[Socket - PBS Tab] Received PBS data:', data.pbs);
-                console.log('[Socket - PBS Tab] Number of PBS instances:', data.pbs.length);
                 // PulseApp.ui.pbs.updatePbsInfo expects the array of PBS instances.
                 // Task data (allPbsTasks, aggregatedPbsTaskSummary) is available in PulseApp.state if needed by UI components directly.
                 // For now, updatePbsInfo primarily works with the pbs array.
@@ -414,8 +403,12 @@ PulseApp.socketHandler = (() => {
 
     function updateBackupsTab(data) {
         try {
-            if (PulseApp.ui && PulseApp.ui.backups && data.pbs) {
-                PulseApp.ui.backups.updateBackupsTab();
+            // Only update if backups tab is active and we have relevant data
+            const backupsTab = document.querySelector('[data-tab="backups"]');
+            const isBackupsTabActive = backupsTab && backupsTab.classList.contains('active');
+            
+            if (PulseApp.ui && PulseApp.ui.backups && data.pbs && isBackupsTabActive) {
+                PulseApp.ui.backups.updateBackupsTab(false); // Mark as API update, not user action
             }
         } catch (error) {
             console.error('[Socket] Error updating backups tab:', error);

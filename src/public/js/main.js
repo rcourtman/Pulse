@@ -117,15 +117,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (loadingOverlay.style.display !== 'none') { // Only act if currently visible
             if (isConnected && initialDataReceived) {
-                console.log('[UI Update] Data received and socket connected, hiding loading overlay.');
                 loadingOverlay.style.display = 'none';
             } else if (!isConnected) {
-                console.log('[UI Update] Socket disconnected. Keeping loading overlay visible.');
             }
             // If initialDataReceived is false, or socket is connected but no data yet, overlay remains.
         } else if (!isConnected && loadingOverlay.style.display === 'none') {
             // If overlay is hidden but socket disconnects, re-show it.
-            console.log('[UI Update] Socket disconnected and overlay was hidden. Re-showing loading overlay.');
             loadingOverlay.style.display = 'flex'; // Or 'block', or its original display type
         }
     }
@@ -189,7 +186,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 return response.json();
             })
             .then(data => {
-                console.log('Version data received:', data);
                 if (data.version) {
                     versionSpan.textContent = data.version;
                     
@@ -244,21 +240,18 @@ document.addEventListener('DOMContentLoaded', function() {
     initializeModules();
     
     // Fetch version immediately and retry after a short delay if needed
-    console.log('[Main] Fetching version...');
     fetchVersion();
     
     // Also try again after DOM is fully ready and socket might be connected
     setTimeout(() => {
         const versionSpan = document.getElementById('app-version');
         if (versionSpan && (versionSpan.textContent === 'loading...' || versionSpan.textContent === 'error')) {
-            console.log('[Main] Retrying version fetch...');
             fetchVersion();
         }
     }, 2000);
     
     // Periodically check for updates (every 6 hours)
     setInterval(() => {
-        console.log('[Main] Checking for version updates...');
         fetchVersion();
     }, 6 * 60 * 60 * 1000);
 });

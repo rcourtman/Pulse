@@ -549,6 +549,55 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                 }
             });
             
+            // Add individual guest failure tasks from real backup tasks that didn't match synthetic runs
+            // These represent failed backup attempts where no snapshot was created
+            realBackupTasks.forEach(task => {
+                if (!usedUPIDs.has(task.upid) && task.status !== 'OK') {
+                    // Extract guest info from worker_id (format: "datastore:backup-type/backup-id")
+                    if (task.worker_id) {
+                        const parts = task.worker_id.split(':');
+                        if (parts.length >= 2) {
+                            const guestPart = parts[1];
+                            const guestMatch = guestPart.match(/^([^/]+)\/(.+)$/);
+                            if (guestMatch) {
+                                const guestType = guestMatch[1];
+                                const guestId = guestMatch[2];
+                                const datastoreName = parts[0] || 'unknown';
+                                
+                                // Create a failed backup task entry
+                                const failedBackupRun = {
+                                    type: 'backup',
+                                    status: task.status,
+                                    starttime: task.starttime,
+                                    endtime: task.endtime,
+                                    node: nodeName,
+                                    guest: `${guestType}/${guestId}`,
+                                    guestType: guestType,
+                                    guestId: guestId,
+                                    upid: task.upid,
+                                    comment: task.comment || '',
+                                    size: 0, // No snapshot created
+                                    owner: task.user || 'unknown',
+                                    datastore: datastoreName,
+                                    // PBS-specific fields
+                                    pbsBackupRun: true,
+                                    backupDate: new Date(task.starttime * 1000).toISOString().split('T')[0],
+                                    snapshotCount: 0, // Failed, so no snapshots
+                                    protected: false,
+                                    // Failure details
+                                    failureTask: true,
+                                    exitcode: task.exitcode,
+                                    user: task.user
+                                };
+                                
+                                enhancedBackupRuns.push(failedBackupRun);
+                                usedUPIDs.add(task.upid);
+                            }
+                        }
+                    }
+                }
+            });
+            
             // Add enhanced synthetic backup runs and non-backup admin tasks
             allBackupTasks.push(...enhancedBackupRuns);
             allBackupTasks.push(...nonBackupAdminTasks);
@@ -569,6 +618,23 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
         });
         
         const deduplicatedTasks = Array.from(finalTasksMap.values());
+        
+        // Debug logging for PBS task processing
+        const failedTasks = deduplicatedTasks.filter(task => task.status !== 'OK');
+        if (failedTasks.length > 0) {
+            console.log(`[PBS Tasks Debug] Found ${failedTasks.length} failed tasks for ${config.name}:`, 
+                failedTasks.map(task => ({
+                    guestId: task.guestId,
+                    guestType: task.guestType,
+                    status: task.status,
+                    starttime: task.starttime,
+                    upid: task.upid,
+                    failureTask: task.failureTask || false
+                }))
+            );
+        } else {
+            console.log(`[PBS Tasks Debug] No failed tasks found for ${config.name}. Total tasks: ${deduplicatedTasks.length}`);
+        }
         
         // console.log(`[DataFetcher] Final task count for ${config.name}: ${allBackupTasks.length} -> ${deduplicatedTasks.length} (removed ${allBackupTasks.length - deduplicatedTasks.length} duplicates)`); // Removed verbose log
         

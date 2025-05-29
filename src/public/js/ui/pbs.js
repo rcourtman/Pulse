@@ -1909,7 +1909,6 @@ PulseApp.ui.pbs = (() => {
     }
 
     function updatePbsInfo(pbsArray) {
-        console.log('[PBS Debug] updatePbsInfo received pbsArray:', JSON.parse(JSON.stringify(pbsArray))); // Log the received PBS array
         const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
         if (!container) {
             console.error(`PBS container element #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found!`);

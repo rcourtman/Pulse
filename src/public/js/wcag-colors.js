@@ -33,7 +33,6 @@ PulseApp.wcagColors = (() => {
     
     function applyWCAGColors() {
         // This would be called during initialization to update CSS classes
-        console.log('WCAG color improvements ready');
     }
     
     function getWCAGColor(originalClass) {

@@ -41,7 +41,7 @@ PulseApp.ui.backups = (() => {
         backupsTabContent = document.getElementById('backups');
 
         if (backupsSearchInput) {
-            const debouncedUpdate = PulseApp.utils.debounce(updateBackupsTab, 300);
+            const debouncedUpdate = PulseApp.utils.debounce(() => updateBackupsTab(true), 300);
             backupsSearchInput.addEventListener('input', debouncedUpdate);
         } else {
             console.warn('Element #backups-search not found - backups text filtering disabled.');
@@ -58,6 +58,52 @@ PulseApp.ui.backups = (() => {
                 }
             });
         }
+        
+        // Add event listeners for filter changes
+        const filterElements = [
+            'backups-filter-type-all', 'backups-filter-type-vm', 'backups-filter-type-ct',
+            'backups-filter-backup-all', 'backups-filter-backup-pbs', 'backups-filter-backup-pve', 'backups-filter-backup-snapshots',
+            'backups-filter-status-all', 'backups-filter-status-ok', 'backups-filter-status-stale', 'backups-filter-status-warning', 'backups-filter-status-none',
+            'backups-filter-failures'
+        ];
+        
+        filterElements.forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('change', () => updateBackupsTab(true));
+            }
+        });
+        
+        // Global ESC key handler for backups tab
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                // Check if backups tab is currently active
+                const backupsTab = document.querySelector('.tab[data-tab="backups"]');
+                const isBackupsTabActive = backupsTab && backupsTab.classList.contains('active');
+                
+                if (isBackupsTabActive) {
+                    // Check if there are any active filters to clear
+                    const calendarFilter = PulseApp.state.get('calendarDateFilter');
+                    const searchTerm = backupsSearchInput ? backupsSearchInput.value : '';
+                    const typeFilter = PulseApp.state.get('backupsFilterGuestType');
+                    const healthFilter = PulseApp.state.get('backupsFilterHealth');
+                    const backupTypeFilter = PulseApp.state.get('backupsFilterBackupType');
+                    const failuresFilter = PulseApp.state.get('backupsFilterFailures');
+                    
+                    const hasActiveFilters = calendarFilter || 
+                                           searchTerm || 
+                                           (typeFilter && typeFilter !== 'all') || 
+                                           (healthFilter && healthFilter !== 'all') ||
+                                           (backupTypeFilter && backupTypeFilter !== 'all') ||
+                                           failuresFilter;
+                    
+                    if (hasActiveFilters) {
+                        event.preventDefault();
+                        resetBackupsView();
+                    }
+                }
+            }
+        });
         
         // Initialize mobile scroll indicators
         if (window.innerWidth < 768) {
@@ -113,110 +159,6 @@ PulseApp.ui.backups = (() => {
         };
     }
 
-    function createConsolidatedBackupSummary(summary, backupData, backupStatusByGuest) {
-        // Calculate additional stats for consolidated view
-        const stats = PulseApp.ui.backupSummaryCards ? 
-            PulseApp.ui.backupSummaryCards.calculateBackupStatistics(backupData) : 
-            { lastBackup: { time: null }, coverage: { daily: 0, weekly: 0, monthly: 0 }, protected: { count: 0 } };
-        
-        // For backup health, reverse the color logic - higher percentage should be green
-        const healthColorClass = summary.healthyPercent >= 80 ? 'text-green-600' : 
-                                 summary.healthyPercent >= 60 ? 'text-yellow-600' : 'text-red-600';
-        const progressColor = summary.healthyPercent >= 80 ? 'green' : 
-                             summary.healthyPercent >= 60 ? 'yellow' : 'red';
-        
-        // Format last backup time
-        const lastBackupText = stats.lastBackup.time ? 
-            formatTimeAgo(Date.now() - stats.lastBackup.time) : 
-            'No backups';
-        const lastBackupClass = stats.lastBackup.time ? 'text-gray-900 dark:text-gray-100' : 'text-red-600 dark:text-red-400';
-        
-        // Determine coverage status
-        let coverageStatus = 'Good';
-        let coverageClass = 'text-green-600 dark:text-green-400';
-        if (stats.coverage.daily === 0) {
-            coverageStatus = 'Poor';
-            coverageClass = 'text-red-600 dark:text-red-400';
-        } else if (stats.coverage.weekly < 3) {
-            coverageStatus = 'Fair';
-            coverageClass = 'text-yellow-600 dark:text-yellow-400';
-        }
-        
-        return `
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4">
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                    <!-- Overview Section -->
-                    <div class="lg:col-span-1">
-                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Backup Overview</h3>
-                        <div class="space-y-2 text-sm">
-                            <div class="flex justify-between items-center">
-                                <span class="text-gray-500 dark:text-gray-400">Total Guests:</span>
-                                <span class="font-medium text-gray-900 dark:text-gray-100">${summary.totalGuests}</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-gray-500 dark:text-gray-400">Last Backup:</span>
-                                <span class="font-medium ${lastBackupClass}">${lastBackupText}</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-gray-500 dark:text-gray-400">Coverage:</span>
-                                <span class="font-medium ${coverageClass}">${coverageStatus}</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-gray-500 dark:text-gray-400">Protected:</span>
-                                <span class="font-medium text-gray-900 dark:text-gray-100">${stats.protected.count}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Backup Types Section -->
-                    <div class="lg:col-span-1">
-                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Backup Types</h3>
-                        <div class="space-y-2">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <span class="inline-block w-2 h-2 bg-blue-500 rounded-full"></span>
-                                    <span class="text-sm text-gray-600 dark:text-gray-400">Snapshots</span>
-                                </div>
-                                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">${summary.totalSnapshots}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <span class="inline-block w-2 h-2 bg-yellow-500 rounded-full"></span>
-                                    <span class="text-sm text-gray-600 dark:text-gray-400">PVE Backups</span>
-                                </div>
-                                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">${summary.totalPveBackups}</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <span class="inline-block w-2 h-2 bg-green-500 rounded-full"></span>
-                                    <span class="text-sm text-gray-600 dark:text-gray-400">PBS Backups</span>
-                                </div>
-                                <span class="text-sm font-medium text-gray-900 dark:text-gray-100">${summary.totalPbsBackups}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Health Status Section -->
-                    <div class="lg:col-span-1">
-                        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Health Status</h3>
-                        <div class="space-y-2">
-                            <div class="flex items-center justify-between">
-                                <span class="text-sm text-gray-600 dark:text-gray-400">Overall Health</span>
-                                <span class="text-sm font-medium ${healthColorClass}">${summary.healthyPercent.toFixed(0)}%</span>
-                            </div>
-                            ${PulseApp.utils.createProgressTextBarHTML(summary.healthyPercent, '', progressColor, '')}
-                            <div class="grid grid-cols-2 gap-2 text-xs mt-2">
-                                ${summary.healthyCount > 0 ? `<span class="text-green-600 dark:text-green-400">● ${summary.healthyCount} healthy</span>` : ''}
-                                ${summary.warningCount > 0 ? `<span class="text-yellow-600 dark:text-yellow-400">● ${summary.warningCount} warning</span>` : ''}
-                                ${summary.errorCount > 0 ? `<span class="text-red-600 dark:text-red-400">● ${summary.errorCount} failed</span>` : ''}
-                                ${summary.noneCount > 0 ? `<span class="text-gray-600 dark:text-gray-400">● ${summary.noneCount} none</span>` : ''}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
     
     function formatTimeAgo(milliseconds) {
         const seconds = Math.floor(milliseconds / 1000);
@@ -279,15 +221,15 @@ PulseApp.ui.backups = (() => {
             </div>
             <div class="flex items-center gap-2 text-[10px] text-gray-600 dark:text-gray-400">
                 <div class="flex items-center gap-1">
-                    <div class="w-2 h-2 bg-blue-500 rounded-sm"></div>
+                    <div class="w-2 h-2 bg-yellow-500 rounded-sm"></div>
                     <span>${snapshotTotal}</span>
                 </div>
                 <div class="flex items-center gap-1">
-                    <div class="w-2 h-2 bg-yellow-500 rounded-sm"></div>
+                    <div class="w-2 h-2 bg-orange-500 rounded-sm"></div>
                     <span>${pveTotal}</span>
                 </div>
                 <div class="flex items-center gap-1">
-                    <div class="w-2 h-2 bg-green-500 rounded-sm"></div>
+                    <div class="w-2 h-2 bg-purple-500 rounded-sm"></div>
                     <span>${pbsTotal}</span>
                 </div>
             </div>
@@ -329,26 +271,32 @@ PulseApp.ui.backups = (() => {
         const initialDataReceived = PulseApp.state.get('initialDataReceived');
         const allGuests = [...vmsData, ...containersData];
 
+        // Debug logging for PBS data
+
         // Combine PBS and PVE backup tasks
-        const pbsBackupTasks = pbsDataArray.flatMap(pbs =>
-            (pbs.backupTasks?.recentTasks || []).map(task => ({
+        const pbsBackupTasks = pbsDataArray.flatMap(pbs => {
+            return (pbs.backupTasks?.recentTasks || []).map(task => ({
                 ...task,
-                guestId: task.id?.split('/')[1] || null,
-                guestTypePbs: task.id?.split('/')[0] || null,
+                guestId: task.id?.split('/')[1] || task.guestId || null,
+                guestTypePbs: task.id?.split('/')[0] || task.guestType || null,
                 pbsInstanceName: pbs.pbsInstanceName,
                 source: 'pbs'
-            }))
-        );
+            }));
+        });
 
         const pveBackupTasks = (pveBackups.backupTasks || []).map(task => ({
             ...task,
-            guestId: task.guestId,
-            guestTypePbs: task.guestType,
+            guestId: task.guestId || task.vmid || null,
+            guestTypePbs: task.guestType || task.type || null,
             startTime: task.starttime,
             source: 'pve'
         }));
 
         const allRecentBackupTasks = [...pbsBackupTasks, ...pveBackupTasks];
+        
+        
+        // Debug failed tasks
+        const failedTasks = allRecentBackupTasks.filter(task => task.status !== 'OK');
 
         // Combine PBS snapshots and PVE storage backups
         const pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
@@ -381,10 +329,13 @@ PulseApp.ui.backups = (() => {
         const snapshotsByGuest = new Map();
 
         allRecentBackupTasks.forEach(task => {
+            // Debug task mapping for first few tasks
+            
             const key = `${task.guestId}-${task.guestTypePbs}`;
             if (!tasksByGuest.has(key)) tasksByGuest.set(key, []);
             tasksByGuest.get(key).push(task);
         });
+        
 
         allSnapshots.forEach(snap => {
             const key = `${snap.backupVMID}-${snap.backupType}`;
@@ -467,6 +418,53 @@ PulseApp.ui.backups = (() => {
         } else {
             healthStatus = 'none';
             displayTimestamp = null;
+        }
+
+        // Calculate recent failures by analyzing actual PBS and PVE backup tasks
+        let recentFailures = 0;
+        let lastFailureTime = null;
+        
+        // Get recent failure window (7 days)
+        const now = Math.floor(Date.now() / 1000);
+        const sevenDaysAgoForFailures = now - (7 * 24 * 60 * 60);
+        
+        
+        if (guestTasks && guestTasks.length > 0) {
+            // Analyze actual backup tasks for failures in the last 7 days
+            const recentFailedTasks = guestTasks.filter(task => {
+                // Include tasks from the last 7 days that failed
+                return task.startTime >= sevenDaysAgoForFailures && 
+                       task.status !== 'OK' && 
+                       task.status !== null && 
+                       task.status !== undefined;
+            });
+            
+            recentFailures = recentFailedTasks.length;
+            
+            // Debug logging for failed tasks
+            if (parseInt(guest.vmid) <= 105 && recentFailedTasks.length > 0) {
+            }
+            
+            // Find the most recent failure timestamp
+            if (recentFailedTasks.length > 0) {
+                const latestFailedTask = recentFailedTasks.reduce((latest, task) => {
+                    return (task.startTime > latest.startTime) ? task : latest;
+                });
+                lastFailureTime = latestFailedTask.startTime;
+            }
+        }
+        
+        // If no task-based failures found but health status indicates failure, count as 1
+        if (recentFailures === 0 && healthStatus === 'failed') {
+            recentFailures = 1;
+            lastFailureTime = displayTimestamp;
+            
+            if (parseInt(guest.vmid) <= 105) {
+            }
+        }
+        
+        // Final debug log
+        if (parseInt(guest.vmid) <= 105) {
         }
 
         // Enhanced 7-day backup status calculation with backup type tracking
@@ -639,6 +637,8 @@ PulseApp.ui.backups = (() => {
             backupHealthStatus: healthStatus,
             last7DaysBackupStatus: last7DaysBackupStatus,
             snapshotCount: guestSnapshotCount,
+            recentFailures: recentFailures,
+            lastFailureTime: lastFailureTime,
             endpointId: guest.endpointId
         };
     }
@@ -648,12 +648,24 @@ PulseApp.ui.backups = (() => {
         const backupsSearchTerms = currentBackupsSearchTerm.split(',').map(term => term.trim()).filter(term => term);
         const backupsFilterHealth = PulseApp.state.get('backupsFilterHealth');
         const backupsFilterGuestType = PulseApp.state.get('backupsFilterGuestType');
+        const backupsFilterBackupType = PulseApp.state.get('backupsFilterBackupType');
+        const calendarDateFilter = PulseApp.state.get('calendarDateFilter');
+        const showFailuresOnly = PulseApp.state.get('backupsFilterFailures') || false;
+
+        // Debug logging for failures filter
+        if (showFailuresOnly) {
+            const guestsWithFailures = backupStatusByGuest.filter(item => item.recentFailures > 0);
+        }
 
         return backupStatusByGuest.filter(item => {
+            // Failures filter - show only guests with recent failures
+            if (showFailuresOnly && item.recentFailures === 0) {
+                return false;
+            }
+
             const healthMatch = (backupsFilterHealth === 'all') ||
                                 (backupsFilterHealth === 'ok' && (item.backupHealthStatus === 'ok' || item.backupHealthStatus === 'stale')) ||
                                 (backupsFilterHealth === 'warning' && (item.backupHealthStatus === 'old')) ||
-                                (backupsFilterHealth === 'error' && item.backupHealthStatus === 'failed') ||
                                 (backupsFilterHealth === 'none' && item.backupHealthStatus === 'none');
             if (!healthMatch) return false;
 
@@ -661,6 +673,25 @@ PulseApp.ui.backups = (() => {
                               (backupsFilterGuestType === 'vm' && item.guestType === 'VM') ||
                               (backupsFilterGuestType === 'lxc' && item.guestType === 'LXC');
             if (!typeMatch) return false;
+
+            // Backup type filter - only show guests that have the specified backup type
+            if (backupsFilterBackupType && backupsFilterBackupType !== 'all') {
+                let hasBackupType = false;
+                if (backupsFilterBackupType === 'pbs' && item.pbsBackups > 0) {
+                    hasBackupType = true;
+                } else if (backupsFilterBackupType === 'pve' && item.pveBackups > 0) {
+                    hasBackupType = true;
+                } else if (backupsFilterBackupType === 'snapshots' && item.snapshotCount > 0) {
+                    hasBackupType = true;
+                }
+                if (!hasBackupType) return false;
+            }
+
+            // Calendar date filter - only show guests that had backups on the selected date
+            if (calendarDateFilter && calendarDateFilter.guestIds && calendarDateFilter.guestIds.length > 0) {
+                const guestIdMatch = calendarDateFilter.guestIds.includes(item.guestId.toString());
+                if (!guestIdMatch) return false;
+            }
 
             if (backupsSearchTerms.length > 0) {
                 return backupsSearchTerms.some(term =>
@@ -687,77 +718,12 @@ PulseApp.ui.backups = (() => {
             : 'ct-icon bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 px-1.5 py-0.5 font-medium';
         const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guestStatus.guestType}</span>`;
 
-        // Generate 7-day backup indicators as horizontal bars
-        let sevenDayDots = '<div class="flex space-x-0.5">';
-        if (guestStatus.last7DaysBackupStatus && guestStatus.last7DaysBackupStatus.length === 7) {
-            guestStatus.last7DaysBackupStatus.forEach(dayInfo => {
-                let barContent = '';
-                let barTitle = `${dayInfo.date}: ${dayInfo.details}`;
-                
-                if (dayInfo.backupTypes && dayInfo.backupTypes.length > 0) {
-                    // Sort types by priority: snapshot -> pve -> pbs
-                    const sortedTypes = dayInfo.backupTypes.sort((a, b) => {
-                        const order = { 'snapshot': 0, 'pve': 1, 'pbs': 2 };
-                        return order[a] - order[b];
-                    });
-                    
-                    const typeClasses = {
-                        'snapshot': 'bg-blue-500',     // Blue for snapshots (local)
-                        'pve': 'bg-yellow-500',        // Yellow for PVE (cluster) 
-                        'pbs': 'bg-green-500'          // Green for PBS (remote)
-                    };
-                    
-                    // Use dots for multiple backup types to avoid overlap
-                    if (sortedTypes.length === 1) {
-                        // Single backup type - solid square
-                        const type = sortedTypes[0];
-                        const colorClass = typeClasses[type];
-                        const failureBorder = dayInfo.hasFailures ? 'border border-red-500' : '';
-                        barContent = `<div class="w-2 h-2 ${colorClass} ${failureBorder} rounded-sm" title="${barTitle}"></div>`;
-                    } else {
-                        // Multiple backup types - stacked dots
-                        const failureBorder = dayInfo.hasFailures ? 'border border-red-500' : '';
-                        
-                        barContent = `<div class="flex flex-col w-2 h-2 ${failureBorder} rounded-sm" title="${barTitle}">`;
-                        
-                        if (sortedTypes.length === 2) {
-                            // Two types - split top/bottom
-                            sortedTypes.forEach((type, index) => {
-                                const colorClass = typeClasses[type];
-                                barContent += `<div class="flex-1 ${colorClass} ${index === 0 ? 'rounded-t-sm' : 'rounded-b-sm'}"></div>`;
-                            });
-                        } else {
-                            // Three types - show as striped pattern
-                            const primaryType = sortedTypes[0]; // Show most important type
-                            const colorClass = typeClasses[primaryType];
-                            barContent = `<div class="w-2 h-2 ${colorClass} ${failureBorder} rounded-sm relative" title="${barTitle}">`;
-                            barContent += `<div class="absolute inset-0 bg-gradient-to-r from-transparent via-white via-50% to-transparent opacity-30 rounded-sm"></div>`;
-                            barContent += '</div>';
-                        }
-                        
-                        if (sortedTypes.length === 2) {
-                            barContent += '</div>';
-                        }
-                    }
-                } else {
-                    // No backup activity
-                    barContent = `<div class="w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-sm" title="${barTitle}"></div>`;
-                }
-                
-                sevenDayDots += barContent;
-            });
-        } else {
-            for (let i = 0; i < 7; i++) {
-                 sevenDayDots += '<div class="w-2 h-2 bg-gray-200 dark:bg-gray-700 rounded-sm" title="Data unavailable"></div>';
-            }
-        }
-        sevenDayDots += '</div>';
 
         // Create PBS backup cell with visual indicator
         let pbsBackupCell = '';
         if (guestStatus.pbsBackups > 0) {
-            const pbsIcon = '<span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-1" title="PBS Backup"></span>';
-            pbsBackupCell = `<span class="text-green-700 dark:text-green-300" ${guestStatus.pbsBackupInfo ? `title="${guestStatus.pbsBackupInfo}"` : ''}>${pbsIcon}${guestStatus.pbsBackups}</span>`;
+            const pbsIcon = '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full mr-1" title="PBS Backup"></span>';
+            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${guestStatus.pbsBackupInfo ? `title="${guestStatus.pbsBackupInfo}"` : ''}>${pbsIcon}${guestStatus.pbsBackups}</span>`;
         } else {
             pbsBackupCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }
@@ -765,8 +731,8 @@ PulseApp.ui.backups = (() => {
         // Create PVE backup cell with visual indicator  
         let pveBackupCell = '';
         if (guestStatus.pveBackups > 0) {
-            const pveIcon = '<span class="inline-block w-2 h-2 bg-yellow-500 rounded-full mr-1" title="PVE Backup"></span>';
-            pveBackupCell = `<span class="text-yellow-700 dark:text-yellow-300" ${guestStatus.pveBackupInfo ? `title="${guestStatus.pveBackupInfo}"` : ''}>${pveIcon}${guestStatus.pveBackups}</span>`;
+            const pveIcon = '<span class="inline-block w-2 h-2 bg-orange-500 rounded-full mr-1" title="PVE Backup"></span>';
+            pveBackupCell = `<span class="text-orange-700 dark:text-orange-300" ${guestStatus.pveBackupInfo ? `title="${guestStatus.pveBackupInfo}"` : ''}>${pveIcon}${guestStatus.pveBackups}</span>`;
         } else {
             pveBackupCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }
@@ -774,8 +740,8 @@ PulseApp.ui.backups = (() => {
         // Create snapshot button or count display
         let snapshotCell = '';
         if (guestStatus.snapshotCount > 0) {
-            const snapshotIcon = '<span class="inline-block w-2 h-2 bg-blue-500 rounded-full mr-1" title="VM/CT Snapshot"></span>';
-            snapshotCell = `<button class="text-blue-600 dark:text-blue-400 hover:underline view-snapshots-btn" 
+            const snapshotIcon = '<span class="inline-block w-2 h-2 bg-yellow-500 rounded-full mr-1" title="VM/CT Snapshots"></span>';
+            snapshotCell = `<button class="text-yellow-600 dark:text-yellow-400 hover:underline view-snapshots-btn" 
                 data-vmid="${guestStatus.guestId}" 
                 data-node="${guestStatus.node}"
                 data-endpoint="${guestStatus.endpointId}"
@@ -784,16 +750,27 @@ PulseApp.ui.backups = (() => {
             snapshotCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }
 
+        // Create failures cell
+        let failuresCell = '';
+        if (guestStatus.recentFailures > 0) {
+            const failureTime = guestStatus.lastFailureTime 
+                ? PulseApp.utils.formatPbsTimestamp(guestStatus.lastFailureTime)
+                : 'Unknown';
+            failuresCell = `<span class="text-red-600 dark:text-red-400 font-medium" title="Last failure: ${failureTime}">${guestStatus.recentFailures}</span>`;
+        } else {
+            failuresCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
+        }
+
         row.innerHTML = `
             <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${latestBackupFormatted}</td>
-            <td class="p-1 px-2 text-center">${pbsBackupCell}</td>
-            <td class="p-1 px-2 text-center">${pveBackupCell}</td>
             <td class="p-1 px-2 text-center">${snapshotCell}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${sevenDayDots}</td>
+            <td class="p-1 px-2 text-center">${pveBackupCell}</td>
+            <td class="p-1 px-2 text-center">${pbsBackupCell}</td>
+            <td class="p-1 px-2 text-center">${failuresCell}</td>
         `;
         return row;
     }
@@ -838,8 +815,8 @@ PulseApp.ui.backups = (() => {
             // Restore visual indication if this row was previously selected
             if (currentFilteredGuest === guestId) {
                 row.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
-                // Re-apply calendar filter on restore
-                _filterCalendarToGuest(guestId);
+                // Re-apply calendar filter on restore (not a user action)
+                _filterCalendarToGuest(guestId, false);
             }
             
             row.addEventListener('click', () => {
@@ -869,7 +846,7 @@ PulseApp.ui.backups = (() => {
         }
     }
 
-    function _filterCalendarToGuest(guestId) {
+    function _filterCalendarToGuest(guestId, isUserAction = true) {
         // Re-render the calendar with only this guest's data
         const calendarContainer = document.getElementById('backup-calendar-heatmap');
         if (!calendarContainer || !PulseApp.ui.calendarHeatmap) return;
@@ -948,8 +925,30 @@ PulseApp.ui.backups = (() => {
             backupTasks: [...pbsBackupTasks, ...pveBackupTasks]
         };
         
+        // Get detail card for callback
+        const detailCardContainer = document.getElementById('backup-detail-card');
+        let onDateSelect = null;
+        
+        if (detailCardContainer && PulseApp.ui.backupDetailCard) {
+            // Find existing detail card or create callback
+            const existingCard = detailCardContainer.querySelector('.bg-slate-800');
+            if (existingCard) {
+                onDateSelect = (dateData, instant = false) => {
+                    PulseApp.ui.backupDetailCard.updateBackupDetailCard(existingCard, dateData, instant);
+                };
+                
+                // Only auto-select today on initial filter, not on API updates
+                // The calendar will handle the auto-selection
+            }
+        }
+        
+        // Reset filter when filtering to specific guest
+        if (PulseApp.ui.calendarHeatmap.resetFilter) {
+            PulseApp.ui.calendarHeatmap.resetFilter();
+        }
+        
         // Create filtered calendar for this specific guest
-        const filteredCalendar = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(backupData, guestId, [guestId]);
+        const filteredCalendar = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(backupData, guestId, [guestId], onDateSelect, isUserAction);
         calendarContainer.innerHTML = '';
         calendarContainer.appendChild(filteredCalendar);
     }
@@ -1040,9 +1039,110 @@ PulseApp.ui.backups = (() => {
         
         // Create calendar respecting current table filters
         const filteredGuestIds = filteredBackupStatus.map(guest => guest.guestId.toString());
-        const restoredCalendar = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(backupData, null, filteredGuestIds);
+        // Get detail card for callback
+        const detailCardContainer = document.getElementById('backup-detail-card');
+        let onDateSelect = null;
+        
+        if (detailCardContainer && PulseApp.ui.backupDetailCard) {
+            // Find existing detail card or create callback
+            const existingCard = detailCardContainer.querySelector('.bg-slate-800');
+            if (existingCard) {
+                onDateSelect = (dateData, instant = false) => {
+                    PulseApp.ui.backupDetailCard.updateBackupDetailCard(existingCard, dateData, instant);
+                };
+                
+                // Clear the detail card when resetting filter
+                PulseApp.ui.backupDetailCard.updateBackupDetailCard(existingCard, null, true);
+            }
+        }
+        
+        // Reset filter when restoring full calendar view  
+        if (PulseApp.ui.calendarHeatmap.resetFilter) {
+            PulseApp.ui.calendarHeatmap.resetFilter();
+        }
+        
+        const restoredCalendar = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(backupData, null, filteredGuestIds, onDateSelect);
         calendarContainer.innerHTML = '';
         calendarContainer.appendChild(restoredCalendar);
+    }
+
+    function checkGuestBackupForDate(backupData, guestId, dateKey) {
+        const guestBackups = [];
+        let hasBackups = false;
+        
+        // Get guest data for name lookup
+        const vmsData = PulseApp.state.get('vmsData') || [];
+        const containersData = PulseApp.state.get('containersData') || [];
+        const allGuests = [...vmsData, ...containersData];
+        const guest = allGuests.find(g => g.vmid == guestId);
+        
+        if (!guest) return null;
+        
+        const guestInfo = {
+            vmid: guestId,
+            name: guest.name,
+            type: guest.type === 'qemu' ? 'VM' : 'CT',
+            types: [],
+            backupCount: 0
+        };
+        
+        // Check all backup sources for this guest on this date
+        ['pbsSnapshots', 'pveBackups', 'vmSnapshots'].forEach(source => {
+            if (!backupData[source]) return;
+            
+            const dayBackups = backupData[source].filter(item => {
+                const timestamp = item.ctime || item.snaptime || item['backup-time'];
+                if (!timestamp) return false;
+                
+                const date = new Date(timestamp * 1000);
+                const utcDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+                const itemDateKey = utcDate.toISOString().split('T')[0];
+                
+                const vmid = item.vmid || item['backup-id'] || item.backupVMID;
+                return vmid == guestId && itemDateKey === dateKey;
+            });
+            
+            if (dayBackups.length > 0) {
+                hasBackups = true;
+                guestInfo.types.push(source);
+                guestInfo.backupCount += dayBackups.length;
+            }
+        });
+        
+        if (!hasBackups) return null;
+        
+        // Check for failures
+        let hasFailures = false;
+        if (backupData.backupTasks) {
+            const dayTasks = backupData.backupTasks.filter(task => {
+                if (!task.starttime || task.vmid != guestId) return false;
+                
+                const date = new Date(task.starttime * 1000);
+                const utcDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+                const taskDateKey = utcDate.toISOString().split('T')[0];
+                
+                return taskDateKey === dateKey && task.status !== 'OK';
+            });
+            
+            hasFailures = dayTasks.length > 0;
+        }
+        
+        guestBackups.push(guestInfo);
+        
+        // Count backup types for stats
+        const stats = {
+            totalGuests: 1,
+            pbsCount: guestInfo.types.includes('pbsSnapshots') ? 1 : 0,
+            pveCount: guestInfo.types.includes('pveBackups') ? 1 : 0,
+            snapshotCount: guestInfo.types.includes('vmSnapshots') ? 1 : 0,
+            failureCount: hasFailures ? 1 : 0
+        };
+        
+        return {
+            date: dateKey,
+            backups: guestBackups,
+            stats: stats
+        };
     }
 
     function _dayHasGuestBackup(dateKey, guestId) {
@@ -1132,7 +1232,7 @@ PulseApp.ui.backups = (() => {
         });
     }
 
-    function updateBackupsTab() {
+    function updateBackupsTab(isUserAction = false) {
         const tableContainer = document.getElementById('backups-table-container');
         const tableBody = document.getElementById('backups-overview-tbody');
         const loadingMsg = document.getElementById('backups-loading-message');
@@ -1225,15 +1325,6 @@ PulseApp.ui.backups = (() => {
             vmSnapshots: vmSnapshots
         };
 
-        // Calculate and display consolidated backup summary
-        const backupSummary = calculateBackupSummary(backupStatusByGuest);
-        const backupSummaryContainer = document.getElementById('backup-summary-container');
-        if (backupSummaryContainer && backupStatusByGuest.length > 0) {
-            backupSummaryContainer.innerHTML = createConsolidatedBackupSummary(backupSummary, backupData, backupStatusByGuest);
-            backupSummaryContainer.classList.remove('hidden');
-        } else if (backupSummaryContainer) {
-            backupSummaryContainer.classList.add('hidden');
-        }
 
         // Hide node backup cards - no longer needed with consolidated view
         const nodeBackupCards = document.getElementById('node-backup-cards');
@@ -1282,13 +1373,113 @@ PulseApp.ui.backups = (() => {
                 backupTasks: [...pbsBackupTasks, ...pveBackupTasks]
             };
             
-            // Create and display calendar heatmap
-            if (calendarContainer && PulseApp.ui.calendarHeatmap) {
+            // Create and display calendar heatmap with detail card
+            if (calendarContainer && PulseApp.ui.calendarHeatmap && PulseApp.ui.backupDetailCard) {
                 // Get filtered guest IDs for calendar filtering
                 const filteredGuestIds = filteredBackupStatus.map(guest => guest.guestId.toString());
-                const calendarHeatmap = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(extendedBackupData, null, filteredGuestIds);
-                calendarContainer.innerHTML = '';
-                calendarContainer.appendChild(calendarHeatmap);
+                
+                // Get detail card container
+                const detailCardContainer = document.getElementById('backup-detail-card');
+                let detailCard = detailCardContainer.querySelector('.bg-slate-800');
+                
+                // Find the detail card with the correct class
+                detailCard = detailCardContainer.querySelector('.bg-white.dark\\:bg-gray-800');
+                
+                // Create detail card only if it doesn't exist
+                if (detailCardContainer && !detailCard) {
+                    detailCard = PulseApp.ui.backupDetailCard.createBackupDetailCard(null);
+                    detailCardContainer.innerHTML = '';
+                    detailCardContainer.appendChild(detailCard);
+                }
+                
+                // Update detail card with filtered data if no calendar date is selected
+                const calendarDateFilter = PulseApp.state.get('calendarDateFilter');
+                if (!calendarDateFilter && isUserAction) {
+                    if (filteredBackupStatus.length > 0) {
+                        const multiDateData = _prepareMultiDateDetailData(filteredBackupStatus, extendedBackupData);
+                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, false);
+                    } else {
+                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, null, false);
+                    }
+                }
+                
+                // Create calendar with date selection callback
+                const onDateSelect = (dateData, instant = false) => {
+                    if (detailCard && PulseApp.ui.backupDetailCard) {
+                        if (dateData) {
+                            // Apply current table filters to the selected date's data
+                            const filteredDateBackups = dateData.backups.filter(backup => {
+                                // Find the guest in filteredBackupStatus
+                                const guestInFiltered = filteredBackupStatus.find(g => g.guestId.toString() === backup.vmid.toString());
+                                return guestInFiltered !== undefined;
+                            });
+                            
+                            // Create filtered date data
+                            const filteredDateData = {
+                                ...dateData,
+                                backups: filteredDateBackups,
+                                stats: {
+                                    totalGuests: filteredDateBackups.length,
+                                    pbsCount: filteredDateBackups.filter(b => b.types && b.types.includes('pbsSnapshots')).length,
+                                    pveCount: filteredDateBackups.filter(b => b.types && b.types.includes('pveBackups')).length,
+                                    snapshotCount: filteredDateBackups.filter(b => b.types && b.types.includes('vmSnapshots')).length,
+                                    failureCount: dateData.stats.failureCount || 0
+                                }
+                            };
+                            
+                            // Force instant updates on API refreshes to prevent flashing
+                            const forceInstant = !isUserAction || instant;
+                            PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, filteredDateData, forceInstant);
+                        } else {
+                            // No date selected, show multi-date filtered data
+                            if (filteredBackupStatus.length > 0) {
+                                const multiDateData = _prepareMultiDateDetailData(filteredBackupStatus, extendedBackupData);
+                                PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, !isUserAction || instant);
+                            } else {
+                                PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, null, !isUserAction || instant);
+                            }
+                        }
+                    }
+                    
+                    // Update calendar date filter for table
+                    if (dateData && dateData.backups && dateData.backups.length > 0) {
+                        // Extract guest IDs from the selected date's backup data
+                        const guestIds = dateData.backups.map(backup => backup.vmid.toString());
+                        PulseApp.state.set('calendarDateFilter', {
+                            date: dateData.date,
+                            guestIds: guestIds
+                        });
+                        
+                        // Show visual indicator in table header
+                        _updateCalendarFilterIndicator(dateData.date, guestIds.length);
+                    } else {
+                        // Clear filter if no data or deselected
+                        PulseApp.state.set('calendarDateFilter', null);
+                        _updateCalendarFilterIndicator(null, 0);
+                    }
+                    
+                    // Refresh table to apply calendar filter (only if this is a user action to avoid loops)
+                    if (!instant) {
+                        updateBackupsTab(false); // false = not a user action for the table update
+                    }
+                };
+                
+                // Only recreate calendar if it doesn't exist or if this is a user action
+                const existingCalendar = calendarContainer.querySelector('.calendar-heatmap-container');
+                if (!existingCalendar || isUserAction) {
+                    const calendarHeatmap = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(
+                        extendedBackupData, 
+                        null, 
+                        filteredGuestIds, 
+                        onDateSelect,
+                        isUserAction
+                    );
+                    calendarContainer.innerHTML = '';
+                    calendarContainer.appendChild(calendarHeatmap);
+                } else {
+                    // Update existing calendar data without recreation to prevent flashing
+                    PulseApp.ui.calendarHeatmap.updateCalendarData(extendedBackupData, null, filteredGuestIds, onDateSelect);
+                }
             }
             
             visualizationSection.classList.remove('hidden');
@@ -1403,8 +1594,10 @@ PulseApp.ui.backups = (() => {
         }
         }); // End of preserveScrollPosition
         
-        // Setup click filtering between table and calendar
-        _initTableCalendarClick();
+        // Setup click filtering between table and calendar (only on user actions or initial load)
+        if (isUserAction || !document.querySelector('#backups-overview-tbody tr[data-guest-id]')) {
+            _initTableCalendarClick();
+        }
         
         // Additional scroll position restoration for horizontal scrolling
         if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
@@ -1425,7 +1618,6 @@ PulseApp.ui.backups = (() => {
     }
 
     function resetBackupsView() {
-        console.log('Resetting backups view...');
         if (backupsSearchInput) backupsSearchInput.value = '';
         PulseApp.state.set('backupsSearchTerm', '');
 
@@ -1437,12 +1629,29 @@ PulseApp.ui.backups = (() => {
         if(backupStatusAllRadio) backupStatusAllRadio.checked = true;
         PulseApp.state.set('backupsFilterHealth', 'all');
 
+        const backupBackupTypeAllRadio = document.getElementById('backups-filter-backup-all');
+        if(backupBackupTypeAllRadio) backupBackupTypeAllRadio.checked = true;
+        PulseApp.state.set('backupsFilterBackupType', 'all');
+
+        const failuresFilter = document.getElementById('backups-filter-failures');
+        if(failuresFilter) failuresFilter.checked = false;
+        PulseApp.state.set('backupsFilterFailures', false);
+
         PulseApp.state.setSortState('backups', 'latestBackupTime', 'desc');
 
         // Clear calendar filter selection
         PulseApp.state.set('currentFilteredGuest', null);
+        
+        // Clear calendar date filter
+        PulseApp.state.set('calendarDateFilter', null);
+        _updateCalendarFilterIndicator(null, 0);
+        
+        // Clear calendar selection if possible
+        if (PulseApp.ui.calendarHeatmap && PulseApp.ui.calendarHeatmap.clearSelection) {
+            PulseApp.ui.calendarHeatmap.clearSelection();
+        }
 
-        updateBackupsTab();
+        updateBackupsTab(true); // Mark as user action
         PulseApp.state.saveFilterState(); // Save reset state
     }
 
@@ -1552,6 +1761,210 @@ PulseApp.ui.backups = (() => {
         `;
         
         modalBody.innerHTML = html;
+    }
+    
+    function _updateCalendarFilterIndicator(date, guestCount) {
+        // Add visual indicator to show calendar date filter is active
+        const statusText = document.getElementById('backups-status-text');
+        if (!statusText) return;
+        
+        if (date && guestCount > 0) {
+            const formattedDate = new Date(date).toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                year: 'numeric'
+            });
+            
+            // Add calendar filter indicator to status text
+            const existingText = statusText.textContent.replace(/ \| Calendar: .+/, '');
+            statusText.textContent = `${existingText} | Calendar: ${formattedDate} (${guestCount} guest${guestCount !== 1 ? 's' : ''})`;
+            statusText.classList.add('text-blue-600', 'dark:text-blue-400');
+        } else {
+            // Remove calendar filter indicator
+            const existingText = statusText.textContent.replace(/ \| Calendar: .+/, '');
+            statusText.textContent = existingText;
+            statusText.classList.remove('text-blue-600', 'dark:text-blue-400');
+        }
+    }
+    
+    function _prepareMultiDateDetailData(filteredBackupStatus, backupData) {
+        // Prepare data for multi-date detail view
+        const multiDateBackups = [];
+        const stats = {
+            totalGuests: filteredBackupStatus.length,
+            totalBackups: 0,
+            pbsCount: 0,
+            pveCount: 0,
+            snapshotCount: 0,
+            failureCount: 0
+        };
+        
+        // Get current backup type filter to determine which dates to include
+        const backupTypeFilter = PulseApp.state.get('backupsFilterBackupType') || 'all';
+        
+        // Get all backup data for filtered guests
+        filteredBackupStatus.forEach(guestStatus => {
+            const guestId = guestStatus.guestId.toString();
+            const backupDates = [];
+            
+            // Check PBS snapshots (only if filter allows PBS backups)
+            if ((backupTypeFilter === 'all' || backupTypeFilter === 'pbs') && backupData.pbsSnapshots) {
+                const pbsDates = {};
+                backupData.pbsSnapshots.forEach(snap => {
+                    const snapId = snap['backup-id'] || snap.backupVMID;
+                    if (snapId == guestId) {
+                        const timestamp = snap['backup-time'];
+                        if (timestamp) {
+                            const date = new Date(timestamp * 1000);
+                            const dateKey = date.toISOString().split('T')[0];
+                            if (!pbsDates[dateKey]) {
+                                pbsDates[dateKey] = { types: new Set(), count: 0 };
+                            }
+                            pbsDates[dateKey].types.add('pbsSnapshots');
+                            pbsDates[dateKey].count++;
+                            stats.totalBackups++;
+                        }
+                    }
+                });
+                Object.entries(pbsDates).forEach(([date, info]) => {
+                    backupDates.push({ date, types: Array.from(info.types), count: info.count });
+                });
+            }
+            
+            // Check PVE backups (only if filter allows PVE backups)
+            if ((backupTypeFilter === 'all' || backupTypeFilter === 'pve') && backupData.pveBackups) {
+                const pveDates = {};
+                backupData.pveBackups.forEach(backup => {
+                    if (backup.vmid == guestId) {
+                        const timestamp = backup.ctime;
+                        if (timestamp) {
+                            const date = new Date(timestamp * 1000);
+                            const dateKey = date.toISOString().split('T')[0];
+                            if (!pveDates[dateKey]) {
+                                pveDates[dateKey] = { types: new Set(), count: 0 };
+                            }
+                            pveDates[dateKey].types.add('pveBackups');
+                            pveDates[dateKey].count++;
+                            stats.totalBackups++;
+                        }
+                    }
+                });
+                Object.entries(pveDates).forEach(([date, info]) => {
+                    const existing = backupDates.find(d => d.date === date);
+                    if (existing) {
+                        existing.types = [...new Set([...existing.types, ...Array.from(info.types)])];
+                        existing.count += info.count;
+                    } else {
+                        backupDates.push({ date, types: Array.from(info.types), count: info.count });
+                    }
+                });
+            }
+            
+            // Check VM snapshots (only if filter allows snapshots)
+            if ((backupTypeFilter === 'all' || backupTypeFilter === 'snapshots') && backupData.vmSnapshots) {
+                const snapDates = {};
+                backupData.vmSnapshots.forEach(snap => {
+                    if (snap.vmid == guestId) {
+                        const timestamp = snap.snaptime;
+                        if (timestamp) {
+                            const date = new Date(timestamp * 1000);
+                            const dateKey = date.toISOString().split('T')[0];
+                            if (!snapDates[dateKey]) {
+                                snapDates[dateKey] = { types: new Set(), count: 0 };
+                            }
+                            snapDates[dateKey].types.add('vmSnapshots');
+                            snapDates[dateKey].count++;
+                            stats.totalBackups++;
+                        }
+                    }
+                });
+                Object.entries(snapDates).forEach(([date, info]) => {
+                    const existing = backupDates.find(d => d.date === date);
+                    if (existing) {
+                        existing.types = [...new Set([...existing.types, ...Array.from(info.types)])];
+                        existing.count += info.count;
+                    } else {
+                        backupDates.push({ date, types: Array.from(info.types), count: info.count });
+                    }
+                });
+            }
+            
+            // Update stats
+            if (guestStatus.pbsBackups > 0) stats.pbsCount++;
+            if (guestStatus.pveBackups > 0) stats.pveCount++;
+            if (guestStatus.snapshotCount > 0) stats.snapshotCount++;
+            if (guestStatus.recentFailures > 0) stats.failureCount++;
+            
+            if (backupDates.length > 0) {
+                multiDateBackups.push({
+                    ...guestStatus,
+                    backupDates: backupDates.sort((a, b) => b.date.localeCompare(a.date))
+                });
+            }
+        });
+        
+        // Get current filter info
+        const filterInfo = {
+            search: backupsSearchInput ? backupsSearchInput.value : '',
+            guestType: PulseApp.state.get('backupsFilterGuestType'),
+            backupType: backupTypeFilter,
+            healthStatus: PulseApp.state.get('backupsFilterHealth'),
+            failuresOnly: PulseApp.state.get('backupsFilterFailures') || false
+        };
+        
+        // Recalculate stats based on unique guests with backups
+        // Use composite key (guestId-node) to handle guests with same VMID on different nodes
+        const uniqueGuestsWithPBS = new Set();
+        const uniqueGuestsWithPVE = new Set();
+        const uniqueGuestsWithSnapshots = new Set();
+        
+        multiDateBackups.forEach(guest => {
+            // Create unique identifier that includes both guest ID and node/endpoint
+            const uniqueKey = `${guest.guestId}-${guest.node || guest.endpointId || 'unknown'}`;
+            
+            // Count guests based on whether they have backup dates of the filtered type
+            // This ensures we count all guests that appear in the filtered view, not just recent activity
+            if (backupTypeFilter === 'all') {
+                // When showing all types, use the guest's overall backup counts
+                if (guest.pbsBackups > 0) uniqueGuestsWithPBS.add(uniqueKey);
+                if (guest.pveBackups > 0) uniqueGuestsWithPVE.add(uniqueKey);
+                if (guest.snapshotCount > 0) uniqueGuestsWithSnapshots.add(uniqueKey);
+            } else {
+                // When filtering by specific type, count guests who have that type in their backup dates
+                const hasFilteredBackupType = guest.backupDates.some(dateInfo => {
+                    if (backupTypeFilter === 'pbs') return dateInfo.types.includes('pbsSnapshots');
+                    if (backupTypeFilter === 'pve') return dateInfo.types.includes('pveBackups');
+                    if (backupTypeFilter === 'snapshots') return dateInfo.types.includes('vmSnapshots');
+                    return false;
+                });
+                
+                if (hasFilteredBackupType) {
+                    if (backupTypeFilter === 'pbs') uniqueGuestsWithPBS.add(uniqueKey);
+                    if (backupTypeFilter === 'pve') uniqueGuestsWithPVE.add(uniqueKey);
+                    if (backupTypeFilter === 'snapshots') uniqueGuestsWithSnapshots.add(uniqueKey);
+                }
+            }
+        });
+        
+        stats.pbsCount = uniqueGuestsWithPBS.size;
+        stats.pveCount = uniqueGuestsWithPVE.size;
+        stats.snapshotCount = uniqueGuestsWithSnapshots.size;
+        
+        // Calculate unique dates for filtered view
+        const uniqueDates = new Set();
+        multiDateBackups.forEach(guest => {
+            guest.backupDates.forEach(dateInfo => {
+                uniqueDates.add(dateInfo.date);
+            });
+        });
+        stats.uniqueDates = uniqueDates.size;
+        
+        return {
+            isMultiDate: true,
+            backups: multiDateBackups,
+            stats: stats,
+            filterInfo: filterInfo
+        };
     }
 
     return {

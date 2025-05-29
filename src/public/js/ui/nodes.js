@@ -262,7 +262,6 @@ PulseApp.ui.nodes = (() => {
         const tbody = document.getElementById('nodes-table-body');
         if (!tbody) {
             // Node table doesn't exist in current UI - nodes are displayed as summary cards instead
-            console.log('[Nodes] Node table not found - using summary cards display instead');
             return;
         }
         

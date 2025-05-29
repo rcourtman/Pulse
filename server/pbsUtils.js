@@ -53,7 +53,7 @@ function processPbsTasks(allTasks) {
         upid: task.upid,
         node: task.node,
         type: task.worker_type || task.type,
-        id: task.worker_id || task.id,
+        id: task.worker_id || task.id || task.guest, // Include guest as fallback for ID
         status: task.status,
         startTime: task.starttime,
         endTime: task.endtime,
@@ -63,7 +63,10 @@ function processPbsTasks(allTasks) {
         exitStatus: task.exitstatus,
         saved: task.saved || false,
         guest: task.guest || task.worker_id,
-        pbsBackupRun: task.pbsBackupRun
+        pbsBackupRun: task.pbsBackupRun,
+        // Add guest identification fields
+        guestId: task.guestId,
+        guestType: task.guestType
     });
 
     const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
@@ -84,6 +87,7 @@ function processPbsTasks(allTasks) {
     const recentVerifyTasks = getRecentTasksList(taskResults.verify.list, createDetailedTask, sortTasksDesc);
     const recentSyncTasks = getRecentTasksList(taskResults.sync.list, createDetailedTask, sortTasksDesc);
     const recentPruneGcTasks = getRecentTasksList(taskResults.pruneGc.list, createDetailedTask, sortTasksDesc);
+    
 
     // Helper function to create the summary object
     const createSummary = (category) => ({ 

@@ -208,7 +208,6 @@ PulseApp.state = (() => {
             // Mark that we've received initial data
             if (!internalState.initialDataReceived && internalState.dashboardData.length > 0) {
                 internalState.initialDataReceived = true;
-                console.log('[State] Initial data received and processed');
             }
             
             // Only update dashboard history if metrics changed

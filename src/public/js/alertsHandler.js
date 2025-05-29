@@ -38,7 +38,6 @@ PulseApp.alerts = (() => {
     function init() {
         if (alertsInitialized) return;
         
-        console.log('[Alerts] Initializing subtle alerts system...');
         
         // Add a small delay to ensure DOM is fully ready
         setTimeout(() => {
@@ -50,7 +49,6 @@ PulseApp.alerts = (() => {
             // Ensure button is visible after initialization
             const indicator = document.getElementById('alerts-indicator');
             if (indicator) {
-                console.log('[Alerts] Alerts indicator button created and visible');
                 updateHeaderIndicator(); // Initialize with current state
             } else {
                 console.error('[Alerts] Failed to create alerts indicator button');
@@ -61,7 +59,6 @@ PulseApp.alerts = (() => {
     }
 
     async function loadInitialData() {
-        console.log('[Alerts] Loading initial alert data...');
         try {
             const [alertsResponse, groupsResponse] = await Promise.all([
                 fetch('/api/alerts'),
@@ -70,11 +67,9 @@ PulseApp.alerts = (() => {
             
             if (alertsResponse.ok) {
                 const alertsData = await alertsResponse.json();
-                console.log('[Alerts] Raw alerts data:', alertsData);
                 activeAlerts = alertsData.active || [];
                 alertRules = alertsData.rules || [];
                 alertMetrics = alertsData.stats?.metrics || {};
-                console.log('[Alerts] Loaded active alerts:', activeAlerts);
                 updateHeaderIndicator();
             } else {
                 console.error('[Alerts] Failed to fetch alerts:', alertsResponse.status);
@@ -141,7 +136,6 @@ PulseApp.alerts = (() => {
             // Append dropdown to body for better positioning control
             document.body.appendChild(alertDropdown);
             
-            console.log('[Alerts] Header indicator and dropdown created successfully');
         } else {
             console.error('[Alerts] connection-status element not found');
         }
@@ -151,7 +145,6 @@ PulseApp.alerts = (() => {
         // Wait for socket to be available and set up event listeners
         const setupSocketListeners = () => {
             if (window.socket && window.socket.connected) {
-                console.log('[Alerts] Setting up socket event listeners');
                 window.socket.on('alert', handleNewAlert);
                 window.socket.on('alertResolved', handleResolvedAlert);
                 return true;
@@ -184,7 +177,6 @@ PulseApp.alerts = (() => {
             
             // If clicking the indicator (but not the dropdown), toggle dropdown
             if (clickedIndicator && !clickedDropdown) {
-                console.log('[Alerts] Indicator clicked, toggling dropdown');
                 e.preventDefault();
                 e.stopPropagation();
                 toggleDropdown();
@@ -193,13 +185,11 @@ PulseApp.alerts = (() => {
             
             // If clicking inside the dropdown, do nothing (let dropdown handle its own clicks)
             if (clickedDropdown) {
-                console.log('[Alerts] Dropdown content clicked');
                 return;
             }
             
             // If clicking outside both indicator and dropdown, close dropdown
             if (!clickedIndicator && !clickedDropdown && !dropdown.classList.contains('hidden')) {
-                console.log('[Alerts] Clicked outside, closing dropdown');
                 closeDropdown();
             }
         });
@@ -234,18 +224,15 @@ PulseApp.alerts = (() => {
         
         alertDropdown.classList.remove('hidden');
         updateDropdownContent();
-        console.log('[Alerts] Dropdown opened');
     }
 
     function closeDropdown() {
         if (!alertDropdown) return;
         
         alertDropdown.classList.add('hidden');
-        console.log('[Alerts] Dropdown closed');
     }
 
     function updateDropdownContent() {
-        console.log('[Alerts] Updating dropdown content. Active alerts:', activeAlerts.length);
         if (!alertDropdown) return;
 
         const unacknowledgedAlerts = activeAlerts.filter(a => !a.acknowledged);
@@ -278,7 +265,7 @@ PulseApp.alerts = (() => {
                         <h3 class="text-xs font-medium text-gray-900 dark:text-gray-100">
                             ${unacknowledgedAlerts.length} alert${unacknowledgedAlerts.length !== 1 ? 's' : ''}
                         </h3>
-                        <button onclick="console.log('[Alerts] Ack All button clicked'); PulseApp.alerts.markAllAsAcknowledged()" 
+                        <button onclick="PulseApp.alerts.markAllAsAcknowledged()" 
                                 class="text-xs px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none">
                             Ack All
                         </button>
@@ -328,7 +315,6 @@ PulseApp.alerts = (() => {
         }
 
         alertDropdown.innerHTML = content;
-        console.log('[Alerts] Dropdown content updated with', unacknowledgedAlerts.length, 'unacknowledged and', acknowledgedAlerts.length, 'acknowledged alerts');
 
         // Restore scroll position if acknowledged section exists and was expanded
         if (wasExpanded && scrollPosition > 0) {
@@ -410,7 +396,6 @@ PulseApp.alerts = (() => {
     }
 
     function handleNewAlert(alert) {
-        console.log('[Alerts] New alert:', alert);
         
         const existingIndex = activeAlerts.findIndex(a => 
             a.ruleId === alert.ruleId && 
@@ -440,7 +425,6 @@ PulseApp.alerts = (() => {
     }
 
     function handleResolvedAlert(alert) {
-        console.log('[Alerts] Alert resolved:', alert);
         
         activeAlerts = activeAlerts.filter(a => 
             !(a.guest.vmid === alert.guest.vmid && 
@@ -581,7 +565,6 @@ PulseApp.alerts = (() => {
 
     async function acknowledgeAlert(alertId, ruleId) {
         try {
-            console.log(`[Alerts] Attempting to acknowledge alert: ${alertId}`);
             
             const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
                 method: 'POST',
@@ -589,11 +572,9 @@ PulseApp.alerts = (() => {
                 body: JSON.stringify({ userId: 'web-user', note: 'Acknowledged via web interface' })
             });
             
-            console.log(`[Alerts] Acknowledge response status: ${response.status}`);
             
             if (response.ok) {
                 const result = await response.json().catch(() => ({}));
-                console.log('[Alerts] Alert acknowledged successfully:', result);
                 
                 // Find and update the alert in local array
                 const alertIndex = activeAlerts.findIndex(a => a.id === alertId);

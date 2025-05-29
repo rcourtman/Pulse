@@ -15,6 +15,7 @@ PulseApp.ui.common = (() => {
         _setupBackupFilterListeners();
         _setupResetButtonListeners();
         _setupGlobalKeydownListeners();
+        _setupTabSwitchListeners();
         applyInitialFilterUI();
         applyInitialSortUI();
     }
@@ -112,7 +113,7 @@ PulseApp.ui.common = (() => {
             radio.addEventListener('change', function() {
                 if (this.checked) {
                     PulseApp.state.set('backupsFilterGuestType', this.value);
-                    PulseApp.ui.backups.updateBackupsTab();
+                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
                     PulseApp.state.saveFilterState();
                 }
             });
@@ -122,11 +123,22 @@ PulseApp.ui.common = (() => {
             radio.addEventListener('change', function() {
                 if (this.checked) {
                     PulseApp.state.set('backupsFilterHealth', this.value);
-                    PulseApp.ui.backups.updateBackupsTab();
+                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
                     PulseApp.state.saveFilterState();
                 }
             });
         });
+
+        document.querySelectorAll('input[name="backups-backup-filter"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.checked) {
+                    PulseApp.state.set('backupsFilterBackupType', this.value);
+                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
+                    PulseApp.state.saveFilterState();
+                }
+            });
+        });
+
     }
 
     function _setupResetButtonListeners() {
@@ -143,47 +155,83 @@ PulseApp.ui.common = (() => {
         document.addEventListener('keydown', function(event) {
             const activeElement = document.activeElement;
             const isSearchInputFocused = activeElement === searchInput || activeElement === backupsSearchInput;
-            const isGeneralInputElement = !isSearchInputFocused && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA' || activeElement.isContentEditable);
-            const isMainActive = document.getElementById('main')?.classList.contains('active');
-            const isBackupsActive = document.getElementById('backups')?.classList.contains('active');
+            const isGeneralInputElement = !isSearchInputFocused && (
+                activeElement.tagName === 'INPUT' || 
+                activeElement.tagName === 'TEXTAREA' || 
+                activeElement.isContentEditable
+            );
 
-
+            // Handle Escape key
             if (event.key === 'Escape') {
-                if (isBackupsActive && document.getElementById('backups')?.contains(activeElement)) {
+                // Check which tab is actually visible (not just has active class)
+                const mainTab = document.getElementById('main');
+                const backupsTab = document.getElementById('backups');
+                
+                if (backupsTab && !backupsTab.classList.contains('hidden')) {
                     PulseApp.ui.backups.resetBackupsView();
-                } else if (isMainActive) { // Only reset dashboard if main tab is active and not in backup context
-                     resetDashboardView();
+                } else if (mainTab && !mainTab.classList.contains('hidden')) {
+                    resetDashboardView();
                 }
-            } else if (isSearchInputFocused && event.key === 'Enter') {
-              activeElement.blur();
-              event.preventDefault();
-            } else if (
+            } 
+            // Handle Enter key in search inputs
+            else if (isSearchInputFocused && event.key === 'Enter') {
+                activeElement.blur();
+                event.preventDefault();
+            } 
+            // Handle typing characters for auto-focus search inputs
+            else if (
                 !isSearchInputFocused &&
                 !isGeneralInputElement &&
-                isMainActive && 
                 !event.metaKey &&
                 !event.ctrlKey &&
                 !event.altKey &&
+                !event.shiftKey &&
                 event.key.length === 1 &&
-                event.key !== ' '
+                event.key !== ' ' &&
+                /[a-zA-Z0-9]/.test(event.key) // Only alphanumeric characters
             ) {
-                if (searchInput) { // Focus dashboard search if main tab is active
-                    searchInput.focus();
-                }
-            } else if (
-                !isSearchInputFocused &&
-                !isGeneralInputElement &&
-                isBackupsActive &&
-                 !event.metaKey &&
-                !event.ctrlKey &&
-                !event.altKey &&
-                event.key.length === 1 &&
-                event.key !== ' '
-            ) {
-                 if (backupsSearchInput) { // Focus backups search if backups tab is active
+                // Check which tab is actually visible (not just has active class)
+                const mainTab = document.getElementById('main');
+                const backupsTab = document.getElementById('backups');
+                
+                if (backupsTab && !backupsTab.classList.contains('hidden') && backupsSearchInput) {
+                    // Backups tab is visible
                     backupsSearchInput.focus();
+                    backupsSearchInput.value = event.key; // Set the typed character immediately
+                    event.preventDefault(); // Prevent the character from being typed twice
+                } else if (mainTab && !mainTab.classList.contains('hidden') && searchInput) {
+                    // Main tab is visible
+                    searchInput.focus();
+                    searchInput.value = event.key; // Set the typed character immediately
+                    event.preventDefault(); // Prevent the character from being typed twice
                 }
             }
+        });
+    }
+
+    function _setupTabSwitchListeners() {
+        // Listen for tab clicks to clear search inputs when switching tabs
+        document.querySelectorAll('.tab[data-tab]').forEach(tab => {
+            tab.addEventListener('click', function() {
+                const targetTab = this.getAttribute('data-tab');
+                
+                // Clear search inputs when switching between main and backups tabs
+                if (targetTab === 'main' && backupsSearchInput && backupsSearchInput.value) {
+                    // Switching to main tab, clear backups search if it has content
+                    backupsSearchInput.value = '';
+                    // Trigger search update to clear filtered results
+                    if (PulseApp.ui && PulseApp.ui.backups) {
+                        PulseApp.ui.backups.updateBackupsTab();
+                    }
+                } else if (targetTab === 'backups' && searchInput && searchInput.value) {
+                    // Switching to backups tab, clear main search if it has content
+                    searchInput.value = '';
+                    // Trigger dashboard update to clear filtered results
+                    if (PulseApp.ui && PulseApp.ui.dashboard) {
+                        PulseApp.ui.dashboard.updateDashboardTable();
+                    }
+                }
+            });
         });
     }
 

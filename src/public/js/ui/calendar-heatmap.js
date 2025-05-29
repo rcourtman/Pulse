@@ -2,10 +2,23 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.calendarHeatmap = (() => {
     
+    // Global selection management
+    let currentSelectedCell = null;
+    let currentSelectedDate = null;
+    let onDateSelectCallback = null;
+    let preservedSelectedDate = null; // Preserve selection across updates
+    let currentDisplayMonth = null; // Current month being displayed (preserved across updates)
+    let hasAutoSelectedToday = false; // Prevent repeated auto-selection on API updates
+    
+    // Helper function to get current backup type filter from global state
+    function getCurrentFilterType() {
+        return PulseApp.state.get('backupsFilterBackupType') || 'all';
+    }
+    
     const CSS_CLASSES = {
         CALENDAR_CONTAINER: 'calendar-heatmap-container max-w-4xl mx-auto',
         MONTH_LABEL: 'text-xs text-gray-600 dark:text-gray-400 font-medium mb-1',
-        DAY_TOOLTIP: 'fixed z-50 px-3 py-2 text-xs text-white bg-gray-900/90 rounded shadow-lg pointer-events-none opacity-0 transition-opacity duration-100 max-w-sm max-h-96 overflow-y-auto',
+        SELECTED_CELL: ['ring-2', 'ring-blue-500', 'dark:ring-blue-400', 'scale-110', 'z-10'],
         LEGEND_CONTAINER: 'flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400',
         LEGEND_BOX: 'w-3 h-3 rounded-sm',
         YEAR_NAVIGATION: 'flex items-center justify-between mb-4',
@@ -22,32 +35,543 @@ PulseApp.ui.calendarHeatmap = (() => {
         MIXED: 'bg-gradient-to-br from-green-400 to-yellow-400 dark:from-green-700 dark:to-yellow-700'
     };
 
-    function createCalendarHeatmap(backupData, guestId = null, filteredGuestIds = null) {
+    function createCalendarHeatmap(backupData, guestId = null, filteredGuestIds = null, onDateSelect = null, isUserAction = true) {
         const container = document.createElement('div');
         container.className = CSS_CLASSES.CALENDAR_CONTAINER;
 
-        // Add header with summary stats (will be updated by updateCalendarContent)
-        const header = createCalendarHeader(backupData, guestId, filteredGuestIds);
-        container.appendChild(header);
+        // Store the date selection callback
+        onDateSelectCallback = onDateSelect;
         
-        const calendarContent = document.createElement('div');
-        calendarContent.className = 'calendar-content';
-        container.appendChild(calendarContent);
+        // Set initial display month to current month (only if not already set)
+        if (!currentDisplayMonth) {
+            currentDisplayMonth = new Date();
+            currentDisplayMonth.setDate(1); // Set to first of month
+        }
 
+        // Month navigation
+        const monthNav = createMonthNavigation(container, backupData, guestId, filteredGuestIds);
+        container.appendChild(monthNav);
+        
+        // Calendar grid
+        const calendarGrid = createSingleMonthCalendar(backupData, guestId, filteredGuestIds);
+        container.appendChild(calendarGrid);
+        
+        // Legend
         const legend = createLegend();
         container.appendChild(legend);
-
-        updateCalendarContent(container, backupData, guestId, filteredGuestIds);
+        
+        // Auto-select today's date if filtering to specific guest (only on user actions)
+        if (guestId && isUserAction && !hasAutoSelectedToday) {
+            hasAutoSelectedToday = true;
+            setTimeout(() => {
+                const today = new Date();
+                const utcToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+                const todayKey = utcToday.toISOString().split('T')[0];
+                const todayCell = container.querySelector(`[data-date="${todayKey}"]`);
+                
+                if (todayCell && (todayCell.classList.contains('bg-slate-600') || 
+                                 todayCell.classList.contains('bg-purple-500') || 
+                                 todayCell.classList.contains('bg-orange-500') || 
+                                 todayCell.classList.contains('bg-yellow-500'))) {
+                    // Auto-click today's cell if it has backup data
+                    todayCell.click();
+                }
+            }, 100);
+        }
+        
+        // Restore preserved selection on API updates (not user actions)
+        if (!isUserAction && preservedSelectedDate) {
+            setTimeout(() => {
+                const cellToSelect = container.querySelector(`[data-date="${preservedSelectedDate}"]`);
+                if (cellToSelect && onDateSelectCallback) {
+                    // Find the day data for this cell
+                    const allData = processBackupDataForSingleMonth(backupData, currentDisplayMonth, guestId, filteredGuestIds);
+                    const dayData = allData[preservedSelectedDate];
+                    if (dayData) {
+                        // Manually restore selection without animation
+                        cellToSelect.classList.add(...CSS_CLASSES.SELECTED_CELL);
+                        currentSelectedCell = cellToSelect;
+                        currentSelectedDate = preservedSelectedDate;
+                        
+                        // Prepare callback data
+                        const callbackData = {
+                            date: preservedSelectedDate,
+                            backups: dayData.guests || [],
+                            stats: {
+                                totalGuests: dayData.guests ? dayData.guests.length : 0,
+                                pbsCount: 0,
+                                pveCount: 0,
+                                snapshotCount: 0,
+                                failureCount: dayData.hasFailures ? 1 : 0
+                            }
+                        };
+                        
+                        // Count backup types
+                        if (dayData.guests) {
+                            dayData.guests.forEach(guest => {
+                                const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                                if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                                if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                                if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                            });
+                        }
+                        
+                        // Call with instant flag to prevent animations
+                        onDateSelectCallback(callbackData, true);
+                    }
+                }
+            }, 50);
+        }
 
         return container;
+    }
+    
+    function createMonthNavigation(container, backupData, guestId, filteredGuestIds) {
+        const nav = document.createElement('div');
+        nav.className = 'flex items-center justify-between mb-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700';
+        
+        const monthYear = currentDisplayMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+        
+        nav.innerHTML = `
+            <button class="prev-month-btn flex items-center gap-1 px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                Previous
+            </button>
+            
+            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">${monthYear}</h3>
+            
+            <button class="next-month-btn flex items-center gap-1 px-3 py-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors">
+                Next
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+            </button>
+        `;
+        
+        // Add navigation event listeners
+        nav.querySelector('.prev-month-btn').addEventListener('click', () => {
+            currentDisplayMonth.setMonth(currentDisplayMonth.getMonth() - 1);
+            refreshMonthView(container, backupData, guestId, filteredGuestIds);
+        });
+        
+        nav.querySelector('.next-month-btn').addEventListener('click', () => {
+            const today = new Date();
+            // Don't allow navigation beyond current month
+            if (currentDisplayMonth.getFullYear() < today.getFullYear() || 
+                (currentDisplayMonth.getFullYear() === today.getFullYear() && currentDisplayMonth.getMonth() < today.getMonth())) {
+                currentDisplayMonth.setMonth(currentDisplayMonth.getMonth() + 1);
+                refreshMonthView(container, backupData, guestId, filteredGuestIds);
+            }
+        });
+        
+        return nav;
+    }
+    
+    function createMonthDayCell(date, backupData, guestId, filteredGuestIds) {
+        const cell = document.createElement('div');
+        cell.className = 'relative w-8 h-8 rounded cursor-pointer transition-transform hover:scale-105';
+        
+        // Create UTC date key to avoid timezone issues
+        const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dateKey = utcDate.toISOString().split('T')[0];
+        const isCurrentMonth = date.getUTCMonth() === currentDisplayMonth.getMonth();
+        
+        // Check if today using UTC comparison
+        const today = new Date();
+        const utcToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+        const isToday = utcDate.getTime() === utcToday.getTime();
+        
+        // Get backup data for this date
+        const allData = processBackupDataForSingleMonth(backupData, currentDisplayMonth, guestId, filteredGuestIds);
+        const dayData = allData[dateKey];
+        
+        let shouldShowDay = false;
+        let hasBackups = dayData && dayData.hasBackups;
+        
+        if (hasBackups) {
+            const backupTypes = Array.from(dayData.allTypes || []);
+            const currentFilterType = getCurrentFilterType();
+            
+            if (currentFilterType === 'all') {
+                shouldShowDay = backupTypes.length > 0;
+            } else if (currentFilterType === 'pbs') {
+                shouldShowDay = backupTypes.includes('pbsSnapshots');
+            } else if (currentFilterType === 'pve') {
+                shouldShowDay = backupTypes.includes('pveBackups');
+            } else if (currentFilterType === 'snapshots') {
+                shouldShowDay = backupTypes.includes('vmSnapshots');
+            }
+        }
+        
+        // Apply styling based on state
+        if (isCurrentMonth) {
+            if (shouldShowDay) {
+                // Apply filter-specific color
+                const currentFilterType = getCurrentFilterType();
+                if (currentFilterType === 'pbs') {
+                    cell.classList.add('bg-purple-500', 'dark:bg-purple-600');
+                } else if (currentFilterType === 'pve') {
+                    cell.classList.add('bg-orange-500', 'dark:bg-orange-600');
+                } else if (currentFilterType === 'snapshots') {
+                    cell.classList.add('bg-yellow-500', 'dark:bg-yellow-600');
+                } else {
+                    cell.classList.add('bg-slate-600', 'dark:bg-slate-500');
+                }
+            } else {
+                cell.classList.add('bg-gray-200', 'dark:bg-gray-700');
+            }
+            
+            // Note: Failure indicators removed - now handled by dedicated failures filter
+            
+            // Add today indicator
+            if (isToday) {
+                cell.classList.add('border-2', 'border-dotted', 'border-indigo-500', 'dark:border-indigo-400');
+            }
+        } else {
+            // Days from previous/next month
+            cell.classList.add('bg-gray-100', 'dark:bg-gray-800', 'opacity-50');
+        }
+        
+        // Add day number
+        const dayNumber = document.createElement('div');
+        dayNumber.className = `absolute inset-0 flex items-center justify-center text-xs font-medium ${
+            isCurrentMonth 
+                ? (shouldShowDay ? 'text-white font-bold' : 'text-gray-600 dark:text-gray-400')
+                : 'text-gray-400 dark:text-gray-600'
+        }`;
+        dayNumber.textContent = date.getUTCDate();
+        cell.appendChild(dayNumber);
+        
+        // Store data for click handling
+        cell.dataset.date = dateKey;
+        if (dayData && dayData.guests) {
+            cell.dataset.guestIds = dayData.guests.map(g => g.vmid).join(',');
+            cell.dataset.backupTypes = Array.from(dayData.allTypes || []).join(',');
+        }
+        
+        // Add click handler
+        cell.addEventListener('click', (e) => {
+            e.stopPropagation();
+            
+            // Only allow clicks on current month days
+            if (!isCurrentMonth) return;
+            
+            // Helper function to check if a cell is today
+            const isCellToday = (cellElement) => {
+                if (!cellElement || !cellElement.dataset.date) return false;
+                const today = new Date();
+                const utcToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+                const todayKey = utcToday.toISOString().split('T')[0];
+                return cellElement.dataset.date === todayKey;
+            };
+            
+            // Remove previous selection
+            if (currentSelectedCell && currentSelectedCell !== cell) {
+                currentSelectedCell.classList.remove(...CSS_CLASSES.SELECTED_CELL);
+                
+                // Restore today indicator if previous cell was today
+                if (isCellToday(currentSelectedCell)) {
+                    currentSelectedCell.classList.add('border-2', 'border-dotted', 'border-indigo-500', 'dark:border-indigo-400');
+                }
+            }
+            
+            // Toggle selection
+            if (cell === currentSelectedCell) {
+                cell.classList.remove(...CSS_CLASSES.SELECTED_CELL);
+                
+                // Restore today indicator if this is today's cell
+                if (isToday) {
+                    cell.classList.add('border-2', 'border-dotted', 'border-indigo-500', 'dark:border-indigo-400');
+                }
+                
+                currentSelectedCell = null;
+                currentSelectedDate = null;
+                preservedSelectedDate = null;
+                
+                if (onDateSelectCallback) {
+                    onDateSelectCallback(null);
+                }
+            } else {
+                // Remove today indicator classes before adding selection classes to avoid conflicts
+                if (isToday) {
+                    cell.classList.remove('border-2', 'border-dotted', 'border-indigo-500', 'dark:border-indigo-400');
+                }
+                
+                cell.classList.add(...CSS_CLASSES.SELECTED_CELL);
+                currentSelectedCell = cell;
+                currentSelectedDate = dateKey;
+                preservedSelectedDate = dateKey;
+                
+                if (onDateSelectCallback && dayData) {
+                    const callbackData = {
+                        date: dateKey,
+                        backups: dayData.guests || [],
+                        stats: {
+                            totalGuests: dayData.guests ? dayData.guests.length : 0,
+                            pbsCount: 0,
+                            pveCount: 0,
+                            snapshotCount: 0,
+                            failureCount: dayData.hasFailures ? 1 : 0
+                        }
+                    };
+                    
+                    // Count backup types
+                    if (dayData.guests) {
+                        dayData.guests.forEach(guest => {
+                            const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                            if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                            if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                            if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                        });
+                    }
+                    
+                    onDateSelectCallback(callbackData);
+                } else if (onDateSelectCallback) {
+                    // Empty day callback
+                    onDateSelectCallback({
+                        date: dateKey,
+                        backups: [],
+                        stats: {
+                            totalGuests: 0,
+                            pbsCount: 0,
+                            pveCount: 0,
+                            snapshotCount: 0,
+                            failureCount: 0
+                        }
+                    });
+                }
+            }
+        });
+        
+        return cell;
+    }
+    
+    function createSingleMonthCalendar(backupData, guestId, filteredGuestIds) {
+        const calendarContainer = document.createElement('div');
+        calendarContainer.className = 'calendar-month-container bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4';
+        
+        // Day headers
+        const dayHeaders = document.createElement('div');
+        dayHeaders.className = 'grid grid-cols-7 gap-1 mb-2';
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        
+        dayNames.forEach(day => {
+            const header = document.createElement('div');
+            header.className = 'text-center text-xs font-medium text-gray-500 dark:text-gray-400 py-2';
+            header.textContent = day;
+            dayHeaders.appendChild(header);
+        });
+        
+        calendarContainer.appendChild(dayHeaders);
+        
+        // Calendar grid (6 weeks x 7 days = 42 cells)
+        const calendarGrid = document.createElement('div');
+        calendarGrid.className = 'calendar-grid grid grid-cols-7 gap-1';
+        
+        // Generate the month grid using UTC dates
+        const firstDay = new Date(Date.UTC(currentDisplayMonth.getFullYear(), currentDisplayMonth.getMonth(), 1));
+        const startDate = new Date(firstDay);
+        startDate.setUTCDate(startDate.getUTCDate() - firstDay.getUTCDay()); // Go to start of week
+        
+        // Create 42 cells (6 weeks)
+        for (let i = 0; i < 42; i++) {
+            const cellDate = new Date(startDate);
+            cellDate.setUTCDate(startDate.getUTCDate() + i);
+            
+            const cell = createMonthDayCell(cellDate, backupData, guestId, filteredGuestIds);
+            calendarGrid.appendChild(cell);
+        }
+        
+        calendarContainer.appendChild(calendarGrid);
+        return calendarContainer;
+    }
+    
+    function processBackupDataForSingleMonth(backupData, displayMonth, guestId, filteredGuestIds = null) {
+        const monthData = {};
+        // Use UTC dates for month boundaries to avoid timezone issues
+        const startOfMonth = new Date(Date.UTC(displayMonth.getFullYear(), displayMonth.getMonth(), 1));
+        const endOfMonth = new Date(Date.UTC(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 0));
+        
+        // Get guest data for hostname lookup
+        const vmsData = PulseApp.state.get('vmsData') || [];
+        const containersData = PulseApp.state.get('containersData') || [];
+        const allGuests = [...vmsData, ...containersData];
+        const guestLookup = {};
+        allGuests.forEach(guest => {
+            guestLookup[guest.vmid] = {
+                name: guest.name,
+                type: guest.type === 'qemu' ? 'VM' : 'CT'
+            };
+        });
+        
+        // Group backups by guest and date for this month only
+        const backupsByGuestAndDate = {};
+        
+        // Process all backup sources
+        ['pbsSnapshots', 'pveBackups', 'vmSnapshots'].forEach(source => {
+            if (!backupData[source]) return;
+            
+            backupData[source].forEach(item => {
+                const timestamp = item.ctime || item.snaptime || item['backup-time'];
+                if (!timestamp) return;
+                
+                const date = new Date(timestamp * 1000);
+                
+                // Create UTC date to avoid timezone issues
+                const utcDate = new Date(Date.UTC(
+                    date.getUTCFullYear(),
+                    date.getUTCMonth(),
+                    date.getUTCDate()
+                ));
+                
+                // Only process items within the current month (UTC comparison)
+                if (utcDate < startOfMonth || utcDate > endOfMonth) return;
+                
+                const dateKey = utcDate.toISOString().split('T')[0];
+                const vmid = item.vmid || item['backup-id'] || item.backupVMID;
+                
+                if (!vmid) return;
+                
+                // Apply filtering logic
+                if (guestId && vmid != guestId) return;
+                if (filteredGuestIds && !filteredGuestIds.includes(vmid.toString())) return;
+                
+                if (!backupsByGuestAndDate[vmid]) {
+                    backupsByGuestAndDate[vmid] = {};
+                }
+                
+                if (!backupsByGuestAndDate[vmid][dateKey]) {
+                    backupsByGuestAndDate[vmid][dateKey] = {
+                        date: utcDate,
+                        types: new Set(),
+                        backups: []
+                    };
+                }
+                
+                backupsByGuestAndDate[vmid][dateKey].types.add(source);
+                backupsByGuestAndDate[vmid][dateKey].backups.push({
+                    type: source,
+                    time: date.toLocaleTimeString(), // Keep original timestamp for display
+                    name: item.volid || item.name || item['backup-id'] || 'Backup'
+                });
+            });
+        });
+        
+        // Process backup days and group by date
+        Object.entries(backupsByGuestAndDate).forEach(([vmid, dateData]) => {
+            Object.keys(dateData).forEach(dateKey => {
+                if (!monthData[dateKey]) {
+                    monthData[dateKey] = {
+                        guests: [],
+                        allTypes: new Set(),
+                        hasBackups: true
+                    };
+                }
+                
+                const guestInfo = guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
+                
+                monthData[dateKey].guests.push({
+                    vmid: vmid,
+                    name: guestInfo.name,
+                    type: guestInfo.type,
+                    types: Array.from(dateData[dateKey].types),
+                    backupCount: dateData[dateKey].backups.length
+                });
+                
+                dateData[dateKey].types.forEach(type => {
+                    monthData[dateKey].allTypes.add(type);
+                });
+            });
+        });
+        
+        // Process backup tasks for failure detection
+        if (backupData.backupTasks) {
+            const tasks = guestId 
+                ? backupData.backupTasks.filter(task => task.vmid == guestId)
+                : backupData.backupTasks;
+            
+            tasks.forEach(task => {
+                if (!task.starttime || task.starttime <= 0) return;
+                
+                const date = new Date(task.starttime * 1000);
+                if (isNaN(date.getTime())) return;
+                
+                // Create UTC date to avoid timezone issues
+                const utcDate = new Date(Date.UTC(
+                    date.getUTCFullYear(),
+                    date.getUTCMonth(),
+                    date.getUTCDate()
+                ));
+                
+                // Only process tasks within the current month (UTC comparison)
+                if (utcDate < startOfMonth || utcDate > endOfMonth) return;
+                
+                const dateKey = utcDate.toISOString().split('T')[0];
+                
+                if (task.status !== 'OK' && monthData[dateKey]) {
+                    monthData[dateKey].hasFailures = true;
+                }
+            });
+        }
+        
+        return monthData;
+    }
+    
+    function refreshMonthView(container, backupData, guestId, filteredGuestIds) {
+        // Update month navigation header
+        const nav = container.querySelector('.flex.items-center.justify-between');
+        if (nav) {
+            const monthYear = currentDisplayMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+            nav.querySelector('h3').textContent = monthYear;
+            
+            // Update next button state
+            const today = new Date();
+            const nextBtn = nav.querySelector('.next-month-btn');
+            if (currentDisplayMonth.getFullYear() >= today.getFullYear() && 
+                currentDisplayMonth.getMonth() >= today.getMonth()) {
+                nextBtn.disabled = true;
+                nextBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                nextBtn.disabled = false;
+                nextBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+        
+        // Recreate calendar grid
+        const oldCalendar = container.querySelector('.calendar-month-container');
+        if (oldCalendar) {
+            const newCalendar = createSingleMonthCalendar(backupData, guestId, filteredGuestIds);
+            oldCalendar.replaceWith(newCalendar);
+        }
+        
+        // Update legend
+        const legendContainer = container.querySelector('.legend-container');
+        if (legendContainer) {
+            updateLegend(legendContainer);
+        }
     }
     
     function createCalendarHeader(backupData, guestId = null, filteredGuestIds = null) {
         const header = document.createElement('div');
         header.className = 'mb-4 space-y-3';
         
+        
         // Add backup statistics summary
         const stats = calculateBackupStats(backupData, guestId, filteredGuestIds);
+        
+        // Get guest name for display if filtering
+        let guestDisplayText = `${stats.activeGuests}`;
+        if (guestId) {
+            const vmsData = PulseApp.state.get('vmsData') || [];
+            const containersData = PulseApp.state.get('containersData') || [];
+            const allGuests = [...vmsData, ...containersData];
+            const guest = allGuests.find(g => g.vmid == guestId);
+            const guestName = guest ? guest.name : `Guest ${guestId}`;
+            guestDisplayText = `${stats.activeGuests} (${guestName})`;
+        }
+        
         const statsDiv = document.createElement('div');
         statsDiv.className = 'grid grid-cols-2 md:grid-cols-4 gap-3 text-sm';
         
@@ -62,14 +586,14 @@ PulseApp.ui.calendarHeatmap = (() => {
             </div>
             <div class="bg-gray-50 dark:bg-gray-700/50 rounded p-2">
                 <div class="text-xs text-gray-500 dark:text-gray-400">Active Guests</div>
-                <div class="font-semibold text-gray-900 dark:text-gray-100">${stats.activeGuests}</div>
+                <div class="font-semibold text-gray-900 dark:text-gray-100">${guestDisplayText}</div>
             </div>
             <div class="bg-gray-50 dark:bg-gray-700/50 rounded p-2">
                 <div class="text-xs text-gray-500 dark:text-gray-400">Backup Types</div>
                 <div class="flex gap-2 mt-1">
-                    ${stats.hasPBS ? '<span class="inline-block w-2 h-2 bg-green-500 rounded-full" title="PBS"></span>' : ''}
-                    ${stats.hasPVE ? '<span class="inline-block w-2 h-2 bg-yellow-500 rounded-full" title="PVE"></span>' : ''}
-                    ${stats.hasSnapshots ? '<span class="inline-block w-2 h-2 bg-blue-500 rounded-full" title="Snapshots"></span>' : ''}
+                    ${stats.hasPBS ? '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full" title="PBS"></span>' : ''}
+                    ${stats.hasPVE ? '<span class="inline-block w-2 h-2 bg-orange-500 rounded-full" title="PVE"></span>' : ''}
+                    ${stats.hasSnapshots ? '<span class="inline-block w-2 h-2 bg-yellow-500 rounded-full" title="Snapshots"></span>' : ''}
                 </div>
             </div>
         `;
@@ -179,6 +703,18 @@ PulseApp.ui.calendarHeatmap = (() => {
         const header = container.querySelector('.mb-4.space-y-3');
         if (header) {
             const stats = calculateBackupStats(backupData, guestId, filteredGuestIds);
+            
+            // Get guest name for display if filtering
+            let guestDisplayText = `${stats.activeGuests}`;
+            if (guestId) {
+                const vmsData = PulseApp.state.get('vmsData') || [];
+                const containersData = PulseApp.state.get('containersData') || [];
+                const allGuests = [...vmsData, ...containersData];
+                const guest = allGuests.find(g => g.vmid == guestId);
+                const guestName = guest ? guest.name : `Guest ${guestId}`;
+                guestDisplayText = `${stats.activeGuests} (${guestName})`;
+            }
+            
             const statsDiv = header.querySelector('.grid');
             if (statsDiv) {
                 statsDiv.innerHTML = `
@@ -192,14 +728,14 @@ PulseApp.ui.calendarHeatmap = (() => {
                     </div>
                     <div class="bg-gray-50 dark:bg-gray-700/50 rounded p-2">
                         <div class="text-xs text-gray-500 dark:text-gray-400">Active Guests</div>
-                        <div class="font-semibold text-gray-900 dark:text-gray-100">${stats.activeGuests}</div>
+                        <div class="font-semibold text-gray-900 dark:text-gray-100">${guestDisplayText}</div>
                     </div>
                     <div class="bg-gray-50 dark:bg-gray-700/50 rounded p-2">
                         <div class="text-xs text-gray-500 dark:text-gray-400">Backup Types</div>
                         <div class="flex gap-2 mt-1">
-                            ${stats.hasPBS ? '<span class="inline-block w-2 h-2 bg-green-500 rounded-full" title="PBS"></span>' : ''}
-                            ${stats.hasPVE ? '<span class="inline-block w-2 h-2 bg-yellow-500 rounded-full" title="PVE"></span>' : ''}
-                            ${stats.hasSnapshots ? '<span class="inline-block w-2 h-2 bg-blue-500 rounded-full" title="Snapshots"></span>' : ''}
+                            ${stats.hasPBS ? '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full" title="PBS"></span>' : ''}
+                            ${stats.hasPVE ? '<span class="inline-block w-2 h-2 bg-orange-500 rounded-full" title="PVE"></span>' : ''}
+                            ${stats.hasSnapshots ? '<span class="inline-block w-2 h-2 bg-yellow-500 rounded-full" title="Snapshots"></span>' : ''}
                         </div>
                     </div>
                 `;
@@ -226,6 +762,59 @@ PulseApp.ui.calendarHeatmap = (() => {
                 : `No backup data found`;
             calendarContent.appendChild(noDataMessage);
         }
+        
+        // Restore selection if there was one
+        if (preservedSelectedDate) {
+            setTimeout(() => {
+                const cellToSelect = calendarContent.querySelector(`[data-date="${preservedSelectedDate}"]`);
+                if (cellToSelect) {
+                    // Check if selection is already applied to avoid re-applying styles
+                    const isAlreadySelected = cellToSelect.classList.contains('ring-2');
+                    
+                    if (!isAlreadySelected) {
+                        // Find the day data for this cell
+                        const dayData = allData[preservedSelectedDate];
+                        if (dayData && onDateSelectCallback) {
+                            // Manually restore selection without animation
+                            cellToSelect.classList.add(...CSS_CLASSES.SELECTED_CELL);
+                            currentSelectedCell = cellToSelect;
+                            currentSelectedDate = preservedSelectedDate;
+                            
+                            // Prepare callback data
+                            const callbackData = {
+                                date: preservedSelectedDate,
+                                backups: dayData.guests || [],
+                                stats: {
+                                    totalGuests: dayData.guests ? dayData.guests.length : 0,
+                                    pbsCount: 0,
+                                    pveCount: 0,
+                                    snapshotCount: 0,
+                                    failureCount: dayData.hasFailures ? 1 : 0
+                                }
+                            };
+                            
+                            // Count backup types
+                            if (dayData.guests) {
+                                dayData.guests.forEach(guest => {
+                                    const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                                    if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                                    if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                                    if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                                });
+                            }
+                            
+                            // Call with instant flag
+                            onDateSelectCallback(callbackData, true);
+                        }
+                    } else {
+                        // Cell is already selected, just update the current references
+                        currentSelectedCell = cellToSelect;
+                        currentSelectedDate = preservedSelectedDate;
+                    }
+                }
+            }, 50);
+        }
+        
     }
 
     function processBackupDataForAllYears(backupData, guestId, filteredGuestIds = null) {
@@ -280,7 +869,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 if (!backupsByGuestAndDate[vmid][dateKey]) {
                     backupsByGuestAndDate[vmid][dateKey] = {
-                        date: date,
+                        date: utcDate,
                         types: new Set(),
                         backups: []
                     };
@@ -289,7 +878,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 backupsByGuestAndDate[vmid][dateKey].types.add(source);
                 backupsByGuestAndDate[vmid][dateKey].backups.push({
                     type: source,
-                    time: date.toLocaleTimeString(),
+                    time: date.toLocaleTimeString(), // Keep original timestamp for display
                     name: item.volid || item.name || item['backup-id'] || 'Backup'
                 });
             });
@@ -356,8 +945,8 @@ PulseApp.ui.calendarHeatmap = (() => {
             monthsSet.add(monthKey);
         });
         
-        // Convert to sorted month objects
-        const months = Array.from(monthsSet).sort().map(monthKey => {
+        // Convert to sorted month objects (most recent first)
+        const allMonths = Array.from(monthsSet).sort().reverse().map(monthKey => {
             const [year, month] = monthKey.split('-').map(Number);
             const firstDay = new Date(year, month, 1);
             const lastDay = new Date(year, month + 1, 0);
@@ -367,11 +956,18 @@ PulseApp.ui.calendarHeatmap = (() => {
                 year: year,
                 month: month,
                 firstDay: firstDay.getDay(),
-                daysInMonth: lastDay.getDate()
+                daysInMonth: lastDay.getDate(),
+                monthKey: monthKey
             };
         });
         
-        return months;
+        // Limit to reasonable number of months for performance and UX
+        // Show last 24 months max (2 years) to keep UI manageable
+        const maxMonths = 24;
+        const months = allMonths.slice(0, maxMonths);
+        
+        // Sort back to chronological order for display
+        return months.reverse();
     }
 
     function processBackupDataForYear(backupData, guestId, year, filteredGuestIds = null) {
@@ -438,7 +1034,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 if (!backupsByGuestAndDate[vmid][dateKey]) {
                     backupsByGuestAndDate[vmid][dateKey] = {
-                        date: date,
+                        date: utcDate,
                         types: new Set(),
                         backups: []
                     };
@@ -447,7 +1043,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 backupsByGuestAndDate[vmid][dateKey].types.add(source);
                 backupsByGuestAndDate[vmid][dateKey].backups.push({
                     type: source,
-                    time: date.toLocaleTimeString(),
+                    time: date.toLocaleTimeString(), // Keep original timestamp for display
                     name: item.volid || item.name || item['backup-id'] || 'Backup'
                 });
             });
@@ -646,13 +1242,13 @@ PulseApp.ui.calendarHeatmap = (() => {
 
     function getDayCellClass(totalMonthCount) {
         if (totalMonthCount === 1) {
-            return 'w-5 h-5 rounded cursor-pointer transition-all duration-200 relative group'; // Largest cells
+            return 'w-5 h-5 rounded cursor-pointer relative transition-transform'; // Largest cells
         } else if (totalMonthCount === 2) {
-            return 'w-4 h-4 rounded cursor-pointer transition-all duration-200 relative group'; // Large cells
+            return 'w-4 h-4 rounded cursor-pointer relative transition-transform'; // Large cells
         } else if (totalMonthCount <= 4) {
-            return 'w-3.5 h-3.5 rounded cursor-pointer transition-all duration-200 relative group'; // Medium cells
+            return 'w-3.5 h-3.5 rounded cursor-pointer relative transition-transform'; // Medium cells
         } else {
-            return 'w-3 h-3 rounded cursor-pointer transition-all duration-200 relative group'; // Original small cells
+            return 'w-3 h-3 rounded cursor-pointer relative transition-transform'; // Original small cells
         }
     }
 
@@ -692,213 +1288,197 @@ PulseApp.ui.calendarHeatmap = (() => {
 
     function createDayCell(date, dayData, totalMonthCount) {
         const cell = document.createElement('div');
-        cell.className = getDayCellClass(totalMonthCount) + ' relative overflow-hidden hover:scale-110 hover:z-10 transform transition-transform duration-200';
+        cell.className = getDayCellClass(totalMonthCount) + ' overflow-hidden';
         
         // Check if this is today
         const today = new Date();
         const isToday = date.toDateString() === today.toDateString();
         
         if (isToday) {
-            // Add today indicator with just a static outline
-            cell.className += ' ring-2 ring-blue-500 dark:ring-blue-400';
+            // Add today indicator with a subtle dotted border
+            cell.className += ' border-2 border-dotted border-indigo-500 dark:border-indigo-400';
         }
         
+        // Make all cells clickable
+        cell.style.cursor = 'pointer';
+        
+        let shouldShowDay = false;
+        
         if (dayData && dayData.hasBackups) {
-            // Remove clickable appearance
-            // cell.style.cursor = 'pointer';
             
-            // Determine color based purely on backup types
+            // Check if this day should be shown based on current filter
             const backupTypes = Array.from(dayData.allTypes || []);
             
-            if (backupTypes.length > 1) {
-                // Multiple backup types - create split background
-                if (backupTypes.includes('pbsSnapshots') && backupTypes.includes('vmSnapshots')) {
-                    // PBS (green) + VM Snapshots (blue) - diagonal split
-                    cell.style.background = `linear-gradient(135deg, rgb(34 197 94) 50%, rgb(59 130 246) 50%)`;
-                } else if (backupTypes.includes('pveBackups') && backupTypes.includes('vmSnapshots')) {
-                    // PVE (yellow) + VM Snapshots (blue) - diagonal split
-                    cell.style.background = `linear-gradient(135deg, rgb(250 204 21) 50%, rgb(59 130 246) 50%)`;
-                } else if (backupTypes.includes('pbsSnapshots') && backupTypes.includes('pveBackups')) {
-                    // PBS (green) + PVE (yellow) - diagonal split
-                    cell.style.background = `linear-gradient(135deg, rgb(34 197 94) 50%, rgb(250 204 21) 50%)`;
-                } else if (backupTypes.length === 3) {
-                    // All three types - use stripes
-                    cell.style.background = `linear-gradient(45deg, 
-                        rgb(34 197 94) 0%, rgb(34 197 94) 33%, 
-                        rgb(250 204 21) 33%, rgb(250 204 21) 66%, 
-                        rgb(59 130 246) 66%, rgb(59 130 246) 100%)`;
-                }
-            } else if (backupTypes.length === 1) {
-                // Single backup type - use solid color based on type
-                if (backupTypes.includes('pbsSnapshots')) {
-                    cell.className += ' bg-green-500'; // PBS - green
-                } else if (backupTypes.includes('pveBackups')) {
-                    cell.className += ' bg-yellow-400'; // PVE - yellow
-                } else if (backupTypes.includes('vmSnapshots')) {
-                    cell.className += ' bg-blue-400'; // Snapshots - blue
+            if (currentFilterType === 'all') {
+                shouldShowDay = backupTypes.length > 0;
+            } else if (currentFilterType === 'pbs') {
+                shouldShowDay = backupTypes.includes('pbsSnapshots');
+            } else if (currentFilterType === 'pve') {
+                shouldShowDay = backupTypes.includes('pveBackups');
+            } else if (currentFilterType === 'snapshots') {
+                shouldShowDay = backupTypes.includes('vmSnapshots');
+            }
+            
+            if (shouldShowDay) {
+                // Use a single color for all backup days
+                if (currentFilterType === 'pbs') {
+                    cell.className += ' bg-purple-500 dark:bg-purple-600';
+                } else if (currentFilterType === 'pve') {
+                    cell.className += ' bg-orange-500 dark:bg-orange-600';
+                } else if (currentFilterType === 'snapshots') {
+                    cell.className += ' bg-yellow-500 dark:bg-yellow-600';
+                } else {
+                    // 'all' filter - use a neutral color
+                    cell.className += ' bg-slate-600 dark:bg-slate-500';
                 }
             } else {
                 cell.className += ' ' + BACKUP_COLORS.NONE;
             }
             
-            // Add failure indicator if present
-            if (dayData.hasFailures) {
-                cell.className += ' ring-1 ring-red-500 dark:ring-red-400';
-            }
+            // Note: Failure indicators removed - now handled by dedicated failures filter
             
-            // Add small indicator for number of guests
-            const totalGuests = dayData.guests ? dayData.guests.length : 0;
-            
-            if (totalGuests > 3) {
-                const countIndicator = document.createElement('div');
-                countIndicator.className = 'absolute inset-0 flex items-center justify-center text-[8px] font-bold text-white drop-shadow';
-                countIndicator.textContent = totalGuests;
-                cell.appendChild(countIndicator);
+            // Add day number to cell
+            if (shouldShowDay) {
+                const dayNumber = document.createElement('div');
+                dayNumber.className = 'absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white drop-shadow-md';
+                dayNumber.textContent = date.getDate();
+                cell.appendChild(dayNumber);
             }
-        } else {
-            // No retention markers - gray
-            cell.className += ' ' + BACKUP_COLORS.NONE;
         }
         
-        cell.dataset.date = date.toISOString().split('T')[0];
+        // Always add day number for non-backup days or filtered out days
+        if (!dayData || !dayData.hasBackups || (dayData.hasBackups && !shouldShowDay)) {
+            const dayNumber = document.createElement('div');
+            dayNumber.className = 'absolute inset-0 flex items-center justify-center text-[9px] font-medium text-gray-500 dark:text-gray-400';
+            dayNumber.textContent = date.getDate();
+            cell.appendChild(dayNumber);
+        }
         
-        // Store guest IDs for this day if available
+        const dateKey = date.toISOString().split('T')[0];
+        cell.dataset.date = dateKey;
+        
+        // Store guest IDs and backup types for this day if available
         if (dayData && dayData.guests && dayData.guests.length > 0) {
             const allGuests = dayData.guests.map(g => g.vmid);
             cell.dataset.guestIds = allGuests.join(',');
+            
+            // Store backup types for fast filtering
+            const backupTypes = Array.from(dayData.allTypes || []);
+            cell.dataset.backupTypes = backupTypes.join(',');
         }
         
-        // Always add tooltip
-        const tooltip = createTooltip(date, dayData);
-        cell.appendChild(tooltip);
-
-        // Add mouse event handlers for tooltip only
-        cell.addEventListener('mouseenter', (e) => {
-            const rect = cell.getBoundingClientRect();
+        // Add click event handler
+        cell.addEventListener('click', (e) => {
+            e.stopPropagation();
             
-            // Smart positioning to avoid viewport cutoff
-            let left = rect.right + 10;
-            let top = rect.top;
-            
-            // Check if tooltip would go off-screen horizontally
-            if (left + 300 > window.innerWidth) {
-                left = rect.left - 310; // Position to the left instead
+            // Remove previous selection
+            if (currentSelectedCell && currentSelectedCell !== cell) {
+                currentSelectedCell.classList.remove(...CSS_CLASSES.SELECTED_CELL);
             }
             
-            // Check if tooltip would go off-screen vertically
-            if (top + 200 > window.innerHeight) {
-                top = window.innerHeight - 210; // Position higher
-            }
-            
-            tooltip.style.left = left + 'px';
-            tooltip.style.top = top + 'px';
-            tooltip.style.opacity = '1';
-            tooltip.style.zIndex = '100';
-            
-            // If tooltip shows no data but cell is colored, try to recreate tooltip
-            if (tooltip.textContent.includes('No backup') && dayData && dayData.hasBackups) {
-                const newTooltip = createTooltip(date, dayData);
-                tooltip.innerHTML = newTooltip.innerHTML;
+            // Toggle selection on current cell
+            if (cell === currentSelectedCell) {
+                // Deselect if clicking the same cell
+                cell.classList.remove(...CSS_CLASSES.SELECTED_CELL);
+                currentSelectedCell = null;
+                currentSelectedDate = null;
+                preservedSelectedDate = null; // Clear preserved selection
+                
+                // Call callback with null to clear detail view
+                if (onDateSelectCallback) {
+                    onDateSelectCallback(null);
+                }
+            } else {
+                // Select new cell
+                cell.classList.add(...CSS_CLASSES.SELECTED_CELL);
+                currentSelectedCell = cell;
+                currentSelectedDate = dateKey;
+                preservedSelectedDate = dateKey; // Preserve for updates
+                
+                // Call callback with date data
+                if (onDateSelectCallback && dayData) {
+                    const callbackData = {
+                        date: dateKey,
+                        backups: dayData.guests || [],
+                        stats: {
+                            totalGuests: dayData.guests ? dayData.guests.length : 0,
+                            pbsCount: 0,
+                            pveCount: 0,
+                            snapshotCount: 0,
+                            failureCount: dayData.hasFailures ? 1 : 0
+                        }
+                    };
+                    
+                    // Count backup types
+                    if (dayData.guests) {
+                        dayData.guests.forEach(guest => {
+                            const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                            if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                            if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                            if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                        });
+                    }
+                    
+                    onDateSelectCallback(callbackData);
+                }
             }
         });
-
+        
+        // Add hover effect
+        cell.addEventListener('mouseenter', () => {
+            if (!cell.classList.contains('ring-2')) {
+                cell.style.transform = 'scale(1.05)';
+            }
+        });
+        
         cell.addEventListener('mouseleave', () => {
-            tooltip.style.opacity = '0';
+            if (!cell.classList.contains('ring-2')) {
+                cell.style.transform = '';
+            }
         });
-
-        // Calendar cells are no longer clickable - interaction moved to table rows
 
         return cell;
-    }
-    
-    function highlightGuestsInTable(guestIds) {
-        // Call the backups UI function to highlight table rows (non-intrusive)
-        if (PulseApp.ui && PulseApp.ui.backups && PulseApp.ui.backups._highlightTableRows) {
-            // Remove any existing highlights first
-            PulseApp.ui.backups._highlightTableRows([], false);
-            // Then highlight the selected guests
-            PulseApp.ui.backups._highlightTableRows(guestIds, true);
-            
-            // Scroll to first matching row
-            const firstRow = document.querySelector(`#backups-overview-tbody tr[data-guest-id="${guestIds[0]}"]`);
-            if (firstRow) {
-                firstRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }
-    }
-
-    function createTooltip(date, dayData) {
-        const tooltip = document.createElement('div');
-        tooltip.className = CSS_CLASSES.DAY_TOOLTIP;
-        
-        // Use consistent date formatting without timezone conversion
-        const dateStr = date.toLocaleDateString(undefined, { 
-            weekday: 'short', 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric',
-            timeZone: 'UTC'  // Force UTC to prevent timezone shifts
-        });
-        
-        if (!dayData || !dayData.guests || dayData.guests.length === 0) {
-            tooltip.innerHTML = `<div class="text-xs">${dateStr}<br>No backup activity</div>`;
-            return tooltip;
-        }
-        
-        let content = `<div class="font-medium mb-2">${dateStr}</div>`;
-        
-        // Show guests and their backup types
-        content += `<div class="text-xs space-y-1">`;
-        
-        dayData.guests.forEach(guest => {
-            const typeLabels = {
-                pbsSnapshots: '<span class="text-green-400">PBS</span>',
-                pveBackups: '<span class="text-yellow-400">PVE</span>',
-                vmSnapshots: '<span class="text-blue-400">SNAP</span>'
-            };
-            
-            const typesArray = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
-            const labels = typesArray.map(t => {
-                return typeLabels[t] || `<span class="text-gray-400">${t}</span>`;
-            }).join(' ');
-            
-            content += `<div>${guest.type} ${guest.vmid} (${guest.name}) ${labels} (${guest.backupCount})</div>`;
-        });
-        
-        content += `</div>`;
-        
-        if (dayData.hasFailures) {
-            content += '<div class="text-red-300 text-xs mt-2">⚠ Contains failures</div>';
-        }
-        
-        tooltip.innerHTML = content;
-        return tooltip;
     }
 
     function createLegend() {
         const legend = document.createElement('div');
-        legend.className = 'mt-4 space-y-2';
+        legend.className = 'mt-2 text-center legend-container';
         
-        legend.innerHTML = `
-            <div class="flex flex-wrap items-center justify-center gap-4 text-xs">
-                <div class="flex items-center gap-2">
-                    <div class="flex items-center gap-1">
-                        <div class="${CSS_CLASSES.LEGEND_BOX} bg-green-500 dark:bg-green-400"></div>
-                        <span>PBS</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <div class="${CSS_CLASSES.LEGEND_BOX} bg-yellow-400 dark:bg-yellow-500"></div>
-                        <span>PVE</span>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <div class="${CSS_CLASSES.LEGEND_BOX} bg-blue-400 dark:bg-blue-500"></div>
-                        <span>Snapshots</span>
-                    </div>
-                </div>
-            </div>
-        `;
+        updateLegend(legend);
         
         return legend;
+    }
+    
+
+    function updateLegend(legendContainer) {
+        const currentFilterType = getCurrentFilterType();
+        let colorClass = 'bg-slate-600 dark:bg-slate-500';
+        let labelText = 'Has backups';
+        
+        if (currentFilterType === 'pbs') {
+            colorClass = 'bg-purple-500 dark:bg-purple-600';
+            labelText = 'PBS backups';
+        } else if (currentFilterType === 'pve') {
+            colorClass = 'bg-orange-500 dark:bg-orange-600';
+            labelText = 'PVE backups';
+        } else if (currentFilterType === 'snapshots') {
+            colorClass = 'bg-yellow-500 dark:bg-yellow-600';
+            labelText = 'Snapshots';
+        }
+        
+        legendContainer.innerHTML = `
+            <div class="text-xs text-gray-500 dark:text-gray-400">
+                <span class="inline-flex items-center gap-1">
+                    <span class="inline-block w-3 h-3 ${colorClass} rounded"></span>
+                    <span>${labelText}</span>
+                </span>
+                <span class="mx-3">•</span>
+                <span class="inline-flex items-center gap-1">
+                    <span class="inline-block w-3 h-3 border-2 border-dotted border-indigo-500 dark:border-indigo-400 rounded"></span>
+                    <span>Today</span>
+                </span>
+            </div>
+        `;
     }
 
     function showBackupDetails(date, dayData) {
@@ -906,7 +1486,81 @@ PulseApp.ui.calendarHeatmap = (() => {
         // TODO: Create modal or expand section with backup details
     }
 
+    function updateCalendarData(backupData, guestId, filteredGuestIds, onDateSelect) {
+        // Store the new callback
+        onDateSelectCallback = onDateSelect;
+        
+        // Find existing calendar container
+        const existingContainer = document.querySelector('.calendar-heatmap-container');
+        if (!existingContainer) return;
+        
+        // For API updates, don't recreate the calendar at all - just preserve the existing state
+        // The calendar data doesn't need to be updated on every API refresh since the backup
+        // data shown in the calendar is historical and doesn't change frequently
+        
+        // Just ensure we maintain the current selection and callback
+        if (preservedSelectedDate && currentSelectedCell) {
+            // Update the callback if the detail card needs updating with new data
+            if (onDateSelectCallback) {
+                const allData = processBackupDataForSingleMonth(backupData, currentDisplayMonth, guestId, filteredGuestIds);
+                const dayData = allData[preservedSelectedDate];
+                if (dayData) {
+                    // Prepare callback data with updated information
+                    const callbackData = {
+                        date: preservedSelectedDate,
+                        backups: dayData.guests || [],
+                        stats: {
+                            totalGuests: dayData.guests ? dayData.guests.length : 0,
+                            pbsCount: 0,
+                            pveCount: 0,
+                            snapshotCount: 0,
+                            failureCount: dayData.hasFailures ? 1 : 0
+                        }
+                    };
+                    
+                    // Count backup types
+                    if (dayData.guests) {
+                        dayData.guests.forEach(guest => {
+                            const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                            if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                            if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                            if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                        });
+                    }
+                    
+                    // Update detail card with latest data (instant to prevent flashing)
+                    onDateSelectCallback(callbackData, true);
+                }
+            }
+        }
+    }
+
     return {
-        createCalendarHeatmap
+        createCalendarHeatmap,
+        updateCalendarData,
+        getSelectedDate: () => preservedSelectedDate,
+        clearSelection: () => {
+            // Remove visual selection from current cell
+            if (currentSelectedCell) {
+                currentSelectedCell.classList.remove(...CSS_CLASSES.SELECTED_CELL);
+            }
+            
+            // Clear detail card if there's a callback
+            if (onDateSelectCallback) {
+                onDateSelectCallback(null, true); // null data, instant update
+            }
+            
+            // Clear internal state
+            preservedSelectedDate = null;
+            currentSelectedDate = null;
+            currentSelectedCell = null;
+        },
+        resetFilter: () => {
+            hasAutoSelectedToday = false; // Reset auto-selection flag
+        },
+        setDisplayMonth: (date) => {
+            currentDisplayMonth = new Date(date);
+            currentDisplayMonth.setDate(1);
+        }
     };
 })();
