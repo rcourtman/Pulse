@@ -118,9 +118,28 @@ find "$STAGING_PARENT_DIR" -type f -exec xattr -c {} \; 2>/dev/null || true
 
 # --- Create Tarball ---
 echo "Creating tarball: $TARBALL_NAME..."
+
+# Detect and use GNU tar if available (preferred on macOS to avoid extended attributes)
+TAR_CMD="tar"
+if command -v gtar &> /dev/null; then
+    TAR_CMD="gtar"
+    echo "Using GNU tar to avoid macOS extended attributes"
+elif tar --version 2>&1 | grep -q "GNU tar"; then
+    TAR_CMD="tar"
+    echo "Using GNU tar"
+else
+    TAR_CMD="tar"
+    echo "Using system tar with COPYFILE_DISABLE=1"
+fi
+
 # Go into the parent of the directory to be tarred to avoid leading paths in tarball
-# COPYFILE_DISABLE=1 prevents macOS from adding extended attributes that cause warnings
-(cd "$STAGING_PARENT_DIR" && COPYFILE_DISABLE=1 tar -czf "../$TARBALL_NAME" "$RELEASE_DIR_NAME")
+if [ "$TAR_CMD" = "gtar" ]; then
+    # GNU tar doesn't need COPYFILE_DISABLE and handles extended attributes properly
+    (cd "$STAGING_PARENT_DIR" && "$TAR_CMD" -czf "../$TARBALL_NAME" "$RELEASE_DIR_NAME")
+else
+    # BSD tar (macOS) needs COPYFILE_DISABLE=1 to prevent extended attributes
+    (cd "$STAGING_PARENT_DIR" && COPYFILE_DISABLE=1 "$TAR_CMD" -czf "../$TARBALL_NAME" "$RELEASE_DIR_NAME")
+fi
 
 # --- Cleanup ---
 echo "Cleaning up staging directory ($STAGING_PARENT_DIR)..."
