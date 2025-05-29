@@ -17,8 +17,6 @@ MODE_UPDATE=""
 INSTALL_MODE=""  
 SPECIFIED_VERSION_TAG=""
 TARGET_TAG=""
-SPECIFIED_BRANCH=""
-TARGET_BRANCH=""
 INSTALLER_WAS_REEXECUTED=false
 
 if command -v readlink &> /dev/null && readlink -f "$0" &> /dev/null; then
@@ -50,24 +48,10 @@ while [[ "$#" -gt 0 ]]; do
                 exit 1
             fi
             ;;
-        --branch)
-            if [[ -n "$2" ]] && [[ "$2" != --* ]]; then
-                SPECIFIED_BRANCH="$2"
-                shift 2
-            else
-                echo "Error: --branch requires a branch name [e.g., feature/pve-backups]" >&2
-                exit 1
-            fi
-            ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
 done
 
-# Validate that both --version and --branch aren't specified
-if [[ -n "$SPECIFIED_VERSION_TAG" ]] && [[ -n "$SPECIFIED_BRANCH" ]]; then
-    echo "Error: Cannot specify both --version and --branch. Please choose one." >&2
-    exit 1
-fi
 
 print_info() {
   echo -e "\033[1;34m[INFO]\033[0m $1"
@@ -664,45 +648,6 @@ perform_tarball_install() {
     fi
 }
 
-prompt_for_branch_selection() {
-    print_info "Fetching available feature branches..."
-    local branches
-    if [ -d "$PULSE_DIR" ]; then
-        cd "$PULSE_DIR" || return 1
-        branches=$(sudo -u "$PULSE_USER" git ls-remote --heads origin | { grep -E 'feature/|hotfix/|dev/' || true; } | sed 's|.*refs/heads/||' | sort)
-        cd - >/dev/null
-    else
-        # For fresh installations, fetch from remote
-        branches=$(git ls-remote --heads https://github.com/rcourtman/Pulse.git | { grep -E 'feature/|hotfix/|dev/' || true; } | sed 's|.*refs/heads/||' | sort)
-    fi
-    
-    if [ -z "$branches" ]; then
-        print_warning "No development branches found."
-        return 1
-    fi
-    
-    echo "Available development branches:"
-    local i=1
-    local branch_array=()
-    while IFS= read -r branch; do
-        echo "  $i) $branch"
-        branch_array+=("$branch")
-        i=$((i+1))
-    done <<< "$branches"
-    echo "  $i) Cancel"
-    
-    read -p "Select a branch to install [1-$i]: " choice
-    
-    if [ "$choice" = "$i" ]; then
-        return 1
-    elif [ "$choice" -ge 1 ] && [ "$choice" -lt "$i" ]; then
-        SPECIFIED_BRANCH="${branch_array[$((choice-1))]}"
-        return 0
-    else
-        print_error "Invalid choice."
-        return 1
-    fi
-}
 
 check_installation_status_and_determine_action() {
     if [ -n "$MODE_UPDATE" ]; then
@@ -720,23 +665,6 @@ check_installation_status_and_determine_action() {
                  cd ..
             else
                 print_error "Cannot validate specified version tag: Pulse directory $PULSE_DIR not found."
-                INSTALL_MODE="error"; return
-            fi
-        elif [ -n "$SPECIFIED_BRANCH" ]; then
-            if [ -d "$PULSE_DIR/.git" ]; then
-                 cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; INSTALL_MODE="error"; return; }
-                 print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
-                 if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH" 2>/dev/null; then
-                     TARGET_BRANCH="$SPECIFIED_BRANCH"
-                     print_info "Will update to branch: $TARGET_BRANCH"
-                 else
-                     print_error "Remote branch '$SPECIFIED_BRANCH' not found."
-                     INSTALL_MODE="error"
-                     cd ..; return
-                 fi
-                 cd ..
-            else
-                print_error "Cannot validate specified branch: Pulse directory $PULSE_DIR not found."
                 INSTALL_MODE="error"; return
             fi
         else
@@ -801,7 +729,7 @@ check_installation_status_and_determine_action() {
                 print_info "Current installed version tag: ${current_tag:-Not on a tag}"
                 print_info "Latest available version tag: $latest_tag"
 
-                # Check for specific version/branch requests first
+                # Check for specific version requests first
                 if [ -n "$SPECIFIED_VERSION_TAG" ]; then
                      if check_remote_tag_exists "$SPECIFIED_VERSION_TAG"; then
                          TARGET_TAG="$SPECIFIED_VERSION_TAG"
@@ -810,16 +738,6 @@ check_installation_status_and_determine_action() {
                      else
                          INSTALL_MODE="error"; cd ..; return
                      fi
-                elif [ -n "$SPECIFIED_BRANCH" ]; then
-                    print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
-                    if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH" 2>/dev/null; then
-                        TARGET_BRANCH="$SPECIFIED_BRANCH"
-                        print_info "Will switch to branch: $TARGET_BRANCH"
-                        INSTALL_MODE="update"
-                    else
-                        print_error "Remote branch '$SPECIFIED_BRANCH' not found."
-                        INSTALL_MODE="error"; cd ..; return
-                    fi
                 elif [ -n "$current_tag" ] && [ "$current_tag" = "$latest_tag" ]; then
                     print_info "Pulse is already installed and up-to-date with the latest release $latest_tag."
                     INSTALL_MODE="uptodate"
@@ -839,16 +757,6 @@ check_installation_status_and_determine_action() {
                  else
                      INSTALL_MODE="error"; cd ..; return
                  fi
-            elif [ -n "$SPECIFIED_BRANCH" ]; then
-                print_info "Checking if remote branch '$SPECIFIED_BRANCH' exists..."
-                if sudo -u "$PULSE_USER" git ls-remote --heads origin "$SPECIFIED_BRANCH" | grep -q "$SPECIFIED_BRANCH" 2>/dev/null; then
-                    TARGET_BRANCH="$SPECIFIED_BRANCH"
-                    print_info "Will switch to branch: $TARGET_BRANCH"
-                    INSTALL_MODE="update"
-                else
-                    print_error "Remote branch '$SPECIFIED_BRANCH' not found."
-                    INSTALL_MODE="error"; cd ..; return
-                fi
             else
                 TARGET_TAG="$latest_tag"
             fi
@@ -874,25 +782,6 @@ check_installation_status_and_determine_action() {
                          4) INSTALL_MODE="cancel" ;;
                          *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                      esac
-                elif [ -n "$SPECIFIED_BRANCH" ]; then
-                    if [ -n "$MODE_UPDATE" ]; then
-                        # In non-interactive mode, proceed with branch update
-                        INSTALL_MODE="update"
-                    else
-                        echo -e "Choose an action:"
-                        echo -e "  1) Install branch $SPECIFIED_BRANCH (for testing)"
-                        echo -e "  2) Remove Pulse"
-                        echo -e "  3) Cancel"
-                        echo -e "  4) Manage automatic updates"
-                        read -p "Enter your choice [1-4]: " user_choice
-                        case $user_choice in
-                            1) INSTALL_MODE="update" ;;
-                            2) INSTALL_MODE="remove" ;;
-                            3) INSTALL_MODE="cancel" ;;
-                            4) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
-                            *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
-                        esac
-                    fi
                 else
                     if [ -n "$MODE_UPDATE" ]; then
                         # In non-interactive mode, re-install if explicitly requested
@@ -901,22 +790,14 @@ check_installation_status_and_determine_action() {
                         echo -e "Choose an action:"
                         echo -e "  1) Manage automatic updates"
                         echo -e "  2) Re-install current version $current_tag"
-                        echo -e "  3) Test a feature branch"
-                        echo -e "  4) Remove Pulse"
-                        echo -e "  5) Cancel"
-                        read -p "Enter your choice [1-5]: " user_choice
+                        echo -e "  3) Remove Pulse"
+                        echo -e "  4) Cancel"
+                        read -p "Enter your choice [1-4]: " user_choice
                         case $user_choice in
                             1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
                             2) INSTALL_MODE="update" ;;
-                            3) 
-                                if prompt_for_branch_selection; then
-                                    INSTALL_MODE="update"
-                                else
-                                    INSTALL_MODE="cancel"
-                                fi
-                                ;;
-                            4) INSTALL_MODE="remove" ;;
-                            5) INSTALL_MODE="cancel" ;;
+                            3) INSTALL_MODE="remove" ;;
+                            4) INSTALL_MODE="cancel" ;;
                             *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                         esac
                     fi
@@ -939,40 +820,18 @@ check_installation_status_and_determine_action() {
                          4) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
                          *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                      esac
-                 elif [ -n "$SPECIFIED_BRANCH" ]; then
-                     echo "Choose an action:"
-                     echo "  1) Install branch $SPECIFIED_BRANCH (for testing)"
-                     echo "  2) Remove Pulse"
-                     echo "  3) Cancel"
-                     echo "  4) Manage automatic updates"
-                     read -p "Enter your choice [1-4]: " user_choice
-                     case $user_choice in
-                         1) INSTALL_MODE="update" ;;
-                         2) INSTALL_MODE="remove" ;;
-                         3) INSTALL_MODE="cancel" ;;
-                         4) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
-                         *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
-                     esac
                  else
                       echo "Choose an action:"
                       echo "  1) Update Pulse to the latest version $TARGET_TAG"
-                      echo "  2) Test a feature branch"
-                      echo "  3) Remove Pulse"
-                      echo "  4) Cancel"
-                      echo "  5) Manage automatic updates"
-                      read -p "Enter your choice [1-5]: " user_choice
+                      echo "  2) Remove Pulse"
+                      echo "  3) Cancel"
+                      echo "  4) Manage automatic updates"
+                      read -p "Enter your choice [1-4]: " user_choice
                       case $user_choice in
                           1) INSTALL_MODE="update" ;;
-                          2) 
-                              if prompt_for_branch_selection; then
-                                  INSTALL_MODE="update"
-                              else
-                                  INSTALL_MODE="cancel"
-                              fi
-                              ;;
-                          3) INSTALL_MODE="remove" ;;
-                          4) INSTALL_MODE="cancel" ;;
-                          5) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
+                          2) INSTALL_MODE="remove" ;;
+                          3) INSTALL_MODE="cancel" ;;
+                          4) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
                           *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                       esac
                  fi
@@ -1001,10 +860,6 @@ check_installation_status_and_determine_action() {
                     TARGET_TAG="$SPECIFIED_VERSION_TAG"
                     print_info "Will target specified version: $TARGET_TAG"
                     INSTALL_MODE="update"
-                elif [ -n "$SPECIFIED_BRANCH" ]; then
-                    TARGET_BRANCH="$SPECIFIED_BRANCH"
-                    print_info "Will switch to branch: $TARGET_BRANCH"
-                    INSTALL_MODE="update"
                 elif [ "$current_version" = "$latest_version" ]; then
                     print_info "Pulse is already up-to-date with the latest release $latest_tag."
                     INSTALL_MODE="uptodate"
@@ -1028,22 +883,14 @@ check_installation_status_and_determine_action() {
                     echo "Choose an action:"
                     echo "  1) Manage automatic updates"
                     echo "  2) Re-install current version"
-                    echo "  3) Test a feature branch"
-                    echo "  4) Remove Pulse"
-                    echo "  5) Cancel"
-                    read -p "Enter your choice [1-5]: " user_choice
+                    echo "  3) Remove Pulse"
+                    echo "  4) Cancel"
+                    read -p "Enter your choice [1-4]: " user_choice
                     case $user_choice in
                         1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
                         2) INSTALL_MODE="update" ;;
-                        3) 
-                            if prompt_for_branch_selection; then
-                                INSTALL_MODE="update"
-                            else
-                                INSTALL_MODE="cancel"
-                            fi
-                            ;;
-                        4) INSTALL_MODE="remove" ;;
-                        5) INSTALL_MODE="cancel" ;;
+                        3) INSTALL_MODE="remove" ;;
+                        4) INSTALL_MODE="cancel" ;;
                         *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                     esac
                 fi
@@ -1054,23 +901,15 @@ check_installation_status_and_determine_action() {
                 else
                     echo "Choose an action:"
                     echo "  1) Update Pulse to the latest version ${TARGET_TAG:-$latest_tag}"
-                    echo "  2) Test a feature branch"
-                    echo "  3) Remove Pulse"
-                    echo "  4) Cancel"
-                    echo "  5) Manage automatic updates"
-                    read -p "Enter your choice [1-5]: " user_choice
+                    echo "  2) Remove Pulse"
+                    echo "  3) Cancel"
+                    echo "  4) Manage automatic updates"
+                    read -p "Enter your choice [1-4]: " user_choice
                     case $user_choice in
                         1) INSTALL_MODE="update" ;;
-                        2) 
-                            if prompt_for_branch_selection; then
-                                INSTALL_MODE="update"
-                            else
-                                INSTALL_MODE="cancel"
-                            fi
-                            ;;
-                        3) INSTALL_MODE="remove" ;;
-                        4) INSTALL_MODE="cancel" ;;
-                        5) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
+                        2) INSTALL_MODE="remove" ;;
+                        3) INSTALL_MODE="cancel" ;;
+                        4) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
                         *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                     esac
                 fi
@@ -1082,10 +921,6 @@ check_installation_status_and_determine_action() {
             TARGET_TAG="$SPECIFIED_VERSION_TAG"
             print_info "Will attempt to install specified version: $TARGET_TAG"
             INSTALL_MODE="install"
-        elif [ -n "$SPECIFIED_BRANCH" ]; then
-            TARGET_BRANCH="$SPECIFIED_BRANCH"
-            print_info "Will attempt to install from branch: $TARGET_BRANCH"
-            INSTALL_MODE="install"
         else
             if [ -n "$MODE_UPDATE" ]; then
                 # In non-interactive mode, install latest version
@@ -1093,19 +928,11 @@ check_installation_status_and_determine_action() {
             else
                 echo "Choose an action:"
                 echo "  1) Install Pulse [latest version]"
-                echo "  2) Test a feature branch"
-                echo "  3) Cancel"
-                read -p "Enter your choice [1-3]: " user_choice
+                echo "  2) Cancel"
+                read -p "Enter your choice [1-2]: " user_choice
                 case $user_choice in
                     1) INSTALL_MODE="install" ;;
-                    2) 
-                        if prompt_for_branch_selection; then
-                            INSTALL_MODE="install"
-                        else
-                            INSTALL_MODE="cancel"
-                        fi
-                        ;;
-                    3) INSTALL_MODE="cancel" ;;
+                    2) INSTALL_MODE="cancel" ;;
                     *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
                 esac
             fi
@@ -1331,27 +1158,21 @@ restore_user_data() {
 }
 
 perform_update() {
-    if [ -z "$TARGET_TAG" ] && [ -z "$TARGET_BRANCH" ]; then
-        print_error "Target version tag or branch not determined. Cannot update."
+    if [ -z "$TARGET_TAG" ]; then
+        print_error "Target version tag not determined. Cannot update."
         return 1
     fi
     
-    # For version tags, try tarball first, then fall back to git
-    if [ -n "$TARGET_TAG" ]; then
-        print_info "Attempting to update Pulse to version $TARGET_TAG..."
-        
-        # Try tarball update first - this is safer and preserves user data
-        if perform_tarball_update; then
-            return 0
-        fi
-        
-        # Fall back to git update only if tarball fails
-        print_warning "Tarball update failed, falling back to git update..."
-        print_warning "⚠️  Git update may be more disruptive to user configuration"
-    else
-        print_info "Attempting to update Pulse to branch $TARGET_BRANCH..."
-        print_warning "⚠️  Branch installations are for testing only and may be unstable!"
+    print_info "Attempting to update Pulse to version $TARGET_TAG..."
+    
+    # Try tarball update first - this is safer and preserves user data
+    if perform_tarball_update; then
+        return 0
     fi
+    
+    # Fall back to git update only if tarball fails
+    print_warning "Tarball update failed, falling back to git update..."
+    print_warning "⚠️  Git update may be more disruptive to user configuration"
     
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
@@ -1456,27 +1277,6 @@ perform_update() {
             print_info "Forcing checkout to ensure all files are updated..."
             sudo -u "$PULSE_USER" git checkout -f "$TARGET_TAG" -- .
         fi
-    else
-        # Branch checkout
-        if ! sudo -u "$PULSE_USER" git fetch origin "$TARGET_BRANCH"; then
-            print_error "Failed to fetch branch '$TARGET_BRANCH' from git."
-            [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
-            cd ..
-            return 1
-        fi
-        
-        print_info "Checking out branch '$TARGET_BRANCH'..."
-        if ! sudo -u "$PULSE_USER" git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"; then
-            print_error "Failed to checkout branch '$TARGET_BRANCH'."
-            [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
-            cd ..
-            return 1
-        fi
-        
-        print_info "Pulling latest changes from branch..."
-        if ! sudo -u "$PULSE_USER" git pull origin "$TARGET_BRANCH"; then
-            print_warning "Failed to pull latest changes, continuing with current state"
-        fi
     fi
 
     local current_tag
@@ -1574,16 +1374,6 @@ perform_update() {
         fi
         
         print_info "The application should now report version: $expected_version"
-    else
-        # Branch update
-        local current_branch=$(sudo -u "$PULSE_USER" git rev-parse --abbrev-ref HEAD 2>/dev/null)
-        local current_commit=$(sudo -u "$PULSE_USER" git rev-parse --short HEAD 2>/dev/null)
-        
-        print_success "Pulse updated successfully to branch: $current_branch!"
-        if [ -n "$current_commit" ]; then
-            print_info "Current commit: $current_commit"
-        fi
-        print_warning "⚠️  Running from branch - version reporting may show development version"
     fi
     return 0
 }
@@ -2064,16 +1854,10 @@ final_instructions() {
     fi
 
     local final_tag=""
-    local final_branch=""
-    local final_commit=""
     
     if [ -d "$PULSE_DIR/.git" ]; then
         cd "$PULSE_DIR" || print_warning "Could not cd to $PULSE_DIR to get version info."
         final_tag=$(get_current_local_tag)
-        if [ -z "$final_tag" ]; then
-            final_branch=$(sudo -u "$PULSE_USER" git rev-parse --abbrev-ref HEAD 2>/dev/null)
-            final_commit=$(sudo -u "$PULSE_USER" git rev-parse --short HEAD 2>/dev/null)
-        fi
         cd ..
     fi
 
@@ -2081,12 +1865,6 @@ final_instructions() {
     print_success "Pulse for Proxmox VE installation/update complete!"
     if [ -n "$final_tag" ]; then
         print_success "Current version installed: $final_tag"
-    elif [ -n "$final_branch" ]; then
-        print_success "Running from branch: $final_branch"
-        if [ -n "$final_commit" ]; then
-            print_info "Current commit: $final_commit"
-        fi
-        print_warning "⚠️  This is a test/development branch - not for production use!"
     fi
     echo "-------------------------------------------------------------"
     print_info "You should be able to access the Pulse dashboard at:"
@@ -2155,64 +1933,43 @@ case "$INSTALL_MODE" in
                  fi
             fi
 
-            # For branch installations, use git clone
-            if [ -n "$TARGET_BRANCH" ]; then
-                print_info "Cloning Pulse repository into $PULSE_DIR for branch installation..."
+            # For version tag installations, try tarball first
+            if [ -z "$TARGET_TAG" ]; then
+                # Need to determine latest tag - use git ls-remote for this
+                print_info "Determining latest release version..."
+                latest_tag=$(git ls-remote --tags --sort='-version:refname' https://github.com/rcourtman/Pulse.git | grep 'refs/tags/v' | head -n 1 | sed 's/.*refs\/tags\///' | sed 's/\^{}.*//')
+                if [ -z "$latest_tag" ]; then
+                     print_error "Could not determine latest release tag to install."
+                     exit 1
+                fi
+                TARGET_TAG="$latest_tag"
+                print_info "Determined latest version tag: $TARGET_TAG"
+            fi
+            
+            # Try tarball installation first
+            TARBALL_INSTALL_SUCCESS=false
+            if perform_tarball_install; then
+                print_info "Installation completed using tarball."
+                TARBALL_INSTALL_SUCCESS=true
+            else
+                # Fall back to git clone
+                print_info "Tarball installation failed, falling back to git clone..."
+                
+                print_info "Cloning Pulse repository into $PULSE_DIR..."
                 if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
                     print_success "Repository cloned successfully."
                     cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR after clone."; exit 1; }
                     chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR" || print_warning "Failed initial chown after clone."
                     
-                    print_info "Checking out branch '$TARGET_BRANCH'..."
-                    if ! sudo -u "$PULSE_USER" git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"; then
-                         print_error "Failed to checkout branch '$TARGET_BRANCH' after cloning."
+                    print_info "Checking out target version tag '$TARGET_TAG'..."
+                    if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
+                         print_error "Failed to checkout tag '$TARGET_TAG' after cloning."
                          cd ..; exit 1
                     fi
-                    print_success "Checked out branch $TARGET_BRANCH."
-                    print_warning "⚠️  Branch installation is for testing only and may be unstable!"
+                    print_success "Checked out version $TARGET_TAG."
                 else
                     print_error "Failed to clone repository."
                     exit 1
-                fi
-            else
-                # For version tag installations, try tarball first
-                if [ -z "$TARGET_TAG" ]; then
-                    # Need to determine latest tag - use git ls-remote for this
-                    print_info "Determining latest release version..."
-                    latest_tag=$(git ls-remote --tags --sort='-version:refname' https://github.com/rcourtman/Pulse.git | grep 'refs/tags/v' | head -n 1 | sed 's/.*refs\/tags\///' | sed 's/\^{}.*//')
-                    if [ -z "$latest_tag" ]; then
-                         print_error "Could not determine latest release tag to install."
-                         exit 1
-                    fi
-                    TARGET_TAG="$latest_tag"
-                    print_info "Determined latest version tag: $TARGET_TAG"
-                fi
-                
-                # Try tarball installation first
-                TARBALL_INSTALL_SUCCESS=false
-                if perform_tarball_install; then
-                    print_info "Installation completed using tarball."
-                    TARBALL_INSTALL_SUCCESS=true
-                else
-                    # Fall back to git clone
-                    print_info "Tarball installation failed, falling back to git clone..."
-                    
-                    print_info "Cloning Pulse repository into $PULSE_DIR..."
-                    if git clone https://github.com/rcourtman/Pulse.git "$PULSE_DIR" > /dev/null 2>&1; then
-                        print_success "Repository cloned successfully."
-                        cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR after clone."; exit 1; }
-                        chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR" || print_warning "Failed initial chown after clone."
-                        
-                        print_info "Checking out target version tag '$TARGET_TAG'..."
-                        if ! sudo -u "$PULSE_USER" git checkout "$TARGET_TAG"; then
-                             print_error "Failed to checkout tag '$TARGET_TAG' after cloning."
-                             cd ..; exit 1
-                        fi
-                        print_success "Checked out version $TARGET_TAG."
-                    else
-                        print_error "Failed to clone repository."
-                        exit 1
-                    fi
                 fi
             fi
             cd ..
