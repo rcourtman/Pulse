@@ -376,6 +376,24 @@ perform_tarball_update() {
     
     print_info "Attempting to update Pulse to version $TARGET_TAG using tarball..."
     
+    # Check if release exists before proceeding
+    if ! check_release_exists "$TARGET_TAG"; then
+        print_warning "Release tarball not available for $TARGET_TAG, falling back to git..."
+        return 1
+    fi
+    
+    # Create comprehensive backup of user data
+    local user_data_backup=""
+    if [ -d "$PULSE_DIR" ]; then
+        cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; return 1; }
+        if user_data_backup=$(backup_user_data); then
+            print_success "User data backup created for tarball update"
+        else
+            print_warning "Failed to create user data backup, proceeding anyway..."
+        fi
+        cd ..
+    fi
+    
     local script_backup_path="/tmp/${SCRIPT_NAME}.bak"
     if [ -n "$SCRIPT_ABS_PATH" ] && [ -f "$SCRIPT_ABS_PATH" ]; then
         print_info "Backing up current installer script to $script_backup_path..."
@@ -389,17 +407,10 @@ perform_tarball_update() {
         script_backup_path=""
     fi
 
-    # Check if release exists before proceeding
-    if ! check_release_exists "$TARGET_TAG"; then
-        print_warning "Release tarball not available for $TARGET_TAG, falling back to git..."
-        [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
-        return 1
-    fi
-    
-    # Backup current installation directory
+    # Backup current installation directory (full backup as fallback)
     local backup_dir="/tmp/pulse-backup-$(date +%s)"
     if [ -d "$PULSE_DIR" ]; then
-        print_info "Backing up current installation..."
+        print_info "Creating full installation backup as safety measure..."
         if ! cp -r "$PULSE_DIR" "$backup_dir"; then
             print_warning "Failed to backup current installation, continuing anyway..."
         fi
@@ -461,6 +472,16 @@ perform_tarball_update() {
             print_info "CSS assets already present and up-to-date."
         fi
         
+        # Restore user data after successful tarball extraction
+        if [ -n "$user_data_backup" ] && [ -d "$user_data_backup" ]; then
+            if restore_user_data "$user_data_backup"; then
+                print_success "User configuration restored after tarball update"
+            else
+                print_warning "Failed to restore some user configuration"
+            fi
+            rm -rf "$user_data_backup"
+        fi
+        
         # Cleanup backup if successful
         [ -d "$backup_dir" ] && rm -rf "$backup_dir"
         
@@ -471,14 +492,51 @@ perform_tarball_update() {
         
         # Restore backup if available
         if [ -d "$backup_dir" ]; then
-            print_info "Restoring from backup..."
+            print_info "Restoring from full backup..."
             rm -rf "$PULSE_DIR"
             mv "$backup_dir" "$PULSE_DIR"
         fi
         
+        # Cleanup failed backups
         [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
+        [ -n "$user_data_backup" ] && rm -rf "$user_data_backup"
         return 1
     fi
+}
+
+# Emergency recovery function for when updates fail
+emergency_recovery() {
+    local backup_dir="$1"
+    
+    print_error "==================== EMERGENCY RECOVERY ===================="
+    print_error "Update failed catastrophically. Attempting emergency recovery..."
+    
+    if [ -n "$backup_dir" ] && [ -d "$backup_dir" ]; then
+        print_info "Restoring from emergency backup: $backup_dir"
+        if [ -d "$PULSE_DIR" ]; then
+            rm -rf "$PULSE_DIR.failed" 2>/dev/null
+            mv "$PULSE_DIR" "$PULSE_DIR.failed" 2>/dev/null
+        fi
+        
+        if mv "$backup_dir" "$PULSE_DIR"; then
+            print_success "Emergency recovery successful!"
+            print_info "Your original configuration has been restored."
+            print_info "Failed installation moved to: $PULSE_DIR.failed"
+            return 0
+        else
+            print_error "Emergency recovery failed!"
+        fi
+    fi
+    
+    print_error "============== MANUAL RECOVERY REQUIRED ================"
+    print_error "Automatic recovery failed. You may need to:"
+    print_error "1. Manually restore from backup if available"
+    print_error "2. Re-run the installer: sudo bash install-pulse.sh"
+    print_error "3. Reconfigure your .env file with Proxmox credentials"
+    print_error "4. Contact support: https://github.com/rcourtman/Pulse/issues"
+    print_error "======================================================="
+    
+    return 1
 }
 
 perform_tarball_install() {
@@ -999,6 +1057,100 @@ create_pulse_user() {
 }
 
 
+# Comprehensive backup of user configuration and data
+backup_user_data() {
+    local backup_base_dir="/tmp/pulse-config-backup-$(date +%s)"
+    mkdir -p "$backup_base_dir" || {
+        print_error "Failed to create backup directory $backup_base_dir"
+        return 1
+    }
+    
+    print_info "Creating comprehensive backup of user configuration..."
+    
+    # Files to always preserve
+    local preserve_files=(
+        ".env"
+        "custom-config.json"
+        "user-settings.json"
+    )
+    
+    # Directories to preserve (if they exist and contain user data)
+    local preserve_dirs=(
+        "data"
+        "logs"
+        "backups"
+        "custom"
+    )
+    
+    local backup_success=false
+    
+    # Backup individual files
+    for file in "${preserve_files[@]}"; do
+        if [ -f "$PULSE_DIR/$file" ]; then
+            local file_backup_dir="$backup_base_dir/$(dirname "$file")"
+            mkdir -p "$file_backup_dir"
+            if cp "$PULSE_DIR/$file" "$backup_base_dir/$file" 2>/dev/null; then
+                print_success "Backed up: $file"
+                backup_success=true
+            else
+                print_warning "Failed to backup: $file"
+            fi
+        fi
+    done
+    
+    # Backup directories
+    for dir in "${preserve_dirs[@]}"; do
+        if [ -d "$PULSE_DIR/$dir" ] && [ "$(ls -A "$PULSE_DIR/$dir" 2>/dev/null)" ]; then
+            if cp -r "$PULSE_DIR/$dir" "$backup_base_dir/$dir" 2>/dev/null; then
+                print_success "Backed up directory: $dir"
+                backup_success=true
+            else
+                print_warning "Failed to backup directory: $dir"
+            fi
+        fi
+    done
+    
+    if [ "$backup_success" = true ]; then
+        echo "$backup_base_dir"
+        return 0
+    else
+        rm -rf "$backup_base_dir" 2>/dev/null
+        print_warning "No user data found to backup or all backups failed"
+        return 1
+    fi
+}
+
+# Restore user configuration and data
+restore_user_data() {
+    local backup_dir="$1"
+    
+    if [ -z "$backup_dir" ] || [ ! -d "$backup_dir" ]; then
+        print_warning "No backup directory provided or directory doesn't exist"
+        return 1
+    fi
+    
+    print_info "Restoring user configuration from backup..."
+    
+    # Restore files and directories
+    if [ -d "$backup_dir" ]; then
+        if cp -r "$backup_dir"/* "$PULSE_DIR/" 2>/dev/null; then
+            # Fix ownership and permissions
+            chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR"
+            
+            # Set secure permissions on sensitive files
+            [ -f "$PULSE_DIR/.env" ] && chmod 600 "$PULSE_DIR/.env"
+            
+            print_success "User configuration restored successfully"
+            return 0
+        else
+            print_error "Failed to restore user configuration"
+            return 1
+        fi
+    fi
+    
+    return 1
+}
+
 perform_update() {
     if [ -z "$TARGET_TAG" ] && [ -z "$TARGET_BRANCH" ]; then
         print_error "Target version tag or branch not determined. Cannot update."
@@ -1009,19 +1161,29 @@ perform_update() {
     if [ -n "$TARGET_TAG" ]; then
         print_info "Attempting to update Pulse to version $TARGET_TAG..."
         
-        # Try tarball update first
+        # Try tarball update first - this is safer and preserves user data
         if perform_tarball_update; then
             return 0
         fi
         
-        # Fall back to git update
-        print_info "Tarball update failed, falling back to git update..."
+        # Fall back to git update only if tarball fails
+        print_warning "Tarball update failed, falling back to git update..."
+        print_warning "⚠️  Git update may be more disruptive to user configuration"
     else
         print_info "Attempting to update Pulse to branch $TARGET_BRANCH..."
         print_warning "⚠️  Branch installations are for testing only and may be unstable!"
     fi
     
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
+
+    # Create comprehensive backup of all user data before ANY destructive operations
+    local user_data_backup=""
+    if user_data_backup=$(backup_user_data); then
+        print_success "User data backup created at: $user_data_backup"
+    else
+        print_warning "Failed to create comprehensive user data backup"
+        print_warning "Proceeding with update but configuration may be lost"
+    fi
 
     local script_backup_path="/tmp/${SCRIPT_NAME}.bak"
     if [ -n "$SCRIPT_ABS_PATH" ] && [ -f "$SCRIPT_ABS_PATH" ]; then
@@ -1039,43 +1201,47 @@ perform_update() {
 
     git config --global --add safe.directory "$PULSE_DIR" > /dev/null 2>&1 || print_warning "Could not configure safe.directory for root user."
 
+    # Check git status before destructive operations
+    local has_local_changes=false
+    if sudo -u "$PULSE_USER" git status --porcelain 2>/dev/null | grep -q .; then
+        has_local_changes=true
+        print_warning "Local changes detected in repository"
+    fi
+
     print_info "Resetting local repository to discard potential changes [running as user $PULSE_USER]..."
     if ! sudo -u "$PULSE_USER" git reset --hard HEAD; then
         print_error "Failed to reset local repository. Aborting update."
         [ -n "$script_backup_path" ] && rm -f "$script_backup_path"
+        [ -n "$user_data_backup" ] && rm -rf "$user_data_backup"
         cd ..
         return 1
     fi
     
-    # Backup .env file before cleaning to preserve user configuration
-    local env_backup_path=""
-    if [ -f "$PULSE_DIR/.env" ]; then
-        env_backup_path="/tmp/.env.backup.$$"
-        print_info "Backing up .env file to preserve user configuration..."
-        if cp "$PULSE_DIR/.env" "$env_backup_path"; then
-            print_success ".env file backed up temporarily."
-        else
-            print_warning "Failed to backup .env file. Configuration may be lost."
-            env_backup_path=""
+    # Only clean untracked files if absolutely necessary
+    # Skip git clean entirely and handle conflicts more gracefully
+    if [ "$has_local_changes" = true ]; then
+        print_info "Checking for untracked files that might conflict..."
+        local untracked_files=$(sudo -u "$PULSE_USER" git status --porcelain 2>/dev/null | grep '^??' | cut -c4-)
+        
+        if [ -n "$untracked_files" ]; then
+            print_warning "Found untracked files that may conflict with update:"
+            echo "$untracked_files" | while read -r file; do
+                print_warning "  - $file"
+            done
+            
+            # Instead of git clean, selectively handle conflicts
+            print_info "Moving conflicting files to temporary backup..."
+            local conflict_backup="/tmp/pulse-conflicts-$(date +%s)"
+            mkdir -p "$conflict_backup"
+            
+            echo "$untracked_files" | while read -r file; do
+                if [ -f "$file" ] || [ -d "$file" ]; then
+                    local file_dir="$conflict_backup/$(dirname "$file")"
+                    mkdir -p "$file_dir"
+                    mv "$file" "$conflict_backup/$file" 2>/dev/null || true
+                fi
+            done
         fi
-    fi
-    
-    print_info "Cleaning untracked files and directories..."
-    if ! sudo -u "$PULSE_USER" git clean -fd; then
-        print_warning "Failed to clean untracked files, continuing anyway."
-    fi
-    
-    # Restore .env file after cleaning
-    if [ -n "$env_backup_path" ] && [ -f "$env_backup_path" ]; then
-        print_info "Restoring .env file..."
-        if cp "$env_backup_path" "$PULSE_DIR/.env"; then
-            chown "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR/.env"
-            chmod 600 "$PULSE_DIR/.env"
-            print_success ".env file restored successfully."
-        else
-            print_warning "Failed to restore .env file from backup."
-        fi
-        rm -f "$env_backup_path"
     fi
 
     print_info "Fetching latest changes from git [running as user $PULSE_USER]..."
@@ -1173,6 +1339,17 @@ perform_update() {
     else
         print_error "Failed to build CSS assets. See npm output above."
         print_warning "Continuing update, but frontend may not display correctly."
+    fi
+
+    # Restore user data BEFORE setting permissions
+    if [ -n "$user_data_backup" ] && [ -d "$user_data_backup" ]; then
+        if restore_user_data "$user_data_backup"; then
+            print_success "User configuration and data restored successfully"
+        else
+            print_warning "Failed to restore some user configuration"
+        fi
+        # Cleanup backup after restoration
+        rm -rf "$user_data_backup"
     fi
 
     set_permissions
