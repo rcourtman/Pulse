@@ -39,8 +39,8 @@ mkdir -p "$STAGING_FULL_PATH"
 # --- Build Step ---
 echo "Building CSS..."
 npm run build:css
-if [ ! -f "src/index.css" ]; then
-    echo "Error: src/index.css not found after build. Aborting."
+if [ ! -f "src/public/output.css" ]; then
+    echo "Error: src/public/output.css not found after build. Aborting."
     exit 1
 fi
 
@@ -98,7 +98,7 @@ MISSING_FILES=""
 [ ! -f "$STAGING_FULL_PATH/package.json" ] && MISSING_FILES="$MISSING_FILES package.json"
 [ ! -f "$STAGING_FULL_PATH/.env.example" ] && MISSING_FILES="$MISSING_FILES .env.example"
 [ ! -f "$STAGING_FULL_PATH/server/index.js" ] && MISSING_FILES="$MISSING_FILES server/index.js"
-[ ! -f "$STAGING_FULL_PATH/src/index.css" ] && MISSING_FILES="$MISSING_FILES src/index.css"
+[ ! -f "$STAGING_FULL_PATH/src/public/output.css" ] && MISSING_FILES="$MISSING_FILES src/public/output.css"
 [ ! -d "$STAGING_FULL_PATH/node_modules" ] && MISSING_FILES="$MISSING_FILES node_modules/"
 
 if [ -n "$MISSING_FILES" ]; then
