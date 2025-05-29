@@ -424,14 +424,11 @@ If monitoring PBS, create a token within the PBS interface.
     *   Enter `Token Name` (e.g., "pulse").
     *   Leave `Privilege Separation` checked. Click `Add`.
     *   **Important:** Copy the `Secret` value immediately.
-4.  **Assign permissions:**
+4.  **Assign permissions (to User and Token):**
     *   Go to `Configuration` → `Access Control` → `Permissions`.
-    *   Click `Add` → `API Token Permission`.
-    *   Path: `/` (root level).
-    *   API Token: Select the token (e.g., "pulse-monitor@pbs!pulse").
-    *   Role: `Audit`.
-    *   Check `Propagate`. Click `Add`.
-    *   *Note: The `Audit` role at root path (`/`) is needed for read-only access.*
+    *   **Add User Permission:** Click `Add` → `User Permission`. Path: `/`, User: `pulse-monitor@pbs`, Role: `Audit`, check `Propagate`. Click `Add`.
+    *   **Add API Token Permission:** Click `Add` → `API Token Permission`. Path: `/`, API Token: `pulse-monitor@pbs!pulse`, Role: `Audit`, check `Propagate`. Click `Add`.
+    *   *Note: The `Audit` role at root path (`/`) with `Propagate` is crucial for both user and token.*
 5.  **Update `.env`:** Set `PBS_TOKEN_ID` (e.g., `pulse-monitor@pbs!pulse`) and `PBS_TOKEN_SECRET`.
 
 </details>
