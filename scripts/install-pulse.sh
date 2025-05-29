@@ -1492,7 +1492,7 @@ set_permissions() {
 }
 
 configure_environment() {
-    print_info "Configuring Pulse environment..."
+    print_info "Setting up environment configuration..."
     local env_example_path="$PULSE_DIR/.env.example"
     local env_path="$PULSE_DIR/.env"
 
@@ -1502,108 +1502,16 @@ configure_environment() {
     fi
 
     if [ -f "$env_path" ]; then
-        print_warning "Configuration file $env_path already exists."
-        if [ -t 0 ]; then
-            read -p "Overwrite existing configuration? [y/N]: " overwrite_confirm
-            if [[ ! "$overwrite_confirm" =~ ^[Yy]$ ]]; then
-                print_info "Skipping environment configuration."
-                return 0
-            fi
-            print_info "Proceeding to overwrite existing configuration..."
-        else
-            print_info "Running non-interactively, skipping environment configuration as file exists."
-            return 0
-        fi
-    fi
-
-    local proxmox_host=""
-    local proxmox_token_id=""
-    local proxmox_token_secret=""
-    local allow_self_signed="y"
-    local pulse_port=""
-
-    if [ -t 0 ]; then
-        echo "Please provide your Proxmox connection details:"
-        read -p " -> Proxmox Host URL [e.g., https://192.168.1.100:8006]: " proxmox_host
-        while [ -z "$proxmox_host" ]; do
-            print_warning "Proxmox Host URL cannot be empty."
-            read -p " -> Proxmox Host URL [e.g., https://192.168.1.100:8006]: " proxmox_host
-        done
-
-        if [[ ! "$proxmox_host" =~ ^https?:// ]]; then
-            print_warning "URL does not start with http:// or https://. Prepending https://."
-            proxmox_host="https://$proxmox_host"
-            print_info "Using Proxmox Host URL: $proxmox_host"
-        fi
-
-        echo ""
-        print_info "You need a Proxmox API Token. You can create one via the Proxmox Web UI,"
-        print_info "or run the following commands on your Proxmox host shell:"
-        echo "----------------------------------------------------------------------"
-        echo "  # 1. Create user 'pulse-monitor' [enter password when prompted]:"
-        echo "  pveum useradd pulse-monitor@pam -comment "API user for Pulse monitoring""
-        echo '  ' 
-        echo "  # 2. Create API token 'pulse' for user [COPY THE SECRET VALUE!]:"
-        echo "  pveum user token add pulse-monitor@pam pulse --privsep=1"
-        echo '  ' 
-        echo "  # 3. Assign PVEAuditor role to user:"
-        echo "  pveum acl modify / -user pulse-monitor@pam -role PVEAuditor"
-        echo "----------------------------------------------------------------------"
-        echo "After running the 'token add' command, copy the Token ID and Secret Value"
-        echo "and paste them below."
-        echo ""
-
-        read -p " -> Proxmox API Token ID [e.g., user@pam!tokenid]: " proxmox_token_id
-        while [ -z "$proxmox_token_id" ]; do
-            print_warning "Proxmox Token ID cannot be empty."
-            read -p " -> Proxmox API Token ID [e.g., user@pam!tokenid]: " proxmox_token_id
-        done
-
-        read -sp " -> Proxmox API Token Secret: " proxmox_token_secret
-        echo
-        while [ -z "$proxmox_token_secret" ]; do
-            print_warning "Proxmox Token Secret cannot be empty."
-            read -sp " -> Proxmox API Token Secret: " proxmox_token_secret
-            echo
-        done
-
-        read -p "Allow self-signed certificates for Proxmox? [Y/n]: " allow_self_signed
-        read -p "Port for Pulse server [leave blank for default 7655]: " pulse_port
-    else
-        print_warning "Running non-interactively. Cannot prompt for environment details."
-        print_warning "Ensure $env_path is configured manually or exists from a previous run."
-        if [ -f "$env_path" ]; then return 0; fi
-    fi
-
-    local self_signed_value="true"
-    if [[ "$allow_self_signed" =~ ^[Nn]$ ]]; then self_signed_value="false"; fi
-
-    local port_value="7655"
-    if [ -n "$pulse_port" ]; then
-        if [[ "$pulse_port" =~ ^[0-9]+$ ]] && [ "$pulse_port" -ge 1 ] && [ "$pulse_port" -le 65535 ]; then
-            port_value="$pulse_port"
-        else
-            print_warning "Invalid port number entered. Using default 7655."
-        fi
+        print_info "Configuration file $env_path already exists, skipping creation."
+        return 0
     fi
 
     print_info "Creating $env_path from example..."
     if cp "$env_example_path" "$env_path"; then
-        if [ -n "$proxmox_host" ]; then
-             sed -i "s|^PROXMOX_HOST=.*|PROXMOX_HOST=$proxmox_host|" "$env_path"
-             sed -i "s|^PROXMOX_TOKEN_ID=.*|PROXMOX_TOKEN_ID=$proxmox_token_id|" "$env_path"
-             sed -i "s|^PROXMOX_TOKEN_SECRET=.*|PROXMOX_TOKEN_SECRET=$proxmox_token_secret|" "$env_path"
-             sed -i "s|^PROXMOX_ALLOW_SELF_SIGNED_CERTS=.*|PROXMOX_ALLOW_SELF_SIGNED_CERTS=$self_signed_value|" "$env_path"
-             sed -i "s|^PORT=.*|PORT=$port_value|" "$env_path"
-        else
-            print_warning "Skipping variable substitution in .env as no values were provided [non-interactive?]."
-            print_warning "Please edit $env_path manually."
-        fi
-
         chown "$PULSE_USER":"$PULSE_USER" "$env_path"
         chmod 600 "$env_path"
-
-        print_success "Environment file created/updated in $env_path."
+        print_success "Environment file created at $env_path."
+        print_info "Please edit $env_path to configure your Proxmox connection details."
         return 0
     else
         print_error "Failed to copy $env_example_path to $env_path."
