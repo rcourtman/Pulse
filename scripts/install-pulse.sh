@@ -328,19 +328,34 @@ download_and_extract_tarball() {
     local temp_extract_dir="/tmp/pulse-extract-$$"
     
     print_info "Downloading Pulse $tag tarball..."
+    print_info "Download URL: $tarball_url"
+    
     if ! curl -sL "$tarball_url" -o "$temp_tarball"; then
         print_error "Failed to download tarball from $tarball_url"
         return 1
     fi
     
+    # Show download info for debugging
+    local file_size=$(stat -f%z "$temp_tarball" 2>/dev/null || stat -c%s "$temp_tarball" 2>/dev/null || echo "unknown")
+    print_info "Downloaded file size: $file_size bytes"
+    
     # Verify downloaded file is actually a gzip file
-    if ! file "$temp_tarball" | grep -q "gzip compressed"; then
-        print_error "Downloaded file is not a valid gzip archive. File type: $(file "$temp_tarball")"
-        print_error "First few bytes: $(head -c 100 "$temp_tarball" | xxd -l 100)"
-        print_error "URL: $tarball_url"
+    local file_type=$(file "$temp_tarball")
+    print_info "Downloaded file type: $file_type"
+    
+    if ! echo "$file_type" | grep -q "gzip compressed"; then
+        print_error "Downloaded file is not a valid gzip archive!"
+        print_error "File type: $file_type"
+        print_error "First 200 bytes as hex:"
+        head -c 200 "$temp_tarball" | xxd
+        print_error "First 200 bytes as text:"
+        head -c 200 "$temp_tarball" | cat -v
+        print_error "URL attempted: $tarball_url"
         rm -f "$temp_tarball"
         return 1
     fi
+    
+    print_success "Tarball download verified as valid gzip archive"
     
     print_info "Extracting tarball..."
     mkdir -p "$temp_extract_dir"
