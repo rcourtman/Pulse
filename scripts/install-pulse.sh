@@ -458,12 +458,34 @@ perform_tarball_update() {
         
         # Always check if CSS assets need building for tarball updates
         print_info "Verifying CSS assets in $PULSE_DIR..."
-        if [ ! -f "$PULSE_DIR/src/index.css" ]; then
-            print_warning "CSS file missing in tarball - this should not happen. Using existing output.css file."
-        elif [ -f "$PULSE_DIR/src/tailwind.config.js" ] && [ "$PULSE_DIR/src/tailwind.config.js" -nt "$PULSE_DIR/src/index.css" ]; then
-            print_info "CSS config newer than source, but skipping rebuild for tarball installation (CSS should be pre-built)."
+        
+        # Check if output.css exists and is valid (not corrupted with HTML content)
+        css_needs_fix=false
+        if [ ! -f "$PULSE_DIR/src/public/output.css" ]; then
+            print_warning "output.css file is missing - will be restored from tarball"
+            css_needs_fix=true
+        elif [ ! -s "$PULSE_DIR/src/public/output.css" ]; then
+            print_warning "output.css file is empty - will be restored from tarball"
+            css_needs_fix=true
+        elif head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
+            print_warning "output.css contains HTML instead of CSS (corrupted from previous installation issue) - will be restored from tarball"
+            css_needs_fix=true
+        fi
+        
+        if [ "$css_needs_fix" = "true" ]; then
+            # The tarball extraction should have already provided a good CSS file
+            # but let's verify it was properly extracted
+            if [ -f "$PULSE_DIR/src/public/output.css" ] && [ -s "$PULSE_DIR/src/public/output.css" ]; then
+                if ! head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
+                    print_success "CSS assets restored from tarball."
+                else
+                    print_error "Failed to restore CSS assets from tarball - CSS file still corrupted."
+                fi
+            else
+                print_error "Failed to restore CSS assets from tarball - CSS file missing or empty."
+            fi
         else
-            print_info "CSS assets already present and up-to-date."
+            print_info "CSS assets verified and ready."
         fi
         
         # Restore user data after successful tarball extraction
@@ -566,12 +588,25 @@ perform_tarball_install() {
         
         # Always check if CSS assets need building for tarball installs
         print_info "Verifying CSS assets in $PULSE_DIR..."
-        if [ ! -f "$PULSE_DIR/src/index.css" ]; then
-            print_warning "CSS source file missing in tarball - this should not happen. Using pre-built output.css file."
-        elif [ -f "$PULSE_DIR/src/tailwind.config.js" ] && [ "$PULSE_DIR/src/tailwind.config.js" -nt "$PULSE_DIR/src/index.css" ]; then
-            print_info "CSS config newer than source, but skipping rebuild for tarball installation (CSS should be pre-built)."
+        
+        # Check if output.css exists and is valid (not corrupted with HTML content)
+        css_needs_fix=false
+        if [ ! -f "$PULSE_DIR/src/public/output.css" ]; then
+            print_warning "output.css file is missing - should be present in tarball"
+            css_needs_fix=true
+        elif [ ! -s "$PULSE_DIR/src/public/output.css" ]; then
+            print_warning "output.css file is empty - should contain CSS from tarball"
+            css_needs_fix=true
+        elif head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
+            print_warning "output.css contains HTML instead of CSS (this should not happen in fresh tarball)"
+            css_needs_fix=true
+        fi
+        
+        if [ "$css_needs_fix" = "true" ]; then
+            print_error "CSS assets in tarball are invalid. This indicates a problem with the release tarball."
+            return 1
         else
-            print_info "CSS assets already present and up-to-date."
+            print_info "CSS assets verified and ready."
         fi
         
         print_success "Tarball installation completed successfully."
