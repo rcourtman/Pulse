@@ -57,25 +57,25 @@ mkdir -p "$STAGING_FULL_PATH/src" # Ensure parent directory exists
 COPYFILE_DISABLE=1 rsync -av --progress src/public/ "$STAGING_FULL_PATH/src/public/"
 
 # Copy CSS build files and config
-cp src/index.css "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/index.css not found"
-cp src/tailwind.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/tailwind.config.js not found"
-cp src/postcss.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/postcss.config.js not found"
+COPYFILE_DISABLE=1 cp src/index.css "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/index.css not found"
+COPYFILE_DISABLE=1 cp src/tailwind.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/tailwind.config.js not found"
+COPYFILE_DISABLE=1 cp src/postcss.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/postcss.config.js not found"
 
 # Root files
 echo "Copying root files..."
-cp package.json "$STAGING_FULL_PATH/"
-cp package-lock.json "$STAGING_FULL_PATH/"
-cp README.md "$STAGING_FULL_PATH/"
-cp LICENSE "$STAGING_FULL_PATH/"
-cp CHANGELOG.md "$STAGING_FULL_PATH/"
-cp .env.example "$STAGING_FULL_PATH/.env.example" # Essential for user configuration
+COPYFILE_DISABLE=1 cp package.json "$STAGING_FULL_PATH/"
+COPYFILE_DISABLE=1 cp package-lock.json "$STAGING_FULL_PATH/"
+COPYFILE_DISABLE=1 cp README.md "$STAGING_FULL_PATH/"
+COPYFILE_DISABLE=1 cp LICENSE "$STAGING_FULL_PATH/"
+COPYFILE_DISABLE=1 cp CHANGELOG.md "$STAGING_FULL_PATH/"
+COPYFILE_DISABLE=1 cp .env.example "$STAGING_FULL_PATH/.env.example" # Essential for user configuration
 
 # Scripts (e.g., install-pulse.sh, if intended for end-user)
 if [ -d "scripts" ]; then
   echo "Copying scripts..."
   mkdir -p "$STAGING_FULL_PATH/scripts/"
   if [ -f "scripts/install-pulse.sh" ]; then
-    cp scripts/install-pulse.sh "$STAGING_FULL_PATH/scripts/"
+    COPYFILE_DISABLE=1 cp scripts/install-pulse.sh "$STAGING_FULL_PATH/scripts/"
   fi
   # Add other scripts if they are part of the release
 fi
