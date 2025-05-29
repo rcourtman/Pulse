@@ -323,7 +323,7 @@ download_and_extract_tarball() {
         return 1
     fi
     
-    local tarball_url="https://github.com/rcourtman/Pulse/releases/download/$tag/pulse-${tag#v}.tar.gz"
+    local tarball_url="https://github.com/rcourtman/Pulse/releases/download/$tag/pulse-$tag.tar.gz"
     local temp_tarball="/tmp/pulse-$tag.tar.gz"
     local temp_extract_dir="/tmp/pulse-extract-$$"
     
@@ -487,7 +487,7 @@ perform_tarball_update() {
         if [ ! -f "$PULSE_DIR/src/public/output.css" ]; then
             print_error "Critical: output.css file is missing after tarball extraction. This indicates a problem with the tarball or extraction process."
             # Try to re-extract just the CSS file as a fallback
-            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-${TARGET_TAG#v}.tar.gz" | tar -xzf - --to-stdout "pulse-${TARGET_TAG#v}/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
+            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-$TARGET_TAG.tar.gz" | tar -xzf - --to-stdout "pulse-$TARGET_TAG/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
                 print_success "CSS file recovered using direct extraction."
             else
                 print_error "Failed to recover CSS file. Frontend may not display correctly."
@@ -495,7 +495,7 @@ perform_tarball_update() {
         elif [ ! -s "$PULSE_DIR/src/public/output.css" ]; then
             print_error "Critical: output.css file is empty after tarball extraction."
             # Try to re-extract just the CSS file as a fallback
-            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-${TARGET_TAG#v}.tar.gz" | tar -xzf - --to-stdout "pulse-${TARGET_TAG#v}/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
+            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-$TARGET_TAG.tar.gz" | tar -xzf - --to-stdout "pulse-$TARGET_TAG/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
                 print_success "CSS file recovered using direct extraction."
             else
                 print_error "Failed to recover CSS file. Frontend may not display correctly."
@@ -503,7 +503,7 @@ perform_tarball_update() {
         elif head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
             print_warning "output.css contains HTML instead of CSS - attempting to recover from tarball..."
             # Try to re-extract just the CSS file as a fallback
-            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-${TARGET_TAG#v}.tar.gz" | tar -xzf - --to-stdout "pulse-${TARGET_TAG#v}/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
+            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-$TARGET_TAG.tar.gz" | tar -xzf - --to-stdout "pulse-$TARGET_TAG/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
                 # Verify the recovery worked
                 if [ -s "$PULSE_DIR/src/public/output.css" ] && ! head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
                     print_success "CSS file recovered and verified."
@@ -623,7 +623,7 @@ perform_tarball_install() {
         if [ ! -f "$PULSE_DIR/src/public/output.css" ]; then
             print_error "Critical: output.css file is missing after tarball extraction. Attempting recovery..."
             # Try to re-extract just the CSS file as a fallback
-            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-${TARGET_TAG#v}.tar.gz" | tar -xzf - --to-stdout "pulse-${TARGET_TAG#v}/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
+            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-$TARGET_TAG.tar.gz" | tar -xzf - --to-stdout "pulse-$TARGET_TAG/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
                 print_success "CSS file recovered using direct extraction."
                 chown "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR/src/public/output.css"
             else
@@ -632,7 +632,7 @@ perform_tarball_install() {
         elif [ ! -s "$PULSE_DIR/src/public/output.css" ]; then
             print_error "Critical: output.css file is empty after tarball extraction. Attempting recovery..."
             # Try to re-extract just the CSS file as a fallback
-            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-${TARGET_TAG#v}.tar.gz" | tar -xzf - --to-stdout "pulse-${TARGET_TAG#v}/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
+            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-$TARGET_TAG.tar.gz" | tar -xzf - --to-stdout "pulse-$TARGET_TAG/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
                 print_success "CSS file recovered using direct extraction."
                 chown "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR/src/public/output.css"
             else
@@ -641,7 +641,7 @@ perform_tarball_install() {
         elif head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
             print_warning "output.css contains HTML instead of CSS - attempting to recover from tarball..."
             # Try to re-extract just the CSS file as a fallback
-            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-${TARGET_TAG#v}.tar.gz" | tar -xzf - --to-stdout "pulse-${TARGET_TAG#v}/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
+            if curl -sL "https://github.com/rcourtman/Pulse/releases/download/$TARGET_TAG/pulse-$TARGET_TAG.tar.gz" | tar -xzf - --to-stdout "pulse-$TARGET_TAG/src/public/output.css" > "$PULSE_DIR/src/public/output.css" 2>/dev/null; then
                 # Verify the recovery worked
                 if [ -s "$PULSE_DIR/src/public/output.css" ] && ! head -1 "$PULSE_DIR/src/public/output.css" 2>/dev/null | grep -q "<!DOCTYPE\|<html\|<head"; then
                     print_success "CSS file recovered and verified."
