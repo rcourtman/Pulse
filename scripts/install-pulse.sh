@@ -333,6 +333,15 @@ download_and_extract_tarball() {
         return 1
     fi
     
+    # Verify downloaded file is actually a gzip file
+    if ! file "$temp_tarball" | grep -q "gzip compressed"; then
+        print_error "Downloaded file is not a valid gzip archive. File type: $(file "$temp_tarball")"
+        print_error "First few bytes: $(head -c 100 "$temp_tarball" | xxd -l 100)"
+        print_error "URL: $tarball_url"
+        rm -f "$temp_tarball"
+        return 1
+    fi
+    
     print_info "Extracting tarball..."
     mkdir -p "$temp_extract_dir"
     if ! tar -xzf "$temp_tarball" -C "$temp_extract_dir" --strip-components=1; then
