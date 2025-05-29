@@ -49,12 +49,12 @@ echo "Copying application files to $STAGING_FULL_PATH..."
 
 # Server files (excluding tests)
 echo "Copying server files..."
-rsync -av --progress server/ "$STAGING_FULL_PATH/server/" --exclude 'tests/'
+COPYFILE_DISABLE=1 rsync -av --progress server/ "$STAGING_FULL_PATH/server/" --exclude 'tests/'
 
 # Source files (including built CSS, Tailwind config, and public assets)
 echo "Copying source files..."
 mkdir -p "$STAGING_FULL_PATH/src" # Ensure parent directory exists
-rsync -av --progress src/public/ "$STAGING_FULL_PATH/src/public/"
+COPYFILE_DISABLE=1 rsync -av --progress src/public/ "$STAGING_FULL_PATH/src/public/"
 
 # Copy CSS build files and config
 cp src/index.css "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/index.css not found"
@@ -83,7 +83,7 @@ fi
 # Docs
 if [ -d "docs" ]; then
   echo "Copying docs..."
-  rsync -av --progress docs/ "$STAGING_FULL_PATH/docs/"
+  COPYFILE_DISABLE=1 rsync -av --progress docs/ "$STAGING_FULL_PATH/docs/"
 fi
 
 # --- Install Production Dependencies ---
