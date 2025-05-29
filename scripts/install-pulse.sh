@@ -700,7 +700,28 @@ check_installation_status_and_determine_action() {
 
     print_info "Checking Pulse installation at $PULSE_DIR..."
     if [ -d "$PULSE_DIR" ]; then
-        if [ -d "$PULSE_DIR/.git" ]; then
+        # Check if this is a valid Pulse installation (either git or tarball)
+        if [ -f "$PULSE_DIR/package.json" ] && grep -q '"name".*"pulse"' "$PULSE_DIR/package.json" 2>/dev/null; then
+            print_info "Found valid Pulse installation"
+            
+            # Determine installation type
+            local is_git_install=false
+            if [ -d "$PULSE_DIR/.git" ]; then
+                is_git_install=true
+                print_info "Installation type: Git repository"
+            else
+                print_info "Installation type: Tarball installation"
+            fi
+        else
+            print_error "Directory $PULSE_DIR exists but does not appear to be a valid Pulse installation."
+            print_error "Missing or invalid package.json file."
+            print_error "Please remove this directory manually ($PULSE_DIR) or choose a different installation path and re-run the script."
+            INSTALL_MODE="error"
+            return
+        fi
+        
+        # Handle git installations
+        if [ "$is_git_install" = true ]; then
             cd "$PULSE_DIR" || { print_error "Failed to cd into $PULSE_DIR"; INSTALL_MODE="error"; return; }
 
             local current_tag
@@ -893,9 +914,102 @@ check_installation_status_and_determine_action() {
             fi
 
         else
-            print_error "Directory $PULSE_DIR exists but does not appear to be a valid Pulse git repository."
-            print_error "Please remove this directory manually \($PULSE_DIR\) or choose a different installation path and re-run the script."
-            INSTALL_MODE="error"
+            # Handle tarball installations
+            print_info "Handling tarball installation..."
+            
+            # Get current version from package.json
+            local current_version=""
+            if [ -f "$PULSE_DIR/package.json" ]; then
+                current_version=$(grep '"version"' "$PULSE_DIR/package.json" | sed 's/.*"version": *"\([^"]*\)".*/\1/')
+                print_info "Current installed version: $current_version"
+            fi
+            
+            # Determine latest version for comparison
+            local latest_tag=""
+            latest_tag=$(git ls-remote --tags --sort='-version:refname' https://github.com/rcourtman/Pulse.git | grep 'refs/tags/v' | head -n 1 | sed 's/.*refs\/tags\///' | sed 's/\^{}.*//')
+            if [ -n "$latest_tag" ]; then
+                local latest_version=$(echo "$latest_tag" | sed 's/^v//')
+                print_info "Latest available version: $latest_version"
+                
+                # Compare versions
+                if [ -n "$SPECIFIED_VERSION_TAG" ]; then
+                    TARGET_TAG="$SPECIFIED_VERSION_TAG"
+                    print_info "Will target specified version: $TARGET_TAG"
+                    INSTALL_MODE="update"
+                elif [ -n "$SPECIFIED_BRANCH" ]; then
+                    TARGET_BRANCH="$SPECIFIED_BRANCH"
+                    print_info "Will switch to branch: $TARGET_BRANCH"
+                    INSTALL_MODE="update"
+                elif [ "$current_version" = "$latest_version" ]; then
+                    print_info "Pulse is already up-to-date with the latest release $latest_tag."
+                    INSTALL_MODE="uptodate"
+                    TARGET_TAG="$latest_tag"
+                else
+                    print_warning "Pulse is installed, but an update to $latest_tag is available."
+                    INSTALL_MODE="update"
+                    TARGET_TAG="$latest_tag"
+                fi
+            else
+                print_warning "Could not determine latest version. Will proceed with update."
+                INSTALL_MODE="update"
+            fi
+            
+            # Handle user interaction for tarball installations
+            if [ "$INSTALL_MODE" = "uptodate" ]; then
+                if [ -n "$MODE_UPDATE" ]; then
+                    print_info "Pulse is already up-to-date. Skipping update."
+                    INSTALL_MODE="cancel"
+                else
+                    echo "Choose an action:"
+                    echo "  1) Manage automatic updates"
+                    echo "  2) Re-install current version"
+                    echo "  3) Test a feature branch"
+                    echo "  4) Remove Pulse"
+                    echo "  5) Cancel"
+                    read -p "Enter your choice [1-5]: " user_choice
+                    case $user_choice in
+                        1) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
+                        2) INSTALL_MODE="update" ;;
+                        3) 
+                            if prompt_for_branch_selection; then
+                                INSTALL_MODE="update"
+                            else
+                                INSTALL_MODE="cancel"
+                            fi
+                            ;;
+                        4) INSTALL_MODE="remove" ;;
+                        5) INSTALL_MODE="cancel" ;;
+                        *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+                    esac
+                fi
+            elif [ "$INSTALL_MODE" = "update" ]; then
+                if [ -n "$MODE_UPDATE" ]; then
+                    # In non-interactive mode, proceed with update
+                    :  # Do nothing, keep INSTALL_MODE as "update"
+                else
+                    echo "Choose an action:"
+                    echo "  1) Update Pulse to the latest version ${TARGET_TAG:-$latest_tag}"
+                    echo "  2) Test a feature branch"
+                    echo "  3) Remove Pulse"
+                    echo "  4) Cancel"
+                    echo "  5) Manage automatic updates"
+                    read -p "Enter your choice [1-5]: " user_choice
+                    case $user_choice in
+                        1) INSTALL_MODE="update" ;;
+                        2) 
+                            if prompt_for_branch_selection; then
+                                INSTALL_MODE="update"
+                            else
+                                INSTALL_MODE="cancel"
+                            fi
+                            ;;
+                        3) INSTALL_MODE="remove" ;;
+                        4) INSTALL_MODE="cancel" ;;
+                        5) prompt_for_cron_setup; INSTALL_MODE="cancel" ;;
+                        *) print_error "Invalid choice."; INSTALL_MODE="error" ;;
+                    esac
+                fi
+            fi
         fi
     else
         print_info "Pulse is not currently installed."
