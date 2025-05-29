@@ -35,6 +35,9 @@ try {
 // Set the placeholder status in stateManager *after* config loading is complete
 stateManager.setConfigPlaceholderStatus(configIsPlaceholder);
 
+// Set endpoint configurations for client use
+stateManager.setEndpointConfigurations(endpoints, pbsConfigs);
+
 const fs = require('fs'); // Add fs module
 const express = require('express');
 const http = require('http');

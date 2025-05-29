@@ -12,6 +12,8 @@ const state = {
     guestSnapshots: []
   },
   isConfigPlaceholder: false, // Add this flag
+  endpoints: [], // Add endpoint configurations for client
+  pbsConfigs: [], // Add PBS configurations for client
   
   // Enhanced monitoring data
   performance: {
@@ -88,6 +90,8 @@ function getState() {
     pbs: state.pbs, // This is what's sent to the client and should now be correct
     pveBackups: state.pveBackups, // Add PVE backup data
     isConfigPlaceholder: state.isConfigPlaceholder,
+    endpoints: state.endpoints, // Add endpoint configurations
+    pbsConfigs: state.pbsConfigs, // Add PBS configurations
     
     // Enhanced monitoring data
     performance: state.performance,
@@ -343,6 +347,24 @@ function setConfigPlaceholderStatus(isPlaceholder) {
   state.isConfigPlaceholder = isPlaceholder;
 }
 
+function setEndpointConfigurations(endpoints, pbsConfigs) {
+  // Store endpoint configurations for client use
+  state.endpoints = endpoints.map(endpoint => ({
+    id: endpoint.id,
+    name: endpoint.name,
+    host: endpoint.host,
+    port: endpoint.port,
+    enabled: endpoint.enabled
+  }));
+  
+  state.pbsConfigs = pbsConfigs.map(config => ({
+    id: config.id,
+    name: config.name,
+    host: config.host,
+    port: config.port
+  }));
+}
+
 function getPerformanceHistory(limit = 50) {
   return performanceHistory.slice(0, limit);
 }
@@ -405,6 +427,7 @@ module.exports = {
   init,
   getState,
   setConfigPlaceholderStatus,
+  setEndpointConfigurations,
   updateDiscoveryData,
   updateMetricsData,
   clearMetricsData,

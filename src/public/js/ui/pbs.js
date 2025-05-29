@@ -994,7 +994,22 @@ PulseApp.ui.pbs = (() => {
         headerDiv.className = `${CSS_CLASSES.FLEX} ${CSS_CLASSES.JUSTIFY_BETWEEN} ${CSS_CLASSES.ITEMS_CENTER} ${CSS_CLASSES.MB3}`;
         const instanceTitleElement = document.createElement('h3');
         instanceTitleElement.className = `${CSS_CLASSES.TEXT_LG} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200} ${CSS_CLASSES.FLEX} ${CSS_CLASSES.ITEMS_CENTER}`;
-        instanceTitleElement.appendChild(document.createTextNode(instanceName));
+        
+        // Check if we can make this PBS instance name clickable
+        const hostUrl = PulseApp.utils.getHostUrl(instanceName);
+        if (hostUrl) {
+            const linkElement = document.createElement('a');
+            linkElement.href = hostUrl;
+            linkElement.target = '_blank';
+            linkElement.rel = 'noopener noreferrer';
+            linkElement.className = 'text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer';
+            linkElement.title = `Open ${instanceName} web interface`;
+            linkElement.appendChild(document.createTextNode(instanceName));
+            instanceTitleElement.appendChild(linkElement);
+        } else {
+            instanceTitleElement.appendChild(document.createTextNode(instanceName));
+        }
+        
         headerDiv.appendChild(instanceTitleElement);
         return headerDiv;
     };
@@ -1471,10 +1486,18 @@ PulseApp.ui.pbs = (() => {
                 statusClass = 'text-yellow-600 dark:text-yellow-400';
             }
             
+            // Check if we can make this PBS instance name clickable
+            const hostUrl = PulseApp.utils.getHostUrl(instanceName);
+            let instanceNameHtml = `<span class="font-medium text-sm">${instanceName}</span>`;
+            
+            if (hostUrl) {
+                instanceNameHtml = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="font-medium text-sm text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${instanceName} web interface">${instanceName}</a>`;
+            }
+            
             headerContent.innerHTML = `
                 <div class="flex items-center gap-2 mb-1">
                     <span class="${statusClass} text-sm">${statusIcon}</span>
-                    <span class="font-medium text-sm">${instanceName}</span>
+                    ${instanceNameHtml}
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 truncate">${statusInfo.statusText}</div>
             `;

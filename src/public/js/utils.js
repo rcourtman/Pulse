@@ -322,6 +322,43 @@ PulseApp.utils = (() => {
         return null;
     }
 
+    // Get URL for a host based on endpoint configuration and API data
+    function getHostUrl(nodeName) {
+        const endpoints = PulseApp.state.get('endpoints') || [];
+        const pbsConfigs = PulseApp.state.get('pbsConfigs') || [];
+        
+        // First check PBS configs for exact name match
+        for (const config of pbsConfigs) {
+            if (config.name === nodeName) {
+                return config.host;
+            }
+        }
+        
+        // For Proxmox nodes, we need to find which endpoint this node belongs to
+        // by looking at the nodes data from the API
+        const nodesData = PulseApp.state.get('nodesData') || [];
+        
+        // Find the node in the API data to get its endpointId
+        const nodeInfo = nodesData.find(node => node.node === nodeName);
+        
+        if (nodeInfo && nodeInfo.endpointId) {
+            // Find the endpoint that matches this endpointId
+            const endpoint = endpoints.find(ep => ep.id === nodeInfo.endpointId);
+            if (endpoint) {
+                return endpoint.host;
+            }
+        }
+        
+        // Fallback: try direct name matches with endpoints
+        for (const endpoint of endpoints) {
+            if (endpoint.name === nodeName) {
+                return endpoint.host;
+            }
+        }
+        
+        return null;
+    }
+
     // Return the public API for this module
     return {
         sanitizeForId: (str) => str.replace(/[^a-zA-Z0-9-]/g, '-'),
@@ -342,6 +379,7 @@ PulseApp.utils = (() => {
         updateProgressBarTexts,
         updateProgressBarTextsDebounced,
         preserveScrollPosition,
-        getScrollableParent
+        getScrollableParent,
+        getHostUrl
     };
 })(); 

@@ -10,6 +10,8 @@ PulseApp.state = (() => {
         metricsData: [],
         dashboardData: [],
         pbsDataArray: [],
+        endpoints: [], // Add endpoint configurations
+        pbsConfigs: [], // Add PBS configurations
         pveBackups: { // Add PVE backup data
             backupTasks: [],
             storageBackups: [],
@@ -175,6 +177,14 @@ PulseApp.state = (() => {
                     }
                 }
             });
+            
+            // Update endpoint configurations (these don't need change tracking)
+            if (newData.endpoints) {
+                internalState.endpoints = newData.endpoints;
+            }
+            if (newData.pbsConfigs) {
+                internalState.pbsConfigs = newData.pbsConfigs;
+            }
             
             // Only update enhanced monitoring data if provided
             if (newData.alerts) {

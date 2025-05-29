@@ -360,8 +360,16 @@ PulseApp.ui.common = (() => {
     function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td') {
         const baseClasses = 'py-0.5 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300';
         
+        // Check if we can make this node name clickable
+        const hostUrl = PulseApp.utils.getHostUrl(text);
+        let nodeContent = text;
+        
+        if (hostUrl) {
+            nodeContent = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${text} web interface">${text}</a>`;
+        }
+        
         // Always create individual cells so first one can be sticky
-        let html = `<${cellTag} class="sticky left-0 bg-gray-200 dark:bg-gray-700 z-10 ${baseClasses}">${text}</${cellTag}>`;
+        let html = `<${cellTag} class="sticky left-0 bg-gray-200 dark:bg-gray-700 z-10 ${baseClasses}">${nodeContent}</${cellTag}>`;
         // Add empty cells for remaining columns
         for (let i = 1; i < colspan; i++) {
             html += `<${cellTag} class="bg-gray-200 dark:bg-gray-700"></${cellTag}>`;
