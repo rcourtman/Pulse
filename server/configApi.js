@@ -427,11 +427,26 @@ class ConfigApi {
             // Clear the require cache for dotenv
             delete require.cache[require.resolve('dotenv')];
             
+            // Clear all environment variables that might be cached
+            Object.keys(process.env).forEach(key => {
+                if (key.startsWith('PROXMOX_') || key.startsWith('PBS_') || key.startsWith('PULSE_') || key.startsWith('ALERT_')) {
+                    delete process.env[key];
+                }
+            });
+            
             // Reload environment variables
             require('dotenv').config();
             
+            // Log environment variables for debugging
+            const envVars = Object.keys(process.env).filter(key => 
+                key.startsWith('PROXMOX_') || key.startsWith('PBS_')
+            ).sort();
+            console.log('[ConfigApi.reloadConfiguration] Environment variables after reload:', envVars);
+            
             // Reload configuration
             const { endpoints, pbsConfigs, isConfigPlaceholder } = loadConfiguration();
+            console.log(`[ConfigApi.reloadConfiguration] Loaded ${endpoints.length} Proxmox endpoints:`, endpoints.map(e => ({ id: e.id, name: e.name, host: e.host })));
+            console.log(`[ConfigApi.reloadConfiguration] Loaded ${pbsConfigs.length} PBS configs:`, pbsConfigs.map(p => ({ id: p.id, name: p.name, host: p.host })));
             
             // Get state manager instance
             const stateManager = require('./state');
@@ -441,7 +456,10 @@ class ConfigApi {
             stateManager.setEndpointConfigurations(endpoints, pbsConfigs);
             
             // Reinitialize API clients
+            console.log('[ConfigApi.reloadConfiguration] Reinitializing API clients...');
             const { apiClients, pbsApiClients } = await initializeApiClients(endpoints, pbsConfigs);
+            console.log(`[ConfigApi.reloadConfiguration] Initialized ${Object.keys(apiClients).length} API clients:`, Object.keys(apiClients));
+            console.log(`[ConfigApi.reloadConfiguration] Initialized ${Object.keys(pbsApiClients).length} PBS clients:`, Object.keys(pbsApiClients));
             
             // Update global references
             if (global.pulseApiClients) {
@@ -458,6 +476,16 @@ class ConfigApi {
             if (global.lastReloadTime !== undefined) {
                 global.lastReloadTime = Date.now();
             }
+            
+            // Manually verify additional endpoints are loaded
+            let additionalEndpointsFound = 0;
+            let i = 2;
+            while (process.env[`PROXMOX_HOST_${i}`]) {
+                console.log(`[ConfigApi.reloadConfiguration] Found additional endpoint ${i}: PROXMOX_HOST_${i}=${process.env[`PROXMOX_HOST_${i}`]}`);
+                additionalEndpointsFound++;
+                i++;
+            }
+            console.log(`[ConfigApi.reloadConfiguration] Total additional endpoints found in environment: ${additionalEndpointsFound}`);
             
             // Trigger a discovery cycle if we have endpoints configured
             if (endpoints.length > 0) {
