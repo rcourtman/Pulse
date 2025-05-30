@@ -243,36 +243,63 @@ class ConfigApi {
             const testPbsConfigs = [];
             
             // Test Proxmox endpoint if configured
-            if (proxmoxHost && proxmoxTokenId && proxmoxTokenSecret) {
-                testEndpoints.push({
-                    id: 'test-primary',
-                    name: 'Test Primary',
-                    host: proxmoxHost,
-                    port: parseInt(proxmoxPort) || 8006,
-                    tokenId: proxmoxTokenId,
-                    tokenSecret: proxmoxTokenSecret,
-                    enabled: true,
-                    allowSelfSignedCerts: true
-                });
+            if (proxmoxHost && proxmoxTokenId) {
+                // If no token secret provided, try to get it from existing config
+                let tokenSecret = proxmoxTokenSecret;
+                if (!tokenSecret) {
+                    const existingConfig = await this.readEnvFile();
+                    tokenSecret = existingConfig.PROXMOX_TOKEN_SECRET;
+                }
+                
+                if (tokenSecret) {
+                    testEndpoints.push({
+                        id: 'test-primary',
+                        name: 'Test Primary',
+                        host: proxmoxHost,
+                        port: parseInt(proxmoxPort) || 8006,
+                        tokenId: proxmoxTokenId,
+                        tokenSecret: tokenSecret,
+                        enabled: true,
+                        allowSelfSignedCerts: true
+                    });
+                }
             }
             
             // Test PBS endpoint if configured
-            if (pbsHost && pbsTokenId && pbsTokenSecret) {
-                testPbsConfigs.push({
-                    id: 'test-pbs',
-                    name: 'Test PBS',
-                    host: pbsHost,
-                    port: parseInt(pbsPort) || 8007,
-                    tokenId: pbsTokenId,
-                    tokenSecret: pbsTokenSecret,
-                    allowSelfSignedCerts: true
-                });
+            if (pbsHost && pbsTokenId) {
+                // If no token secret provided, try to get it from existing config
+                let tokenSecret = pbsTokenSecret;
+                if (!tokenSecret) {
+                    const existingConfig = await this.readEnvFile();
+                    tokenSecret = existingConfig.PBS_TOKEN_SECRET;
+                }
+                
+                if (tokenSecret) {
+                    testPbsConfigs.push({
+                        id: 'test-pbs',
+                        name: 'Test PBS',
+                        host: pbsHost,
+                        port: parseInt(pbsPort) || 8007,
+                        tokenId: pbsTokenId,
+                        tokenSecret: tokenSecret,
+                        allowSelfSignedCerts: true
+                    });
+                }
             }
             
             if (testEndpoints.length === 0) {
+                let errorMessage = 'No Proxmox server configured to test. ';
+                if (!proxmoxHost) {
+                    errorMessage += 'Missing host address.';
+                } else if (!proxmoxTokenId) {
+                    errorMessage += 'Missing API token ID.';
+                } else {
+                    errorMessage += 'Missing API token secret (enter a new one or save existing configuration first).';
+                }
+                
                 return {
                     success: false,
-                    error: 'No Proxmox server configured to test'
+                    error: errorMessage
                 };
             }
             
