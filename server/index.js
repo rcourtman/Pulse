@@ -727,12 +727,16 @@ async function runDiscoveryCycle() {
   let errors = [];
   
   try {
-    if (Object.keys(apiClients).length === 0 && Object.keys(pbsApiClients).length === 0) {
+    // Use global API clients if local ones aren't set
+    const currentApiClients = global.pulseApiClients ? global.pulseApiClients.apiClients : apiClients;
+    const currentPbsApiClients = global.pulseApiClients ? global.pulseApiClients.pbsApiClients : pbsApiClients;
+    
+    if (Object.keys(currentApiClients).length === 0 && Object.keys(currentPbsApiClients).length === 0) {
         console.warn("[Discovery Cycle] API clients not initialized yet, skipping run.");
     return;
   }
     // Use imported fetchDiscoveryData
-    const discoveryData = await fetchDiscoveryData(apiClients, pbsApiClients);
+    const discoveryData = await fetchDiscoveryData(currentApiClients, currentPbsApiClients);
     
     const duration = Date.now() - startTime;
     
@@ -772,7 +776,10 @@ async function runMetricCycle() {
   let errors = [];
   
   try {
-    if (Object.keys(apiClients).length === 0) {
+    // Use global API clients if local ones aren't set
+    const currentApiClients = global.pulseApiClients ? global.pulseApiClients.apiClients : apiClients;
+    
+    if (Object.keys(currentApiClients).length === 0) {
         console.warn("[Metrics Cycle] PVE API clients not initialized yet, skipping run.");
         return;
     }
@@ -783,7 +790,7 @@ async function runMetricCycle() {
 
     if (runningVms.length > 0 || runningContainers.length > 0) {
         // Use imported fetchMetricsData
-        const fetchedMetrics = await fetchMetricsData(runningVms, runningContainers, apiClients);
+        const fetchedMetrics = await fetchMetricsData(runningVms, runningContainers, currentApiClients);
 
         const duration = Date.now() - startTime;
 
@@ -990,6 +997,7 @@ async function startServer() {
             
             // Store globally for config reload
             global.pulseApiClients = { apiClients, pbsApiClients };
+            global.runDiscoveryCycle = runDiscoveryCycle;
             
             console.log("INFO: All API clients initialized.");
         } catch (initError) {
@@ -1004,6 +1012,7 @@ async function startServer() {
         apiClients = {};
         pbsApiClients = {};
         global.pulseApiClients = { apiClients, pbsApiClients };
+        global.runDiscoveryCycle = runDiscoveryCycle;
     } 
 
     server.listen(PORT, () => {
