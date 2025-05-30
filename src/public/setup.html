@@ -99,6 +99,96 @@
           </div>
         </div>
 
+        <!-- Advanced Settings (Optional) -->
+        <details class="border border-gray-200 dark:border-gray-700 rounded-lg">
+          <summary class="px-6 py-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+            <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Advanced Settings (Optional)</span>
+          </summary>
+          <div class="p-6 pt-0 space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label for="metric-interval" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Metric Update Interval (ms)
+                </label>
+                <input type="number" id="metric-interval" name="metric-interval"
+                       placeholder="2000 (default)"
+                       min="1000" max="60000"
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">How often to fetch VM/Container metrics</p>
+              </div>
+
+              <div>
+                <label for="discovery-interval" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Discovery Interval (ms)
+                </label>
+                <input type="number" id="discovery-interval" name="discovery-interval"
+                       placeholder="30000 (default)"
+                       min="5000" max="300000"
+                       class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">How often to discover nodes and VMs</p>
+              </div>
+            </div>
+
+            <!-- Alert Settings -->
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+              <h3 class="text-md font-medium text-gray-800 dark:text-gray-200 mb-3">Alert Settings</h3>
+              
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <label class="flex items-center">
+                  <input type="checkbox" id="alert-cpu-enabled" name="alert-cpu-enabled" checked
+                         class="mr-2 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                  <span class="text-sm text-gray-700 dark:text-gray-300">CPU Alerts</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="checkbox" id="alert-memory-enabled" name="alert-memory-enabled" checked
+                         class="mr-2 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                  <span class="text-sm text-gray-700 dark:text-gray-300">Memory Alerts</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="checkbox" id="alert-disk-enabled" name="alert-disk-enabled" checked
+                         class="mr-2 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                  <span class="text-sm text-gray-700 dark:text-gray-300">Disk Alerts</span>
+                </label>
+                <label class="flex items-center">
+                  <input type="checkbox" id="alert-down-enabled" name="alert-down-enabled" checked
+                         class="mr-2 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                  <span class="text-sm text-gray-700 dark:text-gray-300">Down Alerts</span>
+                </label>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label for="alert-cpu-threshold" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    CPU Alert Threshold (%)
+                  </label>
+                  <input type="number" id="alert-cpu-threshold" name="alert-cpu-threshold"
+                         placeholder="85 (default)"
+                         min="50" max="100"
+                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                  <label for="alert-memory-threshold" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Memory Alert Threshold (%)
+                  </label>
+                  <input type="number" id="alert-memory-threshold" name="alert-memory-threshold"
+                         placeholder="90 (default)"
+                         min="50" max="100"
+                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                  <label for="alert-disk-threshold" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Disk Alert Threshold (%)
+                  </label>
+                  <input type="number" id="alert-disk-threshold" name="alert-disk-threshold"
+                         placeholder="95 (default)"
+                         min="50" max="100"
+                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+
         <!-- PBS Configuration (Optional) -->
         <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
           <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Proxmox Backup Server (Optional)</h2>
@@ -120,6 +210,16 @@
               <input type="number" id="pbs-port" name="pbs-port"
                      placeholder="8007 (default)"
                      class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            <div>
+              <label for="pbs-node-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                PBS Node Name
+              </label>
+              <input type="text" id="pbs-node-name" name="pbs-node-name"
+                     placeholder="Internal hostname (run 'hostname' on PBS)"
+                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Required unless token has Sys.Audit permission</p>
             </div>
 
             <div>
@@ -301,9 +401,33 @@
           host: formData.get('pbs-host'),
           port: formData.get('pbs-port') || '8007',
           tokenId: formData.get('pbs-token-id'),
-          tokenSecret: formData.get('pbs-token-secret')
+          tokenSecret: formData.get('pbs-token-secret'),
+          nodeName: formData.get('pbs-node-name')
         };
       }
+      
+      // Add advanced settings
+      config.advanced = {
+        metricInterval: formData.get('metric-interval'),
+        discoveryInterval: formData.get('discovery-interval'),
+        alerts: {
+          cpu: {
+            enabled: formData.get('alert-cpu-enabled') === 'on',
+            threshold: formData.get('alert-cpu-threshold')
+          },
+          memory: {
+            enabled: formData.get('alert-memory-enabled') === 'on',
+            threshold: formData.get('alert-memory-threshold')
+          },
+          disk: {
+            enabled: formData.get('alert-disk-enabled') === 'on',
+            threshold: formData.get('alert-disk-threshold')
+          },
+          down: {
+            enabled: formData.get('alert-down-enabled') === 'on'
+          }
+        }
+      };
 
       hideMessages();
       const button = document.getElementById('save-button');
@@ -353,6 +477,42 @@
             document.getElementById('pbs-host').value = config.pbs.host || '';
             document.getElementById('pbs-port').value = config.pbs.port || '';
             document.getElementById('pbs-token-id').value = config.pbs.tokenId || '';
+            document.getElementById('pbs-node-name').value = config.pbs.nodeName || '';
+          }
+          
+          if (config.advanced) {
+            if (config.advanced.metricInterval) {
+              document.getElementById('metric-interval').value = config.advanced.metricInterval;
+            }
+            if (config.advanced.discoveryInterval) {
+              document.getElementById('discovery-interval').value = config.advanced.discoveryInterval;
+            }
+            
+            // Load alert settings
+            if (config.advanced.alerts) {
+              const alerts = config.advanced.alerts;
+              if (alerts.cpu !== undefined) {
+                document.getElementById('alert-cpu-enabled').checked = alerts.cpu.enabled !== false;
+                if (alerts.cpu.threshold) {
+                  document.getElementById('alert-cpu-threshold').value = alerts.cpu.threshold;
+                }
+              }
+              if (alerts.memory !== undefined) {
+                document.getElementById('alert-memory-enabled').checked = alerts.memory.enabled !== false;
+                if (alerts.memory.threshold) {
+                  document.getElementById('alert-memory-threshold').value = alerts.memory.threshold;
+                }
+              }
+              if (alerts.disk !== undefined) {
+                document.getElementById('alert-disk-enabled').checked = alerts.disk.enabled !== false;
+                if (alerts.disk.threshold) {
+                  document.getElementById('alert-disk-threshold').value = alerts.disk.threshold;
+                }
+              }
+              if (alerts.down !== undefined) {
+                document.getElementById('alert-down-enabled').checked = alerts.down.enabled !== false;
+              }
+            }
           }
         }
       } catch (error) {

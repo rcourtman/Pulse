@@ -26,12 +26,34 @@ class ConfigApi {
                     host: config.PBS_HOST,
                     port: config.PBS_PORT || '8007',
                     tokenId: config.PBS_TOKEN_ID,
+                    nodeName: config.PBS_NODE_NAME,
                     // Don't send the secret
-                } : null
+                } : null,
+                advanced: {
+                    metricInterval: config.PULSE_METRIC_INTERVAL_MS,
+                    discoveryInterval: config.PULSE_DISCOVERY_INTERVAL_MS,
+                    alerts: {
+                        cpu: {
+                            enabled: config.ALERT_CPU_ENABLED !== 'false',
+                            threshold: config.ALERT_CPU_THRESHOLD
+                        },
+                        memory: {
+                            enabled: config.ALERT_MEMORY_ENABLED !== 'false',
+                            threshold: config.ALERT_MEMORY_THRESHOLD
+                        },
+                        disk: {
+                            enabled: config.ALERT_DISK_ENABLED !== 'false',
+                            threshold: config.ALERT_DISK_THRESHOLD
+                        },
+                        down: {
+                            enabled: config.ALERT_DOWN_ENABLED !== 'false'
+                        }
+                    }
+                }
             };
         } catch (error) {
             console.error('Error reading configuration:', error);
-            return { proxmox: null, pbs: null };
+            return { proxmox: null, pbs: null, advanced: {} };
         }
     }
 
@@ -58,8 +80,48 @@ class ConfigApi {
                 existingConfig.PBS_PORT = config.pbs.port || '8007';
                 existingConfig.PBS_TOKEN_ID = config.pbs.tokenId;
                 existingConfig.PBS_TOKEN_SECRET = config.pbs.tokenSecret;
+                if (config.pbs.nodeName) {
+                    existingConfig.PBS_NODE_NAME = config.pbs.nodeName;
+                }
                 // Always allow self-signed certificates by default for PBS
                 existingConfig.PBS_ALLOW_SELF_SIGNED_CERT = 'true';
+            }
+            
+            // Add advanced settings
+            if (config.advanced) {
+                // Service intervals
+                if (config.advanced.metricInterval) {
+                    existingConfig.PULSE_METRIC_INTERVAL_MS = config.advanced.metricInterval;
+                }
+                if (config.advanced.discoveryInterval) {
+                    existingConfig.PULSE_DISCOVERY_INTERVAL_MS = config.advanced.discoveryInterval;
+                }
+                
+                // Alert settings
+                if (config.advanced.alerts) {
+                    const alerts = config.advanced.alerts;
+                    if (alerts.cpu) {
+                        existingConfig.ALERT_CPU_ENABLED = alerts.cpu.enabled ? 'true' : 'false';
+                        if (alerts.cpu.threshold) {
+                            existingConfig.ALERT_CPU_THRESHOLD = alerts.cpu.threshold;
+                        }
+                    }
+                    if (alerts.memory) {
+                        existingConfig.ALERT_MEMORY_ENABLED = alerts.memory.enabled ? 'true' : 'false';
+                        if (alerts.memory.threshold) {
+                            existingConfig.ALERT_MEMORY_THRESHOLD = alerts.memory.threshold;
+                        }
+                    }
+                    if (alerts.disk) {
+                        existingConfig.ALERT_DISK_ENABLED = alerts.disk.enabled ? 'true' : 'false';
+                        if (alerts.disk.threshold) {
+                            existingConfig.ALERT_DISK_THRESHOLD = alerts.disk.threshold;
+                        }
+                    }
+                    if (alerts.down) {
+                        existingConfig.ALERT_DOWN_ENABLED = alerts.down.enabled ? 'true' : 'false';
+                    }
+                }
             }
             
             // Write back to .env file
@@ -170,7 +232,14 @@ class ConfigApi {
         // Group related settings
         const groups = {
             'Proxmox VE Settings': ['PROXMOX_HOST', 'PROXMOX_PORT', 'PROXMOX_TOKEN_ID', 'PROXMOX_TOKEN_SECRET', 'PROXMOX_ALLOW_SELF_SIGNED_CERT'],
-            'Proxmox Backup Server Settings': ['PBS_HOST', 'PBS_PORT', 'PBS_TOKEN_ID', 'PBS_TOKEN_SECRET', 'PBS_ALLOW_SELF_SIGNED_CERT'],
+            'Proxmox Backup Server Settings': ['PBS_HOST', 'PBS_PORT', 'PBS_TOKEN_ID', 'PBS_TOKEN_SECRET', 'PBS_NODE_NAME', 'PBS_ALLOW_SELF_SIGNED_CERT'],
+            'Pulse Service Settings': ['PULSE_METRIC_INTERVAL_MS', 'PULSE_DISCOVERY_INTERVAL_MS'],
+            'Alert System Configuration': [
+                'ALERT_CPU_ENABLED', 'ALERT_CPU_THRESHOLD', 'ALERT_CPU_DURATION',
+                'ALERT_MEMORY_ENABLED', 'ALERT_MEMORY_THRESHOLD', 'ALERT_MEMORY_DURATION',
+                'ALERT_DISK_ENABLED', 'ALERT_DISK_THRESHOLD', 'ALERT_DISK_DURATION',
+                'ALERT_DOWN_ENABLED', 'ALERT_DOWN_DURATION'
+            ],
             'Other Settings': [] // Will contain all other keys
         };
         
