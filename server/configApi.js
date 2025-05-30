@@ -21,6 +21,7 @@ class ConfigApi {
                     port: config.PROXMOX_PORT || '8006',
                     tokenId: config.PROXMOX_TOKEN_ID,
                     nodeName: config.PROXMOX_NODE_NAME,
+                    enabled: config.PROXMOX_ENABLED !== 'false',
                     // Don't send the secret
                 } : null,
                 pbs: config.PBS_HOST ? {
@@ -70,71 +71,13 @@ class ConfigApi {
             const existingConfig = await this.readEnvFile();
             console.log('[ConfigApi.saveConfig] Existing config keys:', Object.keys(existingConfig));
             
-            // Update with new values
-            if (config.proxmox) {
-                console.log('[ConfigApi.saveConfig] Updating Proxmox config');
-                existingConfig.PROXMOX_HOST = config.proxmox.host;
-                existingConfig.PROXMOX_PORT = config.proxmox.port || '8006';
-                existingConfig.PROXMOX_TOKEN_ID = config.proxmox.tokenId;
-                
-                // Only update token secret if provided (allows keeping existing secret)
-                if (config.proxmox.tokenSecret) {
-                    existingConfig.PROXMOX_TOKEN_SECRET = config.proxmox.tokenSecret;
-                }
-                
-                // Always allow self-signed certificates by default for Proxmox
-                existingConfig.PROXMOX_ALLOW_SELF_SIGNED_CERT = 'true';
+            // Handle both old structured format and new raw .env variable format
+            if (config.proxmox || config.pbs || config.advanced) {
+                // Old structured format
+                this.handleStructuredConfig(config, existingConfig);
             } else {
-                console.log('[ConfigApi.saveConfig] No Proxmox config provided');
-            }
-            
-            if (config.pbs) {
-                existingConfig.PBS_HOST = config.pbs.host;
-                existingConfig.PBS_PORT = config.pbs.port || '8007';
-                existingConfig.PBS_TOKEN_ID = config.pbs.tokenId;
-                existingConfig.PBS_TOKEN_SECRET = config.pbs.tokenSecret;
-                if (config.pbs.nodeName) {
-                    existingConfig.PBS_NODE_NAME = config.pbs.nodeName;
-                }
-                // Always allow self-signed certificates by default for PBS
-                existingConfig.PBS_ALLOW_SELF_SIGNED_CERT = 'true';
-            }
-            
-            // Add advanced settings
-            if (config.advanced) {
-                // Service intervals
-                if (config.advanced.metricInterval) {
-                    existingConfig.PULSE_METRIC_INTERVAL_MS = config.advanced.metricInterval;
-                }
-                if (config.advanced.discoveryInterval) {
-                    existingConfig.PULSE_DISCOVERY_INTERVAL_MS = config.advanced.discoveryInterval;
-                }
-                
-                // Alert settings
-                if (config.advanced.alerts) {
-                    const alerts = config.advanced.alerts;
-                    if (alerts.cpu) {
-                        existingConfig.ALERT_CPU_ENABLED = alerts.cpu.enabled ? 'true' : 'false';
-                        if (alerts.cpu.threshold) {
-                            existingConfig.ALERT_CPU_THRESHOLD = alerts.cpu.threshold;
-                        }
-                    }
-                    if (alerts.memory) {
-                        existingConfig.ALERT_MEMORY_ENABLED = alerts.memory.enabled ? 'true' : 'false';
-                        if (alerts.memory.threshold) {
-                            existingConfig.ALERT_MEMORY_THRESHOLD = alerts.memory.threshold;
-                        }
-                    }
-                    if (alerts.disk) {
-                        existingConfig.ALERT_DISK_ENABLED = alerts.disk.enabled ? 'true' : 'false';
-                        if (alerts.disk.threshold) {
-                            existingConfig.ALERT_DISK_THRESHOLD = alerts.disk.threshold;
-                        }
-                    }
-                    if (alerts.down) {
-                        existingConfig.ALERT_DOWN_ENABLED = alerts.down.enabled ? 'true' : 'false';
-                    }
-                }
+                // New raw .env variable format from settings form
+                this.handleRawEnvConfig(config, existingConfig);
             }
             
             // Write back to .env file
@@ -152,6 +95,111 @@ class ConfigApi {
             console.error('Error saving configuration:', error);
             throw error;
         }
+    }
+
+    /**
+     * Handle structured configuration format (old setup flow)
+     */
+    handleStructuredConfig(config, existingConfig) {
+        // Update with new values
+        if (config.proxmox) {
+            console.log('[ConfigApi.saveConfig] Updating Proxmox config');
+            existingConfig.PROXMOX_HOST = config.proxmox.host;
+            existingConfig.PROXMOX_PORT = config.proxmox.port || '8006';
+            existingConfig.PROXMOX_TOKEN_ID = config.proxmox.tokenId;
+            
+            // Only update token secret if provided (allows keeping existing secret)
+            if (config.proxmox.tokenSecret) {
+                existingConfig.PROXMOX_TOKEN_SECRET = config.proxmox.tokenSecret;
+            }
+            
+            // Always allow self-signed certificates by default for Proxmox
+            existingConfig.PROXMOX_ALLOW_SELF_SIGNED_CERT = 'true';
+        } else {
+            console.log('[ConfigApi.saveConfig] No Proxmox config provided');
+        }
+        
+        if (config.pbs) {
+            existingConfig.PBS_HOST = config.pbs.host;
+            existingConfig.PBS_PORT = config.pbs.port || '8007';
+            existingConfig.PBS_TOKEN_ID = config.pbs.tokenId;
+            existingConfig.PBS_TOKEN_SECRET = config.pbs.tokenSecret;
+            if (config.pbs.nodeName) {
+                existingConfig.PBS_NODE_NAME = config.pbs.nodeName;
+            }
+            // Always allow self-signed certificates by default for PBS
+            existingConfig.PBS_ALLOW_SELF_SIGNED_CERT = 'true';
+        }
+        
+        // Add advanced settings
+        if (config.advanced) {
+            // Service intervals
+            if (config.advanced.metricInterval) {
+                existingConfig.PULSE_METRIC_INTERVAL_MS = config.advanced.metricInterval;
+            }
+            if (config.advanced.discoveryInterval) {
+                existingConfig.PULSE_DISCOVERY_INTERVAL_MS = config.advanced.discoveryInterval;
+            }
+            
+            // Alert settings
+            if (config.advanced.alerts) {
+                const alerts = config.advanced.alerts;
+                if (alerts.cpu) {
+                    existingConfig.ALERT_CPU_ENABLED = alerts.cpu.enabled ? 'true' : 'false';
+                    if (alerts.cpu.threshold) {
+                        existingConfig.ALERT_CPU_THRESHOLD = alerts.cpu.threshold;
+                    }
+                }
+                if (alerts.memory) {
+                    existingConfig.ALERT_MEMORY_ENABLED = alerts.memory.enabled ? 'true' : 'false';
+                    if (alerts.memory.threshold) {
+                        existingConfig.ALERT_MEMORY_THRESHOLD = alerts.memory.threshold;
+                    }
+                }
+                if (alerts.disk) {
+                    existingConfig.ALERT_DISK_ENABLED = alerts.disk.enabled ? 'true' : 'false';
+                    if (alerts.disk.threshold) {
+                        existingConfig.ALERT_DISK_THRESHOLD = alerts.disk.threshold;
+                    }
+                }
+                if (alerts.down) {
+                    existingConfig.ALERT_DOWN_ENABLED = alerts.down.enabled ? 'true' : 'false';
+                }
+            }
+        }
+    }
+
+    /**
+     * Handle raw .env variable format (new settings form)
+     */
+    handleRawEnvConfig(config, existingConfig) {
+        console.log('[ConfigApi.saveConfig] Processing raw .env variable format');
+        
+        // Directly update existing config with new values
+        Object.entries(config).forEach(([key, value]) => {
+            if (value !== undefined && value !== '') {
+                console.log(`[ConfigApi.saveConfig] Setting ${key} = ${value}`);
+                existingConfig[key] = value;
+            }
+        });
+        
+        // Set default self-signed cert allowance for any Proxmox/PBS endpoints
+        Object.keys(existingConfig).forEach(key => {
+            if (key.startsWith('PROXMOX_HOST') && existingConfig[key]) {
+                const suffix = key.replace('PROXMOX_HOST', '');
+                const certKey = `PROXMOX_ALLOW_SELF_SIGNED_CERT${suffix}`;
+                if (!existingConfig[certKey]) {
+                    existingConfig[certKey] = 'true';
+                }
+            }
+            if (key.startsWith('PBS_HOST') && existingConfig[key]) {
+                const suffix = key.replace('PBS_HOST', '');
+                const certKey = `PBS_ALLOW_SELF_SIGNED_CERT${suffix}`;
+                if (!existingConfig[certKey]) {
+                    existingConfig[certKey] = 'true';
+                }
+            }
+        });
     }
 
     /**

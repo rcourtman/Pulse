@@ -1,6 +1,7 @@
 PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.settings = (() => {
+    let currentConfig = {};
     let isInitialized = false;
 
     function init() {
@@ -8,19 +9,84 @@ PulseApp.ui.settings = (() => {
         
         console.log('[Settings] Initializing settings module...');
         
-        // Set up form submission handler
-        const form = document.getElementById('settings-config-form');
-        if (form) {
-            form.addEventListener('submit', handleFormSubmission);
+        // Set up modal event listeners
+        const settingsButton = document.getElementById('settings-button');
+        const modal = document.getElementById('settings-modal');
+        const closeButton = document.getElementById('settings-modal-close');
+        const cancelButton = document.getElementById('settings-cancel-button');
+        const testButton = document.getElementById('settings-test-button');
+        const saveButton = document.getElementById('settings-save-button');
+
+        if (settingsButton) {
+            settingsButton.addEventListener('click', openModal);
         }
+
+        if (closeButton) {
+            closeButton.addEventListener('click', closeModal);
+        }
+
+        if (cancelButton) {
+            cancelButton.addEventListener('click', closeModal);
+        }
+
+        if (testButton) {
+            testButton.addEventListener('click', testConnections);
+        }
+
+        if (saveButton) {
+            saveButton.addEventListener('click', saveConfiguration);
+        }
+
+        // Close modal when clicking outside
+        if (modal) {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    closeModal();
+                }
+            });
+        }
+
+        // Handle escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+                closeModal();
+            }
+        });
         
         isInitialized = true;
         console.log('[Settings] Settings module initialized');
     }
 
-    function load() {
-        console.log('[Settings] Loading current configuration...');
-        loadCurrentConfig();
+    async function openModal() {
+        console.log('[Settings] Opening settings modal...');
+        
+        const modal = document.getElementById('settings-modal');
+        const body = document.getElementById('settings-modal-body');
+        
+        if (!modal || !body) return;
+        
+        // Show modal
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        
+        // Load current configuration
+        try {
+            await loadCurrentConfig();
+            renderConfigurationForm();
+        } catch (error) {
+            console.error('[Settings] Failed to load configuration:', error);
+            body.innerHTML = `<div class="text-red-600 dark:text-red-400">Failed to load configuration: ${error.message}</div>`;
+        }
+    }
+
+    function closeModal() {
+        console.log('[Settings] Closing settings modal...');
+        
+        const modal = document.getElementById('settings-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
     }
 
     async function loadCurrentConfig() {
@@ -30,103 +96,354 @@ PulseApp.ui.settings = (() => {
                 throw new Error(`HTTP ${response.status}`);
             }
             
-            const config = await response.json();
-            console.log('[Settings] Current config loaded:', config);
-            
-            // Populate Proxmox fields
-            if (config.proxmox) {
-                document.getElementById('settings-proxmox-host').value = config.proxmox.host || '';
-                document.getElementById('settings-proxmox-port').value = config.proxmox.port || '';
-                document.getElementById('settings-proxmox-token-id').value = config.proxmox.tokenId || '';
-                // Don't populate the secret for security
-                document.getElementById('settings-proxmox-token-secret').placeholder = 'Enter new secret or leave blank to keep current';
-            }
+            currentConfig = await response.json();
+            console.log('[Settings] Current config loaded:', currentConfig);
             
         } catch (error) {
             console.error('[Settings] Failed to load current configuration:', error);
-            showError('Failed to load current configuration: ' + error.message);
+            throw error;
         }
     }
 
-    async function handleFormSubmission(e) {
-        e.preventDefault();
+    function renderConfigurationForm() {
+        const body = document.getElementById('settings-modal-body');
+        if (!body) return;
+
+        const html = `
+            <form id="settings-form" class="space-y-6">
+                <!-- Proxmox VE Primary Endpoint -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Primary Proxmox VE Server</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Host Address <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" name="PROXMOX_HOST" required
+                                   value="${currentConfig.proxmox?.host || ''}"
+                                   placeholder="https://proxmox.example.com:8006"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
+                            <input type="number" name="PROXMOX_PORT"
+                                   value="${currentConfig.proxmox?.port || ''}"
+                                   placeholder="8006"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Node Name
+                            </label>
+                            <input type="text" name="PROXMOX_NODE_NAME"
+                                   value="${currentConfig.proxmox?.nodeName || ''}"
+                                   placeholder="Display name (optional)"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                API Token ID <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" name="PROXMOX_TOKEN_ID" required
+                                   value="${currentConfig.proxmox?.tokenId || ''}"
+                                   placeholder="root@pam!token-name"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                API Token Secret
+                            </label>
+                            <input type="password" name="PROXMOX_TOKEN_SECRET"
+                                   placeholder="Leave blank to keep current"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enabled</label>
+                            <input type="checkbox" name="PROXMOX_ENABLED" ${currentConfig.proxmox?.enabled !== false ? 'checked' : ''}
+                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Proxmox VE Endpoints -->
+                <div id="additional-pve-endpoints">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional Proxmox VE Servers</h3>
+                        <button type="button" onclick="PulseApp.ui.settings.addPveEndpoint()" 
+                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md">
+                            Add PVE Server
+                        </button>
+                    </div>
+                    <div id="pve-endpoints-container"></div>
+                </div>
+
+                <!-- Primary PBS Configuration -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Proxmox Backup Server (Optional)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
+                            <input type="text" name="PBS_HOST"
+                                   value="${currentConfig.pbs?.host || ''}"
+                                   placeholder="https://pbs.example.com:8007"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
+                            <input type="number" name="PBS_PORT"
+                                   value="${currentConfig.pbs?.port || ''}"
+                                   placeholder="8007"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Node Name
+                            </label>
+                            <input type="text" name="PBS_NODE_NAME"
+                                   value="${currentConfig.pbs?.nodeName || ''}"
+                                   placeholder="PBS internal hostname"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
+                            <input type="text" name="PBS_TOKEN_ID"
+                                   value="${currentConfig.pbs?.tokenId || ''}"
+                                   placeholder="root@pam!token-name"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
+                            <input type="password" name="PBS_TOKEN_SECRET"
+                                   placeholder="Leave blank to keep current"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional PBS Endpoints -->
+                <div id="additional-pbs-endpoints">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional PBS Servers</h3>
+                        <button type="button" onclick="PulseApp.ui.settings.addPbsEndpoint()" 
+                                class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md">
+                            Add PBS Server
+                        </button>
+                    </div>
+                    <div id="pbs-endpoints-container"></div>
+                </div>
+
+                <!-- Service Settings -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Service Settings</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Metric Update Interval (ms)
+                            </label>
+                            <input type="number" name="PULSE_METRIC_INTERVAL_MS"
+                                   value="${currentConfig.advanced?.metricInterval || ''}"
+                                   placeholder="2000 (default)"
+                                   min="1000" max="60000"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">How often to fetch VM/Container metrics</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Discovery Interval (ms)
+                            </label>
+                            <input type="number" name="PULSE_DISCOVERY_INTERVAL_MS"
+                                   value="${currentConfig.advanced?.discoveryInterval || ''}"
+                                   placeholder="30000 (default)"
+                                   min="5000" max="300000"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">How often to discover nodes and VMs</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alert Settings -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Alert Configuration</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" name="ALERT_CPU_ENABLED" ${currentConfig.advanced?.alerts?.cpu?.enabled !== false ? 'checked' : ''}
+                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">CPU Alerts</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" name="ALERT_MEMORY_ENABLED" ${currentConfig.advanced?.alerts?.memory?.enabled !== false ? 'checked' : ''}
+                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Memory Alerts</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" name="ALERT_DISK_ENABLED" ${currentConfig.advanced?.alerts?.disk?.enabled !== false ? 'checked' : ''}
+                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Disk Alerts</span>
+                        </label>
+                        <label class="flex items-center">
+                            <input type="checkbox" name="ALERT_DOWN_ENABLED" ${currentConfig.advanced?.alerts?.down?.enabled !== false ? 'checked' : ''}
+                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Down Alerts</span>
+                        </label>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                CPU Threshold (%)
+                            </label>
+                            <input type="number" name="ALERT_CPU_THRESHOLD"
+                                   value="${currentConfig.advanced?.alerts?.cpu?.threshold || ''}"
+                                   placeholder="85 (default)"
+                                   min="50" max="100"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Memory Threshold (%)
+                            </label>
+                            <input type="number" name="ALERT_MEMORY_THRESHOLD"
+                                   value="${currentConfig.advanced?.alerts?.memory?.threshold || ''}"
+                                   placeholder="90 (default)"
+                                   min="50" max="100"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Disk Threshold (%)
+                            </label>
+                            <input type="number" name="ALERT_DISK_THRESHOLD"
+                                   value="${currentConfig.advanced?.alerts?.disk?.threshold || ''}"
+                                   placeholder="95 (default)"
+                                   min="50" max="100"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Status Messages -->
+                <div id="settings-messages"></div>
+            </form>
+        `;
+
+        body.innerHTML = html;
         
-        const formData = new FormData(e.target);
-        const config = {
-            proxmox: {
-                host: formData.get('proxmox-host'),
-                port: formData.get('proxmox-port') || '8006',
-                tokenId: formData.get('proxmox-token-id'),
-                tokenSecret: formData.get('proxmox-token-secret')
-            }
-        };
-
-        // Validate required fields
-        if (!config.proxmox.host || !config.proxmox.tokenId) {
-            showError('Please fill in all required fields (Host and Token ID)');
-            return;
-        }
-
-        // If token secret is empty, don't include it (keep existing)
-        if (!config.proxmox.tokenSecret) {
-            delete config.proxmox.tokenSecret;
-        }
-
-        hideMessages();
-        const button = document.getElementById('settings-save-button');
-        const originalText = button.textContent;
-        button.disabled = true;
-        button.textContent = 'Saving...';
-
-        try {
-            const response = await fetch('/api/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
-            });
-
-            const result = await response.json();
-            
-            if (response.ok && result.success) {
-                showSuccess('Configuration saved successfully!');
-                // Reload the current config to show updated values
-                setTimeout(() => {
-                    loadCurrentConfig();
-                }, 1000);
-            } else {
-                showError(result.error || 'Failed to save configuration');
-            }
-        } catch (error) {
-            showError('Failed to save configuration: ' + error.message);
-        } finally {
-            button.disabled = false;
-            button.textContent = originalText;
-        }
+        // Render additional endpoints
+        renderAdditionalEndpoints();
     }
 
-    async function testConnection() {
-        const formData = new FormData(document.getElementById('settings-config-form'));
-        const config = {
-            proxmox: {
-                host: formData.get('proxmox-host'),
-                port: formData.get('proxmox-port') || '8006',
-                tokenId: formData.get('proxmox-token-id'),
-                tokenSecret: formData.get('proxmox-token-secret')
-            }
-        };
+    function renderAdditionalEndpoints() {
+        // This will be populated based on what additional endpoints exist in config
+        // For now, we'll support dynamic addition
+    }
 
-        // Validate required fields
-        if (!config.proxmox.host || !config.proxmox.tokenId || !config.proxmox.tokenSecret) {
-            showError('Please fill in all required fields to test connection');
-            return;
-        }
+    function addPveEndpoint() {
+        const container = document.getElementById('pve-endpoints-container');
+        if (!container) return;
 
-        hideMessages();
-        const button = event.target;
-        const originalText = button.textContent;
-        button.disabled = true;
-        button.textContent = 'Testing...';
+        const index = container.children.length + 2; // Start from _2
+        const endpointHtml = `
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
+                <button type="button" onclick="this.parentElement.remove()" 
+                        class="absolute top-2 right-2 text-red-600 hover:text-red-800">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+                <h4 class="text-md font-medium text-gray-800 dark:text-gray-200 mb-3">PVE Server #${index}</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
+                        <input type="text" name="PROXMOX_HOST_${index}" placeholder="https://pve${index}.example.com:8006"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
+                        <input type="number" name="PROXMOX_PORT_${index}" placeholder="8006"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Node Name</label>
+                        <input type="text" name="PROXMOX_NODE_NAME_${index}" placeholder="PVE Server ${index}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
+                        <input type="text" name="PROXMOX_TOKEN_ID_${index}" placeholder="root@pam!token-name"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
+                        <input type="password" name="PROXMOX_TOKEN_SECRET_${index}" placeholder="Enter token secret"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="flex items-center mt-6">
+                            <input type="checkbox" name="PROXMOX_ENABLED_${index}" checked
+                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
 
+        container.insertAdjacentHTML('beforeend', endpointHtml);
+    }
+
+    function addPbsEndpoint() {
+        const container = document.getElementById('pbs-endpoints-container');
+        if (!container) return;
+
+        const index = container.children.length + 2; // Start from _2
+        const endpointHtml = `
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
+                <button type="button" onclick="this.parentElement.remove()" 
+                        class="absolute top-2 right-2 text-red-600 hover:text-red-800">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+                <h4 class="text-md font-medium text-gray-800 dark:text-gray-200 mb-3">PBS Server #${index}</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
+                        <input type="text" name="PBS_HOST_${index}" placeholder="https://pbs${index}.example.com:8007"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
+                        <input type="number" name="PBS_PORT_${index}" placeholder="8007"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Node Name</label>
+                        <input type="text" name="PBS_NODE_NAME_${index}" placeholder="PBS internal hostname"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
+                        <input type="text" name="PBS_TOKEN_ID_${index}" placeholder="root@pam!token-name"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
+                        <input type="password" name="PBS_TOKEN_SECRET_${index}" placeholder="Enter token secret"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.insertAdjacentHTML('beforeend', endpointHtml);
+    }
+
+    async function testConnections() {
+        showMessage('Testing connections...', 'info');
+        
+        const config = collectFormData();
+        
         try {
             const response = await fetch('/api/config/test', {
                 method: 'POST',
@@ -137,63 +454,114 @@ PulseApp.ui.settings = (() => {
             const result = await response.json();
             
             if (response.ok && result.success) {
-                showSuccess('Connection test successful!');
-                setTimeout(() => hideMessages(), 3000);
+                showMessage('All connections tested successfully!', 'success');
             } else {
-                showError(result.error || 'Connection test failed');
+                showMessage(result.error || 'Connection test failed', 'error');
             }
         } catch (error) {
-            showError('Failed to test connection: ' + error.message);
+            showMessage('Failed to test connections: ' + error.message, 'error');
+        }
+    }
+
+    async function saveConfiguration() {
+        const saveButton = document.getElementById('settings-save-button');
+        if (!saveButton) return;
+
+        const originalText = saveButton.textContent;
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+
+        try {
+            const config = collectFormData();
+            
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                showMessage('Configuration saved successfully!', 'success');
+                setTimeout(() => {
+                    closeModal();
+                }, 1500);
+            } else {
+                showMessage(result.error || 'Failed to save configuration', 'error');
+            }
+        } catch (error) {
+            showMessage('Failed to save configuration: ' + error.message, 'error');
         } finally {
-            button.disabled = false;
-            button.textContent = originalText;
+            saveButton.disabled = false;
+            saveButton.textContent = originalText;
         }
     }
 
-    function togglePasswordVisibility(inputId) {
-        const input = document.getElementById(inputId);
-        if (input) {
-            input.type = input.type === 'password' ? 'text' : 'password';
+    function collectFormData() {
+        const form = document.getElementById('settings-form');
+        if (!form) return {};
+
+        const formData = new FormData(form);
+        const config = {};
+
+        // Build the config object from form data
+        for (const [name, value] of formData.entries()) {
+            if (value.trim() === '') continue; // Skip empty values
+
+            // Handle checkbox values
+            if (form.querySelector(`[name="${name}"]`).type === 'checkbox') {
+                config[name] = 'true';
+            } else {
+                config[name] = value;
+            }
         }
+
+        // Also handle unchecked checkboxes
+        const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            if (!checkbox.checked && !config[checkbox.name]) {
+                config[checkbox.name] = 'false';
+            }
+        });
+
+        return config;
     }
 
-    function showError(message) {
-        const errorDiv = document.getElementById('settings-error-message');
-        const errorText = document.getElementById('settings-error-text');
-        const successDiv = document.getElementById('settings-success-message');
-        
-        if (errorText && errorDiv && successDiv) {
-            errorText.textContent = message;
-            errorDiv.classList.remove('hidden');
-            successDiv.classList.add('hidden');
-        }
-    }
+    function showMessage(message, type) {
+        const container = document.getElementById('settings-messages');
+        if (!container) return;
 
-    function showSuccess(message) {
-        const errorDiv = document.getElementById('settings-error-message');
-        const successDiv = document.getElementById('settings-success-message');
-        const successText = document.getElementById('settings-success-text');
-        
-        if (successText && successDiv && errorDiv) {
-            successText.textContent = message;
-            errorDiv.classList.add('hidden');
-            successDiv.classList.remove('hidden');
-        }
-    }
+        const typeClasses = {
+            error: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300',
+            success: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300',
+            info: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+        };
 
-    function hideMessages() {
-        const errorDiv = document.getElementById('settings-error-message');
-        const successDiv = document.getElementById('settings-success-message');
-        
-        if (errorDiv) errorDiv.classList.add('hidden');
-        if (successDiv) successDiv.classList.add('hidden');
+        const html = `
+            <div class="border rounded-lg p-3 ${typeClasses[type] || typeClasses.info}">
+                ${message}
+            </div>
+        `;
+
+        container.innerHTML = html;
+
+        // Clear message after 5 seconds for non-error messages
+        if (type !== 'error') {
+            setTimeout(() => {
+                container.innerHTML = '';
+            }, 5000);
+        }
     }
 
     // Public API
     return {
         init,
-        load,
-        testConnection,
-        togglePasswordVisibility
+        openModal,
+        closeModal,
+        addPveEndpoint,
+        addPbsEndpoint,
+        testConnections,
+        saveConfiguration
     };
 })();
