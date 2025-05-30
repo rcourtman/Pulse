@@ -76,7 +76,12 @@ class ConfigApi {
                 existingConfig.PROXMOX_HOST = config.proxmox.host;
                 existingConfig.PROXMOX_PORT = config.proxmox.port || '8006';
                 existingConfig.PROXMOX_TOKEN_ID = config.proxmox.tokenId;
-                existingConfig.PROXMOX_TOKEN_SECRET = config.proxmox.tokenSecret;
+                
+                // Only update token secret if provided (allows keeping existing secret)
+                if (config.proxmox.tokenSecret) {
+                    existingConfig.PROXMOX_TOKEN_SECRET = config.proxmox.tokenSecret;
+                }
+                
                 // Always allow self-signed certificates by default for Proxmox
                 existingConfig.PROXMOX_ALLOW_SELF_SIGNED_CERT = 'true';
             } else {

@@ -105,6 +105,15 @@ PulseApp.ui.tabs = (() => {
                     PulseApp.ui.pbs.updatePbsInfo(pbsDataArray);
                 }
             }
+
+            if (tabId === 'settings') {
+                console.log('[Tabs] Settings tab activated');
+                if (PulseApp.ui && PulseApp.ui.settings) {
+                    PulseApp.ui.settings.load();
+                } else {
+                    console.warn('[Tabs] PulseApp.ui.settings not available');
+                }
+            }
         }
     }
 
@@ -404,6 +413,10 @@ PulseApp.ui.tabs = (() => {
                 if (PulseApp.ui && PulseApp.ui.pbs) {
                     // PBS data is already fetched, just update the UI
                 }
+                break;
+            case 'settings':
+                // Settings tab loading
+                console.log('[Tabs] Loading settings content');
                 break;
         }
     }

@@ -148,6 +148,7 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.storage?.init?.();
         PulseApp.ui.pbs?.initPbsEventListeners?.();
         PulseApp.ui.backups?.init?.();
+        PulseApp.ui.settings?.init?.();
         PulseApp.ui.thresholds?.init?.();
         PulseApp.ui.common?.init?.();
 
