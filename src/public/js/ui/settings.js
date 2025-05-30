@@ -72,11 +72,14 @@ PulseApp.ui.settings = (() => {
         // Load current configuration
         try {
             await loadCurrentConfig();
-            renderConfigurationForm();
         } catch (error) {
             console.error('[Settings] Failed to load configuration:', error);
-            body.innerHTML = `<div class="text-red-600 dark:text-red-400">Failed to load configuration: ${error.message}</div>`;
+            // Initialize with empty config to prevent errors
+            currentConfig = {};
         }
+        
+        // Always render the form, even if config loading failed
+        renderConfigurationForm();
     }
 
     function closeModal() {
@@ -96,7 +99,8 @@ PulseApp.ui.settings = (() => {
                 throw new Error(`HTTP ${response.status}`);
             }
             
-            currentConfig = await response.json();
+            const configData = await response.json();
+            currentConfig = configData || {}; // Ensure we never have null/undefined
             console.log('[Settings] Current config loaded:', currentConfig);
             
         } catch (error) {
@@ -109,6 +113,13 @@ PulseApp.ui.settings = (() => {
         const body = document.getElementById('settings-modal-body');
         if (!body) return;
 
+        // Ensure currentConfig has a safe default structure
+        const safeConfig = currentConfig || {};
+        const proxmox = safeConfig.proxmox || {};
+        const pbs = safeConfig.pbs || {};
+        const advanced = safeConfig.advanced || {};
+        const alerts = advanced.alerts || {};
+
         const html = `
             <form id="settings-form" class="space-y-6">
                 <!-- Proxmox VE Primary Endpoint -->
@@ -120,14 +131,14 @@ PulseApp.ui.settings = (() => {
                                 Host Address <span class="text-red-500">*</span>
                             </label>
                             <input type="text" name="PROXMOX_HOST" required
-                                   value="${currentConfig.proxmox?.host || ''}"
+                                   value="${proxmox.host || ''}"
                                    placeholder="https://proxmox.example.com:8006"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
                             <input type="number" name="PROXMOX_PORT"
-                                   value="${currentConfig.proxmox?.port || ''}"
+                                   value="${proxmox.port || ''}"
                                    placeholder="8006"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
@@ -136,7 +147,7 @@ PulseApp.ui.settings = (() => {
                                 Node Name
                             </label>
                             <input type="text" name="PROXMOX_NODE_NAME"
-                                   value="${currentConfig.proxmox?.nodeName || ''}"
+                                   value="${proxmox.nodeName || ''}"
                                    placeholder="Display name (optional)"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
@@ -145,7 +156,7 @@ PulseApp.ui.settings = (() => {
                                 API Token ID <span class="text-red-500">*</span>
                             </label>
                             <input type="text" name="PROXMOX_TOKEN_ID" required
-                                   value="${currentConfig.proxmox?.tokenId || ''}"
+                                   value="${proxmox.tokenId || ''}"
                                    placeholder="root@pam!token-name"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
@@ -159,7 +170,7 @@ PulseApp.ui.settings = (() => {
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enabled</label>
-                            <input type="checkbox" name="PROXMOX_ENABLED" ${currentConfig.proxmox?.enabled !== false ? 'checked' : ''}
+                            <input type="checkbox" name="PROXMOX_ENABLED" ${proxmox.enabled !== false ? 'checked' : ''}
                                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                         </div>
                     </div>
@@ -184,14 +195,14 @@ PulseApp.ui.settings = (() => {
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
                             <input type="text" name="PBS_HOST"
-                                   value="${currentConfig.pbs?.host || ''}"
+                                   value="${pbs.host || ''}"
                                    placeholder="https://pbs.example.com:8007"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
                             <input type="number" name="PBS_PORT"
-                                   value="${currentConfig.pbs?.port || ''}"
+                                   value="${pbs.port || ''}"
                                    placeholder="8007"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
@@ -200,14 +211,14 @@ PulseApp.ui.settings = (() => {
                                 Node Name
                             </label>
                             <input type="text" name="PBS_NODE_NAME"
-                                   value="${currentConfig.pbs?.nodeName || ''}"
+                                   value="${pbs.nodeName || ''}"
                                    placeholder="PBS internal hostname"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
                             <input type="text" name="PBS_TOKEN_ID"
-                                   value="${currentConfig.pbs?.tokenId || ''}"
+                                   value="${pbs.tokenId || ''}"
                                    placeholder="root@pam!token-name"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         </div>
@@ -241,7 +252,7 @@ PulseApp.ui.settings = (() => {
                                 Metric Update Interval (ms)
                             </label>
                             <input type="number" name="PULSE_METRIC_INTERVAL_MS"
-                                   value="${currentConfig.advanced?.metricInterval || ''}"
+                                   value="${advanced.metricInterval || ''}"
                                    placeholder="2000 (default)"
                                    min="1000" max="60000"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
@@ -252,7 +263,7 @@ PulseApp.ui.settings = (() => {
                                 Discovery Interval (ms)
                             </label>
                             <input type="number" name="PULSE_DISCOVERY_INTERVAL_MS"
-                                   value="${currentConfig.advanced?.discoveryInterval || ''}"
+                                   value="${advanced.discoveryInterval || ''}"
                                    placeholder="30000 (default)"
                                    min="5000" max="300000"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
@@ -267,22 +278,22 @@ PulseApp.ui.settings = (() => {
                     
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         <label class="flex items-center">
-                            <input type="checkbox" name="ALERT_CPU_ENABLED" ${currentConfig.advanced?.alerts?.cpu?.enabled !== false ? 'checked' : ''}
+                            <input type="checkbox" name="ALERT_CPU_ENABLED" ${alerts.cpu?.enabled !== false ? 'checked' : ''}
                                    class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                             <span class="text-sm text-gray-700 dark:text-gray-300">CPU Alerts</span>
                         </label>
                         <label class="flex items-center">
-                            <input type="checkbox" name="ALERT_MEMORY_ENABLED" ${currentConfig.advanced?.alerts?.memory?.enabled !== false ? 'checked' : ''}
+                            <input type="checkbox" name="ALERT_MEMORY_ENABLED" ${alerts.memory?.enabled !== false ? 'checked' : ''}
                                    class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                             <span class="text-sm text-gray-700 dark:text-gray-300">Memory Alerts</span>
                         </label>
                         <label class="flex items-center">
-                            <input type="checkbox" name="ALERT_DISK_ENABLED" ${currentConfig.advanced?.alerts?.disk?.enabled !== false ? 'checked' : ''}
+                            <input type="checkbox" name="ALERT_DISK_ENABLED" ${alerts.disk?.enabled !== false ? 'checked' : ''}
                                    class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                             <span class="text-sm text-gray-700 dark:text-gray-300">Disk Alerts</span>
                         </label>
                         <label class="flex items-center">
-                            <input type="checkbox" name="ALERT_DOWN_ENABLED" ${currentConfig.advanced?.alerts?.down?.enabled !== false ? 'checked' : ''}
+                            <input type="checkbox" name="ALERT_DOWN_ENABLED" ${alerts.down?.enabled !== false ? 'checked' : ''}
                                    class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                             <span class="text-sm text-gray-700 dark:text-gray-300">Down Alerts</span>
                         </label>
@@ -294,7 +305,7 @@ PulseApp.ui.settings = (() => {
                                 CPU Threshold (%)
                             </label>
                             <input type="number" name="ALERT_CPU_THRESHOLD"
-                                   value="${currentConfig.advanced?.alerts?.cpu?.threshold || ''}"
+                                   value="${alerts.cpu?.threshold || ''}"
                                    placeholder="85 (default)"
                                    min="50" max="100"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
@@ -304,7 +315,7 @@ PulseApp.ui.settings = (() => {
                                 Memory Threshold (%)
                             </label>
                             <input type="number" name="ALERT_MEMORY_THRESHOLD"
-                                   value="${currentConfig.advanced?.alerts?.memory?.threshold || ''}"
+                                   value="${alerts.memory?.threshold || ''}"
                                    placeholder="90 (default)"
                                    min="50" max="100"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
@@ -314,7 +325,7 @@ PulseApp.ui.settings = (() => {
                                 Disk Threshold (%)
                             </label>
                             <input type="number" name="ALERT_DISK_THRESHOLD"
-                                   value="${currentConfig.advanced?.alerts?.disk?.threshold || ''}"
+                                   value="${alerts.disk?.threshold || ''}"
                                    placeholder="95 (default)"
                                    min="50" max="100"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
