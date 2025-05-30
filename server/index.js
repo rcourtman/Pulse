@@ -957,22 +957,31 @@ function setupEnvFileWatcher() {
 
 // --- Start the server ---
 async function startServer() {
-    try {
-        // Use the correct initializer function name
-        const initializedClients = await initializeApiClients(endpoints, pbsConfigs);
-        apiClients = initializedClients.apiClients;
-        pbsApiClients = initializedClients.pbsApiClients;
+    // Only initialize API clients if we have endpoints configured
+    if (endpoints.length > 0 || pbsConfigs.length > 0) {
+        try {
+            // Use the correct initializer function name
+            const initializedClients = await initializeApiClients(endpoints, pbsConfigs);
+            apiClients = initializedClients.apiClients;
+            pbsApiClients = initializedClients.pbsApiClients;
+            
+            // Store globally for config reload
+            global.pulseApiClients = { apiClients, pbsApiClients };
+            
+            console.log("INFO: All API clients initialized.");
+        } catch (initError) {
+            console.error("FATAL: Failed to initialize API clients:", initError);
+            process.exit(1); // Exit if clients can't be initialized
+        }
         
-        // Store globally for config reload
+        await runDiscoveryCycle();
+    } else {
+        console.log("INFO: No endpoints configured. Starting in setup mode.");
+        // Initialize empty clients for consistency
+        apiClients = new Map();
+        pbsApiClients = new Map();
         global.pulseApiClients = { apiClients, pbsApiClients };
-        
-        console.log("INFO: All API clients initialized.");
-    } catch (initError) {
-        console.error("FATAL: Failed to initialize API clients:", initError);
-        process.exit(1); // Exit if clients can't be initialized
-    }
-    
-    await runDiscoveryCycle(); 
+    } 
 
     server.listen(PORT, () => {
         console.log(`Server listening on port ${PORT}`);

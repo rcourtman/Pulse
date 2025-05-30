@@ -123,11 +123,16 @@ function loadConfiguration() {
 
     // Throw error only if required vars are MISSING
     if (missingVars.length > 0) {
-        let errorMessages = ['--- Configuration Error (Primary Endpoint) ---'];
-        errorMessages.push(`Missing required environment variables: ${missingVars.join(', ')}.`);
-        errorMessages.push('Please ensure valid Proxmox connection details are provided.');
-        errorMessages.push('Refer to server/.env.example for the required variable names and format.');
-        throw new ConfigurationError(errorMessages.join('\n'));
+        console.warn('--- Configuration Warning ---');
+        console.warn(`Missing required environment variables: ${missingVars.join(', ')}.`);
+        console.warn('Pulse will start in setup mode. Please configure via the web interface.');
+        
+        // Return minimal configuration to allow server to start
+        return {
+            endpoints: [],
+            pbsConfigs: [],
+            isConfigPlaceholder: true
+        };
     }
 
     // Set the flag if placeholders were detected (but don't throw error)
