@@ -1492,31 +1492,20 @@ set_permissions() {
 }
 
 configure_environment() {
-    print_info "Setting up environment configuration..."
-    local env_example_path="$PULSE_DIR/.env.example"
+    print_info "Checking environment configuration..."
     local env_path="$PULSE_DIR/.env"
 
-    if [ ! -f "$env_example_path" ]; then
-        print_error "Environment example file not found at $env_example_path. Cannot configure."
-        return 1
-    fi
-
     if [ -f "$env_path" ]; then
-        print_info "Configuration file $env_path already exists, skipping creation."
-        return 0
-    fi
-
-    print_info "Creating $env_path from example..."
-    if cp "$env_example_path" "$env_path"; then
+        print_success "Configuration file $env_path already exists, preserving existing configuration."
+        # Ensure proper ownership and permissions for existing file
         chown "$PULSE_USER":"$PULSE_USER" "$env_path"
         chmod 600 "$env_path"
-        print_success "Environment file created at $env_path."
-        print_info "Please edit $env_path to configure your Proxmox connection details."
         return 0
-    else
-        print_error "Failed to copy $env_example_path to $env_path."
-        return 1
     fi
+
+    print_info "No existing configuration found. Pulse will start in setup mode."
+    print_info "You can configure Pulse through the web interface after installation."
+    return 0
 }
 
 setup_systemd_service() {
@@ -1775,12 +1764,22 @@ final_instructions() {
         print_success "Current version installed: $final_tag"
     fi
     echo "-------------------------------------------------------------"
-    print_info "You should be able to access the Pulse dashboard at:"
+    print_info "You can access the Pulse dashboard at:"
     if [ -n "$ip_address" ]; then
         echo "  http://$ip_address:$port_value"
     else
         echo "  http://<YOUR-LXC-IP>:$port_value"
         print_warning "Could not automatically determine the LXC IP address."
+    fi
+    echo ""
+    if [ ! -f "$env_path" ]; then
+        print_info "FIRST TIME SETUP:"
+        print_info "• Pulse will automatically open the settings modal for initial configuration"
+        print_info "• Configure your Proxmox VE and PBS servers through the web interface"
+        print_info "• No manual editing of configuration files required!"
+    else
+        print_info "Your existing configuration has been preserved."
+        print_info "You can update settings anytime using the settings icon in the web interface."
     fi
     echo ""
     print_info "The Pulse service $SERVICE_NAME is running and enabled on boot."
