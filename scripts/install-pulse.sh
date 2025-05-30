@@ -2,7 +2,8 @@
 
 
 NODE_MAJOR_VERSION=20
-PULSE_DIR="/opt/pulse-proxmox"
+PULSE_DIR="/opt/pulse"
+OLD_PULSE_DIR="/opt/pulse-proxmox"
 PULSE_USER="pulse"
 SERVICE_NAME="pulse-monitor.service"
 SCRIPT_NAME="install-pulse.sh"
@@ -644,6 +645,67 @@ perform_tarball_install() {
         return 0
     else
         print_error "Failed to install from tarball."
+        return 1
+    fi
+}
+
+migrate_from_old_path() {
+    if [ ! -d "$OLD_PULSE_DIR" ]; then
+        return 0
+    fi
+    
+    if [ -d "$PULSE_DIR" ]; then
+        print_warning "Both old path ($OLD_PULSE_DIR) and new path ($PULSE_DIR) exist. Skipping migration."
+        print_warning "Please manually resolve this by backing up and removing one of the directories."
+        return 1
+    fi
+    
+    print_info "Found existing Pulse installation at old path: $OLD_PULSE_DIR"
+    print_info "Migrating to new path: $PULSE_DIR"
+    
+    if [ -f "$OLD_PULSE_DIR/package.json" ] && grep -q '"name".*"pulse"' "$OLD_PULSE_DIR/package.json" 2>/dev/null; then
+        print_info "Verified this is a valid Pulse installation."
+    else
+        print_error "Directory $OLD_PULSE_DIR exists but does not appear to be a valid Pulse installation."
+        print_error "Migration aborted for safety."
+        return 1
+    fi
+    
+    local backup_path="/tmp/pulse-migration-backup-$(date +%s)"
+    print_info "Creating backup at $backup_path before migration..."
+    if ! cp -r "$OLD_PULSE_DIR" "$backup_path"; then
+        print_error "Failed to create backup. Migration aborted."
+        return 1
+    fi
+    print_success "Backup created successfully."
+    
+    print_info "Moving installation from $OLD_PULSE_DIR to $PULSE_DIR..."
+    if mv "$OLD_PULSE_DIR" "$PULSE_DIR"; then
+        print_success "Migration completed successfully."
+        print_info "Your configuration and data have been preserved."
+        print_info "Backup available at: $backup_path"
+        
+        chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR" 2>/dev/null || true
+        
+        local old_service_file="/etc/systemd/system/pulse-proxmox.service"
+        if [ -f "$old_service_file" ]; then
+            print_info "Cleaning up old systemd service file..."
+            systemctl stop pulse-proxmox.service 2>/dev/null || true
+            systemctl disable pulse-proxmox.service 2>/dev/null || true
+            rm -f "$old_service_file"
+            systemctl daemon-reload
+            print_success "Old service cleaned up."
+        fi
+        
+        return 0
+    else
+        print_error "Failed to move directory. Restoring from backup..."
+        if mv "$backup_path" "$OLD_PULSE_DIR"; then
+            print_info "Original installation restored."
+        else
+            print_error "Failed to restore backup! Original installation may be lost."
+            print_error "Backup location: $backup_path"
+        fi
         return 1
     fi
 }
@@ -1444,6 +1506,15 @@ perform_remove() {
         return 1
     fi
 
+    if [ -d "$OLD_PULSE_DIR" ]; then
+        print_info "Also removing old installation directory $OLD_PULSE_DIR..."
+        if rm -rf "$OLD_PULSE_DIR"; then
+            print_success "Old installation directory removed."
+        else
+            print_warning "Failed to remove old installation directory $OLD_PULSE_DIR. Please remove it manually."
+        fi
+    fi
+
     print_success "Pulse removed successfully."
     return 0
 }
@@ -1796,6 +1867,8 @@ if [ -z "$MODE_UPDATE" ] && [ "$INSTALLER_WAS_REEXECUTED" != "true" ]; then
 fi
 
 self_update_check || print_warning "Installer self-check failed, proceeding anyway..."
+
+migrate_from_old_path || print_warning "Migration from old path failed, but continuing with installation..."
 
 check_installation_status_and_determine_action
 
