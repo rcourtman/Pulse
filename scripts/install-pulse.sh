@@ -649,8 +649,32 @@ perform_tarball_install() {
     fi
 }
 
+fix_service_paths() {
+    # Check if service file exists and has old paths, fix them
+    local current_service_file="/etc/systemd/system/$SERVICE_NAME"
+    if [ -f "$current_service_file" ]; then
+        if grep -q "$OLD_PULSE_DIR" "$current_service_file"; then
+            print_info "Detected systemd service with old paths, updating..."
+            # Stop service before modifying
+            systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+            
+            # Update WorkingDirectory and EnvironmentFile paths in service file
+            sed -i "s|WorkingDirectory=$OLD_PULSE_DIR|WorkingDirectory=$PULSE_DIR|g" "$current_service_file"
+            sed -i "s|EnvironmentFile=$OLD_PULSE_DIR|EnvironmentFile=$PULSE_DIR|g" "$current_service_file"
+            
+            systemctl daemon-reload
+            
+            # Start service with new configuration
+            systemctl start "$SERVICE_NAME" 2>/dev/null || true
+            print_success "Systemd service paths updated."
+        fi
+    fi
+}
+
 migrate_from_old_path() {
     if [ ! -d "$OLD_PULSE_DIR" ]; then
+        # Even if old directory doesn't exist, check if service needs path fixes
+        fix_service_paths
         return 0
     fi
     
@@ -686,6 +710,24 @@ migrate_from_old_path() {
         print_info "Backup available at: $backup_path"
         
         chown -R "$PULSE_USER":"$PULSE_USER" "$PULSE_DIR" 2>/dev/null || true
+        
+        # Update existing service file to use new path
+        local current_service_file="/etc/systemd/system/$SERVICE_NAME"
+        if [ -f "$current_service_file" ]; then
+            print_info "Updating systemd service to use new path..."
+            # Stop service before modifying
+            systemctl stop "$SERVICE_NAME" 2>/dev/null || true
+            
+            # Update WorkingDirectory and EnvironmentFile paths in service file
+            sed -i "s|WorkingDirectory=$OLD_PULSE_DIR|WorkingDirectory=$PULSE_DIR|g" "$current_service_file"
+            sed -i "s|EnvironmentFile=$OLD_PULSE_DIR|EnvironmentFile=$PULSE_DIR|g" "$current_service_file"
+            
+            systemctl daemon-reload
+            
+            # Start service with new configuration
+            systemctl start "$SERVICE_NAME" 2>/dev/null || true
+            print_success "Systemd service updated for new path."
+        fi
         
         local old_service_file="/etc/systemd/system/pulse-proxmox.service"
         if [ -f "$old_service_file" ]; then
