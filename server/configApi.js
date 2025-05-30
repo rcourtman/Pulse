@@ -207,27 +207,74 @@ class ConfigApi {
      */
     async testConfig(config) {
         try {
-            // Create temporary endpoint configuration
-            const testEndpoints = [{
-                id: 'test-primary',
-                name: 'Test Primary',
-                host: config.proxmox.host,
-                port: parseInt(config.proxmox.port) || 8006,
-                tokenId: config.proxmox.tokenId,
-                tokenSecret: config.proxmox.tokenSecret,
-                enabled: true,
-                allowSelfSignedCerts: true  // Allow self-signed certificates for testing
-            }];
+            console.log('[ConfigApi.testConfig] Testing config:', JSON.stringify(config, null, 2));
             
-            const testPbsConfigs = config.pbs ? [{
-                id: 'test-pbs',
-                name: 'Test PBS',
-                host: config.pbs.host,
-                port: parseInt(config.pbs.port) || 8007,
-                tokenId: config.pbs.tokenId,
-                tokenSecret: config.pbs.tokenSecret,
-                allowSelfSignedCerts: true  // Allow self-signed certificates for testing
-            }] : [];
+            // Handle both old structured format and new raw .env format
+            let proxmoxHost, proxmoxPort, proxmoxTokenId, proxmoxTokenSecret;
+            let pbsHost, pbsPort, pbsTokenId, pbsTokenSecret;
+            
+            if (config.proxmox) {
+                // Old structured format
+                proxmoxHost = config.proxmox.host;
+                proxmoxPort = config.proxmox.port;
+                proxmoxTokenId = config.proxmox.tokenId;
+                proxmoxTokenSecret = config.proxmox.tokenSecret;
+                
+                if (config.pbs) {
+                    pbsHost = config.pbs.host;
+                    pbsPort = config.pbs.port;
+                    pbsTokenId = config.pbs.tokenId;
+                    pbsTokenSecret = config.pbs.tokenSecret;
+                }
+            } else {
+                // New raw .env format
+                proxmoxHost = config.PROXMOX_HOST;
+                proxmoxPort = config.PROXMOX_PORT;
+                proxmoxTokenId = config.PROXMOX_TOKEN_ID;
+                proxmoxTokenSecret = config.PROXMOX_TOKEN_SECRET;
+                
+                pbsHost = config.PBS_HOST;
+                pbsPort = config.PBS_PORT;
+                pbsTokenId = config.PBS_TOKEN_ID;
+                pbsTokenSecret = config.PBS_TOKEN_SECRET;
+            }
+            
+            const testEndpoints = [];
+            const testPbsConfigs = [];
+            
+            // Test Proxmox endpoint if configured
+            if (proxmoxHost && proxmoxTokenId && proxmoxTokenSecret) {
+                testEndpoints.push({
+                    id: 'test-primary',
+                    name: 'Test Primary',
+                    host: proxmoxHost,
+                    port: parseInt(proxmoxPort) || 8006,
+                    tokenId: proxmoxTokenId,
+                    tokenSecret: proxmoxTokenSecret,
+                    enabled: true,
+                    allowSelfSignedCerts: true
+                });
+            }
+            
+            // Test PBS endpoint if configured
+            if (pbsHost && pbsTokenId && pbsTokenSecret) {
+                testPbsConfigs.push({
+                    id: 'test-pbs',
+                    name: 'Test PBS',
+                    host: pbsHost,
+                    port: parseInt(pbsPort) || 8007,
+                    tokenId: pbsTokenId,
+                    tokenSecret: pbsTokenSecret,
+                    allowSelfSignedCerts: true
+                });
+            }
+            
+            if (testEndpoints.length === 0) {
+                return {
+                    success: false,
+                    error: 'No Proxmox server configured to test'
+                };
+            }
             
             // Try to initialize API clients with test config
             const { apiClients, pbsApiClients } = await initializeApiClients(testEndpoints, testPbsConfigs);
@@ -238,6 +285,7 @@ class ConfigApi {
                 await testClient.client.get('/nodes');
             }
             
+            console.log('[ConfigApi.testConfig] Connection test successful');
             return { success: true };
         } catch (error) {
             console.error('Configuration test failed:', error);
