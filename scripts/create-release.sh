@@ -72,7 +72,7 @@ COPYFILE_DISABLE=1 cp package-lock.json "$STAGING_FULL_PATH/"
 COPYFILE_DISABLE=1 cp README.md "$STAGING_FULL_PATH/"
 COPYFILE_DISABLE=1 cp LICENSE "$STAGING_FULL_PATH/"
 COPYFILE_DISABLE=1 cp CHANGELOG.md "$STAGING_FULL_PATH/"
-COPYFILE_DISABLE=1 cp .env.example "$STAGING_FULL_PATH/.env.example" # Essential for user configuration
+# .env.example no longer needed - configuration is now done via web interface
 
 # Scripts (e.g., install-pulse.sh, if intended for end-user)
 if [ -d "scripts" ]; then
@@ -100,7 +100,7 @@ echo "Installing production dependencies in $STAGING_FULL_PATH..."
 echo "Verifying essential files for tarball installation..."
 MISSING_FILES=""
 [ ! -f "$STAGING_FULL_PATH/package.json" ] && MISSING_FILES="$MISSING_FILES package.json"
-[ ! -f "$STAGING_FULL_PATH/.env.example" ] && MISSING_FILES="$MISSING_FILES .env.example"
+# .env.example no longer required - web-based configuration
 [ ! -f "$STAGING_FULL_PATH/server/index.js" ] && MISSING_FILES="$MISSING_FILES server/index.js"
 [ ! -f "$STAGING_FULL_PATH/src/public/output.css" ] && MISSING_FILES="$MISSING_FILES src/public/output.css"
 [ ! -d "$STAGING_FULL_PATH/node_modules" ] && MISSING_FILES="$MISSING_FILES node_modules/"
@@ -166,6 +166,6 @@ echo "2. Manual installation:"
 echo "   - Copy $TARBALL_NAME to target server"
 echo "   - Extract: tar -xzf $TARBALL_NAME"
 echo "   - Navigate: cd $RELEASE_DIR_NAME"
-echo "   - Configure: cp .env.example .env && edit .env"
 echo "   - Start: npm start"
+echo "   - Configure via web interface at http://localhost:7655"
 echo "----------------------------------------------------"
