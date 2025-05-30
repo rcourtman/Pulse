@@ -276,7 +276,7 @@
             </div>
             <div class="ml-3">
               <h3 class="text-sm font-medium text-green-800 dark:text-green-200">Success!</h3>
-              <div class="mt-2 text-sm text-green-700 dark:text-green-300">Configuration saved. Redirecting to dashboard...</div>
+              <div class="mt-2 text-sm text-green-700 dark:text-green-300" id="success-text">Configuration saved. Redirecting to dashboard...</div>
             </div>
           </div>
         </div>
@@ -325,10 +325,12 @@
       successDiv.classList.add('hidden');
     }
 
-    function showSuccess() {
+    function showSuccess(message = 'Configuration saved. Redirecting to dashboard...') {
       const errorDiv = document.getElementById('error-message');
       const successDiv = document.getElementById('success-message');
+      const successText = document.getElementById('success-text');
       
+      successText.textContent = message;
       errorDiv.classList.add('hidden');
       successDiv.classList.remove('hidden');
     }
@@ -369,7 +371,7 @@
         const result = await response.json();
         
         if (response.ok && result.success) {
-          showSuccess();
+          showSuccess('Connection test successful!');
           setTimeout(() => hideMessages(), 3000);
         } else {
           showError(result.error || 'Connection test failed');
