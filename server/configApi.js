@@ -14,9 +14,11 @@ class ConfigApi {
     async getConfig() {
         try {
             const config = await this.readEnvFile();
+            const packageJson = require('../package.json');
             
             // Build the response structure including all additional endpoints
             const response = {
+                version: packageJson.version,
                 proxmox: config.PROXMOX_HOST ? {
                     host: config.PROXMOX_HOST,
                     port: config.PROXMOX_PORT || '8006',
@@ -68,7 +70,7 @@ class ConfigApi {
             return response;
         } catch (error) {
             console.error('Error reading configuration:', error);
-            return { proxmox: null, pbs: null, advanced: {} };
+            return { version: 'unknown', proxmox: null, pbs: null, advanced: {} };
         }
     }
 

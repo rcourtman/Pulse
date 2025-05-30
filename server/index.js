@@ -151,6 +151,73 @@ app.get('/setup.html', (req, res) => {
 // Set up configuration API routes
 configApi.setupRoutes(app);
 
+// Set up update API routes
+const UpdateManager = require('./updateManager');
+const updateManager = new UpdateManager();
+
+// Check for updates endpoint
+app.get('/api/updates/check', async (req, res) => {
+    try {
+        const updateInfo = await updateManager.checkForUpdates();
+        res.json(updateInfo);
+    } catch (error) {
+        console.error('Error checking for updates:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Download and apply update endpoint
+app.post('/api/updates/apply', async (req, res) => {
+    try {
+        const { downloadUrl } = req.body;
+        
+        if (!downloadUrl) {
+            return res.status(400).json({ error: 'Download URL is required' });
+        }
+
+        // Send immediate response
+        res.json({ 
+            message: 'Update started. The application will restart automatically when complete.',
+            status: 'in_progress'
+        });
+
+        // Apply update in background
+        setTimeout(async () => {
+            try {
+                // Download update
+                const updateFile = await updateManager.downloadUpdate(downloadUrl, (progress) => {
+                    io.emit('updateProgress', progress);
+                });
+
+                // Apply update
+                await updateManager.applyUpdate(updateFile, (progress) => {
+                    io.emit('updateProgress', progress);
+                });
+
+                io.emit('updateComplete', { success: true });
+            } catch (error) {
+                console.error('Error applying update:', error);
+                io.emit('updateError', { error: error.message });
+            }
+        }, 100);
+
+    } catch (error) {
+        console.error('Error initiating update:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Update status endpoint
+app.get('/api/updates/status', (req, res) => {
+    try {
+        const status = updateManager.getUpdateStatus();
+        res.json(status);
+    } catch (error) {
+        console.error('Error getting update status:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Health check endpoint
 app.get('/healthz', (req, res) => {
     res.status(200).send('OK');

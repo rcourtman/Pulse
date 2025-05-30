@@ -361,6 +361,71 @@ PulseApp.ui.settings = (() => {
                     </div>
                 </div>
 
+                <!-- Update Management -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Software Updates</h3>
+                    
+                    <div id="update-status" class="mb-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm text-gray-700 dark:text-gray-300">
+                                    Current Version: <span id="current-version" class="font-mono font-semibold">${currentConfig.version || 'Unknown'}</span>
+                                </p>
+                                <p id="latest-version-info" class="text-sm text-gray-600 dark:text-gray-400 mt-1"></p>
+                            </div>
+                            <button type="button" onclick="PulseApp.ui.settings.checkForUpdates()" 
+                                    id="check-updates-button"
+                                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                Check for Updates
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Update Details (hidden by default) -->
+                    <div id="update-details" class="hidden">
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                                <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
+                                    Update Available: <span id="update-version"></span>
+                                </h4>
+                                <div id="update-release-notes" class="text-sm text-gray-700 dark:text-gray-300 prose prose-sm max-w-none"></div>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <p class="text-sm text-gray-600 dark:text-gray-400">
+                                    Published: <span id="update-published"></span>
+                                </p>
+                                <button type="button" onclick="PulseApp.ui.settings.applyUpdate()" 
+                                        id="apply-update-button"
+                                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+                                    </svg>
+                                    Apply Update
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Update Progress (hidden by default) -->
+                    <div id="update-progress" class="hidden">
+                        <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                            <div class="mb-2">
+                                <p class="text-sm font-medium text-gray-700 dark:text-gray-300" id="update-progress-text">Preparing update...</p>
+                            </div>
+                            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                <div id="update-progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                                Do not close this window or refresh the page during the update process.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Status Messages -->
                 <div id="settings-messages"></div>
             </form>
@@ -773,6 +838,175 @@ PulseApp.ui.settings = (() => {
         }
     }
 
+    // Update management functions
+    let updateInfo = null;
+
+    async function checkForUpdates() {
+        const button = document.getElementById('check-updates-button');
+        const updateDetails = document.getElementById('update-details');
+        const latestVersionInfo = document.getElementById('latest-version-info');
+        
+        try {
+            // Disable button and show loading state
+            button.disabled = true;
+            button.innerHTML = `
+                <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Checking...
+            `;
+            
+            const response = await fetch('/api/updates/check');
+            if (!response.ok) throw new Error('Failed to check for updates');
+            
+            updateInfo = await response.json();
+            
+            // Update UI based on result
+            if (updateInfo.updateAvailable) {
+                updateDetails.classList.remove('hidden');
+                document.getElementById('update-version').textContent = `v${updateInfo.latestVersion}`;
+                document.getElementById('update-published').textContent = new Date(updateInfo.publishedAt).toLocaleDateString();
+                
+                // Render release notes (convert markdown to HTML)
+                const releaseNotes = updateInfo.releaseNotes || 'No release notes available';
+                document.getElementById('update-release-notes').innerHTML = releaseNotes
+                    .replace(/## (.*?)$/gm, '<h3 class="font-semibold mt-3 mb-1">$1</h3>')
+                    .replace(/### (.*?)$/gm, '<h4 class="font-medium mt-2 mb-1">$1</h4>')
+                    .replace(/- (.*?)$/gm, '<li class="ml-4">$1</li>')
+                    .replace(/(\n\n)/g, '</p><p class="mb-2">')
+                    .replace(/^/, '<p class="mb-2">')
+                    .replace(/$/, '</p>');
+                
+                latestVersionInfo.innerHTML = `<span class="text-green-600 dark:text-green-400">Update available!</span>`;
+            } else {
+                updateDetails.classList.add('hidden');
+                latestVersionInfo.innerHTML = `<span class="text-gray-600 dark:text-gray-400">You are running the latest version</span>`;
+            }
+            
+        } catch (error) {
+            console.error('[Settings] Error checking for updates:', error);
+            showMessage('Failed to check for updates: ' + error.message, 'error');
+            latestVersionInfo.innerHTML = `<span class="text-red-600 dark:text-red-400">Error checking for updates</span>`;
+        } finally {
+            // Re-enable button
+            button.disabled = false;
+            button.innerHTML = `
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Check for Updates
+            `;
+        }
+    }
+
+    async function applyUpdate() {
+        if (!updateInfo || !updateInfo.updateAvailable) return;
+        
+        const confirmed = confirm(
+            `Are you sure you want to update Pulse to version ${updateInfo.latestVersion}?\\n\\n` +
+            `The application will restart automatically after the update is applied.`
+        );
+        
+        if (!confirmed) return;
+        
+        const updateDetails = document.getElementById('update-details');
+        const updateProgress = document.getElementById('update-progress');
+        const applyButton = document.getElementById('apply-update-button');
+        
+        try {
+            // Find the tarball asset
+            const tarballAsset = updateInfo.assets.find(asset => asset.name.endsWith('.tar.gz'));
+            if (!tarballAsset) {
+                throw new Error('Update package not found');
+            }
+            
+            // Hide details, show progress
+            updateDetails.classList.add('hidden');
+            updateProgress.classList.remove('hidden');
+            applyButton.disabled = true;
+            
+            // Set up WebSocket listeners for progress updates
+            setupUpdateProgressListeners();
+            
+            // Start update
+            const response = await fetch('/api/updates/apply', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    downloadUrl: tarballAsset.downloadUrl
+                })
+            });
+            
+            if (!response.ok) throw new Error('Failed to start update');
+            
+            const result = await response.json();
+            showMessage(result.message, 'info');
+            
+        } catch (error) {
+            console.error('[Settings] Error applying update:', error);
+            showMessage('Failed to apply update: ' + error.message, 'error');
+            
+            // Reset UI
+            updateDetails.classList.remove('hidden');
+            updateProgress.classList.add('hidden');
+            applyButton.disabled = false;
+        }
+    }
+
+    function setupUpdateProgressListeners() {
+        const progressBar = document.getElementById('update-progress-bar');
+        const progressText = document.getElementById('update-progress-text');
+        
+        // Listen for progress updates
+        if (PulseApp.socket) {
+            PulseApp.socket.on('updateProgress', (data) => {
+                if (progressBar && progressText) {
+                    progressBar.style.width = `${data.progress}%`;
+                    
+                    switch(data.phase) {
+                        case 'download':
+                            progressText.textContent = `Downloading update... ${data.progress}%`;
+                            break;
+                        case 'backup':
+                            progressText.textContent = `Backing up configuration... ${data.progress}%`;
+                            break;
+                        case 'extract':
+                            progressText.textContent = `Extracting update... ${data.progress}%`;
+                            break;
+                        case 'apply':
+                            progressText.textContent = `Applying update... ${data.progress}%`;
+                            break;
+                    }
+                }
+            });
+            
+            PulseApp.socket.on('updateComplete', (data) => {
+                if (data.success) {
+                    showMessage('Update completed successfully! The application will restart momentarily...', 'success');
+                    progressText.textContent = 'Update complete! Restarting...';
+                    
+                    // Reload page after 3 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                }
+            });
+            
+            PulseApp.socket.on('updateError', (data) => {
+                showMessage('Update failed: ' + data.error, 'error');
+                
+                // Reset UI
+                const updateDetails = document.getElementById('update-details');
+                const updateProgress = document.getElementById('update-progress');
+                updateDetails.classList.remove('hidden');
+                updateProgress.classList.add('hidden');
+            });
+        }
+    }
+
     // Public API
     return {
         init,
@@ -782,6 +1016,8 @@ PulseApp.ui.settings = (() => {
         addPbsEndpoint,
         removeEndpoint,
         testConnections,
-        saveConfiguration
+        saveConfiguration,
+        checkForUpdates,
+        applyUpdate
     };
 })();

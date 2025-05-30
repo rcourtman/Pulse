@@ -50,6 +50,9 @@ RUN chown -R appuser:appgroup /usr/src/app
 # Switch to non-root user
 USER appuser
 
+# Set environment variable to indicate Docker deployment
+ENV DOCKER_DEPLOYMENT=true
+
 # Expose port
 EXPOSE 7655
 
