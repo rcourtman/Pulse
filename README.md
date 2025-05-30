@@ -70,9 +70,9 @@ This will create a new LXC container and install Pulse automatically. Visit the 
 **For existing Docker hosts:**
 ```bash
 mkdir pulse-config && cd pulse-config
-# Create .env file with your Proxmox details (see Configuration section)
 # Create docker-compose.yml (see Docker section)
 docker compose up -d
+# Configure via web interface at http://localhost:7655
 ```
 
 ### 🛠️ **Manual LXC Installation**
@@ -138,11 +138,10 @@ bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/c
 This script will:
 - Create a new LXC container automatically
 - Install all dependencies (Node.js, npm, etc.)
-- Download and configure Pulse
+- Download and set up Pulse
 - Set up systemd service
-- Guide you through Proxmox API token setup
 
-**After installation:** Access Pulse at `http://<lxc-ip>:7655`
+**After installation:** Access Pulse at `http://<lxc-ip>:7655` and configure via the web interface
 
 Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE/scripts?id=pulse) for more details.
 
@@ -158,27 +157,12 @@ Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE
 
 **Steps:**
 
-1.  **Create a Directory:** Make a directory on your Docker host where Pulse configuration will live:
+1.  **Create a Directory:** Make a directory on your Docker host where Pulse will store configuration:
     ```bash
     mkdir pulse-config
     cd pulse-config
     ```
-2.  **Create `.env` file:** Create a file named `.env` in this directory and add your Proxmox connection details. See [Configuration](#️-configuration) for details and required permissions. Minimally, you need:
-    ```env
-    # .env file
-    PROXMOX_HOST=https://your-proxmox-ip:8006
-    PROXMOX_TOKEN_ID=your_user@pam!your_token_id
-    PROXMOX_TOKEN_SECRET=your_secret_uuid_here
-    # Optional: Set to true if using self-signed certs
-    # PROXMOX_ALLOW_SELF_SIGNED_CERTS=true
-    # Optional: Add PBS details if desired
-    # PBS_HOST=https://your-pbs-ip:8007
-    # PBS_NODE_NAME=your-pbs-node-hostname # Important! See config docs.
-    # PBS_TOKEN_ID=pbs_user@pbs!token_id
-    # PBS_TOKEN_SECRET=pbs_secret_uuid_here
-    # PBS_ALLOW_SELF_SIGNED_CERTS=true
-    ```
-3.  **Create `docker-compose.yml` file:** Create a file named `docker-compose.yml` in the same directory with the following content:
+2.  **Create `docker-compose.yml` file:** Create a file named `docker-compose.yml` in this directory with the following content:
     ```yaml
     # docker-compose.yml
     services:
@@ -190,17 +174,15 @@ Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE
           # Map host port 7655 to container port 7655
           # Change the left side (e.g., "8081:7655") if 7655 is busy on your host
           - "7655:7655"
-        env_file:
-          - .env # Load environment variables from .env file
-        # Optional: Uncomment to map a volume for potential future config/log persistence
-        # volumes:
-        #   - ./data:/data
+        volumes:
+          # Mount local directory for persistent configuration
+          - ./pulse-data:/opt/pulse-proxmox
     ```
-4.  **Run:** Start the container:
+3.  **Run:** Start the container:
     ```bash
     docker compose up -d
     ```
-5.  **Access:** Open your browser to `http://<your-docker-host-ip>:7655`.
+4.  **Access and Configure:** Open your browser to `http://<your-docker-host-ip>:7655` and configure through the web interface.
 
 ---
 
@@ -225,11 +207,9 @@ Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE
     ```
 3.  **Follow Prompts:** The script guides you through:
     *   Installing dependencies (`git`, `curl`, `nodejs`, `npm`, `sudo`).
-    *   Entering your Proxmox Host URL, API Token ID, Secret, and self-signed cert preference.
-    *   (Optional) Entering PBS connection details if desired.
     *   Setting up Pulse as a `systemd` service (`pulse-monitor.service`).
     *   Optionally enabling automatic updates via cron.
-4.  **Access Pulse:** The script will display the URL (e.g., `http://<LXC-IP-ADDRESS>:7655`).
+4.  **Access and Configure:** The script will display the URL (e.g., `http://<LXC-IP-ADDRESS>:7655`). Open this URL and configure via the web interface.
 
 For update instructions, see the [Updating Pulse](#-updating-pulse) section.
 
@@ -240,22 +220,31 @@ For update instructions, see the [Updating Pulse](#-updating-pulse) section.
 Use this method if you have cloned the repository and want to build and run the application from the local source code.
 
 1.  **Get Files:** Clone the repository (`git clone https://github.com/rcourtman/Pulse.git && cd Pulse`)
-2.  **Copy `.env`:** `cp .env.example .env`
-3.  **Edit `.env`:** Fill in your primary Proxmox API details (`PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`). See [Configuration](#️-configuration) for details.
-4.  **Run:** `docker compose up --build -d` (The included `docker-compose.yml` uses the `build:` context by default).
-5.  **Access:** Open your browser to `http://localhost:7655` (or your host IP if Docker runs remotely).
+2.  **Run:** `docker compose up --build -d` (The included `docker-compose.yml` uses the `build:` context by default).
+3.  **Access and Configure:** Open your browser to `http://localhost:7655` (or your host IP if Docker runs remotely) and configure via the web interface.
 
 ## 🛠️ Configuration
 
-### Environment Variables
+Pulse features a comprehensive web-based configuration system accessible through the settings menu. No manual file editing required!
 
-Pulse is configured using environment variables, typically set in a `.env` file in the project root.
+### Web Interface Configuration (Recommended)
 
-1.  **Copy Example File:** If you haven't already, copy the example file:
-    ```bash
-    cp .env.example .env
-    ```
-2.  **Edit `.env`:** Open `.env` in a text editor and update the values for your environment(s).
+**First-time Setup:**
+- Access Pulse at `http://your-host:7655`
+- The settings modal will automatically open for initial configuration
+- Configure all your Proxmox VE and PBS servers through the intuitive web interface
+- Test connections with built-in connectivity verification
+- Save and reload configuration without restarting the application
+
+**Ongoing Management:**
+- Click the settings icon (⚙️) in the top-right corner anytime
+- Add/modify multiple PVE and PBS endpoints
+- Configure alert thresholds and service intervals
+- All changes are applied immediately
+
+### Environment Variables (Advanced/Development)
+
+For advanced users or development setups, Pulse can also be configured using environment variables in a `.env` file.
 
 #### Proxmox VE (Primary Environment)
 
@@ -441,17 +430,12 @@ For users who prefer not to use Docker or the LXC script, pre-packaged release t
     # This creates a directory like pulse-vX.Y.Z/
     cd pulse-vX.Y.Z
     ```
-3.  **Configure:** Copy the environment file template and edit it with your details (see [Configuration](#️-configuration)):
-    ```bash
-    cp .env.example .env
-    nano .env # Or your preferred editor
-    ```
-4.  **Run:** Start the application using npm:
+3.  **Run:** Start the application using npm:
     ```bash
     npm start
     ```
     *(Note: The tarball includes pre-installed production dependencies, so `npm install` is not typically required unless you encounter issues.)*
-5.  **Access:** Open your browser to `http://<your-server-ip>:7655` (or the port configured in `.env`).
+4.  **Access and Configure:** Open your browser to `http://<your-server-ip>:7655` and configure via the web interface.
 
 ### ️ Running the Application (Node.js - Development)
 
@@ -534,8 +518,8 @@ To update a tarball installation:
 1. Download the latest release from [GitHub Releases](https://github.com/rcourtman/Pulse/releases/latest)
 2. Stop the current application
 3. Extract the new tarball to a new directory
-4. Copy your existing `.env` file to the new directory
-5. Start the application: `npm start`
+4. Start the application: `npm start`
+5. Your configuration will be preserved automatically
 
 ### Development/Source Installation
 
@@ -598,7 +582,7 @@ sudo journalctl -u pulse-monitor.service -f
 3. **Check permissions:** Ensure token has `PVEAuditor` role on path `/` with `Propagate` enabled
 
 **"Empty Backups Tab" with PBS configured?**
-- Add `PBS_NODE_NAME=your-pbs-hostname` to your `.env` file
+- Ensure `PBS Node Name` is configured in the settings modal
 - Find hostname with: `ssh root@your-pbs-ip hostname`
 
 **Docker container won't start?**
@@ -642,8 +626,8 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 
 ### Common Issues
 
-*   **Empty Backups Tab:** Usually caused by missing `PBS_NODE_NAME` in your configuration. SSH to your PBS server and run `hostname` to find the correct value.
+*   **Empty Backups Tab:** Usually caused by missing `PBS Node Name` in the settings configuration. SSH to your PBS server and run `hostname` to find the correct value.
 *   **Pulse Application Logs:** Check container logs (`docker logs pulse_monitor`) or service logs (`sudo journalctl -u pulse-monitor.service -f`) for errors (401 Unauthorized, 403 Forbidden, connection refused, timeout).
-*   **`.env` Configuration:** Verify `PROXMOX_HOST`, `PROXMOX_TOKEN_ID`, `PROXMOX_TOKEN_SECRET`, and `PROXMOX_ALLOW_SELF_SIGNED_CERTS`. For PBS, also check `PBS_HOST`, `PBS_TOKEN_ID`, `PBS_TOKEN_SECRET`, `PBS_ALLOW_SELF_SIGNED_CERTS`, and especially **`PBS_NODE_NAME`**. Ensure no placeholder values remain.
+*   **Configuration Issues:** Use the settings modal to verify all connection details. Test connections with the built-in connectivity tester before saving. Ensure no placeholder values remain.
 *   **Network Connectivity:** Can the machine running Pulse reach the PVE/PBS hostnames/IPs and ports (usually 8006 for PVE, 8007 for PBS)? Check firewalls.
 *   **API Token Permissions:** Ensure the correct roles (`PVEAuditor` for PVE, `Audit` for PBS) are assigned at the root path (`/`) with `Propagate` enabled in the respective UIs.
