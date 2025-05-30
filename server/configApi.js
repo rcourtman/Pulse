@@ -15,7 +15,8 @@ class ConfigApi {
         try {
             const config = await this.readEnvFile();
             
-            return {
+            // Build the response structure including all additional endpoints
+            const response = {
                 proxmox: config.PROXMOX_HOST ? {
                     host: config.PROXMOX_HOST,
                     port: config.PROXMOX_PORT || '8006',
@@ -53,6 +54,18 @@ class ConfigApi {
                     }
                 }
             };
+            
+            // Add all additional endpoint configurations to the response
+            // This allows the settings modal to properly display them
+            Object.keys(config).forEach(key => {
+                // Include all additional PVE and PBS endpoint variables
+                if ((key.startsWith('PROXMOX_') && key.includes('_')) || 
+                    (key.startsWith('PBS_') && key.includes('_'))) {
+                    response[key] = config[key];
+                }
+            });
+            
+            return response;
         } catch (error) {
             console.error('Error reading configuration:', error);
             return { proxmox: null, pbs: null, advanced: {} };
@@ -162,7 +175,65 @@ class ConfigApi {
      * Handle raw .env variable format (new settings form)
      */
     handleRawEnvConfig(config, existingConfig) {
-        // Directly update existing config with new values
+        // First, identify which additional endpoints exist in the current config
+        const existingPveEndpoints = new Set();
+        const existingPbsEndpoints = new Set();
+        
+        Object.keys(existingConfig).forEach(key => {
+            const pveMatch = key.match(/^PROXMOX_HOST_(\d+)$/);
+            if (pveMatch) {
+                existingPveEndpoints.add(pveMatch[1]);
+            }
+            const pbsMatch = key.match(/^PBS_HOST_(\d+)$/);
+            if (pbsMatch) {
+                existingPbsEndpoints.add(pbsMatch[1]);
+            }
+        });
+        
+        // Identify which endpoints are in the new config
+        const newPveEndpoints = new Set();
+        const newPbsEndpoints = new Set();
+        
+        Object.keys(config).forEach(key => {
+            const pveMatch = key.match(/^PROXMOX_HOST_(\d+)$/);
+            if (pveMatch) {
+                newPveEndpoints.add(pveMatch[1]);
+            }
+            const pbsMatch = key.match(/^PBS_HOST_(\d+)$/);
+            if (pbsMatch) {
+                newPbsEndpoints.add(pbsMatch[1]);
+            }
+        });
+        
+        // Remove endpoints that exist in current config but not in new config
+        existingPveEndpoints.forEach(index => {
+            if (!newPveEndpoints.has(index)) {
+                // Remove all related PVE configuration variables
+                delete existingConfig[`PROXMOX_HOST_${index}`];
+                delete existingConfig[`PROXMOX_PORT_${index}`];
+                delete existingConfig[`PROXMOX_TOKEN_ID_${index}`];
+                delete existingConfig[`PROXMOX_TOKEN_SECRET_${index}`];
+                delete existingConfig[`PROXMOX_NODE_NAME_${index}`];
+                delete existingConfig[`PROXMOX_ENABLED_${index}`];
+                delete existingConfig[`PROXMOX_ALLOW_SELF_SIGNED_CERT_${index}`];
+                delete existingConfig[`PROXMOX_ALLOW_SELF_SIGNED_CERTS_${index}`];
+            }
+        });
+        
+        existingPbsEndpoints.forEach(index => {
+            if (!newPbsEndpoints.has(index)) {
+                // Remove all related PBS configuration variables
+                delete existingConfig[`PBS_HOST_${index}`];
+                delete existingConfig[`PBS_PORT_${index}`];
+                delete existingConfig[`PBS_TOKEN_ID_${index}`];
+                delete existingConfig[`PBS_TOKEN_SECRET_${index}`];
+                delete existingConfig[`PBS_NODE_NAME_${index}`];
+                delete existingConfig[`PBS_ALLOW_SELF_SIGNED_CERT_${index}`];
+                delete existingConfig[`PBS_ALLOW_SELF_SIGNED_CERTS_${index}`];
+            }
+        });
+        
+        // Update existing config with new values
         Object.entries(config).forEach(([key, value]) => {
             if (value !== undefined && value !== '') {
                 existingConfig[key] = value;
@@ -193,108 +264,177 @@ class ConfigApi {
      */
     async testConfig(config) {
         try {
-            
-            // Handle both old structured format and new raw .env format
-            let proxmoxHost, proxmoxPort, proxmoxTokenId, proxmoxTokenSecret;
-            let pbsHost, pbsPort, pbsTokenId, pbsTokenSecret;
-            
-            if (config.proxmox) {
-                // Old structured format
-                proxmoxHost = config.proxmox.host;
-                proxmoxPort = config.proxmox.port;
-                proxmoxTokenId = config.proxmox.tokenId;
-                proxmoxTokenSecret = config.proxmox.tokenSecret;
-                
-                if (config.pbs) {
-                    pbsHost = config.pbs.host;
-                    pbsPort = config.pbs.port;
-                    pbsTokenId = config.pbs.tokenId;
-                    pbsTokenSecret = config.pbs.tokenSecret;
-                }
-            } else {
-                // New raw .env format
-                proxmoxHost = config.PROXMOX_HOST;
-                proxmoxPort = config.PROXMOX_PORT;
-                proxmoxTokenId = config.PROXMOX_TOKEN_ID;
-                proxmoxTokenSecret = config.PROXMOX_TOKEN_SECRET;
-                
-                pbsHost = config.PBS_HOST;
-                pbsPort = config.PBS_PORT;
-                pbsTokenId = config.PBS_TOKEN_ID;
-                pbsTokenSecret = config.PBS_TOKEN_SECRET;
-            }
-            
             const testEndpoints = [];
             const testPbsConfigs = [];
+            const existingConfig = await this.readEnvFile();
+            const failedEndpoints = [];
             
-            // Test Proxmox endpoint if configured
-            if (proxmoxHost && proxmoxTokenId) {
-                // If no token secret provided, try to get it from existing config
-                let tokenSecret = proxmoxTokenSecret;
-                if (!tokenSecret) {
-                    const existingConfig = await this.readEnvFile();
-                    tokenSecret = existingConfig.PROXMOX_TOKEN_SECRET;
+            // Handle both old structured format and new raw .env format
+            if (config.proxmox) {
+                // Old structured format - test primary endpoint only
+                const { host, port, tokenId, tokenSecret } = config.proxmox;
+                
+                if (host && tokenId) {
+                    const secret = tokenSecret || existingConfig.PROXMOX_TOKEN_SECRET;
+                    if (secret) {
+                        testEndpoints.push({
+                            id: 'test-primary',
+                            name: 'Primary PVE',
+                            host,
+                            port: parseInt(port) || 8006,
+                            tokenId,
+                            tokenSecret: secret,
+                            enabled: true,
+                            allowSelfSignedCerts: true
+                        });
+                    }
                 }
                 
-                if (tokenSecret) {
-                    testEndpoints.push({
-                        id: 'test-primary',
-                        name: 'Test Primary',
-                        host: proxmoxHost,
-                        port: parseInt(proxmoxPort) || 8006,
-                        tokenId: proxmoxTokenId,
-                        tokenSecret: tokenSecret,
-                        enabled: true,
-                        allowSelfSignedCerts: true
-                    });
+                if (config.pbs) {
+                    const { host, port, tokenId, tokenSecret } = config.pbs;
+                    if (host && tokenId) {
+                        const secret = tokenSecret || existingConfig.PBS_TOKEN_SECRET;
+                        if (secret) {
+                            testPbsConfigs.push({
+                                id: 'test-pbs-primary',
+                                name: 'Primary PBS',
+                                host,
+                                port: parseInt(port) || 8007,
+                                tokenId,
+                                tokenSecret: secret,
+                                allowSelfSignedCerts: true
+                            });
+                        }
+                    }
                 }
+            } else {
+                // New raw .env format - test all endpoints including additional ones
+                
+                // Test primary PVE endpoint
+                if (config.PROXMOX_HOST && config.PROXMOX_TOKEN_ID) {
+                    const secret = config.PROXMOX_TOKEN_SECRET || existingConfig.PROXMOX_TOKEN_SECRET;
+                    if (secret) {
+                        testEndpoints.push({
+                            id: 'test-primary',
+                            name: config.PROXMOX_NODE_NAME || 'Primary PVE',
+                            host: config.PROXMOX_HOST,
+                            port: parseInt(config.PROXMOX_PORT) || 8006,
+                            tokenId: config.PROXMOX_TOKEN_ID,
+                            tokenSecret: secret,
+                            enabled: config.PROXMOX_ENABLED !== 'false',
+                            allowSelfSignedCerts: true
+                        });
+                    }
+                }
+                
+                // Test additional PVE endpoints
+                Object.keys(config).forEach(key => {
+                    const match = key.match(/^PROXMOX_HOST_(\d+)$/);
+                    if (match) {
+                        const index = match[1];
+                        const host = config[`PROXMOX_HOST_${index}`];
+                        const tokenId = config[`PROXMOX_TOKEN_ID_${index}`];
+                        const enabled = config[`PROXMOX_ENABLED_${index}`] !== 'false';
+                        
+                        if (host && tokenId && enabled) {
+                            const secret = config[`PROXMOX_TOKEN_SECRET_${index}`] || existingConfig[`PROXMOX_TOKEN_SECRET_${index}`];
+                            if (secret) {
+                                testEndpoints.push({
+                                    id: `test-endpoint-${index}`,
+                                    name: config[`PROXMOX_NODE_NAME_${index}`] || `PVE Endpoint ${index}`,
+                                    host,
+                                    port: parseInt(config[`PROXMOX_PORT_${index}`]) || 8006,
+                                    tokenId,
+                                    tokenSecret: secret,
+                                    enabled: true,
+                                    allowSelfSignedCerts: true
+                                });
+                            }
+                        }
+                    }
+                });
+                
+                // Test primary PBS endpoint
+                if (config.PBS_HOST && config.PBS_TOKEN_ID) {
+                    const secret = config.PBS_TOKEN_SECRET || existingConfig.PBS_TOKEN_SECRET;
+                    if (secret) {
+                        testPbsConfigs.push({
+                            id: 'test-pbs-primary',
+                            name: config.PBS_NODE_NAME || 'Primary PBS',
+                            host: config.PBS_HOST,
+                            port: parseInt(config.PBS_PORT) || 8007,
+                            tokenId: config.PBS_TOKEN_ID,
+                            tokenSecret: secret,
+                            allowSelfSignedCerts: true
+                        });
+                    }
+                }
+                
+                // Test additional PBS endpoints
+                Object.keys(config).forEach(key => {
+                    const match = key.match(/^PBS_HOST_(\d+)$/);
+                    if (match) {
+                        const index = match[1];
+                        const host = config[`PBS_HOST_${index}`];
+                        const tokenId = config[`PBS_TOKEN_ID_${index}`];
+                        
+                        if (host && tokenId) {
+                            const secret = config[`PBS_TOKEN_SECRET_${index}`] || existingConfig[`PBS_TOKEN_SECRET_${index}`];
+                            if (secret) {
+                                testPbsConfigs.push({
+                                    id: `test-pbs-${index}`,
+                                    name: config[`PBS_NODE_NAME_${index}`] || `PBS Endpoint ${index}`,
+                                    host,
+                                    port: parseInt(config[`PBS_PORT_${index}`]) || 8007,
+                                    tokenId,
+                                    tokenSecret: secret,
+                                    allowSelfSignedCerts: true
+                                });
+                            }
+                        }
+                    }
+                });
             }
             
-            // Test PBS endpoint if configured
-            if (pbsHost && pbsTokenId) {
-                // If no token secret provided, try to get it from existing config
-                let tokenSecret = pbsTokenSecret;
-                if (!tokenSecret) {
-                    const existingConfig = await this.readEnvFile();
-                    tokenSecret = existingConfig.PBS_TOKEN_SECRET;
-                }
-                
-                if (tokenSecret) {
-                    testPbsConfigs.push({
-                        id: 'test-pbs',
-                        name: 'Test PBS',
-                        host: pbsHost,
-                        port: parseInt(pbsPort) || 8007,
-                        tokenId: pbsTokenId,
-                        tokenSecret: tokenSecret,
-                        allowSelfSignedCerts: true
-                    });
-                }
-            }
-            
-            if (testEndpoints.length === 0) {
-                let errorMessage = 'No Proxmox server configured to test. ';
-                if (!proxmoxHost) {
-                    errorMessage += 'Missing host address.';
-                } else if (!proxmoxTokenId) {
-                    errorMessage += 'Missing API token ID.';
-                } else {
-                    errorMessage += 'Missing API token secret (enter a new one or save existing configuration first).';
-                }
-                
+            if (testEndpoints.length === 0 && testPbsConfigs.length === 0) {
                 return {
                     success: false,
-                    error: errorMessage
+                    error: 'No endpoints configured to test. Please ensure host, token ID, and token secret are provided.'
                 };
             }
             
-            // Try to initialize API clients with test config
+            // Test all endpoints
             const { apiClients, pbsApiClients } = await initializeApiClients(testEndpoints, testPbsConfigs);
             
-            // Try a simple API call to verify connection
-            const testClient = apiClients['test-primary'];
-            if (testClient) {
-                await testClient.client.get('/nodes');
+            // Test each PVE endpoint
+            for (const endpoint of testEndpoints) {
+                try {
+                    const client = apiClients[endpoint.id];
+                    if (client) {
+                        await client.client.get('/nodes');
+                    }
+                } catch (error) {
+                    failedEndpoints.push(`${endpoint.name}: ${error.message}`);
+                }
+            }
+            
+            // Test each PBS endpoint
+            for (const pbsConfig of testPbsConfigs) {
+                try {
+                    const client = pbsApiClients[pbsConfig.id];
+                    if (client) {
+                        await client.client.get('/nodes');
+                    }
+                } catch (error) {
+                    failedEndpoints.push(`${pbsConfig.name}: ${error.message}`);
+                }
+            }
+            
+            if (failedEndpoints.length > 0) {
+                return {
+                    success: false,
+                    error: `Connection test failed for: ${failedEndpoints.join(', ')}`
+                };
             }
             
             return { success: true };
@@ -302,7 +442,7 @@ class ConfigApi {
             console.error('Configuration test failed:', error);
             return { 
                 success: false, 
-                error: error.message || 'Failed to connect to Proxmox server'
+                error: error.message || 'Failed to test endpoint connections'
             };
         }
     }
@@ -355,8 +495,10 @@ class ConfigApi {
         
         // Group related settings
         const groups = {
-            'Proxmox VE Settings': ['PROXMOX_HOST', 'PROXMOX_PORT', 'PROXMOX_TOKEN_ID', 'PROXMOX_TOKEN_SECRET', 'PROXMOX_ALLOW_SELF_SIGNED_CERT'],
-            'Proxmox Backup Server Settings': ['PBS_HOST', 'PBS_PORT', 'PBS_TOKEN_ID', 'PBS_TOKEN_SECRET', 'PBS_NODE_NAME', 'PBS_ALLOW_SELF_SIGNED_CERT'],
+            'Primary Proxmox VE Settings': ['PROXMOX_HOST', 'PROXMOX_PORT', 'PROXMOX_TOKEN_ID', 'PROXMOX_TOKEN_SECRET', 'PROXMOX_NODE_NAME', 'PROXMOX_ENABLED', 'PROXMOX_ALLOW_SELF_SIGNED_CERT'],
+            'Additional Proxmox VE Endpoints': [], // Will be populated dynamically
+            'Primary Proxmox Backup Server Settings': ['PBS_HOST', 'PBS_PORT', 'PBS_TOKEN_ID', 'PBS_TOKEN_SECRET', 'PBS_NODE_NAME', 'PBS_ALLOW_SELF_SIGNED_CERT'],
+            'Additional PBS Endpoints': [], // Will be populated dynamically
             'Pulse Service Settings': ['PULSE_METRIC_INTERVAL_MS', 'PULSE_DISCOVERY_INTERVAL_MS'],
             'Alert System Configuration': [
                 'ALERT_CPU_ENABLED', 'ALERT_CPU_THRESHOLD', 'ALERT_CPU_DURATION',
@@ -367,25 +509,126 @@ class ConfigApi {
             'Other Settings': [] // Will contain all other keys
         };
         
-        // Find other keys not in predefined groups
+        // Collect additional endpoint configurations
+        const additionalPveEndpoints = {};
+        const additionalPbsEndpoints = {};
+        
+        Object.keys(config).forEach(key => {
+            // Check for additional PVE endpoints
+            const pveMatch = key.match(/^PROXMOX_(.+)_(\d+)$/);
+            if (pveMatch) {
+                const [, type, index] = pveMatch;
+                if (!additionalPveEndpoints[index]) {
+                    additionalPveEndpoints[index] = [];
+                }
+                additionalPveEndpoints[index].push(key);
+            }
+            
+            // Check for additional PBS endpoints
+            const pbsMatch = key.match(/^PBS_(.+)_(\d+)$/);
+            if (pbsMatch) {
+                const [, type, index] = pbsMatch;
+                if (!additionalPbsEndpoints[index]) {
+                    additionalPbsEndpoints[index] = [];
+                }
+                additionalPbsEndpoints[index].push(key);
+            }
+        });
+        
+        // Find other keys not in predefined groups or additional endpoints
         Object.keys(config).forEach(key => {
             let found = false;
+            
+            // Check if it's in a predefined group
             Object.values(groups).forEach(groupKeys => {
                 if (groupKeys.includes(key)) found = true;
             });
+            
+            // Check if it's an additional endpoint key
+            if (key.match(/^PROXMOX_.+_\d+$/) || key.match(/^PBS_.+_\d+$/)) {
+                found = true;
+            }
+            
             if (!found && key !== '') {
                 groups['Other Settings'].push(key);
             }
         });
         
-        // Write each group
-        Object.entries(groups).forEach(([groupName, keys]) => {
+        // Write primary settings first
+        ['Primary Proxmox VE Settings', 'Primary Proxmox Backup Server Settings'].forEach(groupName => {
+            const keys = groups[groupName];
             if (keys.length > 0 && keys.some(key => config[key])) {
                 lines.push(`# ${groupName}`);
                 keys.forEach(key => {
                     if (config[key] !== undefined && config[key] !== '') {
                         const value = config[key];
-                        // Quote values that contain spaces or special characters
+                        const needsQuotes = value.includes(' ') || value.includes('#') || value.includes('=');
+                        lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
+                    }
+                });
+                lines.push('');
+            }
+        });
+        
+        // Write additional PVE endpoints
+        if (Object.keys(additionalPveEndpoints).length > 0) {
+            lines.push('# Additional Proxmox VE Endpoints');
+            Object.keys(additionalPveEndpoints).sort((a, b) => parseInt(a) - parseInt(b)).forEach(index => {
+                lines.push(`# PVE Endpoint ${index}`);
+                const orderedKeys = [
+                    `PROXMOX_HOST_${index}`,
+                    `PROXMOX_PORT_${index}`,
+                    `PROXMOX_TOKEN_ID_${index}`,
+                    `PROXMOX_TOKEN_SECRET_${index}`,
+                    `PROXMOX_NODE_NAME_${index}`,
+                    `PROXMOX_ENABLED_${index}`,
+                    `PROXMOX_ALLOW_SELF_SIGNED_CERT_${index}`,
+                    `PROXMOX_ALLOW_SELF_SIGNED_CERTS_${index}`
+                ];
+                orderedKeys.forEach(key => {
+                    if (config[key] !== undefined && config[key] !== '') {
+                        const value = config[key];
+                        const needsQuotes = value.includes(' ') || value.includes('#') || value.includes('=');
+                        lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
+                    }
+                });
+            });
+            lines.push('');
+        }
+        
+        // Write additional PBS endpoints
+        if (Object.keys(additionalPbsEndpoints).length > 0) {
+            lines.push('# Additional PBS Endpoints');
+            Object.keys(additionalPbsEndpoints).sort((a, b) => parseInt(a) - parseInt(b)).forEach(index => {
+                lines.push(`# PBS Endpoint ${index}`);
+                const orderedKeys = [
+                    `PBS_HOST_${index}`,
+                    `PBS_PORT_${index}`,
+                    `PBS_TOKEN_ID_${index}`,
+                    `PBS_TOKEN_SECRET_${index}`,
+                    `PBS_NODE_NAME_${index}`,
+                    `PBS_ALLOW_SELF_SIGNED_CERT_${index}`,
+                    `PBS_ALLOW_SELF_SIGNED_CERTS_${index}`
+                ];
+                orderedKeys.forEach(key => {
+                    if (config[key] !== undefined && config[key] !== '') {
+                        const value = config[key];
+                        const needsQuotes = value.includes(' ') || value.includes('#') || value.includes('=');
+                        lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
+                    }
+                });
+            });
+            lines.push('');
+        }
+        
+        // Write remaining groups
+        ['Pulse Service Settings', 'Alert System Configuration', 'Other Settings'].forEach(groupName => {
+            const keys = groups[groupName];
+            if (keys.length > 0 && keys.some(key => config[key])) {
+                lines.push(`# ${groupName}`);
+                keys.forEach(key => {
+                    if (config[key] !== undefined && config[key] !== '') {
+                        const value = config[key];
                         const needsQuotes = value.includes(' ') || value.includes('#') || value.includes('=');
                         lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
                     }
