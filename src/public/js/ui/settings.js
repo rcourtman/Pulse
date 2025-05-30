@@ -15,7 +15,6 @@ PulseApp.ui.settings = (() => {
         const modal = document.getElementById('settings-modal');
         const closeButton = document.getElementById('settings-modal-close');
         const cancelButton = document.getElementById('settings-cancel-button');
-        const testButton = document.getElementById('settings-test-button');
         const saveButton = document.getElementById('settings-save-button');
 
         if (settingsButton) {
@@ -28,10 +27,6 @@ PulseApp.ui.settings = (() => {
 
         if (cancelButton) {
             cancelButton.addEventListener('click', closeModal);
-        }
-
-        if (testButton) {
-            testButton.addEventListener('click', testConnections);
         }
 
         if (saveButton) {
@@ -127,8 +122,8 @@ PulseApp.ui.settings = (() => {
             const response = await fetch('/api/config');
             const data = await response.json();
             
-            if (response.ok && data.success) {
-                currentConfig = data.config;
+            if (response.ok) {
+                currentConfig = data;
                 console.log('[Settings] Configuration loaded:', currentConfig);
                 renderTabContent();
             } else {
@@ -176,6 +171,9 @@ PulseApp.ui.settings = (() => {
             loadExistingPveEndpoints();
         } else if (activeTab === 'pbs') {
             loadExistingPbsEndpoints();
+        } else if (activeTab === 'system') {
+            // Auto-check for latest version when system tab is opened
+            checkLatestVersion();
         }
     }
 
@@ -185,7 +183,13 @@ PulseApp.ui.settings = (() => {
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
                 <div class="mb-4">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Primary Proxmox VE Server</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Main PVE server configuration (required)</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Main PVE server configuration (required) 
+                        <a href="https://github.com/rcourtman/Pulse#creating-a-proxmox-api-token" target="_blank" rel="noopener noreferrer" 
+                           class="text-blue-600 dark:text-blue-400 hover:underline ml-1">
+                            📚 Need help creating API tokens?
+                        </a>
+                    </p>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
@@ -260,6 +264,14 @@ PulseApp.ui.settings = (() => {
                     </div>
                 </div>
             </div>
+            
+            <!-- Test Connections -->
+            <div class="flex justify-end mt-6">
+                <button type="button" onclick="PulseApp.ui.settings.testConnections()" 
+                        class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md transition-colors">
+                    Test PVE Connections
+                </button>
+            </div>
         `;
     }
 
@@ -269,7 +281,13 @@ PulseApp.ui.settings = (() => {
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
                 <div class="mb-4">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Primary Proxmox Backup Server</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Main PBS server configuration (optional)</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        Main PBS server configuration (optional)
+                        <a href="https://github.com/rcourtman/Pulse#creating-a-proxmox-backup-server-api-token" target="_blank" rel="noopener noreferrer" 
+                           class="text-blue-600 dark:text-blue-400 hover:underline ml-1">
+                            📚 Need help creating PBS API tokens?
+                        </a>
+                    </p>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
@@ -332,6 +350,14 @@ PulseApp.ui.settings = (() => {
                         <span class="text-sm">Click "Add Another PBS Server" to add more.</span>
                     </div>
                 </div>
+            </div>
+            
+            <!-- Test Connections -->
+            <div class="flex justify-end mt-6">
+                <button type="button" onclick="PulseApp.ui.settings.testConnections()" 
+                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
+                    Test PBS Connections
+                </button>
             </div>
         `;
     }
@@ -402,7 +428,28 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderSystemTab(advanced, config) {
+        const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        
         return `
+            <!-- Appearance Settings -->
+            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Appearance</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Theme
+                        </label>
+                        <select name="THEME_PREFERENCE" onchange="PulseApp.ui.settings.changeTheme(this.value)"
+                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="auto" ${currentTheme === 'auto' ? 'selected' : ''}>Auto (System)</option>
+                            <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>Light</option>
+                            <option value="dark" ${currentTheme === 'dark' ? 'selected' : ''}>Dark</option>
+                        </select>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Choose your preferred color scheme</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Service Settings -->
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Service Settings</h3>
@@ -436,13 +483,55 @@ PulseApp.ui.settings = (() => {
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Software Updates</h3>
                 
+                <!-- Auto-update Setting -->
+                <div class="mb-6 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Automatic Updates</h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                Automatically check for and install updates when available
+                            </p>
+                        </div>
+                        <label class="flex items-center">
+                            <input type="checkbox" name="AUTO_UPDATE_ENABLED" ${advanced.autoUpdate?.enabled !== false ? 'checked' : ''}
+                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Enable</span>
+                        </label>
+                    </div>
+                    <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Check Interval (hours)
+                            </label>
+                            <input type="number" name="AUTO_UPDATE_CHECK_INTERVAL"
+                                   value="${advanced.autoUpdate?.checkInterval || ''}"
+                                   placeholder="24 (default)"
+                                   min="1" max="168"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Update Time
+                            </label>
+                            <input type="time" name="AUTO_UPDATE_TIME"
+                                   value="${advanced.autoUpdate?.time || ''}"
+                                   placeholder="02:00"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Preferred time for automatic updates</p>
+                        </div>
+                    </div>
+                </div>
+                
                 <div id="update-status" class="mb-4">
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm text-gray-700 dark:text-gray-300">
-                                Current Version: <span id="current-version" class="font-mono font-semibold">${config.version || 'Unknown'}</span>
+                                Current Version: <span id="current-version" class="font-mono font-semibold">${currentConfig.version || 'Unknown'}</span>
                             </p>
-                            <p id="latest-version-info" class="text-sm text-gray-600 dark:text-gray-400 mt-1"></p>
+                            <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                                Latest Version: <span id="latest-version" class="font-mono font-semibold text-gray-500 dark:text-gray-400">Checking...</span>
+                            </p>
+                            <p id="version-status" class="text-sm mt-1"></p>
                         </div>
                         <button type="button" onclick="PulseApp.ui.settings.checkForUpdates()" 
                                 id="check-updates-button"
@@ -812,15 +901,146 @@ PulseApp.ui.settings = (() => {
         }
     }
 
-    // Update management functions (simplified for now)
+    // Check for latest version from GitHub releases
+    async function checkLatestVersion() {
+        const latestVersionElement = document.getElementById('latest-version');
+        const versionStatusElement = document.getElementById('version-status');
+        
+        if (!latestVersionElement) return;
+        
+        try {
+            latestVersionElement.textContent = 'Checking...';
+            latestVersionElement.className = 'font-mono font-semibold text-gray-500 dark:text-gray-400';
+            
+            const response = await fetch('https://api.github.com/repos/rcourtman/Pulse/releases/latest');
+            const data = await response.json();
+            
+            if (response.ok && data.tag_name) {
+                const latestVersion = data.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
+                const currentVersion = currentConfig.version || 'Unknown';
+                
+                latestVersionElement.textContent = latestVersion;
+                
+                // Compare versions
+                if (currentVersion !== 'Unknown' && compareVersions(currentVersion, latestVersion) < 0) {
+                    // Update available
+                    latestVersionElement.className = 'font-mono font-semibold text-green-600 dark:text-green-400';
+                    versionStatusElement.innerHTML = '<span class="text-green-600 dark:text-green-400">📦 Update available!</span>';
+                    
+                    // Show update details
+                    showUpdateDetails(data);
+                } else if (currentVersion !== 'Unknown' && compareVersions(currentVersion, latestVersion) >= 0) {
+                    // Up to date
+                    latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
+                    versionStatusElement.innerHTML = '<span class="text-green-600 dark:text-green-400">✅ Up to date</span>';
+                } else {
+                    // Unknown current version
+                    latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
+                    versionStatusElement.innerHTML = '<span class="text-gray-500 dark:text-gray-400">Unable to compare versions</span>';
+                }
+            } else {
+                throw new Error('Failed to fetch release data');
+            }
+        } catch (error) {
+            console.error('Error checking for updates:', error);
+            latestVersionElement.textContent = 'Error';
+            latestVersionElement.className = 'font-mono font-semibold text-red-500';
+            versionStatusElement.innerHTML = '<span class="text-red-500">Failed to check for updates</span>';
+        }
+    }
+    
+    // Simple version comparison (assumes semver format)
+    function compareVersions(version1, version2) {
+        const v1parts = version1.split('.').map(Number);
+        const v2parts = version2.split('.').map(Number);
+        
+        for (let i = 0; i < Math.max(v1parts.length, v2parts.length); i++) {
+            const v1part = v1parts[i] || 0;
+            const v2part = v2parts[i] || 0;
+            
+            if (v1part < v2part) return -1;
+            if (v1part > v2part) return 1;
+        }
+        
+        return 0;
+    }
+    
+    // Show update details in the update section
+    function showUpdateDetails(releaseData) {
+        const updateDetails = document.getElementById('update-details');
+        if (!updateDetails) return;
+        
+        const updateVersion = document.getElementById('update-version');
+        const updateReleaseNotes = document.getElementById('update-release-notes');
+        const updatePublished = document.getElementById('update-published');
+        
+        if (updateVersion) {
+            updateVersion.textContent = releaseData.tag_name;
+        }
+        
+        if (updateReleaseNotes && releaseData.body) {
+            // Convert markdown to basic HTML (simple implementation)
+            const htmlContent = releaseData.body
+                .replace(/### (.*)/g, '<h4 class="font-semibold mt-3 mb-1">$1</h4>')
+                .replace(/## (.*)/g, '<h3 class="font-semibold text-lg mt-3 mb-2">$1</h3>')
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/- (.*)/g, '<li class="ml-4">• $1</li>')
+                .replace(/\n/g, '<br>');
+            
+            updateReleaseNotes.innerHTML = htmlContent;
+        }
+        
+        if (updatePublished && releaseData.published_at) {
+            const publishedDate = new Date(releaseData.published_at).toLocaleDateString();
+            updatePublished.textContent = publishedDate;
+        }
+        
+        updateDetails.classList.remove('hidden');
+    }
+
+    // Update management functions
     async function checkForUpdates() {
-        showMessage('Checking for updates...', 'info');
-        // Implementation would go here
+        await checkLatestVersion();
+        showMessage('Update check completed', 'info');
     }
 
     async function applyUpdate() {
         showMessage('Update functionality not implemented yet', 'info');
         // Implementation would go here
+    }
+
+    // Theme management function
+    function changeTheme(theme) {
+        const htmlElement = document.documentElement;
+        
+        if (theme === 'auto') {
+            // Use system preference
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (prefersDark) {
+                htmlElement.classList.add('dark');
+            } else {
+                htmlElement.classList.remove('dark');
+            }
+            localStorage.setItem('theme', 'auto');
+            
+            // Set up listener for system theme changes
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (localStorage.getItem('theme') === 'auto') {
+                    if (e.matches) {
+                        htmlElement.classList.add('dark');
+                    } else {
+                        htmlElement.classList.remove('dark');
+                    }
+                }
+            });
+        } else if (theme === 'dark') {
+            htmlElement.classList.add('dark');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            htmlElement.classList.remove('dark');
+            localStorage.setItem('theme', 'light');
+        }
     }
 
     // Public API
@@ -831,8 +1051,10 @@ PulseApp.ui.settings = (() => {
         addPveEndpoint,
         addPbsEndpoint,
         removeEndpoint,
+        testConnections,
         checkForUpdates,
-        applyUpdate
+        applyUpdate,
+        changeTheme
     };
 })();
 
