@@ -44,7 +44,7 @@
       </div>
 
       <!-- Configuration Form -->
-      <form id="config-form" class="space-y-6">
+      <form id="config-form" class="space-y-6" autocomplete="off">
         <!-- Primary Proxmox VE Configuration -->
         <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
           <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Primary Proxmox VE Server</h2>
@@ -56,6 +56,7 @@
               </label>
               <input type="text" id="proxmox-host" name="proxmox-host" required
                      placeholder="192.168.1.100 or proxmox.example.com"
+                     autocomplete="off"
                      class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">IP address or hostname of your Proxmox VE server</p>
             </div>
@@ -75,6 +76,7 @@
               </label>
               <input type="text" id="proxmox-token-id" name="proxmox-token-id" required
                      placeholder="user@pam!token-name"
+                     autocomplete="off"
                      class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Format: username@realm!token-name</p>
             </div>
@@ -86,6 +88,7 @@
               <div class="relative">
                 <input type="password" id="proxmox-token-secret" name="proxmox-token-secret" required
                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                       autocomplete="new-password"
                        class="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <button type="button" onclick="togglePasswordVisibility('proxmox-token-secret')"
                         class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
@@ -238,6 +241,7 @@
               <div class="relative">
                 <input type="password" id="pbs-token-secret" name="pbs-token-secret"
                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                       autocomplete="new-password"
                        class="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <button type="button" onclick="togglePasswordVisibility('pbs-token-secret')"
                         class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">
@@ -435,6 +439,9 @@
       const button = document.getElementById('save-button');
       button.disabled = true;
       button.textContent = 'Saving...';
+
+      // Debug: Log what we're sending
+      console.log('Saving configuration:', JSON.stringify(config, null, 2));
 
       try {
         const response = await fetch('/api/config', {
