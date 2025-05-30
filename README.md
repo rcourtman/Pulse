@@ -399,7 +399,25 @@ If monitoring PBS, create a token within the PBS interface.
 
 ### Required Permissions
 
--   **Proxmox VE:** The `PVEAuditor` role assigned at path `/` with `Propagate` enabled is recommended.
+-   **Proxmox VE:** 
+    - **Basic monitoring:** The `PVEAuditor` role assigned at path `/` with `Propagate` enabled.
+    - **To view PVE backup files:** Additionally requires `PVEDatastoreAdmin` role on `/storage` (or specific storage paths).
+    
+    <details>
+    <summary>Important: Storage Content Visibility (Click to Expand)</summary>
+    
+    Due to Proxmox API limitations, viewing backup files in storage requires elevated permissions:
+    - `PVEAuditor` alone is NOT sufficient to list storage contents via API
+    - You must grant `PVEDatastoreAdmin` role which includes `Datastore.Allocate` permission
+    - This applies even for read-only access to backup listings
+    
+    To fix empty PVE backup listings:
+    ```bash
+    # Grant storage admin permissions to your API token
+    pveum acl modify /storage --tokens user@realm!tokenname --roles PVEDatastoreAdmin
+    ```
+    </details>
+    
     <details>
     <summary>Permissions included in PVEAuditor (Click to Expand)</summary>
     - `Datastore.Audit`
@@ -408,6 +426,7 @@ If monitoring PBS, create a token within the PBS interface.
     - `Sys.Audit`
     - `VM.Audit`
     </details>
+    
 -   **Proxmox Backup Server:** The `Audit` role assigned at path `/` with `Propagate` enabled is recommended.
 
 ### Running from Release Tarball
@@ -446,12 +465,15 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - Lightweight monitoring for Proxmox VE nodes, VMs, and Containers.
 - Real-time status updates via WebSockets.
 - Simple, responsive web interface.
+- **Comprehensive backup monitoring:**
+  - Proxmox Backup Server (PBS) snapshots and tasks
+  - PVE backup files stored on local and shared storage
+  - VM/CT snapshot tracking with calendar heatmap visualization
 - Built-in diagnostic tool with API permission testing and troubleshooting guidance.
 - Advanced alert system with configurable thresholds and durations.
 - Efficient polling: Stops API polling when no clients are connected.
 - Docker support.
 - Multi-environment PVE monitoring support.
-- Proxmox Backup Server (PBS) monitoring support.
 - LXC installation script.
 
 ## 💻 System Requirements
@@ -644,7 +666,9 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 
 ### Common Issues
 
-*   **Empty Backups Tab:** Usually caused by missing `PBS Node Name` in the settings configuration. SSH to your PBS server and run `hostname` to find the correct value.
+*   **Empty Backups Tab:** 
+    - **PBS backups not showing:** Usually caused by missing `PBS Node Name` in the settings configuration. SSH to your PBS server and run `hostname` to find the correct value.
+    - **PVE backups not showing:** Ensure your API token has `PVEDatastoreAdmin` role on `/storage` to view backup files. See the permissions section above.
 *   **Pulse Application Logs:** Check container logs (`docker logs pulse_monitor`) or service logs (`sudo journalctl -u pulse-monitor.service -f`) for errors (401 Unauthorized, 403 Forbidden, connection refused, timeout).
 *   **Configuration Issues:** Use the settings modal to verify all connection details. Test connections with the built-in connectivity tester before saving. Ensure no placeholder values remain.
 *   **Network Connectivity:** Can the machine running Pulse reach the PVE/PBS hostnames/IPs and ports (usually 8006 for PVE, 8007 for PBS)? Check firewalls.

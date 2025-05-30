@@ -664,9 +664,16 @@ fix_service_paths() {
             
             systemctl daemon-reload
             
-            # Start service with new configuration
-            systemctl start "$SERVICE_NAME" 2>/dev/null || true
-            print_success "Systemd service paths updated."
+            # Validate and test the service after path updates
+            if validate_service_configuration; then
+                if test_service_startup; then
+                    print_success "Systemd service paths updated and verified."
+                else
+                    print_warning "Service paths updated but startup test failed."
+                fi
+            else
+                print_warning "Service path update completed but validation failed."
+            fi
         fi
     fi
 }
@@ -724,9 +731,15 @@ migrate_from_old_path() {
             
             systemctl daemon-reload
             
-            # Start service with new configuration
-            systemctl start "$SERVICE_NAME" 2>/dev/null || true
-            print_success "Systemd service updated for new path."
+            # Note: .env file is not required - Pulse handles missing configuration automatically
+            
+            # Test the service startup
+            if test_service_startup; then
+                print_success "Systemd service updated and tested successfully."
+            else
+                print_warning "Service migration completed but startup test failed."
+                print_warning "You may need to reconfigure Pulse through the web interface."
+            fi
         fi
         
         local old_service_file="/etc/systemd/system/pulse-proxmox.service"
@@ -1621,6 +1634,101 @@ configure_environment() {
     return 0
 }
 
+validate_service_configuration() {
+    print_info "Validating systemd service configuration..."
+    local service_file="/etc/systemd/system/$SERVICE_NAME"
+    
+    if [ ! -f "$service_file" ]; then
+        print_warning "Service file $service_file not found."
+        return 1
+    fi
+    
+    # Check if WorkingDirectory path exists
+    local working_dir=$(grep "^WorkingDirectory=" "$service_file" | cut -d'=' -f2)
+    if [ -n "$working_dir" ] && [ ! -d "$working_dir" ]; then
+        print_error "Service WorkingDirectory '$working_dir' does not exist!"
+        return 1
+    fi
+    
+    # Check if EnvironmentFile path exists (if specified) - but don't create it as Pulse handles missing .env
+    local env_file=$(grep "^EnvironmentFile=" "$service_file" | cut -d'=' -f2)
+    if [ -n "$env_file" ] && [ ! -f "$env_file" ]; then
+        print_info "Service EnvironmentFile '$env_file' does not exist - Pulse will handle configuration setup."
+    fi
+    
+    print_success "Service configuration validation completed."
+    return 0
+}
+
+test_service_startup() {
+    print_info "Testing service startup..."
+    
+    # First validate the configuration
+    if ! validate_service_configuration; then
+        print_error "Service configuration validation failed."
+        return 1
+    fi
+    
+    # Try to start the service
+    print_info "Attempting to start $SERVICE_NAME..."
+    if systemctl start "$SERVICE_NAME" >/dev/null 2>&1; then
+        sleep 3  # Give it a moment to start up
+        
+        # Check if it's actually running
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            print_success "Service started successfully and is running."
+            return 0
+        else
+            print_error "Service started but is not running properly."
+            diagnose_service_failure
+            return 1
+        fi
+    else
+        print_error "Failed to start service."
+        diagnose_service_failure
+        return 1
+    fi
+}
+
+diagnose_service_failure() {
+    print_error "Diagnosing service failure..."
+    
+    # Get the most recent journal entries for the service
+    local recent_logs=$(journalctl -u "$SERVICE_NAME" --since "1 minute ago" --no-pager -q 2>/dev/null)
+    
+    if echo "$recent_logs" | grep -q "Failed to load environment files"; then
+        print_error "✗ Environment file (.env) is missing or inaccessible"
+        local env_file=$(grep "^EnvironmentFile=" "/etc/systemd/system/$SERVICE_NAME" | cut -d'=' -f2)
+        if [ -n "$env_file" ]; then
+            print_error "  Expected location: $env_file"
+            print_info "  → This should not happen with current Pulse versions."
+            print_info "  → Pulse handles missing .env files automatically."
+            print_info "  → Check file permissions or systemd service configuration."
+        fi
+    elif echo "$recent_logs" | grep -q "No such file or directory"; then
+        print_error "✗ Required files or directories are missing"
+        print_error "  → Check that Pulse is properly installed in $PULSE_DIR"
+    elif echo "$recent_logs" | grep -q "Cannot find module"; then
+        print_error "✗ Node.js dependencies are missing"
+        print_error "  → Run: cd $PULSE_DIR && npm install"
+    elif echo "$recent_logs" | grep -q "Permission denied"; then
+        print_error "✗ Permission issues detected"
+        print_error "  → Check ownership: chown -R $PULSE_USER:$PULSE_USER $PULSE_DIR"
+    elif echo "$recent_logs" | grep -q "EADDRINUSE.*7655"; then
+        print_error "✗ Port 7655 is already in use"
+        print_error "  → Another service is using the default port"
+    else
+        print_error "✗ Unknown service failure"
+        print_error "Recent log entries:"
+        echo "$recent_logs" | tail -5 | sed 's/^/    /'
+    fi
+    
+    print_info ""
+    print_info "For more details, run:"
+    print_info "  systemctl status $SERVICE_NAME"
+    print_info "  journalctl -u $SERVICE_NAME -f"
+}
+
 setup_systemd_service() {
     local update_mode=${1:-false}
 
@@ -1697,16 +1805,27 @@ EOF
         return 1
     fi
 
-    print_info "Starting $SERVICE_NAME..."
-    if systemctl start "$SERVICE_NAME"; then
-        print_success "Service started successfully."
+    # Use the new service testing function for better error handling
+    if test_service_startup; then
+        print_success "Service configured and started successfully."
+        return 0
     else
-        print_error "Failed to start systemd service."
-        print_warning "Please check the service status using: systemctl status $SERVICE_NAME"
-        print_warning "And check the logs using: journalctl -u $SERVICE_NAME"
-        return 1
+        print_error "Service startup failed or encountered issues."
+        print_warning "Attempting automatic recovery..."
+        
+        # Try to fix common issues and restart
+        if validate_service_configuration && systemctl start "$SERVICE_NAME" >/dev/null 2>&1; then
+            print_success "Service recovered successfully after fixing configuration issues."
+            return 0
+        else
+            print_error "Automatic recovery failed."
+            print_warning "Manual intervention may be required."
+            print_warning "Run the following for detailed diagnosis:"
+            print_warning "  systemctl status $SERVICE_NAME"
+            print_warning "  journalctl -u $SERVICE_NAME -f"
+            return 1
+        fi
     fi
-    return 0
 }
 
 

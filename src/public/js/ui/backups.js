@@ -4,6 +4,24 @@ PulseApp.ui.backups = (() => {
     let backupsSearchInput = null;
     let resetBackupsButton = null;
     let backupsTabContent = null;
+    
+    // Cache for expensive data transformations
+    let dataCache = {
+        lastStateHash: null,
+        processedBackupData: null,
+        guestBackupStatus: null
+    };
+    
+    function _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups) {
+        // Simple hash based on data lengths and timestamps
+        const vmCount = vmsData.length;
+        const ctCount = containersData.length;
+        const pbsCount = pbsDataArray.length;
+        const pveTaskCount = pveBackups?.backupTasks?.length || 0;
+        const pveStorageCount = pveBackups?.storageBackups?.length || 0;
+        
+        return `${vmCount}-${ctCount}-${pbsCount}-${pveTaskCount}-${pveStorageCount}`;
+    }
 
     function _initMobileScrollIndicators() {
         const tableContainer = document.querySelector('#backups .table-container');
@@ -125,6 +143,7 @@ PulseApp.ui.backups = (() => {
         let totalSnapshots = 0;
 
         backupStatusByGuest.forEach(guest => {
+            
             switch (guest.backupHealthStatus) {
                 case 'ok':
                 case 'stale':
@@ -263,15 +282,26 @@ PulseApp.ui.backups = (() => {
         return card;
     }
 
+    function _extractBackupTypeFromVolid(volid, vmid) {
+        // Extract type from volid format: vzdump-{type}-{vmid}-{timestamp}
+        const volidMatch = volid.match(/vzdump-(qemu|lxc)-(\d+)-/);
+        return volidMatch ? (volidMatch[1] === 'qemu' ? 'vm' : 'ct') : (vmid ? 'ct' : 'vm');
+    }
+
     function _getInitialBackupData() {
         const vmsData = PulseApp.state.get('vmsData') || [];
         const containersData = PulseApp.state.get('containersData') || [];
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         const initialDataReceived = PulseApp.state.get('initialDataReceived');
+        
+        // Check if we can use cached data
+        const currentHash = _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups);
+        if (dataCache.lastStateHash === currentHash && dataCache.processedBackupData) {
+            return dataCache.processedBackupData;
+        }
+        
         const allGuests = [...vmsData, ...containersData];
-
-        // Debug logging for PBS data
 
         // Combine PBS and PVE backup tasks
         const pbsBackupTasks = pbsDataArray.flatMap(pbs => {
@@ -314,11 +344,15 @@ PulseApp.ui.backups = (() => {
 
         const pveStorageBackups = (pveBackups.storageBackups || []).map(backup => ({
             'backup-time': backup.ctime,
-            backupType: backup.vmid ? 'vm' : 'ct', // Guess based on context
+            backupType: _extractBackupTypeFromVolid(backup.volid, backup.vmid),
             backupVMID: backup.vmid,
+            vmid: backup.vmid, // Ensure vmid is preserved for filtering
             size: backup.size,
             protected: backup.protected,
             storage: backup.storage,
+            volid: backup.volid,
+            node: backup.node,
+            endpointId: backup.endpointId,
             source: 'pve'
         }));
 
@@ -329,16 +363,26 @@ PulseApp.ui.backups = (() => {
         const snapshotsByGuest = new Map();
 
         allRecentBackupTasks.forEach(task => {
-            // Debug task mapping for first few tasks
-            
-            const key = `${task.guestId}-${task.guestTypePbs}`;
+            // Include node/endpointId in key to handle multiple clusters with same vmid
+            const nodeKey = task.node ? `-${task.node}` : (task.endpointId ? `-${task.endpointId}` : '');
+            const key = `${task.guestId}-${task.guestTypePbs}${nodeKey}`;
             if (!tasksByGuest.has(key)) tasksByGuest.set(key, []);
             tasksByGuest.get(key).push(task);
         });
         
 
         allSnapshots.forEach(snap => {
-            const key = `${snap.backupVMID}-${snap.backupType}`;
+            // Different key strategies for PBS vs PVE:
+            // PBS: centralized storage, use vmid-type (accessible by any guest with same vmid)
+            // PVE: node-specific storage, use vmid-type-node
+            let key;
+            if (snap.source === 'pbs') {
+                key = `${snap.backupVMID}-${snap.backupType}`;
+            } else {
+                // PVE backups are node-specific
+                const nodeKey = snap.node ? `-${snap.node}` : (snap.endpointId ? `-${snap.endpointId}` : '');
+                key = `${snap.backupVMID}-${snap.backupType}${nodeKey}`;
+            }
             if (!snapshotsByGuest.has(key)) snapshotsByGuest.set(key, []);
             snapshotsByGuest.get(key).push(snap);
         });
@@ -361,7 +405,7 @@ PulseApp.ui.backups = (() => {
         const threeDaysAgo = Math.floor(new Date(now).setDate(now.getDate() - 3) / 1000);
         const sevenDaysAgo = Math.floor(new Date(now).setDate(now.getDate() - 7) / 1000);
 
-        return { 
+        const result = { 
             allGuests, 
             initialDataReceived, 
             tasksByGuest, 
@@ -370,6 +414,12 @@ PulseApp.ui.backups = (() => {
             threeDaysAgo,
             sevenDaysAgo
         };
+        
+        // Cache the processed data
+        dataCache.lastStateHash = currentHash;
+        dataCache.processedBackupData = result;
+        
+        return result;
     }
 
     function _determineGuestBackupStatus(guest, guestSnapshots, guestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo) {
@@ -381,8 +431,6 @@ PulseApp.ui.backups = (() => {
         const guestSnapshotCount = allSnapshots
             .filter(snap => parseInt(snap.vmid, 10) === parseInt(guest.vmid, 10))
             .length;
-        
-        // Debug disabled
         
         // Use pre-filtered data instead of filtering large arrays
         const totalBackups = guestSnapshots ? guestSnapshots.length : 0;
@@ -441,9 +489,6 @@ PulseApp.ui.backups = (() => {
             
             recentFailures = recentFailedTasks.length;
             
-            // Debug logging for failed tasks
-            if (parseInt(guest.vmid) <= 105 && recentFailedTasks.length > 0) {
-            }
             
             // Find the most recent failure timestamp
             if (recentFailedTasks.length > 0) {
@@ -459,12 +504,6 @@ PulseApp.ui.backups = (() => {
             recentFailures = 1;
             lastFailureTime = displayTimestamp;
             
-            if (parseInt(guest.vmid) <= 105) {
-            }
-        }
-        
-        // Final debug log
-        if (parseInt(guest.vmid) <= 105) {
         }
 
         // Enhanced 7-day backup status calculation with backup type tracking
@@ -622,6 +661,7 @@ PulseApp.ui.backups = (() => {
             }
         }
 
+        
         return {
             guestName: guest.name || `Guest ${guest.vmid}`,
             guestId: guest.vmid,
@@ -869,22 +909,22 @@ PulseApp.ui.backups = (() => {
         
         // Get PVE storage backups
         const pveStorageBackups = [];
-        if (pveBackups?.storageBackups) {
-            Object.entries(pveBackups.storageBackups).forEach(([nodeName, nodeData]) => {
-                if (nodeData && typeof nodeData === 'object') {
-                    Object.entries(nodeData).forEach(([storage, backups]) => {
-                        if (Array.isArray(backups)) {
-                            backups.forEach(backup => {
-                                pveStorageBackups.push({
-                                    ...backup,
-                                    node: nodeName,
-                                    storage: storage,
-                                    source: 'pve'
-                                });
-                            });
-                        }
-                    });
-                }
+        if (pveBackups?.storageBackups && Array.isArray(pveBackups.storageBackups)) {
+            pveBackups.storageBackups.forEach(backup => {
+                pveStorageBackups.push({
+                    'backup-time': backup.ctime,
+                    backupType: _extractBackupTypeFromVolid(backup.volid, backup.vmid),
+                    backupVMID: backup.vmid,
+                    vmid: backup.vmid, // Ensure vmid is preserved for filtering
+                    size: backup.size,
+                    protected: backup.protected,
+                    storage: backup.storage,
+                    volid: backup.volid,
+                    format: backup.format,
+                    node: backup.node,
+                    endpointId: backup.endpointId,
+                    source: 'pve'
+                });
             });
         }
         
@@ -963,7 +1003,24 @@ PulseApp.ui.backups = (() => {
         const containersData = PulseApp.state.get('containersData') || [];
         const allGuests = [...vmsData, ...containersData];
         const { tasksByGuest, snapshotsByGuest, dayBoundaries, threeDaysAgo, sevenDaysAgo } = _getInitialBackupData();
-        const backupStatusByGuest = allGuests.map(guest => _determineGuestBackupStatus(guest, snapshotsByGuest.get(`${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`) || [], tasksByGuest.get(`${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`) || [], dayBoundaries, threeDaysAgo, sevenDaysAgo));
+        const backupStatusByGuest = allGuests.map(guest => {
+            // Try both PBS (generic) and PVE (node-specific) keys
+            const baseKey = `${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`;
+            const nodeKey = guest.node ? `-${guest.node}` : (guest.endpointId ? `-${guest.endpointId}` : '');
+            const nodeSpecificKey = `${baseKey}${nodeKey}`;
+            
+            // Get snapshots from both keys and combine them
+            const pbsSnapshots = snapshotsByGuest.get(baseKey) || [];
+            const pveSnapshots = snapshotsByGuest.get(nodeSpecificKey) || [];
+            const allGuestSnapshots = [...pbsSnapshots, ...pveSnapshots];
+            
+            // Similar for tasks
+            const pbsTasks = tasksByGuest.get(baseKey) || [];
+            const pveTasks = tasksByGuest.get(nodeSpecificKey) || [];
+            const allGuestTasks = [...pbsTasks, ...pveTasks];
+            
+            return _determineGuestBackupStatus(guest, allGuestSnapshots, allGuestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo);
+        });
         const filteredBackupStatus = _filterBackupData(backupStatusByGuest, backupsSearchInput);
         
         // Get the current backup data
@@ -983,22 +1040,12 @@ PulseApp.ui.backups = (() => {
         );
         
         const pveStorageBackups = [];
-        if (pveBackups?.storageBackups) {
-            Object.entries(pveBackups.storageBackups).forEach(([nodeName, nodeData]) => {
-                if (nodeData && typeof nodeData === 'object') {
-                    Object.entries(nodeData).forEach(([storage, backups]) => {
-                        if (Array.isArray(backups)) {
-                            backups.forEach(backup => {
-                                pveStorageBackups.push({
-                                    ...backup,
-                                    node: nodeName,
-                                    storage: storage,
-                                    source: 'pve'
-                                });
-                            });
-                        }
-                    });
-                }
+        if (pveBackups?.storageBackups && Array.isArray(pveBackups.storageBackups)) {
+            pveBackups.storageBackups.forEach(backup => {
+                pveStorageBackups.push({
+                    ...backup,
+                    source: 'pve'
+                });
             });
         }
         
@@ -1171,21 +1218,13 @@ PulseApp.ui.backups = (() => {
         if (pbsSnapshots.length > 0) return true;
         
         // Check PVE storage backups
-        if (pveBackups.storageBackups) {
-            for (const [nodeName, nodeData] of Object.entries(pveBackups.storageBackups)) {
-                if (nodeData && typeof nodeData === 'object') {
-                    for (const [storage, backups] of Object.entries(nodeData)) {
-                        if (Array.isArray(backups)) {
-                            const matchingBackups = backups.filter(backup => {
-                                return backup.vmid == guestId && 
-                                       backup.ctime >= startTimestamp && 
-                                       backup.ctime < endTimestamp;
-                            });
-                            if (matchingBackups.length > 0) return true;
-                        }
-                    }
-                }
-            }
+        if (pveBackups.storageBackups && Array.isArray(pveBackups.storageBackups)) {
+            const matchingBackups = pveBackups.storageBackups.filter(backup => {
+                return backup.vmid == guestId && 
+                       backup.ctime >= startTimestamp && 
+                       backup.ctime < endTimestamp;
+            });
+            if (matchingBackups.length > 0) return true;
         }
         
         // Check VM snapshots
@@ -1273,7 +1312,24 @@ PulseApp.ui.backups = (() => {
         }
         loadingMsg.classList.add('hidden');
 
-        const backupStatusByGuest = allGuests.map(guest => _determineGuestBackupStatus(guest, snapshotsByGuest.get(`${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`) || [], tasksByGuest.get(`${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`) || [], dayBoundaries, threeDaysAgo, sevenDaysAgo));
+        const backupStatusByGuest = allGuests.map(guest => {
+            // Try both PBS (generic) and PVE (node-specific) keys
+            const baseKey = `${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`;
+            const nodeKey = guest.node ? `-${guest.node}` : (guest.endpointId ? `-${guest.endpointId}` : '');
+            const nodeSpecificKey = `${baseKey}${nodeKey}`;
+            
+            // Get snapshots from both keys and combine them
+            const pbsSnapshots = snapshotsByGuest.get(baseKey) || [];
+            const pveSnapshots = snapshotsByGuest.get(nodeSpecificKey) || [];
+            const allGuestSnapshots = [...pbsSnapshots, ...pveSnapshots];
+            
+            // Similar for tasks
+            const pbsTasks = tasksByGuest.get(baseKey) || [];
+            const pveTasks = tasksByGuest.get(nodeSpecificKey) || [];
+            const allGuestTasks = [...pbsTasks, ...pveTasks];
+            
+            return _determineGuestBackupStatus(guest, allGuestSnapshots, allGuestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo);
+        });
         const filteredBackupStatus = _filterBackupData(backupStatusByGuest, backupsSearchInput);
 
         // Prepare backup data for consolidated summary
@@ -1294,22 +1350,22 @@ PulseApp.ui.backups = (() => {
         
         // Get PVE storage backups
         const pveStorageBackups = [];
-        if (pveBackups?.storageBackups) {
-            Object.entries(pveBackups.storageBackups).forEach(([nodeName, nodeData]) => {
-                if (nodeData && typeof nodeData === 'object') {
-                    Object.entries(nodeData).forEach(([storage, backups]) => {
-                        if (Array.isArray(backups)) {
-                            backups.forEach(backup => {
-                                pveStorageBackups.push({
-                                    ...backup,
-                                    node: nodeName,
-                                    storage: storage,
-                                    source: 'pve'
-                                });
-                            });
-                        }
-                    });
-                }
+        if (pveBackups?.storageBackups && Array.isArray(pveBackups.storageBackups)) {
+            pveBackups.storageBackups.forEach(backup => {
+                pveStorageBackups.push({
+                    'backup-time': backup.ctime,
+                    backupType: _extractBackupTypeFromVolid(backup.volid, backup.vmid),
+                    backupVMID: backup.vmid,
+                    vmid: backup.vmid, // Ensure vmid is preserved for filtering
+                    size: backup.size,
+                    protected: backup.protected,
+                    storage: backup.storage,
+                    volid: backup.volid,
+                    format: backup.format,
+                    node: backup.node,
+                    endpointId: backup.endpointId,
+                    source: 'pve'
+                });
             });
         }
         
@@ -1836,7 +1892,7 @@ PulseApp.ui.backups = (() => {
                 const pveDates = {};
                 backupData.pveBackups.forEach(backup => {
                     if (backup.vmid == guestId) {
-                        const timestamp = backup.ctime;
+                        const timestamp = backup['backup-time'] || backup.ctime;
                         if (timestamp) {
                             const date = new Date(timestamp * 1000);
                             const dateKey = date.toISOString().split('T')[0];

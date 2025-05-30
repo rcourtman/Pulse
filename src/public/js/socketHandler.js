@@ -438,7 +438,7 @@ PulseApp.socketHandler = (() => {
             const backupsTab = document.querySelector('[data-tab="backups"]');
             const isBackupsTabActive = backupsTab && backupsTab.classList.contains('active');
             
-            if (PulseApp.ui && PulseApp.ui.backups && data.pbs && isBackupsTabActive) {
+            if (PulseApp.ui && PulseApp.ui.backups && (data.pbs || data.pveBackups) && isBackupsTabActive) {
                 PulseApp.ui.backups.updateBackupsTab(false); // Mark as API update, not user action
             }
         } catch (error) {

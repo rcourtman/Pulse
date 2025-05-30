@@ -1,8 +1,114 @@
 const { processPbsTasks } = require('./pbsUtils'); // Assuming pbsUtils.js exists or will be created
+const { createApiClientInstance } = require('./apiClients');
+const axios = require('axios');
+const https = require('https');
 
 let pLimit;
 let requestLimiter;
 let pLimitInitialized = false;
+
+// Cache for direct node connections
+const nodeConnectionCache = new Map();
+
+/**
+ * Creates a direct connection to a specific node, bypassing cluster routing.
+ * This is necessary for accessing node-local (non-shared) storage.
+ * @param {Object} node - The node object containing node information
+ * @param {Object} clusterConfig - The cluster endpoint configuration
+ * @returns {Promise<Object>} - API client for direct node connection
+ */
+async function getDirectNodeConnection(node, clusterConfig) {
+    const cacheKey = `${node.node}-${clusterConfig.id}`;
+    
+    // Check cache first
+    if (nodeConnectionCache.has(cacheKey)) {
+        return nodeConnectionCache.get(cacheKey);
+    }
+    
+    try {
+        // First, we need to get the node's IP address
+        // We'll try to resolve it through the cluster API
+        const nodeIp = node.ip || null;
+        
+        if (!nodeIp) {
+            console.warn(`[DataFetcher] Cannot create direct connection to node ${node.node}: No IP address available`);
+            return null;
+        }
+        
+        // Create a new API client with the node's direct IP
+        const nodeBaseURL = `https://${nodeIp}:8006/api2/json`;
+        
+        // Use the same auth configuration as the cluster
+        const authInterceptor = (config) => {
+            config.headers.Authorization = `PVEAPIToken=${clusterConfig.tokenId}=${clusterConfig.tokenSecret}`;
+            return config;
+        };
+        
+        const retryConfig = {
+            retries: 1, // Reduce retries for direct connections
+            retryDelayLogger: (retryCount, error) => {
+                console.warn(`Retrying direct node API request for ${node.node} (attempt ${retryCount}) due to error: ${error.message}`);
+                return 500; // Fixed 500ms delay for fast failing
+            },
+            retryConditionChecker: (error) => {
+                return error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.response?.status >= 500;
+            }
+        };
+        
+        // Create a faster client for direct connections
+        const nodeClient = axios.create({
+            baseURL: nodeBaseURL,
+            timeout: 3000, // Very short timeout for direct connections
+            httpsAgent: new https.Agent({
+                rejectUnauthorized: !clusterConfig.allowSelfSignedCerts,
+                timeout: 3000, // Agent-level timeout too
+                freeSocketTimeout: 3000
+            }),
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        // Add auth interceptor
+        nodeClient.interceptors.request.use(authInterceptor);
+        
+        // Add retry with reduced settings
+        if (retryConfig) {
+            const axiosRetry = require('axios-retry').default;
+            axiosRetry(nodeClient, {
+                retries: retryConfig.retries || 1,
+                retryDelay: retryConfig.retryDelayLogger,
+                retryCondition: retryConfig.retryConditionChecker
+            });
+        }
+        
+        // Test the connection before caching with a quick timeout
+        try {
+            // Use a race condition with a very short timeout to fail fast
+            await Promise.race([
+                nodeClient.get('/version'),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Connection test timeout')), 1500)
+                )
+            ]);
+            console.log(`[DataFetcher] Successfully tested direct connection to node ${node.node} at ${nodeIp}`);
+        } catch (testError) {
+            console.warn(`[DataFetcher] Direct connection test failed for ${node.node}: ${testError.message}`);
+            // Don't cache failed connections
+            return null;
+        }
+        
+        // Cache the connection
+        nodeConnectionCache.set(cacheKey, nodeClient);
+        
+        console.log(`[DataFetcher] Created direct connection to node ${node.node} at ${nodeIp}`);
+        return nodeClient;
+        
+    } catch (error) {
+        console.error(`[DataFetcher] Failed to create direct connection to node ${node.node}: ${error.message}`);
+        return null;
+    }
+}
 
 async function initializePLimit() {
   if (pLimitInitialized) return;
@@ -136,6 +242,25 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             return { nodes: [], vms: [], containers: [] };
         }
 
+        // Get node IP addresses from cluster status
+        const nodeIpMap = new Map();
+        try {
+            const clusterStatusResponse = await apiClientInstance.get('/cluster/status');
+            const clusterStatus = clusterStatusResponse.data?.data || [];
+            
+            clusterStatus.forEach(item => {
+                if (item.type === 'node' && item.ip) {
+                    nodeIpMap.set(item.name, item.ip);
+                }
+            });
+            
+            if (nodeIpMap.size > 0) {
+                console.log(`[DataFetcher - ${endpointName}] Found IP addresses for ${nodeIpMap.size} nodes`);
+            }
+        } catch (error) {
+            console.warn(`[DataFetcher - ${endpointName}] Could not fetch cluster status for node IPs: ${error.message}`);
+        }
+
         // Pass the correct endpointId to fetchDataForNode with concurrency limiting
         const guestPromises = nodes.map(node => 
             requestLimiter(() => fetchDataForNode(apiClientInstance, endpointId, node.node))
@@ -161,6 +286,7 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 endpointId: endpointId, // Use endpointId for tagging node
                 clusterIdentifier: actualClusterName, // Use actual cluster name or endpoint name
                 endpointType: endpointType, // Added to differentiate cluster vs standalone for labeling
+                ip: nodeIpMap.get(correspondingNodeInfo.node) || null, // Add IP address for direct connections
             };
 
             if (result.status === 'fulfilled' && result.value) {
@@ -648,6 +774,33 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
  */
 async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
     try {
+        // IMPORTANT: Since all backups in this environment go to PBS,
+        // we should return an empty array for PVE backup tasks.
+        // This function should only return tasks for traditional PVE storage backups
+        // (e.g., to local, NFS, or other non-PBS storage).
+        
+        // Check if any non-PBS backup storage exists
+        let hasNonPbsBackupStorage = false;
+        try {
+            const storageResponse = await apiClient.get('/storage');
+            const allStorage = storageResponse.data?.data || [];
+            
+            // Check if there's any storage that supports backups but isn't PBS
+            hasNonPbsBackupStorage = allStorage.some(storage => 
+                storage.type !== 'pbs' && 
+                storage.content && 
+                storage.content.includes('backup')
+            );
+            
+            if (!hasNonPbsBackupStorage) {
+                // No non-PBS backup storage exists, so there can't be any PVE backups
+                console.log(`[DataFetcher - ${endpointId}-${nodeName}] No non-PBS backup storage found, skipping PVE backup task collection`);
+                return [];
+            }
+        } catch (error) {
+            console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Could not fetch storage list: ${error.message}`);
+        }
+        
         const response = await apiClient.get(`/nodes/${nodeName}/tasks`, {
             params: { 
                 typefilter: 'vzdump',
@@ -660,10 +813,65 @@ async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
         const backupHistoryDays = parseInt(process.env.BACKUP_HISTORY_DAYS || '365');
         const thirtyDaysAgo = Math.floor((Date.now() - backupHistoryDays * 24 * 60 * 60 * 1000) / 1000);
         
-        // Filter to configured history period and transform to match PBS backup task format
-        return tasks
-            .filter(task => task.starttime >= thirtyDaysAgo)
-            .map(task => {
+        // Get PBS storage names to exclude PBS-destined backup tasks
+        let pbsStorageNames = [];
+        try {
+            const storageResponse = await apiClient.get('/storage');
+            const allStorage = storageResponse.data?.data || [];
+            pbsStorageNames = allStorage
+                .filter(storage => storage.type === 'pbs')
+                .map(storage => storage.storage);
+        } catch (error) {
+            console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Could not fetch storage list for PBS filtering: ${error.message}`);
+        }
+        
+        // Filter out PBS-destined tasks
+        const pveOnlyTasks = [];
+        const recentTasks = tasks.filter(task => task.starttime >= thirtyDaysAgo);
+        
+        // Since PBS storage exists, we need to carefully filter out PBS tasks
+        if (pbsStorageNames.length > 0 && recentTasks.length > 0) {
+            // Check ALL tasks, not just recent ones, to ensure accuracy
+            for (const task of recentTasks) {
+                let isPbsTask = false;
+                try {
+                    // Get first few log lines to check storage destination
+                    const logResponse = await apiClient.get(`/nodes/${nodeName}/tasks/${task.upid}/log`, {
+                        params: { limit: 5, start: 0 }
+                    });
+                    const logEntries = logResponse.data?.data || [];
+                    
+                    // Look for storage destination in the log
+                    const logText = logEntries.map(entry => entry.t || '').join(' ');
+                    
+                    // Check if this task uses PBS storage
+                    if (pbsStorageNames.some(pbsName => logText.includes(`--storage ${pbsName}`)) ||
+                        logText.includes('proxmox-backup-client') || 
+                        logText.includes('Proxmox Backup Server') ||
+                        logText.includes('--repository')) {
+                        isPbsTask = true;
+                    }
+                } catch (error) {
+                    // If we can't check the log, assume it's PBS to be safe
+                    isPbsTask = true;
+                }
+                
+                if (!isPbsTask) {
+                    pveOnlyTasks.push(task);
+                }
+            }
+        } else if (pbsStorageNames.length === 0) {
+            // No PBS storage, so all tasks are PVE backups
+            pveOnlyTasks.push(...recentTasks);
+        }
+        
+        // Debug: Log filtering results
+        if (recentTasks.length > 0) {
+            console.log(`[DataFetcher - ${endpointId}-${nodeName}] Filtered backup tasks: ${recentTasks.length} recent vzdump tasks -> ${pveOnlyTasks.length} PVE-only (${recentTasks.length - pveOnlyTasks.length} were PBS)`);
+        }
+        
+        // Transform remaining PVE-only tasks to match PBS backup task format
+        return pveOnlyTasks.map(task => {
                 // Extract guest info from task description or ID
                 let guestId = null;
                 let guestType = null;
@@ -716,14 +924,27 @@ async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
  * @param {string} endpointId - The endpoint identifier.
  * @param {string} nodeName - The name of the node.
  * @param {string} storage - The storage name.
+ * @param {number} isShared - Whether the storage is shared (0 = local, 1 = shared).
+ * @param {Object} node - The full node object containing IP address.
+ * @param {Object} config - The endpoint configuration for auth.
  * @returns {Promise<Array>} - Array of backup file objects.
  */
-async function fetchStorageBackups(apiClient, endpointId, nodeName, storage) {
+async function fetchStorageBackups(apiClient, endpointId, nodeName, storage, isShared, node, config) {
     try {
+        // Skip PBS storage based on the storage name (PBS storages usually have 'pbs' in the name)
+        // We can't check the global storage config due to permission issues
+        if (storage.toLowerCase().includes('pbs')) {
+            console.log(`[DataFetcher - ${endpointId}-${nodeName}] Skipping PBS storage '${storage}' for PVE backup collection`);
+            return [];
+        }
+        
+        // Use the provided API client (direct connection handling is done at higher level)
         const response = await apiClient.get(`/nodes/${nodeName}/storage/${storage}/content`, {
             params: { content: 'backup' }
         });
         const backups = response.data?.data || [];
+        
+        console.log(`[DataFetcher - ${endpointId}-${nodeName}] Found ${backups.length} backup files in storage '${storage}'`);
         
         // Transform to a consistent format
         return backups.map(backup => ({
@@ -740,8 +961,10 @@ async function fetchStorageBackups(apiClient, endpointId, nodeName, storage) {
         }));
     } catch (error) {
         // Storage might not support backups or might be inaccessible
-        if (error.response?.status !== 501) { // 501 = not implemented
-            console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching backups from storage ${storage}: ${error.message}`);
+        if (error.response?.status === 403) {
+            console.error(`[DataFetcher - ${endpointId}-${nodeName}] Permission denied (403) accessing storage ${storage}. Token needs 'Datastore.Audit' or 'Datastore.AllocateSpace' permission.`);
+        } else if (error.response?.status !== 501) { // 501 = not implemented
+            console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching backups from storage ${storage}: ${error.message} (Status: ${error.response?.status})`);
         }
         return [];
     }
@@ -910,20 +1133,46 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
         
         // Fetch backups from each storage on this node
         if (node.storage && Array.isArray(node.storage)) {
-            const storagePromises = node.storage
-                .filter(storage => storage.content && storage.content.includes('backup'))
-                .map(storage => fetchStorageBackups(apiClient, endpointId, nodeName, storage.storage));
+            const backupStorages = node.storage.filter(storage => 
+                storage.content && storage.content.includes('backup')
+            );
             
-            const storageResults = await Promise.allSettled(storagePromises);
-            storageResults.forEach(result => {
-                if (result.status === 'fulfilled' && result.value) {
-                    allStorageBackups.push(...result.value);
+            if (backupStorages.length > 0) {
+                // Get or create direct connection once per node for efficiency
+                let directClient = null;
+                const hasLocalStorage = backupStorages.some(storage => storage.shared === 0);
+                
+                if (hasLocalStorage && node.ip) {
+                    directClient = await getDirectNodeConnection(node, currentApiClients[endpointId].config);
                 }
-            });
+                
+                const storagePromises = backupStorages.map(async storage => {
+                    // Use pre-established direct connection if available and needed
+                    const clientToUse = (storage.shared === 0 && directClient) ? directClient : apiClient;
+                    
+                    console.log(`[DataFetcher - ${endpointId}-${nodeName}] Processing storage '${storage.storage}' (shared=${storage.shared}, type=${storage.type})`);
+                    return fetchStorageBackups(
+                        clientToUse, 
+                        endpointId, 
+                        nodeName, 
+                        storage.storage,
+                        storage.shared,
+                        node,
+                        currentApiClients[endpointId].config
+                    );
+                });
+                
+                const storageResults = await Promise.allSettled(storagePromises);
+                storageResults.forEach(result => {
+                    if (result.status === 'fulfilled' && result.value) {
+                        allStorageBackups.push(...result.value);
+                    }
+                });
+            }
         }
     });
     
-    // Fetch snapshots for all VMs and containers
+    // Fetch snapshots for all VMs and containers, with better error handling
     const guestSnapshotPromises = [];
     
     [...vms, ...containers].forEach(guest => {
@@ -938,7 +1187,7 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
                 fetchGuestSnapshots(apiClient, endpointId, nodeName, vmid, type)
                     .then(snapshots => allGuestSnapshots.push(...snapshots))
                     .catch(err => {
-                        // Silently handle errors for individual guests
+                        // Silently handle errors for individual guests to prevent blocking
                     })
             );
         }
@@ -964,28 +1213,24 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
 async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetchPbsDataInternal = fetchPbsData) {
   // console.log("[DataFetcher] Starting full discovery cycle...");
   
-  // Fetch PVE and PBS data in parallel
-  const [pveResult, pbsResult] = await Promise.all([
-      fetchPveDiscoveryData(currentApiClients),
-      _fetchPbsDataInternal(currentPbsApiClients) // Use the potentially injected function
+  // Fetch PVE discovery data first (needed for backup data)
+  const pveResult = await fetchPveDiscoveryData(currentApiClients);
+  
+  // Now fetch PBS and PVE backup data in parallel
+  const [pbsResult, pveBackups] = await Promise.all([
+      _fetchPbsDataInternal(currentPbsApiClients),
+      fetchPveBackupData(
+          currentApiClients, 
+          pveResult.nodes || [], 
+          pveResult.vms || [], 
+          pveResult.containers || []
+      )
   ])
-  /* istanbul ignore next */ // Ignore this catch block - tested via synchronous error injection
   .catch(error => {
-      // Add a catch block to handle potential rejections from Promise.all itself
-      // This might happen if one of the main fetch functions throws an unhandled error
-      // *before* returning a promise (less likely with current async/await structure but safer)
-      console.error("[DataFetcher] Error during discovery cycle Promise.all:", error);
-      // Return default structure on catastrophic failure
-      return [{ nodes: [], vms: [], containers: [] }, []]; 
+      console.error("[DataFetcher] Error during parallel backup data fetch:", error);
+      // Return default structure on failure
+      return [[], { backupTasks: [], storageBackups: [], guestSnapshots: [] }]; 
   });
-
-  // Now fetch PVE backup data using the discovered nodes, VMs, and containers
-  const pveBackups = await fetchPveBackupData(
-      currentApiClients, 
-      pveResult.nodes || [], 
-      pveResult.vms || [], 
-      pveResult.containers || []
-  );
 
   const aggregatedResult = {
       nodes: pveResult.nodes || [],
@@ -995,7 +1240,7 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
       pveBackups: pveBackups // Add PVE backup data
   };
 
-  console.log(`[DataFetcher] Discovery cycle completed. Found: ${aggregatedResult.nodes.length} PVE nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} CTs, ${aggregatedResult.pbs.length} PBS instances, ${pveBackups.backupTasks.length} PVE backup tasks, ${pveBackups.guestSnapshots.length} guest snapshots.`);
+  console.log(`[DataFetcher] Discovery cycle completed. Found: ${aggregatedResult.nodes.length} PVE nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} CTs, ${aggregatedResult.pbs.length} PBS instances, ${pveBackups.backupTasks.length} PVE backup tasks, ${pveBackups.storageBackups.length} PVE storage backups, ${pveBackups.guestSnapshots.length} guest snapshots.`);
   
   return aggregatedResult;
 }
