@@ -373,8 +373,154 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderAdditionalEndpoints() {
-        // This will be populated based on what additional endpoints exist in config
-        // For now, we'll support dynamic addition
+        const safeConfig = currentConfig || {};
+        
+        // Find all additional PVE endpoints (those with _2, _3, etc suffixes)
+        const pveContainer = document.getElementById('pve-endpoints-container');
+        const pbsContainer = document.getElementById('pbs-endpoints-container');
+        
+        if (pveContainer) {
+            // Look for existing additional PVE endpoints in config
+            Object.keys(safeConfig).forEach(key => {
+                if (key.startsWith('PROXMOX_HOST_') && key !== 'PROXMOX_HOST') {
+                    const suffix = key.replace('PROXMOX_HOST_', '');
+                    if (suffix && !isNaN(suffix)) {
+                        addExistingPveEndpoint(parseInt(suffix), safeConfig);
+                    }
+                }
+            });
+        }
+        
+        if (pbsContainer) {
+            // Look for existing additional PBS endpoints in config
+            Object.keys(safeConfig).forEach(key => {
+                if (key.startsWith('PBS_HOST_') && key !== 'PBS_HOST') {
+                    const suffix = key.replace('PBS_HOST_', '');
+                    if (suffix && !isNaN(suffix)) {
+                        addExistingPbsEndpoint(parseInt(suffix), safeConfig);
+                    }
+                }
+            });
+        }
+    }
+
+    function addExistingPveEndpoint(index, config) {
+        const container = document.getElementById('pve-endpoints-container');
+        if (!container) return;
+
+        // Hide empty state if this is the first endpoint
+        const emptyState = container.querySelector('.border-dashed');
+        if (emptyState) {
+            emptyState.style.display = 'none';
+        }
+
+        const endpointHtml = `
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
+                <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
+                        class="absolute top-2 right-2 text-red-600 hover:text-red-800" title="Remove this server">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+                <h4 class="text-md font-medium text-gray-800 dark:text-gray-200 mb-3">PVE Server #${index}</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
+                        <input type="text" name="PROXMOX_HOST_${index}" placeholder="https://pve${index}.example.com:8006"
+                               value="${config[`PROXMOX_HOST_${index}`] || ''}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
+                        <input type="number" name="PROXMOX_PORT_${index}" placeholder="8006"
+                               value="${config[`PROXMOX_PORT_${index}`] || ''}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Node Name</label>
+                        <input type="text" name="PROXMOX_NODE_NAME_${index}" placeholder="PVE Server ${index}"
+                               value="${config[`PROXMOX_NODE_NAME_${index}`] || ''}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
+                        <input type="text" name="PROXMOX_TOKEN_ID_${index}" placeholder="root@pam!token-name"
+                               value="${config[`PROXMOX_TOKEN_ID_${index}`] || ''}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
+                        <input type="password" name="PROXMOX_TOKEN_SECRET_${index}" placeholder="Enter token secret"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="flex items-center mt-6">
+                            <input type="checkbox" name="PROXMOX_ENABLED_${index}" ${config[`PROXMOX_ENABLED_${index}`] !== 'false' ? 'checked' : ''}
+                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Enabled</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.insertAdjacentHTML('beforeend', endpointHtml);
+    }
+
+    function addExistingPbsEndpoint(index, config) {
+        const container = document.getElementById('pbs-endpoints-container');
+        if (!container) return;
+
+        // Hide empty state if this is the first endpoint
+        const emptyState = container.querySelector('.border-dashed');
+        if (emptyState) {
+            emptyState.style.display = 'none';
+        }
+
+        const endpointHtml = `
+            <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
+                <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
+                        class="absolute top-2 right-2 text-red-600 hover:text-red-800" title="Remove this server">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+                <h4 class="text-md font-medium text-gray-800 dark:text-gray-200 mb-3">PBS Server #${index}</h4>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
+                        <input type="text" name="PBS_HOST_${index}" placeholder="https://pbs${index}.example.com:8007"
+                               value="${config[`PBS_HOST_${index}`] || ''}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
+                        <input type="number" name="PBS_PORT_${index}" placeholder="8007"
+                               value="${config[`PBS_PORT_${index}`] || ''}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Node Name</label>
+                        <input type="text" name="PBS_NODE_NAME_${index}" placeholder="PBS internal hostname"
+                               value="${config[`PBS_NODE_NAME_${index}`] || ''}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
+                        <input type="text" name="PBS_TOKEN_ID_${index}" placeholder="root@pam!token-name"
+                               value="${config[`PBS_TOKEN_ID_${index}`] || ''}"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
+                        <input type="password" name="PBS_TOKEN_SECRET_${index}" placeholder="Enter token secret"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.insertAdjacentHTML('beforeend', endpointHtml);
     }
 
     function addPveEndpoint() {
@@ -387,7 +533,9 @@ PulseApp.ui.settings = (() => {
             emptyState.style.display = 'none';
         }
 
-        const index = container.children.length + 1; // Start from _2 (but adjust for hidden empty state)
+        // Count only actual endpoint divs (not the empty state)
+        const existingEndpoints = container.querySelectorAll('.border:not(.border-dashed)');
+        const index = existingEndpoints.length + 2; // Start from _2 for additional endpoints
         const endpointHtml = `
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
                 <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
@@ -447,7 +595,9 @@ PulseApp.ui.settings = (() => {
             emptyState.style.display = 'none';
         }
 
-        const index = container.children.length + 1; // Start from _2 (but adjust for hidden empty state)
+        // Count only actual endpoint divs (not the empty state)
+        const existingEndpoints = container.querySelectorAll('.border:not(.border-dashed)');
+        const index = existingEndpoints.length + 2; // Start from _2 for additional endpoints
         const endpointHtml = `
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
                 <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
