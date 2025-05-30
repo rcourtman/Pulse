@@ -124,7 +124,10 @@ PulseApp.ui.settings = (() => {
             <form id="settings-form" class="space-y-6">
                 <!-- Proxmox VE Primary Endpoint -->
                 <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Primary Proxmox VE Server</h3>
+                    <div class="mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Primary Proxmox VE Server</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Main PVE server configuration (required)</p>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -179,18 +182,32 @@ PulseApp.ui.settings = (() => {
                 <!-- Additional Proxmox VE Endpoints -->
                 <div id="additional-pve-endpoints">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional Proxmox VE Servers</h3>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional Proxmox VE Servers</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Add more PVE servers beyond the primary one above</p>
+                        </div>
                         <button type="button" onclick="PulseApp.ui.settings.addPveEndpoint()" 
-                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md">
-                            Add PVE Server
+                                class="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Another PVE Server
                         </button>
                     </div>
-                    <div id="pve-endpoints-container"></div>
+                    <div id="pve-endpoints-container" class="space-y-4">
+                        <div class="text-center py-8 text-gray-500 dark:text-gray-400 italic border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                            No additional PVE servers configured.<br>
+                            <span class="text-sm">Click "Add Another PVE Server" to add more.</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Primary PBS Configuration -->
                 <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Proxmox Backup Server (Optional)</h3>
+                    <div class="mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Primary Proxmox Backup Server</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Main PBS server configuration (optional)</p>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
@@ -234,13 +251,24 @@ PulseApp.ui.settings = (() => {
                 <!-- Additional PBS Endpoints -->
                 <div id="additional-pbs-endpoints">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional PBS Servers</h3>
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional PBS Servers</h3>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Add more PBS servers beyond the primary one above</p>
+                        </div>
                         <button type="button" onclick="PulseApp.ui.settings.addPbsEndpoint()" 
-                                class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md">
-                            Add PBS Server
+                                class="flex items-center gap-2 px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Add Another PBS Server
                         </button>
                     </div>
-                    <div id="pbs-endpoints-container"></div>
+                    <div id="pbs-endpoints-container" class="space-y-4">
+                        <div class="text-center py-8 text-gray-500 dark:text-gray-400 italic border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                            No additional PBS servers configured.<br>
+                            <span class="text-sm">Click "Add Another PBS Server" to add more.</span>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Service Settings -->
@@ -353,11 +381,17 @@ PulseApp.ui.settings = (() => {
         const container = document.getElementById('pve-endpoints-container');
         if (!container) return;
 
-        const index = container.children.length + 2; // Start from _2
+        // Hide empty state message when adding first endpoint
+        const emptyState = container.querySelector('.border-dashed');
+        if (emptyState) {
+            emptyState.style.display = 'none';
+        }
+
+        const index = container.children.length + 1; // Start from _2 (but adjust for hidden empty state)
         const endpointHtml = `
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
-                <button type="button" onclick="this.parentElement.remove()" 
-                        class="absolute top-2 right-2 text-red-600 hover:text-red-800">
+                <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
+                        class="absolute top-2 right-2 text-red-600 hover:text-red-800" title="Remove this server">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                     </svg>
@@ -407,11 +441,17 @@ PulseApp.ui.settings = (() => {
         const container = document.getElementById('pbs-endpoints-container');
         if (!container) return;
 
-        const index = container.children.length + 2; // Start from _2
+        // Hide empty state message when adding first endpoint
+        const emptyState = container.querySelector('.border-dashed');
+        if (emptyState) {
+            emptyState.style.display = 'none';
+        }
+
+        const index = container.children.length + 1; // Start from _2 (but adjust for hidden empty state)
         const endpointHtml = `
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
-                <button type="button" onclick="this.parentElement.remove()" 
-                        class="absolute top-2 right-2 text-red-600 hover:text-red-800">
+                <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
+                        class="absolute top-2 right-2 text-red-600 hover:text-red-800" title="Remove this server">
                     <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                     </svg>
@@ -448,6 +488,24 @@ PulseApp.ui.settings = (() => {
         `;
 
         container.insertAdjacentHTML('beforeend', endpointHtml);
+    }
+
+    function removeEndpoint(button) {
+        const container = button.closest('#pve-endpoints-container, #pbs-endpoints-container');
+        const endpointDiv = button.parentElement;
+        
+        // Remove the endpoint
+        endpointDiv.remove();
+        
+        // Check if this was the last additional endpoint
+        const remainingEndpoints = container.querySelectorAll('.border:not(.border-dashed)');
+        if (remainingEndpoints.length === 0) {
+            // Show empty state again
+            const emptyState = container.querySelector('.border-dashed');
+            if (emptyState) {
+                emptyState.style.display = 'block';
+            }
+        }
     }
 
     async function testConnections() {
@@ -572,6 +630,7 @@ PulseApp.ui.settings = (() => {
         closeModal,
         addPveEndpoint,
         addPbsEndpoint,
+        removeEndpoint,
         testConnections,
         saveConfiguration
     };
