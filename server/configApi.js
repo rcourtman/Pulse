@@ -64,12 +64,8 @@ class ConfigApi {
      */
     async saveConfig(config) {
         try {
-            console.log('[ConfigApi.saveConfig] Called with:', JSON.stringify(config, null, 2));
-            console.log('[ConfigApi.saveConfig] .env path:', this.envPath);
-            
             // Read existing .env file to preserve other settings
             const existingConfig = await this.readEnvFile();
-            console.log('[ConfigApi.saveConfig] Existing config keys:', Object.keys(existingConfig));
             
             // Handle both old structured format and new raw .env variable format
             if (config.proxmox || config.pbs || config.advanced) {
@@ -81,14 +77,10 @@ class ConfigApi {
             }
             
             // Write back to .env file
-            console.log('[ConfigApi.saveConfig] Writing config with keys:', Object.keys(existingConfig));
             await this.writeEnvFile(existingConfig);
-            console.log('[ConfigApi.saveConfig] .env file written successfully');
             
             // Reload configuration in the application
-            console.log('[ConfigApi.saveConfig] Reloading configuration...');
             await this.reloadConfiguration();
-            console.log('[ConfigApi.saveConfig] Configuration reloaded successfully');
             
             return { success: true };
         } catch (error) {
@@ -103,7 +95,6 @@ class ConfigApi {
     handleStructuredConfig(config, existingConfig) {
         // Update with new values
         if (config.proxmox) {
-            console.log('[ConfigApi.saveConfig] Updating Proxmox config');
             existingConfig.PROXMOX_HOST = config.proxmox.host;
             existingConfig.PROXMOX_PORT = config.proxmox.port || '8006';
             existingConfig.PROXMOX_TOKEN_ID = config.proxmox.tokenId;
@@ -115,8 +106,6 @@ class ConfigApi {
             
             // Always allow self-signed certificates by default for Proxmox
             existingConfig.PROXMOX_ALLOW_SELF_SIGNED_CERT = 'true';
-        } else {
-            console.log('[ConfigApi.saveConfig] No Proxmox config provided');
         }
         
         if (config.pbs) {
@@ -173,12 +162,9 @@ class ConfigApi {
      * Handle raw .env variable format (new settings form)
      */
     handleRawEnvConfig(config, existingConfig) {
-        console.log('[ConfigApi.saveConfig] Processing raw .env variable format');
-        
         // Directly update existing config with new values
         Object.entries(config).forEach(([key, value]) => {
             if (value !== undefined && value !== '') {
-                console.log(`[ConfigApi.saveConfig] Setting ${key} = ${value}`);
                 existingConfig[key] = value;
             }
         });
@@ -207,7 +193,6 @@ class ConfigApi {
      */
     async testConfig(config) {
         try {
-            console.log('[ConfigApi.testConfig] Testing config:', JSON.stringify(config, null, 2));
             
             // Handle both old structured format and new raw .env format
             let proxmoxHost, proxmoxPort, proxmoxTokenId, proxmoxTokenSecret;
@@ -312,7 +297,6 @@ class ConfigApi {
                 await testClient.client.get('/nodes');
             }
             
-            console.log('[ConfigApi.testConfig] Connection test successful');
             return { success: true };
         } catch (error) {
             console.error('Configuration test failed:', error);
@@ -412,7 +396,6 @@ class ConfigApi {
         
         try {
             await fs.writeFile(this.envPath, lines.join('\n'), 'utf8');
-            console.log(`[ConfigApi.writeEnvFile] Successfully wrote ${lines.length} lines to ${this.envPath}`);
         } catch (writeError) {
             console.error('[ConfigApi.writeEnvFile] Error writing file:', writeError);
             throw writeError;
@@ -437,16 +420,8 @@ class ConfigApi {
             // Reload environment variables
             require('dotenv').config();
             
-            // Log environment variables for debugging
-            const envVars = Object.keys(process.env).filter(key => 
-                key.startsWith('PROXMOX_') || key.startsWith('PBS_')
-            ).sort();
-            console.log('[ConfigApi.reloadConfiguration] Environment variables after reload:', envVars);
-            
             // Reload configuration
             const { endpoints, pbsConfigs, isConfigPlaceholder } = loadConfiguration();
-            console.log(`[ConfigApi.reloadConfiguration] Loaded ${endpoints.length} Proxmox endpoints:`, endpoints.map(e => ({ id: e.id, name: e.name, host: e.host })));
-            console.log(`[ConfigApi.reloadConfiguration] Loaded ${pbsConfigs.length} PBS configs:`, pbsConfigs.map(p => ({ id: p.id, name: p.name, host: p.host })));
             
             // Get state manager instance
             const stateManager = require('./state');
@@ -456,10 +431,7 @@ class ConfigApi {
             stateManager.setEndpointConfigurations(endpoints, pbsConfigs);
             
             // Reinitialize API clients
-            console.log('[ConfigApi.reloadConfiguration] Reinitializing API clients...');
             const { apiClients, pbsApiClients } = await initializeApiClients(endpoints, pbsConfigs);
-            console.log(`[ConfigApi.reloadConfiguration] Initialized ${Object.keys(apiClients).length} API clients:`, Object.keys(apiClients));
-            console.log(`[ConfigApi.reloadConfiguration] Initialized ${Object.keys(pbsApiClients).length} PBS clients:`, Object.keys(pbsApiClients));
             
             // Update global references
             if (global.pulseApiClients) {
@@ -476,16 +448,6 @@ class ConfigApi {
             if (global.lastReloadTime !== undefined) {
                 global.lastReloadTime = Date.now();
             }
-            
-            // Manually verify additional endpoints are loaded
-            let additionalEndpointsFound = 0;
-            let i = 2;
-            while (process.env[`PROXMOX_HOST_${i}`]) {
-                console.log(`[ConfigApi.reloadConfiguration] Found additional endpoint ${i}: PROXMOX_HOST_${i}=${process.env[`PROXMOX_HOST_${i}`]}`);
-                additionalEndpointsFound++;
-                i++;
-            }
-            console.log(`[ConfigApi.reloadConfiguration] Total additional endpoints found in environment: ${additionalEndpointsFound}`);
             
             // Trigger a discovery cycle if we have endpoints configured
             if (endpoints.length > 0) {
@@ -523,9 +485,7 @@ class ConfigApi {
         // Save configuration
         app.post('/api/config', async (req, res) => {
             try {
-                console.log('[API /api/config] POST received with body:', JSON.stringify(req.body, null, 2));
                 const result = await this.saveConfig(req.body);
-                console.log('[API /api/config] Save result:', result);
                 res.json({ success: true });
             } catch (error) {
                 console.error('[API /api/config] Error:', error);
