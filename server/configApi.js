@@ -49,6 +49,8 @@ class ConfigApi {
                 existingConfig.PROXMOX_PORT = config.proxmox.port || '8006';
                 existingConfig.PROXMOX_TOKEN_ID = config.proxmox.tokenId;
                 existingConfig.PROXMOX_TOKEN_SECRET = config.proxmox.tokenSecret;
+                // Always allow self-signed certificates by default for Proxmox
+                existingConfig.PROXMOX_ALLOW_SELF_SIGNED_CERT = 'true';
             }
             
             if (config.pbs) {
@@ -56,6 +58,8 @@ class ConfigApi {
                 existingConfig.PBS_PORT = config.pbs.port || '8007';
                 existingConfig.PBS_TOKEN_ID = config.pbs.tokenId;
                 existingConfig.PBS_TOKEN_SECRET = config.pbs.tokenSecret;
+                // Always allow self-signed certificates by default for PBS
+                existingConfig.PBS_ALLOW_SELF_SIGNED_CERT = 'true';
             }
             
             // Write back to .env file
@@ -84,7 +88,8 @@ class ConfigApi {
                 port: parseInt(config.proxmox.port) || 8006,
                 tokenId: config.proxmox.tokenId,
                 tokenSecret: config.proxmox.tokenSecret,
-                enabled: true
+                enabled: true,
+                allowSelfSignedCerts: true  // Allow self-signed certificates for testing
             }];
             
             const testPbsConfigs = config.pbs ? [{
@@ -93,7 +98,8 @@ class ConfigApi {
                 host: config.pbs.host,
                 port: parseInt(config.pbs.port) || 8007,
                 tokenId: config.pbs.tokenId,
-                tokenSecret: config.pbs.tokenSecret
+                tokenSecret: config.pbs.tokenSecret,
+                allowSelfSignedCerts: true  // Allow self-signed certificates for testing
             }] : [];
             
             // Try to initialize API clients with test config
@@ -163,8 +169,8 @@ class ConfigApi {
         
         // Group related settings
         const groups = {
-            'Proxmox VE Settings': ['PROXMOX_HOST', 'PROXMOX_PORT', 'PROXMOX_TOKEN_ID', 'PROXMOX_TOKEN_SECRET'],
-            'Proxmox Backup Server Settings': ['PBS_HOST', 'PBS_PORT', 'PBS_TOKEN_ID', 'PBS_TOKEN_SECRET'],
+            'Proxmox VE Settings': ['PROXMOX_HOST', 'PROXMOX_PORT', 'PROXMOX_TOKEN_ID', 'PROXMOX_TOKEN_SECRET', 'PROXMOX_ALLOW_SELF_SIGNED_CERT'],
+            'Proxmox Backup Server Settings': ['PBS_HOST', 'PBS_PORT', 'PBS_TOKEN_ID', 'PBS_TOKEN_SECRET', 'PBS_ALLOW_SELF_SIGNED_CERT'],
             'Other Settings': [] // Will contain all other keys
         };
         
