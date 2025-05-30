@@ -546,7 +546,7 @@ PulseApp.ui.dashboard = (() => {
         
         // Ensure name cell keeps sticky styling even after row class updates
         if (cells[0]) {
-            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0';
+            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600';
         }
         if (cells.length >= 10) {
             // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
@@ -1003,7 +1003,7 @@ PulseApp.ui.dashboard = (() => {
         }
 
         row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-b border-gray-200 dark:border-gray-700" title="${guest.name}">${guest.name}</td>
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">${guest.name}</td>
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2">${guest.id}</td>
             <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>
