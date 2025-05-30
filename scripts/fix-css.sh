@@ -29,7 +29,7 @@ print_error() {
 }
 
 # Default installation path
-PULSE_DIR="/opt/pulse-proxmox"
+PULSE_DIR="/opt/pulse"
 
 print_info "Pulse CSS Fix Script"
 print_info "This script fixes CSS issues where the frontend has no styling"
