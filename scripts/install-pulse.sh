@@ -1774,7 +1774,7 @@ User=$PULSE_USER
 Group=$PULSE_USER
 WorkingDirectory=$PULSE_DIR
 
-EnvironmentFile=$PULSE_DIR/.env
+EnvironmentFile=-$PULSE_DIR/.env
 
 ExecStart=$node_path $npm_path run start
 
