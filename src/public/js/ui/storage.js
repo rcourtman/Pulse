@@ -595,7 +595,7 @@ PulseApp.ui.storage = (() => {
                             (isWarning ? ' <span class="inline-block w-2 h-2 bg-yellow-500 rounded-full ml-1"></span>' : '');
 
         row.innerHTML = `
-            <td class="sticky left-0 ${isCritical ? 'bg-red-50 dark:bg-red-900/10' : (isWarning ? 'bg-yellow-50 dark:bg-yellow-900/10' : 'bg-white dark:bg-gray-800')} z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100">${store.storage || 'N/A'}${warningBadge}</td>
+            <td class="sticky left-0 ${isCritical ? 'bg-red-50 dark:bg-red-900/10' : (isWarning ? 'bg-yellow-50 dark:bg-yellow-900/10' : 'bg-white dark:bg-gray-800')} z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700">${store.storage || 'N/A'}${warningBadge}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${contentBadges}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${store.type || 'N/A'}</td>
             <td class="p-1 px-2 whitespace-nowrap text-center">${sharedText}</td>

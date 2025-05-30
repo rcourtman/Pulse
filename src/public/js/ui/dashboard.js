@@ -1003,7 +1003,7 @@ PulseApp.ui.dashboard = (() => {
         }
 
         row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title="${guest.name}">${guest.name}</td>
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-b border-gray-200 dark:border-gray-700" title="${guest.name}">${guest.name}</td>
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2">${guest.id}</td>
             <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>

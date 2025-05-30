@@ -438,7 +438,14 @@ PulseApp.ui.pbs = (() => {
         row.className = rowClasses;
 
         const targetCell = document.createElement('td');
-        targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 bg-white dark:bg-gray-800 z-10`;
+        // Determine sticky cell background based on task status
+        let stickyBg = 'bg-white dark:bg-gray-800';
+        if (isFailed) {
+            stickyBg = 'bg-red-50 dark:bg-red-900/20';
+        } else if (task.status && task.status.toLowerCase().includes('running')) {
+            stickyBg = 'bg-blue-50 dark:bg-blue-900/20';
+        }
+        targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 ${stickyBg} z-10 border-b border-gray-200 dark:border-gray-700`;
         
         // Add expand indicator for failed tasks
         if (isFailed) {
