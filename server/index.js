@@ -978,8 +978,8 @@ async function startServer() {
     } else {
         console.log("INFO: No endpoints configured. Starting in setup mode.");
         // Initialize empty clients for consistency
-        apiClients = new Map();
-        pbsApiClients = new Map();
+        apiClients = {};
+        pbsApiClients = {};
         global.pulseApiClients = { apiClients, pbsApiClients };
     } 
 

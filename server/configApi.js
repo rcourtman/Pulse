@@ -100,7 +100,7 @@ class ConfigApi {
             const { apiClients, pbsApiClients } = await initializeApiClients(testEndpoints, testPbsConfigs);
             
             // Try a simple API call to verify connection
-            const testClient = apiClients.get('test-primary');
+            const testClient = apiClients['test-primary'];
             if (testClient) {
                 await testClient.client.get('/nodes');
             }
