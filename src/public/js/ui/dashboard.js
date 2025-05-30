@@ -696,9 +696,15 @@ PulseApp.ui.dashboard = (() => {
     let previousGroupByNode = null;
 
     function updateDashboardTable() {
+        // If elements aren't initialized yet, try to initialize them
         if (!tableBodyEl || !statusElementEl) {
-            console.error('Dashboard table body or status element not found/initialized!');
-            return;
+            tableBodyEl = document.querySelector('#main-table tbody');
+            statusElementEl = document.getElementById('dashboard-status-text');
+            
+            // If still not found, silently return (not an error during initial load)
+            if (!tableBodyEl || !statusElementEl) {
+                return;
+            }
         }
 
         // Find the scrollable container
