@@ -243,6 +243,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     initializeModules();
     
+    // Check if configuration is missing or contains placeholders and automatically open settings modal
+    checkAndOpenSettingsIfNeeded();
+    
     // Fetch version immediately and retry after a short delay if needed
     fetchVersion();
     
@@ -258,4 +261,41 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(() => {
         fetchVersion();
     }, 6 * 60 * 60 * 1000);
+    
+    /**
+     * Check if configuration is missing or contains placeholder values and open settings modal
+     */
+    async function checkAndOpenSettingsIfNeeded() {
+        try {
+            // Wait a moment for the socket connection to establish and initial data to arrive
+            setTimeout(async () => {
+                try {
+                    const response = await fetch('/api/health');
+                    if (response.ok) {
+                        const health = await response.json();
+                        
+                        // Check if configuration has placeholder values or no data is available
+                        if (health.system && health.system.configPlaceholder) {
+                            console.log('[Main] Configuration contains placeholder values, opening settings modal...');
+                            
+                            // Wait for settings module to be fully initialized
+                            setTimeout(() => {
+                                if (PulseApp.ui.settings && typeof PulseApp.ui.settings.openModal === 'function') {
+                                    PulseApp.ui.settings.openModal();
+                                } else {
+                                    console.warn('[Main] Settings module not available for auto-open');
+                                }
+                            }, 500);
+                        } else {
+                            console.log('[Main] Configuration appears valid, not opening settings modal');
+                        }
+                    }
+                } catch (error) {
+                    console.error('[Main] Error checking configuration status:', error);
+                }
+            }, 2000); // Wait 2 seconds for everything to settle
+        } catch (error) {
+            console.error('[Main] Error in checkAndOpenSettingsIfNeeded:', error);
+        }
+    }
 });

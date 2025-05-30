@@ -125,14 +125,7 @@ app.use(express.static(publicDir, { index: false }));
 
 // Route to serve the main HTML file for the root path
 app.get('/', (req, res) => {
-  // Check if configuration is placeholder or missing using current state
-  const currentConfigStatus = stateManager.getState().isConfigPlaceholder;
-  
-  if (currentConfigStatus) {
-    // Redirect to setup page
-    return res.redirect('/setup.html');
-  }
-  
+  // Always serve the main application with settings modal for initial configuration
   const indexPath = path.join(publicDir, 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) {
