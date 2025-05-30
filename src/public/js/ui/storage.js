@@ -324,16 +324,16 @@ PulseApp.ui.storage = (() => {
             };
             
             thead.innerHTML = `
-                <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 sticky top-0 z-10 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
-                  <th class="sticky left-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2 border-r border-gray-300 dark:border-gray-600">Storage</th>
-                  <th class="p-1 px-2">Content</th>
-                  <th class="p-1 px-2">Type</th>
-                  <th class="p-1 px-2">Shared</th>
-                  <th class="p-1 px-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" id="usage-sort-header">
+                <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
+                  <th class="sticky left-0 top-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2 border-r border-gray-300 dark:border-gray-600">Storage</th>
+                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Content</th>
+                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Type</th>
+                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Shared</th>
+                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 select-none" id="usage-sort-header">
                     Usage${sortIndicator('usage-desc')}${sortIndicator('usage-asc')}
                   </th>
-                  <th class="p-1 px-2">Avail</th>
-                  <th class="p-1 px-2">Total</th>
+                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Avail</th>
+                  <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Total</th>
                 </tr>
               `;
             table.appendChild(thead);
