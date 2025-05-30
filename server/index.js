@@ -125,8 +125,10 @@ app.use(express.static(publicDir, { index: false }));
 
 // Route to serve the main HTML file for the root path
 app.get('/', (req, res) => {
-  // Check if configuration is placeholder or missing
-  if (configIsPlaceholder) {
+  // Check if configuration is placeholder or missing using current state
+  const currentConfigStatus = stateManager.getState().isConfigPlaceholder;
+  
+  if (currentConfigStatus) {
     // Redirect to setup page
     return res.redirect('/setup.html');
   }
@@ -907,6 +909,8 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 // --- Environment File Watcher ---
 let envWatcher = null;
 let reloadDebounceTimer = null;
+let lastReloadTime = 0;
+global.lastReloadTime = 0;  // Make it globally accessible
 
 function setupEnvFileWatcher() {
     const envPath = path.join(__dirname, '../.env');
@@ -924,7 +928,15 @@ function setupEnvFileWatcher() {
             // Debounce the reload to avoid multiple reloads for rapid changes
             clearTimeout(reloadDebounceTimer);
             reloadDebounceTimer = setTimeout(async () => {
+                // Prevent reload if we just reloaded within the last 2 seconds (from API save)
+                const now = Date.now();
+                if (now - global.lastReloadTime < 2000) {
+                    console.log('.env file changed but skipping reload (too recent)');
+                    return;
+                }
+                
                 console.log('.env file changed, reloading configuration...');
+                global.lastReloadTime = now;
                 
                 try {
                     await configApi.reloadConfiguration();

@@ -308,6 +308,11 @@ class ConfigApi {
                 global.pulseConfigStatus.isPlaceholder = isConfigPlaceholder;
             }
             
+            // Update last reload time to prevent file watcher from triggering
+            if (global.lastReloadTime !== undefined) {
+                global.lastReloadTime = Date.now();
+            }
+            
             console.log('Configuration reloaded successfully');
             return true;
         } catch (error) {
