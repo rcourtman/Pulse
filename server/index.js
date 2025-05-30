@@ -143,6 +143,17 @@ app.get('/', (req, res) => {
   });
 });
 
+// Route to explicitly handle setup page
+app.get('/setup.html', (req, res) => {
+  const setupPath = path.join(publicDir, 'setup.html');
+  res.sendFile(setupPath, (err) => {
+    if (err) {
+      console.error(`Error sending setup.html: ${err.message}`);
+      res.status(err.status || 500).send('Internal Server Error loading setup page.');
+    }
+  });
+});
+
 // --- API Routes ---
 // Set up configuration API routes
 configApi.setupRoutes(app);

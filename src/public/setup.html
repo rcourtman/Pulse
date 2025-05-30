@@ -44,7 +44,7 @@
       </div>
 
       <!-- Configuration Form -->
-      <form id="config-form" class="space-y-6" autocomplete="off">
+      <form id="config-form" class="space-y-6" autocomplete="off" onsubmit="return false;">
         <!-- Primary Proxmox VE Configuration -->
         <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
           <h2 class="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-200">Primary Proxmox VE Server</h2>
@@ -274,8 +274,12 @@
         <div id="success-message" class="hidden bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
           <div class="flex">
             <div class="flex-shrink-0">
-              <svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+              <svg id="success-icon" class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+              </svg>
+              <svg id="loading-icon" class="hidden animate-spin h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             </div>
             <div class="ml-3">
@@ -291,7 +295,7 @@
                   class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
             Save Configuration
           </button>
-          <button type="button" onclick="testConnection()"
+          <button type="button" onclick="testConnection(event)"
                   class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">
             Test Connection
           </button>
@@ -335,12 +339,27 @@
       successDiv.classList.add('hidden');
     }
 
-    function showSuccess(message = 'Configuration saved. Redirecting to dashboard...') {
+    function showSuccess(message = 'Configuration saved. Redirecting to dashboard...', showButton = false, showLoading = false) {
       const errorDiv = document.getElementById('error-message');
       const successDiv = document.getElementById('success-message');
       const successText = document.getElementById('success-text');
+      const successIcon = document.getElementById('success-icon');
+      const loadingIcon = document.getElementById('loading-icon');
       
-      successText.textContent = message;
+      // Toggle icons
+      if (showLoading) {
+        successIcon.classList.add('hidden');
+        loadingIcon.classList.remove('hidden');
+      } else {
+        successIcon.classList.remove('hidden');
+        loadingIcon.classList.add('hidden');
+      }
+      
+      if (showButton) {
+        successText.innerHTML = message + '<br><button onclick="window.location.href=\'/\'" class="mt-3 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800">Continue to Pulse</button>';
+      } else {
+        successText.textContent = message;
+      }
       errorDiv.classList.add('hidden');
       successDiv.classList.remove('hidden');
     }
@@ -350,7 +369,8 @@
       document.getElementById('success-message').classList.add('hidden');
     }
 
-    async function testConnection() {
+    async function testConnection(event) {
+      if (event) event.preventDefault();
       const formData = new FormData(document.getElementById('config-form'));
       const config = {
         proxmox: {
@@ -367,7 +387,7 @@
       }
 
       hideMessages();
-      const button = event.target;
+      const button = event && event.target ? event.target : document.querySelector('button[onclick*="testConnection"]');
       button.disabled = true;
       button.textContent = 'Testing...';
 
@@ -381,7 +401,7 @@
         const result = await response.json();
         
         if (response.ok && result.success) {
-          showSuccess('Connection test successful!');
+          showSuccess('Connection test successful!', false, false);
           setTimeout(() => hideMessages(), 3000);
         } else {
           showError(result.error || 'Connection test failed');
@@ -394,8 +414,25 @@
       }
     }
 
-    document.getElementById('config-form').addEventListener('submit', async (e) => {
+    // Ensure DOM is loaded before attaching event handlers
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupFormHandlers);
+    } else {
+      setupFormHandlers();
+    }
+    
+    function setupFormHandlers() {
+      console.log('Setting up form handlers...');
+      
+      const form = document.getElementById('config-form');
+      if (!form) {
+        console.error('Config form not found!');
+        return;
+      }
+      
+      form.addEventListener('submit', async (e) => {
       e.preventDefault();
+      console.log('Form submit event triggered');
       
       const formData = new FormData(e.target);
       const config = {
@@ -406,6 +443,12 @@
           tokenSecret: formData.get('proxmox-token-secret')
         }
       };
+      
+      // Validate required fields
+      if (!config.proxmox.host || !config.proxmox.tokenId || !config.proxmox.tokenSecret) {
+        showError('Please fill in all required Proxmox fields');
+        return;
+      }
 
       // Add PBS config if provided
       if (formData.get('pbs-host')) {
@@ -448,6 +491,7 @@
 
       // Debug: Log what we're sending
       console.log('Saving configuration:', JSON.stringify(config, null, 2));
+      console.log('Making POST request to /api/config...');
 
       try {
         const response = await fetch('/api/config', {
@@ -456,12 +500,16 @@
           body: JSON.stringify(config)
         });
 
+        console.log('Save response status:', response.status, 'ok:', response.ok);
         const result = await response.json();
+        console.log('Save result:', result);
         
         if (response.ok && result.success) {
-          showSuccess();
+          showSuccess('Configuration saved! Applying settings...', false, true);
+          
+          // Wait a moment for the server to start reloading
           setTimeout(() => {
-            window.location.href = '/';
+            checkServerReady();
           }, 2000);
         } else {
           showError(result.error || 'Failed to save configuration');
@@ -469,11 +517,69 @@
           button.textContent = 'Save Configuration';
         }
       } catch (error) {
+        console.error('Save configuration error:', error);
         showError('Failed to save configuration: ' + error.message);
         button.disabled = false;
         button.textContent = 'Save Configuration';
       }
-    });
+      });
+      
+      // Load config on page load
+      loadExistingConfig();
+    }
+    
+    // Check if server is ready after configuration save
+    async function checkServerReady(attempts = 0) {
+      const maxAttempts = 15; // 30 seconds total (15 * 2 seconds)
+      
+      try {
+        const response = await fetch('/api/health');
+        
+        if (response.ok) {
+          const health = await response.json();
+          console.log('Health check response:', health);
+          
+          // Check if the server has successfully loaded configuration
+          // Look for signs that API clients are initialized and not in placeholder mode
+          if (health.system && health.system.configPlaceholder === false) {
+            showSuccess('Configuration applied successfully!', true, false);
+            
+            // Re-enable the save button
+            const button = document.getElementById('save-button');
+            button.disabled = false;
+            button.textContent = 'Save Configuration';
+            return;
+          }
+        }
+      } catch (error) {
+        console.log('Health check failed:', error);
+      }
+      
+      // If we haven't exceeded max attempts, try again
+      if (attempts < maxAttempts) {
+        const messages = [
+          'Applying configuration...',
+          'Initializing connections...',
+          'Connecting to Proxmox servers...',
+          'Verifying credentials...',
+          'Loading server data...'
+        ];
+        const messageIndex = Math.min(Math.floor(attempts / 3), messages.length - 1);
+        showSuccess(`${messages[messageIndex]} (${Math.floor((attempts / maxAttempts) * 100)}%)`, false, true);
+        
+        setTimeout(() => {
+          checkServerReady(attempts + 1);
+        }, 2000);
+      } else {
+        // After 30 seconds, show the button anyway
+        showSuccess('Configuration saved! The server is taking longer than expected to initialize.', true, false);
+        
+        // Re-enable the save button
+        const button = document.getElementById('save-button');
+        button.disabled = false;
+        button.textContent = 'Save Configuration';
+      }
+    }
 
     // Load existing configuration if available
     async function loadExistingConfig() {
@@ -534,9 +640,6 @@
         console.error('Failed to load existing configuration:', error);
       }
     }
-
-    // Load config on page load
-    loadExistingConfig();
   </script>
 </body>
 </html>

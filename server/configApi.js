@@ -63,17 +63,24 @@ class ConfigApi {
      */
     async saveConfig(config) {
         try {
+            console.log('[ConfigApi.saveConfig] Called with:', JSON.stringify(config, null, 2));
+            console.log('[ConfigApi.saveConfig] .env path:', this.envPath);
+            
             // Read existing .env file to preserve other settings
             const existingConfig = await this.readEnvFile();
+            console.log('[ConfigApi.saveConfig] Existing config keys:', Object.keys(existingConfig));
             
             // Update with new values
             if (config.proxmox) {
+                console.log('[ConfigApi.saveConfig] Updating Proxmox config');
                 existingConfig.PROXMOX_HOST = config.proxmox.host;
                 existingConfig.PROXMOX_PORT = config.proxmox.port || '8006';
                 existingConfig.PROXMOX_TOKEN_ID = config.proxmox.tokenId;
                 existingConfig.PROXMOX_TOKEN_SECRET = config.proxmox.tokenSecret;
                 // Always allow self-signed certificates by default for Proxmox
                 existingConfig.PROXMOX_ALLOW_SELF_SIGNED_CERT = 'true';
+            } else {
+                console.log('[ConfigApi.saveConfig] No Proxmox config provided');
             }
             
             if (config.pbs) {
@@ -126,10 +133,14 @@ class ConfigApi {
             }
             
             // Write back to .env file
+            console.log('[ConfigApi.saveConfig] Writing config with keys:', Object.keys(existingConfig));
             await this.writeEnvFile(existingConfig);
+            console.log('[ConfigApi.saveConfig] .env file written successfully');
             
             // Reload configuration in the application
+            console.log('[ConfigApi.saveConfig] Reloading configuration...');
             await this.reloadConfiguration();
+            console.log('[ConfigApi.saveConfig] Configuration reloaded successfully');
             
             return { success: true };
         } catch (error) {
@@ -271,7 +282,13 @@ class ConfigApi {
             }
         });
         
-        await fs.writeFile(this.envPath, lines.join('\n'), 'utf8');
+        try {
+            await fs.writeFile(this.envPath, lines.join('\n'), 'utf8');
+            console.log(`[ConfigApi.writeEnvFile] Successfully wrote ${lines.length} lines to ${this.envPath}`);
+        } catch (writeError) {
+            console.error('[ConfigApi.writeEnvFile] Error writing file:', writeError);
+            throw writeError;
+        }
     }
 
     /**
@@ -339,9 +356,12 @@ class ConfigApi {
         // Save configuration
         app.post('/api/config', async (req, res) => {
             try {
-                await this.saveConfig(req.body);
+                console.log('[API /api/config] POST received with body:', JSON.stringify(req.body, null, 2));
+                const result = await this.saveConfig(req.body);
+                console.log('[API /api/config] Save result:', result);
                 res.json({ success: true });
             } catch (error) {
+                console.error('[API /api/config] Error:', error);
                 res.status(500).json({ 
                     success: false, 
                     error: error.message || 'Failed to save configuration' 
@@ -372,6 +392,22 @@ class ConfigApi {
                     success: false, 
                     error: error.message || 'Failed to reload configuration' 
                 });
+            }
+        });
+        
+        // Debug endpoint to check .env file
+        app.get('/api/config/debug', async (req, res) => {
+            try {
+                const fs = require('fs');
+                const envExists = fs.existsSync(this.envPath);
+                const envContent = envExists ? await fs.promises.readFile(this.envPath, 'utf8') : 'File does not exist';
+                res.json({ 
+                    path: this.envPath,
+                    exists: envExists,
+                    content: envContent.substring(0, 500) + '...' // First 500 chars
+                });
+            } catch (error) {
+                res.status(500).json({ error: error.message });
             }
         });
     }
