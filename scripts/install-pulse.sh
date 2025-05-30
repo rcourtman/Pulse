@@ -1293,6 +1293,13 @@ perform_update() {
     
     cd "$PULSE_DIR" || { print_error "Failed to change directory to $PULSE_DIR"; return 1; }
 
+    # Check if this is actually a git repository before attempting git operations
+    if [ ! -d ".git" ]; then
+        print_error "Directory $PULSE_DIR is not a git repository. Cannot perform git update."
+        print_error "Please remove the existing installation and reinstall, or ensure it's a proper git clone."
+        return 1
+    fi
+
     # Create comprehensive backup of all user data before ANY destructive operations
     local user_data_backup=""
     if user_data_backup=$(backup_user_data); then
