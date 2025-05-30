@@ -39,6 +39,7 @@ class UpdateManager {
                 currentVersion: this.currentVersion,
                 latestVersion,
                 updateAvailable,
+                isDocker: this.isDockerEnvironment(),
                 releaseNotes: response.data.body || 'No release notes available',
                 releaseUrl: response.data.html_url,
                 publishedAt: response.data.published_at,
@@ -49,7 +50,7 @@ class UpdateManager {
                 }))
             };
 
-            console.log(`[UpdateManager] Current version: ${this.currentVersion}, Latest version: ${latestVersion}`);
+            console.log(`[UpdateManager] Current version: ${this.currentVersion}, Latest version: ${latestVersion}, Docker: ${updateInfo.isDocker}`);
             return updateInfo;
 
         } catch (error) {
@@ -105,11 +106,30 @@ class UpdateManager {
     }
 
     /**
+     * Check if running in Docker
+     */
+    isDockerEnvironment() {
+        return process.env.DOCKER_DEPLOYMENT === 'true' || 
+               require('fs').existsSync('/.dockerenv') ||
+               (process.env.container === 'docker');
+    }
+
+    /**
      * Apply update
      */
     async applyUpdate(updateFile, progressCallback) {
         if (this.updateInProgress) {
             throw new Error('Update already in progress');
+        }
+
+        // Check if running in Docker
+        if (this.isDockerEnvironment()) {
+            throw new Error(
+                'Automatic updates are not supported in Docker deployments. ' +
+                'Please update your Docker image by pulling the latest version:\n' +
+                'docker pull rcourtman/pulse:latest\n' +
+                'or update your docker-compose.yml to use the new version tag.'
+            );
         }
 
         this.updateInProgress = true;
@@ -166,8 +186,6 @@ class UpdateManager {
                 progressCallback({ phase: 'extract', progress: 100 });
             }
 
-            // Detect deployment type
-            const isDocker = process.env.DOCKER_DEPLOYMENT === 'true' || require('fs').existsSync('/.dockerenv');
             const pulseDir = path.join(__dirname, '..');
 
             if (progressCallback) {
@@ -207,20 +225,14 @@ class UpdateManager {
             // Schedule restart
             console.log('[UpdateManager] Scheduling restart...');
             setTimeout(() => {
-                if (isDocker) {
-                    // In Docker, just exit - container will be restarted
-                    console.log('[UpdateManager] Exiting for Docker restart...');
+                // For systemd/manual deployments, try to restart
+                console.log('[UpdateManager] Attempting restart...');
+                
+                // Try systemctl first
+                execAsync('sudo systemctl restart pulse').catch(() => {
+                    // If systemctl fails, just exit
                     process.exit(0);
-                } else {
-                    // For systemd/manual deployments, try to restart
-                    console.log('[UpdateManager] Attempting restart...');
-                    
-                    // Try systemctl first
-                    execAsync('sudo systemctl restart pulse').catch(() => {
-                        // If systemctl fails, just exit
-                        process.exit(0);
-                    });
-                }
+                });
             }, 2000);
 
             // Cleanup

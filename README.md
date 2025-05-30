@@ -465,6 +465,22 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 
 ## 🔄 Updating Pulse
 
+### Web-Based Updates (Non-Docker)
+
+For non-Docker installations, Pulse includes a built-in update mechanism:
+
+1. Open the Settings modal (gear icon in the top right)
+2. Scroll to the "Software Updates" section
+3. Click "Check for Updates"
+4. If an update is available, review the release notes
+5. Click "Apply Update" to install it automatically
+
+The update process:
+- Backs up your configuration files
+- Downloads and applies the update
+- Preserves your settings
+- Automatically restarts the application
+
 ### Community Scripts LXC Installation
 
 If you installed using the Community Scripts method, simply re-run the original installation command:
@@ -477,7 +493,7 @@ The script will detect the existing installation and update it automatically.
 
 ### Docker Compose Installation
 
-To update a Docker Compose installation:
+Docker deployments must be updated by pulling the new image:
 
 ```bash
 cd /path/to/your/pulse-config
@@ -486,6 +502,8 @@ docker compose up -d
 ```
 
 This pulls the latest image and recreates the container with the new version.
+
+**Note:** The web-based update feature will detect Docker deployments and provide these instructions instead of attempting an in-place update.
 
 ### Manual LXC Installation
 
