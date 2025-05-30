@@ -34,6 +34,10 @@ PulseApp.socketHandler = (() => {
         
         // Development features
         socket.on('hotReload', handleHotReload);
+        
+        // Configuration reload events
+        socket.on('configurationReloaded', handleConfigurationReloaded);
+        socket.on('configurationError', handleConfigurationError);
 
         // Handle connection errors
         socket.on('connect_error', handleConnectError);
@@ -121,6 +125,33 @@ PulseApp.socketHandler = (() => {
     function handleHotReload() {
         if (process.env.NODE_ENV === 'development') {
             window.location.reload();
+        }
+    }
+    
+    function handleConfigurationReloaded(data) {
+        console.log('[Socket] Configuration reloaded:', data.message);
+        
+        // Show notification to user
+        if (PulseApp.alerts && PulseApp.alerts.showNotification) {
+            PulseApp.alerts.showNotification({
+                message: 'Configuration has been updated and reloaded',
+                severity: 'info'
+            });
+        }
+        
+        // Request fresh data with new configuration
+        socket.emit('requestData');
+    }
+    
+    function handleConfigurationError(data) {
+        console.error('[Socket] Configuration reload error:', data.error);
+        
+        // Show error notification to user
+        if (PulseApp.alerts && PulseApp.alerts.showNotification) {
+            PulseApp.alerts.showNotification({
+                message: 'Failed to reload configuration: ' + data.error,
+                severity: 'critical'
+            });
         }
     }
 

@@ -65,6 +65,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const state = PulseApp.state.getFullState();
         PulseApp.alerts?.updateAlertsFromState?.(state);
         
+        // Check and show configuration banner if needed
+        PulseApp.ui.configBanner?.checkAndShowBanner();
+        
         // Simple and direct scroll preservation - just focus on main table
         const mainTableContainer = document.querySelector('.table-container');
         if (mainTableContainer) {

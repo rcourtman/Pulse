@@ -35,6 +35,9 @@ try {
 // Set the placeholder status in stateManager *after* config loading is complete
 stateManager.setConfigPlaceholderStatus(configIsPlaceholder);
 
+// Store globally for config reload
+global.pulseConfigStatus = { isPlaceholder: configIsPlaceholder };
+
 // Set endpoint configurations for client use
 stateManager.setEndpointConfigurations(endpoints, pbsConfigs);
 
@@ -65,6 +68,10 @@ let apiClients = {};   // Initialize as empty objects
 let pbsApiClients = {};
 // Note: Client initialization is now async and happens in startServer()
 // --- END API Client Initialization ---
+
+// Configuration API
+const ConfigApi = require('./configApi');
+const configApi = new ConfigApi();
 
 // --- REMOVED OLD CLIENT INIT LOGIC --- 
 // The following blocks were moved to apiClients.js
@@ -118,6 +125,12 @@ app.use(express.static(publicDir, { index: false }));
 
 // Route to serve the main HTML file for the root path
 app.get('/', (req, res) => {
+  // Check if configuration is placeholder or missing
+  if (configIsPlaceholder) {
+    // Redirect to setup page
+    return res.redirect('/setup.html');
+  }
+  
   const indexPath = path.join(publicDir, 'index.html');
   res.sendFile(indexPath, (err) => {
     if (err) {
@@ -129,6 +142,9 @@ app.get('/', (req, res) => {
 });
 
 // --- API Routes ---
+// Set up configuration API routes
+configApi.setupRoutes(app);
+
 // Health check endpoint
 app.get('/healthz', (req, res) => {
     res.status(200).send('OK');
@@ -837,6 +853,13 @@ function gracefulShutdown(signal) {
     if (discoveryTimeoutId) clearTimeout(discoveryTimeoutId);
     if (metricTimeoutId) clearTimeout(metricTimeoutId);
     
+    // Clean up file watchers
+    if (envWatcher) {
+        envWatcher.close();
+        envWatcher = null;
+    }
+    clearTimeout(reloadDebounceTimer);
+    
     // Close WebSocket connections
     if (io) {
         io.close();
@@ -881,6 +904,57 @@ function gracefulShutdown(signal) {
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
+// --- Environment File Watcher ---
+let envWatcher = null;
+let reloadDebounceTimer = null;
+
+function setupEnvFileWatcher() {
+    const envPath = path.join(__dirname, '../.env');
+    
+    // Check if the file exists
+    if (!fs.existsSync(envPath)) {
+        console.log('No .env file found, skipping file watcher setup');
+        return;
+    }
+    
+    console.log('Setting up .env file watcher for automatic configuration reload');
+    
+    envWatcher = fs.watch(envPath, (eventType, filename) => {
+        if (eventType === 'change') {
+            // Debounce the reload to avoid multiple reloads for rapid changes
+            clearTimeout(reloadDebounceTimer);
+            reloadDebounceTimer = setTimeout(async () => {
+                console.log('.env file changed, reloading configuration...');
+                
+                try {
+                    await configApi.reloadConfiguration();
+                    
+                    // Notify connected clients about configuration change
+                    io.emit('configurationReloaded', { 
+                        message: 'Configuration has been updated',
+                        timestamp: Date.now()
+                    });
+                    
+                    console.log('Configuration reloaded successfully');
+                } catch (error) {
+                    console.error('Failed to reload configuration:', error);
+                    
+                    // Notify clients about the error
+                    io.emit('configurationError', {
+                        message: 'Failed to reload configuration',
+                        error: error.message,
+                        timestamp: Date.now()
+                    });
+                }
+            }, 1000); // Wait 1 second after last change before reloading
+        }
+    });
+    
+    envWatcher.on('error', (error) => {
+        console.error('Error watching .env file:', error);
+    });
+}
+
 // --- Start the server ---
 async function startServer() {
     try {
@@ -888,6 +962,10 @@ async function startServer() {
         const initializedClients = await initializeApiClients(endpoints, pbsConfigs);
         apiClients = initializedClients.apiClients;
         pbsApiClients = initializedClients.pbsApiClients;
+        
+        // Store globally for config reload
+        global.pulseApiClients = { apiClients, pbsApiClients };
+        
         console.log("INFO: All API clients initialized.");
     } catch (initError) {
         console.error("FATAL: Failed to initialize API clients:", initError);
@@ -905,6 +983,10 @@ async function startServer() {
         
         // Schedule the first metric run *after* the initial discovery completes and server is listening
         scheduleNextMetric(); 
+        
+        // Watch .env file for changes
+        setupEnvFileWatcher();
+        
         // Setup hot reload in development mode
         if (process.env.NODE_ENV === 'development' && chokidar) {
           const publicPath = path.join(__dirname, '../src/public');
