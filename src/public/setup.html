@@ -309,10 +309,16 @@
     </div>
   </div>
 
+  <script>
+    // Initialize PulseApp if it doesn't exist
+    window.PulseApp = window.PulseApp || {};
+  </script>
   <script src="/js/theme.js"></script>
   <script>
     // Initialize theme
-    PulseApp.theme.init();
+    if (PulseApp.theme && PulseApp.theme.init) {
+      PulseApp.theme.init();
+    }
 
     function togglePasswordVisibility(inputId) {
       const input = document.getElementById(inputId);
