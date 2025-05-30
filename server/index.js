@@ -167,6 +167,13 @@ app.get('/healthz', (req, res) => {
 app.get('/api/health', (req, res) => {
     try {
         const healthSummary = stateManager.getHealthSummary();
+        // Add system info including placeholder status
+        const state = stateManager.getState();
+        healthSummary.system = {
+            configPlaceholder: state.isConfigPlaceholder || false,
+            hasData: stateManager.hasData(),
+            clientsInitialized: Object.keys(global.pulseApiClients?.apiClients || {}).length > 0
+        };
         res.json(healthSummary);
     } catch (error) {
         console.error("Error in /api/health:", error);

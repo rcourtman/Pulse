@@ -540,8 +540,8 @@
           console.log('Health check response:', health);
           
           // Check if the server has successfully loaded configuration
-          // Look for signs that API clients are initialized and not in placeholder mode
-          if (health.system && health.system.configPlaceholder === false) {
+          // Look for overall health and recent activity
+          if (health.overall === 'healthy' && health.lastUpdate && health.connections && health.connections.total > 0) {
             showSuccess('Configuration applied successfully!', true, false);
             
             // Re-enable the save button
