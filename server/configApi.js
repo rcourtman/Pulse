@@ -20,6 +20,7 @@ class ConfigApi {
                     host: config.PROXMOX_HOST,
                     port: config.PROXMOX_PORT || '8006',
                     tokenId: config.PROXMOX_TOKEN_ID,
+                    nodeName: config.PROXMOX_NODE_NAME,
                     // Don't send the secret
                 } : null,
                 pbs: config.PBS_HOST ? {
