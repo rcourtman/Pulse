@@ -1792,10 +1792,14 @@ diagnose_service_failure() {
     elif echo "$recent_logs" | grep -q "EADDRINUSE.*7655"; then
         print_error "✗ Port 7655 is already in use"
         print_error "  → Another service is using the default port"
-    elif echo "$recent_logs" | grep -q "npm notice.*npm install"; then
-        print_error "✗ Service startup issue with npm execution"
-        print_error "  → The service may be misconfigured to use npm instead of direct node execution"
-        print_error "  → This has been fixed in recent versions - try updating the installer"
+    elif echo "$recent_logs" | grep -q "ExecStart=.*npm.*start"; then
+        print_error "✗ Service is misconfigured to use npm start"
+        print_error "  → The service should use direct node execution"
+        print_error "  → Re-run the installer to fix this issue"
+    elif echo "$recent_logs" | grep -q "npm ERR!" || echo "$recent_logs" | grep -q "npm WARN"; then
+        print_error "✗ npm-related errors detected"
+        print_error "  → Try running: cd $PULSE_DIR && npm install"
+        print_error "  → Ensure all dependencies are properly installed"
     else
         print_error "✗ Unknown service failure"
         print_error "Recent log entries:"
