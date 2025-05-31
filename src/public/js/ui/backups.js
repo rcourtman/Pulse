@@ -776,10 +776,40 @@ PulseApp.ui.backups = (() => {
         });
     }
 
+    function createThresholdIndicator(guestStatus) {
+        // Get current app state to check for custom thresholds
+        const currentState = PulseApp.state.get();
+        if (!currentState || !currentState.customThresholds) {
+            return ''; // No custom thresholds data available
+        }
+        
+        // Check if this guest has custom thresholds configured
+        const hasCustomThresholds = currentState.customThresholds.some(config => 
+            config.endpointId === guestStatus.endpointId && 
+            config.nodeId === guestStatus.node && 
+            config.vmid === guestStatus.guestId &&
+            config.enabled
+        );
+        
+        if (hasCustomThresholds) {
+            return `
+                <span class="inline-flex items-center justify-center w-3 h-3 text-xs font-bold text-white bg-blue-500 rounded-full" 
+                      title="Custom alert thresholds configured">
+                    T
+                </span>
+            `;
+        }
+        
+        return '';
+    }
+
     function _renderBackupTableRow(guestStatus) {
         const row = document.createElement('tr');
         row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
         row.dataset.guestId = guestStatus.guestId;
+
+        // Check if guest has custom thresholds
+        const thresholdIndicator = createThresholdIndicator(guestStatus);
 
         const latestBackupFormatted = guestStatus.latestBackupTime
             ? PulseApp.utils.formatPbsTimestamp(guestStatus.latestBackupTime)
@@ -834,7 +864,12 @@ PulseApp.ui.backups = (() => {
         }
 
         row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100 border-r border-gray-300 dark:border-gray-600" title="${guestStatus.guestName}">${guestStatus.guestName}</td>
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100 border-r border-gray-300 dark:border-gray-600" title="${guestStatus.guestName}">
+                <div class="flex items-center gap-1">
+                    <span>${guestStatus.guestName}</span>
+                    ${thresholdIndicator}
+                </div>
+            </td>
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>

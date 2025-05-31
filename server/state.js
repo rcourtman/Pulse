@@ -105,7 +105,10 @@ function getState() {
     aggregatedPbsTaskSummary: state.aggregatedPbsTaskSummary,
     
     // Alerts
-    alerts: getAlertInfo() // Corrected: Call the local getAlertInfo function
+    alerts: getAlertInfo(), // Corrected: Call the local getAlertInfo function
+    
+    // Custom Thresholds
+    customThresholds: getCustomThresholds()
   };
 }
 
@@ -332,6 +335,16 @@ function getAlertInfo() {
     stats: alertManager.getEnhancedAlertStats(),
     rules: alertManager.getRules()
   };
+}
+
+function getCustomThresholds() {
+  try {
+    const customThresholdManager = require('./customThresholds');
+    return customThresholdManager.getAllThresholds();
+  } catch (error) {
+    console.error('[State Manager] Error getting custom thresholds:', error);
+    return [];
+  }
 }
 
 function clearMetricsData() {

@@ -942,6 +942,33 @@ PulseApp.ui.dashboard = (() => {
         }
     }
 
+    function createThresholdIndicator(guest) {
+        // Get current app state to check for custom thresholds
+        const currentState = PulseApp.state.get();
+        if (!currentState || !currentState.customThresholds) {
+            return ''; // No custom thresholds data available
+        }
+        
+        // Check if this guest has custom thresholds configured  
+        // Note: We only check endpointId and vmid to support VM migration within clusters
+        const hasCustomThresholds = currentState.customThresholds.some(config => 
+            config.endpointId === guest.endpointId && 
+            config.vmid === guest.id &&
+            config.enabled
+        );
+        
+        if (hasCustomThresholds) {
+            return `
+                <span class="inline-flex items-center justify-center w-3 h-3 text-xs font-bold text-white bg-blue-500 rounded-full" 
+                      title="Custom alert thresholds configured">
+                    T
+                </span>
+            `;
+        }
+        
+        return '';
+    }
+
     function createGuestRow(guest) {
         const row = document.createElement('tr');
         row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
@@ -949,6 +976,9 @@ PulseApp.ui.dashboard = (() => {
         row.setAttribute('data-type', guest.type.toLowerCase());
         row.setAttribute('data-node', guest.node.toLowerCase());
         row.setAttribute('data-id', guest.id);
+
+        // Check if guest has custom thresholds
+        const thresholdIndicator = createThresholdIndicator(guest);
 
         const cpuBarHTML = _createCpuBarHtml(guest);
         const memoryBarHTML = _createMemoryBarHtml(guest);
@@ -1003,7 +1033,12 @@ PulseApp.ui.dashboard = (() => {
         }
 
         row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">${guest.name}</td>
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">
+                <div class="flex items-center gap-1">
+                    <span>${guest.name}</span>
+                    ${thresholdIndicator}
+                </div>
+            </td>
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2">${guest.id}</td>
             <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>

@@ -54,10 +54,8 @@ global.pulseConfigStatus = { isPlaceholder: configIsPlaceholder };
 // Set endpoint configurations for client use
 stateManager.setEndpointConfigurations(endpoints, pbsConfigs);
 
-const fs = require('fs'); // Add fs module
 const express = require('express');
 const http = require('http');
-const path = require('path');
 const cors = require('cors');
 const compression = require('compression');
 const { Server } = require('socket.io');
@@ -163,6 +161,10 @@ app.get('/setup.html', (req, res) => {
 // --- API Routes ---
 // Set up configuration API routes
 configApi.setupRoutes(app);
+
+// Set up threshold API routes
+const { setupThresholdRoutes } = require('./thresholdRoutes');
+setupThresholdRoutes(app);
 
 // Set up update API routes
 const UpdateManager = require('./updateManager');

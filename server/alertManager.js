@@ -1,6 +1,7 @@
 const EventEmitter = require('events');
 const fs = require('fs').promises;
 const path = require('path');
+const customThresholdManager = require('./customThresholds');
 
 class AlertManager extends EventEmitter {
     constructor() {
@@ -31,6 +32,9 @@ class AlertManager extends EventEmitter {
         
         // Load persisted acknowledgements
         this.loadAcknowledgements();
+        
+        // Initialize custom threshold manager
+        this.initializeCustomThresholds();
         
         // Cleanup timer for resolved alerts
         this.cleanupInterval = setInterval(() => {
@@ -306,9 +310,12 @@ class AlertManager extends EventEmitter {
             m.id === guest.vmid
         );
 
+        // Get effective threshold (custom or global)
+        const effectiveThreshold = this.getEffectiveThreshold(rule, guest);
+
         // Enhanced condition evaluation
         if (rule.metric === 'status') {
-            isTriggered = this.evaluateCondition(guest.status, rule.condition, rule.threshold);
+            isTriggered = this.evaluateCondition(guest.status, rule.condition, effectiveThreshold);
             currentValue = guest.status;
         } else if (rule.metric === 'network_combined' && rule.condition === 'anomaly') {
             // Network anomaly detection
@@ -317,7 +324,7 @@ class AlertManager extends EventEmitter {
         } else if (guestMetrics && guestMetrics.current) {
             const metricValue = this.getMetricValue(guestMetrics.current, rule.metric, guest);
             if (metricValue !== null) {
-                isTriggered = this.evaluateCondition(metricValue, rule.condition, rule.threshold);
+                isTriggered = this.evaluateCondition(metricValue, rule.condition, effectiveThreshold);
                 currentValue = metricValue;
             }
         }
@@ -895,6 +902,52 @@ class AlertManager extends EventEmitter {
             return rules.filter(rule => rule.severity === filters.severity);
         }
         return rules;
+    }
+
+    /**
+     * Get effective threshold for a rule, checking for custom thresholds first
+     */
+    getEffectiveThreshold(rule, guest) {
+        try {
+            // Check if custom thresholds are configured for this VM/LXC
+            const customConfig = customThresholdManager.getThresholds(
+                guest.endpointId, 
+                guest.node, 
+                guest.vmid
+            );
+            
+            if (customConfig && customConfig.enabled && customConfig.thresholds) {
+                const metricThresholds = customConfig.thresholds[rule.metric];
+                
+                if (metricThresholds) {
+                    // Determine which threshold to use based on rule severity
+                    if (rule.severity === 'critical' && metricThresholds.critical !== undefined) {
+                        console.log(`[AlertManager] Using custom critical ${rule.metric} threshold ${metricThresholds.critical}% for ${guest.endpointId}:${guest.node}:${guest.vmid}`);
+                        return metricThresholds.critical;
+                    } else if (rule.severity === 'warning' && metricThresholds.warning !== undefined) {
+                        console.log(`[AlertManager] Using custom warning ${rule.metric} threshold ${metricThresholds.warning}% for ${guest.endpointId}:${guest.node}:${guest.vmid}`);
+                        return metricThresholds.warning;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('[AlertManager] Error getting custom thresholds:', error);
+        }
+        
+        // Fall back to global threshold from rule
+        return rule.threshold;
+    }
+
+    /**
+     * Initialize custom threshold manager
+     */
+    async initializeCustomThresholds() {
+        try {
+            await customThresholdManager.init();
+            console.log('[AlertManager] Custom threshold manager initialized');
+        } catch (error) {
+            console.error('[AlertManager] Failed to initialize custom threshold manager:', error);
+        }
     }
 
     async loadAcknowledgements() {

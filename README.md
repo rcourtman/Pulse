@@ -296,6 +296,28 @@ Alert features include:
 - Automatic resolution when conditions normalize
 - Alert history tracking
 
+#### Custom Per-VM/LXC Alert Thresholds (Optional)
+
+For advanced monitoring scenarios, Pulse supports custom alert thresholds on a per-VM/LXC basis through the web interface:
+
+**Use Cases:**
+- **Storage/NAS VMs**: Set higher memory thresholds (e.g., 95%/99%) for VMs that naturally use high memory for disk caching
+- **Application Servers**: Set lower CPU thresholds (e.g., 70%/85%) for performance-critical applications  
+- **Development VMs**: Set custom disk thresholds (e.g., 75%/90%) for early storage warnings
+
+**Configuration:**
+1. Navigate to **Settings → Custom Thresholds** tab
+2. Click **"Add Custom Threshold"**
+3. Select your VM/LXC from the dropdown
+4. Configure custom CPU, Memory, and/or Disk thresholds
+5. Save configuration
+
+**Features:**
+- **Migration-aware**: Thresholds follow VMs when they migrate between cluster nodes
+- **Per-metric control**: Configure only the metrics you need (CPU, Memory, Disk)
+- **Visual indicators**: VMs with custom thresholds show a blue "T" badge in the dashboard
+- **Fallback behavior**: VMs without custom thresholds use global settings
+
 ***Note:** For a Proxmox cluster, you only need to provide connection details for **one** node. Pulse automatically discovers other cluster members.*
 
 
@@ -476,7 +498,10 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
   - PVE backup files stored on local and shared storage
   - VM/CT snapshot tracking with calendar heatmap visualization
 - Built-in diagnostic tool with API permission testing and troubleshooting guidance.
-- Advanced alert system with configurable thresholds and durations.
+- **Advanced alert system:**
+  - Configurable global thresholds and durations
+  - Custom per-VM/LXC alert thresholds (perfect for storage VMs, application servers, etc.)
+  - Migration-aware thresholds that follow VMs across cluster nodes
 - Efficient polling: Stops API polling when no clients are connected.
 - Docker support.
 - Multi-environment PVE monitoring support.
