@@ -98,6 +98,14 @@ class DiagnosticTool {
             console.error('Error generating recommendations:', e);
         }
 
+        // Add summary for UI
+        report.summary = {
+            hasIssues: report.recommendations.some(r => r.severity === 'critical' || r.severity === 'warning'),
+            criticalIssues: report.recommendations.filter(r => r.severity === 'critical').length,
+            warnings: report.recommendations.filter(r => r.severity === 'warning').length,
+            isTimingIssue: report.state.loadTimeout || (report.state.serverUptime < 60 && (!report.state.guests || report.state.guests.total === 0))
+        };
+
         // Return unsanitized report - sanitization will be done client-side for copy/download
         return report;
     }
