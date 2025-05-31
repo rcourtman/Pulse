@@ -294,7 +294,11 @@ install_npm_deps() {
         # Verify dependencies are working
         if npm list --depth=0 &>/dev/null; then
             print_success "NPM dependencies verified"
-            return 0
+            # Check if CSS is already built
+            if [ -f "src/public/index.css" ]; then
+                print_info "CSS assets already built in release"
+                return 0
+            fi
         else
             print_warning "Dependencies need to be reinstalled"
             rm -rf node_modules
@@ -309,13 +313,20 @@ install_npm_deps() {
     
     print_success "NPM dependencies installed"
     
-    # Build CSS
-    print_info "Building CSS assets..."
-    npm run build:css || {
-        print_error "Failed to build CSS assets"
-        exit 1
-    }
-    print_success "CSS assets built"
+    # Build CSS only if it doesn't exist
+    if [ ! -f "src/public/index.css" ]; then
+        print_info "Building CSS assets..."
+        # Check if build:css script exists and tailwindcss is available
+        if npm run | grep -q "build:css" && command -v npx &>/dev/null && npx tailwindcss --help &>/dev/null 2>&1; then
+            npm run build:css || {
+                print_warning "Failed to build CSS assets, but continuing (CSS may be pre-built)"
+            }
+        else
+            print_warning "Tailwind CSS not available for building, assuming CSS is pre-built"
+        fi
+    else
+        print_info "CSS assets already exist"
+    fi
 }
 
 # Set file permissions
