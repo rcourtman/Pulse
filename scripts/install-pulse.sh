@@ -2211,6 +2211,7 @@ case "$INSTALL_MODE" in
                     should_update_deps=false
                 else
                     print_warning "Express version mismatch detected ($current_express_ver vs 4.19.2). Will update dependencies."
+                    should_update_deps=true
                 fi
                 cd ..
             fi
