@@ -1,11 +1,21 @@
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const { loadConfiguration } = require('./configLoader');
 const { initializeApiClients } = require('./apiClients');
 
 class ConfigApi {
     constructor() {
-        this.envPath = path.join(__dirname, '../.env');
+        // Use persistent config directory if it exists (for Docker), otherwise use project root
+        const configDir = path.join(__dirname, '../config');
+        const projectRootEnv = path.join(__dirname, '../.env');
+        
+        // Check if we're in a Docker environment with persistent config volume
+        if (fsSync.existsSync(configDir)) {
+            this.envPath = path.join(configDir, '.env');
+        } else {
+            this.envPath = projectRootEnv;
+        }
     }
 
     /**

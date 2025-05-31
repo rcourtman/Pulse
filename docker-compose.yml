@@ -11,12 +11,22 @@ services:
       # Map container port 7655 to host port 7655
       # You can change the host port (left side) if 7655 is already in use on your host
       - "7655:7655"
-    env_file:
-      # Load environment variables from a .env file in the same directory as this compose file
-      - .env # Standard location
+    # env_file:
+      # NOTE: .env file is now managed by the web UI and stored in persistent volume
+      # No need to load from host .env file
+      # - .env
+    volumes:
+      # Persist configuration data to avoid losing settings on container recreation
+      # Mount a persistent volume for configuration files
+      - pulse_config:/usr/src/app/config
     # Optional: Define networks if needed, otherwise uses default bridge network
     # networks:
     #   - pulse_network
+
+# Define persistent volumes for configuration and data
+volumes:
+  pulse_config:
+    driver: local
 
 # Optional: Define a network
 # networks:

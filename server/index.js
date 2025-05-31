@@ -1,4 +1,17 @@
-require('dotenv').config(); // Load environment variables from .env file
+// Load environment variables from .env file
+// Check for persistent config directory (Docker) or use project root
+const fs = require('fs');
+const path = require('path');
+
+const configDir = path.join(__dirname, '../config');
+const configEnvPath = path.join(configDir, '.env');
+const projectEnvPath = path.join(__dirname, '../.env');
+
+if (fs.existsSync(configEnvPath)) {
+    require('dotenv').config({ path: configEnvPath });
+} else {
+    require('dotenv').config({ path: projectEnvPath });
+}
 
 // Import the state manager FIRST
 const stateManager = require('./state');
@@ -998,7 +1011,12 @@ let lastReloadTime = 0;
 global.lastReloadTime = 0;  // Make it globally accessible
 
 function setupEnvFileWatcher() {
-    const envPath = path.join(__dirname, '../.env');
+    // Use same logic as ConfigApi to find .env file
+    const configDir = path.join(__dirname, '../config');
+    const configEnvPath = path.join(configDir, '.env');
+    const projectEnvPath = path.join(__dirname, '../.env');
+    
+    const envPath = fs.existsSync(configEnvPath) ? configEnvPath : projectEnvPath;
     
     // Check if the file exists
     if (!fs.existsSync(envPath)) {

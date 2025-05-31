@@ -98,7 +98,18 @@ function loadPbsConfig(index = null) {
 function loadConfiguration() {
     // Only load .env file if not in test environment
     if (process.env.NODE_ENV !== 'test') {
-      require('dotenv').config();
+        const fs = require('fs');
+        const path = require('path');
+        
+        const configDir = path.join(__dirname, '../config');
+        const configEnvPath = path.join(configDir, '.env');
+        const projectEnvPath = path.join(__dirname, '../.env');
+
+        if (fs.existsSync(configEnvPath)) {
+            require('dotenv').config({ path: configEnvPath });
+        } else {
+            require('dotenv').config({ path: projectEnvPath });
+        }
     }
 
     let isConfigPlaceholder = false; // Add this flag

@@ -157,7 +157,7 @@ Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE
 
 **Steps:**
 
-1.  **Create a Directory:** Make a directory on your Docker host where Pulse will store configuration:
+1.  **Create a Directory:** Make a directory for your Docker configuration files:
     ```bash
     mkdir pulse-config
     cd pulse-config
@@ -175,8 +175,14 @@ Visit the [Community Scripts page](https://community-scripts.github.io/ProxmoxVE
           # Change the left side (e.g., "8081:7655") if 7655 is busy on your host
           - "7655:7655"
         volumes:
-          # Mount local directory for persistent configuration
-          - ./pulse-data:/opt/pulse-proxmox
+          # Persistent volume for configuration data
+          # Configuration persists across container updates
+          - pulse_config:/usr/src/app/config
+
+    # Define persistent volumes
+    volumes:
+      pulse_config:
+        driver: local
     ```
 3.  **Run:** Start the container:
     ```bash
