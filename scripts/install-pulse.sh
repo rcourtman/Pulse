@@ -1891,6 +1891,7 @@ EOF
         # Try to fix common issues and restart
         if validate_service_configuration && systemctl start "$SERVICE_NAME" >/dev/null 2>&1; then
             print_success "Service recovered successfully after fixing configuration issues."
+            print_info "Pulse service is now running normally."
             return 0
         else
             print_error "Automatic recovery failed."
