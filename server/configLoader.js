@@ -179,7 +179,7 @@ function loadConfiguration() {
         
         return {
             id: index ? `${idPrefix}_${index}` : idPrefix,
-            name: nodeName || host,
+            name: nodeName || null, // Only use explicitly configured names
             host: host,
             port: process.env[portEnv] || '8006',
             tokenId: tokenId,
