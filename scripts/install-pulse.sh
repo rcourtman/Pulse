@@ -319,7 +319,7 @@ configure_environment() {
     if [ ! -f "$env_file" ]; then
         cat > "$env_file" << EOF
 NODE_ENV=production
-PORT=3000
+PORT=7655
 EOF
         chown "$PULSE_USER:$PULSE_USER" "$env_file"
         chmod 600 "$env_file"
@@ -346,7 +346,7 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=pulse-monitor
 Environment="NODE_ENV=production"
-Environment="PORT=3000"
+Environment="PORT=7655"
 
 [Install]
 WantedBy=multi-user.target
@@ -548,7 +548,7 @@ show_final_instructions() {
     local ip=$(hostname -I | awk '{print $1}')
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo -e "Access Pulse: \033[1;36mhttp://${ip}:3000\033[0m"
+    echo -e "Access Pulse: \033[1;36mhttp://${ip}:7655\033[0m"
     echo ""
     echo "Useful commands:"
     echo "  • systemctl status $SERVICE_NAME"
