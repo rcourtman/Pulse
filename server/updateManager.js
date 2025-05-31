@@ -71,7 +71,36 @@ class UpdateManager {
             
             const tempFile = path.join(tempDir, 'update.tar.gz');
             
-            // Download with progress tracking
+            // In test mode, create a mock tarball directly instead of downloading
+            if (process.env.UPDATE_TEST_MODE === 'true' && downloadUrl.includes('/api/test/mock-update.tar.gz')) {
+                console.log('[UpdateManager] Test mode: Creating mock update package...');
+                
+                const tar = require('tar');
+                await tar.create({
+                    gzip: true,
+                    file: tempFile,
+                    cwd: path.join(__dirname, '..'),
+                    filter: (path) => {
+                        return !path.includes('node_modules') && 
+                               !path.includes('.git') && 
+                               !path.includes('temp') &&
+                               !path.includes('data/backups');
+                    }
+                }, ['.']);
+                
+                // Simulate download progress
+                if (progressCallback) {
+                    for (let i = 0; i <= 100; i += 10) {
+                        progressCallback({ phase: 'download', progress: i });
+                        await new Promise(resolve => setTimeout(resolve, 100));
+                    }
+                }
+                
+                console.log('[UpdateManager] Test mode: Mock package created successfully');
+                return tempFile;
+            }
+            
+            // Normal download for real updates
             const response = await axios({
                 method: 'get',
                 url: downloadUrl,
@@ -96,12 +125,26 @@ class UpdateManager {
 
             return new Promise((resolve, reject) => {
                 writer.on('finish', () => resolve(tempFile));
-                writer.on('error', reject);
+                writer.on('error', (error) => {
+                    console.error('[UpdateManager] Writer error:', error);
+                    reject(error);
+                });
+                response.data.on('error', (error) => {
+                    console.error('[UpdateManager] Response stream error:', error);
+                    writer.destroy();
+                    reject(error);
+                });
             });
 
         } catch (error) {
-            console.error('[UpdateManager] Error downloading update:', error.message);
-            throw new Error(`Failed to download update: ${error.message}`);
+            console.error('[UpdateManager] Error downloading update:', error);
+            console.error('[UpdateManager] Error details:', {
+                message: error.message,
+                code: error.code,
+                response: error.response?.status,
+                responseData: error.response?.data
+            });
+            throw new Error(`Failed to download update: ${error.message || error.toString()}`);
         }
     }
 
@@ -224,15 +267,35 @@ class UpdateManager {
 
             // Schedule restart
             console.log('[UpdateManager] Scheduling restart...');
-            setTimeout(() => {
-                // For systemd/manual deployments, try to restart
+            setTimeout(async () => {
                 console.log('[UpdateManager] Attempting restart...');
                 
-                // Try systemctl first
-                execAsync('sudo systemctl restart pulse').catch(() => {
-                    // If systemctl fails, just exit
-                    process.exit(0);
-                });
+                // In test mode or development, just exit (user needs to restart manually)
+                if (process.env.UPDATE_TEST_MODE === 'true' || process.env.NODE_ENV === 'development') {
+                    console.log('[UpdateManager] Test/Dev mode: Please restart the server manually');
+                    console.log('[UpdateManager] Exiting in 3 seconds...');
+                    setTimeout(() => {
+                        process.exit(0);
+                    }, 3000);
+                    return;
+                }
+                
+                // For production deployments, try various restart methods
+                try {
+                    // Try systemctl first (Linux with systemd)
+                    await execAsync('sudo systemctl restart pulse');
+                    console.log('[UpdateManager] Restarted via systemctl');
+                } catch (error) {
+                    try {
+                        // Try pm2 restart
+                        await execAsync('pm2 restart pulse');
+                        console.log('[UpdateManager] Restarted via pm2');
+                    } catch (error) {
+                        // Last resort: exit and hope something restarts us
+                        console.log('[UpdateManager] No restart mechanism found, exiting...');
+                        process.exit(0);
+                    }
+                }
             }, 2000);
 
             // Cleanup

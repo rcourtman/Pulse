@@ -1316,7 +1316,14 @@ PulseApp.ui.settings = (() => {
         );
         
         if (!tarballAsset) {
-            showMessage('No update package found in the release', 'error');
+            console.error('Available assets:', latestReleaseData.assets.map(a => a.name));
+            showMessage('No update package found in the release. Expected a .tar.gz file containing "pulse".', 'error');
+            return;
+        }
+        
+        if (!tarballAsset.downloadUrl && !tarballAsset.browser_download_url) {
+            console.error('Tarball asset missing download URL:', tarballAsset);
+            showMessage('Update package is missing download URL', 'error');
             return;
         }
         
@@ -1348,7 +1355,7 @@ PulseApp.ui.settings = (() => {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    downloadUrl: tarballAsset.browser_download_url
+                    downloadUrl: tarballAsset.downloadUrl || tarballAsset.browser_download_url
                 })
             });
             

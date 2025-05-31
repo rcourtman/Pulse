@@ -173,6 +173,31 @@ const updateManager = new UpdateManager();
 // Check for updates endpoint
 app.get('/api/updates/check', async (req, res) => {
     try {
+        // Check if we're in test mode
+        if (process.env.UPDATE_TEST_MODE === 'true') {
+            const testVersion = process.env.UPDATE_TEST_VERSION || '99.99.99';
+            const currentVersion = updateManager.currentVersion;
+            
+            // Create mock update data
+            const mockUpdateInfo = {
+                currentVersion: currentVersion,
+                latestVersion: testVersion,
+                updateAvailable: true,
+                isDocker: updateManager.isDockerEnvironment(),
+                releaseNotes: 'Test release for update mechanism testing\n\n- Testing download functionality\n- Testing backup process\n- Testing installation process',
+                releaseUrl: 'https://github.com/rcourtman/Pulse/releases/test',
+                publishedAt: new Date().toISOString(),
+                assets: [{
+                    name: 'pulse-v' + testVersion + '.tar.gz',
+                    size: 1024000,
+                    downloadUrl: 'http://localhost:3000/api/test/mock-update.tar.gz'
+                }]
+            };
+            
+            console.log('[UpdateManager] Test mode enabled, returning mock update info');
+            return res.json(mockUpdateInfo);
+        }
+        
         const updateInfo = await updateManager.checkForUpdates();
         res.json(updateInfo);
     } catch (error) {
@@ -231,6 +256,20 @@ app.get('/api/updates/status', (req, res) => {
         console.error('Error getting update status:', error);
         res.status(500).json({ error: error.message });
     }
+});
+
+// Mock update tarball endpoint for testing (not actually used in test mode)
+app.get('/api/test/mock-update.tar.gz', (req, res) => {
+    if (process.env.UPDATE_TEST_MODE !== 'true') {
+        return res.status(404).json({ error: 'Test mode not enabled' });
+    }
+    
+    // This endpoint exists just to make the URL valid
+    // The actual download is handled differently in test mode
+    res.status(200).json({ 
+        message: 'Test mode active - download handled internally',
+        testMode: true 
+    });
 });
 
 // Health check endpoint
