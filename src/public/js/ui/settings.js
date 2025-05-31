@@ -4,6 +4,7 @@ PulseApp.ui.settings = (() => {
     let currentConfig = {};
     let isInitialized = false;
     let activeTab = 'proxmox';
+    let latestReleaseData = null; // Store the latest release data
 
     function init() {
         if (isInitialized) return;
@@ -1142,31 +1143,47 @@ PulseApp.ui.settings = (() => {
             latestVersionElement.textContent = 'Checking...';
             latestVersionElement.className = 'font-mono font-semibold text-gray-500 dark:text-gray-400';
             
-            const response = await fetch('https://api.github.com/repos/rcourtman/Pulse/releases/latest');
+            // Use the server's update check API to get proper update info
+            const response = await fetch('/api/updates/check');
             const data = await response.json();
             
-            if (response.ok && data.tag_name) {
-                const latestVersion = data.tag_name.replace(/^v/, ''); // Remove 'v' prefix if present
-                const currentVersion = currentConfig.version || 'Unknown';
+            if (response.ok && data.latestVersion) {
+                const latestVersion = data.latestVersion;
+                const currentVersion = data.currentVersion || currentConfig.version || 'Unknown';
                 
                 latestVersionElement.textContent = latestVersion;
                 
-                // Compare versions
-                if (currentVersion !== 'Unknown' && compareVersions(currentVersion, latestVersion) < 0) {
+                // Update stored config version if server provided it
+                if (data.currentVersion) {
+                    currentConfig.version = data.currentVersion;
+                }
+                
+                if (data.updateAvailable) {
                     // Update available
                     latestVersionElement.className = 'font-mono font-semibold text-green-600 dark:text-green-400';
                     versionStatusElement.innerHTML = '<span class="text-green-600 dark:text-green-400">📦 Update available!</span>';
                     
+                    // Convert server response to match GitHub API format for showUpdateDetails
+                    const releaseData = {
+                        tag_name: 'v' + latestVersion,
+                        body: data.releaseNotes,
+                        published_at: data.publishedAt,
+                        html_url: data.releaseUrl,
+                        assets: data.assets,
+                        isDocker: data.isDocker // Store Docker status
+                    };
+                    
                     // Show update details
-                    showUpdateDetails(data);
-                } else if (currentVersion !== 'Unknown' && compareVersions(currentVersion, latestVersion) >= 0) {
+                    showUpdateDetails(releaseData);
+                    
+                    // Show Docker warning if applicable
+                    if (data.isDocker) {
+                        versionStatusElement.innerHTML += '<br><span class="text-amber-600 dark:text-amber-400 text-xs">Note: Docker deployments require manual update</span>';
+                    }
+                } else {
                     // Up to date
                     latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
                     versionStatusElement.innerHTML = '<span class="text-green-600 dark:text-green-400">✅ Up to date</span>';
-                } else {
-                    // Unknown current version
-                    latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
-                    versionStatusElement.innerHTML = '<span class="text-gray-500 dark:text-gray-400">Unable to compare versions</span>';
                 }
             } else {
                 throw new Error('Failed to fetch release data');
@@ -1199,6 +1216,9 @@ PulseApp.ui.settings = (() => {
     function showUpdateDetails(releaseData) {
         const updateDetails = document.getElementById('update-details');
         if (!updateDetails) return;
+        
+        // Store the release data for use in applyUpdate
+        latestReleaseData = releaseData;
         
         const updateVersion = document.getElementById('update-version');
         const updateReleaseNotes = document.getElementById('update-release-notes');
@@ -1236,8 +1256,101 @@ PulseApp.ui.settings = (() => {
     }
 
     async function applyUpdate() {
-        showMessage('Update functionality not implemented yet', 'info');
-        // Implementation would go here
+        if (!latestReleaseData || !latestReleaseData.assets || latestReleaseData.assets.length === 0) {
+            showMessage('No update information available. Please check for updates first.', 'error');
+            return;
+        }
+        
+        // Find the tarball asset
+        const tarballAsset = latestReleaseData.assets.find(asset => 
+            asset.name.endsWith('.tar.gz') && asset.name.includes('pulse')
+        );
+        
+        if (!tarballAsset) {
+            showMessage('No update package found in the release', 'error');
+            return;
+        }
+        
+        // Check if running in Docker
+        if (latestReleaseData.isDocker) {
+            showMessage('Automatic updates are not supported in Docker. Please pull the latest Docker image.', 'warning');
+            return;
+        }
+        
+        // Confirm update
+        if (!confirm(`Update to version ${latestReleaseData.tag_name}?\n\nThe application will restart automatically after the update is applied.`)) {
+            return;
+        }
+        
+        try {
+            // Hide update details and show progress
+            const updateDetails = document.getElementById('update-available');
+            const updateProgress = document.getElementById('update-progress');
+            const progressBar = document.getElementById('update-progress-bar');
+            const progressText = document.getElementById('update-progress-text');
+            
+            if (updateDetails) updateDetails.classList.add('hidden');
+            if (updateProgress) updateProgress.classList.remove('hidden');
+            
+            // Start the update
+            const updateResponse = await fetch('/api/updates/apply', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    downloadUrl: tarballAsset.browser_download_url
+                })
+            });
+            
+            if (!updateResponse.ok) {
+                const error = await updateResponse.json();
+                throw new Error(error.error || 'Failed to start update');
+            }
+            
+            // Listen for progress updates via WebSocket
+            if (window.socket) {
+                window.socket.on('updateProgress', (data) => {
+                    if (progressBar) {
+                        progressBar.style.width = `${data.progress}%`;
+                    }
+                    if (progressText) {
+                        const phaseText = {
+                            'download': 'Downloading update...',
+                            'backup': 'Backing up current installation...',
+                            'extract': 'Extracting update files...',
+                            'apply': 'Applying update...'
+                        };
+                        progressText.textContent = phaseText[data.phase] || 'Processing...';
+                    }
+                });
+                
+                window.socket.on('updateComplete', () => {
+                    if (progressText) {
+                        progressText.textContent = 'Update complete! Restarting...';
+                    }
+                    showMessage('Update applied successfully. The application will restart momentarily.', 'success');
+                });
+                
+                window.socket.on('updateError', (data) => {
+                    showMessage(`Update failed: ${data.error}`, 'error');
+                    if (updateDetails) updateDetails.classList.remove('hidden');
+                    if (updateProgress) updateProgress.classList.add('hidden');
+                });
+            }
+            
+            showMessage('Update started. Please wait...', 'info');
+            
+        } catch (error) {
+            console.error('Error applying update:', error);
+            showMessage(`Failed to apply update: ${error.message}`, 'error');
+            
+            // Restore UI state
+            const updateDetails = document.getElementById('update-available');
+            const updateProgress = document.getElementById('update-progress');
+            if (updateDetails) updateDetails.classList.remove('hidden');
+            if (updateProgress) updateProgress.classList.add('hidden');
+        }
     }
 
     // Theme management function
