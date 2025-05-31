@@ -2199,9 +2199,23 @@ case "$INSTALL_MODE" in
             fi
             cd ..
 
-            # Skip npm install and CSS build if tarball installation was successful
-            # (tarball should already include these)
-            if [ "$TARBALL_INSTALL_SUCCESS" != "true" ]; then
+            # Always update dependencies on updates to ensure package changes are applied
+            # Skip only for fresh installs with tarball
+            local should_update_deps=true
+            if [ "$TARBALL_INSTALL_SUCCESS" = "true" ] && [ "$INSTALL_MODE" = "install" ]; then
+                # Even for tarball installs, check if Express version is correct
+                cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR"; exit 1; }
+                local current_express_ver=$(npm list express --depth=0 2>/dev/null | grep express@ | sed 's/.*express@//' || echo "")
+                if [[ "$current_express_ver" == "4.19.2" ]]; then
+                    print_info "Skipping npm install for fresh tarball installation with correct dependencies."
+                    should_update_deps=false
+                else
+                    print_warning "Express version mismatch detected ($current_express_ver vs 4.19.2). Will update dependencies."
+                fi
+                cd ..
+            fi
+            
+            if [ "$should_update_deps" = "true" ]; then
                 print_info "Installing NPM dependencies in $PULSE_DIR..."
                 cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before npm install"; exit 1; }
                 
