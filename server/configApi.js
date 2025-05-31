@@ -207,33 +207,39 @@ class ConfigApi {
             }
         });
         
-        // Remove endpoints that exist in current config but not in new config
-        existingPveEndpoints.forEach(index => {
-            if (!newPveEndpoints.has(index)) {
-                // Remove all related PVE configuration variables
-                delete existingConfig[`PROXMOX_HOST_${index}`];
-                delete existingConfig[`PROXMOX_PORT_${index}`];
-                delete existingConfig[`PROXMOX_TOKEN_ID_${index}`];
-                delete existingConfig[`PROXMOX_TOKEN_SECRET_${index}`];
-                delete existingConfig[`PROXMOX_NODE_NAME_${index}`];
-                delete existingConfig[`PROXMOX_ENABLED_${index}`];
-                delete existingConfig[`PROXMOX_ALLOW_SELF_SIGNED_CERT_${index}`];
-                delete existingConfig[`PROXMOX_ALLOW_SELF_SIGNED_CERTS_${index}`];
-            }
-        });
+        // Only remove endpoints that exist in current config but not in new config
+        // AND the new config contains at least one endpoint of the same type
+        // This prevents removing PBS endpoints when only adding PVE endpoints (and vice versa)
+        if (newPveEndpoints.size > 0) {
+            existingPveEndpoints.forEach(index => {
+                if (!newPveEndpoints.has(index)) {
+                    // Remove all related PVE configuration variables
+                    delete existingConfig[`PROXMOX_HOST_${index}`];
+                    delete existingConfig[`PROXMOX_PORT_${index}`];
+                    delete existingConfig[`PROXMOX_TOKEN_ID_${index}`];
+                    delete existingConfig[`PROXMOX_TOKEN_SECRET_${index}`];
+                    delete existingConfig[`PROXMOX_NODE_NAME_${index}`];
+                    delete existingConfig[`PROXMOX_ENABLED_${index}`];
+                    delete existingConfig[`PROXMOX_ALLOW_SELF_SIGNED_CERT_${index}`];
+                    delete existingConfig[`PROXMOX_ALLOW_SELF_SIGNED_CERTS_${index}`];
+                }
+            });
+        }
         
-        existingPbsEndpoints.forEach(index => {
-            if (!newPbsEndpoints.has(index)) {
-                // Remove all related PBS configuration variables
-                delete existingConfig[`PBS_HOST_${index}`];
-                delete existingConfig[`PBS_PORT_${index}`];
-                delete existingConfig[`PBS_TOKEN_ID_${index}`];
-                delete existingConfig[`PBS_TOKEN_SECRET_${index}`];
-                delete existingConfig[`PBS_NODE_NAME_${index}`];
-                delete existingConfig[`PBS_ALLOW_SELF_SIGNED_CERT_${index}`];
-                delete existingConfig[`PBS_ALLOW_SELF_SIGNED_CERTS_${index}`];
-            }
-        });
+        if (newPbsEndpoints.size > 0) {
+            existingPbsEndpoints.forEach(index => {
+                if (!newPbsEndpoints.has(index)) {
+                    // Remove all related PBS configuration variables
+                    delete existingConfig[`PBS_HOST_${index}`];
+                    delete existingConfig[`PBS_PORT_${index}`];
+                    delete existingConfig[`PBS_TOKEN_ID_${index}`];
+                    delete existingConfig[`PBS_TOKEN_SECRET_${index}`];
+                    delete existingConfig[`PBS_NODE_NAME_${index}`];
+                    delete existingConfig[`PBS_ALLOW_SELF_SIGNED_CERT_${index}`];
+                    delete existingConfig[`PBS_ALLOW_SELF_SIGNED_CERTS_${index}`];
+                }
+            });
+        }
         
         // Update existing config with new values
         Object.entries(config).forEach(([key, value]) => {
