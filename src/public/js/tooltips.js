@@ -22,6 +22,12 @@ PulseApp.tooltips = (() => {
         document.body.addEventListener('mouseout', handleMouseOut);
         document.body.addEventListener('mousemove', handleMouseMove);
 
+        // Hide tooltip when mouse leaves the document
+        document.addEventListener('mouseleave', hideTooltip);
+        
+        // Hide tooltip on scroll to prevent stuck tooltips
+        window.addEventListener('scroll', hideTooltip, true);
+
         document.addEventListener('mouseup', hideSliderTooltip);
         document.addEventListener('touchend', hideSliderTooltip);
     }
@@ -51,21 +57,28 @@ PulseApp.tooltips = (() => {
     }
 
     function handleMouseOut(event) {
-        const target = event.target.closest('.metric-tooltip-trigger, .storage-tooltip-trigger');
-        if (target && tooltipElement) {
+        const target = event.target.closest('[data-tooltip], .metric-tooltip-trigger, .storage-tooltip-trigger, .truncate');
+        if (!target) return;
+        
+        // Check if we're actually leaving the tooltip trigger element
+        const relatedTarget = event.relatedTarget;
+        if (relatedTarget && target.contains(relatedTarget)) {
+            return; // We're still within the same tooltip trigger
+        }
+        
+        if (tooltipElement) {
             tooltipElement.classList.add('hidden', 'opacity-0');
             tooltipElement.classList.remove('opacity-100');
         }
     }
 
     function handleMouseMove(event) {
-        const target = event.target.closest('.metric-tooltip-trigger, .storage-tooltip-trigger');
-        if (tooltipElement && !tooltipElement.classList.contains('hidden') && target) {
-            positionTooltip(event);
-        } else if (tooltipElement && !tooltipElement.classList.contains('hidden') && !target) {
-            // Optional: Hide if moving away from a trigger element while tooltip is still visible
-            // tooltipElement.classList.add('hidden', 'opacity-0');
-            // tooltipElement.classList.remove('opacity-100');
+        if (tooltipElement && !tooltipElement.classList.contains('hidden')) {
+            const target = event.target.closest('[data-tooltip], .metric-tooltip-trigger, .storage-tooltip-trigger, .truncate');
+            if (target) {
+                positionTooltip(event);
+            }
+            // Don't hide on mousemove - let mouseout handle it properly
         }
     }
 
