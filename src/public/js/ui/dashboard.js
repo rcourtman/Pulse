@@ -282,7 +282,7 @@ PulseApp.ui.dashboard = (() => {
             uniqueId: guestUniqueId,
             vmid: guest.vmid,
             name: guest.name || `${guest.type === 'qemu' ? GUEST_TYPE_VM : GUEST_TYPE_CT} ${guest.vmid}`,
-            node: guest.node,
+            node: guest.nodeDisplayName || guest.node, // Use display name if available
             type: guest.type === 'qemu' ? GUEST_TYPE_VM : GUEST_TYPE_CT,
             status: guest.status,
             cpu: avgCpu,

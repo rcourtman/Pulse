@@ -64,7 +64,7 @@ PulseApp.ui.nodes = (() => {
                 <span class="capitalize">${statusText}</span>
               </span>
             </td>
-            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100" title="${node.node || 'N/A'}">${node.node || 'N/A'}</td>
+            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100" title="${node.displayName || node.node || 'N/A'}">${node.displayName || node.node || 'N/A'}</td>
             <td class="p-1 px-2 min-w-[200px]">${cpuBarHTML}</td>
             <td class="p-1 px-2 min-w-[200px]">${memoryBarHTML}</td>
             <td class="p-1 px-2 min-w-[200px]">${diskBarHTML}</td>
@@ -99,7 +99,7 @@ PulseApp.ui.nodes = (() => {
 
         card.innerHTML = `
             <div class="flex justify-between items-center">
-                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate" title="${node.node || 'N/A'}">${node.node || 'N/A'}</h3>
+                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate" title="${node.displayName || node.node || 'N/A'}">${node.displayName || node.node || 'N/A'}</h3>
                 <div class="flex items-center">
                     <span class="h-2.5 w-2.5 rounded-full ${statusColor} mr-1.5 flex-shrink-0"></span>
                     <span class="text-xs capitalize text-gray-600 dark:text-gray-400">${statusText}</span>
@@ -237,7 +237,7 @@ PulseApp.ui.nodes = (() => {
             <div class="flex items-center justify-between gap-2">
                 <div class="flex items-center min-w-0">
                     <span class="h-2 w-2 rounded-full ${statusDotColor} mr-1.5 flex-shrink-0"></span>
-                    <h3 class="font-semibold text-xs truncate">${node.node || 'Unknown'}</h3>
+                    <h3 class="font-semibold text-xs truncate">${node.displayName || node.node || 'Unknown'}</h3>
                 </div>
                 <div class="flex items-center gap-3 text-[10px] text-gray-600 dark:text-gray-400">
                     <span class="flex items-center gap-1">

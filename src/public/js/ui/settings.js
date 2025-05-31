@@ -814,7 +814,24 @@ PulseApp.ui.settings = (() => {
 
         // Count only actual endpoint divs (not the empty state)
         const existingEndpoints = container.querySelectorAll('.border:not(.border-dashed)');
-        const index = existingEndpoints.length + 2; // Start from _2 for additional endpoints
+        
+        // Find the next available index by checking existing endpoints
+        let index = 2;
+        const usedIndexes = new Set();
+        existingEndpoints.forEach(endpoint => {
+            const header = endpoint.querySelector('h4');
+            if (header) {
+                const match = header.textContent.match(/#(\d+)/);
+                if (match) {
+                    usedIndexes.add(parseInt(match[1]));
+                }
+            }
+        });
+        
+        // Find the first unused index starting from 2
+        while (usedIndexes.has(index)) {
+            index++;
+        }
         const endpointHtml = `
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
                 <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
@@ -876,7 +893,24 @@ PulseApp.ui.settings = (() => {
 
         // Count only actual endpoint divs (not the empty state)
         const existingEndpoints = container.querySelectorAll('.border:not(.border-dashed)');
-        const index = existingEndpoints.length + 2; // Start from _2 for additional endpoints
+        
+        // Find the next available index by checking existing endpoints
+        let index = 2;
+        const usedIndexes = new Set();
+        existingEndpoints.forEach(endpoint => {
+            const header = endpoint.querySelector('h4');
+            if (header) {
+                const match = header.textContent.match(/#(\d+)/);
+                if (match) {
+                    usedIndexes.add(parseInt(match[1]));
+                }
+            }
+        });
+        
+        // Find the first unused index starting from 2
+        while (usedIndexes.has(index)) {
+            index++;
+        }
         const endpointHtml = `
             <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4 relative">
                 <button type="button" onclick="PulseApp.ui.settings.removeEndpoint(this)" 
@@ -942,7 +976,17 @@ PulseApp.ui.settings = (() => {
         if (!container) return;
 
         // Load additional PVE endpoints from config
-        for (let i = 2; i <= 10; i++) {
+        // Find all PROXMOX_HOST_N keys in the config
+        const pveHostKeys = Object.keys(config)
+            .filter(key => key.match(/^PROXMOX_HOST_\d+$/))
+            .map(key => {
+                const match = key.match(/^PROXMOX_HOST_(\d+)$/);
+                return match ? parseInt(match[1]) : null;
+            })
+            .filter(num => num !== null && num > 1) // Exclude primary endpoint (no suffix)
+            .sort((a, b) => a - b);
+        
+        for (const i of pveHostKeys) {
             if (config[`PROXMOX_HOST_${i}`]) {
                 addPveEndpoint();
                 // Populate the newly added endpoint with data
@@ -968,7 +1012,17 @@ PulseApp.ui.settings = (() => {
         if (!container) return;
 
         // Load additional PBS endpoints from config
-        for (let i = 2; i <= 10; i++) {
+        // Find all PBS_HOST_N keys in the config
+        const pbsHostKeys = Object.keys(config)
+            .filter(key => key.match(/^PBS_HOST_\d+$/))
+            .map(key => {
+                const match = key.match(/^PBS_HOST_(\d+)$/);
+                return match ? parseInt(match[1]) : null;
+            })
+            .filter(num => num !== null && num > 1) // Exclude primary endpoint (no suffix)
+            .sort((a, b) => a - b);
+        
+        for (const i of pbsHostKeys) {
             if (config[`PBS_HOST_${i}`]) {
                 addPbsEndpoint();
                 // Populate the newly added endpoint with data

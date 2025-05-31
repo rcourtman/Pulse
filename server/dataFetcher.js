@@ -275,9 +275,20 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             const correspondingNodeInfo = nodes[index];
             if (!correspondingNodeInfo || !correspondingNodeInfo.node) return;
 
+            // Determine display name based on cluster configuration
+            let nodeDisplayName = correspondingNodeInfo.node;
+            if (endpointType === 'standalone' && config.name) {
+                // For standalone nodes, use the configured name
+                nodeDisplayName = config.name;
+            } else if (endpointType === 'cluster' && nodes.length > 1 && config.name) {
+                // For multi-node clusters, prefix with configured name
+                nodeDisplayName = `${config.name} - ${correspondingNodeInfo.node}`;
+            }
+            
             const finalNode = {
                 cpu: null, mem: null, disk: null, maxdisk: null, uptime: 0, loadavg: null, storage: [],
                 node: correspondingNodeInfo.node,
+                displayName: nodeDisplayName,
                 maxcpu: correspondingNodeInfo.maxcpu,
                 maxmem: correspondingNodeInfo.maxmem,
                 level: correspondingNodeInfo.level,
@@ -292,8 +303,18 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             if (result.status === 'fulfilled' && result.value) {
                 const nodeData = result.value;
                 // Use endpointId (the actual key) for constructing IDs and tagging
-                endpointVms.push(...(nodeData.vms || []).map(vm => ({ ...vm, endpointId: endpointId, id: `${endpointId}-${vm.node}-${vm.vmid}` })));
-                endpointContainers.push(...(nodeData.containers || []).map(ct => ({ ...ct, endpointId: endpointId, id: `${endpointId}-${ct.node}-${ct.vmid}` })));
+                endpointVms.push(...(nodeData.vms || []).map(vm => ({ 
+                    ...vm, 
+                    endpointId: endpointId, 
+                    id: `${endpointId}-${vm.node}-${vm.vmid}`,
+                    nodeDisplayName: nodeDisplayName // Use the calculated display name
+                })));
+                endpointContainers.push(...(nodeData.containers || []).map(ct => ({ 
+                    ...ct, 
+                    endpointId: endpointId, 
+                    id: `${endpointId}-${ct.node}-${ct.vmid}`,
+                    nodeDisplayName: nodeDisplayName // Use the calculated display name
+                })));
 
                 if (nodeData.nodeStatus && Object.keys(nodeData.nodeStatus).length > 0) {
                     const statusData = nodeData.nodeStatus;
