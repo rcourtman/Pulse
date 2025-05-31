@@ -2204,9 +2204,16 @@ case "$INSTALL_MODE" in
             if [ "$TARBALL_INSTALL_SUCCESS" != "true" ]; then
                 print_info "Installing NPM dependencies in $PULSE_DIR..."
                 cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before npm install"; exit 1; }
-                if ! npm install --unsafe-perm --silent; then
-                    print_error "Failed to install NPM dependencies. See output above."
-                    exit 1
+                
+                # Use npm ci for clean install based on package-lock.json
+                print_info "Performing clean install of dependencies..."
+                if ! npm ci --omit=dev 2>&1 | grep -v "^npm WARN"; then
+                    print_error "Failed to install NPM dependencies."
+                    print_error "Falling back to npm install..."
+                    if ! npm install --omit=dev 2>&1 | grep -v "^npm WARN"; then
+                        print_error "Failed to install NPM dependencies. See output above."
+                        exit 1
+                    fi
                 else
                     print_success "NPM dependencies installed."
                 fi
