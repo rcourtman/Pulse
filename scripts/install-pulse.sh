@@ -11,7 +11,7 @@ SERVICE_NAME="pulse-monitor.service"
 REPO_BASE_URL="https://github.com/rcourtman/Pulse"
 SCRIPT_NAME="install-pulse.sh"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
-CURRENT_SCRIPT_COMMIT_SHA="2b10e80640b3ee84919baf3fd860c19dc3e78c48"
+CURRENT_SCRIPT_COMMIT_SHA="3721e7709c01526f0dd4f70ef622d874ac71ee49"
 
 MODE_UPDATE=""
 INSTALL_MODE=""
