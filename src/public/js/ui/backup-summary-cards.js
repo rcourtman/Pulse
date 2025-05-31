@@ -2,7 +2,7 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.backupSummaryCards = (() => {
     
-    function calculateBackupStatistics(backupData, guestId) {
+    function calculateBackupStatistics(backupData, guestId, guestNode, guestEndpointId) {
         const now = Date.now();
         const stats = {
             lastBackup: { time: null, type: null, status: 'none' },
@@ -18,7 +18,31 @@ PulseApp.ui.backupSummaryCards = (() => {
             if (!backupData[type]) return;
             
             const items = guestId 
-                ? backupData[type].filter(item => item.vmid == guestId)
+                ? backupData[type].filter(item => {
+                    // Match vmid
+                    const itemVmid = item.vmid || item['backup-id'] || item.backupVMID;
+                    if (itemVmid != guestId) return false;
+                    
+                    // For PBS backups (centralized), don't filter by node
+                    if (type === 'pbsSnapshots') return true;
+                    
+                    // For PVE backups and snapshots (node-specific), match node/endpoint
+                    const itemNode = item.node;
+                    const itemEndpoint = item.endpointId;
+                    
+                    // Match by node if available
+                    if (guestNode && itemNode) {
+                        return itemNode === guestNode;
+                    }
+                    
+                    // Match by endpointId if available
+                    if (guestEndpointId && itemEndpoint) {
+                        return itemEndpoint === guestEndpointId;
+                    }
+                    
+                    // If no node/endpoint info available, include it (fallback)
+                    return true;
+                })
                 : backupData[type];
             
             items.forEach(item => {

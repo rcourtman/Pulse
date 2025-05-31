@@ -425,11 +425,25 @@ PulseApp.ui.backups = (() => {
     function _determineGuestBackupStatus(guest, guestSnapshots, guestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo) {
         const guestId = String(guest.vmid);
         
-        // Get guest snapshots from pveBackups
+        // Get guest snapshots from pveBackups - use node-aware filtering
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         const allSnapshots = pveBackups.guestSnapshots || [];
         const guestSnapshotCount = allSnapshots
-            .filter(snap => parseInt(snap.vmid, 10) === parseInt(guest.vmid, 10))
+            .filter(snap => {
+                // Match vmid
+                if (parseInt(snap.vmid, 10) !== parseInt(guest.vmid, 10)) return false;
+                
+                // For VM/CT snapshots, match by node/endpoint if available
+                if (guest.node && snap.node) {
+                    return snap.node === guest.node;
+                }
+                if (guest.endpointId && snap.endpointId) {
+                    return snap.endpointId === guest.endpointId;
+                }
+                
+                // Fallback: include if no node info available
+                return true;
+            })
             .length;
         
         // Use pre-filtered data instead of filtering large arrays
@@ -558,10 +572,22 @@ PulseApp.ui.backups = (() => {
             // Check for VM/CT snapshots on this day (if we have that data)
             const pveBackups = PulseApp.state.get('pveBackups') || {};
             const allSnapshots = pveBackups.guestSnapshots || [];
-            const guestDaySnapshots = allSnapshots.filter(snap => 
-                parseInt(snap.vmid, 10) === parseInt(guestId, 10) &&
-                snap.snaptime >= day.start && snap.snaptime < day.end
-            );
+            const guestDaySnapshots = allSnapshots.filter(snap => {
+                // Match vmid and time
+                if (parseInt(snap.vmid, 10) !== parseInt(guestId, 10)) return false;
+                if (!(snap.snaptime >= day.start && snap.snaptime < day.end)) return false;
+                
+                // Match by node/endpoint if available
+                if (guest.node && snap.node) {
+                    return snap.node === guest.node;
+                }
+                if (guest.endpointId && snap.endpointId) {
+                    return snap.endpointId === guest.endpointId;
+                }
+                
+                // Fallback: include if no node info available
+                return true;
+            });
             
             if (guestDaySnapshots.length > 0) {
                 backupTypes.add('snapshot');
@@ -729,7 +755,13 @@ PulseApp.ui.backups = (() => {
 
             // Calendar date filter - only show guests that had backups on the selected date
             if (calendarDateFilter && calendarDateFilter.guestIds && calendarDateFilter.guestIds.length > 0) {
-                const guestIdMatch = calendarDateFilter.guestIds.includes(item.guestId.toString());
+                // Create unique key for this guest item
+                const nodeIdentifier = item.node || item.endpointId || '';
+                const itemUniqueKey = nodeIdentifier ? `${item.guestId}-${nodeIdentifier}` : item.guestId.toString();
+                
+                // Check if this guest's unique key or simple vmid is in the calendar filter
+                const guestIdMatch = calendarDateFilter.guestIds.includes(itemUniqueKey) || 
+                                   calendarDateFilter.guestIds.includes(item.guestId.toString());
                 if (!guestIdMatch) return false;
             }
 
@@ -1043,7 +1075,17 @@ PulseApp.ui.backups = (() => {
         if (pveBackups?.storageBackups && Array.isArray(pveBackups.storageBackups)) {
             pveBackups.storageBackups.forEach(backup => {
                 pveStorageBackups.push({
-                    ...backup,
+                    'backup-time': backup.ctime,
+                    backupType: _extractBackupTypeFromVolid(backup.volid, backup.vmid),
+                    backupVMID: backup.vmid,
+                    vmid: backup.vmid, // Ensure vmid is preserved for filtering
+                    size: backup.size,
+                    protected: backup.protected,
+                    storage: backup.storage,
+                    volid: backup.volid,
+                    format: backup.format,
+                    node: backup.node,
+                    endpointId: backup.endpointId,
                     source: 'pve'
                 });
             });
@@ -1084,8 +1126,12 @@ PulseApp.ui.backups = (() => {
             backupTasks: [...pbsBackupTasks, ...pveBackupTasks]
         };
         
-        // Create calendar respecting current table filters
-        const filteredGuestIds = filteredBackupStatus.map(guest => guest.guestId.toString());
+        // Create calendar respecting current table filters - use unique guest identifiers
+        const filteredGuestIds = filteredBackupStatus.map(guest => {
+            // Create unique identifier including node/endpoint to handle guests with same vmid on different nodes
+            const nodeIdentifier = guest.node || guest.endpointId || '';
+            return nodeIdentifier ? `${guest.guestId}-${nodeIdentifier}` : guest.guestId.toString();
+        });
         // Get detail card for callback
         const detailCardContainer = document.getElementById('backup-detail-card');
         let onDateSelect = null;
@@ -1146,7 +1192,27 @@ PulseApp.ui.backups = (() => {
                 const itemDateKey = utcDate.toISOString().split('T')[0];
                 
                 const vmid = item.vmid || item['backup-id'] || item.backupVMID;
-                return vmid == guestId && itemDateKey === dateKey;
+                if (vmid != guestId || itemDateKey !== dateKey) return false;
+                
+                // For PBS backups (centralized), don't filter by node
+                if (source === 'pbsSnapshots') return true;
+                
+                // For PVE backups and snapshots (node-specific), match node/endpoint
+                const itemNode = item.node;
+                const itemEndpoint = item.endpointId;
+                
+                // Match by node if available
+                if (guest.node && itemNode) {
+                    return itemNode === guest.node;
+                }
+                
+                // Match by endpointId if available
+                if (guest.endpointId && itemEndpoint) {
+                    return itemEndpoint === guest.endpointId;
+                }
+                
+                // If no node/endpoint info available, include it (fallback)
+                return true;
             });
             
             if (dayBackups.length > 0) {
@@ -1162,13 +1228,37 @@ PulseApp.ui.backups = (() => {
         let hasFailures = false;
         if (backupData.backupTasks) {
             const dayTasks = backupData.backupTasks.filter(task => {
-                if (!task.starttime || task.vmid != guestId) return false;
+                if (!task.starttime) return false;
+                
+                // Match vmid
+                const taskVmid = task.vmid || task.guestId;
+                if (taskVmid != guestId) return false;
                 
                 const date = new Date(task.starttime * 1000);
                 const utcDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
                 const taskDateKey = utcDate.toISOString().split('T')[0];
                 
-                return taskDateKey === dateKey && task.status !== 'OK';
+                if (taskDateKey !== dateKey || task.status === 'OK') return false;
+                
+                // For PBS tasks (centralized), don't filter by node
+                if (task.source === 'pbs') return true;
+                
+                // For PVE tasks (node-specific), match node/endpoint
+                const taskNode = task.node;
+                const taskEndpoint = task.endpointId;
+                
+                // Match by node if available
+                if (guest.node && taskNode) {
+                    return taskNode === guest.node;
+                }
+                
+                // Match by endpointId if available
+                if (guest.endpointId && taskEndpoint) {
+                    return taskEndpoint === guest.endpointId;
+                }
+                
+                // If no node/endpoint info available, include it (fallback)
+                return true;
             });
             
             hasFailures = dayTasks.length > 0;
@@ -1431,8 +1521,12 @@ PulseApp.ui.backups = (() => {
             
             // Create and display calendar heatmap with detail card
             if (calendarContainer && PulseApp.ui.calendarHeatmap && PulseApp.ui.backupDetailCard) {
-                // Get filtered guest IDs for calendar filtering
-                const filteredGuestIds = filteredBackupStatus.map(guest => guest.guestId.toString());
+                // Get filtered guest IDs for calendar filtering - use unique guest identifiers
+                const filteredGuestIds = filteredBackupStatus.map(guest => {
+                    // Create unique identifier including node/endpoint to handle guests with same vmid on different nodes
+                    const nodeIdentifier = guest.node || guest.endpointId || '';
+                    return nodeIdentifier ? `${guest.guestId}-${nodeIdentifier}` : guest.guestId.toString();
+                });
                 
                 // Get detail card container
                 const detailCardContainer = document.getElementById('backup-detail-card');
@@ -1465,8 +1559,20 @@ PulseApp.ui.backups = (() => {
                         if (dateData) {
                             // Apply current table filters to the selected date's data
                             const filteredDateBackups = dateData.backups.filter(backup => {
-                                // Find the guest in filteredBackupStatus
-                                const guestInFiltered = filteredBackupStatus.find(g => g.guestId.toString() === backup.vmid.toString());
+                                // Find the guest in filteredBackupStatus using unique identification
+                                const guestInFiltered = filteredBackupStatus.find(g => {
+                                    // First try exact vmid match for simple cases
+                                    if (g.guestId.toString() === backup.vmid.toString()) {
+                                        // If backup has node info, ensure it matches
+                                        if (backup.node || backup.endpointId) {
+                                            return (backup.node && g.node === backup.node) || 
+                                                   (backup.endpointId && g.endpointId === backup.endpointId) ||
+                                                   (!backup.node && !backup.endpointId);
+                                        }
+                                        return true;
+                                    }
+                                    return false;
+                                });
                                 return guestInFiltered !== undefined;
                             });
                             
@@ -1499,8 +1605,16 @@ PulseApp.ui.backups = (() => {
                     
                     // Update calendar date filter for table
                     if (dateData && dateData.backups && dateData.backups.length > 0) {
-                        // Extract guest IDs from the selected date's backup data
-                        const guestIds = dateData.backups.map(backup => backup.vmid.toString());
+                        // Extract unique guest identifiers from the selected date's backup data
+                        const guestIds = dateData.backups.map(backup => {
+                            // Use unique key if available, fall back to vmid
+                            if (backup.uniqueKey) {
+                                return backup.uniqueKey;
+                            }
+                            // Create unique key from available data
+                            const nodeIdentifier = backup.node || backup.endpointId || '';
+                            return nodeIdentifier ? `${backup.vmid}-${nodeIdentifier}` : backup.vmid.toString();
+                        });
                         PulseApp.state.set('calendarDateFilter', {
                             date: dateData.date,
                             guestIds: guestIds

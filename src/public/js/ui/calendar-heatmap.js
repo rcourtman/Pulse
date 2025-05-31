@@ -15,6 +15,85 @@ PulseApp.ui.calendarHeatmap = (() => {
         return PulseApp.state.get('backupsFilterBackupType') || 'all';
     }
     
+    // Helper function to filter tasks by guest with node awareness
+    function filterTasksByGuest(tasks, guestId) {
+        if (!guestId) return tasks;
+        
+        return tasks.filter(task => {
+            // Match vmid
+            const taskVmid = task.vmid || task.guestId;
+            if (taskVmid != guestId) return false;
+            
+            // For single guest filtering, we need to get the guest node info
+            const vmsData = PulseApp.state.get('vmsData') || [];
+            const containersData = PulseApp.state.get('containersData') || [];
+            const allGuests = [...vmsData, ...containersData];
+            const guest = allGuests.find(g => g.vmid == guestId);
+            
+            if (!guest) return true; // Fallback if guest not found
+            
+            // For PBS tasks (centralized), don't filter by node
+            if (task.source === 'pbs') return true;
+            
+            // For PVE tasks (node-specific), match node/endpoint
+            const taskNode = task.node;
+            const taskEndpoint = task.endpointId;
+            
+            // Match by node if available
+            if (guest.node && taskNode) {
+                return taskNode === guest.node;
+            }
+            
+            // Match by endpointId if available
+            if (guest.endpointId && taskEndpoint) {
+                return taskEndpoint === guest.endpointId;
+            }
+            
+            // If no node/endpoint info available, include it (fallback)
+            return true;
+        });
+    }
+    
+    // Helper function to generate unique guest key including node information
+    function generateUniqueGuestKey(vmid, backupItem) {
+        const itemNode = backupItem.node;
+        const itemEndpoint = backupItem.endpointId;
+        
+        // Create unique key with node/endpoint information
+        if (itemNode) {
+            return `${vmid}-${itemNode}`;
+        }
+        if (itemEndpoint) {
+            return `${vmid}-${itemEndpoint}`;
+        }
+        
+        // Fallback to simple vmid if no node info
+        return vmid.toString();
+    }
+    
+    // Helper function to extract vmid from unique guest key
+    function extractVmidFromGuestKey(guestKey) {
+        // If it contains a dash, take the part before the first dash
+        const dashIndex = guestKey.indexOf('-');
+        return dashIndex !== -1 ? guestKey.substring(0, dashIndex) : guestKey;
+    }
+    
+    // Helper function to check if a guest (with potential node info) is in the filtered list
+    function isGuestInFilteredList(vmid, backupItem, filteredGuestIds) {
+        if (!filteredGuestIds || filteredGuestIds.length === 0) return true;
+        
+        // Generate the unique key for this guest
+        const uniqueKey = generateUniqueGuestKey(vmid, backupItem);
+        
+        // Check if this unique key is in the filtered list
+        if (filteredGuestIds.includes(uniqueKey)) return true;
+        
+        // Also check for simple vmid match (backward compatibility)
+        if (filteredGuestIds.includes(vmid.toString())) return true;
+        
+        return false;
+    }
+    
     const CSS_CLASSES = {
         CALENDAR_CONTAINER: 'calendar-heatmap-container max-w-4xl mx-auto',
         MONTH_LABEL: 'text-xs text-gray-600 dark:text-gray-400 font-medium mb-1',
@@ -400,10 +479,23 @@ PulseApp.ui.calendarHeatmap = (() => {
         const allGuests = [...vmsData, ...containersData];
         const guestLookup = {};
         allGuests.forEach(guest => {
-            guestLookup[guest.vmid] = {
+            // Create unique key for guest lookup
+            const nodeIdentifier = guest.node || guest.endpointId || '';
+            const uniqueKey = nodeIdentifier ? `${guest.vmid}-${nodeIdentifier}` : guest.vmid.toString();
+            guestLookup[uniqueKey] = {
                 name: guest.name,
-                type: guest.type === 'qemu' ? 'VM' : 'CT'
+                type: guest.type === 'qemu' ? 'VM' : 'CT',
+                vmid: guest.vmid,
+                node: guest.node,
+                endpointId: guest.endpointId
             };
+            // Also add simple vmid lookup as fallback for backward compatibility
+            if (!guestLookup[guest.vmid]) {
+                guestLookup[guest.vmid] = {
+                    name: guest.name,
+                    type: guest.type === 'qemu' ? 'VM' : 'CT'
+                };
+            }
         });
         
         // Group backups by guest and date for this month only
@@ -436,22 +528,28 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 // Apply filtering logic
                 if (guestId && vmid != guestId) return;
-                if (filteredGuestIds && !filteredGuestIds.includes(vmid.toString())) return;
+                if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;
                 
-                if (!backupsByGuestAndDate[vmid]) {
-                    backupsByGuestAndDate[vmid] = {};
+                // Use unique guest key that includes node information
+                const uniqueGuestKey = generateUniqueGuestKey(vmid, item);
+                
+                if (!backupsByGuestAndDate[uniqueGuestKey]) {
+                    backupsByGuestAndDate[uniqueGuestKey] = {};
                 }
                 
-                if (!backupsByGuestAndDate[vmid][dateKey]) {
-                    backupsByGuestAndDate[vmid][dateKey] = {
+                if (!backupsByGuestAndDate[uniqueGuestKey][dateKey]) {
+                    backupsByGuestAndDate[uniqueGuestKey][dateKey] = {
                         date: utcDate,
                         types: new Set(),
-                        backups: []
+                        backups: [],
+                        vmid: vmid, // Store original vmid for lookups
+                        node: item.node,
+                        endpointId: item.endpointId
                     };
                 }
                 
-                backupsByGuestAndDate[vmid][dateKey].types.add(source);
-                backupsByGuestAndDate[vmid][dateKey].backups.push({
+                backupsByGuestAndDate[uniqueGuestKey][dateKey].types.add(source);
+                backupsByGuestAndDate[uniqueGuestKey][dateKey].backups.push({
                     type: source,
                     time: date.toLocaleTimeString(), // Keep original timestamp for display
                     name: item.volid || item.name || item['backup-id'] || 'Backup'
@@ -460,7 +558,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         });
         
         // Process backup days and group by date
-        Object.entries(backupsByGuestAndDate).forEach(([vmid, dateData]) => {
+        Object.entries(backupsByGuestAndDate).forEach(([uniqueGuestKey, dateData]) => {
             Object.keys(dateData).forEach(dateKey => {
                 if (!monthData[dateKey]) {
                     monthData[dateKey] = {
@@ -470,12 +568,18 @@ PulseApp.ui.calendarHeatmap = (() => {
                     };
                 }
                 
-                const guestInfo = guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
+                // Extract vmid from unique key for guest lookup
+                const vmid = dateData[dateKey].vmid || extractVmidFromGuestKey(uniqueGuestKey);
+                // Use unique key for guest lookup, fall back to vmid if not found
+                const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
                 
                 monthData[dateKey].guests.push({
                     vmid: vmid,
+                    uniqueKey: uniqueGuestKey, // Include unique key for proper identification
                     name: guestInfo.name,
                     type: guestInfo.type,
+                    node: dateData[dateKey].node,
+                    endpointId: dateData[dateKey].endpointId,
                     types: Array.from(dateData[dateKey].types),
                     backupCount: dateData[dateKey].backups.length
                 });
@@ -488,9 +592,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         
         // Process backup tasks for failure detection
         if (backupData.backupTasks) {
-            const tasks = guestId 
-                ? backupData.backupTasks.filter(task => task.vmid == guestId)
-                : backupData.backupTasks;
+            const tasks = filterTasksByGuest(backupData.backupTasks, guestId);
             
             tasks.forEach(task => {
                 if (!task.starttime || task.starttime <= 0) return;
@@ -631,9 +733,11 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 // Apply filtering logic
                 if (guestId && vmid != guestId) return;
-                if (filteredGuestIds && !filteredGuestIds.includes(vmid.toString())) return;
+                if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;
                 
-                stats.activeGuests.add(vmid);
+                // Track unique guests using node-aware keys
+                const uniqueGuestKey = generateUniqueGuestKey(vmid, item);
+                stats.activeGuests.add(uniqueGuestKey);
                 daysWithData.add(dateKey);
                 stats.totalBackups++;
                 
@@ -826,10 +930,23 @@ PulseApp.ui.calendarHeatmap = (() => {
         const allGuests = [...vmsData, ...containersData];
         const guestLookup = {};
         allGuests.forEach(guest => {
-            guestLookup[guest.vmid] = {
+            // Create unique key for guest lookup
+            const nodeIdentifier = guest.node || guest.endpointId || '';
+            const uniqueKey = nodeIdentifier ? `${guest.vmid}-${nodeIdentifier}` : guest.vmid.toString();
+            guestLookup[uniqueKey] = {
                 name: guest.name,
-                type: guest.type === 'qemu' ? 'VM' : 'CT'
+                type: guest.type === 'qemu' ? 'VM' : 'CT',
+                vmid: guest.vmid,
+                node: guest.node,
+                endpointId: guest.endpointId
             };
+            // Also add simple vmid lookup as fallback for backward compatibility
+            if (!guestLookup[guest.vmid]) {
+                guestLookup[guest.vmid] = {
+                    name: guest.name,
+                    type: guest.type === 'qemu' ? 'VM' : 'CT'
+                };
+            }
         });
         
         // Group all backups by guest and date (no year restriction)
@@ -861,22 +978,28 @@ PulseApp.ui.calendarHeatmap = (() => {
                 if (guestId && vmid != guestId) return;
                 
                 // Skip if filtered guest list is provided and this guest is not in it
-                if (filteredGuestIds && !filteredGuestIds.includes(vmid.toString())) return;
+                if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;
                 
-                if (!backupsByGuestAndDate[vmid]) {
-                    backupsByGuestAndDate[vmid] = {};
+                // Use unique guest key that includes node information
+                const uniqueGuestKey = generateUniqueGuestKey(vmid, item);
+                
+                if (!backupsByGuestAndDate[uniqueGuestKey]) {
+                    backupsByGuestAndDate[uniqueGuestKey] = {};
                 }
                 
-                if (!backupsByGuestAndDate[vmid][dateKey]) {
-                    backupsByGuestAndDate[vmid][dateKey] = {
+                if (!backupsByGuestAndDate[uniqueGuestKey][dateKey]) {
+                    backupsByGuestAndDate[uniqueGuestKey][dateKey] = {
                         date: utcDate,
                         types: new Set(),
-                        backups: []
+                        backups: [],
+                        vmid: vmid, // Store original vmid for lookups
+                        node: item.node,
+                        endpointId: item.endpointId
                     };
                 }
                 
-                backupsByGuestAndDate[vmid][dateKey].types.add(source);
-                backupsByGuestAndDate[vmid][dateKey].backups.push({
+                backupsByGuestAndDate[uniqueGuestKey][dateKey].types.add(source);
+                backupsByGuestAndDate[uniqueGuestKey][dateKey].backups.push({
                     type: source,
                     time: date.toLocaleTimeString(), // Keep original timestamp for display
                     name: item.volid || item.name || item['backup-id'] || 'Backup'
@@ -885,7 +1008,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         });
         
         // Process all backup days and group by date
-        Object.entries(backupsByGuestAndDate).forEach(([vmid, dateData]) => {
+        Object.entries(backupsByGuestAndDate).forEach(([uniqueGuestKey, dateData]) => {
             Object.keys(dateData).forEach(dateKey => {
                 // Initialize day data if not exists
                 if (!allData[dateKey]) {
@@ -896,12 +1019,18 @@ PulseApp.ui.calendarHeatmap = (() => {
                     };
                 }
                 
-                const guestInfo = guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
+                // Extract vmid from unique key for guest lookup
+                const vmid = dateData[dateKey].vmid || extractVmidFromGuestKey(uniqueGuestKey);
+                // Use unique key for guest lookup, fall back to vmid if not found
+                const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
                 
                 allData[dateKey].guests.push({
                     vmid: vmid,
+                    uniqueKey: uniqueGuestKey, // Include unique key for proper identification
                     name: guestInfo.name,
                     type: guestInfo.type,
+                    node: dateData[dateKey].node,
+                    endpointId: dateData[dateKey].endpointId,
                     types: Array.from(dateData[dateKey].types),
                     backupCount: dateData[dateKey].backups.length
                 });
@@ -914,9 +1043,7 @@ PulseApp.ui.calendarHeatmap = (() => {
 
         // Process backup tasks for failure detection
         if (backupData.backupTasks) {
-            const tasks = guestId 
-                ? backupData.backupTasks.filter(task => task.vmid == guestId)
-                : backupData.backupTasks;
+            const tasks = filterTasksByGuest(backupData.backupTasks, guestId);
 
             tasks.forEach(task => {
                 if (!task.starttime || task.starttime <= 0) return;
@@ -982,10 +1109,23 @@ PulseApp.ui.calendarHeatmap = (() => {
         const allGuests = [...vmsData, ...containersData];
         const guestLookup = {};
         allGuests.forEach(guest => {
-            guestLookup[guest.vmid] = {
+            // Create unique key for guest lookup
+            const nodeIdentifier = guest.node || guest.endpointId || '';
+            const uniqueKey = nodeIdentifier ? `${guest.vmid}-${nodeIdentifier}` : guest.vmid.toString();
+            guestLookup[uniqueKey] = {
                 name: guest.name,
-                type: guest.type === 'qemu' ? 'VM' : 'CT'
+                type: guest.type === 'qemu' ? 'VM' : 'CT',
+                vmid: guest.vmid,
+                node: guest.node,
+                endpointId: guest.endpointId
             };
+            // Also add simple vmid lookup as fallback for backward compatibility
+            if (!guestLookup[guest.vmid]) {
+                guestLookup[guest.vmid] = {
+                    name: guest.name,
+                    type: guest.type === 'qemu' ? 'VM' : 'CT'
+                };
+            }
         });
         
         // Group all backups by guest and date
@@ -1025,23 +1165,28 @@ PulseApp.ui.calendarHeatmap = (() => {
                 if (guestId && vmid != guestId) return;
                 
                 // Skip if filtered guest list is provided and this guest is not in it
-                if (filteredGuestIds && !filteredGuestIds.includes(vmid.toString())) return;
+                if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;
                 
+                // Use unique guest key that includes node information
+                const uniqueGuestKey = generateUniqueGuestKey(vmid, item);
                 
-                if (!backupsByGuestAndDate[vmid]) {
-                    backupsByGuestAndDate[vmid] = {};
+                if (!backupsByGuestAndDate[uniqueGuestKey]) {
+                    backupsByGuestAndDate[uniqueGuestKey] = {};
                 }
                 
-                if (!backupsByGuestAndDate[vmid][dateKey]) {
-                    backupsByGuestAndDate[vmid][dateKey] = {
+                if (!backupsByGuestAndDate[uniqueGuestKey][dateKey]) {
+                    backupsByGuestAndDate[uniqueGuestKey][dateKey] = {
                         date: utcDate,
                         types: new Set(),
-                        backups: []
+                        backups: [],
+                        vmid: vmid, // Store original vmid for lookups
+                        node: item.node,
+                        endpointId: item.endpointId
                     };
                 }
                 
-                backupsByGuestAndDate[vmid][dateKey].types.add(source);
-                backupsByGuestAndDate[vmid][dateKey].backups.push({
+                backupsByGuestAndDate[uniqueGuestKey][dateKey].types.add(source);
+                backupsByGuestAndDate[uniqueGuestKey][dateKey].backups.push({
                     type: source,
                     time: date.toLocaleTimeString(), // Keep original timestamp for display
                     name: item.volid || item.name || item['backup-id'] || 'Backup'
@@ -1050,7 +1195,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         });
         
         // Process all backup days and determine retention markers
-        Object.entries(backupsByGuestAndDate).forEach(([vmid, dateData]) => {
+        Object.entries(backupsByGuestAndDate).forEach(([uniqueGuestKey, dateData]) => {
             const sortedDates = Object.keys(dateData).sort().reverse(); // Most recent first
             
             let lastDaily = null;
@@ -1106,10 +1251,13 @@ PulseApp.ui.calendarHeatmap = (() => {
                     yearData[dateKey].guestsByRetention[retentionLevel] = [];
                 }
                 
-                const guestInfo = guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
+                // Extract vmid from unique key for guest lookup
+                const vmid = dateData[dateKey].vmid || extractVmidFromGuestKey(uniqueGuestKey);
+                // Use unique key for guest lookup, fall back to vmid if not found
+                const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
                 
-                // Check if this guest already exists in this retention level
-                const existingGuestIndex = yearData[dateKey].guestsByRetention[retentionLevel].findIndex(g => g.vmid === vmid);
+                // Check if this guest already exists in this retention level using unique key
+                const existingGuestIndex = yearData[dateKey].guestsByRetention[retentionLevel].findIndex(g => g.uniqueKey === uniqueGuestKey);
                 
                 if (existingGuestIndex >= 0) {
                     // Merge backup types if guest already exists
@@ -1121,8 +1269,11 @@ PulseApp.ui.calendarHeatmap = (() => {
                     // Add new guest
                     yearData[dateKey].guestsByRetention[retentionLevel].push({
                         vmid: vmid,
+                        uniqueKey: uniqueGuestKey, // Include unique key for proper identification
                         name: guestInfo.name,
                         type: guestInfo.type,
+                        node: dateData[dateKey].node,
+                        endpointId: dateData[dateKey].endpointId,
                         types: Array.from(dateData[dateKey].types),
                         backupCount: dateData[dateKey].backups.length
                     });
@@ -1136,9 +1287,7 @@ PulseApp.ui.calendarHeatmap = (() => {
 
         // Process backup tasks for failure detection
         if (backupData.backupTasks) {
-            const tasks = guestId 
-                ? backupData.backupTasks.filter(task => task.vmid == guestId)
-                : backupData.backupTasks;
+            const tasks = filterTasksByGuest(backupData.backupTasks, guestId);
 
             tasks.forEach(task => {
                 if (!task.starttime || task.starttime <= 0) {
