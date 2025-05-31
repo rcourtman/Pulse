@@ -691,21 +691,80 @@ migrate_from_old_path() {
         return 1
     fi
     
+    echo ""
+    echo "=================================================================="
+    echo "                    PULSE MIGRATION NOTICE"
+    echo "=================================================================="
+    echo ""
     print_info "Found existing Pulse installation at old path: $OLD_PULSE_DIR"
-    print_info "Migrating to new path: $PULSE_DIR"
+    print_info "This will be automatically migrated to new path: $PULSE_DIR"
+    echo ""
+    print_info "What will be migrated:"
+    print_info "  • Application files and data"
+    print_info "  • Configuration and metrics history" 
+    print_info "  • Systemd service files"
+    print_info "  • User settings and preferences"
+    echo ""
+    print_info "A backup will be created at /tmp/pulse-migration-backup-* before migration"
+    print_info "Your Pulse service will be briefly stopped during this process"
+    echo ""
+    read -p "Press Enter to continue with migration, or Ctrl+C to abort..."
+    echo ""
     
+    # Pre-migration validation checks
+    print_info "Running pre-migration validation..."
+    
+    # Check if it's a valid Pulse installation
     if [ -f "$OLD_PULSE_DIR/package.json" ] && grep -q '"name".*"pulse"' "$OLD_PULSE_DIR/package.json" 2>/dev/null; then
-        print_info "Verified this is a valid Pulse installation."
+        print_info "✓ Verified this is a valid Pulse installation"
     else
-        print_error "Directory $OLD_PULSE_DIR exists but does not appear to be a valid Pulse installation."
+        print_error "✗ Directory $OLD_PULSE_DIR exists but does not appear to be a valid Pulse installation."
         print_error "Migration aborted for safety."
         return 1
     fi
+    
+    # Check available disk space (need at least 2x the installation size)
+    local old_size=$(du -sm "$OLD_PULSE_DIR" 2>/dev/null | cut -f1)
+    local available_space=$(df -m /opt 2>/dev/null | awk 'NR==2 {print $4}')
+    if [ -n "$old_size" ] && [ -n "$available_space" ]; then
+        local required_space=$((old_size * 2))
+        if [ "$available_space" -lt "$required_space" ]; then
+            print_error "✗ Insufficient disk space for migration"
+            print_error "Required: ${required_space}MB, Available: ${available_space}MB"
+            return 1
+        else
+            print_info "✓ Sufficient disk space available (${available_space}MB)"
+        fi
+    fi
+    
+    # Check if Pulse service is running and can be stopped
+    if systemctl is-active --quiet pulse-monitor.service 2>/dev/null || systemctl is-active --quiet pulse-proxmox.service 2>/dev/null; then
+        print_info "✓ Pulse service is running and will be temporarily stopped during migration"
+    fi
+    
+    # Check write permissions to /opt
+    if [ ! -w "/opt" ]; then
+        print_error "✗ No write permission to /opt directory"
+        return 1
+    else
+        print_info "✓ Write permissions confirmed for /opt directory"
+    fi
+    
+    # Check if migration was already attempted
+    local migration_marker="/tmp/.pulse-migration-attempted"
+    if [ -f "$migration_marker" ]; then
+        print_warning "Previous migration attempt detected. Cleaning up and retrying..."
+        rm -f "$migration_marker"
+    fi
+    
+    # Create migration marker
+    touch "$migration_marker"
     
     local backup_path="/tmp/pulse-migration-backup-$(date +%s)"
     print_info "Creating backup at $backup_path before migration..."
     if ! cp -r "$OLD_PULSE_DIR" "$backup_path"; then
         print_error "Failed to create backup. Migration aborted."
+        rm -f "$migration_marker"
         return 1
     fi
     print_success "Backup created successfully."
@@ -752,6 +811,8 @@ migrate_from_old_path() {
             print_success "Old service cleaned up."
         fi
         
+        # Remove migration marker on success
+        rm -f "$migration_marker"
         return 0
     else
         print_error "Failed to move directory. Restoring from backup..."
@@ -760,7 +821,14 @@ migrate_from_old_path() {
         else
             print_error "Failed to restore backup! Original installation may be lost."
             print_error "Backup location: $backup_path"
+            print_error ""
+            print_error "TROUBLESHOOTING STEPS:"
+            print_error "1. Check disk space: df -h"
+            print_error "2. Check permissions: ls -la /opt/"
+            print_error "3. Manually restore: sudo mv $backup_path $OLD_PULSE_DIR"
+            print_error "4. Check systemctl status pulse-monitor for service issues"
         fi
+        rm -f "$migration_marker"
         return 1
     fi
 }
