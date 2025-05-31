@@ -22,11 +22,6 @@ PulseApp.ui.settings = (() => {
             settingsButton.addEventListener('click', openModal);
         }
         
-        // Set up diagnostics button
-        const diagnosticsButton = document.getElementById('diagnostics-icon');
-        if (diagnosticsButton) {
-            diagnosticsButton.addEventListener('click', () => openModalWithTab('diagnostics'));
-        }
 
         if (closeButton) {
             closeButton.addEventListener('click', closeModal);
