@@ -326,6 +326,7 @@ PulseApp.utils = (() => {
     function getHostUrl(nodeName) {
         const endpoints = PulseApp.state.get('endpoints') || [];
         const pbsConfigs = PulseApp.state.get('pbsConfigs') || [];
+        const nodesData = PulseApp.state.get('nodesData') || [];
         
         // First check PBS configs for exact name match
         for (const config of pbsConfigs) {
@@ -336,9 +337,18 @@ PulseApp.utils = (() => {
         
         // For Proxmox nodes, we need to find which endpoint this node belongs to
         // by looking at the nodes data from the API
-        const nodesData = PulseApp.state.get('nodesData') || [];
         
-        // Find the node in the API data to get its endpointId
+        // First check if nodeName matches a displayName (for nodes with custom names)
+        // This needs to be checked first because the UI shows displayName in headers
+        const nodeByDisplayName = nodesData.find(node => node.displayName === nodeName);
+        if (nodeByDisplayName && nodeByDisplayName.endpointId) {
+            const endpoint = endpoints.find(ep => ep.id === nodeByDisplayName.endpointId);
+            if (endpoint) {
+                return endpoint.host;
+            }
+        }
+        
+        // Then find the node in the API data by actual node name
         const nodeInfo = nodesData.find(node => node.node === nodeName);
         
         if (nodeInfo && nodeInfo.endpointId) {
@@ -352,6 +362,15 @@ PulseApp.utils = (() => {
         // Fallback: try direct name matches with endpoints
         for (const endpoint of endpoints) {
             if (endpoint.name === nodeName) {
+                return endpoint.host;
+            }
+        }
+        
+        // Additional fallback: for standalone nodes, check if the endpoint name matches
+        // and there's only one node for that endpoint
+        for (const endpoint of endpoints) {
+            const endpointNodes = nodesData.filter(node => node.endpointId === endpoint.id);
+            if (endpointNodes.length === 1 && endpoint.name === nodeName) {
                 return endpoint.host;
             }
         }
