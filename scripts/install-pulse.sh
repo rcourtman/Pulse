@@ -57,6 +57,42 @@ check_root() {
     fi
 }
 
+# Self-update check
+self_update_check() {
+    # Skip if running from pipe or no curl available
+    if [ ! -t 0 ] || ! command -v curl &>/dev/null; then
+        return 0
+    fi
+    
+    print_info "Checking for installer updates..."
+    
+    local current_script="$0"
+    local temp_script="/tmp/install-pulse-new.sh"
+    local script_url="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
+    
+    # Download latest version
+    if curl -sL "$script_url" -o "$temp_script" 2>/dev/null; then
+        # Compare with current script
+        if ! diff -q "$current_script" "$temp_script" >/dev/null 2>&1; then
+            print_warning "A newer version of the installer is available"
+            read -p "Update installer and restart? [Y/n]: " update_confirm
+            
+            if [[ ! "$update_confirm" =~ ^[Nn]$ ]]; then
+                print_info "Updating installer..."
+                cp "$temp_script" "$current_script"
+                chmod +x "$current_script"
+                rm -f "$temp_script"
+                
+                print_success "Installer updated, restarting..."
+                exec "$current_script" "$@"
+            fi
+        else
+            print_success "Installer is up to date"
+        fi
+        rm -f "$temp_script"
+    fi
+}
+
 # Print welcome banner
 print_welcome() {
     echo ""
@@ -492,6 +528,7 @@ show_final_instructions() {
 # Main execution
 main() {
     check_root
+    self_update_check
     print_welcome
     check_installation
     
