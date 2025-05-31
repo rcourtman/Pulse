@@ -1792,6 +1792,10 @@ diagnose_service_failure() {
     elif echo "$recent_logs" | grep -q "EADDRINUSE.*7655"; then
         print_error "✗ Port 7655 is already in use"
         print_error "  → Another service is using the default port"
+    elif echo "$recent_logs" | grep -q "npm notice.*npm install"; then
+        print_error "✗ Service startup issue with npm execution"
+        print_error "  → The service may be misconfigured to use npm instead of direct node execution"
+        print_error "  → This has been fixed in recent versions - try updating the installer"
     else
         print_error "✗ Unknown service failure"
         print_error "Recent log entries:"
@@ -1844,7 +1848,7 @@ WorkingDirectory=$PULSE_DIR
 
 EnvironmentFile=-$PULSE_DIR/.env
 
-ExecStart=$node_path $npm_path run start
+ExecStart=$node_path server/index.js
 
 Restart=on-failure
 RestartSec=5
