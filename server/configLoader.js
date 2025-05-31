@@ -206,8 +206,17 @@ function loadConfiguration() {
     }
     
     // Load additional Proxmox endpoints
-    let i = 2;
-    while (process.env[`PROXMOX_HOST_${i}`]) {
+    // Check all environment variables for PROXMOX_HOST_N pattern to handle non-sequential numbering
+    const proxmoxHostKeys = Object.keys(process.env)
+        .filter(key => key.match(/^PROXMOX_HOST_\d+$/))
+        .map(key => {
+            const match = key.match(/^PROXMOX_HOST_(\d+)$/);
+            return match ? parseInt(match[1]) : null;
+        })
+        .filter(num => num !== null)
+        .sort((a, b) => a - b);
+    
+    for (const i of proxmoxHostKeys) {
         const additionalEndpoint = createProxmoxEndpointConfig(
             'endpoint',
             i,
@@ -222,7 +231,6 @@ function loadConfiguration() {
         if (additionalEndpoint) {
             endpoints.push(additionalEndpoint);
         }
-        i++;
     }
 
     if (endpoints.length > 1) {
@@ -239,14 +247,21 @@ function loadConfiguration() {
     }
 
     // Load additional PBS configs
-    let pbsIndex = 2;
-    let pbsResult = loadPbsConfig(pbsIndex);
-    while (pbsResult.found) { // Continue as long as a PBS_HOST_n was found
+    // Check all environment variables for PBS_HOST_N pattern to handle non-sequential numbering
+    const pbsHostKeys = Object.keys(process.env)
+        .filter(key => key.match(/^PBS_HOST_\d+$/))
+        .map(key => {
+            const match = key.match(/^PBS_HOST_(\d+)$/);
+            return match ? parseInt(match[1]) : null;
+        })
+        .filter(num => num !== null)
+        .sort((a, b) => a - b);
+    
+    for (const pbsIndex of pbsHostKeys) {
+        const pbsResult = loadPbsConfig(pbsIndex);
         if (pbsResult.config) {
             pbsConfigs.push(pbsResult.config);
         }
-        pbsIndex++;
-        pbsResult = loadPbsConfig(pbsIndex);
     }
 
     if (pbsConfigs.length > 0) {
