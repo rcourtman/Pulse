@@ -310,7 +310,7 @@ PulseApp.ui.settings = (() => {
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
                         <input type="text" name="PBS_HOST"
                                value="${pbs.host || ''}"
-                               placeholder="https://pbs.example.com:8007"
+                               placeholder="192.168.1.100 or pbs.example.com"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
@@ -893,7 +893,7 @@ PulseApp.ui.settings = (() => {
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
-                        <input type="text" name="PBS_HOST_${index}" placeholder="https://pbs${index}.example.com:8007"
+                        <input type="text" name="PBS_HOST_${index}" placeholder="192.168.1.10${index} or pbs${index}.example.com"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
@@ -1067,7 +1067,20 @@ PulseApp.ui.settings = (() => {
             if (form.querySelector(`[name="${name}"]`).type === 'checkbox') {
                 config[name] = 'true';
             } else {
-                config[name] = value;
+                // Clean PBS_HOST entries - remove protocol and port if included
+                if (name.startsWith('PBS_HOST')) {
+                    let cleanHost = value.trim();
+                    // Remove protocol (http:// or https://)
+                    cleanHost = cleanHost.replace(/^https?:\/\//, '');
+                    // Remove port if it's included in the host (e.g., "192.168.1.1:8007")
+                    const portMatch = cleanHost.match(/^([^:]+)(:\d+)?$/);
+                    if (portMatch) {
+                        cleanHost = portMatch[1];
+                    }
+                    config[name] = cleanHost;
+                } else {
+                    config[name] = value;
+                }
             }
         }
 

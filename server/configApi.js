@@ -711,8 +711,8 @@ class ConfigApi {
                 global.lastReloadTime = Date.now();
             }
             
-            // Trigger a discovery cycle if we have endpoints configured
-            if (endpoints.length > 0) {
+            // Trigger a discovery cycle if we have any endpoints configured (PVE or PBS)
+            if (endpoints.length > 0 || pbsConfigs.length > 0) {
                 console.log('Triggering discovery cycle after configuration reload...');
                 // Import and call runDiscoveryCycle if available
                 if (global.runDiscoveryCycle && typeof global.runDiscoveryCycle === 'function') {
