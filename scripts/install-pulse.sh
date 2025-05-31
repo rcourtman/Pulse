@@ -2205,6 +2205,18 @@ case "$INSTALL_MODE" in
                 print_info "Installing NPM dependencies in $PULSE_DIR..."
                 cd "$PULSE_DIR" || { print_error "Failed to cd to $PULSE_DIR before npm install"; exit 1; }
                 
+                # Stop the service before updating dependencies
+                if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+                    print_info "Stopping $SERVICE_NAME before updating dependencies..."
+                    systemctl stop "$SERVICE_NAME" || true
+                fi
+                
+                # Clean up node_modules to ensure fresh install
+                if [ -d "node_modules" ]; then
+                    print_info "Removing old node_modules directory..."
+                    rm -rf node_modules
+                fi
+                
                 # Use npm ci for clean install based on package-lock.json
                 print_info "Performing clean install of dependencies..."
                 if ! npm ci --omit=dev 2>&1 | grep -v "^npm WARN"; then
@@ -2216,6 +2228,12 @@ case "$INSTALL_MODE" in
                     fi
                 else
                     print_success "NPM dependencies installed."
+                fi
+                
+                # Verify Express version
+                local express_version=$(npm list express --depth=0 2>/dev/null | grep express@ | sed 's/.*express@//')
+                if [ -n "$express_version" ]; then
+                    print_info "Express version installed: $express_version"
                 fi
                 
                 print_info "Building CSS assets in $PULSE_DIR..."
