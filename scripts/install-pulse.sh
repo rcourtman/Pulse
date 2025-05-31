@@ -392,6 +392,22 @@ perform_install() {
     fi
     
     download_and_extract_tarball "$TARGET_TAG" || exit 1
+    
+    # Fix Express version if needed
+    print_info "Checking dependencies..."
+    cd "$PULSE_DIR"
+    if grep -q '"express": "4.19.2"' package.json; then
+        local current_express=$(npm list express --depth=0 2>/dev/null | grep express@ | sed 's/.*express@//' || echo "")
+        if [[ "$current_express" != "4.19.2" ]]; then
+            print_warning "Fixing Express version mismatch..."
+            rm -rf node_modules
+            npm install --omit=dev || {
+                print_error "Failed to install dependencies"
+                exit 1
+            }
+        fi
+    fi
+    
     set_permissions
     configure_environment
     setup_systemd_service
@@ -434,6 +450,22 @@ perform_update() {
     echo ""
     
     download_and_extract_tarball "$TARGET_TAG" || exit 1
+    
+    # Fix Express version if needed
+    print_info "Checking dependencies..."
+    cd "$PULSE_DIR"
+    if grep -q '"express": "4.19.2"' package.json; then
+        local current_express=$(npm list express --depth=0 2>/dev/null | grep express@ | sed 's/.*express@//' || echo "")
+        if [[ "$current_express" != "4.19.2" ]]; then
+            print_warning "Fixing Express version mismatch..."
+            rm -rf node_modules
+            npm install --omit=dev || {
+                print_error "Failed to install dependencies"
+                exit 1
+            }
+        fi
+    fi
+    
     set_permissions
     
     # Restart service
