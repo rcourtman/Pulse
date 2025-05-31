@@ -1,8 +1,3 @@
-## [3.16.2](https://github.com/rcourtman/Pulse/compare/v3.16.1...v3.16.2) (2025-05-31)
-
-### Fixed
-- Corrected port number in installer output (shows 7655 instead of 3000)
-
 ## [3.16.1](https://github.com/rcourtman/Pulse/compare/v3.16.0...v3.16.1) (2025-05-31)
 
 ### Fixed
