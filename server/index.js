@@ -723,6 +723,31 @@ app.get('/api/diagnostics', async (req, res) => {
     }
 });
 
+// Global error handler for unhandled API errors
+app.use((err, req, res, next) => {
+    console.error('Unhandled API error:', err);
+    
+    // Ensure we always return JSON for API routes
+    if (req.url.startsWith('/api/')) {
+        return res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            message: err.message
+        });
+    }
+    
+    // For non-API routes, return HTML error
+    res.status(500).send('Internal Server Error');
+});
+
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
+    res.status(404).json({
+        success: false,
+        error: 'API endpoint not found'
+    });
+});
+
 // --- WebSocket Setup ---
 const io = new Server(server, {
   // Optional: Configure CORS for Socket.IO if needed, separate from Express CORS

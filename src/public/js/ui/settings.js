@@ -1440,6 +1440,16 @@ PulseApp.ui.settings = (() => {
         const nodeField = document.getElementById('threshold-node');
         const vmidField = document.getElementById('threshold-vmid');
         
+        // If editing existing threshold, select the correct guest in dropdown
+        if (endpointId && vmid) {
+            const selectValue = `${endpointId}:${vmid}`;
+            guestSelector.value = selectValue;
+            
+            // Trigger change event to populate hidden fields properly
+            const changeEvent = new Event('change');
+            guestSelector.dispatchEvent(changeEvent);
+        }
+        
         guestSelector.addEventListener('change', (e) => {
             if (e.target.value) {
                 const [selectedEndpoint, selectedVmid] = e.target.value.split(':');
@@ -1449,6 +1459,14 @@ PulseApp.ui.settings = (() => {
                 // Find the current node for this VM (for display purposes)
                 const selectedGuest = allGuests.find(g => g.endpointId === selectedEndpoint && g.id === selectedVmid);
                 nodeField.value = selectedGuest ? selectedGuest.node : '';
+                
+                // Debug logging
+                console.log('[Settings] Guest selector changed:', {
+                    selectedEndpoint,
+                    selectedVmid,
+                    selectedGuest,
+                    nodeValue: selectedGuest ? selectedGuest.node : 'MISSING'
+                });
             } else {
                 endpointField.value = '';
                 nodeField.value = '';
@@ -1495,6 +1513,14 @@ PulseApp.ui.settings = (() => {
             const endpointId = document.getElementById('threshold-endpoint').value;
             const nodeId = document.getElementById('threshold-node').value;
             const vmid = document.getElementById('threshold-vmid').value;
+            
+            // Validate required fields
+            if (!endpointId || !nodeId || !vmid) {
+                alert('Please select a VM/LXC from the dropdown first.');
+                return;
+            }
+            
+            console.log('[Settings] Saving thresholds for:', { endpointId, nodeId, vmid });
             
             try {
                 const method = existingThresholds ? 'PUT' : 'POST';
