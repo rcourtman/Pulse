@@ -258,10 +258,16 @@ download_and_extract_tarball() {
         return 1
     fi
     
-    # Backup existing data if updating
+    # Backup existing data and configuration if updating
     if [ -d "$PULSE_DIR/data" ]; then
         print_info "Backing up user data..."
         cp -r "$PULSE_DIR/data" "$temp_dir/data-backup"
+    fi
+    
+    # Backup .env file if it exists
+    if [ -f "$PULSE_DIR/.env" ]; then
+        print_info "Backing up configuration..."
+        cp "$PULSE_DIR/.env" "$temp_dir/.env-backup"
     fi
     
     # Remove old installation
@@ -276,6 +282,14 @@ download_and_extract_tarball() {
     if [ -d "$temp_dir/data-backup" ]; then
         print_info "Restoring user data..."
         cp -r "$temp_dir/data-backup"/* "$PULSE_DIR/data/" 2>/dev/null || true
+    fi
+    
+    # Restore .env file if it was backed up
+    if [ -f "$temp_dir/.env-backup" ]; then
+        print_info "Restoring configuration..."
+        cp "$temp_dir/.env-backup" "$PULSE_DIR/.env"
+        chown "$PULSE_USER:$PULSE_USER" "$PULSE_DIR/.env"
+        chmod 600 "$PULSE_DIR/.env"
     fi
     
     # Cleanup
@@ -621,9 +635,15 @@ perform_migration() {
     
     # Backup old data
     local backup_dir="/tmp/pulse-migration-$$"
+    mkdir -p "$backup_dir"
+    
     if [ -d "$OLD_PULSE_DIR/data" ]; then
-        mkdir -p "$backup_dir"
         cp -r "$OLD_PULSE_DIR/data" "$backup_dir/"
+    fi
+    
+    # Backup old .env file if it exists
+    if [ -f "$OLD_PULSE_DIR/.env" ]; then
+        cp "$OLD_PULSE_DIR/.env" "$backup_dir/.env"
     fi
     
     # Remove old installation
@@ -639,8 +659,17 @@ perform_migration() {
         print_info "Restoring data..."
         cp -r "$backup_dir/data"/* "$PULSE_DIR/data/" 2>/dev/null || true
         chown -R "$PULSE_USER:$PULSE_USER" "$PULSE_DIR/data"
-        rm -rf "$backup_dir"
     fi
+    
+    # Restore old .env file
+    if [ -f "$backup_dir/.env" ]; then
+        print_info "Restoring configuration..."
+        cp "$backup_dir/.env" "$PULSE_DIR/.env"
+        chown "$PULSE_USER:$PULSE_USER" "$PULSE_DIR/.env"
+        chmod 600 "$PULSE_DIR/.env"
+    fi
+    
+    rm -rf "$backup_dir"
 }
 
 # Show final instructions
