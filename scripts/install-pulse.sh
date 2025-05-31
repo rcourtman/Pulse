@@ -11,7 +11,7 @@ SERVICE_NAME="pulse-monitor.service"
 REPO_BASE_URL="https://github.com/rcourtman/Pulse"
 SCRIPT_NAME="install-pulse.sh"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
-CURRENT_SCRIPT_COMMIT_SHA="6c7dd20"
+CURRENT_SCRIPT_COMMIT_SHA="2b10e80640b3ee84919baf3fd860c19dc3e78c48"
 
 MODE_UPDATE=""
 INSTALL_MODE=""
@@ -139,7 +139,7 @@ self_update_check() {
             
             while IFS= read -r line || [[ -n "$line" ]]; do
                 if [[ "$line" == CURRENT_SCRIPT_COMMIT_SHA=* ]]; then
-                    echo "CURRENT_SCRIPT_COMMIT_SHA=\"${latest_sha:0:7}\"" >> "$updated_script"
+                    echo "CURRENT_SCRIPT_COMMIT_SHA=\"$latest_sha\"" >> "$updated_script"
                     sha_updated=true
                 else
                     echo "$line" >> "$updated_script"
