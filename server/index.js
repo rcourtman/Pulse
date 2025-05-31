@@ -1117,7 +1117,12 @@ async function startServer() {
             process.exit(1); // Exit if clients can't be initialized
         }
         
-        await runDiscoveryCycle();
+        // Run initial discovery cycle in background after server starts
+        setImmediate(() => {
+            runDiscoveryCycle().catch(error => {
+                console.error('Error in initial discovery cycle:', error);
+            });
+        });
     } else {
         console.log("INFO: No endpoints configured. Starting in setup mode.");
         // Initialize empty clients for consistency
