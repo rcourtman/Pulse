@@ -120,6 +120,7 @@ class DiagnosticTool {
                 sanitized.configuration.proxmox = sanitized.configuration.proxmox.map(pve => ({
                     ...pve,
                     host: this.sanitizeUrl(pve.host),
+                    name: this.sanitizeUrl(pve.name),
                     // Remove potentially sensitive fields, keep only structure info
                     tokenConfigured: pve.tokenConfigured,
                     selfSignedCerts: pve.selfSignedCerts
@@ -127,13 +128,15 @@ class DiagnosticTool {
             }
             
             if (sanitized.configuration.pbs) {
-                sanitized.configuration.pbs = sanitized.configuration.pbs.map(pbs => ({
+                sanitized.configuration.pbs = sanitized.configuration.pbs.map((pbs, index) => ({
                     ...pbs,
                     host: this.sanitizeUrl(pbs.host),
+                    name: this.sanitizeUrl(pbs.name),
+                    // Sanitize node_name
+                    node_name: pbs.node_name === 'NOT SET' ? 'NOT SET' : `pbs-node-${index + 1}`,
                     // Remove potentially sensitive fields, keep only structure info
                     tokenConfigured: pbs.tokenConfigured,
-                    selfSignedCerts: pbs.selfSignedCerts,
-                    node_name: pbs.node_name
+                    selfSignedCerts: pbs.selfSignedCerts
                 }));
             }
         }
@@ -151,10 +154,12 @@ class DiagnosticTool {
             }
             
             if (sanitized.permissions.pbs) {
-                sanitized.permissions.pbs = sanitized.permissions.pbs.map(perm => ({
+                sanitized.permissions.pbs = sanitized.permissions.pbs.map((perm, index) => ({
                     ...perm,
                     host: this.sanitizeUrl(perm.host),
                     name: this.sanitizeUrl(perm.name),
+                    // Sanitize node_name
+                    node_name: perm.node_name === 'NOT SET' ? 'NOT SET' : `pbs-node-${index + 1}`,
                     // Keep diagnostic info but sanitize error messages
                     errors: perm.errors ? perm.errors.map(err => this.sanitizeErrorMessage(err)) : []
                 }));
@@ -761,22 +766,35 @@ class DiagnosticTool {
 
     sanitizeUrl(url) {
         if (!url) return 'Not configured';
+        
+        // Handle URLs that may not have protocol
+        let urlToParse = url;
+        if (!url.includes('://')) {
+            urlToParse = 'https://' + url;
+        }
+        
         try {
-            const parsed = new URL(url);
+            const parsed = new URL(urlToParse);
             // Anonymize hostname/IP but keep protocol and port structure
             const port = parsed.port || (parsed.protocol === 'https:' ? '443' : '80');
             
             // Check if hostname is an IP address
             const isIP = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(parsed.hostname);
-            const anonymizedHost = isIP ? '[IP-ADDRESS]' : '[HOSTNAME]';
+            const anonymizedHost = isIP ? 'REDACTED-IP' : 'REDACTED-HOST';
             
+            // Only include port if it's non-standard
+            if ((parsed.protocol === 'https:' && port === '443') || 
+                (parsed.protocol === 'http:' && port === '80')) {
+                return `${parsed.protocol}//${anonymizedHost}`;
+            }
             return `${parsed.protocol}//${anonymizedHost}:${port}`;
         } catch {
-            // Fallback for malformed URLs
+            // Fallback for malformed URLs - sanitize more aggressively
             return url
-                .replace(/\/\/[^:]+:[^@]+@/, '//[USER]:[PASSWORD]@')
-                .replace(/\b(?:\d{1,3}\.){3}\d{1,3}(?::\d+)?\b/g, '[IP-ADDRESS]')
-                .replace(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/g, '[HOSTNAME]');
+                .replace(/\/\/[^:]+:[^@]+@/, '//REDACTED:REDACTED@')
+                .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, 'REDACTED-IP')
+                .replace(/:[0-9]{2,5}/g, ':PORT')
+                .replace(/[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*/g, 'REDACTED-HOST');
         }
     }
 }
