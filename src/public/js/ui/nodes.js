@@ -97,9 +97,17 @@ PulseApp.ui.nodes = (() => {
         const card = document.createElement('div');
         card.className = 'bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 border border-gray-200 dark:border-gray-700 flex flex-col gap-1';
 
+        // Check if we can make the node name clickable
+        const hostUrl = PulseApp.utils.getHostUrl(node.displayName || node.node);
+        let nodeNameContent = node.displayName || node.node || 'N/A';
+        
+        if (hostUrl) {
+            nodeNameContent = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-800 dark:text-gray-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${node.displayName || node.node} web interface">${node.displayName || node.node || 'N/A'}</a>`;
+        }
+
         card.innerHTML = `
             <div class="flex justify-between items-center">
-                <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate" title="${node.displayName || node.node || 'N/A'}">${node.displayName || node.node || 'N/A'}</h3>
+                <h3 class="text-sm font-semibold truncate">${nodeNameContent}</h3>
                 <div class="flex items-center">
                     <span class="h-2.5 w-2.5 rounded-full ${statusColor} mr-1.5 flex-shrink-0"></span>
                     <span class="text-xs capitalize text-gray-600 dark:text-gray-400">${statusText}</span>
@@ -233,11 +241,19 @@ PulseApp.ui.nodes = (() => {
         const card = document.createElement('div');
         card.className = 'bg-white dark:bg-gray-800 shadow-sm rounded-lg p-2 border border-gray-200 dark:border-gray-700';
 
+        // Check if we can make the node name clickable
+        const hostUrl = PulseApp.utils.getHostUrl(node.displayName || node.node);
+        let nodeNameContent = node.displayName || node.node || 'Unknown';
+        
+        if (hostUrl) {
+            nodeNameContent = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-current hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${node.displayName || node.node} web interface">${node.displayName || node.node || 'Unknown'}</a>`;
+        }
+
         card.innerHTML = `
             <div class="flex items-center justify-between gap-2">
                 <div class="flex items-center min-w-0">
                     <span class="h-2 w-2 rounded-full ${statusDotColor} mr-1.5 flex-shrink-0"></span>
-                    <h3 class="font-semibold text-xs truncate">${node.displayName || node.node || 'Unknown'}</h3>
+                    <h3 class="font-semibold text-xs truncate">${nodeNameContent}</h3>
                 </div>
                 <div class="flex items-center gap-3 text-[10px] text-gray-600 dark:text-gray-400">
                     <span class="flex items-center gap-1">
