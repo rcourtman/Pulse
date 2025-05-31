@@ -305,28 +305,30 @@ install_npm_deps() {
         fi
     fi
     
-    # Clean install
-    npm ci --omit=dev || npm install --omit=dev || {
+    # For tarball installations, we need to install ALL dependencies first to build CSS
+    print_info "Installing all dependencies (including dev) for CSS build..."
+    npm ci || npm install || {
         print_error "Failed to install NPM dependencies"
         exit 1
     }
     
-    print_success "NPM dependencies installed"
-    
-    # Build CSS only if it doesn't exist
-    if [ ! -f "src/public/index.css" ]; then
+    # Build CSS if needed
+    if [ ! -f "src/public/output.css" ]; then
         print_info "Building CSS assets..."
-        # Check if build:css script exists and tailwindcss is available
-        if npm run | grep -q "build:css" && command -v npx &>/dev/null && npx tailwindcss --help &>/dev/null 2>&1; then
-            npm run build:css || {
-                print_warning "Failed to build CSS assets, but continuing (CSS may be pre-built)"
-            }
-        else
-            print_warning "Tailwind CSS not available for building, assuming CSS is pre-built"
-        fi
+        npm run build:css || {
+            print_error "Failed to build CSS assets"
+            exit 1
+        }
+        print_success "CSS assets built"
     else
         print_info "CSS assets already exist"
     fi
+    
+    # Now remove dev dependencies to save space
+    print_info "Removing development dependencies..."
+    npm prune --omit=dev || print_warning "Failed to prune dev dependencies"
+    
+    print_success "NPM dependencies installed and optimized"
 }
 
 # Set file permissions
