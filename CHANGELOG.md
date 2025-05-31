@@ -1,3 +1,15 @@
+## [3.16.1](https://github.com/rcourtman/Pulse/compare/v3.16.0...v3.16.1) (2025-05-31)
+
+### Fixed
+- Installer now properly handles Express version mismatches in tarballs
+- Service startup failure due to path-to-regexp compatibility issues
+- Simplified installer with cleaner output and better error handling
+
+### Changed
+- Removed automatic updates (cron jobs) - all updates are now manual
+- Installer reduced from 2290 to ~600 lines for better maintainability
+- Installer self-update check restored for keeping installer script current
+
 ## [3.6.3](https://github.com/rcourtman/Pulse/compare/v3.6.1...v3.6.3) (2024-07-25)
 
 ### Fixed
