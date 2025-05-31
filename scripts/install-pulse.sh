@@ -9,16 +9,24 @@ OLD_PULSE_DIR="/opt/pulse-proxmox"
 PULSE_USER="pulse"
 SERVICE_NAME="pulse-monitor.service"
 REPO_BASE_URL="https://github.com/rcourtman/Pulse"
+SCRIPT_NAME="install-pulse.sh"
+SCRIPT_RAW_URL="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
+CURRENT_SCRIPT_COMMIT_SHA="4348a3d"
 
 MODE_UPDATE=""
 INSTALL_MODE=""
 SPECIFIED_VERSION_TAG=""
 TARGET_TAG=""
+INSTALLER_WAS_REEXECUTED=false
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --update) MODE_UPDATE="true"; shift ;;
+        --installer-reexecuted)
+            INSTALLER_WAS_REEXECUTED=true
+            shift
+            ;;
         --version)
             if [[ -n "$2" ]] && [[ "$2" != --* ]]; then
                 SPECIFIED_VERSION_TAG="$2"
@@ -59,38 +67,130 @@ check_root() {
 
 # Self-update check
 self_update_check() {
-    # Skip if running from pipe or no curl available
-    if [ ! -t 0 ] || ! command -v curl &>/dev/null; then
+    # Skip if running from pipe, in update mode, or already reexecuted
+    if [ ! -t 0 ] || [ -n "$MODE_UPDATE" ] || [ "$INSTALLER_WAS_REEXECUTED" = "true" ]; then
         return 0
     fi
     
-    print_info "Checking for installer updates..."
+    if ! command -v curl &>/dev/null; then
+        print_warning "curl not found, skipping installer update check"
+        return 0
+    fi
     
-    local current_script="$0"
-    local temp_script="/tmp/install-pulse-new.sh"
-    local script_url="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
-    
-    # Download latest version
-    if curl -sL "$script_url" -o "$temp_script" 2>/dev/null; then
-        # Compare with current script
-        if ! diff -q "$current_script" "$temp_script" >/dev/null 2>&1; then
-            print_warning "A newer version of the installer is available"
-            read -p "Update installer and restart? [Y/n]: " update_confirm
-            
-            if [[ ! "$update_confirm" =~ ^[Nn]$ ]]; then
-                print_info "Updating installer..."
-                cp "$temp_script" "$current_script"
-                chmod +x "$current_script"
-                rm -f "$temp_script"
-                
-                print_success "Installer updated, restarting..."
-                exec "$current_script" "$@"
+    # Install jq if needed for robust SHA checking
+    if ! command -v jq &>/dev/null; then
+        print_info "Installing jq for installer update check..."
+        if command -v apt-get &>/dev/null; then
+            apt-get update -qq >/dev/null 2>&1
+            if apt-get install -y -qq jq >/dev/null 2>&1; then
+                print_success "jq installed"
+            else
+                print_warning "Could not install jq, falling back to simple update check"
+                # Fall back to simple diff check
+                simple_update_check
+                return $?
             fi
         else
-            print_success "Installer is up to date"
+            print_warning "Could not install jq, falling back to simple update check"
+            simple_update_check
+            return $?
+        fi
+    fi
+    
+    print_info "Checking for installer updates (GitHub API)..."
+    
+    local owner="rcourtman"
+    local repo="Pulse"
+    local script_path="scripts/install-pulse.sh"
+    local branch="main"
+    local api_url="https://api.github.com/repos/${owner}/${repo}/commits?path=${script_path}&sha=${branch}&per_page=1"
+    
+    local latest_sha
+    latest_sha=$(curl -sL -H "Accept: application/vnd.github.v3+json" "$api_url" | jq -r 'if type=="array" and length > 0 then .[0].sha else empty end')
+    
+    if [ -z "$latest_sha" ] || [ "$latest_sha" = "null" ]; then
+        print_warning "Could not check for updates via API"
+        return 0
+    fi
+    
+    local current_sha="$CURRENT_SCRIPT_COMMIT_SHA"
+    if [ -z "$current_sha" ]; then
+        print_warning "Current version unknown, skipping update check"
+        return 0
+    fi
+    
+    if [ "$latest_sha" != "$current_sha" ]; then
+        print_warning "New installer version available (${latest_sha:0:7})"
+        read -p "Update installer and restart? [Y/n]: " confirm
+        
+        if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
+            print_info "Downloading new installer..."
+            local temp_script="/tmp/${SCRIPT_NAME}.tmp"
+            
+            if ! curl -sL "$SCRIPT_RAW_URL" -o "$temp_script"; then
+                print_error "Failed to download new installer"
+                rm -f "$temp_script"
+                return 1
+            fi
+            
+            # Update the SHA in the downloaded script
+            local updated_script="${temp_script}.updated"
+            local sha_updated=false
+            
+            while IFS= read -r line || [[ -n "$line" ]]; do
+                if [[ "$line" == CURRENT_SCRIPT_COMMIT_SHA=* ]]; then
+                    echo "CURRENT_SCRIPT_COMMIT_SHA=\"${latest_sha:0:7}\"" >> "$updated_script"
+                    sha_updated=true
+                else
+                    echo "$line" >> "$updated_script"
+                fi
+            done < "$temp_script"
+            
+            if [ "$sha_updated" = false ]; then
+                print_error "Failed to update version in new installer"
+                rm -f "$temp_script" "$updated_script"
+                return 1
+            fi
+            
+            # Replace current script
+            if ! mv "$updated_script" "$0"; then
+                print_error "Failed to update installer"
+                rm -f "$temp_script" "$updated_script"
+                return 1
+            fi
+            
+            chmod +x "$0"
+            rm -f "$temp_script"
+            
+            print_success "Installer updated to ${latest_sha:0:7}"
+            print_info "Restarting..."
+            exec "$0" --installer-reexecuted "$@"
+        fi
+    else
+        print_success "Installer is up to date"
+    fi
+}
+
+# Simple fallback update check using diff
+simple_update_check() {
+    local temp_script="/tmp/install-pulse-new.sh"
+    
+    if curl -sL "$SCRIPT_RAW_URL" -o "$temp_script" 2>/dev/null; then
+        if ! diff -q "$0" "$temp_script" >/dev/null 2>&1; then
+            print_warning "New installer version might be available"
+            read -p "Update installer and restart? [Y/n]: " confirm
+            
+            if [[ ! "$confirm" =~ ^[Nn]$ ]]; then
+                cp "$temp_script" "$0"
+                chmod +x "$0"
+                rm -f "$temp_script"
+                print_success "Installer updated"
+                exec "$0" "$@"
+            fi
         fi
         rm -f "$temp_script"
     fi
+    return 0
 }
 
 # Print welcome banner
