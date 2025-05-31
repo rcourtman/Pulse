@@ -22,13 +22,13 @@ PulseApp.ui.calendarHeatmap = (() => {
         return tasks.filter(task => {
             // Match vmid
             const taskVmid = task.vmid || task.guestId;
-            if (taskVmid != guestId) return false;
+            if (parseInt(taskVmid, 10) !== parseInt(guestId, 10)) return false;
             
             // For single guest filtering, we need to get the guest node info
             const vmsData = PulseApp.state.get('vmsData') || [];
             const containersData = PulseApp.state.get('containersData') || [];
             const allGuests = [...vmsData, ...containersData];
-            const guest = allGuests.find(g => g.vmid == guestId);
+            const guest = allGuests.find(g => parseInt(g.vmid, 10) === parseInt(guestId, 10));
             
             if (!guest) return true; // Fallback if guest not found
             
@@ -527,7 +527,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 if (!vmid) return;
                 
                 // Apply filtering logic
-                if (guestId && vmid != guestId) return;
+                if (guestId && parseInt(vmid, 10) !== parseInt(guestId, 10)) return;
                 if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;
                 
                 // Use unique guest key that includes node information
@@ -669,7 +669,7 @@ PulseApp.ui.calendarHeatmap = (() => {
             const vmsData = PulseApp.state.get('vmsData') || [];
             const containersData = PulseApp.state.get('containersData') || [];
             const allGuests = [...vmsData, ...containersData];
-            const guest = allGuests.find(g => g.vmid == guestId);
+            const guest = allGuests.find(g => parseInt(g.vmid, 10) === parseInt(guestId, 10));
             const guestName = guest ? guest.name : `Guest ${guestId}`;
             guestDisplayText = `${stats.activeGuests} (${guestName})`;
         }
@@ -732,7 +732,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 if (!vmid) return;
                 
                 // Apply filtering logic
-                if (guestId && vmid != guestId) return;
+                if (guestId && parseInt(vmid, 10) !== parseInt(guestId, 10)) return;
                 if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;
                 
                 // Track unique guests using node-aware keys
@@ -814,7 +814,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 const vmsData = PulseApp.state.get('vmsData') || [];
                 const containersData = PulseApp.state.get('containersData') || [];
                 const allGuests = [...vmsData, ...containersData];
-                const guest = allGuests.find(g => g.vmid == guestId);
+                const guest = allGuests.find(g => parseInt(g.vmid, 10) === parseInt(guestId, 10));
                 const guestName = guest ? guest.name : `Guest ${guestId}`;
                 guestDisplayText = `${stats.activeGuests} (${guestName})`;
             }
@@ -975,7 +975,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 if (!vmid) return;
                 
                 // Skip if filtering by specific guest
-                if (guestId && vmid != guestId) return;
+                if (guestId && parseInt(vmid, 10) !== parseInt(guestId, 10)) return;
                 
                 // Skip if filtered guest list is provided and this guest is not in it
                 if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;
@@ -1162,7 +1162,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 }
                 
                 // Skip if filtering by specific guest
-                if (guestId && vmid != guestId) return;
+                if (guestId && parseInt(vmid, 10) !== parseInt(guestId, 10)) return;
                 
                 // Skip if filtered guest list is provided and this guest is not in it
                 if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;

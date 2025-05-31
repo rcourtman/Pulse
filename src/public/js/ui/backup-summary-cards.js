@@ -21,7 +21,7 @@ PulseApp.ui.backupSummaryCards = (() => {
                 ? backupData[type].filter(item => {
                     // Match vmid
                     const itemVmid = item.vmid || item['backup-id'] || item.backupVMID;
-                    if (itemVmid != guestId) return false;
+                    if (parseInt(itemVmid, 10) !== parseInt(guestId, 10)) return false;
                     
                     // For PBS backups (centralized), don't filter by node
                     if (type === 'pbsSnapshots') return true;

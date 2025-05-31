@@ -1167,7 +1167,7 @@ PulseApp.ui.backups = (() => {
         const vmsData = PulseApp.state.get('vmsData') || [];
         const containersData = PulseApp.state.get('containersData') || [];
         const allGuests = [...vmsData, ...containersData];
-        const guest = allGuests.find(g => g.vmid == guestId);
+        const guest = allGuests.find(g => parseInt(g.vmid, 10) === parseInt(guestId, 10));
         
         if (!guest) return null;
         
@@ -1232,7 +1232,7 @@ PulseApp.ui.backups = (() => {
                 
                 // Match vmid
                 const taskVmid = task.vmid || task.guestId;
-                if (taskVmid != guestId) return false;
+                if (parseInt(taskVmid, 10) !== parseInt(guestId, 10)) return false;
                 
                 const date = new Date(task.starttime * 1000);
                 const utcDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
@@ -1300,7 +1300,7 @@ PulseApp.ui.backups = (() => {
                 (ds.snapshots || []).filter(snap => {
                     const vmid = snap['backup-id'];
                     const timestamp = snap['backup-time'];
-                    return vmid == guestId && timestamp >= startTimestamp && timestamp < endTimestamp;
+                    return parseInt(vmid, 10) === parseInt(guestId, 10) && timestamp >= startTimestamp && timestamp < endTimestamp;
                 })
             )
         );
@@ -1310,7 +1310,7 @@ PulseApp.ui.backups = (() => {
         // Check PVE storage backups
         if (pveBackups.storageBackups && Array.isArray(pveBackups.storageBackups)) {
             const matchingBackups = pveBackups.storageBackups.filter(backup => {
-                return backup.vmid == guestId && 
+                return parseInt(backup.vmid, 10) === parseInt(guestId, 10) && 
                        backup.ctime >= startTimestamp && 
                        backup.ctime < endTimestamp;
             });
@@ -1982,7 +1982,7 @@ PulseApp.ui.backups = (() => {
                 const pbsDates = {};
                 backupData.pbsSnapshots.forEach(snap => {
                     const snapId = snap['backup-id'] || snap.backupVMID;
-                    if (snapId == guestId) {
+                    if (parseInt(snapId, 10) === parseInt(guestId, 10)) {
                         const timestamp = snap['backup-time'];
                         if (timestamp) {
                             const date = new Date(timestamp * 1000);
@@ -2005,7 +2005,7 @@ PulseApp.ui.backups = (() => {
             if ((backupTypeFilter === 'all' || backupTypeFilter === 'pve') && backupData.pveBackups) {
                 const pveDates = {};
                 backupData.pveBackups.forEach(backup => {
-                    if (backup.vmid == guestId) {
+                    if (parseInt(backup.vmid, 10) === parseInt(guestId, 10)) {
                         const timestamp = backup['backup-time'] || backup.ctime;
                         if (timestamp) {
                             const date = new Date(timestamp * 1000);
@@ -2034,7 +2034,7 @@ PulseApp.ui.backups = (() => {
             if ((backupTypeFilter === 'all' || backupTypeFilter === 'snapshots') && backupData.vmSnapshots) {
                 const snapDates = {};
                 backupData.vmSnapshots.forEach(snap => {
-                    if (snap.vmid == guestId) {
+                    if (parseInt(snap.vmid, 10) === parseInt(guestId, 10)) {
                         const timestamp = snap.snaptime;
                         if (timestamp) {
                             const date = new Date(timestamp * 1000);
