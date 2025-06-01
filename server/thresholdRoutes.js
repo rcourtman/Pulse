@@ -56,7 +56,7 @@ function setupThresholdRoutes(app) {
     // Set custom thresholds for VM/LXC
     app.post('/api/thresholds/:endpointId/:nodeId/:vmid', async (req, res) => {
         try {
-            const { endpointId, nodeId, vmid } = req.params;
+            let { endpointId, nodeId, vmid } = req.params;
             const { thresholds } = req.body;
             
             if (!thresholds) {
@@ -64,6 +64,25 @@ function setupThresholdRoutes(app) {
                     success: false, 
                     error: 'Thresholds configuration is required' 
                 });
+            }
+            
+            // Handle auto-detect node
+            if (nodeId === 'auto-detect') {
+                const state = require('./state');
+                // Find the VM/LXC in the current state
+                const allGuests = [...(state.vms || []), ...(state.containers || [])];
+                const guest = allGuests.find(g => 
+                    g.endpointId === endpointId && g.id === vmid
+                );
+                
+                if (guest && guest.node) {
+                    nodeId = guest.node;
+                    console.log(`[ThresholdRoutes] Auto-detected node '${nodeId}' for ${endpointId}:${vmid}`);
+                } else {
+                    // If we can't find the node, use a wildcard that will match any node
+                    nodeId = '*';
+                    console.log(`[ThresholdRoutes] Could not auto-detect node for ${endpointId}:${vmid}, using wildcard`);
+                }
             }
             
             if (!customThresholdManager.initialized) {
@@ -84,7 +103,7 @@ function setupThresholdRoutes(app) {
     // Update existing custom thresholds
     app.put('/api/thresholds/:endpointId/:nodeId/:vmid', async (req, res) => {
         try {
-            const { endpointId, nodeId, vmid } = req.params;
+            let { endpointId, nodeId, vmid } = req.params;
             const { thresholds } = req.body;
             
             if (!thresholds) {
@@ -92,6 +111,25 @@ function setupThresholdRoutes(app) {
                     success: false, 
                     error: 'Thresholds configuration is required' 
                 });
+            }
+            
+            // Handle auto-detect node
+            if (nodeId === 'auto-detect') {
+                const state = require('./state');
+                // Find the VM/LXC in the current state
+                const allGuests = [...(state.vms || []), ...(state.containers || [])];
+                const guest = allGuests.find(g => 
+                    g.endpointId === endpointId && g.id === vmid
+                );
+                
+                if (guest && guest.node) {
+                    nodeId = guest.node;
+                    console.log(`[ThresholdRoutes] Auto-detected node '${nodeId}' for ${endpointId}:${vmid}`);
+                } else {
+                    // If we can't find the node, use a wildcard that will match any node
+                    nodeId = '*';
+                    console.log(`[ThresholdRoutes] Could not auto-detect node for ${endpointId}:${vmid}, using wildcard`);
+                }
             }
             
             if (!customThresholdManager.initialized) {

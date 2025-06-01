@@ -1712,14 +1712,24 @@ PulseApp.ui.settings = (() => {
                 
                 // Find the current node for this VM (for display purposes)
                 const selectedGuest = allGuests.find(g => g.endpointId === selectedEndpoint && g.id === selectedVmid);
-                nodeField.value = selectedGuest ? selectedGuest.node : '';
+                
+                // If we can't find the guest or it doesn't have a node, use a placeholder
+                // The server will handle finding the actual node
+                if (selectedGuest && selectedGuest.node) {
+                    nodeField.value = selectedGuest.node;
+                } else {
+                    // Use a placeholder value that will pass validation
+                    // The server can determine the actual node from endpointId and vmid
+                    nodeField.value = 'auto-detect';
+                }
                 
                 // Debug logging
                 console.log('[Settings] Guest selector changed:', {
                     selectedEndpoint,
                     selectedVmid,
                     selectedGuest,
-                    nodeValue: selectedGuest ? selectedGuest.node : 'MISSING'
+                    nodeValue: nodeField.value,
+                    allGuestsCount: allGuests.length
                 });
             } else {
                 endpointField.value = '';
