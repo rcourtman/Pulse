@@ -776,7 +776,7 @@ app.post('/api/test-email', async (req, res) => {
         
         // Create a temporary transporter for testing
         const nodemailer = require('nodemailer');
-        const testTransporter = nodemailer.createTransporter({
+        const testTransporter = nodemailer.createTransport({
             host: host,
             port: parseInt(port),
             secure: secure === true,
