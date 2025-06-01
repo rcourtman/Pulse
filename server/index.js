@@ -1039,7 +1039,7 @@ function sendCurrentStateToSocket(socket) {
   const currentPlaceholderStatus = fullCurrentState.isConfigPlaceholder; // Extract for clarity if needed
 
   if (stateManager.hasData()) {
-    socket.emit('rawData', fullCurrentState);
+socket.emit('rawData', fullCurrentState);
   } else {
     console.log('No data available yet, sending initial/loading state.');
     socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
@@ -1134,6 +1134,8 @@ async function runDiscoveryCycle() {
 
     // Emit combined data using updated state manager state (which includes the flag)
     if (io.engine.clientsCount > 0) {
+        const pveBackups = updatedState.pveBackups || {};
+        console.log(`[Discovery Broadcast] Broadcasting state with PVE backups: ${(pveBackups.backupTasks || []).length} tasks, ${(pveBackups.storageBackups || []).length} storage, ${(pveBackups.guestSnapshots || []).length} snapshots`);
         io.emit('rawData', updatedState);
     }
   } catch (error) {

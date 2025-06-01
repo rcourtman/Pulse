@@ -873,8 +873,9 @@ async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
                         isPbsTask = true;
                     }
                 } catch (error) {
-                    // If we can't check the log, assume it's PBS to be safe
-                    isPbsTask = true;
+                    // If we can't check the log, assume it's a PVE backup (more common)
+                    console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Could not parse task log for ${task.upid}: ${error.message}`);
+                    isPbsTask = false;
                 }
                 
                 if (!isPbsTask) {

@@ -163,6 +163,7 @@ PulseApp.ui.backups = (() => {
             totalPbsBackups += guest.pbsBackups || 0;
             totalPveBackups += guest.pveBackups || 0;
             totalSnapshots += guest.snapshotCount || 0;
+            
         });
 
         return {
@@ -302,6 +303,7 @@ PulseApp.ui.backups = (() => {
         }
         
         const allGuests = [...vmsData, ...containersData];
+        
 
         // Combine PBS and PVE backup tasks
         const pbsBackupTasks = pbsDataArray.flatMap(pbs => {
@@ -314,13 +316,19 @@ PulseApp.ui.backups = (() => {
             }));
         });
 
-        const pveBackupTasks = (pveBackups.backupTasks || []).map(task => ({
-            ...task,
-            guestId: task.guestId || task.vmid || null,
-            guestTypePbs: task.guestType || task.type || null,
-            startTime: task.starttime,
-            source: 'pve'
-        }));
+        // PVE backup tasks are job-level and don't map to individual guests well
+        // Focus on actual backup files instead of job tasks for PVE backup counting
+        const pveBackupTasks = [];
+        
+        // Create debug element
+        let debugEl = document.getElementById('pve-debug');
+        if (!debugEl) {
+            debugEl = document.createElement('div');
+            debugEl.id = 'pve-debug';
+            debugEl.style.cssText = 'position:fixed;top:10px;right:10px;background:yellow;padding:10px;border:2px solid red;z-index:9999;font-size:12px;max-width:300px;';
+            document.body.appendChild(debugEl);
+        }
+        debugEl.remove();
 
         const allRecentBackupTasks = [...pbsBackupTasks, ...pveBackupTasks];
         
@@ -355,7 +363,9 @@ PulseApp.ui.backups = (() => {
             endpointId: backup.endpointId,
             source: 'pve'
         }));
-
+        
+        // PVE guest snapshots are NOT backups - they should be handled separately
+        // Only include actual PVE backup files in the backup processing
         const allSnapshots = [...pbsSnapshots, ...pveStorageBackups];
 
         // Pre-index data by guest ID and type for performance
@@ -374,17 +384,27 @@ PulseApp.ui.backups = (() => {
         allSnapshots.forEach(snap => {
             // Different key strategies for PBS vs PVE:
             // PBS: centralized storage, use vmid-type (accessible by any guest with same vmid)
-            // PVE: node-specific storage, use vmid-type-node
-            let key;
+            // PVE: create both node-specific AND generic keys for cross-node matching
             if (snap.source === 'pbs') {
-                key = `${snap.backupVMID}-${snap.backupType}`;
+                const key = `${snap.backupVMID}-${snap.backupType}`;
+                if (!snapshotsByGuest.has(key)) snapshotsByGuest.set(key, []);
+                snapshotsByGuest.get(key).push(snap);
             } else {
-                // PVE backups are node-specific
-                const nodeKey = snap.node ? `-${snap.node}` : (snap.endpointId ? `-${snap.endpointId}` : '');
-                key = `${snap.backupVMID}-${snap.backupType}${nodeKey}`;
+                // PVE: create both node-specific and endpoint-generic keys (cross-node within same cluster)
+                const endpointKey = snap.endpointId ? `-${snap.endpointId}` : '';
+                const endpointGenericKey = `${snap.backupVMID}-${snap.backupType}${endpointKey}`;
+                const nodeKey = snap.node ? `-${snap.node}` : '';
+                const fullNodeSpecificKey = `${snap.backupVMID}-${snap.backupType}${endpointKey}${nodeKey}`;
+                
+                // Add to endpoint-generic key (for cross-node matching within same cluster)
+                if (!snapshotsByGuest.has(endpointGenericKey)) snapshotsByGuest.set(endpointGenericKey, []);
+                snapshotsByGuest.get(endpointGenericKey).push(snap);
+                
+                // Add to fully specific key (for exact matching)
+                if (!snapshotsByGuest.has(fullNodeSpecificKey)) snapshotsByGuest.set(fullNodeSpecificKey, []);
+                snapshotsByGuest.get(fullNodeSpecificKey).push(snap);
+                
             }
-            if (!snapshotsByGuest.has(key)) snapshotsByGuest.set(key, []);
-            snapshotsByGuest.get(key).push(snap);
         });
 
         // Pre-calculate day boundaries for 7-day analysis
@@ -1071,20 +1091,24 @@ PulseApp.ui.backups = (() => {
         const allGuests = [...vmsData, ...containersData];
         const { tasksByGuest, snapshotsByGuest, dayBoundaries, threeDaysAgo, sevenDaysAgo } = _getInitialBackupData();
         const backupStatusByGuest = allGuests.map(guest => {
-            // Try both PBS (generic) and PVE (node-specific) keys
+            // Try PBS (generic), PVE (endpoint-generic), and PVE (fully-specific) keys
             const baseKey = `${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`;
-            const nodeKey = guest.node ? `-${guest.node}` : (guest.endpointId ? `-${guest.endpointId}` : '');
-            const nodeSpecificKey = `${baseKey}${nodeKey}`;
+            const endpointKey = guest.endpointId ? `-${guest.endpointId}` : '';
+            const nodeKey = guest.node ? `-${guest.node}` : '';
+            const endpointGenericKey = `${baseKey}${endpointKey}`;
+            const fullSpecificKey = `${baseKey}${endpointKey}${nodeKey}`;
             
-            // Get snapshots from both keys and combine them
+            // Get snapshots from all keys and combine them (remove duplicates)
             const pbsSnapshots = snapshotsByGuest.get(baseKey) || [];
-            const pveSnapshots = snapshotsByGuest.get(nodeSpecificKey) || [];
-            const allGuestSnapshots = [...pbsSnapshots, ...pveSnapshots];
+            const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
+            const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
+            const allGuestSnapshots = [...pbsSnapshots, ...pveEndpointSnapshots, ...pveSpecificSnapshots];
             
             // Similar for tasks
             const pbsTasks = tasksByGuest.get(baseKey) || [];
-            const pveTasks = tasksByGuest.get(nodeSpecificKey) || [];
-            const allGuestTasks = [...pbsTasks, ...pveTasks];
+            const pveEndpointTasks = tasksByGuest.get(endpointGenericKey) || [];
+            const pveSpecificTasks = tasksByGuest.get(fullSpecificKey) || [];
+            const allGuestTasks = [...pbsTasks, ...pveEndpointTasks, ...pveSpecificTasks];
             
             return _determineGuestBackupStatus(guest, allGuestSnapshots, allGuestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo);
         });
@@ -1438,20 +1462,24 @@ PulseApp.ui.backups = (() => {
         loadingMsg.classList.add('hidden');
 
         const backupStatusByGuest = allGuests.map(guest => {
-            // Try both PBS (generic) and PVE (node-specific) keys
+            // Try PBS (generic), PVE (endpoint-generic), and PVE (fully-specific) keys
             const baseKey = `${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`;
-            const nodeKey = guest.node ? `-${guest.node}` : (guest.endpointId ? `-${guest.endpointId}` : '');
-            const nodeSpecificKey = `${baseKey}${nodeKey}`;
+            const endpointKey = guest.endpointId ? `-${guest.endpointId}` : '';
+            const nodeKey = guest.node ? `-${guest.node}` : '';
+            const endpointGenericKey = `${baseKey}${endpointKey}`;
+            const fullSpecificKey = `${baseKey}${endpointKey}${nodeKey}`;
             
-            // Get snapshots from both keys and combine them
+            // Get snapshots from all keys and combine them (remove duplicates)
             const pbsSnapshots = snapshotsByGuest.get(baseKey) || [];
-            const pveSnapshots = snapshotsByGuest.get(nodeSpecificKey) || [];
-            const allGuestSnapshots = [...pbsSnapshots, ...pveSnapshots];
+            const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
+            const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
+            const allGuestSnapshots = [...pbsSnapshots, ...pveEndpointSnapshots, ...pveSpecificSnapshots];
             
             // Similar for tasks
             const pbsTasks = tasksByGuest.get(baseKey) || [];
-            const pveTasks = tasksByGuest.get(nodeSpecificKey) || [];
-            const allGuestTasks = [...pbsTasks, ...pveTasks];
+            const pveEndpointTasks = tasksByGuest.get(endpointGenericKey) || [];
+            const pveSpecificTasks = tasksByGuest.get(fullSpecificKey) || [];
+            const allGuestTasks = [...pbsTasks, ...pveEndpointTasks, ...pveSpecificTasks];
             
             return _determineGuestBackupStatus(guest, allGuestSnapshots, allGuestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo);
         });
