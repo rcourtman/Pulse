@@ -28,8 +28,8 @@ FROM node:18-alpine
 
 WORKDIR /usr/src/app
 
-# Create a non-root user and group
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Create a non-root user and group with uid:gid 1000:1000 (standard user)
+RUN addgroup -g 1000 appgroup && adduser -u 1000 -G appgroup -s /bin/sh -D appuser
 
 # Copy necessary files from builder stage
 # Copy node_modules first (can be large)
