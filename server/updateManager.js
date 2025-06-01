@@ -259,7 +259,7 @@ class UpdateManager {
 
             // Install dependencies
             console.log('[UpdateManager] Installing dependencies...');
-            await execAsync(`cd "${pulseDir}" && npm ci --production`);
+            await execAsync(`cd "${pulseDir}" && rm -rf node_modules && npm install --omit=dev`);
 
             if (progressCallback) {
                 progressCallback({ phase: 'apply', progress: 100 });
