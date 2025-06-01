@@ -43,6 +43,9 @@ COPY --from=builder /usr/src/app/package.json ./
 # Optionally copy other root files if needed by the application (e.g., .env.example, README)
 # COPY --from=builder /usr/src/app/.env.example ./
 
+# Create config directory for persistent volume mount and data directory
+RUN mkdir -p /usr/src/app/config /usr/src/app/data
+
 # Ensure correct ownership of application files
 # Use /usr/src/app to cover everything copied
 RUN chown -R appuser:appgroup /usr/src/app
