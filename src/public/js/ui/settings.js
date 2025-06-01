@@ -186,8 +186,9 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'alerts') {
             // Load threshold configurations when alerts tab is opened
             loadThresholdConfigurations();
-            // Setup email test button
+            // Setup email and webhook test buttons
             setupEmailTestButton();
+            setupWebhookTestButton();
         }
     }
 
@@ -534,6 +535,55 @@ PulseApp.ui.settings = (() => {
                                 <p class="text-xs text-blue-700 dark:text-blue-300">
                                     <strong>Gmail users:</strong> Use an App Password instead of your regular password. 
                                     Generate one at <a href="https://myaccount.google.com/apppasswords" target="_blank" class="underline">myaccount.google.com/apppasswords</a>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Webhook Notifications -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Webhook Notifications</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Send alert notifications to Discord, Slack, Teams, or any webhook-compatible service.</p>
+                    
+                    <div class="grid grid-cols-1 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Webhook URL
+                            </label>
+                            <input type="url" name="WEBHOOK_URL"
+                                   value="${alerts.webhook?.url || ''}"
+                                   placeholder="https://discord.com/api/webhooks/..."
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Discord, Slack, Teams, or any webhook endpoint</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4 mb-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" name="WEBHOOK_ENABLED" ${alerts.webhook?.enabled ? 'checked' : ''}
+                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Enable Webhook Notifications</span>
+                        </label>
+                        <button type="button" id="test-webhook-btn" 
+                                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded transition-colors">
+                            Test Webhook
+                        </button>
+                    </div>
+                    
+                    <div class="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded p-3">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-4 w-4 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-2">
+                                <p class="text-xs text-purple-700 dark:text-purple-300">
+                                    <strong>Popular services:</strong><br>
+                                    • <strong>Discord:</strong> Server Settings → Integrations → Webhooks<br>
+                                    • <strong>Slack:</strong> Apps → Incoming Webhooks<br>
+                                    • <strong>Teams:</strong> Channel → Connectors → Incoming Webhook
                                 </p>
                             </div>
                         </div>
@@ -2060,6 +2110,66 @@ PulseApp.ui.settings = (() => {
                     setTimeout(() => {
                         testBtn.textContent = originalText;
                         testBtn.className = 'px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors';
+                    }, 3000);
+                } finally {
+                    testBtn.disabled = false;
+                }
+            });
+        }
+    }
+
+    // Webhook test functionality
+    function setupWebhookTestButton() {
+        const testBtn = document.getElementById('test-webhook-btn');
+        if (testBtn) {
+            testBtn.addEventListener('click', async () => {
+                const originalText = testBtn.textContent;
+                testBtn.textContent = 'Sending...';
+                testBtn.disabled = true;
+                
+                try {
+                    // Get webhook settings from form
+                    const form = document.getElementById('settings-form');
+                    const formData = new FormData(form);
+                    
+                    const webhookConfig = {
+                        url: formData.get('WEBHOOK_URL'),
+                        enabled: formData.get('WEBHOOK_ENABLED') === 'on'
+                    };
+                    
+                    const response = await fetch('/api/test-webhook', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(webhookConfig)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        testBtn.textContent = '✓ Sent!';
+                        testBtn.className = 'px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors';
+                        setTimeout(() => {
+                            testBtn.textContent = originalText;
+                            testBtn.className = 'px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded transition-colors';
+                        }, 3000);
+                    } else {
+                        testBtn.textContent = '✗ Failed';
+                        testBtn.className = 'px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors';
+                        alert('Test webhook failed: ' + result.error);
+                        setTimeout(() => {
+                            testBtn.textContent = originalText;
+                            testBtn.className = 'px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded transition-colors';
+                        }, 3000);
+                    }
+                } catch (error) {
+                    testBtn.textContent = '✗ Error';
+                    testBtn.className = 'px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors';
+                    alert('Error sending test webhook: ' + error.message);
+                    setTimeout(() => {
+                        testBtn.textContent = originalText;
+                        testBtn.className = 'px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded transition-colors';
                     }, 3000);
                 } finally {
                     testBtn.disabled = false;
