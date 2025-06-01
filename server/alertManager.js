@@ -1,6 +1,7 @@
 const EventEmitter = require('events');
 const fs = require('fs').promises;
 const path = require('path');
+const nodemailer = require('nodemailer');
 const customThresholdManager = require('./customThresholds');
 
 class AlertManager extends EventEmitter {
@@ -35,6 +36,10 @@ class AlertManager extends EventEmitter {
         
         // Initialize custom threshold manager
         this.initializeCustomThresholds();
+        
+        // Initialize email transporter
+        this.emailTransporter = null;
+        this.initializeEmailTransporter();
         
         // Cleanup timer for resolved alerts
         this.cleanupInterval = setInterval(() => {
@@ -544,18 +549,27 @@ class AlertManager extends EventEmitter {
         });
     }
 
-    sendToChannel(channel, alert) {
-        // This would implement actual notification sending
-        // For now, just log it
-        console.log(`[NOTIFICATION] Sending to ${channel.name}:`, {
-            channel: channel.type,
-            alert: alert.rule.name,
-            severity: alert.rule.severity,
-            guest: alert.guest.name
-        });
-        
-        // Emit event for external handlers
-        this.emit('notification', { channel, alert });
+    async sendToChannel(channel, alert) {
+        try {
+            console.log(`[NOTIFICATION] Sending to ${channel.name}:`, {
+                channel: channel.type,
+                alert: alert.rule.name,
+                severity: alert.rule.severity,
+                guest: alert.guest.name
+            });
+
+            if (channel.type === 'email') {
+                await this.sendEmailNotification(channel, alert);
+            } else if (channel.type === 'webhook') {
+                await this.sendWebhookNotification(channel, alert);
+            }
+            
+            // Emit event for external handlers
+            this.emit('notification', { channel, alert });
+        } catch (error) {
+            console.error(`[NOTIFICATION ERROR] Failed to send to ${channel.name}:`, error);
+            this.emit('notificationError', { channel, alert, error });
+        }
     }
 
     updateMetrics() {
@@ -991,6 +1005,146 @@ class AlertManager extends EventEmitter {
         }
     }
 
+    /**
+     * Initialize email transporter for sending notifications
+     */
+    initializeEmailTransporter() {
+        if (process.env.SMTP_HOST) {
+            try {
+                this.emailTransporter = nodemailer.createTransporter({
+                    host: process.env.SMTP_HOST,
+                    port: parseInt(process.env.SMTP_PORT) || 587,
+                    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+                    auth: {
+                        user: process.env.SMTP_USER,
+                        pass: process.env.SMTP_PASS
+                    }
+                });
+                console.log('[AlertManager] Email transporter initialized');
+            } catch (error) {
+                console.error('[AlertManager] Failed to initialize email transporter:', error);
+            }
+        } else {
+            console.log('[AlertManager] SMTP not configured, email notifications disabled');
+        }
+    }
+
+    /**
+     * Send email notification
+     */
+    async sendEmailNotification(channel, alert) {
+        if (!this.emailTransporter) {
+            throw new Error('Email transporter not configured');
+        }
+
+        const recipients = channel.config.to;
+        if (!recipients || recipients.length === 0) {
+            throw new Error('No email recipients configured');
+        }
+
+        const severityEmoji = {
+            'info': '💙',
+            'warning': '⚠️',
+            'critical': '🚨'
+        };
+
+        const subject = `${severityEmoji[alert.rule.severity] || '📢'} Pulse Alert: ${alert.rule.name}`;
+        
+        const html = `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <div style="background: ${alert.rule.severity === 'critical' ? '#dc2626' : alert.rule.severity === 'warning' ? '#ea580c' : '#2563eb'}; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                    <h1 style="margin: 0; font-size: 24px;">${severityEmoji[alert.rule.severity] || '📢'} ${alert.rule.name}</h1>
+                    <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 16px;">Severity: ${alert.rule.severity.toUpperCase()}</p>
+                </div>
+                
+                <div style="background: #f9fafb; padding: 20px; border-left: 4px solid ${alert.rule.severity === 'critical' ? '#dc2626' : alert.rule.severity === 'warning' ? '#ea580c' : '#2563eb'};">
+                    <h2 style="margin: 0 0 15px 0; color: #374151;">Alert Details</h2>
+                    
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold; color: #374151; width: 120px;">VM/LXC:</td>
+                            <td style="padding: 8px 0; color: #6b7280;">${alert.guest.name} (${alert.guest.type} ${alert.guest.id})</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Node:</td>
+                            <td style="padding: 8px 0; color: #6b7280;">${alert.guest.node}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Metric:</td>
+                            <td style="padding: 8px 0; color: #6b7280;">${alert.rule.metric.toUpperCase()}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Current Value:</td>
+                            <td style="padding: 8px 0; color: #6b7280;">${alert.value}%</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Threshold:</td>
+                            <td style="padding: 8px 0; color: #6b7280;">${alert.threshold}%</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Status:</td>
+                            <td style="padding: 8px 0; color: #6b7280;">${alert.guest.status}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Time:</td>
+                            <td style="padding: 8px 0; color: #6b7280;">${new Date(alert.timestamp).toLocaleString()}</td>
+                        </tr>
+                    </table>
+                </div>
+                
+                <div style="background: white; padding: 20px; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e7eb;">
+                    <p style="margin: 0; color: #6b7280; font-size: 14px;">
+                        <strong>Description:</strong> ${alert.rule.description}
+                    </p>
+                    <p style="margin: 15px 0 0 0; color: #9ca3af; font-size: 12px;">
+                        This alert was generated by Pulse monitoring system. 
+                        Please check your Proxmox dashboard for more details.
+                    </p>
+                </div>
+            </div>
+        `;
+
+        const text = `
+PULSE ALERT: ${alert.rule.name}
+
+Severity: ${alert.rule.severity.toUpperCase()}
+VM/LXC: ${alert.guest.name} (${alert.guest.type} ${alert.guest.id})
+Node: ${alert.guest.node}
+Metric: ${alert.rule.metric.toUpperCase()}
+Current Value: ${alert.value}%
+Threshold: ${alert.threshold}%
+Status: ${alert.guest.status}
+Time: ${new Date(alert.timestamp).toLocaleString()}
+
+Description: ${alert.rule.description}
+
+This alert was generated by Pulse monitoring system.
+        `;
+
+        const mailOptions = {
+            from: channel.config.from,
+            to: recipients.join(', '),
+            subject: subject,
+            text: text,
+            html: html
+        };
+
+        await this.emailTransporter.sendMail(mailOptions);
+        console.log(`[EMAIL] Alert sent to: ${recipients.join(', ')}`);
+    }
+
+    /**
+     * Send webhook notification (placeholder for future implementation)
+     */
+    async sendWebhookNotification(channel, alert) {
+        if (!channel.config.url) {
+            throw new Error('Webhook URL not configured');
+        }
+        
+        // Placeholder for webhook implementation
+        console.log(`[WEBHOOK] Would send to: ${channel.config.url}`);
+    }
+
     destroy() {
         if (this.cleanupInterval) {
             clearInterval(this.cleanupInterval);
@@ -1003,6 +1157,11 @@ class AlertManager extends EventEmitter {
         this.alertRules.clear();
         this.acknowledgedAlerts.clear();
         this.suppressedAlerts.clear();
+        
+        // Close email transporter
+        if (this.emailTransporter) {
+            this.emailTransporter.close();
+        }
     }
 }
 

@@ -186,6 +186,8 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'alerts') {
             // Load threshold configurations when alerts tab is opened
             loadThresholdConfigurations();
+            // Setup email test button
+            setupEmailTestButton();
         }
     }
 
@@ -435,6 +437,105 @@ PulseApp.ui.settings = (() => {
                                    placeholder="95 (default)"
                                    min="50" max="100"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Email Notification Settings -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Email Notifications</h3>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Configure SMTP settings to receive alert notifications via email.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                SMTP Server Host
+                            </label>
+                            <input type="text" name="SMTP_HOST"
+                                   value="${alerts.smtp?.host || ''}"
+                                   placeholder="smtp.gmail.com"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                SMTP Port
+                            </label>
+                            <input type="number" name="SMTP_PORT"
+                                   value="${alerts.smtp?.port || ''}"
+                                   placeholder="587"
+                                   min="25" max="65535"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Username
+                            </label>
+                            <input type="text" name="SMTP_USER"
+                                   value="${alerts.smtp?.user || ''}"
+                                   placeholder="your-email@gmail.com"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Password / App Password
+                            </label>
+                            <input type="password" name="SMTP_PASS"
+                                   value="${alerts.smtp?.pass || ''}"
+                                   placeholder="••••••••••••••••"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                From Email Address
+                            </label>
+                            <input type="email" name="ALERT_FROM_EMAIL"
+                                   value="${alerts.smtp?.from || ''}"
+                                   placeholder="alerts@your-domain.com"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                To Email Address(es)
+                            </label>
+                            <input type="text" name="ALERT_TO_EMAIL"
+                                   value="${alerts.smtp?.to || ''}"
+                                   placeholder="admin@your-domain.com, tech@your-domain.com"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple emails with commas</p>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center space-x-4 mb-4">
+                        <label class="flex items-center">
+                            <input type="checkbox" name="SMTP_SECURE" ${alerts.smtp?.secure ? 'checked' : ''}
+                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS (Port 465)</span>
+                        </label>
+                        <button type="button" id="test-email-btn" 
+                                class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors">
+                            Test Email
+                        </button>
+                    </div>
+                    
+                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-4 w-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                </svg>
+                            </div>
+                            <div class="ml-2">
+                                <p class="text-xs text-blue-700 dark:text-blue-300">
+                                    <strong>Gmail users:</strong> Use an App Password instead of your regular password. 
+                                    Generate one at <a href="https://myaccount.google.com/apppasswords" target="_blank" class="underline">myaccount.google.com/apppasswords</a>
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1899,6 +2000,71 @@ PulseApp.ui.settings = (() => {
             }
         } catch (error) {
             alert('Error deleting threshold configuration: ' + error.message);
+        }
+    }
+
+    // Email test functionality
+    function setupEmailTestButton() {
+        const testBtn = document.getElementById('test-email-btn');
+        if (testBtn) {
+            testBtn.addEventListener('click', async () => {
+                const originalText = testBtn.textContent;
+                testBtn.textContent = 'Sending...';
+                testBtn.disabled = true;
+                
+                try {
+                    // Get email settings from form
+                    const form = document.getElementById('settings-form');
+                    const formData = new FormData(form);
+                    
+                    const emailConfig = {
+                        host: formData.get('SMTP_HOST'),
+                        port: formData.get('SMTP_PORT'),
+                        user: formData.get('SMTP_USER'),
+                        pass: formData.get('SMTP_PASS'),
+                        from: formData.get('ALERT_FROM_EMAIL'),
+                        to: formData.get('ALERT_TO_EMAIL'),
+                        secure: formData.get('SMTP_SECURE') === 'on'
+                    };
+                    
+                    const response = await fetch('/api/test-email', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(emailConfig)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        testBtn.textContent = '✓ Sent!';
+                        testBtn.className = 'px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors';
+                        setTimeout(() => {
+                            testBtn.textContent = originalText;
+                            testBtn.className = 'px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors';
+                        }, 3000);
+                    } else {
+                        testBtn.textContent = '✗ Failed';
+                        testBtn.className = 'px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors';
+                        alert('Test email failed: ' + result.error);
+                        setTimeout(() => {
+                            testBtn.textContent = originalText;
+                            testBtn.className = 'px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors';
+                        }, 3000);
+                    }
+                } catch (error) {
+                    testBtn.textContent = '✗ Error';
+                    testBtn.className = 'px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors';
+                    alert('Error sending test email: ' + error.message);
+                    setTimeout(() => {
+                        testBtn.textContent = originalText;
+                        testBtn.className = 'px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors';
+                    }, 3000);
+                } finally {
+                    testBtn.disabled = false;
+                }
+            });
         }
     }
 
