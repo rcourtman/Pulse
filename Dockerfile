@@ -28,8 +28,8 @@ FROM node:18-alpine
 
 WORKDIR /usr/src/app
 
-# Create a non-root user and group with uid:gid 1000:1000 (standard user)
-RUN addgroup -g 1000 appgroup && adduser -u 1000 -G appgroup -s /bin/sh -D appuser
+# Use existing node user (uid:gid 1000:1000) instead of system service accounts
+# The node:18-alpine image already has a 'node' user with uid:gid 1000:1000
 
 # Copy necessary files from builder stage
 # Copy node_modules first (can be large)
@@ -48,10 +48,10 @@ RUN mkdir -p /usr/src/app/config /usr/src/app/data
 
 # Ensure correct ownership of application files
 # Use /usr/src/app to cover everything copied
-RUN chown -R appuser:appgroup /usr/src/app
+RUN chown -R node:node /usr/src/app
 
 # Switch to non-root user
-USER appuser
+USER node
 
 # Set environment variable to indicate Docker deployment
 ENV DOCKER_DEPLOYMENT=true
