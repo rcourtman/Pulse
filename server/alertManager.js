@@ -908,6 +908,91 @@ class AlertManager extends EventEmitter {
         return success;
     }
 
+    /**
+     * Refresh alert rules based on current environment variables
+     * This should be called after configuration changes
+     */
+    refreshRules() {
+        console.log('[AlertManager] Refreshing alert rules based on current environment variables');
+        
+        // Store currently disabled rule IDs to clean up their alerts
+        const previouslyActiveRules = new Set(this.alertRules.keys());
+        
+        // Clear existing rules
+        this.alertRules.clear();
+        
+        // Re-initialize rules with current environment variables
+        this.initializeDefaultRules();
+        
+        // Find rules that were disabled
+        const nowActiveRules = new Set(this.alertRules.keys());
+        const disabledRules = [...previouslyActiveRules].filter(ruleId => !nowActiveRules.has(ruleId));
+        
+        // Clean up alerts for disabled rules
+        disabledRules.forEach(ruleId => {
+            this.cleanupAlertsForRule(ruleId);
+        });
+        
+        console.log(`[AlertManager] Rules refreshed. Active: ${this.alertRules.size}, Disabled: ${disabledRules.length}`);
+        if (disabledRules.length > 0) {
+            console.log(`[AlertManager] Cleaned up alerts for disabled rules: ${disabledRules.join(', ')}`);
+        }
+        
+        this.emit('rulesRefreshed', { activeRules: nowActiveRules.size, disabledRules });
+    }
+
+    /**
+     * Clean up active alerts for a specific rule type
+     */
+    cleanupAlertsForRule(ruleId) {
+        const alertsToRemove = [];
+        
+        // Find all active alerts for this rule
+        for (const [alertKey, alert] of this.activeAlerts) {
+            if (alert.rule.id === ruleId) {
+                alertsToRemove.push(alertKey);
+            }
+        }
+        
+        // Remove the alerts
+        alertsToRemove.forEach(alertKey => {
+            const alert = this.activeAlerts.get(alertKey);
+            if (alert) {
+                // Mark as resolved due to rule disable
+                const resolvedAlert = {
+                    id: alert.id,
+                    ruleId: alert.rule.id,
+                    ruleName: alert.rule.name,
+                    severity: 'resolved',
+                    guest: {
+                        name: alert.guest.name,
+                        vmid: alert.guest.vmid,
+                        node: alert.guest.node,
+                        type: alert.guest.type,
+                        endpointId: alert.guest.endpointId
+                    },
+                    metric: alert.rule.metric,
+                    resolvedAt: Date.now(),
+                    duration: alert.triggeredAt ? Date.now() - alert.triggeredAt : 0,
+                    message: `${alert.rule.name} - Alert cleared due to rule type being disabled`,
+                    resolvedReason: 'rule_disabled'
+                };
+                
+                // Add to history
+                this.addToHistory(resolvedAlert);
+                
+                // Emit event
+                this.emit('alertResolved', resolvedAlert);
+                
+                console.info(`[ALERT CLEARED] ${resolvedAlert.message}`);
+            }
+            
+            this.activeAlerts.delete(alertKey);
+        });
+        
+        return alertsToRemove.length;
+    }
+
     getRules(filters = {}) {
         const rules = Array.from(this.alertRules.values());
         if (filters.group) {

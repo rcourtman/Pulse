@@ -711,6 +711,20 @@ class ConfigApi {
                 global.lastReloadTime = Date.now();
             }
             
+            // Refresh AlertManager rules based on new environment variables
+            try {
+                const alertManager = stateManager.getAlertManager();
+                if (alertManager && typeof alertManager.refreshRules === 'function') {
+                    alertManager.refreshRules();
+                    console.log('Alert rules refreshed after configuration reload');
+                } else {
+                    console.warn('AlertManager not available or refreshRules method not found');
+                }
+            } catch (alertError) {
+                console.error('Error refreshing alert rules:', alertError);
+                // Don't fail the entire reload if alert refresh fails
+            }
+            
             // Trigger a discovery cycle if we have any endpoints configured (PVE or PBS)
             if (endpoints.length > 0 || pbsConfigs.length > 0) {
                 console.log('Triggering discovery cycle after configuration reload...');

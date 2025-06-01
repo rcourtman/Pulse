@@ -436,6 +436,10 @@ function destroy() {
   performanceHistory = [];
 }
 
+function getAlertManager() {
+  return alertManager;
+}
+
 module.exports = {
   init,
   getState,
@@ -454,5 +458,6 @@ module.exports = {
   destroy,
   
   // Alert manager access
-  alertManager
+  alertManager,
+  getAlertManager
 };
