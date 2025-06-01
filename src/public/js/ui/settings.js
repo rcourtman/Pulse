@@ -1456,7 +1456,10 @@ PulseApp.ui.settings = (() => {
     }
 
     async function applyUpdate() {
+        console.log('[Settings] applyUpdate called, latestReleaseData:', latestReleaseData);
+        
         if (!latestReleaseData || !latestReleaseData.assets || latestReleaseData.assets.length === 0) {
+            console.error('[Settings] No release data or assets:', { latestReleaseData, hasAssets: !!latestReleaseData?.assets, assetCount: latestReleaseData?.assets?.length });
             showMessage('No update information available. Please check for updates first.', 'error');
             return;
         }
@@ -1465,6 +1468,9 @@ PulseApp.ui.settings = (() => {
         const tarballAsset = latestReleaseData.assets.find(asset => 
             asset.name.endsWith('.tar.gz') && asset.name.includes('pulse')
         );
+        
+        console.log('[Settings] Looking for tarball asset in:', latestReleaseData.assets.map(a => ({ name: a.name, downloadUrl: a.downloadUrl, browser_download_url: a.browser_download_url })));
+        console.log('[Settings] Found tarball asset:', tarballAsset);
         
         if (!tarballAsset) {
             console.error('Available assets:', latestReleaseData.assets.map(a => a.name));
