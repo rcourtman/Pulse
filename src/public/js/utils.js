@@ -299,8 +299,8 @@ PulseApp.utils = (() => {
         // Execute the update function
         updateFn();
 
-        // Restore scroll positions after a microtask to ensure DOM is updated
-        Promise.resolve().then(() => {
+        // Restore scroll positions after DOM updates are complete
+        requestAnimationFrame(() => {
             element.scrollLeft = scrollLeft;
             element.scrollTop = scrollTop;
         });
