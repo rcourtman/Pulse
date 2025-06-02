@@ -67,6 +67,16 @@ PulseApp.ui.calendarHeatmap = (() => {
             return `${vmid}-${itemEndpoint}`;
         }
         
+        // For PBS backups, extract node from comment field
+        // Comment format: "name, node, vmid" e.g. "pihole, minipc, 103"
+        if (backupItem.comment) {
+            const parts = backupItem.comment.split(',').map(p => p.trim());
+            if (parts.length >= 3) {
+                const node = parts[1]; // Second part is the node
+                return `${vmid}-${node}`;
+            }
+        }
+        
         // Fallback to simple vmid if no node info
         return vmid.toString();
     }
@@ -91,7 +101,15 @@ PulseApp.ui.calendarHeatmap = (() => {
         // Also check for simple vmid match (backward compatibility)
         if (filteredGuestIds.includes(vmid.toString())) return true;
         
-        return false;
+        // For cluster environments: check if any guest with the same VMID (but different node) is in the filtered list
+        // This handles cases where backups were made when the guest was on a different node
+        const vmidMatch = filteredGuestIds.find(guestId => {
+            // Extract VMID from guest ID (format: "vmid-node")
+            const extractedVmid = guestId.includes('-') ? guestId.split('-')[0] : guestId;
+            return extractedVmid === vmid.toString();
+        });
+        
+        return vmidMatch !== undefined;
     }
     
     const CSS_CLASSES = {
@@ -384,6 +402,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 preservedSelectedDate = dateKey;
                 
                 if (onDateSelectCallback && dayData) {
+                    
                     const callbackData = {
                         date: dateKey,
                         backups: dayData.guests || [],
@@ -468,6 +487,7 @@ PulseApp.ui.calendarHeatmap = (() => {
     }
     
     function processBackupDataForSingleMonth(backupData, displayMonth, guestId, filteredGuestIds = null) {
+        
         const monthData = {};
         // Use UTC dates for month boundaries to avoid timezone issues
         const startOfMonth = new Date(Date.UTC(displayMonth.getFullYear(), displayMonth.getMonth(), 1));
@@ -505,6 +525,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         ['pbsSnapshots', 'pveBackups', 'vmSnapshots'].forEach(source => {
             if (!backupData[source]) return;
             
+            
             backupData[source].forEach(item => {
                 const timestamp = item.ctime || item.snaptime || item['backup-time'];
                 if (!timestamp) return;
@@ -524,6 +545,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 const dateKey = utcDate.toISOString().split('T')[0];
                 const vmid = item.vmid || item['backup-id'] || item.backupVMID;
                 
+                
                 if (!vmid) return;
                 
                 // Apply filtering logic
@@ -532,6 +554,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 // Use unique guest key that includes node information
                 const uniqueGuestKey = generateUniqueGuestKey(vmid, item);
+                
                 
                 if (!backupsByGuestAndDate[uniqueGuestKey]) {
                     backupsByGuestAndDate[uniqueGuestKey] = {};
@@ -560,6 +583,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         // Process backup days and group by date
         Object.entries(backupsByGuestAndDate).forEach(([uniqueGuestKey, dateData]) => {
             Object.keys(dateData).forEach(dateKey => {
+                
                 if (!monthData[dateKey]) {
                     monthData[dateKey] = {
                         guests: [],
@@ -720,6 +744,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         // Process all backup sources
         ['pbsSnapshots', 'pveBackups', 'vmSnapshots'].forEach(source => {
             if (!backupData[source]) return;
+            
             
             backupData[source].forEach(item => {
                 const timestamp = item.ctime || item.snaptime || item['backup-time'];
@@ -884,12 +909,32 @@ PulseApp.ui.calendarHeatmap = (() => {
                             currentSelectedCell = cellToSelect;
                             currentSelectedDate = preservedSelectedDate;
                             
+                            // Filter guests based on current backup type filter
+                            const currentFilterType = getCurrentFilterType();
+                            let filteredGuests = dayData.guests || [];
+                            
+                            if (currentFilterType !== 'all' && filteredGuests.length > 0) {
+                                filteredGuests = filteredGuests.filter(guest => {
+                                    const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                                    switch (currentFilterType) {
+                                        case 'pbs':
+                                            return types.includes('pbsSnapshots');
+                                        case 'pve':
+                                            return types.includes('pveBackups');
+                                        case 'snapshots':
+                                            return types.includes('vmSnapshots');
+                                        default:
+                                            return true;
+                                    }
+                                });
+                            }
+                            
                             // Prepare callback data
                             const callbackData = {
                                 date: preservedSelectedDate,
-                                backups: dayData.guests || [],
+                                backups: filteredGuests,
                                 stats: {
-                                    totalGuests: dayData.guests ? dayData.guests.length : 0,
+                                    totalGuests: filteredGuests.length,
                                     pbsCount: 0,
                                     pveCount: 0,
                                     snapshotCount: 0,
@@ -897,15 +942,13 @@ PulseApp.ui.calendarHeatmap = (() => {
                                 }
                             };
                             
-                            // Count backup types
-                            if (dayData.guests) {
-                                dayData.guests.forEach(guest => {
-                                    const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
-                                    if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
-                                    if (types.includes('pveBackups')) callbackData.stats.pveCount++;
-                                    if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
-                                });
-                            }
+                            // Count backup types from filtered guests
+                            filteredGuests.forEach(guest => {
+                                const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                                if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                                if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                                if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                            });
                             
                             // Call with instant flag
                             onDateSelectCallback(callbackData, true);
@@ -982,6 +1025,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 // Use unique guest key that includes node information
                 const uniqueGuestKey = generateUniqueGuestKey(vmid, item);
+                
                 
                 if (!backupsByGuestAndDate[uniqueGuestKey]) {
                     backupsByGuestAndDate[uniqueGuestKey] = {};
@@ -1169,6 +1213,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 // Use unique guest key that includes node information
                 const uniqueGuestKey = generateUniqueGuestKey(vmid, item);
+                
                 
                 if (!backupsByGuestAndDate[uniqueGuestKey]) {
                     backupsByGuestAndDate[uniqueGuestKey] = {};
@@ -1546,11 +1591,31 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 // Call callback with date data
                 if (onDateSelectCallback && dayData) {
+                    // Filter guests based on current backup type filter
+                    const currentFilterType = getCurrentFilterType();
+                    let filteredGuests = dayData.guests || [];
+                    
+                    if (currentFilterType !== 'all' && filteredGuests.length > 0) {
+                        filteredGuests = filteredGuests.filter(guest => {
+                            const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                            switch (currentFilterType) {
+                                case 'pbs':
+                                    return types.includes('pbsSnapshots');
+                                case 'pve':
+                                    return types.includes('pveBackups');
+                                case 'snapshots':
+                                    return types.includes('vmSnapshots');
+                                default:
+                                    return true;
+                            }
+                        });
+                    }
+                    
                     const callbackData = {
                         date: dateKey,
-                        backups: dayData.guests || [],
+                        backups: filteredGuests,
                         stats: {
-                            totalGuests: dayData.guests ? dayData.guests.length : 0,
+                            totalGuests: filteredGuests.length,
                             pbsCount: 0,
                             pveCount: 0,
                             snapshotCount: 0,
@@ -1558,15 +1623,13 @@ PulseApp.ui.calendarHeatmap = (() => {
                         }
                     };
                     
-                    // Count backup types
-                    if (dayData.guests) {
-                        dayData.guests.forEach(guest => {
-                            const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
-                            if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
-                            if (types.includes('pveBackups')) callbackData.stats.pveCount++;
-                            if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
-                        });
-                    }
+                    // Count backup types from filtered guests
+                    filteredGuests.forEach(guest => {
+                        const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                        if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                        if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                        if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                    });
                     
                     onDateSelectCallback(callbackData);
                 }

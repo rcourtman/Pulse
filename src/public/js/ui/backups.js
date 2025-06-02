@@ -383,10 +383,12 @@ PulseApp.ui.backups = (() => {
 
         allSnapshots.forEach(snap => {
             // Different key strategies for PBS vs PVE:
-            // PBS: centralized storage, use vmid-type (accessible by any guest with same vmid)
+            // PBS: Include PBS instance name to prevent cross-PBS contamination
             // PVE: create both node-specific AND generic keys for cross-node matching
             if (snap.source === 'pbs') {
-                const key = `${snap.backupVMID}-${snap.backupType}`;
+                // Include PBS instance in the key to prevent guests from different clusters
+                // seeing each other's backups when they have the same VMID
+                const key = `${snap.backupVMID}-${snap.backupType}-${snap.pbsInstanceName}`;
                 if (!snapshotsByGuest.has(key)) snapshotsByGuest.set(key, []);
                 snapshotsByGuest.get(key).push(snap);
             } else {
@@ -422,8 +424,8 @@ PulseApp.ui.backups = (() => {
             });
         }
 
-        const threeDaysAgo = Math.floor(new Date(now).setDate(now.getDate() - 3) / 1000);
-        const sevenDaysAgo = Math.floor(new Date(now).setDate(now.getDate() - 7) / 1000);
+        const threeDaysAgo = Math.floor(Date.now() / 1000) - (3 * 24 * 60 * 60);
+        const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
 
         const result = { 
             allGuests, 
@@ -482,22 +484,27 @@ PulseApp.ui.backups = (() => {
             : null;
 
         let healthStatus = 'none';
-        let displayTimestamp = latestSnapshotTime;
+        let displayTimestamp = null;
 
-        if (latestTask) {
+        // Only use actual backup snapshots for timestamp, not just tasks
+        // Tasks might be failed attempts or other operations
+        if (latestSnapshotTime) {
+            displayTimestamp = latestSnapshotTime;
+            if (latestSnapshotTime >= threeDaysAgo) healthStatus = 'ok';
+            else if (latestSnapshotTime >= sevenDaysAgo) healthStatus = 'stale';
+            else healthStatus = 'old';
+        } else if (latestTask && latestTask.status === 'OK') {
+            // Only use task timestamp if there are no snapshots AND the task succeeded
             displayTimestamp = latestTask.startTime;
-            if (latestTask.status === 'OK') {
-                if (latestTask.startTime >= threeDaysAgo) healthStatus = 'ok';
-                else if (latestTask.startTime >= sevenDaysAgo) healthStatus = 'stale';
-                else healthStatus = 'old';
-            } else {
-                healthStatus = 'failed';
-            }
-        } else if (latestSnapshotTime) {
-             if (latestSnapshotTime >= threeDaysAgo) healthStatus = 'ok';
-             else if (latestSnapshotTime >= sevenDaysAgo) healthStatus = 'stale';
-             else healthStatus = 'old';
+            if (latestTask.startTime >= threeDaysAgo) healthStatus = 'ok';
+            else if (latestTask.startTime >= sevenDaysAgo) healthStatus = 'stale';
+            else healthStatus = 'old';
+        } else if (latestTask && latestTask.status !== 'OK') {
+            // Failed task with no snapshots
+            healthStatus = 'failed';
+            displayTimestamp = null; // No successful backup timestamp
         } else {
+            // No snapshots and no tasks
             healthStatus = 'none';
             displayTimestamp = null;
         }
@@ -773,17 +780,8 @@ PulseApp.ui.backups = (() => {
                 if (!hasBackupType) return false;
             }
 
-            // Calendar date filter - only show guests that had backups on the selected date
-            if (calendarDateFilter && calendarDateFilter.guestIds && calendarDateFilter.guestIds.length > 0) {
-                // Create unique key for this guest item
-                const nodeIdentifier = item.node || item.endpointId || '';
-                const itemUniqueKey = nodeIdentifier ? `${item.guestId}-${nodeIdentifier}` : item.guestId.toString();
-                
-                // Check if this guest's unique key or simple vmid is in the calendar filter
-                const guestIdMatch = calendarDateFilter.guestIds.includes(itemUniqueKey) || 
-                                   calendarDateFilter.guestIds.includes(item.guestId.toString());
-                if (!guestIdMatch) return false;
-            }
+            // Calendar date selection should NOT filter the table
+            // It only affects the detail card/filtered summary
 
             if (backupsSearchTerms.length > 0) {
                 return backupsSearchTerms.some(term =>
@@ -1088,6 +1086,7 @@ PulseApp.ui.backups = (() => {
         // Get current filtered backup status to determine which guests to show
         const vmsData = PulseApp.state.get('vmsData') || [];
         const containersData = PulseApp.state.get('containersData') || [];
+        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
         const allGuests = [...vmsData, ...containersData];
         const { tasksByGuest, snapshotsByGuest, dayBoundaries, threeDaysAgo, sevenDaysAgo } = _getInitialBackupData();
         const backupStatusByGuest = allGuests.map(guest => {
@@ -1098,8 +1097,15 @@ PulseApp.ui.backups = (() => {
             const endpointGenericKey = `${baseKey}${endpointKey}`;
             const fullSpecificKey = `${baseKey}${endpointKey}${nodeKey}`;
             
-            // Get snapshots from all keys and combine them (remove duplicates)
-            const pbsSnapshots = snapshotsByGuest.get(baseKey) || [];
+            // Get snapshots from all keys and combine them
+            // For PBS, we need to check all PBS instances to find the right one for this guest
+            const pbsSnapshots = [];
+            pbsDataArray.forEach(pbsInstance => {
+                const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}`;
+                const snapshots = snapshotsByGuest.get(pbsKey) || [];
+                pbsSnapshots.push(...snapshots);
+            });
+            
             const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
             const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
             const allGuestSnapshots = [...pbsSnapshots, ...pveEndpointSnapshots, ...pveSpecificSnapshots];
@@ -1115,7 +1121,6 @@ PulseApp.ui.backups = (() => {
         const filteredBackupStatus = _filterBackupData(backupStatusByGuest, backupsSearchInput);
         
         // Get the current backup data
-        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         
         // Prepare backup data same as in updateBackupsTab
@@ -1235,7 +1240,13 @@ PulseApp.ui.backups = (() => {
             name: guest.name,
             type: guest.type === 'qemu' ? 'VM' : 'CT',
             types: [],
-            backupCount: 0
+            backupCount: 0,
+            node: guest.node,
+            endpointId: guest.endpointId,
+            // Create unique key to match table filtering logic
+            uniqueKey: (guest.node || guest.endpointId) ? 
+                `${guestId}-${guest.node || guest.endpointId}` : 
+                guestId.toString()
         };
         
         // Check all backup sources for this guest on this date
@@ -1461,6 +1472,12 @@ PulseApp.ui.backups = (() => {
         }
         loadingMsg.classList.add('hidden');
 
+        // Debug: Log guest count
+        console.log('[Backup Health Debug] Total guests before backup status:', allGuests.length);
+        
+        // Get PBS data array early as it's needed for guest backup status calculation
+        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+        
         const backupStatusByGuest = allGuests.map(guest => {
             // Try PBS (generic), PVE (endpoint-generic), and PVE (fully-specific) keys
             const baseKey = `${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`;
@@ -1469,8 +1486,15 @@ PulseApp.ui.backups = (() => {
             const endpointGenericKey = `${baseKey}${endpointKey}`;
             const fullSpecificKey = `${baseKey}${endpointKey}${nodeKey}`;
             
-            // Get snapshots from all keys and combine them (remove duplicates)
-            const pbsSnapshots = snapshotsByGuest.get(baseKey) || [];
+            // Get snapshots from all keys and combine them
+            // For PBS, we need to check all PBS instances to find the right one for this guest
+            const pbsSnapshots = [];
+            pbsDataArray.forEach(pbsInstance => {
+                const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}`;
+                const snapshots = snapshotsByGuest.get(pbsKey) || [];
+                pbsSnapshots.push(...snapshots);
+            });
+            
             const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
             const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
             const allGuestSnapshots = [...pbsSnapshots, ...pveEndpointSnapshots, ...pveSpecificSnapshots];
@@ -1483,10 +1507,34 @@ PulseApp.ui.backups = (() => {
             
             return _determineGuestBackupStatus(guest, allGuestSnapshots, allGuestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo);
         });
+        
+        // Debug: Log backup status results
+        console.log('[Backup Health Debug] Backup status by guest count:', backupStatusByGuest.length);
+        const healthStats = {
+            '<24h': 0,
+            '1-7d': 0,
+            '7-14d': 0,
+            '>14d': 0,
+            'none': 0
+        };
+        backupStatusByGuest.forEach(status => {
+            const now = Date.now() / 1000;
+            if (!status.latestBackupTime) {
+                healthStats.none++;
+            } else {
+                const ageSeconds = now - status.latestBackupTime;
+                const ageDays = ageSeconds / (24 * 60 * 60);
+                if (ageDays < 1) healthStats['<24h']++;
+                else if (ageDays <= 7) healthStats['1-7d']++;
+                else if (ageDays <= 14) healthStats['7-14d']++;
+                else healthStats['>14d']++;
+            }
+        });
+        console.log('[Backup Health Debug] Health distribution:', healthStats);
+        
         const filteredBackupStatus = _filterBackupData(backupStatusByGuest, backupsSearchInput);
 
         // Prepare backup data for consolidated summary
-        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         
         // Get PBS snapshots
@@ -1607,12 +1655,24 @@ PulseApp.ui.backups = (() => {
                 
                 // Update detail card with filtered data if no calendar date is selected
                 const calendarDateFilter = PulseApp.state.get('calendarDateFilter');
-                if (!calendarDateFilter && isUserAction) {
-                    if (filteredBackupStatus.length > 0) {
-                        const multiDateData = _prepareMultiDateDetailData(filteredBackupStatus, extendedBackupData);
-                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, false);
+                if (!calendarDateFilter) {
+                    // Check if any filters are actually active
+                    const hasActiveFilters = (
+                        (backupsSearchInput && backupsSearchInput.value) ||
+                        (PulseApp.state.get('backupsFilterGuestType') !== 'all') ||
+                        (PulseApp.state.get('backupsFilterHealth') !== 'all') ||
+                        (PulseApp.state.get('backupsFilterBackupType') !== 'all') ||
+                        PulseApp.state.get('backupsFilterFailures')
+                    );
+                    
+                    // Use unfiltered data for overview when no filters are active
+                    const dataToUse = hasActiveFilters ? filteredBackupStatus : backupStatusByGuest;
+                    
+                    if (dataToUse.length > 0) {
+                        const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);
+                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, !isUserAction);
                     } else {
-                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, null, false);
+                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, null, !isUserAction);
                     }
                 }
                 
@@ -1620,29 +1680,38 @@ PulseApp.ui.backups = (() => {
                 const onDateSelect = (dateData, instant = false) => {
                     if (detailCard && PulseApp.ui.backupDetailCard) {
                         if (dateData) {
-                            // Apply current table filters to the selected date's data
-                            const filteredDateBackups = dateData.backups.filter(backup => {
-                                // Find the guest in filteredBackupStatus using unique identification
-                                const guestInFiltered = filteredBackupStatus.find(g => {
-                                    // First try exact vmid match for simple cases
-                                    if (g.guestId.toString() === backup.vmid.toString()) {
-                                        // If backup has node info, ensure it matches
-                                        if (backup.node || backup.endpointId) {
-                                            return (backup.node && g.node === backup.node) || 
-                                                   (backup.endpointId && g.endpointId === backup.endpointId) ||
-                                                   (!backup.node && !backup.endpointId);
-                                        }
-                                        return true;
+                            // Filter backups based on backup type filter
+                            const backupsFilterBackupType = PulseApp.state.get('backupsFilterBackupType') || 'all';
+                            
+                            // Always work with a copy of the backup data to avoid mutations
+                            const backupsCopy = JSON.parse(JSON.stringify(dateData.backups));
+                            
+                            let filteredDateBackups;
+                            if (backupsFilterBackupType === 'all') {
+                                filteredDateBackups = backupsCopy;
+                            } else {
+                                filteredDateBackups = backupsCopy.filter(backup => {
+                                    const backupTypes = backup.types || [];
+                                    
+                                    switch (backupsFilterBackupType) {
+                                        case 'pbs':
+                                            return backupTypes.includes('pbsSnapshots');
+                                        case 'pve':
+                                            return backupTypes.includes('pveBackups');
+                                        case 'snapshots':
+                                            return backupTypes.includes('vmSnapshots');
+                                        default:
+                                            return false;
                                     }
-                                    return false;
                                 });
-                                return guestInFiltered !== undefined;
-                            });
+                            }
                             
                             // Create filtered date data
                             const filteredDateData = {
                                 ...dateData,
                                 backups: filteredDateBackups,
+                                isCalendarFiltered: true, // Flag to indicate this is calendar-filtered data
+                                calendarFilter: backupsFilterBackupType, // Include the filter type
                                 stats: {
                                     totalGuests: filteredDateBackups.length,
                                     pbsCount: filteredDateBackups.filter(b => b.types && b.types.includes('pbsSnapshots')).length,
@@ -1652,13 +1721,30 @@ PulseApp.ui.backups = (() => {
                                 }
                             };
                             
+                            // Don't overwrite user selections with empty data from automatic updates
+                            if (filteredDateData.backups.length === 0 && !isUserAction) {
+                                return;
+                            }
+                            
                             // Force instant updates on API refreshes to prevent flashing
                             const forceInstant = !isUserAction || instant;
                             PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, filteredDateData, forceInstant);
                         } else {
-                            // No date selected, show multi-date filtered data
-                            if (filteredBackupStatus.length > 0) {
-                                const multiDateData = _prepareMultiDateDetailData(filteredBackupStatus, extendedBackupData);
+                            // No date selected, show multi-date data
+                            // Check if any filters are actually active
+                            const hasActiveFilters = (
+                                (backupsSearchInput && backupsSearchInput.value) ||
+                                (PulseApp.state.get('backupsFilterGuestType') !== 'all') ||
+                                (PulseApp.state.get('backupsFilterHealth') !== 'all') ||
+                                (PulseApp.state.get('backupsFilterBackupType') !== 'all') ||
+                                PulseApp.state.get('backupsFilterFailures')
+                            );
+                            
+                            // Use unfiltered data for overview when no filters are active
+                            const dataToUse = hasActiveFilters ? filteredBackupStatus : backupStatusByGuest;
+                            
+                            if (dataToUse.length > 0) {
+                                const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);
                                 PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, !isUserAction || instant);
                             } else {
                                 PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, null, !isUserAction || instant);
@@ -1666,35 +1752,8 @@ PulseApp.ui.backups = (() => {
                         }
                     }
                     
-                    // Update calendar date filter for table
-                    if (dateData && dateData.backups && dateData.backups.length > 0) {
-                        // Extract unique guest identifiers from the selected date's backup data
-                        const guestIds = dateData.backups.map(backup => {
-                            // Use unique key if available, fall back to vmid
-                            if (backup.uniqueKey) {
-                                return backup.uniqueKey;
-                            }
-                            // Create unique key from available data
-                            const nodeIdentifier = backup.node || backup.endpointId || '';
-                            return nodeIdentifier ? `${backup.vmid}-${nodeIdentifier}` : backup.vmid.toString();
-                        });
-                        PulseApp.state.set('calendarDateFilter', {
-                            date: dateData.date,
-                            guestIds: guestIds
-                        });
-                        
-                        // Show visual indicator in table header
-                        _updateCalendarFilterIndicator(dateData.date, guestIds.length);
-                    } else {
-                        // Clear filter if no data or deselected
-                        PulseApp.state.set('calendarDateFilter', null);
-                        _updateCalendarFilterIndicator(null, 0);
-                    }
-                    
-                    // Refresh table to apply calendar filter (only if this is a user action to avoid loops)
-                    if (!instant) {
-                        updateBackupsTab(false); // false = not a user action for the table update
-                    }
+                    // Calendar date selection only affects the detail card, not the table
+                    // No need to refresh the table when calendar date is selected
                 };
                 
                 // Only recreate calendar if it doesn't exist or if this is a user action
@@ -1877,7 +1936,6 @@ PulseApp.ui.backups = (() => {
         
         // Clear calendar date filter
         PulseApp.state.set('calendarDateFilter', null);
-        _updateCalendarFilterIndicator(null, 0);
         
         // Clear calendar selection if possible
         if (PulseApp.ui.calendarHeatmap && PulseApp.ui.calendarHeatmap.clearSelection) {
@@ -1996,31 +2054,11 @@ PulseApp.ui.backups = (() => {
         modalBody.innerHTML = html;
     }
     
-    function _updateCalendarFilterIndicator(date, guestCount) {
-        // Add visual indicator to show calendar date filter is active
-        const statusText = document.getElementById('backups-status-text');
-        if (!statusText) return;
-        
-        if (date && guestCount > 0) {
-            const formattedDate = new Date(date).toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric',
-                year: 'numeric'
-            });
-            
-            // Add calendar filter indicator to status text
-            const existingText = statusText.textContent.replace(/ \| Calendar: .+/, '');
-            statusText.textContent = `${existingText} | Calendar: ${formattedDate} (${guestCount} guest${guestCount !== 1 ? 's' : ''})`;
-            statusText.classList.add('text-blue-600', 'dark:text-blue-400');
-        } else {
-            // Remove calendar filter indicator
-            const existingText = statusText.textContent.replace(/ \| Calendar: .+/, '');
-            statusText.textContent = existingText;
-            statusText.classList.remove('text-blue-600', 'dark:text-blue-400');
-        }
-    }
     
     function _prepareMultiDateDetailData(filteredBackupStatus, backupData) {
+        // Debug: Log data being passed to detail card
+        console.log('[Backup Health Debug] _prepareMultiDateDetailData received guests:', filteredBackupStatus.length);
+        
         // Prepare data for multi-date detail view
         const multiDateBackups = [];
         const stats = {

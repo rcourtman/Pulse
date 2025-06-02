@@ -26,6 +26,11 @@ PulseApp.ui.common = (() => {
         const filterStatus = PulseApp.state.get('filterStatus');
         const backupsFilterHealth = PulseApp.state.get('backupsFilterHealth');
         const backupsFilterGuestType = PulseApp.state.get('backupsFilterGuestType');
+        const backupsFilterBackupType = PulseApp.state.get('backupsFilterBackupType') || 'all';
+        // Initialize backup type filter if not set
+        if (!PulseApp.state.get('backupsFilterBackupType')) {
+            PulseApp.state.set('backupsFilterBackupType', 'all');
+        }
 
         const groupRadio = document.getElementById(groupByNode ? 'group-grouped' : 'group-list');
         if (groupRadio) groupRadio.checked = true;
@@ -37,6 +42,8 @@ PulseApp.ui.common = (() => {
         if (backupHealthRadio) backupHealthRadio.checked = true;
         const backupTypeRadio = document.getElementById(`backups-filter-type-${backupsFilterGuestType}`);
         if (backupTypeRadio) backupTypeRadio.checked = true;
+        const calendarBackupRadio = document.getElementById(`backups-filter-backup-${backupsFilterBackupType}`);
+        if (calendarBackupRadio) calendarBackupRadio.checked = true;
     }
 
     function applyInitialSortUI() {
@@ -132,6 +139,11 @@ PulseApp.ui.common = (() => {
         document.querySelectorAll('input[name="backups-backup-filter"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 if (this.checked) {
+                    // Clear any selected calendar day when filter changes
+                    if (PulseApp.ui.calendarHeatmap && PulseApp.ui.calendarHeatmap.clearSelection) {
+                        PulseApp.ui.calendarHeatmap.clearSelection();
+                    }
+                    
                     PulseApp.state.set('backupsFilterBackupType', this.value);
                     PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
                     PulseApp.state.saveFilterState();

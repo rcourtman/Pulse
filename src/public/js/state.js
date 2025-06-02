@@ -36,6 +36,8 @@ PulseApp.state = (() => {
         filterStatus: savedFilterState.filterStatus || 'all',
         backupsFilterHealth: savedFilterState.backupsFilterHealth || 'all',
         backupsFilterGuestType: savedFilterState.backupsFilterGuestType || 'all',
+        backupsFilterBackupType: savedFilterState.backupsFilterBackupType || 'all',
+        backupsFilterFailures: savedFilterState.backupsFilterFailures || false,
         backupsSearchTerm: '',
         
         // Enhanced monitoring data

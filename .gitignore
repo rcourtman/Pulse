@@ -60,7 +60,10 @@ RELEASE_PROCEDURE.md
 .DS_Store 
 
 # Feature Ideas - Should not be tracked
-docs/feature_ideas/ 
+docs/feature_ideas/
+
+# Proxmox API Documentation - Should not be tracked
+docs/proxmox-api/ 
 
 # Dependency directories
 jspm_packages/

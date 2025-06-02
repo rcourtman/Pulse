@@ -2,9 +2,10 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.backupDetailCard = (() => {
     let pendingTimeout = null;
+    
     function createBackupDetailCard(data) {
         const card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700 h-full flex flex-col';
+        card.className = 'bg-white dark:bg-gray-800 rounded-lg p-2 border border-gray-200 dark:border-gray-700 h-full flex flex-col';
         card.style.height = '100%';
         card.innerHTML = `
             <div class="backup-detail-content h-full overflow-hidden flex flex-col">
@@ -18,28 +19,21 @@ PulseApp.ui.backupDetailCard = (() => {
     function getEmptyState(isLoading = true) {
         if (isLoading) {
             return `
-                <div class="flex flex-col items-center justify-center h-full text-center px-4 py-6">
-                    <svg class="w-10 h-10 text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
-                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">Loading backup data...</h3>
-                    <p class="text-xs text-gray-400 dark:text-gray-500">
-                        Summary will appear here
-                    </p>
+                <div class="flex flex-col items-center justify-center h-full text-center px-2 py-4">
+                    <div class="animate-pulse">
+                        <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-32 mb-2"></div>
+                        <div class="h-3 bg-gray-200 dark:bg-gray-700 rounded w-24 mx-auto"></div>
+                    </div>
                 </div>
             `;
         } else {
             return `
-                <div class="flex flex-col items-center justify-center h-full text-center px-4 py-6">
-                    <svg class="w-10 h-10 text-gray-400 dark:text-gray-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div class="flex flex-col items-center justify-center h-full text-center px-2 py-4">
+                    <svg class="w-6 h-6 text-gray-400 dark:text-gray-500 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" 
-                            d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                     </svg>
-                    <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-1">No matching backups</h3>
-                    <p class="text-xs text-gray-400 dark:text-gray-500">
-                        No backups found for the selected filters
-                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">No backup data</p>
                 </div>
             `;
         }
@@ -67,53 +61,261 @@ PulseApp.ui.backupDetailCard = (() => {
         
         // If no filters active, show summary view
         if (!hasActiveFilters) {
-            return getOverviewSummary(backups, stats);
+            return getCompactOverview(backups, stats);
         }
         
-        // Otherwise show detailed view
-        // Group backups by date
-        const backupsByDate = {};
-        backups.forEach(guest => {
-            guest.backupDates.forEach(dateInfo => {
-                const dateKey = dateInfo.date;
-                if (!backupsByDate[dateKey]) {
-                    backupsByDate[dateKey] = [];
-                }
-                backupsByDate[dateKey].push({
-                    ...guest,
-                    backupTypes: dateInfo.types,
-                    backupCount: dateInfo.count
-                });
-            });
+        // Otherwise show detailed table view
+        return getCompactDetailTable(backups, stats, filterInfo);
+    }
+
+    function getCompactOverview(backups, stats) {
+        // Debug: Log what the detail card is receiving
+        console.log('[Backup Health Debug] getCompactOverview received:', {
+            backupsCount: backups.length,
+            stats: stats
         });
-
-        // Sort dates in descending order
-        const sortedDates = Object.keys(backupsByDate).sort((a, b) => b.localeCompare(a));
-
+        
+        // Calculate critical metrics
+        const now = new Date();
+        const criticalAge = 14; // days
+        const warningAge = 7; // days
+        
+        // Group guests by backup age
+        const guestsByAge = {
+            good: [],      // < 24h
+            ok: [],        // 1-7 days
+            warning: [],   // 7-14 days
+            critical: [],  // > 14 days
+            none: []       // no backups
+        };
+        
+        // Analyze each guest
+        backups.forEach(guest => {
+            let mostRecentBackup = null;
+            
+            // Find most recent backup - only use if it's a valid timestamp
+            if (guest.latestBackupTime && guest.latestBackupTime > 0) {
+                // latestBackupTime is a Unix timestamp from the main backup status
+                mostRecentBackup = new Date(guest.latestBackupTime * 1000);
+            } else if (guest.backupDates && guest.backupDates.length > 0) {
+                // Fallback to backupDates array - find the most recent actual backup
+                const validDates = guest.backupDates
+                    .filter(bd => bd.date && new Date(bd.date).getTime() > 0)
+                    .map(bd => new Date(bd.date))
+                    .sort((a, b) => b - a);
+                if (validDates.length > 0) {
+                    mostRecentBackup = validDates[0];
+                }
+            }
+            
+            const guestData = {
+                id: guest.guestId,
+                name: guest.guestName,
+                type: guest.guestType,
+                pbsCount: guest.pbsBackups || 0,
+                pveCount: guest.pveBackups || 0,
+                snapCount: guest.snapshotCount || 0,
+                failures: guest.recentFailures || 0,
+                lastBackup: mostRecentBackup
+            };
+            
+            if (!mostRecentBackup) {
+                guestsByAge.none.push(guestData);
+            } else {
+                const ageInDays = (now - mostRecentBackup) / (1000 * 60 * 60 * 24);
+                guestData.ageInDays = ageInDays;
+                
+                if (ageInDays < 1) {
+                    guestsByAge.good.push(guestData);
+                } else if (ageInDays <= warningAge) {
+                    guestsByAge.ok.push(guestData);
+                } else if (ageInDays <= criticalAge) {
+                    guestsByAge.warning.push(guestData);
+                } else {
+                    guestsByAge.critical.push(guestData);
+                }
+            }
+        });
+        
+        // Sort each group
+        Object.keys(guestsByAge).forEach(key => {
+            if (key !== 'none') {
+                guestsByAge[key].sort((a, b) => (a.ageInDays || 0) - (b.ageInDays || 0));
+            }
+        });
+        
+        // Calculate summary stats
+        const totalIssues = guestsByAge.critical.length + guestsByAge.warning.length + guestsByAge.none.length;
+        const healthScore = Math.round(((stats.totalGuests - totalIssues) / stats.totalGuests) * 100) || 0;
+        
         return `
             <div class="flex flex-col h-full">
-                <!-- Header -->
-                <div class="mb-3 flex-shrink-0">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Filtered Backup Details</h3>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">${stats.totalBackups} total ${getBackupTypeLabel(filterInfo?.backupType)}</div>
+                <!-- Compact Header with Key Metrics -->
+                <div class="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between mb-1">
+                        <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Backup Health</h3>
+                        <span class="text-xs ${healthScore >= 80 ? 'text-green-600 dark:text-green-400' : healthScore >= 60 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'} font-bold">${healthScore}%</span>
                     </div>
-                    <div class="flex flex-wrap gap-2 text-xs">
-                        ${getCompactFilterSummary(filterInfo)}
-                    </div>
-                    <div class="flex flex-wrap gap-2 text-xs mt-2">
-                        ${getCompactStatsSummary(stats, filterInfo)}
+                    <div class="grid grid-cols-4 gap-2 text-[10px]">
+                        <div class="text-center">
+                            <div class="font-semibold text-green-600 dark:text-green-400">${guestsByAge.good.length}</div>
+                            <div class="text-gray-500 dark:text-gray-400">&lt;24h</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-semibold text-blue-600 dark:text-blue-400">${guestsByAge.ok.length}</div>
+                            <div class="text-gray-500 dark:text-gray-400">1-7d</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-semibold text-orange-600 dark:text-orange-400">${guestsByAge.warning.length}</div>
+                            <div class="text-gray-500 dark:text-gray-400">7-14d</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="font-semibold text-red-600 dark:text-red-400">${guestsByAge.critical.length + guestsByAge.none.length}</div>
+                            <div class="text-gray-500 dark:text-gray-400">&gt;14d</div>
+                        </div>
                     </div>
                 </div>
                 
-                <!-- Scrollable Content -->
-                <div class="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-track-gray-100 dark:scrollbar-track-gray-700 scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 min-h-0">
-                    ${sortedDates.length === 0 ? getNoBackupsMessage() : sortedDates.map(date => `
-                        <div class="mb-3">
-                            <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2 sticky top-0 bg-white dark:bg-gray-800 py-1 border-b border-gray-100 dark:border-gray-700/50">${formatCompactDate(date)}</h4>
-                            ${getCompactGuestTable(backupsByDate[date], filterInfo)}
+                <!-- Scrollable Guest List -->
+                <div class="flex-1 overflow-y-auto">
+                    ${totalIssues > 0 ? `
+                        <!-- Critical/Warning Guests -->
+                        <div class="mb-2">
+                            <h4 class="text-[10px] font-semibold text-red-700 dark:text-red-400 uppercase tracking-wider mb-1">Needs Attention (${totalIssues})</h4>
+                            <div class="space-y-0.5">
+                                ${[...guestsByAge.none, ...guestsByAge.critical, ...guestsByAge.warning].map(guest => `
+                                    <div class="flex items-center justify-between px-1 py-0.5 rounded text-[11px] bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30">
+                                        <div class="flex items-center gap-1 flex-1 min-w-0">
+                                            <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
+                                            <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
+                                            <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2 ml-2">
+                                            <div class="flex items-center gap-1 text-[9px]">
+                                                ${guest.pbsCount > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
+                                                ${guest.pveCount > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
+                                                ${guest.snapCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
+                                            </div>
+                                            ${guest.failures > 0 ? `<span class="text-red-600 dark:text-red-400">⚠ ${guest.failures}</span>` : ''}
+                                            <span class="${guest.lastBackup ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'} font-medium">
+                                                ${guest.lastBackup ? formatAge(guest.ageInDays) : 'Never'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
                         </div>
-                    `).join('')}
+                    ` : ''}
+                    
+                    <!-- Recent Backups -->
+                    ${guestsByAge.good.length > 0 ? `
+                        <div class="mb-2">
+                            <h4 class="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider mb-1">Recent (${guestsByAge.good.length})</h4>
+                            <div class="space-y-0.5">
+                                ${guestsByAge.good.map(guest => `
+                                    <div class="flex items-center justify-between px-1 py-0.5 rounded text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                        <div class="flex items-center gap-1 flex-1 min-w-0">
+                                            <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
+                                            <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
+                                            <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2 ml-2">
+                                            <div class="flex items-center gap-1 text-[9px]">
+                                                ${guest.pbsCount > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
+                                                ${guest.pveCount > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
+                                                ${guest.snapCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
+                                            </div>
+                                            <span class="text-green-600 dark:text-green-400 font-medium">${formatAge(guest.ageInDays)}</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Summary Stats -->
+                    <div class="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <div class="grid grid-cols-3 gap-2 text-[10px]">
+                            <div class="text-center">
+                                <div class="font-semibold text-purple-600 dark:text-purple-400">${stats.pbsCount || 0}</div>
+                                <div class="text-gray-500 dark:text-gray-400">PBS</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="font-semibold text-orange-600 dark:text-orange-400">${stats.pveCount || 0}</div>
+                                <div class="text-gray-500 dark:text-gray-400">PVE</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="font-semibold text-yellow-600 dark:text-yellow-400">${stats.snapshotCount || 0}</div>
+                                <div class="text-gray-500 dark:text-gray-400">Snapshots</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function getCompactDetailTable(backups, stats, filterInfo) {
+        // Sort backups by most recent backup date
+        const sortedBackups = [...backups].sort((a, b) => {
+            const aDate = a.backupDates.length > 0 ? new Date(a.backupDates[0].date) : new Date(0);
+            const bDate = b.backupDates.length > 0 ? new Date(b.backupDates[0].date) : new Date(0);
+            return bDate - aDate;
+        });
+        
+        return `
+            <div class="flex flex-col h-full">
+                <!-- Header -->
+                <div class="mb-2 pb-1 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                            ${getFilterLabel(filterInfo)}
+                        </h3>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">${stats.totalGuests} guests</span>
+                    </div>
+                </div>
+                
+                <!-- Table Header -->
+                <div class="grid grid-cols-12 gap-1 px-1 pb-1 text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
+                    <div class="col-span-5">Guest</div>
+                    <div class="col-span-3 text-center">Types</div>
+                    <div class="col-span-2 text-right">Count</div>
+                    <div class="col-span-2 text-right">Age</div>
+                </div>
+                
+                <!-- Scrollable Table Body -->
+                <div class="flex-1 overflow-y-auto">
+                    <div class="space-y-0.5">
+                        ${sortedBackups.map(guest => {
+                            const mostRecent = guest.backupDates.length > 0 
+                                ? new Date(guest.backupDates[0].date)
+                                : null;
+                            const ageInDays = mostRecent 
+                                ? (new Date() - mostRecent) / (1000 * 60 * 60 * 24)
+                                : Infinity;
+                            
+                            return `
+                                <div class="grid grid-cols-12 gap-1 px-1 py-0.5 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded">
+                                    <div class="col-span-5 flex items-center gap-1 min-w-0">
+                                        <span class="text-[9px] font-medium ${guest.guestType === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.guestType}</span>
+                                        <span class="font-mono text-gray-600 dark:text-gray-400">${guest.guestId}</span>
+                                        <span class="truncate text-gray-700 dark:text-gray-300">${guest.guestName}</span>
+                                    </div>
+                                    <div class="col-span-3 flex items-center justify-center gap-1 text-[9px]">
+                                        ${guest.pbsBackups > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
+                                        ${guest.pveBackups > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
+                                        ${guest.snapshotCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
+                                    </div>
+                                    <div class="col-span-2 text-right text-gray-600 dark:text-gray-400">
+                                        ${guest.pbsBackups + guest.pveBackups + guest.snapshotCount}
+                                    </div>
+                                    <div class="col-span-2 text-right font-medium ${getAgeColor(ageInDays)}">
+                                        ${formatAge(ageInDays)}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
                 </div>
             </div>
         `;
@@ -121,543 +323,139 @@ PulseApp.ui.backupDetailCard = (() => {
 
     function getSingleDateContent(data) {
         const { date, backups, stats } = data;
-        const formattedDate = formatCompactDate(date);
+        
+        if (!backups || backups.length === 0) {
+            return getEmptyState(false);
+        }
+        
+        // Sort by guest name
+        const sortedBackups = [...backups].sort((a, b) => 
+            (a.name || a.vmid).localeCompare(b.name || b.vmid)
+        );
         
         return `
             <div class="flex flex-col h-full">
                 <!-- Header -->
-                <div class="mb-3 flex-shrink-0">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">${formattedDate}</h3>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">${stats.totalGuests} guests</div>
+                <div class="mb-2 pb-1 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                            ${formatCompactDate(date)}
+                        </h3>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">${stats.totalGuests} guests</span>
                     </div>
-                    <div class="flex flex-wrap gap-2 text-xs">
-                        ${getCompactStatsSummary(stats)}
+                    <div class="flex items-center gap-3 mt-1 text-[10px]">
+                        ${stats.pbsCount > 0 ? `<span class="text-purple-600 dark:text-purple-400">PBS: ${stats.pbsCount}</span>` : ''}
+                        ${stats.pveCount > 0 ? `<span class="text-orange-600 dark:text-orange-400">PVE: ${stats.pveCount}</span>` : ''}
+                        ${stats.snapshotCount > 0 ? `<span class="text-yellow-600 dark:text-yellow-400">Snap: ${stats.snapshotCount}</span>` : ''}
                     </div>
                 </div>
                 
-                <!-- Scrollable Content -->
-                <div class="flex-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-track-gray-100 dark:scrollbar-track-gray-700 scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-600 min-h-0">
-                    ${backups.length === 0 ? getNoBackupsMessage() : getCompactGuestTable(backups)}
+                <!-- Guest List -->
+                <div class="flex-1 overflow-y-auto">
+                    <div class="space-y-0.5">
+                        ${sortedBackups.map(backup => `
+                            <div class="flex items-center justify-between px-1 py-0.5 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded">
+                                <div class="flex items-center gap-1 min-w-0">
+                                    <span class="text-[9px] font-medium ${backup.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${backup.type}</span>
+                                    <span class="font-mono text-gray-600 dark:text-gray-400">${backup.vmid}</span>
+                                    <span class="truncate text-gray-700 dark:text-gray-300">${backup.name}</span>
+                                </div>
+                                <div class="flex items-center gap-2 ml-2">
+                                    <div class="flex items-center gap-1 text-[9px]">
+                                        ${backup.types.includes('pbsSnapshots') ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
+                                        ${backup.types.includes('pveBackups') ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
+                                        ${backup.types.includes('vmSnapshots') ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
+                                    </div>
+                                    <span class="text-gray-600 dark:text-gray-400">${backup.backupCount}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
             </div>
         `;
     }
 
-    function formatDate(dateStr) {
-        const date = new Date(dateStr);
-        const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
-        return date.toLocaleDateString('en-US', options);
+    // Helper functions
+    function formatAge(ageInDays) {
+        if (ageInDays === Infinity) return 'Never';
+        if (ageInDays < 1) return `${Math.floor(ageInDays * 24)}h`;
+        if (ageInDays < 7) return `${Math.floor(ageInDays)}d`;
+        if (ageInDays < 30) return `${Math.floor(ageInDays / 7)}w`;
+        return `${Math.floor(ageInDays / 30)}mo`;
     }
-    
+
+    function getAgeColor(ageInDays) {
+        if (ageInDays <= 1) return 'text-green-600 dark:text-green-400';
+        if (ageInDays <= 3) return 'text-blue-600 dark:text-blue-400';
+        if (ageInDays <= 7) return 'text-yellow-600 dark:text-yellow-400';
+        if (ageInDays <= 14) return 'text-orange-600 dark:text-orange-400';
+        return 'text-red-600 dark:text-red-400';
+    }
+
     function formatCompactDate(dateStr) {
         const date = new Date(dateStr);
-        const options = { month: 'short', day: 'numeric', year: 'numeric' };
-        return date.toLocaleDateString('en-US', options);
+        const month = date.toLocaleDateString('en-US', { month: 'short' });
+        const day = date.getDate();
+        return `${month} ${day}`;
     }
-    
-    function getBackupTypeLabel(backupType) {
-        switch(backupType) {
+
+    function getFilterLabel(filterInfo) {
+        const parts = [];
+        if (filterInfo.backupType && filterInfo.backupType !== 'all') {
+            parts.push(filterInfo.backupType.toUpperCase());
+        }
+        if (filterInfo.guestType && filterInfo.guestType !== 'all') {
+            parts.push(filterInfo.guestType === 'vm' ? 'VMs' : 'LXCs');
+        }
+        if (filterInfo.healthStatus && filterInfo.healthStatus !== 'all') {
+            parts.push(filterInfo.healthStatus);
+        }
+        return parts.length > 0 ? parts.join(' / ') : 'Filtered Results';
+    }
+
+    function getBackupTypeLabel(type) {
+        switch(type) {
             case 'pbs': return 'PBS backups';
-            case 'pve': return 'PVE backups'; 
+            case 'pve': return 'PVE backups';
             case 'snapshots': return 'snapshots';
             default: return 'backups';
         }
     }
-    
-    function getCompactFilterSummary(filterInfo) {
-        if (!filterInfo) return '';
-        
-        const items = [];
-        
-        if (filterInfo.search) {
-            items.push(`<span class="text-gray-500 dark:text-gray-400">Search: <span class="font-medium text-gray-700 dark:text-gray-300">"${filterInfo.search}"</span></span>`);
-        }
-        
-        if (filterInfo.guestType && filterInfo.guestType !== 'all') {
-            items.push(`<span class="text-gray-500 dark:text-gray-400">Type: <span class="font-medium text-gray-700 dark:text-gray-300">${filterInfo.guestType.toUpperCase()}</span></span>`);
-        }
-        
-        if (filterInfo.backupType && filterInfo.backupType !== 'all') {
-            const typeLabels = { pbs: 'PBS', pve: 'PVE', snapshots: 'Snapshots' };
-            items.push(`<span class="text-gray-500 dark:text-gray-400">Type: <span class="font-medium text-gray-700 dark:text-gray-300">${typeLabels[filterInfo.backupType]}</span></span>`);
-        }
-        
-        if (filterInfo.healthStatus && filterInfo.healthStatus !== 'all') {
-            const statusLabels = { ok: 'OK', stale: 'Stale', warning: 'Warning', none: 'None' };
-            items.push(`<span class="text-gray-500 dark:text-gray-400">Status: <span class="font-medium text-gray-700 dark:text-gray-300">${statusLabels[filterInfo.healthStatus] || filterInfo.healthStatus}</span></span>`);
-        }
-        
-        
-        return items.join('<span class="text-gray-400 dark:text-gray-500 mx-1">•</span>');
-    }
-    
-    function getCompactStatsSummary(stats, filterInfo = null) {
-        const items = [];
-        
-        // Check if filtering by specific backup type
-        const backupTypeFilter = filterInfo?.backupType;
-        const isFiltering = backupTypeFilter && backupTypeFilter !== 'all';
-        
-        if (isFiltering) {
-            // When filtering by specific type, show more useful metrics
-            const guestCount = stats.pbsCount + stats.pveCount + stats.snapshotCount;
-            items.push(`<span class="text-gray-600 dark:text-gray-400">${guestCount} guests</span>`);
-            
-            if (stats.uniqueDates) {
-                items.push(`<span class="text-gray-600 dark:text-gray-400">${stats.uniqueDates} days</span>`);
-            }
-            
-            if (guestCount > 0) {
-                const avgPerGuest = (stats.totalBackups / guestCount).toFixed(1);
-                items.push(`<span class="text-gray-600 dark:text-gray-400">${avgPerGuest} avg/guest</span>`);
-            }
-        } else {
-            // When showing all types, show the original breakdown
-            if (stats.pbsCount > 0) {
-                items.push(`<span class="text-purple-600 dark:text-purple-400">PBS: ${stats.pbsCount}</span>`);
-            }
-            
-            if (stats.pveCount > 0) {
-                items.push(`<span class="text-orange-600 dark:text-orange-400">PVE: ${stats.pveCount}</span>`);
-            }
-            
-            if (stats.snapshotCount > 0) {
-                items.push(`<span class="text-yellow-600 dark:text-yellow-400">Snapshots: ${stats.snapshotCount}</span>`);
-            }
-        }
-        
-        if (stats.failureCount > 0) {
-            items.push(`<span class="text-red-600 dark:text-red-400">Failed: ${stats.failureCount}</span>`);
-        }
-        
-        return items.join('<span class="text-gray-400 dark:text-gray-500 mx-1">•</span>');
-    }
-    
-    function getOverviewSummary(backups, stats) {
-        // Calculate summary statistics
-        const dateStats = {};
-        let oldestBackup = null;
-        let newestBackup = null;
-        const guestsByStatus = { healthy: 0, warning: 0, failed: 0, none: 0 };
-        const backupsByType = { pbs: 0, pve: 0, snapshots: 0 };
-        
-        backups.forEach(guest => {
-            // Count by health status
-            if (guest.recentFailures > 0) {
-                guestsByStatus.failed++;
-            } else if (guest.backupHealthStatus === 'ok' || guest.backupHealthStatus === 'stale') {
-                guestsByStatus.healthy++;
-            } else if (guest.backupHealthStatus === 'old') {
-                guestsByStatus.warning++;
-            } else if (guest.backupHealthStatus === 'none') {
-                guestsByStatus.none++;
-            }
-            
-            // Count by backup type
-            if (guest.pbsBackups > 0) backupsByType.pbs++;
-            if (guest.pveBackups > 0) backupsByType.pve++;
-            if (guest.snapshotCount > 0) backupsByType.snapshots++;
-            
-            // Track dates
-            guest.backupDates.forEach(dateInfo => {
-                const date = new Date(dateInfo.date);
-                if (!oldestBackup || date < oldestBackup) oldestBackup = date;
-                if (!newestBackup || date > newestBackup) newestBackup = date;
-                
-                // Count backups per day
-                if (!dateStats[dateInfo.date]) {
-                    dateStats[dateInfo.date] = { count: 0, guests: new Set() };
-                }
-                dateStats[dateInfo.date].count += dateInfo.count;
-                dateStats[dateInfo.date].guests.add(guest.guestId);
-            });
-        });
-        
-        // Calculate date range
-        const dateRange = oldestBackup && newestBackup ? 
-            Math.ceil((newestBackup - oldestBackup) / (1000 * 60 * 60 * 24)) + 1 : 0;
-        
-        // Find busiest day
-        let busiestDay = null;
-        let maxBackups = 0;
-        Object.entries(dateStats).forEach(([date, stats]) => {
-            if (stats.count > maxBackups) {
-                maxBackups = stats.count;
-                busiestDay = date;
-            }
-        });
-        
-        // Calculate overall health percentage
-        const totalGuests = stats.totalGuests;
-        const healthyGuests = guestsByStatus.healthy;
-        const healthPercentage = totalGuests > 0 ? Math.round((healthyGuests / totalGuests) * 100) : 0;
-        
-        // Determine health status color and text
-        let healthColor, healthStatus;
-        if (healthPercentage >= 80) {
-            healthColor = 'text-green-600 dark:text-green-400';
-            healthStatus = 'Excellent';
-        } else if (healthPercentage >= 60) {
-            healthColor = 'text-yellow-600 dark:text-yellow-400'; 
-            healthStatus = 'Good';
-        } else {
-            healthColor = 'text-red-600 dark:text-red-400';
-            healthStatus = 'Needs Attention';
-        }
-        
-        // Format last backup time
-        const lastBackupText = newestBackup ? 
-            `${formatTimeAgo(newestBackup)}` : 'No recent backups';
-            
-        function formatTimeAgo(date) {
-            const now = new Date();
-            const diffMs = now - date;
-            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-            
-            if (diffDays === 0) {
-                if (diffHours === 0) return 'Less than an hour ago';
-                return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
-            } else if (diffDays === 1) {
-                return 'Yesterday';
-            } else if (diffDays < 7) {
-                return `${diffDays} days ago`;
-            } else {
-                return formatCompactDate(date.toISOString());
-            }
-        }
-        
-        return `
-            <div class="flex flex-col h-full">
-                <!-- Header -->
-                <div class="mb-3 flex-shrink-0">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-sm font-semibold text-gray-800 dark:text-gray-200">Backup Overview</h3>
-                        <div class="text-xs text-gray-500 dark:text-gray-400">${stats.totalGuests} guests</div>
-                    </div>
-                    
-                    <!-- Overall Health Status -->
-                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded-lg p-3 mb-3">
-                        <div class="flex items-center justify-between mb-2">
-                            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Overall Health</span>
-                            <span class="${healthColor} text-sm font-semibold">${healthPercentage}%</span>
-                        </div>
-                        <div class="flex items-center justify-between text-xs">
-                            <span class="${healthColor} font-medium">${healthStatus}</span>
-                            <span class="text-gray-500 dark:text-gray-400">Last backup: ${lastBackupText}</span>
-                        </div>
-                    </div>
-                    
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                        Apply filters above to see detailed backup information
-                    </p>
-                </div>
-                
-                <!-- Summary Stats -->
-                <div class="flex-1 overflow-y-auto pr-1 space-y-3">
-                    <!-- Date Range -->
-                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded p-3">
-                        <h4 class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Date Range</h4>
-                        <div class="space-y-1 text-xs">
-                            <div class="flex justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Period:</span>
-                                <span class="text-gray-700 dark:text-gray-300">${dateRange} days</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Latest:</span>
-                                <span class="text-gray-700 dark:text-gray-300">${newestBackup ? formatCompactDate(newestBackup.toISOString()) : 'N/A'}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Oldest:</span>
-                                <span class="text-gray-700 dark:text-gray-300">${oldestBackup ? formatCompactDate(oldestBackup.toISOString()) : 'N/A'}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Backup Statistics -->
-                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded p-3">
-                        <h4 class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Backup Statistics</h4>
-                        <div class="space-y-1 text-xs">
-                            <div class="flex justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Total Backups:</span>
-                                <span class="text-gray-700 dark:text-gray-300 font-medium">${stats.totalBackups}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Avg per Guest:</span>
-                                <span class="text-gray-700 dark:text-gray-300">${stats.totalGuests > 0 ? (stats.totalBackups / stats.totalGuests).toFixed(1) : 0}</span>
-                            </div>
-                            <div class="flex justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Busiest Day:</span>
-                                <span class="text-gray-700 dark:text-gray-300">${busiestDay ? `${formatCompactDate(busiestDay)} (${maxBackups})` : 'N/A'}</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Guest Health -->
-                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded p-3">
-                        <h4 class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Guest Health</h4>
-                        <div class="space-y-1">
-                            ${guestsByStatus.healthy > 0 ? `
-                                <div class="flex items-center justify-between text-xs">
-                                    <span class="text-green-600 dark:text-green-400">● Healthy</span>
-                                    <span class="text-gray-700 dark:text-gray-300">${guestsByStatus.healthy} guests</span>
-                                </div>
-                            ` : ''}
-                            ${guestsByStatus.warning > 0 ? `
-                                <div class="flex items-center justify-between text-xs">
-                                    <span class="text-yellow-600 dark:text-yellow-400">● Warning</span>
-                                    <span class="text-gray-700 dark:text-gray-300">${guestsByStatus.warning} guests</span>
-                                </div>
-                            ` : ''}
-                            ${guestsByStatus.failed > 0 ? `
-                                <div class="flex items-center justify-between text-xs">
-                                    <span class="text-red-600 dark:text-red-400">● Failed</span>
-                                    <span class="text-gray-700 dark:text-gray-300">${guestsByStatus.failed} guests</span>
-                                </div>
-                            ` : ''}
-                            ${guestsByStatus.none > 0 ? `
-                                <div class="flex items-center justify-between text-xs">
-                                    <span class="text-gray-600 dark:text-gray-400">○ No Backups</span>
-                                    <span class="text-gray-700 dark:text-gray-300">${guestsByStatus.none} guests</span>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                    
-                    <!-- Backup Types -->
-                    <div class="bg-gray-50 dark:bg-gray-700/30 rounded p-3">
-                        <h4 class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Backup Coverage</h4>
-                        <div class="space-y-1 text-xs">
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">PBS Backups:</span>
-                                <span class="text-purple-600 dark:text-purple-400">${backupsByType.pbs} guests</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">PVE Backups:</span>
-                                <span class="text-orange-600 dark:text-orange-400">${backupsByType.pve} guests</span>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <span class="text-gray-500 dark:text-gray-400">Snapshots:</span>
-                                <span class="text-yellow-600 dark:text-yellow-400">${backupsByType.snapshots} guests</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function getFilterSummary(filterInfo) {
-        if (!filterInfo) return '';
-        
-        const items = [];
-        
-        if (filterInfo.search) {
-            items.push(`<span class="text-gray-500 dark:text-gray-400">Search: <span class="font-medium text-gray-700 dark:text-gray-300">"${filterInfo.search}"</span></span>`);
-        }
-        
-        if (filterInfo.guestType && filterInfo.guestType !== 'all') {
-            items.push(`<span class="text-gray-500 dark:text-gray-400">Type: <span class="font-medium text-gray-700 dark:text-gray-300">${filterInfo.guestType.toUpperCase()}</span></span>`);
-        }
-        
-        if (filterInfo.backupType && filterInfo.backupType !== 'all') {
-            const typeLabels = { pbs: 'PBS', pve: 'PVE', snapshots: 'Snapshots' };
-            items.push(`<span class="text-gray-500 dark:text-gray-400">Backup: <span class="font-medium text-gray-700 dark:text-gray-300">${typeLabels[filterInfo.backupType] || filterInfo.backupType}</span></span>`);
-        }
-        
-        if (filterInfo.healthStatus && filterInfo.healthStatus !== 'all') {
-            items.push(`<span class="text-gray-500 dark:text-gray-400">Status: <span class="font-medium text-gray-700 dark:text-gray-300">${filterInfo.healthStatus.charAt(0).toUpperCase() + filterInfo.healthStatus.slice(1)}</span></span>`);
-        }
-        
-        
-        return items.join('<span class="text-gray-400 dark:text-gray-500 mx-1">•</span>');
-    }
-
-    function getStatsSummary(stats) {
-        const items = [];
-        
-        items.push(`<span class="text-gray-500 dark:text-gray-400">Guests: <span class="font-medium text-gray-700 dark:text-gray-300">${stats.totalGuests}</span></span>`);
-        
-        if (stats.totalBackups) {
-            items.push(`<span class="text-gray-500 dark:text-gray-400">Backups: <span class="font-medium text-gray-700 dark:text-gray-300">${stats.totalBackups}</span></span>`);
-        }
-        
-        if (stats.pbsCount > 0) {
-            items.push(`<span class="text-green-600 dark:text-green-400">PBS: ${stats.pbsCount}</span>`);
-        }
-        
-        if (stats.pveCount > 0) {
-            items.push(`<span class="text-yellow-600 dark:text-yellow-400">PVE: ${stats.pveCount}</span>`);
-        }
-        
-        if (stats.snapshotCount > 0) {
-            items.push(`<span class="text-blue-600 dark:text-blue-400">Snap: ${stats.snapshotCount}</span>`);
-        }
-        
-        if (stats.failureCount > 0) {
-            items.push(`<span class="text-red-600 dark:text-red-400">Failed: ${stats.failureCount}</span>`);
-        }
-        
-        return items.join('<span class="text-gray-400 dark:text-gray-500 mx-1">•</span>');
-    }
-
-    function getNoBackupsMessage() {
-        return `
-            <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                <p class="text-sm">No backups found matching the current filters</p>
-            </div>
-        `;
-    }
-
-    function getGuestTable(backups) {
-        // Sort by type then by vmid
-        const sortedBackups = [...backups].sort((a, b) => {
-            if (a.type !== b.type) return a.type === 'VM' ? -1 : 1;
-            return parseInt(a.vmid) - parseInt(b.vmid);
-        });
-        
-        return `
-            <table class="w-full text-xs">
-                <thead class="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-                    <tr>
-                        <th class="text-left py-1 px-1 text-gray-500 dark:text-gray-400 font-medium">Type</th>
-                        <th class="text-left py-1 px-1 text-gray-500 dark:text-gray-400 font-medium">ID</th>
-                        <th class="text-left py-1 px-1 text-gray-500 dark:text-gray-400 font-medium">Name</th>
-                        <th class="text-center py-1 px-1 text-gray-500 dark:text-gray-400 font-medium">Backups</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-gray-100 dark:divide-gray-700/50">
-                    ${sortedBackups.map(guest => {
-                        const types = guest.types || guest.backupTypes || [];
-                        const typeIndicators = [];
-                        
-                        if (types.includes('pbsSnapshots') || guest.pbsBackups > 0) typeIndicators.push('<span class="text-purple-600 dark:text-purple-400" title="PBS">PBS</span>');
-                        if (types.includes('pveBackups') || guest.pveBackups > 0) typeIndicators.push('<span class="text-orange-600 dark:text-orange-400" title="PVE">PVE</span>');
-                        if (types.includes('vmSnapshots') || guest.snapshotCount > 0) typeIndicators.push('<span class="text-yellow-600 dark:text-yellow-400" title="Snapshot">Snapshots</span>');
-                        
-                        const hasFailure = guest.hasFailure || guest.recentFailures > 0;
-                        const guestType = guest.type || guest.guestType;
-                        const guestName = guest.name || guest.guestName;
-                        const guestId = guest.vmid || guest.guestId;
-                        
-                        return `
-                            <tr class="${hasFailure ? 'bg-red-50 dark:bg-red-900/10' : ''}">
-                                <td class="py-1 px-1">
-                                    <span class="${guestType === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guestType}</span>
-                                </td>
-                                <td class="py-1 px-1 text-gray-600 dark:text-gray-400">${guestId}</td>
-                                <td class="py-1 px-1 text-gray-800 dark:text-gray-200 truncate max-w-[200px]" title="${guestName}">${guestName}</td>
-                                <td class="py-1 px-1 text-center">
-                                    ${typeIndicators.join(' ')}
-                                    ${guest.backupCount && guest.backupCount > 1 ? `<span class="text-gray-500 dark:text-gray-400 ml-1">(${guest.backupCount})</span>` : ''}
-                                    ${hasFailure ? '<span class="text-red-600 dark:text-red-400 ml-1">!</span>' : ''}
-                                </td>
-                            </tr>
-                        `;
-                    }).join('')}
-                </tbody>
-            </table>
-        `;
-    }
-    
-    function getCompactGuestTable(backups, filterInfo = null) {
-        // Sort by type then by vmid
-        const sortedBackups = [...backups].sort((a, b) => {
-            if (a.type !== b.type) return a.type === 'VM' ? -1 : 1;
-            return parseInt(a.vmid) - parseInt(b.vmid);
-        });
-        
-        return `
-            <div class="space-y-0.5 text-xs">
-                ${sortedBackups.map(guest => {
-                    const types = guest.types || guest.backupTypes || [];
-                    const typeIndicators = [];
-                    
-                    // Only show backup types that match the current filter (if any)
-                    const backupTypeFilter = filterInfo?.backupType;
-                    const showAllTypes = !backupTypeFilter || backupTypeFilter === 'all';
-                    
-                    if (showAllTypes) {
-                        // When showing all types, show all backup types the guest has
-                        if (types.includes('pbsSnapshots') || guest.pbsBackups > 0) {
-                            typeIndicators.push('<span class="text-purple-600 dark:text-purple-400" title="PBS Backup">PBS</span>');
-                        }
-                        if (types.includes('pveBackups') || guest.pveBackups > 0) {
-                            typeIndicators.push('<span class="text-orange-600 dark:text-orange-400" title="PVE Backup">PVE</span>');
-                        }
-                        if (types.includes('vmSnapshots') || guest.snapshotCount > 0) {
-                            typeIndicators.push('<span class="text-yellow-600 dark:text-yellow-400" title="Snapshot">Snapshots</span>');
-                        }
-                    } else {
-                        // When filtering by specific type, only show that type if it exists in the current date's types
-                        if (backupTypeFilter === 'pbs' && types.includes('pbsSnapshots')) {
-                            typeIndicators.push('<span class="text-purple-600 dark:text-purple-400" title="PBS Backup">PBS</span>');
-                        }
-                        if (backupTypeFilter === 'pve' && types.includes('pveBackups')) {
-                            typeIndicators.push('<span class="text-orange-600 dark:text-orange-400" title="PVE Backup">PVE</span>');
-                        }
-                        if (backupTypeFilter === 'snapshots' && types.includes('vmSnapshots')) {
-                            typeIndicators.push('<span class="text-yellow-600 dark:text-yellow-400" title="Snapshot">Snapshots</span>');
-                        }
-                    }
-                    
-                    const hasFailure = guest.hasFailure || guest.recentFailures > 0;
-                    const guestType = guest.type || guest.guestType;
-                    const guestName = guest.name || guest.guestName;
-                    const guestId = guest.vmid || guest.guestId;
-                    return `
-                        <div class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 dark:hover:bg-gray-700/50 ${hasFailure ? 'bg-red-50 dark:bg-red-900/10' : ''}">
-                            <span class="${guestType === 'VM' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'} px-1.5 py-0.5 rounded text-[10px] font-medium w-10 text-center">${guestType}</span>
-                            <span class="text-gray-500 dark:text-gray-400 w-10 text-right">${guestId}</span>
-                            <span class="text-gray-700 dark:text-gray-300 flex-1 truncate" title="${guestName}">${guestName}</span>
-                            <div class="text-right flex-shrink-0">
-                                <div class="flex items-center gap-1 flex-wrap justify-end">
-                                    ${typeIndicators.length > 0 ? typeIndicators.map(indicator => `<span class="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-[10px]">${indicator}</span>`).join('') : ''}
-                                </div>
-                                ${hasFailure ? '<div class="text-red-600 dark:text-red-400 text-[10px] font-medium mt-0.5">FAIL</div>' : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
-            </div>
-        `;
-    }
 
     function updateBackupDetailCard(card, data, instant = false) {
-        // Clear any pending timeout to prevent race conditions
+        if (!card) return;
+        
+        const contentDiv = card.querySelector('.backup-detail-content');
+        if (!contentDiv) return;
+        
+        // Cancel any pending timeout
         if (pendingTimeout) {
             clearTimeout(pendingTimeout);
             pendingTimeout = null;
         }
         
-        const content = card.querySelector('.backup-detail-content');
-        if (content) {
-            if (instant) {
-                // Instant update for restoring selection
-                content.innerHTML = !data ? getEmptyState(false) : getDetailContent(data);
+        const updateContent = () => {
+            const newContent = !data ? getEmptyState(false) : getDetailContent(data);
+            
+            if (!instant) {
+                contentDiv.style.opacity = '0';
+                setTimeout(() => {
+                    contentDiv.innerHTML = newContent;
+                    contentDiv.style.opacity = '1';
+                }, 150);
             } else {
-                // For empty states, use instant update to avoid stutter
-                if (!data) {
-                    content.style.opacity = '1';
-                    content.style.transition = '';
-                    content.innerHTML = getEmptyState(false);
-                    return;
-                }
-                
-                // Add fade transition for user clicks with actual data
-                content.style.opacity = '0';
-                content.style.transition = 'opacity 0.2s ease-in-out';
-                
-                pendingTimeout = setTimeout(() => {
-                    content.innerHTML = getDetailContent(data);
-                    content.style.opacity = '1';
-                    pendingTimeout = null;
-                }, 200);
+                contentDiv.innerHTML = newContent;
             }
+        };
+        
+        if (!instant) {
+            pendingTimeout = setTimeout(updateContent, 100);
+        } else {
+            updateContent();
         }
     }
-    
+
     return {
         createBackupDetailCard,
         updateBackupDetailCard
