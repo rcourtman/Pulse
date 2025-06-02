@@ -273,7 +273,7 @@ PulseApp.ui.backupDetailCard = (() => {
                 <!-- Table Header -->
                 <div class="grid grid-cols-12 gap-1 px-1 pb-1 text-[10px] font-semibold text-gray-600 dark:text-gray-400 uppercase">
                     <div class="col-span-5">Guest</div>
-                    <div class="col-span-3 text-center">Types</div>
+                    <div class="col-span-3">Types</div>
                     <div class="col-span-2 text-right">Count</div>
                     <div class="col-span-2 text-right">Age</div>
                 </div>
@@ -299,7 +299,7 @@ PulseApp.ui.backupDetailCard = (() => {
                                         <span class="font-mono text-gray-600 dark:text-gray-400">${guest.guestId}</span>
                                         <span class="truncate text-gray-700 dark:text-gray-300">${guest.guestName}</span>
                                     </div>
-                                    <div class="col-span-3 flex items-center justify-center gap-1 text-[9px]">
+                                    <div class="col-span-3 flex items-center gap-1 text-[9px]">
                                         ${filteredBackupData.typeLabels}
                                     </div>
                                     <div class="col-span-2 text-right text-gray-600 dark:text-gray-400">
@@ -382,10 +382,10 @@ PulseApp.ui.backupDetailCard = (() => {
         // If no specific backup type filter is active, show all types
         if (!backupType || backupType === 'all') {
             const typeLabels = [
-                guest.pbsBackups > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : '',
-                guest.pveBackups > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : '',
-                guest.snapshotCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''
-            ].filter(label => label).join('');
+                guest.pbsBackups > 0 ? '<span class="px-1 py-0.5 rounded text-[8px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">PBS</span>' : '',
+                guest.pveBackups > 0 ? '<span class="px-1 py-0.5 rounded text-[8px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-medium">PVE</span>' : '',
+                guest.snapshotCount > 0 ? '<span class="px-1 py-0.5 rounded text-[8px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">SNAP</span>' : ''
+            ].filter(label => label).join(' ');
             
             return {
                 typeLabels,
@@ -397,17 +397,17 @@ PulseApp.ui.backupDetailCard = (() => {
         switch (backupType) {
             case 'pbs':
                 return {
-                    typeLabels: guest.pbsBackups > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : '',
+                    typeLabels: guest.pbsBackups > 0 ? '<span class="px-1 py-0.5 rounded text-[8px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">PBS</span>' : '',
                     totalCount: guest.pbsBackups
                 };
             case 'pve':
                 return {
-                    typeLabels: guest.pveBackups > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : '',
+                    typeLabels: guest.pveBackups > 0 ? '<span class="px-1 py-0.5 rounded text-[8px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-medium">PVE</span>' : '',
                     totalCount: guest.pveBackups
                 };
             case 'snapshots':
                 return {
-                    typeLabels: guest.snapshotCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : '',
+                    typeLabels: guest.snapshotCount > 0 ? '<span class="px-1 py-0.5 rounded text-[8px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">SNAP</span>' : '',
                     totalCount: guest.snapshotCount
                 };
             default:
@@ -427,10 +427,10 @@ PulseApp.ui.backupDetailCard = (() => {
         // If no specific backup type filter is active, show all types
         if (!backupType || backupType === 'all') {
             const typeLabels = [
-                backup.types.includes('pbsSnapshots') ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : '',
-                backup.types.includes('pveBackups') ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : '',
-                backup.types.includes('vmSnapshots') ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''
-            ].filter(label => label).join('');
+                backup.types.includes('pbsSnapshots') ? '<span class="px-1 py-0.5 rounded text-[8px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">PBS</span>' : '',
+                backup.types.includes('pveBackups') ? '<span class="px-1 py-0.5 rounded text-[8px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-medium">PVE</span>' : '',
+                backup.types.includes('vmSnapshots') ? '<span class="px-1 py-0.5 rounded text-[8px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">SNAP</span>' : ''
+            ].filter(label => label).join(' ');
             
             return {
                 typeLabels,
@@ -450,17 +450,17 @@ PulseApp.ui.backupDetailCard = (() => {
             switch (backupType) {
                 case 'pbs':
                     return {
-                        typeLabels: '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>',
+                        typeLabels: '<span class="px-1 py-0.5 rounded text-[8px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">PBS</span>',
                         backupCount: backup.backupCount // Note: This shows total count, which may include other types
                     };
                 case 'pve':
                     return {
-                        typeLabels: '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>',
+                        typeLabels: '<span class="px-1 py-0.5 rounded text-[8px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-medium">PVE</span>',
                         backupCount: backup.backupCount
                     };
                 case 'snapshots':
                     return {
-                        typeLabels: '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>',
+                        typeLabels: '<span class="px-1 py-0.5 rounded text-[8px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">SNAP</span>',
                         backupCount: backup.backupCount
                     };
             }
