@@ -28,8 +28,8 @@
     "concurrently": "^9.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
-    "express": "^4.21.2",
-    "nodemailer": "^6.9.18",
+    "express": "^5.1.0",
+    "nodemailer": "^7.0.3",
     "p-limit": "^6.2.0",
     "semver": "^7.7.2",
     "socket.io": "^4.7.2",
@@ -50,6 +50,8 @@
     "tailwindcss": "^3.4.4"
   },
   "jest": {
+    "testEnvironment": "node",
+    "coverageProvider": "v8",
     "transformIgnorePatterns": [
       "/node_modules/(?!p-limit|yocto-queue)/"
     ]
