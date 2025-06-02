@@ -69,11 +69,6 @@ PulseApp.ui.backupDetailCard = (() => {
     }
 
     function getCompactOverview(backups, stats) {
-        // Debug: Log what the detail card is receiving
-        console.log('[Backup Health Debug] getCompactOverview received:', {
-            backupsCount: backups.length,
-            stats: stats
-        });
         
         // Calculate critical metrics
         const now = new Date();
@@ -294,6 +289,9 @@ PulseApp.ui.backupDetailCard = (() => {
                                 ? (new Date() - mostRecent) / (1000 * 60 * 60 * 24)
                                 : Infinity;
                             
+                            // Get filtered backup types and counts based on active filter
+                            const filteredBackupData = getFilteredBackupData(guest, filterInfo);
+                            
                             return `
                                 <div class="grid grid-cols-12 gap-1 px-1 py-0.5 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded">
                                     <div class="col-span-5 flex items-center gap-1 min-w-0">
@@ -302,12 +300,10 @@ PulseApp.ui.backupDetailCard = (() => {
                                         <span class="truncate text-gray-700 dark:text-gray-300">${guest.guestName}</span>
                                     </div>
                                     <div class="col-span-3 flex items-center justify-center gap-1 text-[9px]">
-                                        ${guest.pbsBackups > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
-                                        ${guest.pveBackups > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
-                                        ${guest.snapshotCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
+                                        ${filteredBackupData.typeLabels}
                                     </div>
                                     <div class="col-span-2 text-right text-gray-600 dark:text-gray-400">
-                                        ${guest.pbsBackups + guest.pveBackups + guest.snapshotCount}
+                                        ${filteredBackupData.totalCount}
                                     </div>
                                     <div class="col-span-2 text-right font-medium ${getAgeColor(ageInDays)}">
                                         ${formatAge(ageInDays)}
@@ -322,7 +318,7 @@ PulseApp.ui.backupDetailCard = (() => {
     }
 
     function getSingleDateContent(data) {
-        const { date, backups, stats } = data;
+        const { date, backups, stats, filterInfo } = data;
         
         if (!backups || backups.length === 0) {
             return getEmptyState(false);
@@ -344,36 +340,164 @@ PulseApp.ui.backupDetailCard = (() => {
                         <span class="text-xs text-gray-500 dark:text-gray-400">${stats.totalGuests} guests</span>
                     </div>
                     <div class="flex items-center gap-3 mt-1 text-[10px]">
-                        ${stats.pbsCount > 0 ? `<span class="text-purple-600 dark:text-purple-400">PBS: ${stats.pbsCount}</span>` : ''}
-                        ${stats.pveCount > 0 ? `<span class="text-orange-600 dark:text-orange-400">PVE: ${stats.pveCount}</span>` : ''}
-                        ${stats.snapshotCount > 0 ? `<span class="text-yellow-600 dark:text-yellow-400">Snap: ${stats.snapshotCount}</span>` : ''}
+                        ${getFilteredStatsDisplay(stats, filterInfo)}
                     </div>
                 </div>
                 
                 <!-- Guest List -->
                 <div class="flex-1 overflow-y-auto">
                     <div class="space-y-0.5">
-                        ${sortedBackups.map(backup => `
-                            <div class="flex items-center justify-between px-1 py-0.5 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded">
-                                <div class="flex items-center gap-1 min-w-0">
-                                    <span class="text-[9px] font-medium ${backup.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${backup.type}</span>
-                                    <span class="font-mono text-gray-600 dark:text-gray-400">${backup.vmid}</span>
-                                    <span class="truncate text-gray-700 dark:text-gray-300">${backup.name}</span>
-                                </div>
-                                <div class="flex items-center gap-2 ml-2">
-                                    <div class="flex items-center gap-1 text-[9px]">
-                                        ${backup.types.includes('pbsSnapshots') ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
-                                        ${backup.types.includes('pveBackups') ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
-                                        ${backup.types.includes('vmSnapshots') ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
+                        ${sortedBackups.map(backup => {
+                            // Get filtered backup types and counts based on active filter
+                            const filteredBackupData = getFilteredSingleDateBackupData(backup, filterInfo);
+                            
+                            return `
+                                <div class="flex items-center justify-between px-1 py-0.5 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded">
+                                    <div class="flex items-center gap-1 min-w-0">
+                                        <span class="text-[9px] font-medium ${backup.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${backup.type}</span>
+                                        <span class="font-mono text-gray-600 dark:text-gray-400">${backup.vmid}</span>
+                                        <span class="truncate text-gray-700 dark:text-gray-300">${backup.name}</span>
                                     </div>
-                                    <span class="text-gray-600 dark:text-gray-400">${backup.backupCount}</span>
+                                    <div class="flex items-center gap-2 ml-2">
+                                        <div class="flex items-center gap-1 text-[9px]">
+                                            ${filteredBackupData.typeLabels}
+                                        </div>
+                                        <span class="text-gray-600 dark:text-gray-400">${filteredBackupData.backupCount}</span>
+                                    </div>
                                 </div>
-                            </div>
-                        `).join('')}
+                            `;
+                        }).join('')}
                     </div>
                 </div>
             </div>
         `;
+    }
+
+    // Get filtered backup data based on active filter
+    function getFilteredBackupData(guest, filterInfo) {
+        if (!guest) return { typeLabels: '', totalCount: 0 };
+        
+        const backupType = filterInfo?.backupType;
+        
+        // If no specific backup type filter is active, show all types
+        if (!backupType || backupType === 'all') {
+            const typeLabels = [
+                guest.pbsBackups > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : '',
+                guest.pveBackups > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : '',
+                guest.snapshotCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''
+            ].filter(label => label).join('');
+            
+            return {
+                typeLabels,
+                totalCount: guest.pbsBackups + guest.pveBackups + guest.snapshotCount
+            };
+        }
+        
+        // Show only the filtered backup type
+        switch (backupType) {
+            case 'pbs':
+                return {
+                    typeLabels: guest.pbsBackups > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : '',
+                    totalCount: guest.pbsBackups
+                };
+            case 'pve':
+                return {
+                    typeLabels: guest.pveBackups > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : '',
+                    totalCount: guest.pveBackups
+                };
+            case 'snapshots':
+                return {
+                    typeLabels: guest.snapshotCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : '',
+                    totalCount: guest.snapshotCount
+                };
+            default:
+                return {
+                    typeLabels: '',
+                    totalCount: 0
+                };
+        }
+    }
+
+    // Get filtered backup data for single date view based on active filter
+    function getFilteredSingleDateBackupData(backup, filterInfo) {
+        if (!backup) return { typeLabels: '', backupCount: 0 };
+        
+        const backupType = filterInfo?.backupType;
+        
+        // If no specific backup type filter is active, show all types
+        if (!backupType || backupType === 'all') {
+            const typeLabels = [
+                backup.types.includes('pbsSnapshots') ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : '',
+                backup.types.includes('pveBackups') ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : '',
+                backup.types.includes('vmSnapshots') ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''
+            ].filter(label => label).join('');
+            
+            return {
+                typeLabels,
+                backupCount: backup.backupCount
+            };
+        }
+        
+        // Show only the filtered backup type
+        const typeMapping = {
+            'pbs': 'pbsSnapshots',
+            'pve': 'pveBackups', 
+            'snapshots': 'vmSnapshots'
+        };
+        
+        const targetType = typeMapping[backupType];
+        if (backup.types.includes(targetType)) {
+            switch (backupType) {
+                case 'pbs':
+                    return {
+                        typeLabels: '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>',
+                        backupCount: backup.backupCount // Note: This shows total count, which may include other types
+                    };
+                case 'pve':
+                    return {
+                        typeLabels: '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>',
+                        backupCount: backup.backupCount
+                    };
+                case 'snapshots':
+                    return {
+                        typeLabels: '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>',
+                        backupCount: backup.backupCount
+                    };
+            }
+        }
+        
+        return {
+            typeLabels: '',
+            backupCount: 0
+        };
+    }
+
+    // Get filtered stats display for single date view
+    function getFilteredStatsDisplay(stats, filterInfo) {
+        if (!stats) return '';
+        
+        const backupType = filterInfo?.backupType;
+        
+        // If no specific backup type filter is active, show all stats
+        if (!backupType || backupType === 'all') {
+            return [
+                stats.pbsCount > 0 ? `<span class="text-purple-600 dark:text-purple-400">PBS: ${stats.pbsCount}</span>` : '',
+                stats.pveCount > 0 ? `<span class="text-orange-600 dark:text-orange-400">PVE: ${stats.pveCount}</span>` : '',
+                stats.snapshotCount > 0 ? `<span class="text-yellow-600 dark:text-yellow-400">Snap: ${stats.snapshotCount}</span>` : ''
+            ].filter(stat => stat).join('');
+        }
+        
+        // Show only the filtered backup type stat
+        switch (backupType) {
+            case 'pbs':
+                return stats.pbsCount > 0 ? `<span class="text-purple-600 dark:text-purple-400">PBS: ${stats.pbsCount}</span>` : '';
+            case 'pve':
+                return stats.pveCount > 0 ? `<span class="text-orange-600 dark:text-orange-400">PVE: ${stats.pveCount}</span>` : '';
+            case 'snapshots':
+                return stats.snapshotCount > 0 ? `<span class="text-yellow-600 dark:text-yellow-400">Snap: ${stats.snapshotCount}</span>` : '';
+            default:
+                return '';
+        }
     }
 
     // Helper functions
@@ -438,14 +562,34 @@ PulseApp.ui.backupDetailCard = (() => {
         const updateContent = () => {
             const newContent = !data ? getEmptyState(false) : getDetailContent(data);
             
+            // Find scrollable container and preserve scroll position
+            const scrollableContainer = contentDiv.querySelector('.overflow-y-auto');
+            const scrollTop = scrollableContainer ? scrollableContainer.scrollTop : 0;
+            
             if (!instant) {
                 contentDiv.style.opacity = '0';
                 setTimeout(() => {
                     contentDiv.innerHTML = newContent;
                     contentDiv.style.opacity = '1';
+                    
+                    // Restore scroll position
+                    requestAnimationFrame(() => {
+                        const newScrollableContainer = contentDiv.querySelector('.overflow-y-auto');
+                        if (newScrollableContainer && scrollTop > 0) {
+                            newScrollableContainer.scrollTop = scrollTop;
+                        }
+                    });
                 }, 150);
             } else {
                 contentDiv.innerHTML = newContent;
+                
+                // Restore scroll position for instant updates
+                requestAnimationFrame(() => {
+                    const newScrollableContainer = contentDiv.querySelector('.overflow-y-auto');
+                    if (newScrollableContainer && scrollTop > 0) {
+                        newScrollableContainer.scrollTop = scrollTop;
+                    }
+                });
             }
         };
         

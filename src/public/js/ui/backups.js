@@ -1473,7 +1473,6 @@ PulseApp.ui.backups = (() => {
         loadingMsg.classList.add('hidden');
 
         // Debug: Log guest count
-        console.log('[Backup Health Debug] Total guests before backup status:', allGuests.length);
         
         // Get PBS data array early as it's needed for guest backup status calculation
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
@@ -1509,7 +1508,6 @@ PulseApp.ui.backups = (() => {
         });
         
         // Debug: Log backup status results
-        console.log('[Backup Health Debug] Backup status by guest count:', backupStatusByGuest.length);
         const healthStats = {
             '<24h': 0,
             '1-7d': 0,
@@ -1530,7 +1528,6 @@ PulseApp.ui.backups = (() => {
                 else healthStats['>14d']++;
             }
         });
-        console.log('[Backup Health Debug] Health distribution:', healthStats);
         
         const filteredBackupStatus = _filterBackupData(backupStatusByGuest, backupsSearchInput);
 
@@ -1712,6 +1709,13 @@ PulseApp.ui.backups = (() => {
                                 backups: filteredDateBackups,
                                 isCalendarFiltered: true, // Flag to indicate this is calendar-filtered data
                                 calendarFilter: backupsFilterBackupType, // Include the filter type
+                                filterInfo: {
+                                    search: backupsSearchInput ? backupsSearchInput.value : '',
+                                    guestType: PulseApp.state.get('backupsFilterGuestType') || 'all',
+                                    backupType: backupsFilterBackupType,
+                                    healthStatus: PulseApp.state.get('backupsFilterHealth') || 'all',
+                                    failuresOnly: PulseApp.state.get('backupsFilterFailures') || false
+                                },
                                 stats: {
                                     totalGuests: filteredDateBackups.length,
                                     pbsCount: filteredDateBackups.filter(b => b.types && b.types.includes('pbsSnapshots')).length,
@@ -2057,7 +2061,6 @@ PulseApp.ui.backups = (() => {
     
     function _prepareMultiDateDetailData(filteredBackupStatus, backupData) {
         // Debug: Log data being passed to detail card
-        console.log('[Backup Health Debug] _prepareMultiDateDetailData received guests:', filteredBackupStatus.length);
         
         // Prepare data for multi-date detail view
         const multiDateBackups = [];
