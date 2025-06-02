@@ -90,6 +90,10 @@ sudo ./install-pulse.sh
 - [Prerequisites](#-prerequisites)
 - [Configuration](#️-configuration)
   - [Environment Variables](#environment-variables)
+  - [Alert System Configuration](#alert-system-configuration-optional)
+  - [Custom Per-VM/LXC Alert Thresholds](#custom-per-vmlxc-alert-thresholds-optional)
+  - [Webhook Notifications](#webhook-notifications-optional)
+  - [Email Notifications](#email-notifications-optional)
   - [Creating a Proxmox API Token](#creating-a-proxmox-api-token)
   - [Creating a Proxmox Backup Server API Token](#creating-a-proxmox-backup-server-api-token)
   - [Required Permissions](#required-permissions)
@@ -108,6 +112,10 @@ sudo ./install-pulse.sh
 - [Trademark Notice](#trademark-notice)
 - [Support](#-support)
 - [Troubleshooting](#-troubleshooting)
+  - [Quick Fixes](#-quick-fixes)
+  - [Diagnostic Tool](#diagnostic-tool)
+  - [Common Issues](#common-issues)
+  - [Notification Troubleshooting](#notification-troubleshooting)
 
 ## ✅ Prerequisites
 
@@ -295,6 +303,8 @@ Alert features include:
 - Duration-based triggering (alerts only fire after conditions persist)
 - Automatic resolution when conditions normalize
 - Alert history tracking
+- Webhook and email notification support
+- Alert acknowledgment and escalation
 
 #### Custom Per-VM/LXC Alert Thresholds (Optional)
 
@@ -319,6 +329,60 @@ For advanced monitoring scenarios, Pulse supports custom alert thresholds on a p
 - **Fallback behavior**: VMs without custom thresholds use global settings
 
 ***Note:** For a Proxmox cluster, you only need to provide connection details for **one** node. Pulse automatically discovers other cluster members.*
+
+#### Webhook Notifications (Optional)
+
+Pulse supports webhook notifications for alerts, compatible with Discord, Slack, and Microsoft Teams:
+
+**Configuration via Web Interface:**
+1. Navigate to **Settings → Alerts** tab
+2. Enable "Webhook Notifications"
+3. Enter your webhook URL
+4. Click "Test Webhook" to verify connectivity
+5. Save configuration
+
+**Webhook URL Examples:**
+- **Discord**: `https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN`
+- **Slack**: `https://hooks.slack.com/services/YOUR/WEBHOOK/URL`
+- **Teams**: `https://outlook.office.com/webhook/YOUR-WEBHOOK-URL`
+
+**Features:**
+- Rich embed formatting with color-coded severity levels
+- Automatic retry on failure
+- Dual payload format supporting multiple platforms
+- Real-time alert notifications for:
+  - Resource threshold violations (CPU, Memory, Disk)
+  - VM/Container availability changes
+  - Alert escalations
+  - Alert resolutions
+
+#### Email Notifications (Optional)
+
+Configure SMTP email notifications for alerts:
+
+**Configuration via Web Interface:**
+1. Navigate to **Settings → Alerts** tab
+2. Enable "Email Notifications"
+3. Configure SMTP settings:
+   - **SMTP Host**: Your email server (e.g., `smtp.gmail.com`)
+   - **SMTP Port**: Usually 587 for TLS, 465 for SSL, 25 for unencrypted
+   - **Username**: Your email address or username
+   - **Password**: Your email password (use App Password for Gmail)
+   - **From Address**: Sender email address
+   - **To Addresses**: Recipient(s), comma-separated for multiple
+   - **Use SSL**: Enable for SSL/TLS encryption
+4. Click "Test Email" to verify configuration
+5. Save settings
+
+**Gmail Configuration Example:**
+1. Enable 2-factor authentication on your Google account
+2. Generate an App Password: Google Account → Security → App passwords
+3. Use settings:
+   - Host: `smtp.gmail.com`
+   - Port: `587`
+   - Username: Your Gmail address
+   - Password: Your App Password (not regular password)
+   - Use SSL: Enabled
 
 
 #### Multiple Proxmox Environments (Optional)
@@ -490,22 +554,64 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 
 ## ✨ Features
 
-- Lightweight monitoring for Proxmox VE nodes, VMs, and Containers.
-- Real-time status updates via WebSockets.
-- Simple, responsive web interface.
+### Core Monitoring
+- Lightweight monitoring for Proxmox VE nodes, VMs, and Containers
+- Real-time status updates via WebSockets
+- Simple, responsive web interface with dark/light theme support
+- Multi-environment PVE monitoring support (monitor multiple clusters/sites)
+- Efficient polling: Stops API polling when no clients are connected
+
+### Advanced Alert System
+- **Configurable alert thresholds** for CPU, Memory, Disk, and VM/CT availability
+- **Custom per-VM/LXC alert thresholds** (perfect for storage VMs, application servers, etc.)
+- **Migration-aware thresholds** that follow VMs across cluster nodes
+- **Multi-severity alerts**: Info, Warning, Critical, and Resolved states
+- **Duration-based triggering** (alerts only fire after conditions persist)
+- **Alert history tracking** with comprehensive metrics
+- **Alert acknowledgment** and suppression capabilities
+- **Alert escalation** for unacknowledged critical alerts
+
+### Notification Systems
+- **Webhook notifications** for Discord, Slack, and Microsoft Teams
+  - Rich embed formatting with color-coded severity
+  - Dual payload format support
+  - Built-in webhook testing
+- **Email notifications** via SMTP
+  - Multiple recipient support
+  - SSL/TLS encryption
+  - Gmail App Password support
+  - Test email functionality
+
+### Backup Monitoring
 - **Comprehensive backup monitoring:**
   - Proxmox Backup Server (PBS) snapshots and tasks
-  - PVE backup files stored on local and shared storage
+  - PVE backup files on local and shared storage
   - VM/CT snapshot tracking with calendar heatmap visualization
-- Built-in diagnostic tool with API permission testing and troubleshooting guidance.
-- **Advanced alert system:**
-  - Configurable global thresholds and durations
-  - Custom per-VM/LXC alert thresholds (perfect for storage VMs, application servers, etc.)
-  - Migration-aware thresholds that follow VMs across cluster nodes
-- Efficient polling: Stops API polling when no clients are connected.
-- Docker support.
-- Multi-environment PVE monitoring support.
-- LXC installation script.
+- **Enhanced backup health card** with health score calculation
+- **Recent coverage metrics** showing protection status
+- **Backup type filtering** with styled badges
+
+### Performance & UI
+- **Virtual scrolling** for handling large VM/container lists efficiently
+- **Metrics history** with 1-hour retention using circular buffers
+- **Network anomaly detection** with automatic baseline learning
+- **Responsive design** optimized for desktop and mobile
+- **UI scale adjustment** for different screen sizes
+- **Persistent filter states** across sessions
+
+### Management & Diagnostics
+- **Built-in update manager** with web-based updates (non-Docker)
+- **Comprehensive diagnostic tool** with API permission testing
+- **Privacy-protected diagnostic exports** for troubleshooting
+- **Real-time connectivity testing** for all configured endpoints
+- **Automatic configuration validation**
+
+### Deployment & Integration
+- Docker support with pre-built images
+- LXC installation script
+- Proxmox Community Scripts integration
+- systemd service management
+- Automatic update capability via cron
 
 ## 💻 System Requirements
 
@@ -704,3 +810,20 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 *   **Configuration Issues:** Use the settings modal to verify all connection details. Test connections with the built-in connectivity tester before saving. Ensure no placeholder values remain.
 *   **Network Connectivity:** Can the machine running Pulse reach the PVE/PBS hostnames/IPs and ports (usually 8006 for PVE, 8007 for PBS)? Check firewalls.
 *   **API Token Permissions:** Ensure the correct roles (`PVEAuditor` for PVE, `Audit` for PBS) are assigned at the root path (`/`) with `Propagate` enabled in the respective UIs.
+
+### Notification Troubleshooting
+
+**Webhook notifications not working?**
+- **Test the webhook:** Use the "Test Webhook" button in settings to verify connectivity
+- **Check the URL format:** Ensure you're using the full webhook URL including protocol (https://)
+- **Firewall rules:** Verify Pulse can reach Discord/Slack/Teams servers (outbound HTTPS)
+- **Check logs:** Look for webhook errors in application logs
+
+**Email notifications not sending?**
+- **Test configuration:** Use the "Test Email" button to verify SMTP settings
+- **Gmail issues:** 
+  - Must use App Password, not regular password
+  - Enable "Less secure app access" or use App Passwords with 2FA
+- **Port issues:** Try different ports (587 for TLS, 465 for SSL, 25 for unencrypted)
+- **Firewall:** Ensure outbound SMTP traffic is allowed
+- **Authentication:** Double-check username/password, some servers require full email address
