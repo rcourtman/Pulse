@@ -160,4 +160,4 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
     return results;
 }
 
-module.exports = { processPbsTasks };
+module.exports = { processPbsTasks, categorizeAndCountTasks };

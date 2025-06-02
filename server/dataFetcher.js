@@ -368,6 +368,10 @@ async function fetchPveDiscoveryData(currentApiClients) {
     // console.log(`[DataFetcher] Fetching PVE discovery data for ${pveEndpointIds.length} endpoints...`);
 
     const pvePromises = pveEndpointIds.map(endpointId => {
+        if (!currentApiClients[endpointId]) {
+            console.error(`[DataFetcher] No client found for endpoint: ${endpointId}`);
+            return Promise.resolve({ nodes: [], vms: [], containers: [], pveBackups: { backupTasks: [], guestSnapshots: [], storageBackups: [] } });
+        }
         const { client: apiClientInstance, config } = currentApiClients[endpointId];
         // Pass endpointId, client, and config to the helper
         return fetchDataForPveEndpoint(endpointId, apiClientInstance, config);

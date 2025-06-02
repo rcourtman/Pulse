@@ -1,4 +1,4 @@
-const { processPbsTasks } = require('../pbsUtils');
+const { processPbsTasks, categorizeAndCountTasks } = require('../pbsUtils');
 
 describe('PBS Utils - processPbsTasks', () => {
 
@@ -240,4 +240,30 @@ describe('PBS Utils - processPbsTasks', () => {
         });
     });
 
+});
+
+describe('PBS Utils - categorizeAndCountTasks', () => {
+    test('should return default structure for null input', () => {
+        const taskTypeMap = { backup: 'backup', verify: 'verify' };
+        const result = categorizeAndCountTasks(null, taskTypeMap);
+        
+        expect(result).toEqual({
+            backup: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 },
+            verify: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 },
+            sync: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 },
+            pruneGc: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 }
+        });
+    });
+
+    test('should return default structure for non-array input', () => {
+        const taskTypeMap = { backup: 'backup', verify: 'verify' };
+        const result = categorizeAndCountTasks({}, taskTypeMap);
+        
+        expect(result).toEqual({
+            backup: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 },
+            verify: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 },
+            sync: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 },
+            pruneGc: { list: [], ok: 0, failed: 0, lastOk: 0, lastFailed: 0 }
+        });
+    });
 });

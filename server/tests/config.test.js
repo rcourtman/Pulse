@@ -101,14 +101,16 @@ describe('Configuration Loading (loadConfiguration)', () => {
   });
 
   // Test Case 2: Missing Primary Proxmox Variables
-  test('should throw ConfigurationError if primary Proxmox variables are missing', () => {
+  test('should return setup mode configuration if primary Proxmox variables are missing', () => {
     setEnvVars({
       PROXMOX_HOST: '192.168.1.100',
       // Missing TOKEN_ID and TOKEN_SECRET
     });
 
-    expect(() => loadConfiguration()).toThrow(ConfigurationError);
-    expect(() => loadConfiguration()).toThrow(/Missing required environment variables: PROXMOX_TOKEN_ID, PROXMOX_TOKEN_SECRET/);
+    const config = loadConfiguration();
+    expect(config.endpoints).toEqual([]);
+    expect(config.pbsConfigs).toEqual([]);
+    expect(config.isConfigPlaceholder).toBe(true);
   });
 
   // Test Case 3: Placeholder Primary Proxmox Variables
@@ -168,7 +170,7 @@ describe('Configuration Loading (loadConfiguration)', () => {
 
     // Check second (disabled)
     expect(config.endpoints[1].id).toBe('endpoint_2');
-    expect(config.endpoints[1].name).toBe('pve2.example.com'); // Defaults to host
+    expect(config.endpoints[1].name).toBe(null); // No custom name configured
     expect(config.endpoints[1].host).toBe('pve2.example.com');
     expect(config.endpoints[1].port).toBe('8006'); // Default port
     expect(config.endpoints[1].enabled).toBe(false);
@@ -446,6 +448,39 @@ describe('Configuration Loading (loadConfiguration)', () => {
       expect.stringContaining('PROXMOX_TOKEN_ID')
     );
     expect(config.isConfigPlaceholder).toBe(true);
+  });
+
+  // Test Case: Config file path loading
+  test('should load config from config directory when it exists', () => {
+    // Set NODE_ENV to non-test to enable dotenv loading
+    const originalNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'development';
+    
+    // Mock fs.existsSync to return true for config dir path
+    const fs = require('fs');
+    const originalExistsSync = fs.existsSync;
+    fs.existsSync = jest.fn((path) => {
+      if (path.includes('config/.env')) {
+        return true; // Config dir .env exists
+      }
+      return false;
+    });
+
+    // Set up environment variables
+    setEnvVars({
+      PROXMOX_HOST: '192.168.1.100',
+      PROXMOX_TOKEN_ID: 'user@pam!token',
+      PROXMOX_TOKEN_SECRET: 'secret'
+    });
+
+    const config = loadConfiguration();
+    
+    // Verify that dotenv.config was called with config dir path
+    expect(dotenv.config).toHaveBeenCalledWith({ path: expect.stringContaining('config/.env') });
+    
+    // Restore fs.existsSync and NODE_ENV
+    fs.existsSync = originalExistsSync;
+    process.env.NODE_ENV = originalNodeEnv;
   });
 
 }); 

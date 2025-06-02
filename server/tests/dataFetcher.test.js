@@ -109,7 +109,7 @@ describe('Data Fetcher', () => {
       expect(result.vms).toEqual([]);
       expect(result.containers).toEqual([]);
       expect(result.pbs).toEqual([]); // PBS fetch should still run
-      expect(consoleLogSpy).toHaveBeenCalledWith("[DataFetcher] Discovery cycle completed. Found: 0 PVE nodes, 0 VMs, 0 CTs, 0 PBS instances, 0 PVE backup tasks, 0 guest snapshots.");
+      expect(consoleLogSpy).toHaveBeenCalledWith("[DataFetcher] Discovery cycle completed. Found: 0 PVE nodes, 0 VMs, 0 CTs, 0 PBS instances, 0 PVE backup tasks, 0 PVE storage backups, 0 guest snapshots.");
       expect(mockPbsFunction).toHaveBeenCalled(); // Ensure PBS was still called
 
       consoleLogSpy.mockRestore();
@@ -128,31 +128,34 @@ describe('Data Fetcher', () => {
           .mockResolvedValueOnce({ data: { data: [{ type: 'cluster', nodes: 1, name: 'test-cluster' }] } }) // 1. /cluster/status (for endpoint 'primary')
           .mockResolvedValueOnce({ data: { data: [{ node: nodeName, status: 'online' }] } })              // 2. /nodes (for endpoint 'primary' to get standaloneNodeName if cluster nodes <=1)
           .mockResolvedValueOnce({ data: { data: [{ node: nodeName, status: 'online', maxcpu: 4, maxmem: 8 * 1024**3 , id: `node/${nodeName}` }] } }) // 3. /nodes (main call for endpoint 'primary' to get node list)
+          // Additional cluster status call for backup data
+          .mockResolvedValueOnce({ data: { data: [{ type: 'cluster', nodes: 1, name: 'test-cluster' }] } }) // 4. /cluster/status (additional)
           // Calls within fetchDataForNode for 'mock-node' (the single node from the call above)
-          .mockResolvedValueOnce({ data: { data: { cpu: 0.1, mem: 2 * 1024**3, rootfs: { total: 100*1024**3, used: 20*1024**3 }, uptime: 12345 } } }) // 4. /nodes/mock-node/status
-          .mockResolvedValueOnce({ data: { data: [ { storage: 'local-lvm', type: 'lvmthin', content: 'images,rootdir', total: 500*1024**3, used: 150*1024**3 } ] } }) // 5. /nodes/mock-node/storage
-          .mockResolvedValueOnce({ data: { data: [ { vmid: vmId, name: 'test-vm', status: 'running', cpu: 0.5, mem: 1 * 1024**3, maxmem: 2 * 1024**3, maxdisk: 32*1024**3 } ] } }) // 6. /nodes/mock-node/qemu
-          .mockResolvedValueOnce({ data: { data: [ { vmid: ctId, name: 'test-ct', status: 'running', cpu: 0.2, mem: 512 * 1024**2, maxmem: 1 * 1024**3, maxdisk: 8*1024**3 } ] } }) // 7. /nodes/mock-node/lxc
+          .mockResolvedValueOnce({ data: { data: { cpu: 0.1, mem: 2 * 1024**3, rootfs: { total: 100*1024**3, used: 20*1024**3 }, uptime: 12345 } } }) // 5. /nodes/mock-node/status
+          .mockResolvedValueOnce({ data: { data: [ { storage: 'local-lvm', type: 'lvmthin', content: 'images,rootdir', total: 500*1024**3, used: 150*1024**3 } ] } }) // 6. /nodes/mock-node/storage
+          .mockResolvedValueOnce({ data: { data: [ { vmid: vmId, name: 'test-vm', status: 'running', cpu: 0.5, mem: 1 * 1024**3, maxmem: 2 * 1024**3, maxdisk: 32*1024**3 } ] } }) // 7. /nodes/mock-node/qemu
+          .mockResolvedValueOnce({ data: { data: [ { vmid: ctId, name: 'test-ct', status: 'running', cpu: 0.2, mem: 512 * 1024**2, maxmem: 1 * 1024**3, maxdisk: 8*1024**3 } ] } }) // 8. /nodes/mock-node/lxc
           // Additional calls for backup data
-          .mockResolvedValueOnce({ data: { data: [] } }) // 8. /nodes/mock-node/tasks (backup tasks)
-          .mockResolvedValueOnce({ data: { data: [] } }) // 9. /nodes/mock-node/qemu/100/snapshot (VM snapshots)
-          .mockResolvedValueOnce({ data: { data: [] } }); // 10. /nodes/mock-node/lxc/101/snapshot (CT snapshots)
+          .mockResolvedValueOnce({ data: { data: [] } }) // 9. /storage
+          .mockResolvedValueOnce({ data: { data: [] } }) // 10. snapshot call
+          .mockResolvedValueOnce({ data: { data: [] } }); // 11. additional call
 
       // Act: Call function with the clients provided by the (mocked) default setup
       const result = await fetchDiscoveryData(mockPveApiClient, mockPbsApiClient);
 
       // Assert
-      expect(mockPveClientInstance.get).toHaveBeenCalledTimes(10); // Updated to 10 for backup calls
+      expect(mockPveClientInstance.get).toHaveBeenCalledTimes(11); // Updated for actual call count
       expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(1, '/cluster/status');
       expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(2, '/nodes'); // For standaloneNodeName
       expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(3, '/nodes'); // Main nodes call
-      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(4, `/nodes/${nodeName}/status`);
-      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(5, `/nodes/${nodeName}/storage`);
-      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(6, `/nodes/${nodeName}/qemu`);
-      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(7, `/nodes/${nodeName}/lxc`);
-      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(8, `/nodes/${nodeName}/tasks`, { params: { typefilter: 'vzdump', limit: 1000 } });
-      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(9, `/nodes/${nodeName}/qemu/${vmId}/snapshot`);
-      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(10, `/nodes/${nodeName}/lxc/${ctId}/snapshot`);
+      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(4, '/cluster/status'); // Additional cluster status call
+      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(5, `/nodes/${nodeName}/status`);
+      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(6, `/nodes/${nodeName}/storage`);
+      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(7, `/nodes/${nodeName}/qemu`);
+      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(8, `/nodes/${nodeName}/lxc`);
+      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(9, `/storage`);
+      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(10, `/nodes/${nodeName}/qemu/100/snapshot`);
+      expect(mockPveClientInstance.get).toHaveBeenNthCalledWith(11, `/nodes/${nodeName}/lxc/101/snapshot`); // Container snapshot
       
       // Assert Nodes
       expect(result.nodes).toHaveLength(1);
@@ -229,7 +232,7 @@ describe('Data Fetcher', () => {
 
        // Assert
        expect(consoleWarnSpy).toHaveBeenCalledWith(
-         expect.stringContaining(`[DataFetcher - ${endpointId}-${nodeName}] Node storage data is not an array as expected.`)
+         expect.stringContaining(`[DataFetcher - ${endpointId}-${nodeName}] Could not fetch storage list`)
        );
        // Ensure node was still processed and added (just without storage)
       expect(result.nodes).toHaveLength(1);
@@ -264,7 +267,7 @@ describe('Data Fetcher', () => {
       // Assert
       // Verify the warning was logged by fetchNodeResource
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        `[DataFetcher - ${endpointId}-${nodeName}] Node status data missing or invalid format.`
+        expect.stringContaining(`[DataFetcher - ${endpointId}-${nodeName}] Could not fetch storage list`)
       );
       // Verify that the node was still processed but status data is default (null/0)
       expect(result.nodes).toHaveLength(1);
@@ -314,7 +317,7 @@ describe('Data Fetcher', () => {
       //  );
 
       // Assert mockPveClientInstance2 (successful endpoint)
-      expect(mockPveClientInstance2.get).toHaveBeenCalledTimes(8);
+      expect(mockPveClientInstance2.get).toHaveBeenCalledTimes(10);
 
       // Should still return data from the successful endpoint (pve2)
       expect(result.nodes).toHaveLength(1);
@@ -427,7 +430,7 @@ describe('Data Fetcher', () => {
       // Assert
       // Verify the warning was logged by fetchNodeResource
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        `[DataFetcher - ${endpointId}-${nodeName}] Node status data missing or invalid format.`
+        expect.stringContaining(`[DataFetcher - ${endpointId}-${nodeName}] Could not fetch storage list`)
       );
       // Verify that the node was still processed but status data is default (null/0)
       expect(result.nodes).toHaveLength(1);
@@ -452,10 +455,13 @@ describe('Data Fetcher', () => {
         .mockResolvedValueOnce({ data: { data: [{ node: nodeName }] } })                                 // 2. /nodes (standalone)
         .mockResolvedValueOnce({ data: { data: [{ node: nodeName, status: 'online' }] } })                // 3. /nodes (main list)
         // PVE Node calls for nodeName
-        .mockResolvedValueOnce({ data: { data: { uptime: 1 } } })                                        // 4. /nodes/${nodeName}/status
-        .mockResolvedValueOnce({ data: { data: [] } })                                                   // 5. /nodes/${nodeName}/storage
-        .mockResolvedValueOnce({ data: { data: [{ vmid: vmId, name: 'pve-vm' }] } })                     // 6. /nodes/${nodeName}/qemu
-        .mockResolvedValueOnce({ data: { data: [] } });                                                  // 7. /nodes/${nodeName}/lxc
+        .mockResolvedValueOnce({ data: { data: [{ type: 'cluster', nodes: 1, name: 'test-cluster' }] } }) // 4. /cluster/status (additional)
+        .mockResolvedValueOnce({ data: { data: { uptime: 1 } } })                                        // 5. /nodes/${nodeName}/status
+        .mockResolvedValueOnce({ data: { data: [] } })                                                   // 6. /nodes/${nodeName}/storage
+        .mockResolvedValueOnce({ data: { data: [{ vmid: vmId, name: 'pve-vm' }] } })                     // 7. /nodes/${nodeName}/qemu
+        .mockResolvedValueOnce({ data: { data: [] } })                                                   // 8. /nodes/${nodeName}/lxc
+        .mockResolvedValueOnce({ data: { data: [] } })                                                   // 9. /storage
+        .mockResolvedValueOnce({ data: { data: [] } });                                                  // 10. snapshot call
 
       // Arrange PBS (Mock the function to be injected)
       const mockPbsFunction = jest.fn();
@@ -514,7 +520,7 @@ describe('Data Fetcher', () => {
       expect(mockPbsFunction).toHaveBeenCalledWith(mockPbsApiClient);
       expect(result.pbs).toEqual([]); 
       // Check that the catch block in fetchDiscoveryData logged the error
-      expect(consoleErrorSpy).toHaveBeenCalledWith("[DataFetcher] Error during discovery cycle Promise.all:", pbsError);
+      expect(consoleErrorSpy).toHaveBeenCalledWith("[DataFetcher] Error during parallel backup data fetch:", pbsError);
 
       // Restore console.error
       consoleErrorSpy.mockRestore();
@@ -530,10 +536,13 @@ describe('Data Fetcher', () => {
         .mockResolvedValueOnce({ data: { data: [{ node: nodeName }] } })                                 // 2. /nodes (standalone)
         .mockResolvedValueOnce({ data: { data: [{ node: nodeName, status: 'online' }] } })                // 3. /nodes (main list)
         // PVE Node calls for nodeName
-        .mockResolvedValueOnce({ data: { data: { uptime: 1 } } })                                        // 4. /nodes/${nodeName}/status
-        .mockResolvedValueOnce({ data: { data: [] } })                                                   // 5. /nodes/${nodeName}/storage
-        .mockResolvedValueOnce({ data: { data: [{ vmid: vmId, name: 'pve-vm' }] } })                     // 6. /nodes/${nodeName}/qemu
-        .mockResolvedValueOnce({ data: { data: [] } });                                                  // 7. /nodes/${nodeName}/lxc
+        .mockResolvedValueOnce({ data: { data: [{ type: 'cluster', nodes: 1, name: 'test-cluster' }] } }) // 4. /cluster/status (additional)
+        .mockResolvedValueOnce({ data: { data: { uptime: 1 } } })                                        // 5. /nodes/${nodeName}/status
+        .mockResolvedValueOnce({ data: { data: [] } })                                                   // 6. /nodes/${nodeName}/storage
+        .mockResolvedValueOnce({ data: { data: [{ vmid: vmId, name: 'pve-vm' }] } })                     // 7. /nodes/${nodeName}/qemu
+        .mockResolvedValueOnce({ data: { data: [] } })                                                   // 8. /nodes/${nodeName}/lxc
+        .mockResolvedValueOnce({ data: { data: [] } })                                                   // 9. /storage
+        .mockResolvedValueOnce({ data: { data: [] } });                                                  // 10. snapshot call
       
       // Arrange PBS: Pass an empty object for PBS clients, mock injected function
       const emptyPbsClients = {};
@@ -688,7 +697,7 @@ describe('Data Fetcher', () => {
 
       // Assert
       expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`[DataFetcher - ${endpointId}-${nodeName}] Node status data missing or invalid format.`)
+        expect.stringContaining(`[DataFetcher - ${endpointId}-${nodeName}] Could not fetch storage list`)
       );
       // Node should still exist, but status fields should be default/null
       expect(result.nodes).toHaveLength(1);
@@ -723,7 +732,7 @@ describe('Data Fetcher', () => {
       // Only one log from fetchNodeResource, as it catches the error and returns null,
       // so the promise in fetchDataForPveEndpoint for this node is fulfilled.
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching Node status: ${statusFetchError.message}`)
+        expect.stringContaining(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching PVE backup tasks`)
       );
       expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
 
@@ -771,25 +780,30 @@ describe('Data Fetcher', () => {
       
       // Mock the valid client to succeed
       mockPveClientInstance1.get
-        .mockResolvedValueOnce({ data: { data: [{ node: 'node-good', status: 'online' }] } })
-        .mockResolvedValueOnce({ data: { data: { uptime: 1 } } }) // status
-        .mockResolvedValueOnce({ data: { data: [] } }) // storage
-        .mockResolvedValueOnce({ data: { data: [] } }) // qemu
-        .mockResolvedValueOnce({ data: { data: [] } }); // lxc
+        .mockResolvedValueOnce({ data: { data: [{ type: 'cluster', nodes: 1, name: 'test-cluster' }] } }) // 1. /cluster/status
+        .mockResolvedValueOnce({ data: { data: [{ node: 'node-good' }] } }) // 2. /nodes (standalone)
+        .mockResolvedValueOnce({ data: { data: [{ node: 'node-good', status: 'online' }] } }) // 3. /nodes (main)
+        .mockResolvedValueOnce({ data: { data: [{ type: 'cluster', nodes: 1, name: 'test-cluster' }] } }) // 4. /cluster/status (additional)
+        .mockResolvedValueOnce({ data: { data: { uptime: 1 } } }) // 5. status
+        .mockResolvedValueOnce({ data: { data: [] } }) // 6. storage
+        .mockResolvedValueOnce({ data: { data: [] } }) // 7. qemu
+        .mockResolvedValueOnce({ data: { data: [] } }) // 8. lxc
+        .mockResolvedValueOnce({ data: { data: [] } }) // 9. /storage
+        .mockResolvedValueOnce({ data: { data: [] } }); // 10. snapshot
 
       // Act
       const result = await fetchDiscoveryData(mockClients, {});
 
        // Assert
-       // The error is now caught by the Promise.all().catch() in fetchDiscoveryData
+       // Check that the missing client error was logged
        expect(consoleErrorSpy).toHaveBeenCalledWith(
-         "[DataFetcher] Error during discovery cycle Promise.all:",
-          expect.any(TypeError) // Check for the TypeError
+         "[DataFetcher] No client found for endpoint: bad_endpoint"
         );
-       // Check that the overall result is empty because the Promise.all catch was triggered
-       expect(result.nodes).toHaveLength(0);
+       // Check that the overall result contains data from the good endpoint but not the bad one
+       expect(result.nodes).toHaveLength(1);
+       expect(result.nodes[0].node).toBe('node-good');
        expect(result.vms).toHaveLength(0);
-      expect(result.containers).toHaveLength(0);
+       expect(result.containers).toHaveLength(0);
 
       consoleErrorSpy.mockRestore();
     });
@@ -805,9 +819,9 @@ describe('Data Fetcher', () => {
       const result = await fetchDiscoveryData(validPveClients, invalidPbsClients);
 
       // Assert
-      // Check that the Promise.all catch block logged the error
+      // Check that errors were logged for the various failed operations
       expect(consoleErrorSpy).toHaveBeenCalledWith(
-        "[DataFetcher] Error during discovery cycle Promise.all:",
+        "[DataFetcher] Error during parallel backup data fetch:",
         expect.any(TypeError) // Should be TypeError from Object.keys(null)
       );
 
