@@ -875,94 +875,155 @@ app.post('/api/test-webhook', async (req, res) => {
         
         // Create test webhook payload
         const axios = require('axios');
-        const testPayload = {
-            timestamp: new Date().toISOString(),
-            alert: {
-                id: 'test-alert-' + Date.now(),
-                rule: {
-                    name: 'Webhook Test Alert',
+        // const testPayload = {
+        //     timestamp: new Date().toISOString(),
+        //     alert: {
+        //         id: 'test-alert-' + Date.now(),
+        //         rule: {
+        //             name: 'Webhook Test Alert',
+        //             description: 'This is a test alert to verify webhook configuration',
+        //             severity: 'info',
+        //             metric: 'test'
+        //         },
+        //         guest: {
+        //             name: 'Test-VM',
+        //             id: '999',
+        //             type: 'qemu',
+        //             node: 'test-node',
+        //             status: 'running'
+        //         },
+        //         value: 75,
+        //         threshold: 80,
+        //         emoji: '🧪'
+        //     },
+        //     // Discord/Slack compatible format
+        //     embeds: [{
+        //         title: '🧪 Webhook Test Alert',
+        //         description: 'This is a test alert to verify webhook configuration',
+        //         color: 3447003, // Blue
+        //         fields: [
+        //             {
+        //                 name: 'VM/LXC',
+        //                 value: 'Test-VM (qemu 999)',
+        //                 inline: true
+        //             },
+        //             {
+        //                 name: 'Node',
+        //                 value: 'test-node',
+        //                 inline: true
+        //             },
+        //             {
+        //                 name: 'Status',
+        //                 value: 'running',
+        //                 inline: true
+        //             },
+        //             {
+        //                 name: 'Metric',
+        //                 value: 'TEST',
+        //                 inline: true
+        //             },
+        //             {
+        //                 name: 'Current Value',
+        //                 value: '75%',
+        //                 inline: true
+        //             },
+        //             {
+        //                 name: 'Threshold',
+        //                 value: '80%',
+        //                 inline: true
+        //             }
+        //         ],
+        //         footer: {
+        //             text: 'Pulse Monitoring System - Test Message'
+        //         },
+        //         timestamp: new Date().toISOString()
+        //     }],
+        //     // Slack compatible format
+        //     text: '🧪 *Webhook Test Alert*',
+        //     attachments: [{
+        //         color: 'good',
+        //         fields: [
+        //             {
+        //                 title: 'VM/LXC',
+        //                 value: 'Test-VM (qemu 999)',
+        //                 short: true
+        //             },
+        //             {
+        //                 title: 'Node',
+        //                 value: 'test-node',
+        //                 short: true
+        //             },
+        //             {
+        //                 title: 'Status',
+        //                 value: 'Webhook configuration test successful!',
+        //                 short: false
+        //             }
+        //         ],
+        //         footer: 'Pulse Monitoring - Test',
+        //         ts: Math.floor(Date.now() / 1000)
+        //     }]
+        // };
+
+        let testPayload;
+        const lowerUrl = url.toLowerCase();
+        const isDiscord = lowerUrl.includes('discord.com');
+        const isSlack = lowerUrl.includes('hooks.slack.com');
+
+        if (isDiscord) {
+            testPayload = {
+                username: 'Pulse Monitor',
+                content: '🧪 Webhook Test Alert',
+                embeds: [{
+                    title: '🧪 Webhook Test Alert',
                     description: 'This is a test alert to verify webhook configuration',
-                    severity: 'info',
-                    metric: 'test'
-                },
-                guest: {
-                    name: 'Test-VM',
-                    id: '999',
-                    type: 'qemu',
-                    node: 'test-node',
-                    status: 'running'
-                },
-                value: 75,
-                threshold: 80,
-                emoji: '🧪'
-            },
-            // Discord/Slack compatible format
-            embeds: [{
-                title: '🧪 Webhook Test Alert',
-                description: 'This is a test alert to verify webhook configuration',
-                color: 3447003, // Blue
-                fields: [
-                    {
-                        name: 'VM/LXC',
-                        value: 'Test-VM (qemu 999)',
-                        inline: true
+                    color: 3447003,
+                    fields: [
+                        { name: 'VM/LXC', value: 'Test-VM (qemu 999)', inline: true },
+                        { name: 'Node', value: 'test-node', inline: true },
+                        { name: 'Status', value: 'running', inline: true },
+                        { name: 'Metric', value: 'TEST', inline: true },
+                        { name: 'Current Value', value: '75%', inline: true },
+                        { name: 'Threshold', value: '80%', inline: true }
+                    ],
+                    footer: {
+                        text: 'Pulse Monitoring System - Test Message'
                     },
-                    {
-                        name: 'Node',
-                        value: 'test-node',
-                        inline: true
-                    },
-                    {
-                        name: 'Status',
-                        value: 'running',
-                        inline: true
-                    },
-                    {
-                        name: 'Metric',
-                        value: 'TEST',
-                        inline: true
-                    },
-                    {
-                        name: 'Current Value',
-                        value: '75%',
-                        inline: true
-                    },
-                    {
-                        name: 'Threshold',
-                        value: '80%',
-                        inline: true
-                    }
-                ],
-                footer: {
-                    text: 'Pulse Monitoring System - Test Message'
-                },
-                timestamp: new Date().toISOString()
-            }],
-            // Slack compatible format
-            text: '🧪 *Webhook Test Alert*',
-            attachments: [{
-                color: 'good',
-                fields: [
-                    {
-                        title: 'VM/LXC',
-                        value: 'Test-VM (qemu 999)',
-                        short: true
-                    },
-                    {
-                        title: 'Node',
-                        value: 'test-node',
-                        short: true
-                    },
-                    {
-                        title: 'Status',
-                        value: 'Webhook configuration test successful!',
-                        short: false
-                    }
-                ],
-                footer: 'Pulse Monitoring - Test',
-                ts: Math.floor(Date.now() / 1000)
-            }]
-        };
+                    timestamp: new Date().toISOString()
+                }]
+            };
+        } else if (isSlack) {
+            testPayload = {
+                text: '🧪 *Webhook Test Alert*',
+                attachments: [{
+                    color: 'good',
+                    fields: [
+                        {
+                            title: 'VM/LXC',
+                            value: 'Test-VM (qemu 999)',
+                            short: true
+                        },
+                        {
+                            title: 'Node',
+                            value: 'test-node',
+                            short: true
+                        },
+                        {
+                            title: 'Status',
+                            value: 'Webhook configuration test successful!',
+                            short: false
+                        }
+                    ],
+                    footer: 'Pulse Monitoring - Test',
+                    ts: Math.floor(Date.now() / 1000)
+                }]
+            };
+        } else {
+            // Default fallback payload if unknown platform
+            testPayload = {
+                text: '🧪 Webhook Test Alert from Pulse Monitoring System',
+                note: 'Unknown webhook type. Payload format may not be compatible.'
+            };
+        }
         
         // Send test webhook
         const response = await axios.post(url, testPayload, {
