@@ -35,6 +35,8 @@ temp_file=$(mktemp)
 mkdir -p /opt/pulse
 curl -fsSL "https://github.com/rcourtman/Pulse/releases/download/v${RELEASE}/pulse-v${RELEASE}.tar.gz" -o "$temp_file"
 tar zxf "$temp_file" --strip-components=1 -C /opt/pulse
+touch /opt/pulse/.env
+chown pulse:pulse /opt/pulse/.env
 echo "${RELEASE}" >/opt/${APPLICATION}_version.txt
 msg_ok "Installed Pulse"
 
