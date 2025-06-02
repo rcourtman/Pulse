@@ -147,9 +147,12 @@ PulseApp.ui.backupDetailCard = (() => {
             <div class="flex flex-col h-full">
                 <!-- Compact Header with Key Metrics -->
                 <div class="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-between mb-1">
+                    <div class="flex items-center justify-between mb-2">
                         <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Backup Health</h3>
-                        <span class="text-xs ${healthScore >= 80 ? 'text-green-600 dark:text-green-400' : healthScore >= 60 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'} font-bold">${healthScore}%</span>
+                        <div class="text-right">
+                            <div class="text-lg font-bold ${healthScore >= 80 ? 'text-green-600 dark:text-green-400' : healthScore >= 60 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}">${healthScore}%</div>
+                            <div class="text-[9px] text-gray-500 dark:text-gray-400">${stats.totalGuests - totalIssues}/${stats.totalGuests} healthy</div>
+                        </div>
                     </div>
                     <div class="grid grid-cols-4 gap-2 text-[10px]">
                         <div class="text-center">
@@ -230,18 +233,37 @@ PulseApp.ui.backupDetailCard = (() => {
                     
                     <!-- Summary Stats -->
                     <div class="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
-                        <div class="grid grid-cols-3 gap-2 text-[10px]">
-                            <div class="text-center">
-                                <div class="font-semibold text-purple-600 dark:text-purple-400">${stats.pbsCount || 0}</div>
-                                <div class="text-gray-500 dark:text-gray-400">PBS</div>
+                        <div class="space-y-2">
+                            <!-- Total Backups and Coverage -->
+                            <div class="grid grid-cols-2 gap-3 text-[10px]">
+                                <div class="text-center">
+                                    <div class="font-semibold text-blue-600 dark:text-blue-400">${stats.totalBackups || 0}</div>
+                                    <div class="text-gray-500 dark:text-gray-400">Total Backups</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="font-semibold text-green-600 dark:text-green-400">${guestsByAge.good.length + guestsByAge.ok.length}</div>
+                                    <div class="text-gray-500 dark:text-gray-400">Recent Coverage</div>
+                                </div>
                             </div>
-                            <div class="text-center">
-                                <div class="font-semibold text-orange-600 dark:text-orange-400">${stats.pveCount || 0}</div>
-                                <div class="text-gray-500 dark:text-gray-400">PVE</div>
+                            
+                            <!-- Backup Type Distribution -->
+                            <div class="text-[9px] text-gray-600 dark:text-gray-400">
+                                <div class="flex justify-between items-center">
+                                    <span>Backup Types:</span>
+                                    <div class="flex gap-2">
+                                        ${stats.pbsCount > 0 ? `<span class="text-purple-600 dark:text-purple-400">${stats.pbsCount} PBS</span>` : ''}
+                                        ${stats.pveCount > 0 ? `<span class="text-orange-600 dark:text-orange-400">${stats.pveCount} PVE</span>` : ''}
+                                        ${stats.snapshotCount > 0 ? `<span class="text-yellow-600 dark:text-yellow-400">${stats.snapshotCount} Snap</span>` : ''}
+                                    </div>
+                                </div>
                             </div>
-                            <div class="text-center">
-                                <div class="font-semibold text-yellow-600 dark:text-yellow-400">${stats.snapshotCount || 0}</div>
-                                <div class="text-gray-500 dark:text-gray-400">Snapshots</div>
+                            
+                            <!-- Coverage Detail -->
+                            <div class="text-[9px] text-gray-600 dark:text-gray-400">
+                                <div class="flex justify-between items-center">
+                                    <span>Coverage:</span>
+                                    <span>${stats.totalGuests - guestsByAge.none.length}/${stats.totalGuests} guests protected</span>
+                                </div>
                             </div>
                         </div>
                     </div>
