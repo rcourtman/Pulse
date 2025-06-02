@@ -28,7 +28,7 @@
     "concurrently": "^9.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
-    "express": "^4.21.2",
+    "express": "^5.1.0",
     "nodemailer": "^6.9.18",
     "p-limit": "^6.2.0",
     "semver": "^7.7.2",
