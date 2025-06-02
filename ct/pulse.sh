@@ -23,13 +23,13 @@ function update_script() {
   header_info
   check_container_storage
   check_container_resources
-  if [[ ! -d /opt/pulse ]]; then
-    msg_error "No ${APP} Installation Found!"
-    exit
-  fi
   if [[ -d /opt/pulse-monitor ]]; then
   msg_error "An old installation was detected. Please recreate the LXC from scratch (https://github.com/community-scripts/ProxmoxVE/pull/4848)"
   exit 1
+  fi
+  if [[ ! -d /opt/pulse ]]; then
+    msg_error "No ${APP} Installation Found!"
+    exit
   fi
   RELEASE=$(curl -fsSL https://api.github.com/repos/rcourtman/Pulse/releases/latest | grep "tag_name" | awk '{print substr($2, 3, length($2)-4) }')
   if [[ ! -f /opt/${APP}_version.txt ]] || [[ "${RELEASE}" != "$(cat /opt/${APP}_version.txt)" ]]; then
