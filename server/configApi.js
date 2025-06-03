@@ -71,9 +71,10 @@ class ConfigApi {
             // Add all additional endpoint configurations to the response
             // This allows the settings modal to properly display them
             Object.keys(config).forEach(key => {
-                // Include all additional PVE and PBS endpoint variables
+                // Include all additional PVE and PBS endpoint variables and webhook config
                 if ((key.startsWith('PROXMOX_') && key.includes('_')) || 
-                    (key.startsWith('PBS_') && key.includes('_'))) {
+                    (key.startsWith('PBS_') && key.includes('_')) ||
+                    key.startsWith('WEBHOOK_')) {
                     response[key] = config[key];
                 }
             });

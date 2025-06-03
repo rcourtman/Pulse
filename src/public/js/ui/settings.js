@@ -163,7 +163,7 @@ PulseApp.ui.settings = (() => {
                 content = renderPBSTab(pbs, safeConfig);
                 break;
             case 'alerts':
-                content = renderAlertsTab(alerts);
+                content = renderAlertsTab(alerts, safeConfig);
                 break;
             case 'system':
                 content = renderSystemTab(advanced, safeConfig);
@@ -377,7 +377,7 @@ PulseApp.ui.settings = (() => {
         `;
     }
 
-    function renderAlertsTab(alerts) {
+    function renderAlertsTab(alerts, config) {
         return `
             <div class="space-y-6">
                 <!-- Global Alert Settings -->
@@ -552,7 +552,7 @@ PulseApp.ui.settings = (() => {
                                 Webhook URL
                             </label>
                             <input type="url" name="WEBHOOK_URL"
-                                   value="${alerts.webhook?.url || ''}"
+                                   value="${config.WEBHOOK_URL || ''}"
                                    placeholder="https://discord.com/api/webhooks/..."
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Discord, Slack, Teams, or any webhook endpoint</p>
@@ -561,7 +561,7 @@ PulseApp.ui.settings = (() => {
                     
                     <div class="flex items-center space-x-4 mb-4">
                         <label class="flex items-center">
-                            <input type="checkbox" name="WEBHOOK_ENABLED" ${alerts.webhook?.enabled ? 'checked' : ''}
+                            <input type="checkbox" name="WEBHOOK_ENABLED" ${config.WEBHOOK_ENABLED === 'true' ? 'checked' : ''}
                                    class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                             <span class="text-sm text-gray-700 dark:text-gray-300">Enable Webhook Notifications</span>
                         </label>
