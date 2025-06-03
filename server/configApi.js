@@ -64,6 +64,10 @@ class ConfigApi {
                         down: {
                             enabled: config.ALERT_DOWN_ENABLED !== 'false'
                         }
+                    },
+                    webhook: {
+                        url: config.WEBHOOK_URL,
+                        enabled: config.WEBHOOK_ENABLED === 'true'
                     }
                 }
             };
@@ -180,6 +184,17 @@ class ConfigApi {
                 }
                 if (alerts.down) {
                     existingConfig.ALERT_DOWN_ENABLED = alerts.down.enabled ? 'true' : 'false';
+                }
+            }
+            
+            // Webhook settings
+            if (config.advanced.webhook) {
+                const webhook = config.advanced.webhook;
+                if (webhook.url !== undefined) {
+                    existingConfig.WEBHOOK_URL = webhook.url;
+                }
+                if (webhook.enabled !== undefined) {
+                    existingConfig.WEBHOOK_ENABLED = webhook.enabled ? 'true' : 'false';
                 }
             }
         }
