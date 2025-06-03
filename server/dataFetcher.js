@@ -186,48 +186,52 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
     let standaloneNodeName = null; // To store the name of the standalone node if applicable
 
     try {
-        // Attempt to determine if the endpoint is part of a multi-node cluster
-        try {
-            const clusterStatusResponse = await apiClientInstance.get('/cluster/status');
+        // Make initial discovery calls non-blocking to prevent dashboard freezing
+        // Use shorter timeout for discovery calls to fail fast
+        const discoveryTimeout = 5000; // 5 seconds
+        const [clusterStatusResult, nodesResult] = await Promise.allSettled([
+            apiClientInstance.get('/cluster/status', { timeout: discoveryTimeout }),
+            apiClientInstance.get('/nodes', { timeout: discoveryTimeout })
+        ]);
 
-            if (clusterStatusResponse.data && Array.isArray(clusterStatusResponse.data.data) && clusterStatusResponse.data.data.length > 0) {
-                const clusterInfoObject = clusterStatusResponse.data.data.find(item => item.type === 'cluster');
-                if (clusterInfoObject) {
-                    if (clusterInfoObject.nodes && clusterInfoObject.nodes > 1) {
-                        endpointType = 'cluster';
-                        actualClusterName = clusterInfoObject.name || actualClusterName; // Use actual cluster name if available
-                    } else {
-                        endpointType = 'standalone'; // Still standalone if nodes <= 1
-                        // Attempt to get the actual node name for the label if it's standalone
-                        const nodesListForEndpoint = (await apiClientInstance.get('/nodes')).data?.data;
-                        if (nodesListForEndpoint && nodesListForEndpoint.length > 0) {
-                            // For a standalone or single-node cluster, use its own node name as the identifier
-                            standaloneNodeName = nodesListForEndpoint[0].node;
-                        }
-                    }
+        // Process cluster status to determine endpoint type
+        if (clusterStatusResult.status === 'fulfilled' && 
+            clusterStatusResult.value.data && 
+            Array.isArray(clusterStatusResult.value.data.data) && 
+            clusterStatusResult.value.data.data.length > 0) {
+            
+            const clusterInfoObject = clusterStatusResult.value.data.data.find(item => item.type === 'cluster');
+            if (clusterInfoObject) {
+                if (clusterInfoObject.nodes && clusterInfoObject.nodes > 1) {
+                    endpointType = 'cluster';
+                    actualClusterName = clusterInfoObject.name || actualClusterName;
                 } else {
                     endpointType = 'standalone';
-                    const nodesListForEndpoint = (await apiClientInstance.get('/nodes')).data?.data;
-                    if (nodesListForEndpoint && nodesListForEndpoint.length > 0) {
-                        standaloneNodeName = nodesListForEndpoint[0].node;
-                    }
                 }
             } else {
-                // console.warn(`[DataFetcher - ${endpointName}] No nodes found or unexpected format.`);
-                endpointType = 'standalone'; // Fallback
+                endpointType = 'standalone';
             }
-        } catch (clusterError) {
-            console.error(`[DataFetcher - ${endpointName}] Error fetching /cluster/status: ${clusterError.message}`, clusterError);
+        } else if (clusterStatusResult.status === 'rejected') {
+            console.error(`[DataFetcher - ${endpointName}] Error fetching /cluster/status: ${clusterStatusResult.reason?.message || clusterStatusResult.reason}`);
             endpointType = 'standalone'; // Fallback
-            // Even on /cluster/status error, try to get node name if it's likely standalone
-            try {
-                const nodesListForEndpoint = (await apiClientInstance.get('/nodes')).data?.data;
-                if (nodesListForEndpoint && nodesListForEndpoint.length > 0) {
-                    standaloneNodeName = nodesListForEndpoint[0].node;
-                }
-            } catch (nodesError) {
-                console.error(`[DataFetcher - ${endpointName}] Also failed to fetch /nodes after /cluster/status error: ${nodesError.message}`);
+        }
+
+        // Process nodes result
+        let nodes = [];
+        if (nodesResult.status === 'fulfilled' && 
+            nodesResult.value.data && 
+            Array.isArray(nodesResult.value.data.data)) {
+            
+            nodes = nodesResult.value.data.data;
+            
+            // For standalone endpoints, get the node name for proper labeling
+            if (endpointType === 'standalone' && nodes.length > 0) {
+                standaloneNodeName = nodes[0].node;
+                actualClusterName = standaloneNodeName;
             }
+        } else if (nodesResult.status === 'rejected') {
+            console.error(`[DataFetcher - ${endpointName}] Failed to fetch nodes: ${nodesResult.reason?.message || nodesResult.reason}`);
+            return { nodes: [], vms: [], containers: [] };
         }
         
         // Update actualClusterName if this is a standalone endpoint and we found a specific node name
@@ -235,18 +239,15 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             actualClusterName = standaloneNodeName;
         }
 
-        const nodesResponse = await apiClientInstance.get('/nodes');
-        const nodes = nodesResponse.data.data;
-        if (!nodes || !Array.isArray(nodes)) {
-            // console.warn(`[DataFetcher - ${endpointName}] No nodes found or unexpected format.`);
+        if (!nodes || nodes.length === 0) {
+            console.warn(`[DataFetcher - ${endpointName}] No nodes found or unexpected format.`);
             return { nodes: [], vms: [], containers: [] };
         }
 
-        // Get node IP addresses from cluster status
+        // Get node IP addresses from cluster status (reuse the result we already have)
         const nodeIpMap = new Map();
-        try {
-            const clusterStatusResponse = await apiClientInstance.get('/cluster/status');
-            const clusterStatus = clusterStatusResponse.data?.data || [];
+        if (clusterStatusResult.status === 'fulfilled' && clusterStatusResult.value.data?.data) {
+            const clusterStatus = clusterStatusResult.value.data.data;
             
             clusterStatus.forEach(item => {
                 if (item.type === 'node' && item.ip) {
@@ -257,8 +258,8 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             if (nodeIpMap.size > 0) {
                 console.log(`[DataFetcher - ${endpointName}] Found IP addresses for ${nodeIpMap.size} nodes`);
             }
-        } catch (error) {
-            console.warn(`[DataFetcher - ${endpointName}] Could not fetch cluster status for node IPs: ${error.message}`);
+        } else {
+            console.warn(`[DataFetcher - ${endpointName}] Could not get cluster status for node IPs`);
         }
 
         // Pass the correct endpointId to fetchDataForNode with concurrency limiting
@@ -351,6 +352,131 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
 }
 
 
+// Cache for last known good node states
+const nodeStateCache = new Map();
+const NODE_CACHE_TTL = 60000; // 1 minute
+
+/**
+ * Deduplicates nodes from multiple endpoints that may point to the same cluster
+ * @param {Array} allNodes - Array of all nodes from all endpoints
+ * @returns {Array} - Deduplicated array of nodes
+ */
+function deduplicateClusterNodes(allNodes) {
+    const nodeMap = new Map();
+    const now = Date.now();
+    
+    // First, add all current nodes
+    allNodes.forEach(node => {
+        const nodeKey = node.node; // Use node name as the unique key
+        const existingNode = nodeMap.get(nodeKey);
+        
+        if (!existingNode) {
+            nodeMap.set(nodeKey, node);
+            // Cache online nodes
+            if (node.status === 'online') {
+                nodeStateCache.set(nodeKey, { node, timestamp: now });
+            }
+        } else {
+            // Merge data, preferring online nodes and more recent data
+            let mergedNode = existingNode;
+            
+            const shouldReplace = 
+                // Prefer online nodes over offline ones
+                (node.status === 'online' && existingNode.status !== 'online') ||
+                // If both have same status, prefer the one with more complete data
+                (node.status === existingNode.status && 
+                 node.uptime > existingNode.uptime) ||
+                // Prefer nodes with actual CPU/memory data
+                (node.cpu !== null && existingNode.cpu === null);
+                
+            if (shouldReplace) {
+                mergedNode = node;
+                // Update cache if node is online
+                if (node.status === 'online') {
+                    nodeStateCache.set(nodeKey, { node, timestamp: now });
+                }
+            } else if (existingNode.status === 'online' && node.status !== 'online') {
+                // Handle transition states - if we had an online node but now getting offline status,
+                // it might be a temporary glitch during endpoint switching
+                // Keep the online status but mark it as potentially stale
+                mergedNode = {
+                    ...existingNode,
+                    _lastSeen: now,
+                    _possibleTransition: true
+                };
+            }
+            
+            nodeMap.set(nodeKey, mergedNode);
+        }
+    });
+    
+    // If we have no nodes or all nodes are offline, check cache for recent states
+    if (allNodes.length === 0 || Array.from(nodeMap.values()).every(n => n.status !== 'online')) {
+        nodeStateCache.forEach((cached, nodeKey) => {
+            if (now - cached.timestamp < NODE_CACHE_TTL && !nodeMap.has(nodeKey)) {
+                // Add cached node with offline status but preserve other data
+                nodeMap.set(nodeKey, {
+                    ...cached.node,
+                    status: 'offline',
+                    _fromCache: true,
+                    _cachedAt: cached.timestamp
+                });
+            }
+        });
+    }
+    
+    // Clean up old cache entries
+    nodeStateCache.forEach((cached, nodeKey) => {
+        if (now - cached.timestamp > NODE_CACHE_TTL) {
+            nodeStateCache.delete(nodeKey);
+        }
+    });
+    
+    return Array.from(nodeMap.values());
+}
+
+/**
+ * Deduplicates VMs based on node and VMID
+ * @param {Array} allVms - Array of all VMs from all endpoints
+ * @returns {Array} - Deduplicated array of VMs
+ */
+function deduplicateVmsByNode(allVms) {
+    const vmMap = new Map();
+    
+    allVms.forEach(vm => {
+        const vmKey = `${vm.node}-${vm.vmid}`;
+        const existingVm = vmMap.get(vmKey);
+        
+        if (!existingVm || vm.status === 'running') {
+            // Prefer running VMs or first occurrence
+            vmMap.set(vmKey, vm);
+        }
+    });
+    
+    return Array.from(vmMap.values());
+}
+
+/**
+ * Deduplicates containers based on node and VMID
+ * @param {Array} allContainers - Array of all containers from all endpoints
+ * @returns {Array} - Deduplicated array of containers
+ */
+function deduplicateContainersByNode(allContainers) {
+    const containerMap = new Map();
+    
+    allContainers.forEach(container => {
+        const containerKey = `${container.node}-${container.vmid}`;
+        const existingContainer = containerMap.get(containerKey);
+        
+        if (!existingContainer || container.status === 'running') {
+            // Prefer running containers or first occurrence
+            containerMap.set(containerKey, container);
+        }
+    });
+    
+    return Array.from(containerMap.values());
+}
+
 /**
  * Fetches structural PVE data: node list, statuses, VM/CT lists.
  * @param {Object} currentApiClients - Initialized PVE API clients.
@@ -377,18 +503,30 @@ async function fetchPveDiscoveryData(currentApiClients) {
         return fetchDataForPveEndpoint(endpointId, apiClientInstance, config);
     });
 
-    const pveResults = await Promise.all(pvePromises); // Wait for all endpoint fetches
+    // Use Promise.allSettled to prevent one offline endpoint from blocking all others
+    const pveResults = await Promise.allSettled(pvePromises);
 
     // Aggregate results from all endpoints
-    pveResults.forEach(result => {
-        if (result) { // Check if result is not null/undefined (error handled in helper)
-            allNodes.push(...(result.nodes || []));
-            allVms.push(...(result.vms || []));
-            allContainers.push(...(result.containers || []));
+    pveResults.forEach((result, index) => {
+        if (result.status === 'fulfilled' && result.value) {
+            allNodes.push(...(result.value.nodes || []));
+            allVms.push(...(result.value.vms || []));
+            allContainers.push(...(result.value.containers || []));
+        } else if (result.status === 'rejected') {
+            console.error(`[DataFetcher] Failed to fetch data from PVE endpoint ${pveEndpointIds[index]}: ${result.reason?.message || result.reason}`);
         }
     });
 
-    return { nodes: allNodes, vms: allVms, containers: allContainers };
+    // Deduplicate nodes from multiple endpoints pointing to the same cluster
+    const deduplicatedNodes = deduplicateClusterNodes(allNodes);
+    const deduplicatedVms = deduplicateVmsByNode(allVms);
+    const deduplicatedContainers = deduplicateContainersByNode(allContainers);
+
+    return { 
+        nodes: deduplicatedNodes, 
+        vms: deduplicatedVms, 
+        containers: deduplicatedContainers 
+    };
 }
 
 
@@ -1044,6 +1182,10 @@ async function fetchGuestSnapshots(apiClient, endpointId, nodeName, vmid, type) 
  * @returns {Promise<Array>} - Array of processed data objects for each PBS instance.
  */
 async function fetchPbsData(currentPbsApiClients) {
+    if (!currentPbsApiClients) {
+        return [];
+    }
+    
     const pbsClientIds = Object.keys(currentPbsApiClients);
     const pbsDataResults = [];
 
@@ -1243,7 +1385,7 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
   const pveResult = await fetchPveDiscoveryData(currentApiClients);
   
   // Now fetch PBS and PVE backup data in parallel
-  const [pbsResult, pveBackups] = await Promise.all([
+  const backupResults = await Promise.allSettled([
       _fetchPbsDataInternal(currentPbsApiClients),
       fetchPveBackupData(
           currentApiClients, 
@@ -1251,12 +1393,20 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
           pveResult.vms || [], 
           pveResult.containers || []
       )
-  ])
-  .catch(error => {
-      console.error("[DataFetcher] Error during parallel backup data fetch:", error);
-      // Return default structure on failure
-      return [[], { backupTasks: [], storageBackups: [], guestSnapshots: [] }]; 
-  });
+  ]);
+  
+  // Extract results, using defaults for any failures
+  const pbsResult = backupResults[0].status === 'fulfilled' ? backupResults[0].value : [];
+  const pveBackups = backupResults[1].status === 'fulfilled' 
+      ? backupResults[1].value 
+      : { backupTasks: [], storageBackups: [], guestSnapshots: [] };
+  
+  if (backupResults[0].status === 'rejected') {
+      console.error("[DataFetcher] Error fetching PBS data:", backupResults[0].reason);
+  }
+  if (backupResults[1].status === 'rejected') {
+      console.error("[DataFetcher] Error fetching PVE backup data:", backupResults[1].reason);
+  }
 
   const aggregatedResult = {
       nodes: pveResult.nodes || [],
