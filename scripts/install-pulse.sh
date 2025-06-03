@@ -7,7 +7,7 @@ NODE_MAJOR_VERSION=20
 PULSE_DIR="/opt/pulse"
 OLD_PULSE_DIR="/opt/pulse-proxmox"
 PULSE_USER="pulse"
-SERVICE_NAME="pulse-monitor.service"
+SERVICE_NAME="pulse.service"
 REPO_BASE_URL="https://github.com/rcourtman/Pulse"
 SCRIPT_NAME="install-pulse.sh"
 SCRIPT_RAW_URL="https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
@@ -315,7 +315,10 @@ check_installation() {
     
     [ -d "$PULSE_DIR" ] && pulse_exists=true
     [ -d "$OLD_PULSE_DIR" ] && old_pulse_exists=true
-    systemctl list-unit-files | grep -q "^$SERVICE_NAME" && service_exists=true
+    # Check for any pulse-related service
+    (systemctl list-unit-files | grep -q "^$SERVICE_NAME" || \
+     systemctl list-unit-files | grep -q "^pulse-monitor.service" || \
+     systemctl list-unit-files | grep -q "^pulse-proxmox.service") && service_exists=true
     
     if [ "$old_pulse_exists" = true ]; then
         print_info "Old installation detected at $OLD_PULSE_DIR"
@@ -627,11 +630,15 @@ perform_remove() {
 perform_migration() {
     print_info "Migrating old installation..."
     
-    # Stop old service
+    # Stop old service (could be either pulse-proxmox.service or pulse-monitor.service)
     if systemctl is-active --quiet "pulse-proxmox.service"; then
         systemctl stop "pulse-proxmox.service"
     fi
+    if systemctl is-active --quiet "pulse-monitor.service"; then
+        systemctl stop "pulse-monitor.service"
+    fi
     systemctl disable "pulse-proxmox.service" &>/dev/null || true
+    systemctl disable "pulse-monitor.service" &>/dev/null || true
     
     # Backup old data
     local backup_dir="/tmp/pulse-migration-$$"
@@ -649,6 +656,7 @@ perform_migration() {
     # Remove old installation
     rm -rf "$OLD_PULSE_DIR"
     rm -f "/etc/systemd/system/pulse-proxmox.service"
+    rm -f "/etc/systemd/system/pulse-monitor.service"
     
     # Perform fresh install
     INSTALL_MODE="install"
