@@ -37,18 +37,17 @@ async function testWebhookIntegration() {
         console.log(`   - Total rules: ${alertData.stats.totalRules}`);
         console.log(`   - Webhook channel enabled: ${alertData.stats.channels.find(c => c.id === 'default')?.enabled}`);
 
-        // 4. Check available guests for testing
-        console.log('\n4. Fetching guest list for testing...');
-        const guestsResponse = await axios.get(`${PULSE_API_BASE}/guests`);
-        const guests = guestsResponse.data;
+        // 4. Test webhook using Pulse's built-in test endpoint
+        console.log('\n4. Testing webhook using Pulse API...');
+        const testWebhookApiResponse = await axios.post(`${PULSE_API_BASE}/test-webhook`, {
+            url: WEBHOOK_SERVER,
+            enabled: true
+        });
         
-        if (guests && guests.length > 0) {
-            console.log(`📋 Found ${guests.length} guests available for testing:`);
-            guests.slice(0, 3).forEach(guest => {
-                console.log(`   - ${guest.name} (${guest.type} ${guest.vmid}) on ${guest.node}`);
-            });
+        if (testWebhookApiResponse.data.success) {
+            console.log('✅ Webhook test via Pulse API succeeded');
         } else {
-            console.log('⚠️  No guests found - this might affect alert testing');
+            console.log('❌ Webhook test via Pulse API failed:', testWebhookApiResponse.data.error);
         }
 
         // 5. Test webhook payload format
