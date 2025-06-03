@@ -14,6 +14,10 @@ SUGGESTED_RELEASE_VERSION=$(echo "$PACKAGE_VERSION" | sed -E 's/-(dev|alpha|beta
 
 # --- User Input for Version ---
 echo "Current version in package.json: $PACKAGE_VERSION"
+echo "Suggested stable version: $SUGGESTED_RELEASE_VERSION"
+echo ""
+echo "Pre-release example: ${SUGGESTED_RELEASE_VERSION}-rc.1"
+echo ""
 read -p "Enter release version (default: $SUGGESTED_RELEASE_VERSION): " USER_VERSION
 RELEASE_VERSION=${USER_VERSION:-$SUGGESTED_RELEASE_VERSION}
 
