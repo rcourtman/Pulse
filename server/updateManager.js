@@ -158,6 +158,25 @@ class UpdateManager {
     }
 
     /**
+     * Recursively copy directory
+     */
+    async copyDirectory(src, dest) {
+        await fs.mkdir(dest, { recursive: true });
+        const entries = await fs.readdir(src, { withFileTypes: true });
+        
+        for (const entry of entries) {
+            const srcPath = path.join(src, entry.name);
+            const destPath = path.join(dest, entry.name);
+            
+            if (entry.isDirectory()) {
+                await this.copyDirectory(srcPath, destPath);
+            } else {
+                await fs.copyFile(srcPath, destPath);
+            }
+        }
+    }
+
+    /**
      * Apply update
      */
     async applyUpdate(updateFile, progressCallback) {
@@ -223,28 +242,52 @@ class UpdateManager {
             const tempExtractDir = path.join(__dirname, '..', 'temp', 'extract');
             await fs.mkdir(tempExtractDir, { recursive: true });
 
+            console.log('[UpdateManager] Extracting update tarball...');
             await execAsync(`tar -xzf ${updateFile} -C ${tempExtractDir}`);
+
+            // Find the extracted directory (should be pulse-vX.Y.Z)
+            const extractedFiles = await fs.readdir(tempExtractDir);
+            const extractedDirName = extractedFiles.find(file => file.startsWith('pulse-v'));
+            
+            if (!extractedDirName) {
+                throw new Error('Invalid update package: pulse directory not found');
+            }
+            
+            const extractedPulsePath = path.join(tempExtractDir, extractedDirName);
+            
+            // Verify essential files exist
+            const requiredFiles = ['package.json', 'server/index.js', 'node_modules'];
+            for (const file of requiredFiles) {
+                const filePath = path.join(extractedPulsePath, file);
+                try {
+                    await fs.access(filePath);
+                } catch (error) {
+                    throw new Error(`Invalid update package: missing ${file}`);
+                }
+            }
+            
+            console.log('[UpdateManager] Update package validated successfully');
 
             if (progressCallback) {
                 progressCallback({ phase: 'extract', progress: 100 });
             }
 
-            const pulseDir = path.join(__dirname, '..');
+            const currentPulseDir = path.join(__dirname, '..');
 
             if (progressCallback) {
                 progressCallback({ phase: 'apply', progress: 50 });
             }
 
             // Apply update files
-            console.log('[UpdateManager] Extracting update files...');
+            console.log('[UpdateManager] Applying update files...');
             
-            // List files to update (exclude config and data)
-            const updateFiles = await fs.readdir(tempExtractDir);
+            // List files to update from the extracted pulse directory (exclude config and data)
+            const updateFiles = await fs.readdir(extractedPulsePath);
             for (const file of updateFiles) {
                 if (file === '.env' || file === 'data') continue;
                 
-                const sourcePath = path.join(tempExtractDir, file);
-                const destPath = path.join(pulseDir, file);
+                const sourcePath = path.join(extractedPulsePath, file);
+                const destPath = path.join(currentPulseDir, file);
                 
                 // Remove existing file/directory
                 try {
@@ -253,13 +296,17 @@ class UpdateManager {
                     // Ignore errors
                 }
                 
-                // Copy new file/directory
-                await execAsync(`cp -rf "${sourcePath}" "${destPath}"`);
+                // Copy new file/directory using Node.js fs
+                const stat = await fs.stat(sourcePath);
+                if (stat.isDirectory()) {
+                    await this.copyDirectory(sourcePath, destPath);
+                } else {
+                    await fs.copyFile(sourcePath, destPath);
+                }
             }
 
-            // Install dependencies
-            console.log('[UpdateManager] Installing dependencies...');
-            await execAsync(`cd "${pulseDir}" && rm -rf node_modules && npm install --omit=dev`);
+            // No need to install dependencies - the release tarball already includes node_modules
+            console.log('[UpdateManager] Release tarball already includes dependencies, skipping npm install...');
 
             if (progressCallback) {
                 progressCallback({ phase: 'apply', progress: 100 });
