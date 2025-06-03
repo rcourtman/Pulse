@@ -2,6 +2,14 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.calendarHeatmap = (() => {
     
+    // Helper function to format date as YYYY-MM-DD in local timezone
+    function formatLocalDateKey(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    
     // Global selection management
     let currentSelectedCell = null;
     let currentSelectedDate = null;
@@ -162,8 +170,9 @@ PulseApp.ui.calendarHeatmap = (() => {
             hasAutoSelectedToday = true;
             setTimeout(() => {
                 const today = new Date();
-                const utcToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-                const todayKey = utcToday.toISOString().split('T')[0];
+                const todayKey = formatLocalDateKey(today);
+                
+                
                 const todayCell = container.querySelector(`[data-date="${todayKey}"]`);
                 
                 if (todayCell && (todayCell.classList.contains('bg-slate-600') || 
@@ -270,15 +279,16 @@ PulseApp.ui.calendarHeatmap = (() => {
         const cell = document.createElement('div');
         cell.className = 'relative w-8 h-8 rounded cursor-pointer transition-transform hover:scale-105';
         
-        // Create UTC date key to avoid timezone issues
-        const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-        const dateKey = utcDate.toISOString().split('T')[0];
-        const isCurrentMonth = date.getUTCMonth() === currentDisplayMonth.getMonth();
+        // Create local date key
+        const dateKey = formatLocalDateKey(date);
+        const isCurrentMonth = date.getMonth() === currentDisplayMonth.getMonth();
         
-        // Check if today using UTC comparison
+        // Check if today using local date comparison
         const today = new Date();
-        const utcToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-        const isToday = utcDate.getTime() === utcToday.getTime();
+        const todayKey = formatLocalDateKey(today);
+        const isToday = dateKey === todayKey;
+        
+        
         
         // Get backup data for this date
         const allData = processBackupDataForSingleMonth(backupData, currentDisplayMonth, guestId, filteredGuestIds);
@@ -338,7 +348,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 ? (shouldShowDay ? 'text-white font-bold' : 'text-gray-600 dark:text-gray-400')
                 : 'text-gray-400 dark:text-gray-600'
         }`;
-        dayNumber.textContent = date.getUTCDate();
+        dayNumber.textContent = date.getDate();
         cell.appendChild(dayNumber);
         
         // Store data for click handling
@@ -359,8 +369,7 @@ PulseApp.ui.calendarHeatmap = (() => {
             const isCellToday = (cellElement) => {
                 if (!cellElement || !cellElement.dataset.date) return false;
                 const today = new Date();
-                const utcToday = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-                const todayKey = utcToday.toISOString().split('T')[0];
+                const todayKey = formatLocalDateKey(today);
                 return cellElement.dataset.date === todayKey;
             };
             
@@ -468,15 +477,16 @@ PulseApp.ui.calendarHeatmap = (() => {
         const calendarGrid = document.createElement('div');
         calendarGrid.className = 'calendar-grid grid grid-cols-7 gap-1';
         
-        // Generate the month grid using UTC dates
-        const firstDay = new Date(Date.UTC(currentDisplayMonth.getFullYear(), currentDisplayMonth.getMonth(), 1));
+        // Generate the month grid using local dates
+        const firstDay = new Date(currentDisplayMonth.getFullYear(), currentDisplayMonth.getMonth(), 1);
         const startDate = new Date(firstDay);
-        startDate.setUTCDate(startDate.getUTCDate() - firstDay.getUTCDay()); // Go to start of week
+        startDate.setDate(startDate.getDate() - firstDay.getDay()); // Go to start of week
+        
         
         // Create 42 cells (6 weeks)
         for (let i = 0; i < 42; i++) {
             const cellDate = new Date(startDate);
-            cellDate.setUTCDate(startDate.getUTCDate() + i);
+            cellDate.setDate(startDate.getDate() + i);
             
             const cell = createMonthDayCell(cellDate, backupData, guestId, filteredGuestIds);
             calendarGrid.appendChild(cell);
@@ -489,9 +499,9 @@ PulseApp.ui.calendarHeatmap = (() => {
     function processBackupDataForSingleMonth(backupData, displayMonth, guestId, filteredGuestIds = null) {
         
         const monthData = {};
-        // Use UTC dates for month boundaries to avoid timezone issues
-        const startOfMonth = new Date(Date.UTC(displayMonth.getFullYear(), displayMonth.getMonth(), 1));
-        const endOfMonth = new Date(Date.UTC(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 0));
+        // Use local dates for month boundaries
+        const startOfMonth = new Date(displayMonth.getFullYear(), displayMonth.getMonth(), 1);
+        const endOfMonth = new Date(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 0);
         
         // Get guest data for hostname lookup
         const vmsData = PulseApp.state.get('vmsData') || [];
@@ -532,17 +542,14 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 const date = new Date(timestamp * 1000);
                 
-                // Create UTC date to avoid timezone issues
-                const utcDate = new Date(Date.UTC(
-                    date.getUTCFullYear(),
-                    date.getUTCMonth(),
-                    date.getUTCDate()
-                ));
+                // Create local date for the timestamp
+                const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
                 
-                // Only process items within the current month (UTC comparison)
-                if (utcDate < startOfMonth || utcDate > endOfMonth) return;
+                // Only process items within the current month
+                if (localDate < startOfMonth || localDate > endOfMonth) return;
                 
-                const dateKey = utcDate.toISOString().split('T')[0];
+                const dateKey = formatLocalDateKey(date);
+                
                 const vmid = item.vmid || item['backup-id'] || item.backupVMID;
                 
                 
@@ -562,7 +569,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 if (!backupsByGuestAndDate[uniqueGuestKey][dateKey]) {
                     backupsByGuestAndDate[uniqueGuestKey][dateKey] = {
-                        date: utcDate,
+                        date: localDate,
                         types: new Set(),
                         backups: [],
                         vmid: vmid, // Store original vmid for lookups
@@ -624,17 +631,13 @@ PulseApp.ui.calendarHeatmap = (() => {
                 const date = new Date(task.starttime * 1000);
                 if (isNaN(date.getTime())) return;
                 
-                // Create UTC date to avoid timezone issues
-                const utcDate = new Date(Date.UTC(
-                    date.getUTCFullYear(),
-                    date.getUTCMonth(),
-                    date.getUTCDate()
-                ));
+                // Create local date for the task
+                const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
                 
-                // Only process tasks within the current month (UTC comparison)
-                if (utcDate < startOfMonth || utcDate > endOfMonth) return;
+                // Only process tasks within the current month
+                if (localDate < startOfMonth || localDate > endOfMonth) return;
                 
-                const dateKey = utcDate.toISOString().split('T')[0];
+                const dateKey = formatLocalDateKey(date);
                 
                 if (task.status !== 'OK' && monthData[dateKey]) {
                     monthData[dateKey].hasFailures = true;
@@ -751,7 +754,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 if (!timestamp) return;
                 
                 const date = new Date(timestamp * 1000);
-                const dateKey = date.toISOString().split('T')[0];
+                const dateKey = formatLocalDateKey(date);
                 const vmid = item.vmid || item['backup-id'] || item.backupVMID;
                 
                 if (!vmid) return;
@@ -1008,7 +1011,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 if (!timestamp) return;
 
                 const date = new Date(timestamp * 1000);
-                const dateKey = date.toISOString().split('T')[0];
+                const dateKey = formatLocalDateKey(date);
                 
                 // Skip future dates
                 const now = new Date();
@@ -1033,7 +1036,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 if (!backupsByGuestAndDate[uniqueGuestKey][dateKey]) {
                     backupsByGuestAndDate[uniqueGuestKey][dateKey] = {
-                        date: utcDate,
+                        date: localDate,
                         types: new Set(),
                         backups: [],
                         vmid: vmid, // Store original vmid for lookups
@@ -1095,7 +1098,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 const date = new Date(task.starttime * 1000);
                 if (isNaN(date.getTime())) return;
 
-                const dateKey = date.toISOString().split('T')[0];
+                const dateKey = formatLocalDateKey(date);
                 
                 if (task.status !== 'OK' && allData[dateKey]) {
                     allData[dateKey].hasFailures = true;
@@ -1192,7 +1195,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 const date = new Date(timestamp * 1000);
                 if (date < startOfYear || date > endOfYear) return;
                 
-                const dateKey = date.toISOString().split('T')[0];
+                const dateKey = formatLocalDateKey(date);
                 
                 // Skip future dates
                 const now = new Date();
@@ -1221,7 +1224,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 if (!backupsByGuestAndDate[uniqueGuestKey][dateKey]) {
                     backupsByGuestAndDate[uniqueGuestKey][dateKey] = {
-                        date: utcDate,
+                        date: localDate,
                         types: new Set(),
                         backups: [],
                         vmid: vmid, // Store original vmid for lookups
@@ -1346,7 +1349,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 if (date < startOfYear || date > endOfYear) return;
 
-                const dateKey = date.toISOString().split('T')[0];
+                const dateKey = formatLocalDateKey(date);
                 
                 if (task.status !== 'OK' && yearData[dateKey]) {
                     yearData[dateKey].hasFailures = true;
@@ -1404,7 +1407,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         // Check if any day in this month has backup data
         for (let day = 1; day <= month.daysInMonth; day++) {
             const date = new Date(month.year, month.month, day);
-            const dateKey = date.toISOString().split('T')[0];
+            const dateKey = formatLocalDateKey(date);
             if (yearData[dateKey] && yearData[dateKey].hasBackups) {
                 return true;
             }
@@ -1467,9 +1470,9 @@ PulseApp.ui.calendarHeatmap = (() => {
 
         // Add day cells - show all days but only color those with backup data  
         for (let day = 1; day <= month.daysInMonth; day++) {
-            // Use UTC to avoid timezone conversion issues
-            const date = new Date(Date.UTC(month.year, month.month, day));
-            const dateKey = date.toISOString().split('T')[0];
+            // Use local date for consistency
+            const date = new Date(month.year, month.month, day);
+            const dateKey = formatLocalDateKey(date);
             const dayData = yearData[dateKey];
             
             const dayCell = createDayCell(date, dayData, totalMonthCount);
@@ -1548,7 +1551,7 @@ PulseApp.ui.calendarHeatmap = (() => {
             cell.appendChild(dayNumber);
         }
         
-        const dateKey = date.toISOString().split('T')[0];
+        const dateKey = formatLocalDateKey(date);
         cell.dataset.date = dateKey;
         
         // Store guest IDs and backup types for this day if available
