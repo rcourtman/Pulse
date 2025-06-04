@@ -212,22 +212,27 @@ create_backup() {
     print_info "Creating backup at $backup_dir..."
     mkdir -p "$backup_dir"
     
-    # Backup user data directory
+    # Backup user data directory (includes custom thresholds, acknowledgements, metrics history)
     if [ -d "$PULSE_DIR/data" ]; then
         cp -r "$PULSE_DIR/data" "$backup_dir/"
-        print_success "Backed up user data"
+        local data_files=$(find "$PULSE_DIR/data" -type f | wc -l)
+        print_success "Backed up user data ($data_files files)"
     fi
     
-    # Backup configuration files
+    # Backup configuration files (.env contains webhook settings, alert configs, etc.)
     if [ -f "$PULSE_DIR/.env" ]; then
         cp "$PULSE_DIR/.env" "$backup_dir/"
         print_success "Backed up .env configuration"
+    else
+        print_info "No .env file found (fresh installation)"
     fi
     
-    # Backup config directory if it exists
+    # Backup config directory (frontend settings, update channel preference)
     if [ -d "$PULSE_DIR/config" ]; then
         cp -r "$PULSE_DIR/config" "$backup_dir/"
         print_success "Backed up config directory"
+    else
+        print_info "No config directory found"
     fi
     
     # Create backup info file
@@ -235,8 +240,18 @@ create_backup() {
 Pulse Backup Created: $(date)
 Original Installation: $PULSE_DIR
 Pulse Version: $(get_current_version 2>/dev/null || echo "Unknown")
+
 Backup Contents:
 $(ls -la "$backup_dir")
+
+Data Directory Contents:
+$([ -d "$backup_dir/data" ] && find "$backup_dir/data" -type f -exec basename {} \; | sort || echo "No data directory")
+
+Configuration Summary:
+- Custom Thresholds: $([ -f "$backup_dir/data/custom-thresholds.json" ] && echo "Yes" || echo "No")
+- Acknowledgements: $([ -f "$backup_dir/data/acknowledgements.json" ] && echo "Yes" || echo "No")
+- Environment Config: $([ -f "$backup_dir/.env" ] && echo "Yes" || echo "No")
+- Frontend Settings: $([ -d "$backup_dir/config" ] && echo "Yes" || echo "No")
 EOF
     
     echo "$backup_dir"
