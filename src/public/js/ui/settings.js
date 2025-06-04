@@ -106,7 +106,6 @@ PulseApp.ui.settings = (() => {
     }
     
     async function openModalWithTab(tabName) {
-        console.log('[Settings] Opening modal with tab:', tabName);
         
         const modal = document.getElementById('settings-modal');
         if (!modal) return;
@@ -123,8 +122,6 @@ PulseApp.ui.settings = (() => {
     }
 
     function closeModal() {
-        console.log('[Settings] Closing modal...');
-        
         // Preserve current form data before closing
         preserveCurrentFormData();
         
@@ -145,7 +142,6 @@ PulseApp.ui.settings = (() => {
             
             if (response.ok) {
                 currentConfig = data;
-                console.log('[Settings] Configuration loaded:', currentConfig);
                 renderTabContent();
             } else {
                 console.error('[Settings] Failed to load configuration:', data.error);
@@ -220,6 +216,29 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderProxmoxTab(proxmox, config) {
+        // Handle both structured config (proxmox object) and flat config (direct env vars)
+        let host = proxmox?.host || config.PROXMOX_HOST || '';
+        let port = proxmox?.port || config.PROXMOX_PORT || '';
+        const tokenId = proxmox?.tokenId || config.PROXMOX_TOKEN_ID || '';
+        const nodeName = proxmox?.nodeName || config.PROXMOX_NODE_NAME || '';
+        const enabled = proxmox?.enabled !== undefined ? proxmox.enabled : (config.PROXMOX_ENABLED !== 'false');
+        
+        // Clean the host value if it contains protocol or port, and extract port if needed
+        if (host) {
+            const originalHost = host;
+            // Remove protocol (http:// or https://)
+            host = host.replace(/^https?:\/\//, '');
+            // Extract port if it's included in the host (e.g., "proxmox.lan:8006")
+            const portMatch = host.match(/^([^:]+)(:(\d+))?$/);
+            if (portMatch) {
+                host = portMatch[1];
+                // Use extracted port if no explicit port was set
+                if (portMatch[3] && !port) {
+                    port = portMatch[3];
+                }
+            }
+        }
+        
         return `
             <!-- Primary Proxmox VE Configuration -->
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
@@ -239,23 +258,25 @@ PulseApp.ui.settings = (() => {
                             Host Address <span class="text-red-500">*</span>
                         </label>
                         <input type="text" name="PROXMOX_HOST" required
-                               value="${proxmox.host || ''}"
-                               placeholder="https://proxmox.example.com:8006"
+                               value="${host}"
+                               placeholder="proxmox.example.com"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">IP address or hostname only (without port number)</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
                         <input type="number" name="PROXMOX_PORT"
-                               value="${proxmox.port || ''}"
+                               value="${port}"
                                placeholder="8006"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox VE web interface port</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Node Name
                         </label>
                         <input type="text" name="PROXMOX_NODE_NAME"
-                               value="${proxmox.nodeName || ''}"
+                               value="${nodeName}"
                                placeholder="Display name (optional)"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
@@ -264,7 +285,7 @@ PulseApp.ui.settings = (() => {
                             API Token ID <span class="text-red-500">*</span>
                         </label>
                         <input type="text" name="PROXMOX_TOKEN_ID" required
-                               value="${proxmox.tokenId || ''}"
+                               value="${tokenId}"
                                placeholder="root@pam!token-name"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
@@ -278,7 +299,7 @@ PulseApp.ui.settings = (() => {
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Enabled</label>
-                        <input type="checkbox" name="PROXMOX_ENABLED" ${proxmox.enabled !== false ? 'checked' : ''}
+                        <input type="checkbox" name="PROXMOX_ENABLED" ${enabled ? 'checked' : ''}
                                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                     </div>
                 </div>
@@ -318,6 +339,28 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderPBSTab(pbs, config) {
+        // Handle both structured config (pbs object) and flat config (direct env vars)
+        let host = pbs?.host || config.PBS_HOST || '';
+        let port = pbs?.port || config.PBS_PORT || '';
+        const tokenId = pbs?.tokenId || config.PBS_TOKEN_ID || '';
+        const nodeName = pbs?.nodeName || config.PBS_NODE_NAME || '';
+        
+        // Clean the host value if it contains protocol or port, and extract port if needed
+        if (host) {
+            const originalHost = host;
+            // Remove protocol (http:// or https://)
+            host = host.replace(/^https?:\/\//, '');
+            // Extract port if it's included in the host (e.g., "192.168.0.16:8007")
+            const portMatch = host.match(/^([^:]+)(:(\d+))?$/);
+            if (portMatch) {
+                host = portMatch[1];
+                // Use extracted port if no explicit port was set
+                if (portMatch[3] && !port) {
+                    port = portMatch[3];
+                }
+            }
+        }
+        
         return `
             <!-- Primary PBS Configuration -->
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
@@ -335,30 +378,32 @@ PulseApp.ui.settings = (() => {
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
                         <input type="text" name="PBS_HOST"
-                               value="${pbs.host || ''}"
-                               placeholder="192.168.1.100 or pbs.example.com"
+                               value="${host}"
+                               placeholder="pbs.example.com"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">IP address or hostname only (without port number)</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
                         <input type="number" name="PBS_PORT"
-                               value="${pbs.port || ''}"
+                               value="${port}"
                                placeholder="8007"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox Backup Server web interface port</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Node Name
                         </label>
                         <input type="text" name="PBS_NODE_NAME"
-                               value="${pbs.nodeName || ''}"
+                               value="${nodeName}"
                                placeholder="PBS internal hostname"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
                         <input type="text" name="PBS_TOKEN_ID"
-                               value="${pbs.tokenId || ''}"
+                               value="${tokenId}"
                                placeholder="root@pam!token-name"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
@@ -1434,7 +1479,6 @@ PulseApp.ui.settings = (() => {
             });
         });
 
-        console.log('[Settings] Collected data from all tabs:', allConfig);
         return allConfig;
     }
 
@@ -1468,8 +1512,7 @@ PulseApp.ui.settings = (() => {
         // Only cache data if it contains meaningful configuration
         if (hasSignificantConfiguration(currentTabData, activeTab)) {
             formDataCache[activeTab] = currentTabData;
-            console.log(`[Settings] Preserved data for tab '${activeTab}':`, currentTabData);
-        } else {
+            } else {
             // Clear cache for this tab if no significant data
             delete formDataCache[activeTab];
             console.log(`[Settings] No significant data to preserve for tab '${activeTab}', cleared cache`);
@@ -1515,7 +1558,6 @@ PulseApp.ui.settings = (() => {
         const savedData = formDataCache[activeTab];
         if (!savedData) return;
 
-        console.log(`[Settings] Restoring data for tab '${activeTab}':`, savedData);
 
         // Restore form field values
         Object.entries(savedData).forEach(([name, value]) => {

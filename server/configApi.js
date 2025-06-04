@@ -9,11 +9,13 @@ class ConfigApi {
     constructor() {
         // Use persistent config directory if it exists (for Docker), otherwise use project root
         const configDir = path.join(__dirname, '../config');
+        const configEnvPath = path.join(configDir, '.env');
         const projectRootEnv = path.join(__dirname, '../.env');
         
         // Check if we're in a Docker environment with persistent config volume
-        if (fsSync.existsSync(configDir)) {
-            this.envPath = path.join(configDir, '.env');
+        // Use config/.env if it exists, otherwise fall back to project root .env
+        if (fsSync.existsSync(configEnvPath)) {
+            this.envPath = configEnvPath;
         } else {
             this.envPath = projectRootEnv;
         }
