@@ -633,6 +633,7 @@ perform_update() {
     fi
     
     set_permissions
+    setup_systemd_service
     
     # Restart service
     systemctl start "$SERVICE_NAME"
