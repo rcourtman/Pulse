@@ -1157,13 +1157,15 @@ PulseApp.ui.settings = (() => {
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
-                        <input type="text" name="PROXMOX_HOST_${index}" placeholder="https://pve${index}.example.com:8006"
+                        <input type="text" name="PROXMOX_HOST_${index}" placeholder="pve${index}.example.com"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">IP address or hostname only (without port number)</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
                         <input type="number" name="PROXMOX_PORT_${index}" placeholder="8006"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox VE web interface port</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Node Name</label>
@@ -1236,13 +1238,15 @@ PulseApp.ui.settings = (() => {
                 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Host Address</label>
-                        <input type="text" name="PBS_HOST_${index}" placeholder="192.168.1.10${index} or pbs${index}.example.com"
+                        <input type="text" name="PBS_HOST_${index}" placeholder="pbs${index}.example.com"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">IP address or hostname only (without port number)</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Port</label>
                         <input type="number" name="PBS_PORT_${index}" placeholder="8007"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox Backup Server web interface port</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Node Name</label>
@@ -1311,7 +1315,28 @@ PulseApp.ui.settings = (() => {
                         if (input.type === 'checkbox') {
                             input.checked = config[configKey] !== 'false';
                         } else {
-                            input.value = config[configKey];
+                            let value = config[configKey];
+                            
+                            // Clean host values that contain protocol or port
+                            if (configKey.includes('PROXMOX_HOST_') && value) {
+                                // Remove protocol (http:// or https://)
+                                value = value.replace(/^https?:\/\//, '');
+                                // Extract port if it's included in the host
+                                const portMatch = value.match(/^([^:]+)(:(\d+))?$/);
+                                if (portMatch) {
+                                    value = portMatch[1];
+                                    // If we extracted a port and there's no explicit port config, set it
+                                    if (portMatch[3]) {
+                                        const portKey = configKey.replace('HOST_', 'PORT_');
+                                        const portInput = newEndpoint.querySelector(`[name="${portKey}"]`);
+                                        if (portInput && !config[portKey]) {
+                                            portInput.value = portMatch[3];
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            input.value = value;
                         }
                     }
                 });
@@ -1347,7 +1372,28 @@ PulseApp.ui.settings = (() => {
                         if (input.type === 'checkbox') {
                             input.checked = config[configKey] !== 'false';
                         } else {
-                            input.value = config[configKey];
+                            let value = config[configKey];
+                            
+                            // Clean host values that contain protocol or port
+                            if (configKey.includes('PBS_HOST_') && value) {
+                                // Remove protocol (http:// or https://)
+                                value = value.replace(/^https?:\/\//, '');
+                                // Extract port if it's included in the host
+                                const portMatch = value.match(/^([^:]+)(:(\d+))?$/);
+                                if (portMatch) {
+                                    value = portMatch[1];
+                                    // If we extracted a port and there's no explicit port config, set it
+                                    if (portMatch[3]) {
+                                        const portKey = configKey.replace('HOST_', 'PORT_');
+                                        const portInput = newEndpoint.querySelector(`[name="${portKey}"]`);
+                                        if (portInput && !config[portKey]) {
+                                            portInput.value = portMatch[3];
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            input.value = value;
                         }
                     }
                 });
