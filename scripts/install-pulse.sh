@@ -608,6 +608,7 @@ perform_update() {
     local current_version=$(get_current_version)
     if [ "$current_version" = "${TARGET_TAG#v}" ]; then
         print_info "Already running latest version"
+        setup_systemd_service
         systemctl start "$SERVICE_NAME"
         return 0
     fi
