@@ -482,6 +482,185 @@ function deduplicateContainersByNode(allContainers) {
     return Array.from(containerMap.values());
 }
 
+// Cache for cluster membership detection
+const clusterMembershipCache = new Map();
+const CLUSTER_CACHE_TTL = 300000; // 5 minutes
+
+/**
+ * Detects cluster membership for endpoints and returns prioritized endpoint groups
+ * @param {Object} currentApiClients - Initialized PVE API clients
+ * @returns {Promise<Array>} - Array of endpoint groups, each with a primary endpoint
+ */
+async function detectClusterMembership(currentApiClients) {
+    const pveEndpointIds = Object.keys(currentApiClients);
+    const clusterGroups = new Map(); // Map of cluster ID -> endpoints
+    const standaloneEndpoints = [];
+    const now = Date.now();
+
+    console.log(`[DataFetcher] Detecting cluster membership for ${pveEndpointIds.length} endpoints...`);
+
+    // First pass: Detect cluster membership for each endpoint
+    const membershipPromises = pveEndpointIds.map(async (endpointId) => {
+        const cacheKey = endpointId;
+        const cached = clusterMembershipCache.get(cacheKey);
+        
+        // Use cached result if valid
+        if (cached && (now - cached.timestamp) < CLUSTER_CACHE_TTL) {
+            return { endpointId, ...cached.data };
+        }
+
+        const { client: apiClientInstance, config } = currentApiClients[endpointId];
+        
+        try {
+            // Try to get cluster status with short timeout
+            const clusterResponse = await apiClientInstance.get('/cluster/status', { timeout: 5000 });
+            const clusterData = clusterResponse.data?.data || [];
+            
+            const clusterInfo = clusterData.find(item => item.type === 'cluster');
+            if (clusterInfo && clusterInfo.nodes && clusterInfo.nodes > 1) {
+                // This is a multi-node cluster
+                const result = {
+                    endpointId,
+                    type: 'cluster',
+                    clusterId: clusterInfo.name,
+                    nodeCount: clusterInfo.nodes,
+                    quorate: clusterInfo.quorate || false
+                };
+                
+                // Cache the result
+                clusterMembershipCache.set(cacheKey, {
+                    data: result,
+                    timestamp: now
+                });
+                
+                return result;
+            } else {
+                // Standalone node or single-node cluster
+                const result = {
+                    endpointId,
+                    type: 'standalone',
+                    clusterId: null,
+                    nodeCount: 1,
+                    quorate: true
+                };
+                
+                clusterMembershipCache.set(cacheKey, {
+                    data: result,
+                    timestamp: now
+                });
+                
+                return result;
+            }
+        } catch (error) {
+            console.warn(`[DataFetcher] Could not detect cluster membership for ${endpointId}: ${error.message}`);
+            // Default to standalone on error
+            const result = {
+                endpointId,
+                type: 'standalone',
+                clusterId: null,
+                nodeCount: 1,
+                quorate: true,
+                error: true
+            };
+            
+            return result;
+        }
+    });
+
+    const membershipResults = await Promise.allSettled(membershipPromises);
+    
+    // Group endpoints by cluster
+    membershipResults.forEach(result => {
+        if (result.status === 'fulfilled' && result.value) {
+            const membership = result.value;
+            
+            if (membership.type === 'cluster' && membership.clusterId) {
+                // Group cluster endpoints together
+                if (!clusterGroups.has(membership.clusterId)) {
+                    clusterGroups.set(membership.clusterId, []);
+                }
+                clusterGroups.get(membership.clusterId).push(membership);
+            } else {
+                // Standalone endpoints
+                standaloneEndpoints.push(membership);
+            }
+        }
+    });
+
+    // Prioritize endpoints within each cluster group
+    const prioritizedGroups = [];
+    
+    // Add cluster groups (with prioritization)
+    clusterGroups.forEach((endpoints, clusterId) => {
+        if (endpoints.length > 1) {
+            console.log(`[DataFetcher] Found ${endpoints.length} endpoints for cluster '${clusterId}': ${endpoints.map(e => e.endpointId).join(', ')}`);
+            
+            // Sort by health status (no errors first) and then by endpoint ID for consistency
+            endpoints.sort((a, b) => {
+                if (a.error && !b.error) return 1;
+                if (!a.error && b.error) return -1;
+                return a.endpointId.localeCompare(b.endpointId);
+            });
+        }
+        
+        prioritizedGroups.push({
+            type: 'cluster',
+            clusterId,
+            primary: endpoints[0].endpointId,
+            backup: endpoints.slice(1).map(e => e.endpointId),
+            allEndpoints: endpoints.map(e => e.endpointId)
+        });
+    });
+    
+    // Add standalone endpoints
+    standaloneEndpoints.forEach(endpoint => {
+        prioritizedGroups.push({
+            type: 'standalone',
+            clusterId: null,
+            primary: endpoint.endpointId,
+            backup: [],
+            allEndpoints: [endpoint.endpointId]
+        });
+    });
+
+    return prioritizedGroups;
+}
+
+/**
+ * Fetches data from a single endpoint group with failover support
+ * @param {Object} endpointGroup - Group with primary and backup endpoints
+ * @param {Object} currentApiClients - API clients
+ * @returns {Promise<Object>} - Endpoint data or null on failure
+ */
+async function fetchFromEndpointGroup(endpointGroup, currentApiClients) {
+    const endpointsToTry = [endpointGroup.primary, ...endpointGroup.backup];
+    
+    for (const endpointId of endpointsToTry) {
+        if (!currentApiClients[endpointId]) {
+            console.warn(`[DataFetcher] No client found for endpoint: ${endpointId}`);
+            continue;
+        }
+        
+        try {
+            const { client: apiClientInstance, config } = currentApiClients[endpointId];
+            console.log(`[DataFetcher] Trying ${endpointGroup.type === 'cluster' ? `cluster '${endpointGroup.clusterId}'` : 'standalone'} endpoint: ${endpointId}`);
+            
+            const result = await fetchDataForPveEndpoint(endpointId, apiClientInstance, config);
+            
+            if (result && (result.nodes?.length > 0 || result.vms?.length > 0 || result.containers?.length > 0)) {
+                console.log(`[DataFetcher] Successfully fetched data from ${endpointId}${endpointId !== endpointGroup.primary ? ' (backup)' : ''}`);
+                return { ...result, sourceEndpoint: endpointId, endpointGroup };
+            }
+        } catch (error) {
+            console.warn(`[DataFetcher] Failed to fetch from endpoint ${endpointId}: ${error.message}`);
+            continue;
+        }
+    }
+    
+    console.error(`[DataFetcher] All endpoints failed for ${endpointGroup.type === 'cluster' ? `cluster '${endpointGroup.clusterId}'` : 'standalone endpoint'}`);
+    return null;
+}
+
 /**
  * Fetches structural PVE data: node list, statuses, VM/CT lists.
  * @param {Object} currentApiClients - Initialized PVE API clients.
@@ -492,45 +671,42 @@ async function fetchPveDiscoveryData(currentApiClients) {
     let allNodes = [], allVms = [], allContainers = [];
 
     if (pveEndpointIds.length === 0) {
-        // console.log("[DataFetcher] No PVE endpoints configured or initialized.");
         return { nodes: [], vms: [], containers: [] };
     }
 
-    // console.log(`[DataFetcher] Fetching PVE discovery data for ${pveEndpointIds.length} endpoints...`);
+    // Detect cluster membership and prioritize endpoints
+    const endpointGroups = await detectClusterMembership(currentApiClients);
+    console.log(`[DataFetcher] Processing ${endpointGroups.length} endpoint groups (${pveEndpointIds.length} total endpoints)`);
 
-    const pvePromises = pveEndpointIds.map(endpointId => {
-        if (!currentApiClients[endpointId]) {
-            console.error(`[DataFetcher] No client found for endpoint: ${endpointId}`);
-            return Promise.resolve({ nodes: [], vms: [], containers: [], pveBackups: { backupTasks: [], guestSnapshots: [], storageBackups: [] } });
-        }
-        const { client: apiClientInstance, config } = currentApiClients[endpointId];
-        // Pass endpointId, client, and config to the helper
-        return fetchDataForPveEndpoint(endpointId, apiClientInstance, config);
-    });
+    // Fetch from each endpoint group (only one endpoint per cluster)
+    const groupPromises = endpointGroups.map(group => 
+        fetchFromEndpointGroup(group, currentApiClients)
+    );
 
-    // Use Promise.allSettled to prevent one offline endpoint from blocking all others
-    const pveResults = await Promise.allSettled(pvePromises);
+    const groupResults = await Promise.allSettled(groupPromises);
 
-    // Aggregate results from all endpoints
-    pveResults.forEach((result, index) => {
+    // Aggregate results from successful endpoint groups (no duplication since we only use one endpoint per cluster)
+    groupResults.forEach((result, index) => {
         if (result.status === 'fulfilled' && result.value) {
-            allNodes.push(...(result.value.nodes || []));
-            allVms.push(...(result.value.vms || []));
-            allContainers.push(...(result.value.containers || []));
+            const data = result.value;
+            allNodes.push(...(data.nodes || []));
+            allVms.push(...(data.vms || []));
+            allContainers.push(...(data.containers || []));
+            
+            console.log(`[DataFetcher] Added data from ${data.sourceEndpoint}: ${data.nodes?.length || 0} nodes, ${data.vms?.length || 0} VMs, ${data.containers?.length || 0} containers`);
         } else if (result.status === 'rejected') {
-            console.error(`[DataFetcher] Failed to fetch data from PVE endpoint ${pveEndpointIds[index]}: ${result.reason?.message || result.reason}`);
+            const group = endpointGroups[index];
+            console.error(`[DataFetcher] Failed to fetch data from ${group?.type === 'cluster' ? `cluster '${group.clusterId}'` : 'endpoint group'}: ${result.reason?.message || result.reason}`);
         }
     });
 
-    // Deduplicate nodes from multiple endpoints pointing to the same cluster
-    const deduplicatedNodes = deduplicateClusterNodes(allNodes);
-    const deduplicatedVms = deduplicateVmsByNode(allVms);
-    const deduplicatedContainers = deduplicateContainersByNode(allContainers);
+    console.log(`[DataFetcher] Discovery completed. Total: ${allNodes.length} nodes, ${allVms.length} VMs, ${allContainers.length} containers (no deduplication needed)`);
 
+    // No need for complex deduplication since we only fetch from one endpoint per cluster
     return { 
-        nodes: deduplicatedNodes, 
-        vms: deduplicatedVms, 
-        containers: deduplicatedContainers 
+        nodes: allNodes, 
+        vms: allVms, 
+        containers: allContainers 
     };
 }
 
@@ -1666,6 +1842,7 @@ async function fetchPbsVersionInfo({ client, config }) {
 function clearCaches() {
     nodeConnectionCache.clear();
     nodeStateCache.clear();
+    clusterMembershipCache.clear();
 }
 
 module.exports = {
