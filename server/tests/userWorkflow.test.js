@@ -339,6 +339,227 @@ describe('Real User Workflows - Production Scenarios', () => {
             console.log(`Memory increase: ${Math.round(memoryIncrease / 1024 / 1024)}MB`);
         });
     });
+
+    describe('Scenario 6: Admin Debugs "Slow Dashboard Loading"', () => {
+        test('should identify performance bottlenecks in data fetching', async () => {
+            // REAL SCENARIO: Dashboard taking 30+ seconds to load, admin needs to find why
+            
+            const mockApiClients = createRealisticMockClients(realApiData.pveCluster);
+            const performanceMetrics = {
+                discoveryStart: Date.now(),
+                nodeCallTimes: [],
+                totalApiCalls: 0
+            };
+            
+            // Monitor API call performance
+            const originalGet = mockApiClients.primary.client.get;
+            mockApiClients.primary.client.get = jest.fn().mockImplementation(async (path) => {
+                const callStart = Date.now();
+                performanceMetrics.totalApiCalls++;
+                
+                // Simulate realistic response times for different endpoints
+                let delay = 100; // Default delay
+                if (path.includes('/qemu') || path.includes('/lxc')) {
+                    delay = 500; // Guest endpoints are slower
+                }
+                if (path.includes('node3')) {
+                    delay = 2000; // One node is slow (network issue)
+                }
+                
+                await new Promise(resolve => setTimeout(resolve, delay));
+                const result = await originalGet.call(this, path);
+                
+                const callTime = Date.now() - callStart;
+                performanceMetrics.nodeCallTimes.push({ path, time: callTime });
+                
+                return result;
+            });
+            
+            const discoveryData = await fetchDiscoveryData(mockApiClients, {});
+            const totalTime = Date.now() - performanceMetrics.discoveryStart;
+            
+            // ANALYZE: Performance bottlenecks
+            const slowCalls = performanceMetrics.nodeCallTimes.filter(call => call.time > 1000);
+            const avgCallTime = performanceMetrics.nodeCallTimes.reduce((sum, call) => sum + call.time, 0) / performanceMetrics.nodeCallTimes.length;
+            
+            // VALIDATE: Should identify the slow node
+            expect(slowCalls.length).toBeGreaterThan(0);
+            expect(slowCalls.some(call => call.path.includes('node3'))).toBe(true);
+            
+            // DETECT: Performance recommendations
+            if (avgCallTime > 500) {
+                console.log(`PERFORMANCE ISSUE: Average API call time ${Math.round(avgCallTime)}ms`);
+            }
+            if (totalTime > 5000) {
+                console.log(`PERFORMANCE ISSUE: Total discovery time ${totalTime}ms`);
+            }
+            
+            console.log(`Performance analysis: ${performanceMetrics.totalApiCalls} API calls, ${slowCalls.length} slow calls`);
+            slowCalls.forEach(call => {
+                console.log(`  SLOW: ${call.path} took ${call.time}ms`);
+            });
+        });
+    });
+
+    describe('Scenario 7: Admin Investigates "Missing Backup Alerts"', () => {
+        test('should detect when backup monitoring is not working correctly', async () => {
+            // REAL SCENARIO: VM 102 hasn't been backed up in 3 days but no alerts fired
+            
+            const mockPbsClients = createRealisticPbsClients(realApiData.pbsBackups);
+            const pbsData = await fetchPbsData(mockPbsClients);
+            
+            // ANALYZE: Backup monitoring effectiveness
+            const allBackups = pbsData[0].datastores[0].snapshots;
+            const vm102Backups = allBackups.filter(snap => 
+                snap['backup-id'] === '102' && snap['backup-type'] === 'vm'
+            );
+            
+            expect(vm102Backups).toHaveLength(1);
+            
+            const vm102LastBackup = vm102Backups[0];
+            const backupAge = (Date.now() / 1000) - vm102LastBackup['backup-time'];
+            const ageInDays = backupAge / (24 * 3600);
+            
+            // VALIDATE: Should detect old backup
+            expect(ageInDays).toBeGreaterThan(2); // More than 2 days old
+            
+            // SIMULATE: Alert system check
+            const mockAlertThreshold = 24 * 3600; // 24 hours
+            const shouldHaveAlerted = backupAge > mockAlertThreshold;
+            
+            // DETECT: Alert system gap
+            if (shouldHaveAlerted) {
+                console.log(`MONITORING GAP: VM 102 backup is ${Math.round(ageInDays * 10) / 10} days old, should have triggered alert`);
+                console.log(`Backup age: ${Math.round(backupAge / 3600)} hours (threshold: ${mockAlertThreshold / 3600} hours)`);
+            }
+            
+            // VALIDATE: This test helps identify why backup alerts aren't working
+            expect(shouldHaveAlerted).toBe(true);
+            
+            // RECOMMEND: Compare with other VMs to see pattern
+            const recentBackups = allBackups.filter(snap => {
+                const snapAge = (Date.now() / 1000) - snap['backup-time'];
+                return snapAge < (24 * 3600); // Less than 24 hours old
+            });
+            
+            console.log(`Found ${recentBackups.length} recent backups vs ${allBackups.length} total`);
+        });
+    });
+
+    describe('Scenario 8: Data Integrity Validation', () => {
+        test('should validate that all running VMs have corresponding metrics', async () => {
+            // REAL SCENARIO: Admin notices some VMs missing from metrics dashboard
+            
+            const mockApiClients = createRealisticMockClients(realApiData.pveCluster);
+            const discoveryData = await fetchDiscoveryData(mockApiClients, {});
+            
+            const runningGuests = [
+                ...discoveryData.vms.filter(vm => vm.status === 'running'),
+                ...discoveryData.containers.filter(ct => ct.status === 'running')
+            ];
+            
+            // Mock metrics that might miss some guests
+            const mockMetricsApiClients = createRealisticMockClientsWithMetrics(realApiData.currentMetrics);
+            const metricsData = await fetchMetricsData(
+                discoveryData.vms.filter(vm => vm.status === 'running'),
+                discoveryData.containers.filter(ct => ct.status === 'running'),
+                mockMetricsApiClients
+            );
+            
+            // DATA INTEGRITY CHECK: Every running guest should have metrics
+            const runningGuestIds = runningGuests.map(g => g.vmid);
+            const metricsGuestIds = metricsData.map(m => m.id);
+            
+            const missingMetrics = runningGuestIds.filter(id => !metricsGuestIds.includes(id));
+            const extraMetrics = metricsGuestIds.filter(id => !runningGuestIds.includes(id));
+            
+            // VALIDATE: Data consistency
+            expect(missingMetrics).toHaveLength(0); // No running guests should be missing metrics
+            expect(extraMetrics).toHaveLength(0); // No metrics for non-existent guests
+            
+            if (missingMetrics.length > 0) {
+                console.error(`DATA INTEGRITY ISSUE: ${missingMetrics.length} running guests missing metrics:`, missingMetrics);
+            }
+            if (extraMetrics.length > 0) {
+                console.error(`DATA INTEGRITY ISSUE: ${extraMetrics.length} metrics for non-running guests:`, extraMetrics);
+            }
+            
+            // VALIDATE: Metrics data quality
+            metricsData.forEach(metrics => {
+                expect(metrics.current).toBeDefined();
+                expect(typeof metrics.current.cpu).toBe('number');
+                expect(metrics.current.cpu).toBeGreaterThanOrEqual(0);
+                expect(metrics.current.cpu).toBeLessThanOrEqual(1); // Assuming decimal format
+            });
+            
+            console.log(`Data integrity check: ${runningGuests.length} running guests, ${metricsData.length} metrics records`);
+        });
+    });
+
+    describe('Scenario 9: Admin Responds to "Disk Space Critical" Alert', () => {
+        test('should help admin prioritize disk cleanup actions', async () => {
+            // REAL SCENARIO: Multiple disk space alerts, admin needs to know where to focus cleanup
+            
+            // Mock guests with varying disk usage
+            const diskPressureGuests = {
+                106: { cpu: 0.12, memory: 536870912, disk: 0.92 }, // Pulse - 92% full
+                200: { cpu: 0.15, memory: 2147483648, disk: 0.88 }, // UnraidServer - 88% full  
+                107: { cpu: 0.08, memory: 268435456, disk: 0.95 }, // Jellyfin - 95% full (critical!)
+                108: { cpu: 0.22, memory: 1073741824, disk: 0.85 }  // Frigate - 85% full
+            };
+            
+            const mockApiClients = createRealisticMockClientsWithMetrics(diskPressureGuests);
+            const metricsData = await fetchMetricsData([], [
+                { vmid: 106, name: 'pulse', status: 'running', endpointId: 'primary', node: 'minipc', type: 'lxc' },
+                { vmid: 200, name: 'UnraidServer', status: 'running', endpointId: 'primary', node: 'desktop', type: 'qemu' },
+                { vmid: 107, name: 'jellyfin', status: 'running', endpointId: 'primary', node: 'minipc', type: 'lxc' },
+                { vmid: 108, name: 'frigate', status: 'running', endpointId: 'primary', node: 'delly', type: 'lxc' }
+            ], mockApiClients);
+            
+            // ANALYZE: Disk usage patterns
+            const diskMetrics = metricsData.map(m => ({
+                id: m.id,
+                name: m.guestName,
+                diskUsage: m.current.disk * 100,
+                type: m.type
+            })).sort((a, b) => b.diskUsage - a.diskUsage);
+            
+            // PRIORITIZE: Critical vs warning levels
+            const criticalDisk = diskMetrics.filter(g => g.diskUsage > 90); // >90%
+            const warningDisk = diskMetrics.filter(g => g.diskUsage > 85 && g.diskUsage <= 90); // 85-90%
+            
+            // VALIDATE: Should identify jellyfin as highest priority
+            expect(criticalDisk).toHaveLength(2); // Jellyfin (95%) and Pulse (92%)
+            expect(criticalDisk[0].name).toBe('jellyfin');
+            expect(criticalDisk[0].diskUsage).toBe(95);
+            
+            // RECOMMEND: Actions based on service type
+            const mediaServices = criticalDisk.filter(g => 
+                ['jellyfin', 'plex', 'frigate'].includes(g.name.toLowerCase())
+            );
+            const systemServices = criticalDisk.filter(g => 
+                ['pulse', 'pihole', 'homeassistant'].includes(g.name.toLowerCase())
+            );
+            
+            console.log('DISK CLEANUP PRIORITIES:');
+            console.log(`CRITICAL (>90%): ${criticalDisk.length} services`);
+            criticalDisk.forEach(g => {
+                console.log(`  - ${g.name}: ${g.diskUsage}% full`);
+            });
+            
+            console.log(`WARNING (85-90%): ${warningDisk.length} services`);
+            
+            // GUIDANCE: Specific cleanup recommendations
+            if (mediaServices.length > 0) {
+                console.log('RECOMMENDATION: Check media files for cleanup (jellyfin, frigate)');
+            }
+            if (systemServices.length > 0) {
+                console.log('RECOMMENDATION: Check logs and temporary files (pulse, system services)');
+            }
+            
+            expect(criticalDisk.length).toBeGreaterThan(0);
+        });
+    });
 });
 
 // Helper functions for realistic test data

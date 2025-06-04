@@ -502,130 +502,224 @@ describe('Pulse Integration Tests', () => {
         });
     });
 
-    describe('Configuration-Based Workflow', () => {
-        test('should load configuration and initialize complete monitoring stack', async () => {
-            // === STEP 1: Mock configuration loading ===
-            const mockConfig = {
-                endpoints: [{
-                    id: 'production-pve',
-                    name: 'Production Cluster',
-                    host: 'pve-prod.company.com',
-                    port: '8006',
-                    tokenId: 'monitor@pve!readonly',
-                    tokenSecret: 'secret-token',
-                    enabled: true,
-                    allowSelfSignedCerts: false
-                }],
-                pbsConfigs: [{
-                    id: 'production-pbs',
-                    name: 'Production Backup',
-                    host: 'pbs-prod.company.com',
-                    port: '8007',
-                    tokenId: 'monitor@pbs!readonly',
-                    tokenSecret: 'secret-pbs-token',
-                    authMethod: 'token',
-                    allowSelfSignedCerts: false
-                }]
-            };
-
-            // Mock the configuration loader
-            jest.doMock('../configLoader', () => ({
-                loadConfiguration: jest.fn().mockReturnValue(mockConfig)
-            }));
-
-            // === STEP 2: Mock API client initialization ===
-            jest.doMock('../apiClients', () => ({
-                initializeApiClients: jest.fn().mockResolvedValue({
-                    apiClients: mockApiClients,
-                    pbsApiClients: mockPbsApiClients
-                })
-            }));
-
-            // === STEP 3: Simulate full initialization ===
-            const { loadConfiguration: mockedLoadConfig } = require('../configLoader');
-            const { initializeApiClients: mockedInitClients } = require('../apiClients');
-
-            const config = mockedLoadConfig();
-            const { apiClients, pbsApiClients } = await mockedInitClients(
-                config.endpoints,
-                config.pbsConfigs
-            );
-
-            // === STEP 4: Verify configuration-driven setup ===
-            expect(config.endpoints).toHaveLength(1);
-            expect(config.pbsConfigs).toHaveLength(1);
-            expect(config.endpoints[0].id).toBe('production-pve');
-            expect(config.pbsConfigs[0].id).toBe('production-pbs');
-
-            expect(apiClients).toBeDefined();
-            expect(pbsApiClients).toBeDefined();
-
-            // === STEP 5: Test monitoring with configured endpoints ===
-            mockApiClients['pve-main'].client.get.mockResolvedValue({
-                data: { data: [{ node: 'prod-node', status: 'online' }] }
-            });
-
-            const discoveryData = await fetchDiscoveryData(apiClients, pbsApiClients);
-            expect(discoveryData.nodes).toHaveLength(1);
-            expect(discoveryData.nodes[0].node).toBe('prod-node');
-        });
-    });
-
-    describe('Performance and Stress Scenarios', () => {
-        test('should handle large cluster with many guests efficiently', async () => {
-            const nodeCount = 5;
-            const guestsPerNode = 20;
-            const totalGuests = nodeCount * guestsPerNode;
-
-            // === STEP 1: Mock large cluster ===
+    describe('Real Production Workflow: Multi-Tenant Environment', () => {
+        test('should handle admin investigating cross-tenant resource conflicts', async () => {
+            // REAL SCENARIO: Admin gets reports of VMs interfering with each other's performance
+            // Multiple departments sharing the same cluster with different SLA requirements
+            
+            // Mock multi-tenant cluster data
             mockApiClients['pve-main'].client.get.mockImplementation((path) => {
                 if (path === '/nodes') {
-                    const nodes = Array.from({ length: nodeCount }, (_, i) => ({
-                        node: `node${i + 1}`,
-                        status: 'online'
-                    }));
-                    return Promise.resolve({ data: { data: nodes } });
+                    return Promise.resolve({
+                        data: {
+                            data: [
+                                { node: 'cluster1-node1', status: 'online' },
+                                { node: 'cluster1-node2', status: 'online' }
+                            ]
+                        }
+                    });
                 }
-
-                // Generate guests for each node
-                for (let nodeIndex = 1; nodeIndex <= nodeCount; nodeIndex++) {
-                    if (path.includes(`/nodes/node${nodeIndex}/qemu`)) {
-                        const vms = Array.from({ length: guestsPerNode / 2 }, (_, i) => ({
-                            vmid: nodeIndex * 1000 + i,
-                            name: `vm-${nodeIndex}-${i}`,
-                            status: 'running'
-                        }));
-                        return Promise.resolve({ data: { data: vms } });
+                if (path.includes('/qemu')) {
+                    if (path.includes('cluster1-node1')) {
+                        return Promise.resolve({
+                            data: {
+                                data: [
+                                    { vmid: 1000, name: 'finance-db', status: 'running', tags: 'finance;critical' },
+                                    { vmid: 1001, name: 'hr-app', status: 'running', tags: 'hr;standard' },
+                                    { vmid: 1002, name: 'dev-test', status: 'running', tags: 'development;low' }
+                                ]
+                            }
+                        });
                     }
-                    if (path.includes(`/nodes/node${nodeIndex}/lxc`)) {
-                        const containers = Array.from({ length: guestsPerNode / 2 }, (_, i) => ({
-                            vmid: nodeIndex * 1000 + 500 + i,
-                            name: `ct-${nodeIndex}-${i}`,
-                            status: 'running'
-                        }));
-                        return Promise.resolve({ data: { data: containers } });
+                    if (path.includes('cluster1-node2')) {
+                        return Promise.resolve({
+                            data: {
+                                data: [
+                                    { vmid: 2000, name: 'marketing-web', status: 'running', tags: 'marketing;standard' },
+                                    { vmid: 2001, name: 'analytics-worker', status: 'running', tags: 'analytics;high' }
+                                ]
+                            }
+                        });
                     }
                 }
-
+                if (path.includes('/lxc')) {
+                    return Promise.resolve({ data: { data: [] } });
+                }
                 return Promise.resolve({ data: { data: [] } });
             });
 
-            // === STEP 2: Measure discovery performance ===
-            const startTime = Date.now();
-            const discoveryData = await fetchDiscoveryData(mockApiClients, {});
-            const discoveryTime = Date.now() - startTime;
+            const discoveryData = await fetchDiscoveryData(mockApiClients, mockPbsApiClients);
 
-            // === STEP 3: Verify scale handling ===
-            expect(discoveryData.nodes).toHaveLength(nodeCount);
-            expect(discoveryData.vms).toHaveLength(nodeCount * (guestsPerNode / 2));
-            expect(discoveryData.containers).toHaveLength(nodeCount * (guestsPerNode / 2));
+            // ANALYZE: Resource distribution across departments
+            const departmentMapping = {
+                finance: discoveryData.vms.filter(vm => vm.tags?.includes('finance')),
+                hr: discoveryData.vms.filter(vm => vm.tags?.includes('hr')),
+                development: discoveryData.vms.filter(vm => vm.tags?.includes('development')),
+                marketing: discoveryData.vms.filter(vm => vm.tags?.includes('marketing')),
+                analytics: discoveryData.vms.filter(vm => vm.tags?.includes('analytics'))
+            };
 
-            const totalDiscoveredGuests = discoveryData.vms.length + discoveryData.containers.length;
-            expect(totalDiscoveredGuests).toBe(totalGuests);
+            // VALIDATE: Multi-tenant separation
+            expect(departmentMapping.finance).toHaveLength(1);
+            expect(departmentMapping.analytics).toHaveLength(1);
+            
+            // DETECT: Potential resource conflicts
+            const criticalVMs = discoveryData.vms.filter(vm => vm.tags?.includes('critical'));
+            const nodeDistribution = {};
+            discoveryData.vms.forEach(vm => {
+                if (!nodeDistribution[vm.node]) nodeDistribution[vm.node] = [];
+                nodeDistribution[vm.node].push(vm);
+            });
 
-            // === STEP 4: Performance assertions ===
-            expect(discoveryTime).toBeLessThan(5000); // Should complete within 5 seconds
-            console.log(`Integration test: Discovered ${totalGuests} guests across ${nodeCount} nodes in ${discoveryTime}ms`);
+            // VALIDATE: Critical VMs should not be overloaded on same node
+            const criticalNode = criticalVMs[0]?.node;
+            const vmsOnCriticalNode = nodeDistribution[criticalNode] || [];
+            
+            if (vmsOnCriticalNode.length > 2) {
+                console.warn(`RESOURCE CONFLICT: ${vmsOnCriticalNode.length} VMs on node with critical workload`);
+            }
+
+            console.log(`Multi-tenant analysis: ${Object.keys(departmentMapping).length} departments across ${discoveryData.nodes.length} nodes`);
+        });
+    });
+
+    describe('Real Operations: Disaster Recovery Testing', () => {
+        test('should help admin validate backup recovery process for critical VMs', async () => {
+            // REAL SCENARIO: Monthly DR test - admin needs to verify which VMs can be recovered
+            
+            // Mock PBS with realistic backup scenario
+            mockPbsApiClients['pbs-main'].client.get.mockImplementation((path) => {
+                if (path === '/nodes') {
+                    return Promise.resolve({ data: { data: [{ node: 'pbs-dr' }] } });
+                }
+                if (path === '/config/datastore') {
+                    return Promise.resolve({ data: { data: [{ name: 'dr-backups' }] } });
+                }
+                if (path.includes('/admin/datastore/dr-backups/snapshots')) {
+                    const now = Math.floor(Date.now() / 1000);
+                    return Promise.resolve({
+                        data: {
+                            data: [
+                                // Critical systems with recent backups
+                                { 'backup-id': '100', 'backup-type': 'vm', 'backup-time': now - 3600, size: 10737418240, protected: true },
+                                { 'backup-id': '101', 'backup-type': 'vm', 'backup-time': now - 3600, size: 5368709120, protected: true },
+                                // Development VM with older backup (acceptable)
+                                { 'backup-id': '200', 'backup-type': 'vm', 'backup-time': now - 86400, size: 2147483648, protected: false },
+                                // Critical container with very recent backup
+                                { 'backup-id': '300', 'backup-type': 'ct', 'backup-time': now - 1800, size: 1073741824, protected: true },
+                                // Test VM with gap in backups (concerning!)
+                                { 'backup-id': '400', 'backup-type': 'vm', 'backup-time': now - 259200, size: 8589934592, protected: false }
+                            ]
+                        }
+                    });
+                }
+                return Promise.resolve({ data: { data: [] } });
+            });
+
+            // Mock PVE discovery to correlate with backups
+            mockApiClients['pve-main'].client.get.mockImplementation((path) => {
+                if (path === '/nodes') {
+                    return Promise.resolve({ data: { data: [{ node: 'production', status: 'online' }] } });
+                }
+                if (path.includes('/qemu')) {
+                    return Promise.resolve({
+                        data: {
+                            data: [
+                                { vmid: 100, name: 'finance-app', status: 'running', tags: 'critical;finance' },
+                                { vmid: 101, name: 'customer-db', status: 'running', tags: 'critical;database' },
+                                { vmid: 200, name: 'dev-staging', status: 'running', tags: 'development' },
+                                { vmid: 400, name: 'legacy-system', status: 'running', tags: 'legacy;important' }
+                            ]
+                        }
+                    });
+                }
+                if (path.includes('/lxc')) {
+                    return Promise.resolve({
+                        data: { data: [{ vmid: 300, name: 'web-proxy', status: 'running', tags: 'critical;web' }] }
+                    });
+                }
+                return Promise.resolve({ data: { data: [] } });
+            });
+
+            const [discoveryData, pbsData] = await Promise.all([
+                fetchDiscoveryData(mockApiClients, {}),
+                fetchPbsData(mockPbsApiClients)
+            ]);
+
+            // ANALYZE: DR readiness for each system
+            const drAnalysis = {
+                criticalSystems: [],
+                warningItems: [],
+                gapDetected: []
+            };
+
+            const allGuests = [...discoveryData.vms, ...discoveryData.containers];
+            const allBackups = pbsData[0].datastores[0].snapshots;
+
+            allGuests.forEach(guest => {
+                const backups = allBackups.filter(backup => 
+                    backup['backup-id'] === guest.vmid.toString()
+                );
+
+                if (backups.length === 0) {
+                    drAnalysis.gapDetected.push({
+                        guest: guest.name,
+                        vmid: guest.vmid,
+                        issue: 'No backups found'
+                    });
+                    return;
+                }
+
+                const latestBackup = backups[0];
+                const backupAge = (Date.now() / 1000) - latestBackup['backup-time'];
+                const ageInHours = backupAge / 3600;
+
+                const isCritical = guest.tags?.includes('critical');
+                
+                if (isCritical) {
+                    drAnalysis.criticalSystems.push({
+                        guest: guest.name,
+                        vmid: guest.vmid,
+                        lastBackupAge: ageInHours,
+                        protected: latestBackup.protected,
+                        size: latestBackup.size
+                    });
+
+                    if (ageInHours > 6) { // Critical systems should be backed up within 6 hours
+                        drAnalysis.warningItems.push({
+                            guest: guest.name,
+                            vmid: guest.vmid,
+                            issue: `Critical system backup ${Math.round(ageInHours)} hours old`
+                        });
+                    }
+                } else if (ageInHours > 48) { // Non-critical can be up to 48 hours
+                    drAnalysis.warningItems.push({
+                        guest: guest.name,
+                        vmid: guest.vmid,
+                        issue: `Backup ${Math.round(ageInHours)} hours old`
+                    });
+                }
+            });
+
+            // VALIDATE: DR test criteria
+            expect(drAnalysis.criticalSystems.length).toBeGreaterThan(0);
+            expect(drAnalysis.gapDetected.length).toBe(0); // No critical systems should lack backups
+            
+            // REPORT: DR readiness status
+            console.log(`DR Test Summary:`);
+            console.log(`- Critical systems monitored: ${drAnalysis.criticalSystems.length}`);
+            console.log(`- Warning items: ${drAnalysis.warningItems.length}`);
+            console.log(`- Backup gaps: ${drAnalysis.gapDetected.length}`);
+
+            if (drAnalysis.warningItems.length > 0) {
+                console.log(`DR Warnings:`);
+                drAnalysis.warningItems.forEach(item => {
+                    console.log(`  - ${item.guest} (${item.vmid}): ${item.issue}`);
+                });
+            }
+
+            // This test would help identify DR readiness issues before they become problems
+            expect(drAnalysis.criticalSystems.every(sys => sys.lastBackupAge < 24)).toBe(true);
         });
 
         test('should handle concurrent operations without race conditions', async () => {

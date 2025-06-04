@@ -34,9 +34,28 @@ class ConfigurationError extends Error {
 
 // Function to get update channel preference
 function getUpdateChannelPreference() {
-    const updateChannel = process.env.UPDATE_CHANNEL || 'stable';
-    const validChannels = ['stable', 'rc'];
+    const fs = require('fs');
+    const path = require('path');
     
+    // Try to read from config/.env file first, then fallback to default
+    const configDir = path.join(__dirname, '../config');
+    const configEnvPath = path.join(configDir, '.env');
+    
+    let updateChannel = 'stable'; // Default value
+    
+    if (fs.existsSync(configEnvPath)) {
+        try {
+            const configContent = fs.readFileSync(configEnvPath, 'utf8');
+            const updateChannelMatch = configContent.match(/^UPDATE_CHANNEL=(.+)$/m);
+            if (updateChannelMatch) {
+                updateChannel = updateChannelMatch[1].trim();
+            }
+        } catch (error) {
+            console.warn('WARN: Could not read UPDATE_CHANNEL from config file. Using default "stable".');
+        }
+    }
+    
+    const validChannels = ['stable', 'rc'];
     if (!validChannels.includes(updateChannel)) {
         console.warn(`WARN: Invalid UPDATE_CHANNEL value "${updateChannel}". Using default "stable".`);
         return 'stable';
