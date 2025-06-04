@@ -303,7 +303,7 @@ class UpdateManager {
     }
 
     /**
-     * Apply update using the install script (reliable method)
+     * Apply update without requiring sudo
      */
     async applyUpdate(updateFile, progressCallback, downloadUrl = null) {
         if (this.updateInProgress) {
@@ -323,143 +323,79 @@ class UpdateManager {
         this.updateInProgress = true;
 
         try {
-            console.log('[UpdateManager] Applying update using install script...');
+            console.log('[UpdateManager] Starting update process...');
             
             if (progressCallback) {
-                progressCallback({ phase: 'preparing', progress: 10 });
+                progressCallback({ phase: 'preparing', progress: 5 });
             }
 
-            // Extract version from the download URL (more reliable than temp file path)
+            // Extract version from the download URL
             let targetVersion = 'latest';
             if (downloadUrl && typeof downloadUrl === 'string') {
-                // Extract from download URL like: https://github.com/user/repo/releases/download/v3.21.0/pulse-v3.21.0.tar.gz
                 const urlMatch = downloadUrl.match(/\/releases\/download\/(v[\d\.\-\w]+)\//); 
                 if (urlMatch) {
                     targetVersion = urlMatch[1];
-                    console.log(`[UpdateManager] Extracted version from URL: ${targetVersion}`);
+                    console.log(`[UpdateManager] Target version: ${targetVersion}`);
                 }
             }
             
-            // Fallback: try to extract from updateFile path if URL parsing failed
-            if (targetVersion === 'latest' && typeof updateFile === 'string' && updateFile.includes('pulse-v')) {
-                const fileMatch = updateFile.match(/pulse-v([\d\.\-\w]+)\.tar\.gz/);
-                if (fileMatch) {
-                    targetVersion = 'v' + fileMatch[1];
-                    console.log(`[UpdateManager] Extracted version from file: ${targetVersion}`);
-                }
-            }
-
-            if (progressCallback) {
-                progressCallback({ phase: 'updating', progress: 20 });
-            }
-
-            // Use the proven install script for updates
-            const installScriptPath = path.join(__dirname, '..', 'scripts', 'install-pulse.sh');
-            
-            // Check if install script exists
-            try {
-                await fs.access(installScriptPath);
-            } catch (error) {
-                throw new Error('Install script not found. Please update manually using the install script.');
-            }
-
-            console.log(`[UpdateManager] Running install script update to ${targetVersion}...`);
-            
-            // Validate version parameter to prevent injection attacks
+            // Validate version parameter
             if (targetVersion !== 'latest' && !/^v[\d\.\-\w]+$/.test(targetVersion)) {
                 throw new Error(`Invalid version format: ${targetVersion}. Expected format like v3.21.0`);
             }
 
+            // Step 1: Create backup
             if (progressCallback) {
-                progressCallback({ phase: 'downloading', progress: 30 });
+                progressCallback({ phase: 'backup', progress: 15 });
             }
+            await this.createBackup();
 
-            // Execute the install script with real-time output parsing
-            const updateProcess = spawn('sudo', ['bash', installScriptPath, '--update', ...(targetVersion !== 'latest' ? ['--version', targetVersion] : [])], {
-                stdio: ['pipe', 'pipe', 'pipe'],
-                env: { ...process.env, DEBIAN_FRONTEND: 'noninteractive' }
-            });
-
-            let output = '';
-            let hasError = false;
-
-            // Parse output for progress updates
-            updateProcess.stdout.on('data', (data) => {
-                const text = data.toString();
-                output += text;
-                console.log('[UpdateManager] Install script:', text.trim());
-                
-                // Parse progress from install script output
-                if (progressCallback) {
-                    if (text.includes('Downloading')) {
-                        progressCallback({ phase: 'downloading', progress: 40 });
-                    } else if (text.includes('Extracting')) {
-                        progressCallback({ phase: 'extracting', progress: 60 });
-                    } else if (text.includes('Backing up')) {
-                        progressCallback({ phase: 'backup', progress: 70 });
-                    } else if (text.includes('dependencies')) {
-                        progressCallback({ phase: 'dependencies', progress: 80 });
-                    } else if (text.includes('Service started') || text.includes('complete')) {
-                        progressCallback({ phase: 'finishing', progress: 95 });
-                    }
-                }
-            });
-
-            updateProcess.stderr.on('data', (data) => {
-                const text = data.toString();
-                console.error('[UpdateManager] Install script error:', text.trim());
-                if (!text.includes('Warning:') && !text.includes('WARN:')) {
-                    hasError = true;
-                }
-            });
-
-            // Wait for install script to complete with timeout
-            const exitCode = await new Promise((resolve, reject) => {
-                const timeout = setTimeout(() => {
-                    updateProcess.kill('SIGTERM');
-                    reject(new Error('Install script timeout after 10 minutes'));
-                }, 600000); // 10 minutes timeout
-
-                updateProcess.on('close', (code) => {
-                    clearTimeout(timeout);
-                    resolve(code);
-                });
-
-                updateProcess.on('error', (error) => {
-                    clearTimeout(timeout);
-                    reject(error);
-                });
-            });
-
-            if (exitCode !== 0 || hasError) {
-                throw new Error(`Install script failed with exit code ${exitCode}. Output: ${output}`);
-            }
-
+            // Step 2: Extract update
             if (progressCallback) {
-                progressCallback({ phase: 'complete', progress: 100 });
+                progressCallback({ phase: 'extract', progress: 40 });
             }
+            await this.extractUpdate(updateFile);
 
-            console.log('[UpdateManager] Update completed successfully via install script');
+            // Step 3: Install dependencies
+            if (progressCallback) {
+                progressCallback({ phase: 'apply', progress: 70 });
+            }
+            await this.installDependencies();
 
-            // The install script handles restart automatically
-            console.log('[UpdateManager] Install script will handle service restart');
+            // Step 4: Signal completion and schedule restart
+            if (progressCallback) {
+                progressCallback({ phase: 'restarting', progress: 100 });
+            }
             
-            // Cleanup temp file before process terminates
+            console.log('[UpdateManager] Update completed successfully. Preparing for restart...');
+            
+            // Cleanup temp file before restart
             try {
                 await fs.unlink(updateFile);
                 console.log('[UpdateManager] Cleaned up temporary update file');
             } catch (cleanupError) {
                 console.warn('[UpdateManager] Could not cleanup temp file:', cleanupError.message);
             }
-            
-            // Note: The install script will restart the service, so this process will be terminated
-            // Reset flag before process terminates (good practice)
-            this.updateInProgress = false;
 
-            return {
+            // Return success immediately, then restart after a delay
+            const result = {
                 success: true,
-                message: 'Update applied successfully. The application will restart automatically.'
+                message: 'Update applied successfully. Service will restart shortly...',
+                targetVersion: targetVersion
             };
+
+            // Schedule service restart after allowing time for response to be sent
+            setTimeout(async () => {
+                try {
+                    this.updateInProgress = false;
+                    await this.restartService();
+                } catch (error) {
+                    console.error('[UpdateManager] Failed to restart service:', error.message);
+                    this.updateInProgress = false;
+                }
+            }, 2000); // Give time for WebSocket message to be sent
+
+            return result;
 
         } catch (error) {
             console.error('[UpdateManager] Error applying update:', error.message);
@@ -474,6 +410,144 @@ class UpdateManager {
             
             this.updateInProgress = false;
             throw new Error(`Failed to apply update: ${error.message}`);
+        }
+    }
+
+    /**
+     * Create backup of current installation
+     */
+    async createBackup() {
+        console.log('[UpdateManager] Creating backup...');
+        
+        const backupDir = path.join(__dirname, '..', 'data', 'backups');
+        await fs.mkdir(backupDir, { recursive: true });
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+        const backupPath = path.join(backupDir, `pulse-backup-${timestamp}.tar.gz`);
+        
+        const tar = require('tar');
+        await tar.create({
+            gzip: true,
+            file: backupPath,
+            cwd: path.join(__dirname, '..'),
+            filter: (path) => {
+                // Exclude node_modules, temp files, and backups from backup
+                return !path.includes('node_modules') && 
+                       !path.includes('.git') && 
+                       !path.includes('temp') &&
+                       !path.includes('data/backups');
+            }
+        }, ['.']);
+        
+        console.log(`[UpdateManager] Backup created: ${backupPath}`);
+    }
+
+    /**
+     * Extract update files
+     */
+    async extractUpdate(updateFile) {
+        console.log('[UpdateManager] Extracting update files...');
+        
+        const pulseDir = path.join(__dirname, '..');
+        const tar = require('tar');
+        
+        await tar.extract({
+            file: updateFile,
+            cwd: pulseDir,
+            strip: 1 // Remove the top-level directory from the tarball
+        });
+        
+        console.log('[UpdateManager] Update files extracted successfully');
+    }
+
+    /**
+     * Install npm dependencies if needed
+     */
+    async installDependencies() {
+        console.log('[UpdateManager] Checking dependencies...');
+        
+        const pulseDir = path.join(__dirname, '..');
+        const nodeModulesPath = path.join(pulseDir, 'node_modules');
+        
+        try {
+            // Check if node_modules exists and has content
+            const nodeModulesExists = await fs.access(nodeModulesPath).then(() => true).catch(() => false);
+            
+            if (nodeModulesExists) {
+                const moduleFiles = await fs.readdir(nodeModulesPath);
+                if (moduleFiles.length > 0) {
+                    console.log('[UpdateManager] Dependencies already bundled in update package');
+                    return;
+                }
+            }
+            
+            // Only run npm ci if node_modules is missing or empty
+            console.log('[UpdateManager] Installing missing dependencies...');
+            await execAsync('npm ci --production', { 
+                cwd: pulseDir,
+                timeout: 300000 // 5 minutes
+            });
+            console.log('[UpdateManager] Dependencies installed successfully');
+        } catch (error) {
+            console.warn('[UpdateManager] Failed to install dependencies:', error.message);
+            // Don't fail the update for dependency issues
+        }
+    }
+
+    /**
+     * Restart the pulse service using multiple strategies
+     */
+    async restartService() {
+        console.log('[UpdateManager] Restarting pulse service...');
+        
+        // Strategy 1: Try pkexec systemctl (most reliable with polkit)
+        try {
+            console.log('[UpdateManager] Attempting restart via pkexec...');
+            await execAsync('pkexec systemctl restart pulse.service', { timeout: 10000 });
+            console.log('[UpdateManager] Service restarted successfully via pkexec');
+            return;
+        } catch (error) {
+            console.warn('[UpdateManager] pkexec restart failed:', error.message);
+        }
+        
+        // Strategy 2: Try direct systemctl (if polkit rules work)
+        try {
+            console.log('[UpdateManager] Attempting restart via systemctl...');
+            await execAsync('systemctl restart pulse.service', { timeout: 10000 });
+            console.log('[UpdateManager] Service restarted successfully via systemctl');
+            return;
+        } catch (error) {
+            console.warn('[UpdateManager] systemctl restart failed:', error.message);
+        }
+        
+        // Strategy 3: Use systemd-run to restart in separate session
+        try {
+            console.log('[UpdateManager] Attempting restart via systemd-run...');
+            await execAsync('systemd-run --no-ask-password --scope systemctl restart pulse.service', { timeout: 10000 });
+            console.log('[UpdateManager] Service restarted successfully via systemd-run');
+            return;
+        } catch (error) {
+            console.warn('[UpdateManager] systemd-run restart failed:', error.message);
+        }
+        
+        // Strategy 4: Graceful shutdown and let systemd restart
+        console.log('[UpdateManager] All restart methods failed. Using graceful shutdown...');
+        console.log('[UpdateManager] systemd will automatically restart the service');
+        
+        // Close server gracefully then exit
+        if (global.server) {
+            global.server.close(() => {
+                console.log('[UpdateManager] Server closed gracefully');
+                process.exit(0);
+            });
+            
+            // Force exit after 5 seconds if graceful close doesn't work
+            setTimeout(() => {
+                console.log('[UpdateManager] Forcing process exit');
+                process.exit(0);
+            }, 5000);
+        } else {
+            process.exit(0);
         }
     }
 

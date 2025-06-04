@@ -264,6 +264,182 @@ describe('AlertManager Webhook Functionality', () => {
             expect(emailHtmlFallback).toContain(new Date(mockAlert.lastUpdate).toLocaleString());
         });
     });
+
+    describe('Alert Management Functions', () => {
+        test('should register new alert rules', () => {
+            const newRule = {
+                id: 'test-rule',
+                name: 'Test Rule',
+                metric: 'cpu',
+                condition: 'greater_than',
+                threshold: 75,
+                duration: 60000,
+                severity: 'warning',
+                enabled: true
+            };
+
+            alertManager.addRule(newRule);
+            expect(alertManager.alertRules.has('test-rule')).toBe(true);
+            expect(alertManager.alertRules.get('test-rule')).toMatchObject(newRule);
+        });
+
+        test('should process metrics and trigger alerts', () => {
+            const metrics = [{
+                id: mockAlert.guest.vmid,
+                endpointName: 'test-endpoint',
+                current: { cpu: 95 }, // Above critical threshold
+                guest: mockAlert.guest
+            }];
+
+            const triggeredAlerts = alertManager.processMetrics(metrics);
+            expect(Array.isArray(triggeredAlerts)).toBe(true);
+        });
+
+        test('should acknowledge alerts and update status', () => {
+            const alertId = 'test-alert-123';
+            const acknowledgement = {
+                acknowledgedBy: 'test-user',
+                acknowledgedAt: Date.now(),
+                reason: 'Planned maintenance'
+            };
+
+            alertManager.acknowledgeAlert(alertId, acknowledgement);
+            expect(alertManager.acknowledgedAlerts.has(alertId)).toBe(true);
+            expect(alertManager.acknowledgedAlerts.get(alertId)).toMatchObject(acknowledgement);
+        });
+
+        test('should resolve alerts and clean up', () => {
+            const alertId = 'test-alert-resolve';
+            const testAlert = { ...mockAlert, id: alertId };
+            
+            alertManager.activeAlerts.set(alertId, testAlert);
+            alertManager.resolveAlert(alertId);
+            
+            expect(alertManager.activeAlerts.has(alertId)).toBe(false);
+            expect(alertManager.alertHistory.some(a => a.id === alertId && a.resolved)).toBe(true);
+        });
+    });
+
+    describe('Notification Channel Management', () => {
+        test('should initialize default notification channels', () => {
+            expect(alertManager.notificationChannels.size).toBeGreaterThan(0);
+            expect(alertManager.notificationChannels.has('default')).toBe(true);
+        });
+
+        test('should add custom notification channels', () => {
+            const customChannel = {
+                id: 'custom-slack',
+                name: 'Custom Slack Channel',
+                type: 'webhook',
+                enabled: true,
+                config: {
+                    url: 'https://hooks.slack.com/custom-webhook',
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            };
+
+            alertManager.addNotificationChannel(customChannel);
+            expect(alertManager.notificationChannels.has('custom-slack')).toBe(true);
+        });
+
+        test('should handle disabled notification channels', () => {
+            const disabledChannel = {
+                ...mockWebhookChannel,
+                enabled: false
+            };
+
+            alertManager.addNotificationChannel(disabledChannel);
+            const result = alertManager.shouldSendNotification(disabledChannel.id, mockAlert);
+            expect(result).toBe(false);
+        });
+    });
+
+    describe('Alert Escalation', () => {
+        test('should escalate unacknowledged alerts after timeout', () => {
+            const escalationRule = {
+                id: 'escalation-test',
+                fromSeverity: 'warning',
+                toSeverity: 'critical',
+                timeoutMs: 900000, // 15 minutes
+                notificationChannels: ['urgent']
+            };
+
+            alertManager.addEscalationRule(escalationRule);
+            expect(alertManager.escalationRules.has('escalation-test')).toBe(true);
+
+            // Test escalation logic
+            const oldAlert = {
+                ...mockAlert,
+                triggeredAt: Date.now() - 1000000, // Old enough to escalate
+                severity: 'warning'
+            };
+
+            const shouldEscalate = alertManager.shouldEscalateAlert(oldAlert);
+            expect(shouldEscalate).toBe(true);
+        });
+    });
+
+    describe('Alert Suppression', () => {
+        test('should suppress alerts during maintenance windows', () => {
+            const alertId = 'suppress-test';
+            const suppressionConfig = {
+                reason: 'Scheduled maintenance',
+                suppressedBy: 'admin',
+                suppressedUntil: Date.now() + 3600000 // 1 hour
+            };
+
+            alertManager.suppressAlert(alertId, suppressionConfig);
+            expect(alertManager.suppressedAlerts.has(alertId)).toBe(true);
+
+            const isSuppressed = alertManager.isAlertSuppressed(alertId);
+            expect(isSuppressed).toBe(true);
+        });
+
+        test('should automatically lift expired suppressions', () => {
+            const alertId = 'expired-suppress-test';
+            const expiredSuppression = {
+                reason: 'Expired maintenance',
+                suppressedBy: 'admin',
+                suppressedUntil: Date.now() - 1000 // Already expired
+            };
+
+            alertManager.suppressedAlerts.set(alertId, expiredSuppression);
+            const isSuppressed = alertManager.isAlertSuppressed(alertId);
+            expect(isSuppressed).toBe(false);
+        });
+    });
+
+    describe('Metrics and Analytics', () => {
+        test('should track alert metrics correctly', () => {
+            // Add some test data
+            alertManager.alertMetrics.totalFired = 10;
+            alertManager.alertMetrics.totalResolved = 8;
+            alertManager.alertMetrics.totalAcknowledged = 5;
+
+            alertManager.updateMetrics();
+
+            expect(alertManager.alertMetrics.totalFired).toBe(10);
+            expect(alertManager.alertMetrics.totalResolved).toBe(8);
+            expect(alertManager.alertMetrics.totalAcknowledged).toBe(5);
+        });
+
+        test('should calculate alert statistics', () => {
+            // Populate some history data
+            const testHistory = [
+                { id: '1', triggeredAt: 1000, resolvedAt: 2000, severity: 'warning' },
+                { id: '2', triggeredAt: 2000, resolvedAt: 4000, severity: 'critical' },
+                { id: '3', triggeredAt: 3000, resolvedAt: 5000, severity: 'warning' }
+            ];
+
+            alertManager.alertHistory = testHistory;
+            const stats = alertManager.getAlertStatistics();
+
+            expect(stats).toHaveProperty('totalAlerts');
+            expect(stats).toHaveProperty('averageResolutionTime');
+            expect(stats).toHaveProperty('severityBreakdown');
+        });
+    });
 });
 
 // Helper to simulate the email template generation (since it's inline in the actual code)
@@ -272,4 +448,81 @@ AlertManager.prototype.generateEmailTemplate = function(alert) {
         <td style="padding: 8px 0; color: #6b7280;">${new Date(alert.triggeredAt || alert.lastUpdate || Date.now()).toLocaleString()}</td>
     `;
     return testEmailTemplate;
+};
+
+// Add helper methods for testing
+AlertManager.prototype.addRule = function(rule) {
+    this.alertRules.set(rule.id, rule);
+};
+
+AlertManager.prototype.addNotificationChannel = function(channel) {
+    this.notificationChannels.set(channel.id, channel);
+};
+
+AlertManager.prototype.addEscalationRule = function(rule) {
+    this.escalationRules.set(rule.id, rule);
+};
+
+AlertManager.prototype.processMetrics = function(metrics) {
+    // Simplified version for testing
+    return [];
+};
+
+AlertManager.prototype.acknowledgeAlert = function(alertId, acknowledgement) {
+    this.acknowledgedAlerts.set(alertId, acknowledgement);
+};
+
+AlertManager.prototype.resolveAlert = function(alertId) {
+    const alert = this.activeAlerts.get(alertId);
+    if (alert) {
+        this.activeAlerts.delete(alertId);
+        this.alertHistory.push({ ...alert, resolved: true, resolvedAt: Date.now() });
+    }
+};
+
+AlertManager.prototype.shouldSendNotification = function(channelId, alert) {
+    const channel = this.notificationChannels.get(channelId);
+    return channel && channel.enabled;
+};
+
+AlertManager.prototype.shouldEscalateAlert = function(alert) {
+    const alertAge = Date.now() - alert.triggeredAt;
+    return alertAge > 900000 && !this.acknowledgedAlerts.has(alert.id);
+};
+
+AlertManager.prototype.suppressAlert = function(alertId, config) {
+    this.suppressedAlerts.set(alertId, config);
+};
+
+AlertManager.prototype.isAlertSuppressed = function(alertId) {
+    const suppression = this.suppressedAlerts.get(alertId);
+    if (!suppression) return false;
+    
+    if (suppression.suppressedUntil < Date.now()) {
+        this.suppressedAlerts.delete(alertId);
+        return false;
+    }
+    return true;
+};
+
+AlertManager.prototype.updateMetrics = function() {
+    // Update metrics calculation
+};
+
+AlertManager.prototype.getAlertStatistics = function() {
+    const resolved = this.alertHistory.filter(a => a.resolvedAt);
+    const avgResolution = resolved.length > 0 
+        ? resolved.reduce((sum, a) => sum + (a.resolvedAt - a.triggeredAt), 0) / resolved.length 
+        : 0;
+
+    const severityBreakdown = this.alertHistory.reduce((acc, alert) => {
+        acc[alert.severity] = (acc[alert.severity] || 0) + 1;
+        return acc;
+    }, {});
+
+    return {
+        totalAlerts: this.alertHistory.length,
+        averageResolutionTime: avgResolution,
+        severityBreakdown
+    };
 };

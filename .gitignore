@@ -96,4 +96,4 @@ pnpm-lock.yaml
 
 # Update mechanism
 backup/
-temp/ 
+temp/ ProxmoxVE/

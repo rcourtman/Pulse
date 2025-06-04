@@ -2015,7 +2015,8 @@ PulseApp.ui.settings = (() => {
                             'download': 'Downloading update...',
                             'backup': 'Backing up current installation...',
                             'extract': 'Extracting update files...',
-                            'apply': 'Applying update...'
+                            'apply': 'Applying update...',
+                            'restarting': 'Update complete! Restarting service...'
                         };
                         progressText.textContent = phaseText[data.phase] || 'Processing...';
                     }
@@ -2048,6 +2049,7 @@ PulseApp.ui.settings = (() => {
             if (updateProgress) updateProgress.classList.add('hidden');
         }
     }
+
 
     // Theme management function
     function changeTheme(theme) {

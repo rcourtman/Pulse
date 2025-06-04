@@ -291,6 +291,33 @@ class AlertManager extends EventEmitter {
         });
     }
 
+    processMetrics(metricsData) {
+        const beforeAlertCount = this.activeAlerts.size;
+        
+        // Convert metricsData to guests format expected by checkMetrics
+        const guests = metricsData.map(m => ({
+            endpointId: m.endpointId,
+            node: m.node || 'unknown',
+            vmid: m.id,
+            name: m.guest?.name || `Guest ${m.id}`,
+            type: m.guest?.type || 'unknown',
+            status: 'running' // Assume running if we have metrics
+        }));
+        
+        // Process the metrics
+        this.checkMetrics(guests, metricsData);
+        
+        // Return any new alerts that were triggered
+        const newAlerts = [];
+        for (const [key, alert] of this.activeAlerts) {
+            if (alert.state === 'active' && alert.triggeredAt && alert.triggeredAt >= Date.now() - 5000) {
+                newAlerts.push(alert);
+            }
+        }
+        
+        return newAlerts;
+    }
+
     isRuleSuppressed(ruleId, guest) {
         const suppressKey = `${ruleId}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
         const suppression = this.suppressedAlerts.get(suppressKey);

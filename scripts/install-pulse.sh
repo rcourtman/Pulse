@@ -471,6 +471,10 @@ EOF
 
     systemctl daemon-reload
     systemctl enable "$SERVICE_NAME" &>/dev/null
+    
+    # Setup polkit rule for sudoless updates
+    setup_polkit_rule
+    
     systemctl start "$SERVICE_NAME"
     
     # Wait a moment and check if service started
@@ -482,6 +486,39 @@ EOF
         print_info "Check logs: journalctl -u $SERVICE_NAME -n 50"
         exit 1
     fi
+}
+
+# Setup polkit rule for sudoless service management
+setup_polkit_rule() {
+    print_info "Setting up polkit rule for automatic updates..."
+    
+    # Create polkit rules directory if it doesn't exist
+    mkdir -p /etc/polkit-1/rules.d
+    
+    # Create the polkit rule
+    cat > /etc/polkit-1/rules.d/10-pulse-service.rules << 'EOF'
+/* Allow pulse user to manage pulse.service without password */
+polkit.addRule(function(action, subject) {
+    if ((action.id == "org.freedesktop.systemd1.manage-units" ||
+         action.id == "org.freedesktop.systemd1.manage-unit-files" ||
+         action.id == "org.freedesktop.systemd1.reload-daemon") &&
+        action.lookup("unit") == "pulse.service" &&
+        subject.user == "pulse") {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});
+EOF
+    
+    # Set correct permissions
+    chmod 644 /etc/polkit-1/rules.d/10-pulse-service.rules
+    
+    # Restart polkit to apply changes (don't fail if polkit isn't running)
+    if systemctl is-active --quiet polkit 2>/dev/null; then
+        systemctl restart polkit 2>/dev/null || true
+    fi
+    
+    print_success "Polkit rule configured for automatic updates"
 }
 
 # Perform installation
