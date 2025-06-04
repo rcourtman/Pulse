@@ -582,6 +582,13 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
   - Gmail App Password support
   - Test email functionality
 
+### Enhanced Update System
+- **Smart Version Switching** between stable and RC releases with clear commit differences
+- **Consolidated Update Mechanism** using proven install script for reliability
+- **Real-time Progress Tracking** with detailed commit information and GitHub links
+- **Automatic Backup & Restore** of configuration during updates
+- **Context-Aware Updates** showing exactly what changes with each version switch
+
 ### Backup Monitoring
 - **Comprehensive backup monitoring:**
   - Proxmox Backup Server (PBS) snapshots and tasks
