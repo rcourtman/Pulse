@@ -503,6 +503,10 @@ setup_polkit_rule() {
     # Create polkit rules directory if it doesn't exist
     mkdir -p /etc/polkit-1/rules.d
     
+    # Ensure correct permissions (polkit installation may set restrictive permissions)
+    chown root:root /etc/polkit-1/rules.d
+    chmod 755 /etc/polkit-1/rules.d
+    
     # Create the polkit rule
     cat > /etc/polkit-1/rules.d/10-pulse-service.rules << 'EOF'
 /* Allow pulse user to manage pulse.service without password */
