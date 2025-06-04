@@ -328,10 +328,24 @@ PulseApp.utils = (() => {
         const pbsConfigs = PulseApp.state.get('pbsConfigs') || [];
         const nodesData = PulseApp.state.get('nodesData') || [];
         
+        // Helper function to construct the complete URL
+        function constructUrl(host, port, defaultPort = '8006') {
+            if (!host) return null;
+            
+            // If host already includes protocol, return as-is
+            if (host.startsWith('http://') || host.startsWith('https://')) {
+                return host;
+            }
+            
+            // Use the provided port or default
+            const finalPort = port || defaultPort;
+            return `https://${host}:${finalPort}`;
+        }
+        
         // First check PBS configs for exact name match
         for (const config of pbsConfigs) {
             if (config.name === nodeName) {
-                return config.host;
+                return constructUrl(config.host, config.port, '8007'); // PBS default port
             }
         }
         
@@ -344,7 +358,7 @@ PulseApp.utils = (() => {
         if (nodeByDisplayName && nodeByDisplayName.endpointId) {
             const endpoint = endpoints.find(ep => ep.id === nodeByDisplayName.endpointId);
             if (endpoint) {
-                return endpoint.host;
+                return constructUrl(endpoint.host, endpoint.port);
             }
         }
         
@@ -355,14 +369,14 @@ PulseApp.utils = (() => {
             // Find the endpoint that matches this endpointId
             const endpoint = endpoints.find(ep => ep.id === nodeInfo.endpointId);
             if (endpoint) {
-                return endpoint.host;
+                return constructUrl(endpoint.host, endpoint.port);
             }
         }
         
         // Fallback: try direct name matches with endpoints
         for (const endpoint of endpoints) {
             if (endpoint.name === nodeName) {
-                return endpoint.host;
+                return constructUrl(endpoint.host, endpoint.port);
             }
         }
         
@@ -371,7 +385,7 @@ PulseApp.utils = (() => {
         for (const endpoint of endpoints) {
             const endpointNodes = nodesData.filter(node => node.endpointId === endpoint.id);
             if (endpointNodes.length === 1 && endpoint.name === nodeName) {
-                return endpoint.host;
+                return constructUrl(endpoint.host, endpoint.port);
             }
         }
         
