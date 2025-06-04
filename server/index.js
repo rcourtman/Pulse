@@ -507,40 +507,6 @@ app.delete('/api/alerts/rules/:id', (req, res) => {
     }
 });
 
-// Version check functionality
-let latestVersionCache = null;
-let lastVersionCheck = 0;
-const VERSION_CHECK_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
-
-async function checkLatestVersion() {
-    const now = Date.now();
-    
-    // Return cached version if still fresh
-    if (latestVersionCache && (now - lastVersionCheck) < VERSION_CHECK_INTERVAL) {
-        return latestVersionCache;
-    }
-    
-    try {
-        const response = await axios.get('https://api.github.com/repos/rcourtman/Pulse/releases/latest', {
-            timeout: 5000,
-            headers: {
-                'Accept': 'application/vnd.github.v3+json'
-            }
-        });
-        
-        if (response.data && response.data.tag_name) {
-            // Remove 'v' prefix if present
-            const version = response.data.tag_name.replace(/^v/, '');
-            latestVersionCache = version;
-            lastVersionCheck = now;
-            return version;
-        }
-    } catch (error) {
-        console.error('Error checking latest version:', error.message);
-    }
-    
-    return null;
-}
 
 // Version API endpoint
 app.get('/api/version', async (req, res) => {
@@ -548,14 +514,13 @@ app.get('/api/version', async (req, res) => {
         const packageJson = require('../package.json');
         const currentVersion = packageJson.version || 'N/A';
         
-        // Check for latest version
-        const latestVersion = await checkLatestVersion();
+        // Use UpdateManager to check for updates respecting user's channel preference
+        const updateInfo = await updateManager.checkForUpdates();
         
         res.json({ 
             version: currentVersion,
-            latestVersion: latestVersion,
-            updateAvailable: latestVersion && latestVersion !== currentVersion && 
-                            compareVersions(latestVersion, currentVersion) > 0
+            latestVersion: updateInfo.latestVersion,
+            updateAvailable: updateInfo.hasUpdate
         });
     } catch (error) {
          console.error("Error in version endpoint:", error);
