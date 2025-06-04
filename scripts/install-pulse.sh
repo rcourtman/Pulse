@@ -667,6 +667,13 @@ perform_remove() {
         systemctl stop "$SERVICE_NAME"
     fi
     systemctl disable "$SERVICE_NAME" &>/dev/null || true
+    
+    # Kill any remaining Pulse processes to prevent port conflicts
+    print_info "Ensuring all Pulse processes are stopped..."
+    pkill -f "/opt/pulse/server/index.js" 2>/dev/null || true
+    sleep 2
+    pkill -9 -f "/opt/pulse/server/index.js" 2>/dev/null || true
+    
     rm -f "/etc/systemd/system/$SERVICE_NAME"
     systemctl daemon-reload
     
