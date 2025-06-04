@@ -129,7 +129,10 @@ async function initializePLimit() {
 // Helper function to fetch data and handle common errors/warnings
 async function fetchNodeResource(apiClient, endpointId, nodeName, resourcePath, resourceName, expectArray = false, transformFn = null) {
   try {
-    const response = await apiClient.get(`/nodes/${nodeName}/${resourcePath}`);
+    // Add a short timeout for individual resource calls to fail fast
+    const response = await apiClient.get(`/nodes/${nodeName}/${resourcePath}`, { 
+      timeout: 8000 // 8 second timeout per resource to prevent long blocks
+    });
     const data = response.data?.data;
 
     if (data) {
@@ -149,24 +152,25 @@ async function fetchNodeResource(apiClient, endpointId, nodeName, resourcePath, 
 }
 
 async function fetchDataForNode(apiClient, endpointId, nodeName) {
-  const nodeStatus = await fetchNodeResource(apiClient, endpointId, nodeName, 'status', 'Node status');
-  const storage = await fetchNodeResource(apiClient, endpointId, nodeName, 'storage', 'Node storage', true);
-  
-  const vms = await fetchNodeResource(
-    apiClient, endpointId, nodeName, 'qemu', 'VMs (qemu)', true,
-    (data) => data.map(vm => ({ ...vm, node: nodeName, endpointId: endpointId, type: 'qemu' }))
-  );
-
-  const containers = await fetchNodeResource(
-    apiClient, endpointId, nodeName, 'lxc', 'Containers (lxc)', true,
-    (data) => data.map(ct => ({ ...ct, node: nodeName, endpointId: endpointId, type: 'lxc' }))
-  );
+  // Make all node resource fetches parallel to prevent blocking when one node is down
+  const [nodeStatus, storage, vms, containers] = await Promise.allSettled([
+    fetchNodeResource(apiClient, endpointId, nodeName, 'status', 'Node status'),
+    fetchNodeResource(apiClient, endpointId, nodeName, 'storage', 'Node storage', true),
+    fetchNodeResource(
+      apiClient, endpointId, nodeName, 'qemu', 'VMs (qemu)', true,
+      (data) => data.map(vm => ({ ...vm, node: nodeName, endpointId: endpointId, type: 'qemu' }))
+    ),
+    fetchNodeResource(
+      apiClient, endpointId, nodeName, 'lxc', 'Containers (lxc)', true,
+      (data) => data.map(ct => ({ ...ct, node: nodeName, endpointId: endpointId, type: 'lxc' }))
+    )
+  ]);
 
   return {
-    vms: vms || [],
-    containers: containers || [],
-    nodeStatus: nodeStatus || {},
-    storage: storage || [],
+    vms: (vms.status === 'fulfilled' ? vms.value : []) || [],
+    containers: (containers.status === 'fulfilled' ? containers.value : []) || [],
+    nodeStatus: (nodeStatus.status === 'fulfilled' ? nodeStatus.value : {}) || {},
+    storage: (storage.status === 'fulfilled' ? storage.value : []) || [],
   };
 }
 
