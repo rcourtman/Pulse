@@ -7,6 +7,7 @@ PulseApp.ui.settings = (() => {
     let latestReleaseData = null; // Store the latest release data
     let updateCache = new Map(); // Cache update check results to reduce API calls
     let updateCheckTimeout = null; // Debounce rapid channel changes
+    let formDataCache = {}; // Store form data between tab switches
 
     function init() {
         if (isInitialized) return;
@@ -72,6 +73,9 @@ PulseApp.ui.settings = (() => {
     }
 
     function switchTab(tabName) {
+        // Preserve current form data before switching tabs
+        preserveCurrentFormData();
+        
         activeTab = tabName;
         
         // Update tab buttons
@@ -92,6 +96,9 @@ PulseApp.ui.settings = (() => {
 
         // Update content
         renderTabContent();
+        
+        // Restore form data for the new tab
+        restoreFormData();
     }
 
     async function openModal() {
@@ -118,11 +125,17 @@ PulseApp.ui.settings = (() => {
     function closeModal() {
         console.log('[Settings] Closing modal...');
         
+        // Preserve current form data before closing
+        preserveCurrentFormData();
+        
         const modal = document.getElementById('settings-modal');
         if (!modal) return;
 
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+        
+        // Clear form data cache since modal is being closed
+        formDataCache = {};
     }
 
     async function loadConfiguration() {
@@ -176,6 +189,11 @@ PulseApp.ui.settings = (() => {
         }
 
         container.innerHTML = `<form id="settings-form" class="space-y-6">${content}</form>`;
+        
+        // Restore form data after content is rendered
+        setTimeout(() => {
+            restoreFormData();
+        }, 0);
         
         // Load existing additional endpoints for Proxmox and PBS tabs
         if (activeTab === 'proxmox') {
@@ -1326,7 +1344,9 @@ PulseApp.ui.settings = (() => {
         saveButton.textContent = 'Saving...';
 
         try {
-            const config = collectFormData();
+            // Preserve current tab data before collecting all data
+            preserveCurrentFormData();
+            const config = collectAllTabsData();
             
             const response = await fetch('/api/config', {
                 method: 'POST',
@@ -1393,6 +1413,121 @@ PulseApp.ui.settings = (() => {
         });
 
         return config;
+    }
+
+    function collectAllTabsData() {
+        // Start with current form data and add cached data from other tabs
+        const currentFormConfig = collectFormData();
+        const allConfig = { ...currentFormConfig };
+
+        // Merge data from all cached tabs
+        Object.values(formDataCache).forEach(tabData => {
+            Object.entries(tabData).forEach(([name, value]) => {
+                // Only use cached value if not already set from current form
+                if (!allConfig.hasOwnProperty(name)) {
+                    if (typeof value === 'boolean') {
+                        allConfig[name] = value ? 'true' : 'false';
+                    } else {
+                        allConfig[name] = value;
+                    }
+                }
+            });
+        });
+
+        console.log('[Settings] Collected data from all tabs:', allConfig);
+        return allConfig;
+    }
+
+    function preserveCurrentFormData() {
+        const form = document.getElementById('settings-form');
+        if (!form) return;
+
+        const formData = new FormData(form);
+        const currentTabData = {};
+
+        // Store all form field values
+        for (const [name, value] of formData.entries()) {
+            const field = form.querySelector(`[name="${name}"]`);
+            if (field) {
+                if (field.type === 'checkbox') {
+                    currentTabData[name] = field.checked;
+                } else {
+                    currentTabData[name] = value;
+                }
+            }
+        }
+
+        // Also store unchecked checkboxes
+        const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            if (!checkbox.checked && !currentTabData.hasOwnProperty(checkbox.name)) {
+                currentTabData[checkbox.name] = false;
+            }
+        });
+
+        // Only cache data if it contains meaningful configuration
+        if (hasSignificantConfiguration(currentTabData, activeTab)) {
+            formDataCache[activeTab] = currentTabData;
+            console.log(`[Settings] Preserved data for tab '${activeTab}':`, currentTabData);
+        } else {
+            // Clear cache for this tab if no significant data
+            delete formDataCache[activeTab];
+            console.log(`[Settings] No significant data to preserve for tab '${activeTab}', cleared cache`);
+        }
+    }
+
+    function hasSignificantConfiguration(data, tabName) {
+        // Check if the data contains any non-empty, meaningful values
+        if (tabName === 'proxmox') {
+            // For Proxmox tab, require at least a host to be considered significant
+            return !!(data.PROXMOX_HOST && data.PROXMOX_HOST.trim()) ||
+                   !!(data.PROXMOX_HOST_2 && data.PROXMOX_HOST_2.trim()) ||
+                   !!(data.PROXMOX_HOST_3 && data.PROXMOX_HOST_3.trim());
+        } else if (tabName === 'pbs') {
+            // For PBS tab, require at least a host to be considered significant
+            return !!(data.PBS_HOST && data.PBS_HOST.trim()) ||
+                   !!(data.PBS_HOST_2 && data.PBS_HOST_2.trim()) ||
+                   !!(data.PBS_HOST_3 && data.PBS_HOST_3.trim());
+        } else if (tabName === 'alerts') {
+            // For alerts tab, any threshold value or email/webhook config is significant
+            return Object.keys(data).some(key => {
+                const value = data[key];
+                if (typeof value === 'string' && value.trim()) return true;
+                if (typeof value === 'boolean' && value) return true;
+                if (typeof value === 'number' && value > 0) return true;
+                return false;
+            });
+        }
+        
+        // For other tabs, check if any field has a non-empty value
+        return Object.values(data).some(value => {
+            if (typeof value === 'string' && value.trim()) return true;
+            if (typeof value === 'boolean' && value) return true;
+            if (typeof value === 'number' && value !== 0) return true;
+            return false;
+        });
+    }
+
+    function restoreFormData() {
+        const form = document.getElementById('settings-form');
+        if (!form) return;
+
+        const savedData = formDataCache[activeTab];
+        if (!savedData) return;
+
+        console.log(`[Settings] Restoring data for tab '${activeTab}':`, savedData);
+
+        // Restore form field values
+        Object.entries(savedData).forEach(([name, value]) => {
+            const field = form.querySelector(`[name="${name}"]`);
+            if (field) {
+                if (field.type === 'checkbox') {
+                    field.checked = value === true || value === 'true';
+                } else {
+                    field.value = value || '';
+                }
+            }
+        });
     }
 
     function showMessage(message, type = 'info') {
