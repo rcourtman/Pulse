@@ -507,6 +507,18 @@ app.delete('/api/alerts/rules/:id', (req, res) => {
     }
 });
 
+// Enhanced alerts/rules endpoints to handle compound threshold rules
+app.get('/api/alerts/compound-rules', (req, res) => {
+    try {
+        const allRules = stateManager.alertManager.getRules();
+        const compoundRules = allRules.filter(rule => rule.type === 'compound_threshold');
+        res.json({ success: true, rules: compoundRules });
+    } catch (error) {
+        console.error("Error fetching compound threshold rules:", error);
+        res.status(500).json({ error: "Failed to fetch compound threshold rules" });
+    }
+});
+
 
 // Version API endpoint
 app.get('/api/version', async (req, res) => {

@@ -678,6 +678,33 @@
                     </select>
                   </th>
                 </tr>
+                <!-- Alert Rule Creation Row -->
+                <tr id="alert-rule-row" class="hidden">
+                  <td colspan="11" class="py-2 px-4 bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-700">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zm-2-8V7a1 1 0 00-1-1H5a1 1 0 00-1 1v3a1 1 0 001 1h7a1 1 0 001-1z"></path>
+                        </svg>
+                        <span class="text-sm font-medium text-blue-700 dark:text-blue-300">
+                          Create Alert Rule from Current Thresholds
+                        </span>
+                        <span id="active-thresholds-summary" class="text-xs text-blue-600 dark:text-blue-400"></span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button id="create-alert-rule-btn" 
+                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
+                                disabled>
+                          Create Alert Rule
+                        </button>
+                        <button id="view-alert-rules-btn" 
+                                class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs font-medium rounded transition-colors">
+                          View Rules
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                 <tr>

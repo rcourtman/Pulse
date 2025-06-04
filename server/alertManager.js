@@ -282,11 +282,19 @@ class AlertManager extends EventEmitter {
         const timestamp = Date.now();
         
         guests.forEach(guest => {
+            // Evaluate all alert rules (both single-metric and compound threshold rules)
             this.alertRules.forEach(rule => {
                 if (this.isRuleSuppressed(rule.id, guest)) return;
                 
                 const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
-                this.evaluateRule(rule, guest, metrics, alertKey, timestamp);
+                
+                if (rule.type === 'compound_threshold' && rule.thresholds) {
+                    // Handle compound threshold rules
+                    this.evaluateCompoundThresholdRule(rule, guest, metrics, alertKey, timestamp);
+                } else {
+                    // Handle single-metric rules
+                    this.evaluateRule(rule, guest, metrics, alertKey, timestamp);
+                }
             });
         });
     }
@@ -904,26 +912,40 @@ class AlertManager extends EventEmitter {
     }
 
     addRule(rule) {
-        if (!rule.id || !rule.name || !rule.metric) {
-            throw new Error('Rule must have id, name, and metric');
+        // Support both single-metric rules and compound threshold rules
+        const isCompoundRule = rule.thresholds && Array.isArray(rule.thresholds) && rule.thresholds.length > 0;
+        
+        if (!rule.name) {
+            throw new Error('Rule must have a name');
         }
+        
+        if (!isCompoundRule && !rule.metric) {
+            throw new Error('Single-metric rule must have a metric, or provide thresholds for compound rule');
+        }
+        
+        const ruleId = rule.id || (isCompoundRule ? 
+            `compound_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : 
+            `rule_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
         
         // Set defaults for new rules
         const fullRule = {
+            id: ruleId,
             condition: 'greater_than',
             duration: 300000,
             severity: 'warning',
             enabled: true,
             tags: [],
-            group: 'custom',
+            group: isCompoundRule ? 'compound_threshold' : 'custom',
             escalationTime: 900000,
             autoResolve: true,
             suppressionTime: 300000,
             notificationChannels: ['default'],
+            type: isCompoundRule ? 'compound_threshold' : 'single_metric',
             ...rule
         };
         
-        this.alertRules.set(rule.id, fullRule);
+        this.alertRules.set(ruleId, fullRule);
+        console.log(`[AlertManager] Added ${isCompoundRule ? 'compound threshold' : 'single-metric'} rule: ${fullRule.name} (${ruleId})`);
         this.emit('ruleAdded', fullRule);
         return fullRule;
     }
@@ -967,6 +989,123 @@ class AlertManager extends EventEmitter {
         }
         
         this.emit('rulesRefreshed', { activeRules: nowActiveRules.size, disabledRules });
+    }
+
+
+    evaluateCompoundThresholdRule(rule, guest, metrics, alertKey, timestamp) {
+        const guestMetrics = metrics[guest.vmid] || metrics[guest.name];
+        if (!guestMetrics || !guestMetrics.current) return;
+
+        // Check if ALL threshold conditions are met (AND logic)
+        const thresholdsMet = rule.thresholds.every(threshold => {
+            return this.evaluateThresholdCondition(threshold, guestMetrics.current, guest);
+        });
+
+        const existingAlert = this.activeAlerts.get(alertKey);
+
+        if (thresholdsMet) {
+            if (!existingAlert) {
+                // Create new alert
+                const alert = {
+                    id: alertKey,
+                    ruleId: rule.id,
+                    rule: rule,
+                    guest: guest,
+                    severity: rule.severity,
+                    message: this.formatCompoundThresholdMessage(rule, guestMetrics.current, guest),
+                    timestamp: timestamp,
+                    state: 'firing',
+                    values: this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest)
+                };
+
+                this.fireAlert(alert);
+            }
+        } else if (existingAlert) {
+            // Resolve existing alert
+            this.resolveAlert(alertKey, timestamp, 'Thresholds no longer exceeded');
+        }
+    }
+
+    evaluateThresholdCondition(threshold, currentMetrics, guest) {
+        let metricValue;
+
+        switch (threshold.type) {
+            case 'cpu':
+                metricValue = currentMetrics.cpu;
+                break;
+            case 'memory':
+                metricValue = currentMetrics.memory;
+                break;
+            case 'disk':
+                metricValue = currentMetrics.disk;
+                break;
+            case 'diskread':
+                metricValue = currentMetrics.diskread;
+                break;
+            case 'diskwrite':
+                metricValue = currentMetrics.diskwrite;
+                break;
+            case 'netin':
+                metricValue = currentMetrics.netin;
+                break;
+            case 'netout':
+                metricValue = currentMetrics.netout;
+                break;
+            default:
+                return false;
+        }
+
+        if (metricValue === undefined || metricValue === null || isNaN(metricValue)) {
+            return false;
+        }
+
+        return metricValue >= threshold.value;
+    }
+
+    formatCompoundThresholdMessage(rule, currentMetrics, guest) {
+        const conditions = rule.thresholds.map(threshold => {
+            const value = this.getThresholdCurrentValue(threshold, currentMetrics);
+            const displayName = this.getThresholdDisplayName(threshold.type);
+            const unit = ['cpu', 'memory', 'disk'].includes(threshold.type) ? '%' : ' bytes/s';
+            
+            return `${displayName}: ${value}${unit} (≥ ${threshold.value}${unit})`;
+        }).join(', ');
+
+        return `Dynamic threshold rule "${rule.name}" triggered for ${guest.name}: ${conditions}`;
+    }
+
+    getCurrentThresholdValues(thresholds, currentMetrics, guest) {
+        const values = {};
+        thresholds.forEach(threshold => {
+            values[threshold.type] = this.getThresholdCurrentValue(threshold, currentMetrics);
+        });
+        return values;
+    }
+
+    getThresholdCurrentValue(threshold, currentMetrics) {
+        switch (threshold.type) {
+            case 'cpu': return currentMetrics.cpu || 0;
+            case 'memory': return currentMetrics.memory || 0;
+            case 'disk': return currentMetrics.disk || 0;
+            case 'diskread': return currentMetrics.diskread || 0;
+            case 'diskwrite': return currentMetrics.diskwrite || 0;
+            case 'netin': return currentMetrics.netin || 0;
+            case 'netout': return currentMetrics.netout || 0;
+            default: return 0;
+        }
+    }
+
+    getThresholdDisplayName(type) {
+        const names = {
+            'cpu': 'CPU',
+            'memory': 'Memory',
+            'disk': 'Disk',
+            'diskread': 'Disk Read',
+            'diskwrite': 'Disk Write',
+            'netin': 'Network In',
+            'netout': 'Network Out'
+        };
+        return names[type] || type;
     }
 
     /**
