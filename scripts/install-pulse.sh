@@ -817,7 +817,10 @@ perform_remove() {
     sleep 2
     pkill -9 -f "/opt/pulse/server/index.js" 2>/dev/null || true
     
+    # Remove all pulse-related service files
     rm -f "/etc/systemd/system/$SERVICE_NAME"
+    rm -f "/etc/systemd/system/pulse-monitor.service"
+    rm -f "/etc/systemd/system/pulse-proxmox.service"
     systemctl daemon-reload
     
     # Remove directories
