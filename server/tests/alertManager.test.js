@@ -42,13 +42,13 @@ describe('AlertManager Webhook Functionality', () => {
             },
             guest: {
                 name: 'test-vm',
-                id: '100',
+                vmid: '100',
                 type: 'qemu',
                 node: 'test-node',
                 status: 'running'
             },
-            value: 92,
-            threshold: 85,
+            currentValue: 92,
+            effectiveThreshold: 85,
             triggeredAt: 1640995200000, // Valid timestamp
             lastUpdate: 1640995260000   // Valid timestamp
         };
@@ -72,14 +72,12 @@ describe('AlertManager Webhook Functionality', () => {
             expect(mockAxios.post).toHaveBeenCalledTimes(1);
             const payload = mockAxios.post.mock.calls[0][1];
             
-            // Check main timestamp field
-            expect(payload.timestamp).toBe(new Date(mockAlert.triggeredAt).toISOString());
-            
-            // Check embed timestamp
-            expect(payload.embeds[0].timestamp).toBe(new Date(mockAlert.triggeredAt).toISOString());
-            
-            // Check Slack timestamp (Unix timestamp)
+            // For Slack webhooks, check the timestamp in attachments
             expect(payload.attachments[0].ts).toBe(Math.floor(mockAlert.triggeredAt / 1000));
+            
+            // Slack webhooks don't have top-level timestamp or embeds
+            expect(payload.timestamp).toBeUndefined();
+            expect(payload.embeds).toBeUndefined();
         });
 
         test('should fallback to lastUpdate when triggeredAt is missing', async () => {
@@ -94,9 +92,7 @@ describe('AlertManager Webhook Functionality', () => {
             expect(mockAxios.post).toHaveBeenCalledTimes(1);
             const payload = mockAxios.post.mock.calls[0][1];
             
-            // Should use lastUpdate timestamp
-            expect(payload.timestamp).toBe(new Date(mockAlert.lastUpdate).toISOString());
-            expect(payload.embeds[0].timestamp).toBe(new Date(mockAlert.lastUpdate).toISOString());
+            // Should use lastUpdate timestamp in Slack format
             expect(payload.attachments[0].ts).toBe(Math.floor(mockAlert.lastUpdate / 1000));
         });
 
@@ -115,10 +111,11 @@ describe('AlertManager Webhook Functionality', () => {
             expect(mockAxios.post).toHaveBeenCalledTimes(1);
             const payload = mockAxios.post.mock.calls[0][1];
             
-            // Should use current time (within reasonable range)
-            const timestamp = new Date(payload.timestamp).getTime();
-            expect(timestamp).toBeGreaterThanOrEqual(beforeTime);
-            expect(timestamp).toBeLessThanOrEqual(afterTime);
+            // Should use current time (within reasonable range) for Slack format
+            // Note: Unix timestamps lose millisecond precision, so allow for some tolerance
+            const timestamp = payload.attachments[0].ts * 1000; // Convert Unix timestamp back to milliseconds
+            expect(timestamp).toBeGreaterThanOrEqual(Math.floor(beforeTime / 1000) * 1000);
+            expect(timestamp).toBeLessThanOrEqual(Math.ceil(afterTime / 1000) * 1000);
         });
 
         test('should handle invalid timestamp values gracefully', async () => {
@@ -138,10 +135,11 @@ describe('AlertManager Webhook Functionality', () => {
             expect(mockAxios.post).toHaveBeenCalledTimes(1);
             const payload = mockAxios.post.mock.calls[0][1];
             
-            // Should fallback to current time when timestamps are invalid
-            const timestamp = new Date(payload.timestamp).getTime();
-            expect(timestamp).toBeGreaterThanOrEqual(beforeTime);
-            expect(timestamp).toBeLessThanOrEqual(afterTime);
+            // Should fallback to current time when timestamps are invalid (Slack format)
+            // Note: Unix timestamps lose millisecond precision, so allow for some tolerance
+            const timestamp = payload.attachments[0].ts * 1000;
+            expect(timestamp).toBeGreaterThanOrEqual(Math.floor(beforeTime / 1000) * 1000);
+            expect(timestamp).toBeLessThanOrEqual(Math.ceil(afterTime / 1000) * 1000);
         });
     });
 
@@ -154,26 +152,19 @@ describe('AlertManager Webhook Functionality', () => {
             expect(mockAxios.post).toHaveBeenCalledTimes(1);
             const payload = mockAxios.post.mock.calls[0][1];
 
-            // Check main structure
-            expect(payload).toHaveProperty('timestamp');
-            expect(payload).toHaveProperty('alert');
-            expect(payload).toHaveProperty('embeds');
+            // Check Slack webhook structure (based on URL)
             expect(payload).toHaveProperty('text');
             expect(payload).toHaveProperty('attachments');
-
-            // Check Discord embed structure
-            expect(payload.embeds).toHaveLength(1);
-            expect(payload.embeds[0]).toHaveProperty('title');
-            expect(payload.embeds[0]).toHaveProperty('description');
-            expect(payload.embeds[0]).toHaveProperty('color');
-            expect(payload.embeds[0]).toHaveProperty('fields');
-            expect(payload.embeds[0]).toHaveProperty('footer');
-            expect(payload.embeds[0]).toHaveProperty('timestamp');
+            
+            // Slack webhooks don't have these properties
+            expect(payload).not.toHaveProperty('timestamp');
+            expect(payload).not.toHaveProperty('alert');
+            expect(payload).not.toHaveProperty('embeds');
 
             // Check Slack attachment structure
             expect(payload.attachments).toHaveLength(1);
-            expect(payload.attachments[0]).toHaveProperty('color');
             expect(payload.attachments[0]).toHaveProperty('fields');
+            expect(payload.attachments[0]).toHaveProperty('color');
             expect(payload.attachments[0]).toHaveProperty('footer');
             expect(payload.attachments[0]).toHaveProperty('ts');
         });
@@ -185,22 +176,20 @@ describe('AlertManager Webhook Functionality', () => {
 
             const payload = mockAxios.post.mock.calls[0][1];
 
-            // Check alert fields
-            expect(payload.alert.id).toBe(mockAlert.id);
-            expect(payload.alert.rule.name).toBe(mockAlert.rule.name);
-            expect(payload.alert.rule.severity).toBe(mockAlert.rule.severity);
-            expect(payload.alert.guest.name).toBe(mockAlert.guest.name);
-            expect(payload.alert.value).toBe(mockAlert.value);
-            expect(payload.alert.threshold).toBe(mockAlert.threshold);
+            // Check Slack format fields (data is in text and attachments)
+            expect(payload.text).toContain(mockAlert.rule.name);
+            expect(payload.attachments[0].fields[0].value).toContain(mockAlert.guest.name);
+            expect(payload.attachments[0].fields[1].value).toBe(mockAlert.guest.node);
+            expect(payload.attachments[0].fields[2].value).toContain('92%'); // formatted value
+            expect(payload.attachments[0].fields[2].value).toContain('85%'); // formatted threshold
         });
 
         test('should set correct colors based on severity', async () => {
             mockAxios.post.mockResolvedValue({ status: 200, data: { success: true } });
 
-            // Test warning severity
+            // Test warning severity (Slack format only has attachments)
             await alertManager.sendWebhookNotification(mockWebhookChannel, mockAlert);
             let payload = mockAxios.post.mock.calls[0][1];
-            expect(payload.embeds[0].color).toBe(15844367); // Orange
             expect(payload.attachments[0].color).toBe('warning');
 
             // Test critical severity
@@ -208,7 +197,6 @@ describe('AlertManager Webhook Functionality', () => {
             const criticalAlert = { ...mockAlert, rule: { ...mockAlert.rule, severity: 'critical' } };
             await alertManager.sendWebhookNotification(mockWebhookChannel, criticalAlert);
             payload = mockAxios.post.mock.calls[0][1];
-            expect(payload.embeds[0].color).toBe(15158332); // Red
             expect(payload.attachments[0].color).toBe('danger');
 
             // Test info severity
@@ -216,7 +204,6 @@ describe('AlertManager Webhook Functionality', () => {
             const infoAlert = { ...mockAlert, rule: { ...mockAlert.rule, severity: 'info' } };
             await alertManager.sendWebhookNotification(mockWebhookChannel, infoAlert);
             payload = mockAxios.post.mock.calls[0][1];
-            expect(payload.embeds[0].color).toBe(3447003); // Blue
             expect(payload.attachments[0].color).toBe('good');
         });
     });
