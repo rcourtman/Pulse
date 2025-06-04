@@ -279,9 +279,19 @@ restore_from_backup() {
     # Restore user data
     if [ -d "$backup_dir/data" ]; then
         print_info "Restoring user data..."
-        cp -r "$backup_dir/data" "$PULSE_DIR/"
+        # Ensure data directory exists
+        mkdir -p "$PULSE_DIR/data"
+        # Copy contents, preserving structure
+        cp -r "$backup_dir/data/"* "$PULSE_DIR/data/" 2>/dev/null || true
         chown -R "$PULSE_USER:$PULSE_USER" "$PULSE_DIR/data"
-        print_success "User data restored"
+        
+        # Verify restoration
+        local restored_files=$(find "$PULSE_DIR/data" -type f 2>/dev/null | wc -l)
+        print_success "User data restored ($restored_files files)"
+        
+        # Log specific important files
+        [ -f "$PULSE_DIR/data/custom-thresholds.json" ] && print_info "✓ Custom thresholds restored"
+        [ -f "$PULSE_DIR/data/acknowledgements.json" ] && print_info "✓ Alert acknowledgements restored"
     fi
     
     # Restore .env file
