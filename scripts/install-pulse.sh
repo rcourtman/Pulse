@@ -372,6 +372,11 @@ install_dependencies() {
         fi
     done
     
+    # Check for polkit separately since it's a package, not a command
+    if ! command -v pkexec &> /dev/null; then
+        missing_deps="$missing_deps policykit-1"
+    fi
+    
     if [ -n "$missing_deps" ]; then
         print_info "Installing:$missing_deps"
         apt-get install -y -qq $missing_deps || { print_error "Failed to install dependencies"; exit 1; }
@@ -491,6 +496,9 @@ EOF
 # Setup polkit rule for sudoless service management
 setup_polkit_rule() {
     print_info "Setting up polkit rule for automatic updates..."
+    
+    # Note: polkit is required for sudoless updates in the web interface
+    # Without this, users would need to manually restart the service after updates
     
     # Create polkit rules directory if it doesn't exist
     mkdir -p /etc/polkit-1/rules.d
