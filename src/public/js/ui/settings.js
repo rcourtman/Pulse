@@ -183,6 +183,13 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'system') {
             // Auto-check for latest version when system tab is opened
             checkLatestVersion();
+            // Initialize update channel warning visibility
+            setTimeout(() => {
+                const channelSelect = document.querySelector('select[name="UPDATE_CHANNEL"]');
+                if (channelSelect) {
+                    onUpdateChannelChange(channelSelect.value);
+                }
+            }, 0);
         } else if (activeTab === 'alerts') {
             // Load threshold configurations when alerts tab is opened
             loadThresholdConfigurations();
@@ -716,6 +723,45 @@ PulseApp.ui.settings = (() => {
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Software Updates</h3>
                 
+                <!-- Update Channel Preference -->
+                <div class="mb-6 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="mb-4">
+                        <h4 class="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-2">Update Channel</h4>
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Choose which types of updates to receive
+                        </p>
+                        <select name="UPDATE_CHANNEL" onchange="PulseApp.ui.settings.onUpdateChannelChange(this.value)"
+                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="stable" ${(advanced.updateChannel || 'stable') === 'stable' ? 'selected' : ''}>
+                                Stable - Production releases (recommended)
+                            </option>
+                            <option value="rc" ${(advanced.updateChannel || 'stable') === 'rc' ? 'selected' : ''}>
+                                Release Candidate - Test fixes and new features
+                            </option>
+                        </select>
+                        <div id="update-channel-description" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                            <div class="space-y-1">
+                                <div><strong>Stable:</strong> Thoroughly tested releases for production use</div>
+                                <div><strong>RC:</strong> Pre-release versions for testing - may contain bugs</div>
+                            </div>
+                        </div>
+                        <div id="rc-warning" class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hidden">
+                            <div class="flex items-start gap-2">
+                                <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                                </svg>
+                                <div>
+                                    <h5 class="text-sm font-semibold text-amber-800 dark:text-amber-200">Release Candidate Warning</h5>
+                                    <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                                        RC versions are pre-release software for testing fixes and new features. 
+                                        They may contain bugs. Only select this if you want to help test and provide feedback.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Auto-update Setting -->
                 <div class="mb-6 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
                     <div class="flex items-center justify-between">
@@ -764,6 +810,7 @@ PulseApp.ui.settings = (() => {
                             <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
                                 Latest Version: <span id="latest-version" class="font-mono font-semibold text-gray-500 dark:text-gray-400">Checking...</span>
                             </p>
+                            <p id="update-channel-info" class="text-sm text-gray-500 dark:text-gray-400 mt-1"></p>
                             <p id="version-status" class="text-sm mt-1"></p>
                         </div>
                         <button type="button" onclick="PulseApp.ui.settings.checkForUpdates()" 
@@ -1336,12 +1383,17 @@ PulseApp.ui.settings = (() => {
     async function checkLatestVersion() {
         const latestVersionElement = document.getElementById('latest-version');
         const versionStatusElement = document.getElementById('version-status');
+        const updateChannelInfoElement = document.getElementById('update-channel-info');
         
         if (!latestVersionElement) return;
         
         try {
             latestVersionElement.textContent = 'Checking...';
             latestVersionElement.className = 'font-mono font-semibold text-gray-500 dark:text-gray-400';
+            
+            if (updateChannelInfoElement) {
+                updateChannelInfoElement.textContent = '';
+            }
             
             // Use the server's update check API to get proper update info
             const response = await fetch('/api/updates/check');
@@ -1356,6 +1408,11 @@ PulseApp.ui.settings = (() => {
                 // Update stored config version if server provided it
                 if (data.currentVersion) {
                     currentConfig.version = data.currentVersion;
+                }
+                
+                // Display update channel information
+                if (updateChannelInfoElement && data.updateChannel) {
+                    updateChannelInfoElement.textContent = `Update channel: ${data.updateChannel}`;
                 }
                 
                 if (data.updateAvailable) {
@@ -2637,6 +2694,18 @@ PulseApp.ui.settings = (() => {
     }
 
     // Public API
+    // Handle update channel selection change
+    function onUpdateChannelChange(value) {
+        const rcWarning = document.getElementById('rc-warning');
+        if (rcWarning) {
+            if (value === 'rc') {
+                rcWarning.classList.remove('hidden');
+            } else {
+                rcWarning.classList.add('hidden');
+            }
+        }
+    }
+
     return {
         init,
         openModal,
@@ -2651,7 +2720,8 @@ PulseApp.ui.settings = (() => {
         changeTheme,
         runDiagnostics,
         copyDiagnosticReport,
-        downloadDiagnosticReport
+        downloadDiagnosticReport,
+        onUpdateChannelChange
     };
 })();
 

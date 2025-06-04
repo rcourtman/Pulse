@@ -4,6 +4,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const { exec } = require('child_process');
 const { promisify } = require('util');
+const { getUpdateChannelPreference } = require('./configLoader');
 const execAsync = promisify(exec);
 
 class UpdateManager {
@@ -14,23 +15,119 @@ class UpdateManager {
     }
 
     /**
+     * Check if current version is a release candidate
+     */
+    isReleaseCandidate(version) {
+        // Only use currentVersion as default if no argument is passed at all
+        const versionToCheck = (arguments.length === 0) ? this.currentVersion : version;
+        
+        if (!versionToCheck || typeof versionToCheck !== 'string') {
+            return false;
+        }
+        return versionToCheck.includes('-rc') || versionToCheck.includes('-alpha') || versionToCheck.includes('-beta');
+    }
+
+    /**
+     * Validate download URL for security
+     */
+    isValidDownloadUrl(downloadUrl) {
+        if (!downloadUrl || typeof downloadUrl !== 'string') {
+            return false;
+        }
+        
+        try {
+            const url = new URL(downloadUrl);
+            
+            // Allow test mode URLs
+            if (process.env.UPDATE_TEST_MODE === 'true' && 
+                url.hostname === 'localhost' && 
+                url.pathname.includes('/api/test/mock-update.tar.gz')) {
+                return true;
+            }
+            
+            // Only allow HTTPS GitHub release asset URLs
+            return url.protocol === 'https:' &&
+                   url.hostname === 'github.com' && 
+                   url.pathname.includes('/releases/download/') &&
+                   url.pathname.includes(`/${this.githubRepo}/`);
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
      * Check for available updates
      */
     async checkForUpdates() {
         try {
             console.log('[UpdateManager] Checking for updates...');
             
-            // Fetch latest release from GitHub
-            const response = await axios.get(
-                `https://api.github.com/repos/${this.githubRepo}/releases/latest`,
-                {
-                    headers: {
-                        'Accept': 'application/vnd.github.v3+json',
-                        'User-Agent': 'Pulse-Update-Checker'
-                    },
-                    timeout: 10000
+            const updateChannel = getUpdateChannelPreference();
+            let response;
+            let channelDescription = '';
+            
+            if (updateChannel === 'stable') {
+                // Stable channel: only check latest stable release
+                channelDescription = 'stable releases only';
+                console.log('[UpdateManager] Checking for stable releases...');
+                response = await axios.get(
+                    `https://api.github.com/repos/${this.githubRepo}/releases/latest`,
+                    {
+                        headers: {
+                            'Accept': 'application/vnd.github.v3+json',
+                            'User-Agent': 'Pulse-Update-Checker'
+                        },
+                        timeout: 10000
+                    }
+                );
+            } else {
+                // RC channel: check all releases for RC versions
+                channelDescription = 'RC releases only';
+                console.log('[UpdateManager] Checking for RC releases...');
+                response = await axios.get(
+                    `https://api.github.com/repos/${this.githubRepo}/releases?per_page=10`,
+                    {
+                        headers: {
+                            'Accept': 'application/vnd.github.v3+json',
+                            'User-Agent': 'Pulse-Update-Checker'
+                        },
+                        timeout: 10000
+                    }
+                );
+
+                // Find the latest RC release that's newer than current
+                let latestRelease = null;
+                const releases = response.data;
+                
+                for (const release of releases) {
+                    const releaseVersion = release.tag_name.replace('v', '');
+                    const releaseIsRC = this.isReleaseCandidate(releaseVersion);
+                    
+                    if (releaseIsRC && semver.gt(releaseVersion, this.currentVersion)) {
+                        latestRelease = release;
+                        break;
+                    }
                 }
-            );
+                
+                if (!latestRelease) {
+                    // No newer RC version found
+                    const updateInfo = {
+                        currentVersion: this.currentVersion,
+                        latestVersion: this.currentVersion,
+                        updateAvailable: false,
+                        isDocker: this.isDockerEnvironment(),
+                        releaseNotes: 'No newer RC version available',
+                        releaseUrl: null,
+                        publishedAt: null,
+                        assets: [],
+                        updateChannel: channelDescription
+                    };
+                    console.log(`[UpdateManager] No RC updates available: ${this.currentVersion}`);
+                    return updateInfo;
+                }
+                
+                response.data = latestRelease;
+            }
 
             const latestVersion = response.data.tag_name.replace('v', '');
             const updateAvailable = semver.gt(latestVersion, this.currentVersion);
@@ -43,6 +140,7 @@ class UpdateManager {
                 releaseNotes: response.data.body || 'No release notes available',
                 releaseUrl: response.data.html_url,
                 publishedAt: response.data.published_at,
+                updateChannel: channelDescription,
                 assets: response.data.assets.map(asset => ({
                     name: asset.name,
                     size: asset.size,
@@ -50,7 +148,7 @@ class UpdateManager {
                 }))
             };
 
-            console.log(`[UpdateManager] Current version: ${this.currentVersion}, Latest version: ${latestVersion}, Docker: ${updateInfo.isDocker}`);
+            console.log(`[UpdateManager] Current version: ${this.currentVersion}, Latest version: ${latestVersion}, Channel: ${channelDescription}, Docker: ${updateInfo.isDocker}`);
             return updateInfo;
 
         } catch (error) {
@@ -64,6 +162,11 @@ class UpdateManager {
      */
     async downloadUpdate(downloadUrl, progressCallback) {
         try {
+            // Validate download URL for security
+            if (!this.isValidDownloadUrl(downloadUrl)) {
+                throw new Error('Invalid download URL. Only GitHub release assets are allowed.');
+            }
+            
             console.log('[UpdateManager] Downloading update from:', downloadUrl);
             
             const tempDir = path.join(__dirname, '..', 'temp');

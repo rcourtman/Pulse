@@ -32,6 +32,19 @@ class ConfigurationError extends Error {
   }
 }
 
+// Function to get update channel preference
+function getUpdateChannelPreference() {
+    const updateChannel = process.env.UPDATE_CHANNEL || 'stable';
+    const validChannels = ['stable', 'rc'];
+    
+    if (!validChannels.includes(updateChannel)) {
+        console.warn(`WARN: Invalid UPDATE_CHANNEL value "${updateChannel}". Using default "stable".`);
+        return 'stable';
+    }
+    
+    return updateChannel;
+}
+
 // Function to load PBS configuration
 function loadPbsConfig(index = null) {
     const suffix = index ? `_${index}` : '';
@@ -278,8 +291,12 @@ function loadConfiguration() {
     }
 
     // console.log('INFO: Configuration loaded successfully.');
+    
+    // Load update channel preference
+    const updateChannel = getUpdateChannelPreference();
+    
     // Return the flag along with endpoints and pbsConfigs
-    return { endpoints, pbsConfigs, isConfigPlaceholder };
+    return { endpoints, pbsConfigs, isConfigPlaceholder, updateChannel };
 }
 
-module.exports = { loadConfiguration, ConfigurationError }; // Export the function and error class
+module.exports = { loadConfiguration, getUpdateChannelPreference, ConfigurationError }; // Export the function and error class

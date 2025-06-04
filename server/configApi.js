@@ -48,6 +48,7 @@ class ConfigApi {
                 advanced: {
                     metricInterval: config.PULSE_METRIC_INTERVAL_MS,
                     discoveryInterval: config.PULSE_DISCOVERY_INTERVAL_MS,
+                    updateChannel: config.UPDATE_CHANNEL || 'stable',
                     alerts: {
                         cpu: {
                             enabled: config.ALERT_CPU_ENABLED !== 'false',
@@ -271,6 +272,14 @@ class ConfigApi {
         // Update existing config with new values
         Object.entries(config).forEach(([key, value]) => {
             if (value !== undefined && value !== '') {
+                // Special validation for UPDATE_CHANNEL
+                if (key === 'UPDATE_CHANNEL') {
+                    const validChannels = ['stable', 'rc'];
+                    if (!validChannels.includes(value)) {
+                        console.warn(`WARN: Invalid UPDATE_CHANNEL value "${value}" in config. Skipping.`);
+                        return; // Skip this invalid value
+                    }
+                }
                 existingConfig[key] = value;
             }
         });
@@ -595,8 +604,8 @@ class ConfigApi {
             if (keys.length > 0 && keys.some(key => config[key])) {
                 lines.push(`# ${groupName}`);
                 keys.forEach(key => {
-                    if (config[key] !== undefined && config[key] !== '') {
-                        const value = config[key];
+                    if (config[key] !== undefined && config[key] !== '' && config[key] !== null) {
+                        const value = String(config[key]); // Ensure value is a string
                         const needsQuotes = value.includes(' ') || value.includes('#') || value.includes('=');
                         lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
                     }
@@ -621,8 +630,8 @@ class ConfigApi {
                     `PROXMOX_ALLOW_SELF_SIGNED_CERTS_${index}`
                 ];
                 orderedKeys.forEach(key => {
-                    if (config[key] !== undefined && config[key] !== '') {
-                        const value = config[key];
+                    if (config[key] !== undefined && config[key] !== '' && config[key] !== null) {
+                        const value = String(config[key]); // Ensure value is a string
                         const needsQuotes = value.includes(' ') || value.includes('#') || value.includes('=');
                         lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
                     }
@@ -646,8 +655,8 @@ class ConfigApi {
                     `PBS_ALLOW_SELF_SIGNED_CERTS_${index}`
                 ];
                 orderedKeys.forEach(key => {
-                    if (config[key] !== undefined && config[key] !== '') {
-                        const value = config[key];
+                    if (config[key] !== undefined && config[key] !== '' && config[key] !== null) {
+                        const value = String(config[key]); // Ensure value is a string
                         const needsQuotes = value.includes(' ') || value.includes('#') || value.includes('=');
                         lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
                     }
@@ -662,8 +671,8 @@ class ConfigApi {
             if (keys.length > 0 && keys.some(key => config[key])) {
                 lines.push(`# ${groupName}`);
                 keys.forEach(key => {
-                    if (config[key] !== undefined && config[key] !== '') {
-                        const value = config[key];
+                    if (config[key] !== undefined && config[key] !== '' && config[key] !== null) {
+                        const value = String(config[key]); // Ensure value is a string
                         const needsQuotes = value.includes(' ') || value.includes('#') || value.includes('=');
                         lines.push(`${key}=${needsQuotes ? `"${value}"` : value}`);
                     }
