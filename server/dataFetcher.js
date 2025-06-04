@@ -212,7 +212,7 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 endpointType = 'standalone';
             }
         } else if (clusterStatusResult.status === 'rejected') {
-            console.error(`[DataFetcher - ${endpointName}] Error fetching /cluster/status: ${clusterStatusResult.reason?.message || clusterStatusResult.reason}`);
+            console.error(`[DataFetcher - ${endpointName}] Error fetching /cluster/status: ${clusterStatusResult.reason?.message || clusterStatusResult.reason}`, clusterStatusResult.reason);
             endpointType = 'standalone'; // Fallback
         }
 
@@ -230,7 +230,12 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 actualClusterName = standaloneNodeName;
             }
         } else if (nodesResult.status === 'rejected') {
-            console.error(`[DataFetcher - ${endpointName}] Failed to fetch nodes: ${nodesResult.reason?.message || nodesResult.reason}`);
+            if (clusterStatusResult.status === 'rejected') {
+                // Both cluster status and nodes failed
+                console.error(`[DataFetcher - ${endpointName}] Also failed to fetch /nodes after /cluster/status error: ${nodesResult.reason?.message || nodesResult.reason}`);
+            } else {
+                console.error(`[DataFetcher - ${endpointName}] Failed to fetch nodes: ${nodesResult.reason?.message || nodesResult.reason}`);
+            }
             return { nodes: [], vms: [], containers: [] };
         }
         
@@ -1402,7 +1407,7 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
       : { backupTasks: [], storageBackups: [], guestSnapshots: [] };
   
   if (backupResults[0].status === 'rejected') {
-      console.error("[DataFetcher] Error fetching PBS data:", backupResults[0].reason);
+      console.error("[DataFetcher] Error during parallel backup data fetch:", backupResults[0].reason);
   }
   if (backupResults[1].status === 'rejected') {
       console.error("[DataFetcher] Error fetching PVE backup data:", backupResults[1].reason);
@@ -1657,10 +1662,17 @@ async function fetchPbsVersionInfo({ client, config }) {
     }
 }
 
+// Function to clear caches for testing
+function clearCaches() {
+    nodeConnectionCache.clear();
+    nodeStateCache.clear();
+}
+
 module.exports = {
     fetchDiscoveryData,
     fetchPbsData, // Keep exporting the real one
     fetchMetricsData,
+    clearCaches, // Export for testing
     // Potentially export PBS helpers if needed elsewhere, but keep internal if not
     // fetchPbsNodeName,
     // fetchPbsDatastoreData,

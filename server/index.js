@@ -198,7 +198,9 @@ app.get('/api/updates/check', async (req, res) => {
             return res.json(mockUpdateInfo);
         }
         
-        const updateInfo = await updateManager.checkForUpdates();
+        // Allow override of update channel via query parameter for preview
+        const channelOverride = req.query.channel;
+        const updateInfo = await updateManager.checkForUpdates(channelOverride);
         res.json(updateInfo);
     } catch (error) {
         console.error('Error checking for updates:', error);
@@ -229,10 +231,10 @@ app.post('/api/updates/apply', async (req, res) => {
                     io.emit('updateProgress', progress);
                 });
 
-                // Apply update
+                // Apply update (pass download URL for version extraction)
                 await updateManager.applyUpdate(updateFile, (progress) => {
                     io.emit('updateProgress', progress);
-                });
+                }, downloadUrl);
 
                 io.emit('updateComplete', { success: true });
             } catch (error) {

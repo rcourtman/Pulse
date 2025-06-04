@@ -5,6 +5,8 @@ PulseApp.ui.settings = (() => {
     let isInitialized = false;
     let activeTab = 'proxmox';
     let latestReleaseData = null; // Store the latest release data
+    let updateCache = new Map(); // Cache update check results to reduce API calls
+    let updateCheckTimeout = null; // Debounce rapid channel changes
 
     function init() {
         if (isInitialized) return;
@@ -740,10 +742,7 @@ PulseApp.ui.settings = (() => {
                             </option>
                         </select>
                         <div id="update-channel-description" class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                            <div class="space-y-1">
-                                <div><strong>Stable:</strong> Thoroughly tested releases for production use</div>
-                                <div><strong>RC:</strong> Pre-release versions for testing - may contain bugs</div>
-                            </div>
+                            <strong>Stable:</strong> Thoroughly tested releases for production use
                         </div>
                         <div id="rc-warning" class="mt-3 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hidden">
                             <div class="flex items-start gap-2">
@@ -808,9 +807,28 @@ PulseApp.ui.settings = (() => {
                                 Current Version: <span id="current-version" class="font-mono font-semibold">${currentConfig.version || 'Unknown'}</span>
                             </p>
                             <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                                Latest Version: <span id="latest-version" class="font-mono font-semibold text-gray-500 dark:text-gray-400">Checking...</span>
+                                <span id="latest-version-label">Latest Version</span>: <span id="latest-version" class="font-mono font-semibold text-gray-500 dark:text-gray-400">Checking...</span>
                             </p>
                             <p id="update-channel-info" class="text-sm text-gray-500 dark:text-gray-400 mt-1"></p>
+                            <div id="channel-mismatch-warning" class="hidden mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                <div class="flex items-start gap-2">
+                                    <svg class="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                                    </svg>
+                                    <div>
+                                        <h5 class="text-sm font-semibold text-blue-800 dark:text-blue-200">Channel Recommendation</h5>
+                                        <p id="channel-mismatch-message" class="text-sm text-blue-700 dark:text-blue-300 mt-1"></p>
+                                        <div class="mt-2 space-x-3">
+                                            <button type="button" id="switch-to-stable-btn" class="text-sm text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-200 underline font-medium" onclick="PulseApp.ui.settings.proceedWithStableSwitch()">
+                                                Switch to stable release
+                                            </button>
+                                            <button type="button" id="cancel-switch-btn" class="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 underline" onclick="PulseApp.ui.settings.switchToChannel('rc')">
+                                                Cancel (stay on RC)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             <p id="version-status" class="text-sm mt-1"></p>
                         </div>
                         <button type="button" onclick="PulseApp.ui.settings.checkForUpdates()" 
@@ -828,16 +846,50 @@ PulseApp.ui.settings = (() => {
                 <div id="update-details" class="hidden">
                     <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
                         <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-                            <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
-                                Update Available: <span id="update-version"></span>
-                            </h4>
-                            <div id="update-release-notes" class="text-sm text-gray-700 dark:text-gray-300 prose prose-sm max-w-none"></div>
+                            <div class="flex items-center justify-between mb-3">
+                                <h4 class="text-sm font-semibold text-blue-800 dark:text-blue-200">
+                                    Update Available: <span id="update-version"></span>
+                                </h4>
+                                <span id="update-published-badge" class="text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-800 px-2 py-1 rounded"></span>
+                            </div>
+                            
+                            <!-- Compact Changes Summary -->
+                            <div id="changes-summary" class="mb-3">
+                                <div id="changes-loading" class="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-sm">
+                                    <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    Loading changes...
+                                </div>
+                                <div id="changes-summary-text" class="hidden text-sm text-gray-700 dark:text-gray-300"></div>
+                                <div id="changes-error" class="hidden text-red-600 dark:text-red-400 text-sm"></div>
+                            </div>
+                            
+                            <!-- Expandable Details -->
+                            <div class="border-t border-blue-200 dark:border-blue-700 pt-3">
+                                <button type="button" id="toggle-details-btn" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-1">
+                                    <span>Show details</span>
+                                    <svg id="details-chevron" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                    </svg>
+                                </button>
+                                
+                                <div id="update-details-expanded" class="hidden mt-3 space-y-3">
+                                    <div id="detailed-changes" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-3">
+                                        <h5 class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Commit Details</h5>
+                                        <div id="changes-list" class="space-y-2 max-h-64 overflow-y-auto"></div>
+                                    </div>
+                                    
+                                    <div id="release-notes-section" class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded p-3">
+                                        <h5 class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-2">Release Notes</h5>
+                                        <div id="update-release-notes" class="text-sm text-gray-700 dark:text-gray-300 prose prose-sm max-w-none max-h-48 overflow-y-auto"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         
-                        <div class="flex items-center justify-between">
-                            <p class="text-sm text-gray-600 dark:text-gray-400">
-                                Published: <span id="update-published"></span>
-                            </p>
+                        <div class="flex justify-end">
                             <button type="button" onclick="PulseApp.ui.settings.applyUpdate()" 
                                     id="apply-update-button"
                                     class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm rounded-md flex items-center gap-2">
@@ -1380,10 +1432,13 @@ PulseApp.ui.settings = (() => {
     }
 
     // Check for latest version from GitHub releases
-    async function checkLatestVersion() {
+    // @param {string} channelOverride - Optional channel to check instead of saved config
+    async function checkLatestVersion(channelOverride = null) {
         const latestVersionElement = document.getElementById('latest-version');
+        const latestVersionLabelElement = document.getElementById('latest-version-label');
         const versionStatusElement = document.getElementById('version-status');
         const updateChannelInfoElement = document.getElementById('update-channel-info');
+        const channelMismatchWarning = document.getElementById('channel-mismatch-warning');
         
         if (!latestVersionElement) return;
         
@@ -1395,13 +1450,47 @@ PulseApp.ui.settings = (() => {
                 updateChannelInfoElement.textContent = '';
             }
             
-            // Use the server's update check API to get proper update info
-            const response = await fetch('/api/updates/check');
-            const data = await response.json();
+            if (channelMismatchWarning) {
+                channelMismatchWarning.classList.add('hidden');
+            }
             
-            if (response.ok && data.latestVersion) {
+            // Check cache first to reduce API calls
+            const cacheKey = channelOverride || 'default';
+            const cacheExpiry = 5 * 60 * 1000; // 5 minutes
+            const cachedResult = updateCache.get(cacheKey);
+            
+            let data;
+            if (cachedResult && (Date.now() - cachedResult.timestamp) < cacheExpiry) {
+                console.log(`[Settings] Using cached result for channel: ${cacheKey}`);
+                data = cachedResult.data;
+            } else {
+                // Use the server's update check API with optional channel override
+                const url = channelOverride ? `/api/updates/check?channel=${channelOverride}` : '/api/updates/check';
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.status} ${response.statusText}`);
+                }
+                
+                data = await response.json();
+                
+                // Cache the result
+                updateCache.set(cacheKey, {
+                    data: data,
+                    timestamp: Date.now()
+                });
+            }
+            
+            // Add preview indicator if using channel override
+            const isPreview = !!channelOverride;
+            
+            if (data && data.latestVersion) {
                 const latestVersion = data.latestVersion;
                 const currentVersion = data.currentVersion || currentConfig.version || 'Unknown';
+                // Parse channel from descriptive text (e.g., "RC releases only" -> "rc")
+                const rawChannel = data.updateChannel || 'stable';
+                const rawChannelLower = rawChannel.toLowerCase();
+                const updateChannel = (rawChannelLower.includes('rc') || rawChannelLower.includes('release candidate') || rawChannelLower.includes('alpha') || rawChannelLower.includes('beta')) ? 'rc' : 'stable';
                 
                 latestVersionElement.textContent = latestVersion;
                 
@@ -1410,15 +1499,60 @@ PulseApp.ui.settings = (() => {
                     currentConfig.version = data.currentVersion;
                 }
                 
-                // Display update channel information
-                if (updateChannelInfoElement && data.updateChannel) {
-                    updateChannelInfoElement.textContent = `Update channel: ${data.updateChannel}`;
+                // Update the label to be channel-specific
+                if (latestVersionLabelElement) {
+                    if (updateChannel === 'rc') {
+                        latestVersionLabelElement.textContent = 'Latest RC Version';
+                    } else {
+                        latestVersionLabelElement.textContent = 'Latest Stable Version';
+                    }
                 }
                 
-                if (data.updateAvailable) {
-                    // Update available
+                // Display update channel information with more context
+                if (updateChannelInfoElement) {
+                    const channelName = updateChannel === 'rc' ? 'Release Candidate (RC)' : 'Stable';
+                    const previewText = isPreview ? ' (Preview)' : '';
+                    updateChannelInfoElement.textContent = `Update channel: ${channelName}${previewText}`;
+                    
+                    // Add preview styling
+                    if (isPreview) {
+                        updateChannelInfoElement.classList.add('text-blue-600', 'dark:text-blue-400', 'font-medium');
+                    } else {
+                        updateChannelInfoElement.classList.remove('text-blue-600', 'dark:text-blue-400', 'font-medium');
+                    }
+                }
+                
+                // Check for channel mismatch and show recommendations
+                const currentVersionLower = currentVersion.toLowerCase();
+                const isCurrentRC = currentVersionLower.includes('-rc') || currentVersionLower.includes('-alpha') || currentVersionLower.includes('-beta');
+                const shouldShowRecommendation = (!isCurrentRC && updateChannel === 'rc');
+                
+                console.log('Channel debug:', { currentVersion, updateChannel, isCurrentRC, shouldShowRecommendation, serverResponse: data });
+                
+                if (shouldShowRecommendation && channelMismatchWarning) {
+                    const messageElement = document.getElementById('channel-mismatch-message');
+                    if (messageElement) {
+                        messageElement.textContent = `You're running a stable version (${currentVersion}) but checking for RC releases. Consider switching to the stable channel for production use.`;
+                    }
+                    channelMismatchWarning.classList.remove('hidden');
+                }
+                
+                // Check if this is a "downgrade" scenario (RC to stable)
+                const isDowngradeToStable = isCurrentRC && updateChannel === 'stable' && 
+                    currentVersion !== latestVersion;
+                
+                if (data.updateAvailable || isDowngradeToStable) {
+                    // Update available (or downgrade to stable)
                     latestVersionElement.className = 'font-mono font-semibold text-green-600 dark:text-green-400';
-                    versionStatusElement.innerHTML = '<span class="text-green-600 dark:text-green-400">📦 Update available!</span>';
+                    
+                    let updateText;
+                    if (isDowngradeToStable) {
+                        updateText = '📦 Switch to stable release available';
+                    } else {
+                        updateText = updateChannel === 'rc' ? '📦 RC Update available!' : '📦 Update available!';
+                    }
+                    
+                    versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${updateText}</span>`;
                     
                     // Convert server response to match GitHub API format for showUpdateDetails
                     const releaseData = {
@@ -1438,18 +1572,65 @@ PulseApp.ui.settings = (() => {
                         versionStatusElement.innerHTML += '<br><span class="text-amber-600 dark:text-amber-400 text-xs">Note: Docker deployments require manual update</span>';
                     }
                 } else {
-                    // Up to date
+                    // Up to date - hide any update details
+                    hideUpdateDetails();
+                    
                     latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
-                    versionStatusElement.innerHTML = '<span class="text-green-600 dark:text-green-400">✅ Up to date</span>';
+                    
+                    // Check if we should show "up to date" or "no updates" for RC on stable
+                    if (isCurrentRC && updateChannel === 'stable' && currentVersion === latestVersion) {
+                        // Same version on both channels
+                        const upToDateText = '✅ Up to date (same as stable)';
+                        versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
+                    } else if (isCurrentRC && updateChannel === 'stable') {
+                        // RC version is different from stable - should have been caught above as "downgrade"
+                        const upToDateText = '⚠️ No newer stable (running RC)';
+                        versionStatusElement.innerHTML = `<span class="text-amber-600 dark:text-amber-400">${upToDateText}</span>`;
+                    } else {
+                        const upToDateText = updateChannel === 'rc' ? '✅ Up to date (RC channel)' : '✅ Up to date';
+                        versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
+                    }
                 }
             } else {
-                throw new Error('Failed to fetch release data');
+                throw new Error('Invalid response data - missing version information');
             }
         } catch (error) {
             console.error('Error checking for updates:', error);
+            
+            // Hide update details on error
+            hideUpdateDetails();
+            
             latestVersionElement.textContent = 'Error';
             latestVersionElement.className = 'font-mono font-semibold text-red-500';
-            versionStatusElement.innerHTML = '<span class="text-red-500">Failed to check for updates</span>';
+            
+            // Provide more specific error messages
+            let errorMessage = 'Failed to check for updates';
+            if (error.message.includes('500')) {
+                errorMessage = 'Server error - please try again later';
+            } else if (error.message.includes('403') || error.message.includes('429')) {
+                errorMessage = 'Rate limited - please wait a moment';
+            } else if (error.message.includes('Failed to fetch')) {
+                errorMessage = 'Network error - check connection';
+            }
+            
+            versionStatusElement.innerHTML = `<span class="text-red-500">${errorMessage}</span>`;
+            
+            // If it's a rate limit issue, suggest using cached data if available
+            if (error.message.includes('403') || error.message.includes('429')) {
+                const cacheKey = channelOverride || 'default';
+                const staleCache = updateCache.get(cacheKey);
+                if (staleCache) {
+                    console.log('[Settings] Using stale cache due to rate limiting');
+                    // Recursively call with cached data
+                    setTimeout(() => {
+                        const cachedData = staleCache.data;
+                        // Process cached data (simplified version)
+                        latestVersionElement.textContent = cachedData.latestVersion || 'Unknown';
+                        latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
+                        versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Cached data (rate limited)</span>';
+                    }, 100);
+                }
+            }
         }
     }
     
@@ -1478,11 +1659,16 @@ PulseApp.ui.settings = (() => {
         latestReleaseData = releaseData;
         
         const updateVersion = document.getElementById('update-version');
+        const updatePublishedBadge = document.getElementById('update-published-badge');
         const updateReleaseNotes = document.getElementById('update-release-notes');
-        const updatePublished = document.getElementById('update-published');
         
         if (updateVersion) {
             updateVersion.textContent = releaseData.tag_name;
+        }
+        
+        if (updatePublishedBadge && releaseData.published_at) {
+            const publishedDate = new Date(releaseData.published_at).toLocaleDateString();
+            updatePublishedBadge.textContent = publishedDate;
         }
         
         if (updateReleaseNotes && releaseData.body) {
@@ -1498,12 +1684,252 @@ PulseApp.ui.settings = (() => {
             updateReleaseNotes.innerHTML = htmlContent;
         }
         
-        if (updatePublished && releaseData.published_at) {
-            const publishedDate = new Date(releaseData.published_at).toLocaleDateString();
-            updatePublished.textContent = publishedDate;
-        }
+        // Set up toggle functionality
+        setupDetailsToggle();
         
         updateDetails.classList.remove('hidden');
+        
+        // Load commit differences for summary
+        loadVersionChanges(releaseData.tag_name);
+    }
+    
+    // Set up the toggle functionality for details expansion
+    function setupDetailsToggle() {
+        const toggleBtn = document.getElementById('toggle-details-btn');
+        const detailsExpanded = document.getElementById('update-details-expanded');
+        const chevron = document.getElementById('details-chevron');
+        
+        if (toggleBtn && detailsExpanded && chevron) {
+            toggleBtn.onclick = () => {
+                const isExpanded = !detailsExpanded.classList.contains('hidden');
+                
+                if (isExpanded) {
+                    detailsExpanded.classList.add('hidden');
+                    chevron.style.transform = 'rotate(0deg)';
+                    toggleBtn.querySelector('span').textContent = 'Show details';
+                } else {
+                    detailsExpanded.classList.remove('hidden');
+                    chevron.style.transform = 'rotate(180deg)';
+                    toggleBtn.querySelector('span').textContent = 'Hide details';
+                }
+            };
+        }
+    }
+    
+    // Load and display commit differences between versions
+    async function loadVersionChanges(targetVersion) {
+        const currentVersion = currentConfig.version || 'Unknown';
+        const changesLoading = document.getElementById('changes-loading');
+        const changesSummaryText = document.getElementById('changes-summary-text');
+        const changesList = document.getElementById('changes-list');
+        const changesError = document.getElementById('changes-error');
+        
+        if (currentVersion === 'Unknown') return;
+        
+        // Determine if we're showing changes between RC and stable or between versions
+        const currentVersionLower = currentVersion.toLowerCase();
+        const isCurrentRC = currentVersionLower.includes('-rc') || currentVersionLower.includes('-alpha') || currentVersionLower.includes('-beta');
+        const isTargetRC = targetVersion.toLowerCase().includes('-rc') || targetVersion.toLowerCase().includes('-alpha') || targetVersion.toLowerCase().includes('-beta');
+        
+        // Show loading state
+        changesLoading.classList.remove('hidden');
+        changesSummaryText.classList.add('hidden');
+        changesError.classList.add('hidden');
+        
+        try {
+            // GitHub API to compare between versions
+            const baseVersion = isCurrentRC && !isTargetRC ? targetVersion : currentVersion;
+            const headVersion = isCurrentRC && !isTargetRC ? currentVersion : targetVersion;
+            
+            // Strip any existing 'v' prefix to avoid double prefixes
+            const cleanBaseVersion = baseVersion.replace(/^v/, '');
+            const cleanHeadVersion = headVersion.replace(/^v/, '');
+            
+            const compareUrl = `https://api.github.com/repos/rcourtman/Pulse/compare/v${cleanBaseVersion}...v${cleanHeadVersion}`;
+            
+            console.log(`[Settings] Fetching version comparison: ${compareUrl}`);
+            
+            const response = await fetch(compareUrl);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error(`Version comparison not found. One of the versions (${cleanBaseVersion} or ${cleanHeadVersion}) may not exist.`);
+                } else if (response.status === 403) {
+                    throw new Error('GitHub API rate limit exceeded. Please try again later.');
+                } else {
+                    throw new Error(`Failed to fetch version comparison: ${response.status} ${response.statusText}`);
+                }
+            }
+            
+            const compareData = await response.json();
+            
+            // Hide loading and show results
+            changesLoading.classList.add('hidden');
+            
+            if (compareData.commits && compareData.commits.length > 0) {
+                // Create compact summary
+                createChangesSummary(compareData.commits, isCurrentRC && !isTargetRC);
+                changesSummaryText.classList.remove('hidden');
+                
+                // Populate detailed view for expandable section
+                displayCommitChanges(compareData.commits, isCurrentRC && !isTargetRC);
+            } else {
+                changesError.textContent = 'No commits found between these versions.';
+                changesError.classList.remove('hidden');
+            }
+            
+        } catch (error) {
+            console.error('[Settings] Error fetching version changes:', error);
+            changesLoading.classList.add('hidden');
+            changesError.textContent = `Could not load changes: ${error.message}`;
+            changesError.classList.remove('hidden');
+        }
+    }
+    
+    // Create a compact summary of changes for the main view
+    function createChangesSummary(commits, isRollback = false) {
+        const changesSummaryText = document.getElementById('changes-summary-text');
+        if (!changesSummaryText) return;
+        
+        // Categorize commits
+        const categories = {
+            features: commits.filter(c => c.commit.message.toLowerCase().startsWith('feat')),
+            fixes: commits.filter(c => c.commit.message.toLowerCase().startsWith('fix')),
+            chores: commits.filter(c => c.commit.message.toLowerCase().startsWith('chore')),
+            docs: commits.filter(c => c.commit.message.toLowerCase().startsWith('docs'))
+        };
+        
+        const totalCommits = commits.length;
+        const summaryParts = [];
+        
+        if (categories.features.length > 0) {
+            summaryParts.push(`<span class="text-green-600 dark:text-green-400">✨ ${categories.features.length} new feature${categories.features.length === 1 ? '' : 's'}</span>`);
+        }
+        
+        if (categories.fixes.length > 0) {
+            summaryParts.push(`<span class="text-red-600 dark:text-red-400">🐛 ${categories.fixes.length} bug fix${categories.fixes.length === 1 ? '' : 'es'}</span>`);
+        }
+        
+        if (categories.chores.length > 0) {
+            summaryParts.push(`<span class="text-gray-600 dark:text-gray-400">🔧 ${categories.chores.length} maintenance</span>`);
+        }
+        
+        if (categories.docs.length > 0) {
+            summaryParts.push(`<span class="text-purple-600 dark:text-purple-400">📚 ${categories.docs.length} documentation</span>`);
+        }
+        
+        let summaryHtml = '';
+        
+        if (isRollback) {
+            summaryHtml = `<span class="text-amber-600 dark:text-amber-400">⚠️ Switching to stable will remove ${totalCommits} changes:</span>`;
+        } else {
+            summaryHtml = `<span class="text-green-600 dark:text-green-400">✅ This update includes ${totalCommits} changes:</span>`;
+        }
+        
+        if (summaryParts.length > 0) {
+            summaryHtml += ` ${summaryParts.join(', ')}`;
+        }
+        
+        changesSummaryText.innerHTML = summaryHtml;
+    }
+    
+    // Display commit changes in a nice format
+    function displayCommitChanges(commits, isRollback = false) {
+        const changesList = document.getElementById('changes-list');
+        if (!changesList) return;
+        
+        // Limit to most recent 15 commits to avoid overwhelming the UI
+        const limitedCommits = commits.slice(0, 15);
+        const hasMore = commits.length > 15;
+        
+        const commitsHtml = limitedCommits.map(commit => {
+            const shortSha = commit.sha.substring(0, 7);
+            const commitUrl = commit.html_url;
+            const message = commit.commit.message.split('\n')[0]; // First line only
+            const author = commit.commit.author.name;
+            const date = new Date(commit.commit.author.date).toLocaleDateString();
+            
+            // Simple commit type detection
+            let icon = '📝';
+            let iconClass = 'text-blue-600 dark:text-blue-400';
+            
+            if (message.toLowerCase().startsWith('feat')) {
+                icon = '✨';
+                iconClass = 'text-green-600 dark:text-green-400';
+            } else if (message.toLowerCase().startsWith('fix')) {
+                icon = '🐛';
+                iconClass = 'text-red-600 dark:text-red-400';
+            } else if (message.toLowerCase().startsWith('chore')) {
+                icon = '🔧';
+                iconClass = 'text-gray-600 dark:text-gray-400';
+            } else if (message.toLowerCase().startsWith('docs')) {
+                icon = '📚';
+                iconClass = 'text-purple-600 dark:text-purple-400';
+            }
+            
+            return `
+                <div class="flex items-start gap-3 p-2 rounded border border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
+                    <span class="${iconClass} text-lg">${icon}</span>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">${message}</p>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            <a href="${commitUrl}" target="_blank" class="font-mono hover:text-blue-600 dark:hover:text-blue-400 hover:underline">${shortSha}</a>
+                            <span>•</span>
+                            <span>${author}</span>
+                            <span>•</span>
+                            <span>${date}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        let summaryText = '';
+        if (isRollback) {
+            summaryText = `<p class="text-sm text-amber-600 dark:text-amber-400 mb-3">⚠️ Switching to stable will remove these ${limitedCommits.length} changes${hasMore ? ` (showing ${limitedCommits.length} of ${commits.length})` : ''}:</p>`;
+        } else {
+            summaryText = `<p class="text-sm text-green-600 dark:text-green-400 mb-3">✅ This update includes ${limitedCommits.length} new changes${hasMore ? ` (showing ${limitedCommits.length} of ${commits.length})` : ''}:</p>`;
+        }
+        
+        changesList.innerHTML = summaryText + commitsHtml;
+        
+        if (hasMore) {
+            changesList.innerHTML += `
+                <div class="text-center mt-3">
+                    <a href="https://github.com/rcourtman/Pulse/compare/v${currentConfig.version}...v${latestReleaseData?.tag_name || 'latest'}" 
+                       target="_blank" 
+                       class="text-sm text-blue-600 dark:text-blue-400 hover:underline">
+                        View all ${commits.length} changes on GitHub →
+                    </a>
+                </div>
+            `;
+        }
+    }
+    
+    // Hide update details card
+    function hideUpdateDetails() {
+        const updateDetails = document.getElementById('update-details');
+        if (updateDetails) {
+            updateDetails.classList.add('hidden');
+        }
+        
+        // Reset expanded details state
+        const detailsExpanded = document.getElementById('update-details-expanded');
+        const chevron = document.getElementById('details-chevron');
+        const toggleBtn = document.getElementById('toggle-details-btn');
+        
+        if (detailsExpanded) {
+            detailsExpanded.classList.add('hidden');
+        }
+        if (chevron) {
+            chevron.style.transform = 'rotate(0deg)';
+        }
+        if (toggleBtn) {
+            const span = toggleBtn.querySelector('span');
+            if (span) span.textContent = 'Show details';
+        }
+        
+        // Clear the stored release data
+        latestReleaseData = null;
     }
 
     // Update management functions
@@ -2704,8 +3130,81 @@ PulseApp.ui.settings = (() => {
                 rcWarning.classList.add('hidden');
             }
         }
+        
+        // Re-check for updates with the selected channel (preview mode)
+        // Debounce rapid changes to prevent API spam
+        if (updateCheckTimeout) {
+            clearTimeout(updateCheckTimeout);
+        }
+        updateCheckTimeout = setTimeout(() => {
+            checkLatestVersion(value);
+        }, 300);
+    }
+    
+    // Switch to a specific update channel
+    function switchToChannel(targetChannel) {
+        const channelSelect = document.querySelector('select[name="UPDATE_CHANNEL"]');
+        if (channelSelect) {
+            channelSelect.value = targetChannel;
+            onUpdateChannelChange(targetChannel);
+            
+            // Hide the warning
+            const warningElement = document.getElementById('channel-mismatch-warning');
+            if (warningElement) {
+                warningElement.classList.add('hidden');
+            }
+            
+            // Show success message
+            const button = document.getElementById('switch-to-rc-btn');
+            if (button) {
+                const originalText = button.textContent;
+                button.textContent = 'Switched! ✓';
+                button.classList.add('text-green-600', 'dark:text-green-400');
+                button.classList.remove('text-blue-600', 'dark:text-blue-400');
+                
+                setTimeout(() => {
+                    if (warningElement) {
+                        warningElement.classList.add('hidden');
+                    }
+                }, 2000);
+            }
+        }
+    }
+    
+    // Proceed with switching to stable release (downgrade)
+    function proceedWithStableSwitch() {
+        const warningElement = document.getElementById('channel-mismatch-warning');
+        if (warningElement) {
+            warningElement.classList.add('hidden');
+        }
+        
+        // Show confirmation that they're choosing stable
+        const versionStatusElement = document.getElementById('version-status');
+        if (versionStatusElement) {
+            versionStatusElement.innerHTML = '<span class="text-blue-600 dark:text-blue-400">✓ Stable channel selected - save settings to apply</span>';
+        }
+    }
+    
+    // Acknowledge the user wants to stay on stable channel (legacy)
+    function acknowledgeStableChoice() {
+        proceedWithStableSwitch();
+    }
+    
+    // Legacy function for backward compatibility
+    function switchToRecommendedChannel() {
+        const currentVersion = currentConfig.version || 'Unknown';
+        const currentVersionLower = currentVersion.toLowerCase();
+        const isCurrentRC = currentVersionLower.includes('-rc') || currentVersionLower.includes('-alpha') || currentVersionLower.includes('-beta');
+        const recommendedChannel = isCurrentRC ? 'rc' : 'stable';
+        switchToChannel(recommendedChannel);
     }
 
+    // Clear update cache (useful after saving settings)
+    function clearUpdateCache() {
+        updateCache.clear();
+        console.log('[Settings] Update cache cleared');
+    }
+    
     return {
         init,
         openModal,
@@ -2721,7 +3220,12 @@ PulseApp.ui.settings = (() => {
         runDiagnostics,
         copyDiagnosticReport,
         downloadDiagnosticReport,
-        onUpdateChannelChange
+        onUpdateChannelChange,
+        switchToRecommendedChannel,
+        switchToChannel,
+        acknowledgeStableChoice,
+        proceedWithStableSwitch,
+        clearUpdateCache
     };
 })();
 
