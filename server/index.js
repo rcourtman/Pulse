@@ -746,10 +746,15 @@ app.post('/api/test-email', async (req, res) => {
         const testTransporter = nodemailer.createTransport({
             host: host,
             port: parseInt(port),
-            secure: secure === true,
+            secure: secure === true, // true for 465, false for other ports
+            requireTLS: true, // Force TLS encryption
             auth: {
                 user: user,
                 pass: pass
+            },
+            tls: {
+                // Do not fail on invalid certs for testing
+                rejectUnauthorized: false
             }
         });
         

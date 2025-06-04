@@ -1129,9 +1129,14 @@ class AlertManager extends EventEmitter {
                     host: process.env.SMTP_HOST,
                     port: parseInt(process.env.SMTP_PORT) || 587,
                     secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+                    requireTLS: true, // Force TLS encryption
                     auth: {
                         user: process.env.SMTP_USER,
                         pass: process.env.SMTP_PASS
+                    },
+                    tls: {
+                        // Do not fail on invalid certs
+                        rejectUnauthorized: false
                     }
                 });
                 console.log('[AlertManager] Email transporter initialized');

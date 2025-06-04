@@ -211,6 +211,7 @@ PulseApp.ui.settings = (() => {
             loadThresholdConfigurations();
             // Setup email and webhook test buttons
             setupEmailTestButton();
+            setupEmailProviderSelection();
             setupWebhookTestButton();
         }
     }
@@ -450,6 +451,7 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderAlertsTab(alerts, config) {
+        const smtp = config.advanced?.smtp || {};
         return `
             <div class="space-y-6">
                 <!-- Global Alert Settings -->
@@ -517,99 +519,191 @@ PulseApp.ui.settings = (() => {
                 <!-- Email Notification Settings -->
                 <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
                     <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Email Notifications</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Configure SMTP settings to receive alert notifications via email.</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">Set up email alerts for critical system events. We'll help you configure this automatically.</p>
                     
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                SMTP Server Host
-                            </label>
-                            <input type="text" name="SMTP_HOST"
-                                   value="${alerts.smtp?.host || ''}"
-                                   placeholder="smtp.gmail.com"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                SMTP Port
-                            </label>
-                            <input type="number" name="SMTP_PORT"
-                                   value="${alerts.smtp?.port || ''}"
-                                   placeholder="587"
-                                   min="25" max="65535"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <!-- Step 1: Email Provider Selection -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Step 1: Choose your email provider
+                        </label>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                            <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="gmail">
+                                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Gmail</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">Google</div>
+                            </button>
+                            <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="outlook">
+                                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Outlook</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">Microsoft</div>
+                            </button>
+                            <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="yahoo">
+                                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Yahoo</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">Yahoo Mail</div>
+                            </button>
+                            <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="custom">
+                                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Other</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400">Custom SMTP</div>
+                            </button>
                         </div>
                     </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Username
-                            </label>
-                            <input type="text" name="SMTP_USER"
-                                   value="${alerts.smtp?.user || ''}"
-                                   placeholder="your-email@gmail.com"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+
+                    <!-- Step 2: Basic Email Configuration -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Step 2: Enter your email details
+                        </label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Your Email Address
+                                    <span class="text-gray-500 text-xs ml-1">(for sending alerts)</span>
+                                </label>
+                                <input type="email" id="email-from-input" name="ALERT_FROM_EMAIL"
+                                       value="${smtp.from || ''}"
+                                       placeholder="your-email@gmail.com"
+                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                    Alert Recipients
+                                    <span class="text-gray-500 text-xs ml-1">(who gets notified)</span>
+                                </label>
+                                <input type="text" name="ALERT_TO_EMAIL"
+                                       value="${smtp.to || ''}"
+                                       placeholder="admin@example.com, tech@example.com"
+                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple emails with commas</p>
+                            </div>
                         </div>
-                        <div>
+                        
+                        <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Password / App Password
+                                <span id="password-label">Email Password</span>
                             </label>
                             <input type="password" name="SMTP_PASS"
-                                   value="${alerts.smtp?.pass || ''}"
+                                   value=""
                                    placeholder="••••••••••••••••"
                                    class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <div id="password-help" class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Enter your email password
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                From Email Address
-                            </label>
-                            <input type="email" name="ALERT_FROM_EMAIL"
-                                   value="${alerts.smtp?.from || ''}"
-                                   placeholder="alerts@your-domain.com"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+
+                    <!-- Provider-specific Help -->
+                    <div id="provider-help" class="hidden mb-4">
+                        <!-- Gmail Help -->
+                        <div id="gmail-help" class="hidden bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-4 w-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-2">
+                                    <p class="text-xs text-blue-700 dark:text-blue-300">
+                                        <strong>Gmail Setup:</strong> You need an App Password (not your regular password). 
+                                        <a href="https://myaccount.google.com/apppasswords" target="_blank" class="underline font-medium">Create one here</a> → 
+                                        Search "Mail" → Generate → Copy the 16-character password above.<br>
+                                        <strong>Important:</strong> Leave SSL checkbox UNCHECKED (Gmail uses STARTTLS on port 587).
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                To Email Address(es)
-                            </label>
-                            <input type="text" name="ALERT_TO_EMAIL"
-                                   value="${alerts.smtp?.to || ''}"
-                                   placeholder="admin@your-domain.com, tech@your-domain.com"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Separate multiple emails with commas</p>
+                        
+                        <!-- Outlook Help -->
+                        <div id="outlook-help" class="hidden bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-4 w-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-2">
+                                    <p class="text-xs text-blue-700 dark:text-blue-300">
+                                        <strong>Outlook Setup:</strong> Use your regular email password. If you have 2FA enabled, you may need an app password.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Yahoo Help -->
+                        <div id="yahoo-help" class="hidden bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
+                            <div class="flex">
+                                <div class="flex-shrink-0">
+                                    <svg class="h-4 w-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                                    </svg>
+                                </div>
+                                <div class="ml-2">
+                                    <p class="text-xs text-blue-700 dark:text-blue-300">
+                                        <strong>Yahoo Setup:</strong> You'll need an App Password. Go to Account Security → Generate app password → Use that instead of your regular password.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    
-                    <div class="flex items-center space-x-4 mb-4">
-                        <label class="flex items-center">
-                            <input type="checkbox" name="SMTP_SECURE" ${alerts.smtp?.secure ? 'checked' : ''}
-                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS (Port 465)</span>
-                        </label>
-                        <button type="button" id="test-email-btn" 
-                                class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors">
-                            Test Email
+
+                    <!-- Advanced Settings (Collapsible) -->
+                    <div class="mb-4">
+                        <button type="button" id="toggle-advanced-email" class="flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+                            <svg id="advanced-email-icon" class="h-4 w-4 mr-1 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                            Advanced Settings
                         </button>
-                    </div>
-                    
-                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3">
-                        <div class="flex">
-                            <div class="flex-shrink-0">
-                                <svg class="h-4 w-4 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                                </svg>
+                        <div id="advanced-email-settings" class="hidden mt-3 p-3 bg-gray-100 dark:bg-gray-800 rounded-lg">
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        SMTP Server
+                                    </label>
+                                    <input type="text" name="SMTP_HOST"
+                                           value="${smtp.host || ''}"
+                                           placeholder="smtp.gmail.com"
+                                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Port
+                                    </label>
+                                    <input type="number" name="SMTP_PORT"
+                                           value="${smtp.port || ''}"
+                                           placeholder="587"
+                                           min="25" max="65535"
+                                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                        Username
+                                    </label>
+                                    <input type="text" name="SMTP_USER"
+                                           value="${smtp.user || ''}"
+                                           placeholder="your-email@gmail.com"
+                                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
                             </div>
-                            <div class="ml-2">
-                                <p class="text-xs text-blue-700 dark:text-blue-300">
-                                    <strong>Gmail users:</strong> Use an App Password instead of your regular password. 
-                                    Generate one at <a href="https://myaccount.google.com/apppasswords" target="_blank" class="underline">myaccount.google.com/apppasswords</a>
-                                </p>
+                            <div class="space-y-2">
+                                <label class="flex items-center">
+                                    <input type="checkbox" name="SMTP_SECURE" ${smtp.secure ? 'checked' : ''}
+                                           class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                    <span class="text-sm text-gray-700 dark:text-gray-300">Use SSL encryption (port 465)</span>
+                                </label>
+                                <div class="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded p-2">
+                                    <p class="text-xs text-amber-700 dark:text-amber-300">
+                                        <strong>For Gmail/Outlook/Yahoo:</strong> Leave this <strong>UNCHECKED</strong> - they use STARTTLS (port 587), not SSL (port 465)
+                                    </p>
+                                </div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Test Button -->
+                    <div class="flex items-center justify-between">
+                        <div id="email-config-status" class="text-sm"></div>
+                        <button type="button" id="test-email-btn" 
+                                class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded transition-colors">
+                            Test Email Configuration
+                        </button>
                     </div>
                 </div>
 
@@ -2768,6 +2862,188 @@ PulseApp.ui.settings = (() => {
     }
 
     // Email test functionality
+    // Email provider configurations
+    const emailProviders = {
+        gmail: {
+            name: 'Gmail',
+            host: 'smtp.gmail.com',
+            port: 587,
+            secure: false,  // Use STARTTLS with port 587 (not SSL with port 465)
+            requireTLS: true,
+            domains: ['gmail.com', 'googlemail.com']
+        },
+        outlook: {
+            name: 'Outlook',
+            host: 'smtp-mail.outlook.com',
+            port: 587,
+            secure: false,  // Use STARTTLS
+            requireTLS: true,
+            domains: ['outlook.com', 'hotmail.com', 'live.com', 'msn.com']
+        },
+        yahoo: {
+            name: 'Yahoo',
+            host: 'smtp.mail.yahoo.com',
+            port: 587,
+            secure: false,  // Use STARTTLS
+            requireTLS: true,
+            domains: ['yahoo.com', 'yahoo.co.uk', 'yahoo.ca', 'ymail.com']
+        },
+        custom: {
+            name: 'Custom',
+            host: '',
+            port: 587,
+            secure: false,
+            requireTLS: false,
+            domains: []
+        }
+    };
+
+    function setupEmailProviderSelection() {
+        const providerButtons = document.querySelectorAll('.email-provider-btn');
+        const emailFromInput = document.getElementById('email-from-input');
+        const passwordLabel = document.getElementById('password-label');
+        const passwordHelp = document.getElementById('password-help');
+        const providerHelp = document.getElementById('provider-help');
+        const advancedToggle = document.getElementById('toggle-advanced-email');
+        const advancedSettings = document.getElementById('advanced-email-settings');
+        const advancedIcon = document.getElementById('advanced-email-icon');
+        
+        // Set up provider button clicks
+        providerButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                selectProvider(btn.getAttribute('data-provider'));
+            });
+        });
+
+        // Set up email input change detection
+        if (emailFromInput) {
+            emailFromInput.addEventListener('blur', () => {
+                autoDetectProvider(emailFromInput.value);
+            });
+        }
+
+        // Set up advanced settings toggle
+        if (advancedToggle) {
+            advancedToggle.addEventListener('click', () => {
+                const isHidden = advancedSettings.classList.contains('hidden');
+                if (isHidden) {
+                    advancedSettings.classList.remove('hidden');
+                    advancedIcon.style.transform = 'rotate(90deg)';
+                } else {
+                    advancedSettings.classList.add('hidden');
+                    advancedIcon.style.transform = 'rotate(0deg)';
+                }
+            });
+        }
+
+        function selectProvider(providerKey) {
+            const provider = emailProviders[providerKey];
+            if (!provider) return;
+
+            // Update button styles
+            providerButtons.forEach(btn => {
+                btn.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+                btn.classList.add('border-gray-200', 'dark:border-gray-600');
+            });
+            
+            const selectedBtn = document.querySelector(`[data-provider="${providerKey}"]`);
+            if (selectedBtn) {
+                selectedBtn.classList.remove('border-gray-200', 'dark:border-gray-600');
+                selectedBtn.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+            }
+
+            // Update form fields
+            const form = document.getElementById('settings-form');
+            if (form) {
+                const hostInput = form.querySelector('[name="SMTP_HOST"]');
+                const portInput = form.querySelector('[name="SMTP_PORT"]');
+                const userInput = form.querySelector('[name="SMTP_USER"]');
+                const secureInput = form.querySelector('[name="SMTP_SECURE"]');
+
+                if (hostInput) hostInput.value = provider.host;
+                if (portInput) portInput.value = provider.port;
+                if (secureInput) secureInput.checked = provider.secure;
+                
+                // Set username to match from email if available
+                const fromEmail = form.querySelector('[name="ALERT_FROM_EMAIL"]').value;
+                if (userInput && fromEmail && providerKey !== 'custom') {
+                    userInput.value = fromEmail;
+                }
+            }
+
+            // Update password label and help text
+            updatePasswordLabels(providerKey);
+
+            // Show/hide provider-specific help
+            showProviderHelp(providerKey);
+
+            // Show advanced settings for custom provider
+            if (providerKey === 'custom' && advancedSettings.classList.contains('hidden')) {
+                advancedToggle.click();
+            }
+        }
+
+        function autoDetectProvider(email) {
+            if (!email || !email.includes('@')) return;
+            
+            const domain = email.split('@')[1].toLowerCase();
+            
+            for (const [key, provider] of Object.entries(emailProviders)) {
+                if (provider.domains.includes(domain)) {
+                    selectProvider(key);
+                    return;
+                }
+            }
+            
+            // If no provider detected, select custom
+            selectProvider('custom');
+        }
+
+        function updatePasswordLabels(providerKey) {
+            if (!passwordLabel || !passwordHelp) return;
+
+            switch (providerKey) {
+                case 'gmail':
+                    passwordLabel.textContent = 'App Password';
+                    passwordHelp.textContent = 'You need a 16-character App Password from Google (not your regular password)';
+                    break;
+                case 'yahoo':
+                    passwordLabel.textContent = 'App Password';
+                    passwordHelp.textContent = 'You need an App Password from Yahoo (not your regular password)';
+                    break;
+                case 'outlook':
+                    passwordLabel.textContent = 'Password';
+                    passwordHelp.textContent = 'Use your regular email password (or app password if 2FA is enabled)';
+                    break;
+                default:
+                    passwordLabel.textContent = 'Password';
+                    passwordHelp.textContent = 'Enter your email password or app password';
+            }
+        }
+
+        function showProviderHelp(providerKey) {
+            if (!providerHelp) return;
+
+            // Hide all help sections
+            const helpSections = providerHelp.querySelectorAll('[id$="-help"]');
+            helpSections.forEach(section => section.classList.add('hidden'));
+
+            // Show the relevant help section
+            const helpSection = document.getElementById(`${providerKey}-help`);
+            if (helpSection) {
+                providerHelp.classList.remove('hidden');
+                helpSection.classList.remove('hidden');
+            } else {
+                providerHelp.classList.add('hidden');
+            }
+        }
+
+        // Auto-detect provider on page load if email is already filled
+        if (emailFromInput && emailFromInput.value) {
+            autoDetectProvider(emailFromInput.value);
+        }
+    }
+
     function setupEmailTestButton() {
         const testBtn = document.getElementById('test-email-btn');
         if (testBtn) {

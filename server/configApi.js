@@ -71,6 +71,15 @@ class ConfigApi {
                     webhook: {
                         url: config.WEBHOOK_URL,
                         enabled: config.WEBHOOK_ENABLED === 'true'
+                    },
+                    smtp: {
+                        host: config.SMTP_HOST,
+                        port: config.SMTP_PORT,
+                        user: config.SMTP_USER,
+                        from: config.ALERT_FROM_EMAIL,
+                        to: config.ALERT_TO_EMAIL,
+                        secure: config.SMTP_SECURE === 'true'
+                        // Don't send password for security
                     }
                 }
             };
