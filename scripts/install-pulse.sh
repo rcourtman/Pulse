@@ -201,6 +201,94 @@ print_welcome() {
     echo ""
 }
 
+# Backup and restore functions
+create_backup() {
+    local backup_dir="/tmp/pulse-backup-$(date +%Y%m%d-%H%M%S)"
+    
+    if [ ! -d "$PULSE_DIR" ]; then
+        return 1
+    fi
+    
+    print_info "Creating backup at $backup_dir..."
+    mkdir -p "$backup_dir"
+    
+    # Backup user data directory
+    if [ -d "$PULSE_DIR/data" ]; then
+        cp -r "$PULSE_DIR/data" "$backup_dir/"
+        print_success "Backed up user data"
+    fi
+    
+    # Backup configuration files
+    if [ -f "$PULSE_DIR/.env" ]; then
+        cp "$PULSE_DIR/.env" "$backup_dir/"
+        print_success "Backed up .env configuration"
+    fi
+    
+    # Backup config directory if it exists
+    if [ -d "$PULSE_DIR/config" ]; then
+        cp -r "$PULSE_DIR/config" "$backup_dir/"
+        print_success "Backed up config directory"
+    fi
+    
+    # Create backup info file
+    cat > "$backup_dir/backup-info.txt" << EOF
+Pulse Backup Created: $(date)
+Original Installation: $PULSE_DIR
+Pulse Version: $(get_current_version 2>/dev/null || echo "Unknown")
+Backup Contents:
+$(ls -la "$backup_dir")
+EOF
+    
+    echo "$backup_dir"
+    return 0
+}
+
+detect_backups() {
+    find /tmp -maxdepth 1 -name "pulse-backup-*" -type d 2>/dev/null | sort -r
+}
+
+restore_from_backup() {
+    local backup_dir="$1"
+    
+    if [ ! -d "$backup_dir" ]; then
+        print_error "Backup directory does not exist: $backup_dir"
+        return 1
+    fi
+    
+    print_info "Restoring from backup: $backup_dir"
+    
+    # Ensure target directories exist
+    mkdir -p "$PULSE_DIR"
+    chown "$PULSE_USER:$PULSE_USER" "$PULSE_DIR"
+    
+    # Restore user data
+    if [ -d "$backup_dir/data" ]; then
+        print_info "Restoring user data..."
+        cp -r "$backup_dir/data" "$PULSE_DIR/"
+        chown -R "$PULSE_USER:$PULSE_USER" "$PULSE_DIR/data"
+        print_success "User data restored"
+    fi
+    
+    # Restore .env file
+    if [ -f "$backup_dir/.env" ]; then
+        print_info "Restoring configuration..."
+        cp "$backup_dir/.env" "$PULSE_DIR/"
+        chown "$PULSE_USER:$PULSE_USER" "$PULSE_DIR/.env"
+        chmod 600 "$PULSE_DIR/.env"
+        print_success "Configuration restored"
+    fi
+    
+    # Restore config directory
+    if [ -d "$backup_dir/config" ]; then
+        print_info "Restoring config directory..."
+        cp -r "$backup_dir/config" "$PULSE_DIR/"
+        chown -R "$PULSE_USER:$PULSE_USER" "$PULSE_DIR/config"
+        print_success "Config directory restored"
+    fi
+    
+    return 0
+}
+
 # Get latest release tag from GitHub
 get_latest_release_tag() {
     local api_url="https://api.github.com/repos/rcourtman/Pulse/releases/latest"
@@ -352,6 +440,35 @@ check_installation() {
     else
         INSTALL_MODE="install"
         print_info "Pulse is not installed"
+        
+        # Check for existing backups
+        local backups=($(detect_backups))
+        if [ ${#backups[@]} -gt 0 ]; then
+            echo ""
+            print_info "Found ${#backups[@]} backup(s) from previous installations:"
+            for i in "${!backups[@]}"; do
+                local backup_dir="${backups[$i]}"
+                local backup_date=$(basename "$backup_dir" | sed 's/pulse-backup-//' | sed 's/-/ /' | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\) \([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\3\/\2\/\1 \4:\5:\6/')
+                local backup_info=""
+                if [ -f "$backup_dir/backup-info.txt" ]; then
+                    backup_info=" - $(grep "Pulse Version:" "$backup_dir/backup-info.txt" 2>/dev/null | cut -d: -f2 | xargs)"
+                fi
+                echo "  $((i+1))) $(basename "$backup_dir") (Created: $backup_date$backup_info)"
+            done
+            echo "  $((${#backups[@]}+1))) Fresh install (no restore)"
+            echo ""
+            read -p "Choose backup to restore [1-$((${#backups[@]}+1))]: " backup_choice
+            
+            if [[ "$backup_choice" =~ ^[0-9]+$ ]] && [ "$backup_choice" -ge 1 ] && [ "$backup_choice" -le ${#backups[@]} ]; then
+                RESTORE_BACKUP="${backups[$((backup_choice-1))]}"
+                print_info "Will restore from: $(basename "$RESTORE_BACKUP")"
+            elif [ "$backup_choice" -eq $((${#backups[@]}+1)) ]; then
+                print_info "Will perform fresh installation"
+            else
+                print_error "Invalid choice"
+                exit 1
+            fi
+        fi
     fi
 }
 
@@ -578,6 +695,12 @@ perform_install() {
     configure_environment
     setup_systemd_service
     
+    # Restore backup if selected
+    if [ -n "$RESTORE_BACKUP" ]; then
+        echo ""
+        restore_from_backup "$RESTORE_BACKUP"
+    fi
+    
     echo ""
     print_success "Installation complete!"
 }
@@ -652,7 +775,27 @@ perform_update() {
 # Remove Pulse
 perform_remove() {
     print_warning "This will completely remove Pulse"
-    read -p "Are you sure? [y/N]: " confirm
+    
+    # Offer backup option
+    if [ -d "$PULSE_DIR" ] && ([ -d "$PULSE_DIR/data" ] || [ -f "$PULSE_DIR/.env" ] || [ -d "$PULSE_DIR/config" ]); then
+        echo ""
+        print_info "Would you like to backup your data and configuration before removal?"
+        print_info "This includes: user data, .env settings, and config files"
+        read -p "Create backup? [Y/n]: " backup_confirm
+        
+        if [[ ! "$backup_confirm" =~ ^[Nn]$ ]]; then
+            backup_path=$(create_backup)
+            if [ $? -eq 0 ]; then
+                print_success "Backup created at: $backup_path"
+                print_info "You can restore this backup during future installations"
+            else
+                print_warning "Backup failed, but continuing with removal"
+            fi
+        fi
+        echo ""
+    fi
+    
+    read -p "Are you sure you want to remove Pulse? [y/N]: " confirm
     
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
         print_info "Cancelled"
