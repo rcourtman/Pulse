@@ -162,7 +162,6 @@ PulseApp.ui.settings = (() => {
         const proxmox = safeConfig.proxmox || {};
         const pbs = safeConfig.pbs || {};
         const advanced = safeConfig.advanced || {};
-        const alerts = advanced.alerts || {};
 
         let content = '';
 
@@ -751,77 +750,6 @@ PulseApp.ui.settings = (() => {
         `;
     }
 
-    function renderThresholdsTab() {
-        return `
-            <div class="space-y-6">
-                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-                    <div class="flex items-start">
-                        <div class="flex-shrink-0">
-                            <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
-                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
-                            </svg>
-                        </div>
-                        <div class="ml-3">
-                            <h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">Custom Alert Thresholds</h3>
-                            <p class="mt-1 text-sm text-blue-700 dark:text-blue-300">Configure custom alert thresholds for individual VMs/LXCs based on their specific resource requirements and usage patterns.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Custom Threshold Configurations</h3>
-                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">VMs and containers with custom alert thresholds</p>
-                            </div>
-                            <button type="button" id="add-threshold-btn" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                                </svg>
-                                Add Custom Threshold
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div id="thresholds-loading" class="px-6 py-8 text-center">
-                        <div class="inline-flex items-center">
-                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span class="text-gray-600 dark:text-gray-400">Loading threshold configurations...</span>
-                        </div>
-                    </div>
-                    
-                    <div id="thresholds-container" class="hidden">
-                        <div id="thresholds-list" class="divide-y divide-gray-200 dark:divide-gray-700">
-                            <!-- Threshold configurations will be loaded here -->
-                        </div>
-                        
-                        <div id="thresholds-empty" class="hidden px-6 py-8 text-center">
-                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 00-2-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4"></path>
-                            </svg>
-                            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No custom thresholds configured</h3>
-                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Get started by adding a custom threshold configuration for a VM or container.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
-                    <div class="space-y-2">
-                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Examples:</h4>
-                        <ul class="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-                            <li>• <strong>Storage/NAS VMs:</strong> Set memory warning to 95% and critical to 99% (high memory usage from disk caching is normal)</li>
-                            <li>• <strong>Application Servers:</strong> Set CPU warning to 70% and critical to 85% for better performance monitoring</li>
-                            <li>• <strong>Development VMs:</strong> Set disk warning to 75% and critical to 90% for early space alerts</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
 
     // Additional endpoint management functions
     function addPveEndpoint() {
@@ -1286,6 +1214,8 @@ PulseApp.ui.settings = (() => {
             return !!(data.PBS_HOST && data.PBS_HOST.trim()) ||
                    !!(data.PBS_HOST_2 && data.PBS_HOST_2.trim()) ||
                    !!(data.PBS_HOST_3 && data.PBS_HOST_3.trim());
+        } else if (tabName === 'alerts') {
+            // For alerts tab, any threshold value or email/webhook config is significant
             return Object.keys(data).some(key => {
                 const value = data[key];
                 if (typeof value === 'string' && value.trim()) return true;
@@ -3417,11 +3347,8 @@ PulseApp.ui.settings = (() => {
         
         if (addCustomBtn) {
             addCustomBtn.addEventListener('click', () => {
-                // Open alert management modal instead
-                if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.alertManagementModal) {
-                    closeModal();
-                    window.PulseApp.ui.alertManagementModal.openModal();
-                }
+                // Switch to alerts tab to add custom threshold
+                switchTab('alerts');
                 setTimeout(() => {
                     // Scroll to the custom threshold section
                     const customSection = document.querySelector('h3:contains("Custom Threshold Configurations")');
@@ -3757,10 +3684,8 @@ PulseApp.ui.settings = (() => {
     };
 
     window.editCustomThreshold = function(endpointId, nodeId, vmid) {
-        // Open alert management modal instead
-        if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.alertManagementModal) {
-            window.PulseApp.ui.alertManagementModal.openModal();
-        }
+        // Switch to alerts tab to edit
+        switchTab('alerts');
         setTimeout(() => {
             // Scroll to custom threshold section and highlight it
             const customSection = document.querySelector('h3[contains("Custom Threshold Configurations")]');
@@ -3942,14 +3867,6 @@ PulseApp.ui.settings = (() => {
         acknowledgeStableChoice,
         proceedWithStableSwitch,
         clearUpdateCache,
-        // Expose alert-related functions for the alert management modal
-        renderAlertsTab,
-        renderAlertManagementTab,
-        loadThresholdConfigurations,
-        setupEmailProviderSelection,
-        setupEmailTestButton,
-        setupWebhookTestButton,
-        initializeAlertManagementTab,
         getCurrentConfig: () => currentConfig
     };
 })();
