@@ -519,6 +519,53 @@ app.get('/api/alerts/compound-rules', (req, res) => {
     }
 });
 
+// Debug endpoint to manually reload alert rules
+app.post('/api/alerts/rules/reload', async (req, res) => {
+    try {
+        console.log('[DEBUG] Manually reloading alert rules...');
+        await stateManager.alertManager.loadAlertRules();
+        const allRules = stateManager.alertManager.getRules();
+        console.log(`[DEBUG] Total rules after reload: ${allRules.length}`);
+        res.json({ success: true, message: "Alert rules reloaded", rulesCount: allRules.length });
+    } catch (error) {
+        console.error("Error reloading alert rules:", error);
+        res.status(500).json({ error: "Failed to reload alert rules" });
+    }
+});
+
+// Endpoint to trigger immediate alert evaluation
+app.post('/api/alerts/evaluate', async (req, res) => {
+    try {
+        console.log('[AlertManager] Triggering immediate alert evaluation...');
+        stateManager.alertManager.evaluateCurrentState();
+        res.json({ success: true, message: "Alert evaluation triggered" });
+    } catch (error) {
+        console.error("Error triggering alert evaluation:", error);
+        res.status(500).json({ error: "Failed to trigger alert evaluation" });
+    }
+});
+
+// Simple endpoint to get just the alert enabled/disabled status
+app.get('/api/alerts/status', (req, res) => {
+    try {
+        const { loadConfiguration } = require('./configLoader');
+        const { endpoints, pbsConfigs, isConfigPlaceholder } = loadConfiguration();
+        
+        // Read the environment variables directly
+        const alertStatus = {
+            cpu: process.env.ALERT_CPU_ENABLED !== 'false',
+            memory: process.env.ALERT_MEMORY_ENABLED !== 'false', 
+            disk: process.env.ALERT_DISK_ENABLED !== 'false',
+            down: process.env.ALERT_DOWN_ENABLED === 'true'
+        };
+        
+        res.json({ success: true, alerts: alertStatus });
+    } catch (error) {
+        console.error("Error getting alert status:", error);
+        res.status(500).json({ error: "Failed to get alert status" });
+    }
+});
+
 
 // Version API endpoint
 app.get('/api/version', async (req, res) => {

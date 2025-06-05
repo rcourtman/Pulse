@@ -689,6 +689,7 @@ PulseApp.ui.settings = (() => {
         `;
     }
 
+
     function renderDiagnosticsTab() {
         return `
             <div class="space-y-6">
@@ -2440,6 +2441,7 @@ PulseApp.ui.settings = (() => {
             PulseApp.ui.toast.error('Error deleting threshold configuration: ' + error.message);
         }
     }
+
 
     // Email test functionality
     // Email provider configurations

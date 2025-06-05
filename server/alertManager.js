@@ -992,7 +992,7 @@ class AlertManager extends EventEmitter {
      * Refresh alert rules based on current environment variables
      * This should be called after configuration changes
      */
-    refreshRules() {
+    async refreshRules() {
         console.log('[AlertManager] Refreshing alert rules based on current environment variables');
         
         // Store currently disabled rule IDs to clean up their alerts
@@ -1003,6 +1003,9 @@ class AlertManager extends EventEmitter {
         
         // Re-initialize rules with current environment variables
         this.initializeDefaultRules();
+        
+        // Reload custom and compound threshold rules from JSON file
+        await this.loadAlertRules();
         
         // Find rules that were disabled
         const nowActiveRules = new Set(this.alertRules.keys());
@@ -1018,9 +1021,95 @@ class AlertManager extends EventEmitter {
             console.log(`[AlertManager] Cleaned up alerts for disabled rules: ${disabledRules.join(', ')}`);
         }
         
+        // Trigger immediate evaluation of newly enabled rules against current state
+        this.evaluateCurrentState();
+        
         this.emit('rulesRefreshed', { activeRules: nowActiveRules.size, disabledRules });
     }
 
+    /**
+     * Evaluate current system state against all enabled rules
+     * This should be called when rules are enabled to check for immediate alerts
+     */
+    evaluateCurrentState() {
+        try {
+            console.log('[AlertManager] evaluateCurrentState() called');
+            
+            // Get current state from state manager
+            const stateManager = require('./state');
+            const currentState = stateManager.getState();
+            
+            if (!currentState) {
+                console.log('[AlertManager] No current state available for evaluation');
+                return;
+            }
+
+            // Combine VMs and containers into guests array
+            const allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
+            const currentMetrics = currentState.metrics || [];
+
+            if (allGuests.length === 0) {
+                console.log('[AlertManager] No guests found in current state');
+                return;
+            }
+
+            console.log(`[AlertManager] Evaluating current state: ${allGuests.length} guests against ${this.alertRules.size} rules`);
+            
+            // Log some sample guests for debugging
+            const sampleGuests = allGuests.slice(0, 3).map(g => `${g.name}(${g.status})`).join(', ');
+            console.log(`[AlertManager] Sample guests: ${sampleGuests}`);
+            
+            // Check which rules are enabled for down alerts
+            const downRules = Array.from(this.alertRules.values()).filter(r => r.metric === 'status');
+            console.log(`[AlertManager] Found ${downRules.length} down alert rules enabled`);
+
+            // For immediate evaluation, we need to check existing conditions and create alerts immediately
+            // This bypasses the normal duration-based pending state
+            const timestamp = Date.now();
+            
+            allGuests.forEach(guest => {
+                this.alertRules.forEach(rule => {
+                    if (this.isRuleSuppressed(rule.id, guest)) return;
+                    
+                    const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
+                    const existingAlert = this.activeAlerts.get(alertKey);
+                    
+                    // Skip if alert already exists
+                    if (existingAlert) return;
+                    
+                    // For immediate evaluation, we only care about status-based rules (down alerts)
+                    if (rule.metric === 'status') {
+                        const effectiveThreshold = this.getEffectiveThreshold(rule, guest);
+                        const isTriggered = this.evaluateCondition(guest.status, rule.condition, effectiveThreshold);
+                        
+                        if (isTriggered) {
+                            // Create alert immediately without waiting for duration
+                            const newAlert = {
+                                id: this.generateAlertId(),
+                                rule,
+                                guest,
+                                startTime: timestamp,
+                                lastUpdate: timestamp,
+                                triggeredAt: timestamp, // Set immediately for instant alerts
+                                currentValue: guest.status,
+                                effectiveThreshold: effectiveThreshold,
+                                state: 'active', // Make it active immediately
+                                escalated: false,
+                                acknowledged: false
+                            };
+                            
+                            this.activeAlerts.set(alertKey, newAlert);
+                            this.triggerAlert(newAlert);
+                        }
+                    }
+                });
+            });
+            
+
+        } catch (error) {
+            console.error('[AlertManager] Error evaluating current state:', error);
+        }
+    }
 
     evaluateCompoundThresholdRule(rule, guest, metrics, alertKey, timestamp) {
         const guestMetrics = metrics[guest.vmid] || metrics[guest.name];

@@ -751,7 +751,7 @@ class ConfigApi {
             try {
                 const alertManager = stateManager.getAlertManager();
                 if (alertManager && typeof alertManager.refreshRules === 'function') {
-                    alertManager.refreshRules();
+                    await alertManager.refreshRules();
                     console.log('Alert rules refreshed after configuration reload');
                 } else {
                     console.warn('AlertManager not available or refreshRules method not found');

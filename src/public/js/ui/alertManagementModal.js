@@ -154,6 +154,17 @@ PulseApp.ui.alertManagementModal = (() => {
             }
         });
 
+        // Show/hide the save button based on the active tab
+        // Only show save button on notifications tab where there might be unsaved changes
+        const saveButton = document.getElementById('alert-management-save-button');
+        if (saveButton) {
+            if (tabName === 'notifications') {
+                saveButton.style.display = 'block';
+            } else {
+                saveButton.style.display = 'none';
+            }
+        }
+
         // Update content
         renderTabContent();
         
@@ -269,7 +280,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                         <div class="flex-1">
                                             <div class="flex items-center gap-2 mb-1">
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">CPU Alert</h5>
-                                                <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full" id="cpu-status-badge">Enabled</span>
+                                                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full" id="cpu-status-badge">Loading...</span>
                                             </div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                                 Built-in system rule • Target: All VMs/LXCs
@@ -298,7 +309,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                         <div class="flex-1">
                                             <div class="flex items-center gap-2 mb-1">
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Memory Alert</h5>
-                                                <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full" id="memory-status-badge">Enabled</span>
+                                                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full" id="memory-status-badge">Loading...</span>
                                             </div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                                 Built-in system rule • Target: All VMs/LXCs
@@ -327,7 +338,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                         <div class="flex-1">
                                             <div class="flex items-center gap-2 mb-1">
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Disk Alert</h5>
-                                                <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full" id="disk-status-badge">Enabled</span>
+                                                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full" id="disk-status-badge">Loading...</span>
                                             </div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                                 Built-in system rule • Target: All VMs/LXCs
@@ -356,7 +367,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                         <div class="flex-1">
                                             <div class="flex items-center gap-2 mb-1">
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Down Alert</h5>
-                                                <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full" id="down-status-badge">Enabled</span>
+                                                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full" id="down-status-badge">Loading...</span>
                                             </div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                                 Built-in system rule • Target: All VMs/LXCs
@@ -479,6 +490,28 @@ PulseApp.ui.alertManagementModal = (() => {
                                     </div>
                                     <div id="email-provider-help" class="text-xs text-gray-500 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-800 rounded-md hidden">
                                         <!-- Provider-specific help will be shown here -->
+                                    </div>
+                                    
+                                    <!-- App Password Help -->
+                                    <div id="app-password-help" class="hidden bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+                                        <div class="flex items-start gap-3">
+                                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                            </svg>
+                                            <div class="flex-1">
+                                                <h5 class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1" id="app-password-title">App Password Required</h5>
+                                                <p class="text-sm text-blue-700 dark:text-blue-300 mb-3" id="app-password-description">
+                                                    You need to create an app password for Pulse to send emails.
+                                                </p>
+                                                <a id="app-password-link" href="#" target="_blank" rel="noopener noreferrer" 
+                                                   class="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/50 transition-colors">
+                                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-1M14 6h6m0 0v6m0-6L10 16"/>
+                                                    </svg>
+                                                    Create App Password
+                                                </a>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -704,8 +737,13 @@ PulseApp.ui.alertManagementModal = (() => {
         });
         
         // Load system and custom alerts
-        loadSystemAlerts();
-        loadCustomAlerts();
+        // Ensure we have the latest configuration before loading alerts
+        console.log('[DEBUG] About to load configuration for alert rules tab');
+        loadConfiguration().then(() => {
+            console.log('[DEBUG] Configuration loaded, now loading system and custom alerts');
+            loadSystemAlerts();
+            loadCustomAlerts();
+        });
     }
     
     function switchAlertRulesSubTab(tabName) {
@@ -764,6 +802,14 @@ PulseApp.ui.alertManagementModal = (() => {
                 handleEmailProviderSelection(provider);
             });
         });
+
+        // Set up auto-detection when email address is entered
+        const emailFromInput = document.getElementById('email-from-input');
+        if (emailFromInput) {
+            emailFromInput.addEventListener('blur', () => {
+                autoDetectEmailProvider(emailFromInput.value);
+            });
+        }
 
         // Set up advanced SMTP toggle
         const advancedToggle = document.getElementById('toggle-advanced-smtp');
@@ -849,6 +895,7 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function loadSystemAlerts() {
+        console.log('[DEBUG] loadSystemAlerts() called');
         // System alerts are now hardcoded in HTML, just load their configuration
         loadSystemAlertConfiguration();
     }
@@ -1091,7 +1138,10 @@ PulseApp.ui.alertManagementModal = (() => {
                 secure: true,
                 passwordLabel: 'App Password',
                 passwordHelp: '(Generate from Google Account settings)',
-                help: 'For Gmail, you need to enable 2-factor authentication and generate an App Password. Go to Google Account → Security → 2-Step Verification → App passwords.'
+                help: 'For Gmail, you need to enable 2-factor authentication and generate an App Password. Go to Google Account → Security → 2-Step Verification → App passwords.',
+                appPasswordUrl: 'https://myaccount.google.com/apppasswords',
+                appPasswordTitle: 'Gmail App Password Required',
+                appPasswordDesc: 'Gmail requires an app password for third-party applications. Your regular password won\'t work.'
             },
             outlook: {
                 host: 'smtp-mail.outlook.com',
@@ -1099,7 +1149,10 @@ PulseApp.ui.alertManagementModal = (() => {
                 secure: true,
                 passwordLabel: 'Password',
                 passwordHelp: '(Your Microsoft account password)',
-                help: 'Use your regular Microsoft account password. If you have 2FA enabled, you may need to generate an app password.'
+                help: 'Use your regular Microsoft account password. If you have 2FA enabled, you may need to generate an app password.',
+                appPasswordUrl: 'https://account.microsoft.com/security/app-passwords',
+                appPasswordTitle: 'Outlook App Password (If 2FA Enabled)',
+                appPasswordDesc: 'If you have 2-factor authentication enabled, you\'ll need an app password. Otherwise, use your regular password.'
             },
             yahoo: {
                 host: 'smtp.mail.yahoo.com',
@@ -1107,7 +1160,10 @@ PulseApp.ui.alertManagementModal = (() => {
                 secure: true,
                 passwordLabel: 'App Password',
                 passwordHelp: '(Generate from Yahoo Account settings)',
-                help: 'For Yahoo Mail, you need to generate an App Password. Go to Yahoo Account Info → Account Security → Generate app password.'
+                help: 'For Yahoo Mail, you need to generate an App Password. Go to Yahoo Account Info → Account Security → Generate app password.',
+                appPasswordUrl: 'https://login.yahoo.com/account/security/app-passwords',
+                appPasswordTitle: 'Yahoo App Password Required',
+                appPasswordDesc: 'Yahoo Mail requires an app password for third-party applications.'
             },
             custom: {
                 host: '',
@@ -1131,9 +1187,73 @@ PulseApp.ui.alertManagementModal = (() => {
                 helpDiv.textContent = config.help;
                 helpDiv.classList.remove('hidden');
             }
+
+            // Show app password help for providers that need it
+            showAppPasswordHelp(config);
+            
+            // Auto-fill username with from email if available
+            const fromEmailInput = document.getElementById('email-from-input');
+            const usernameInput = document.querySelector('input[name="ALERT_SMTP_USER"]');
+            if (fromEmailInput && usernameInput && fromEmailInput.value && provider !== 'custom') {
+                usernameInput.value = fromEmailInput.value;
+            }
+            
+            // Auto-expand advanced settings to show what was configured
+            const advancedSettings = document.getElementById('advanced-smtp-settings');
+            const toggleBtn = document.getElementById('toggle-advanced-smtp');
+            if (advancedSettings && advancedSettings.classList.contains('hidden')) {
+                toggleAdvancedSMTPSettings();
+            }
+        } else {
+            // Hide app password help for custom provider
+            hideAppPasswordHelp();
         }
     }
     
+    function showAppPasswordHelp(config) {
+        const helpDiv = document.getElementById('app-password-help');
+        const titleEl = document.getElementById('app-password-title');
+        const descEl = document.getElementById('app-password-description');
+        const linkEl = document.getElementById('app-password-link');
+
+        if (config.appPasswordUrl && helpDiv && titleEl && descEl && linkEl) {
+            helpDiv.classList.remove('hidden');
+            titleEl.textContent = config.appPasswordTitle;
+            descEl.textContent = config.appPasswordDesc;
+            linkEl.href = config.appPasswordUrl;
+        }
+    }
+
+    function hideAppPasswordHelp() {
+        const helpDiv = document.getElementById('app-password-help');
+        if (helpDiv) {
+            helpDiv.classList.add('hidden');
+        }
+    }
+
+    function autoDetectEmailProvider(email) {
+        if (!email || !email.includes('@')) return;
+        
+        const domain = email.split('@')[1].toLowerCase();
+        const providers = {
+            'gmail.com': 'gmail',
+            'googlemail.com': 'gmail',
+            'outlook.com': 'outlook',
+            'hotmail.com': 'outlook',
+            'live.com': 'outlook',
+            'msn.com': 'outlook',
+            'yahoo.com': 'yahoo',
+            'yahoo.co.uk': 'yahoo',
+            'yahoo.ca': 'yahoo',
+            'ymail.com': 'yahoo'
+        };
+
+        const provider = providers[domain];
+        if (provider) {
+            handleEmailProviderSelection(provider);
+        }
+    }
+
     function toggleAdvancedSMTPSettings() {
         const settingsDiv = document.getElementById('advanced-smtp-settings');
         const icon = document.getElementById('advanced-smtp-icon');
@@ -1249,7 +1369,27 @@ PulseApp.ui.alertManagementModal = (() => {
             alertConfig.threshold = threshold;
         }
         
-        // TODO: Save to backend
+        // Save to backend
+        const configUpdate = {};
+        configUpdate[`ALERT_${alertType.toUpperCase()}_ENABLED`] = enabled ? 'true' : 'false';
+        if (threshold && alertType !== 'down') {
+            configUpdate[`ALERT_${alertType.toUpperCase()}_THRESHOLD`] = threshold.toString();
+        }
+        
+        // Save via config API
+        fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(configUpdate)
+        }).then(response => response.json()).then(result => {
+            if (!result.success) {
+                console.error('Failed to save alert configuration:', result.error);
+                PulseApp.ui.toast.error('Failed to save alert configuration');
+            }
+        }).catch(error => {
+            console.error('Error saving alert configuration:', error);
+            PulseApp.ui.toast.error('Failed to save alert configuration');
+        });
         
         // Update the UI immediately
         updateSystemAlertDisplay(alertType, alertConfig);
@@ -1259,35 +1399,128 @@ PulseApp.ui.alertManagementModal = (() => {
     }
     
     function updateSystemAlertStatus(alertType, enabled) {
-        // TODO: Save status change to backend
+        console.log(`[DEBUG] updateSystemAlertStatus called: ${alertType} = ${enabled}`);
+        
+        // Save status change to backend
+        const configUpdate = {};
+        configUpdate[`ALERT_${alertType.toUpperCase()}_ENABLED`] = enabled ? 'true' : 'false';
+        console.log('[DEBUG] Sending config update:', configUpdate);
+        
+        fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(configUpdate)
+        }).then(response => response.json()).then(result => {
+            console.log('[DEBUG] Save response:', result);
+            if (result.success) {
+                PulseApp.ui.toast.success(`${alertType.charAt(0).toUpperCase() + alertType.slice(1)} alert ${enabled ? 'enabled' : 'disabled'} successfully`);
+                console.log('[DEBUG] Save successful, reloading configuration...');
+                // Reload configuration to ensure UI reflects the saved state
+                loadConfiguration().then(() => {
+                    console.log('[DEBUG] Configuration reloaded, updating display...');
+                    // Update the display with the fresh config
+                    const alertConfig = currentConfig?.advanced?.alerts?.[alertType] || {};
+                    console.log(`[DEBUG] Fresh config for ${alertType}:`, alertConfig);
+                    updateSystemAlertDisplay(alertType, { enabled: alertConfig.enabled !== false });
+                    
+                    // If we just enabled an alert, trigger immediate evaluation of current state
+                    if (enabled) {
+                        console.log(`[DEBUG] Alert ${alertType} was enabled, triggering immediate evaluation...`);
+                        triggerImmediateAlertEvaluation();
+                    }
+                });
+            } else {
+                console.error('[DEBUG] Failed to save alert status:', result.error);
+                PulseApp.ui.toast.error('Failed to save alert status');
+            }
+        }).catch(error => {
+            console.error('[DEBUG] Error saving alert status:', error);
+            PulseApp.ui.toast.error('Failed to save alert status');
+        });
+    }
+
+    function triggerImmediateAlertEvaluation() {
+        console.log('[DEBUG] triggerImmediateAlertEvaluation() called - calling API endpoint');
+        
+        PulseApp.ui.toast.alert('Alert enabled - checking for existing conditions...');
+        
+        // Call the API endpoint to trigger immediate evaluation
+        fetch('/api/alerts/evaluate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('[DEBUG] Alert evaluation triggered successfully');
+                // Refresh the main page alerts display
+                setTimeout(() => {
+                    if (typeof window.updateAlertsDisplay === 'function') {
+                        window.updateAlertsDisplay();
+                    }
+                }, 1000);
+            } else {
+                console.error('[DEBUG] Failed to trigger alert evaluation:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('[DEBUG] Error calling alert evaluation endpoint:', error);
+        });
     }
     
     function updateSystemAlertDisplay(alertType, config) {
-        // Update the toggle
-        const toggle = document.getElementById(`${alertType}-alert-enabled`);
-        if (toggle) toggle.checked = config.enabled;
+        console.log(`[DEBUG] updateSystemAlertDisplay called for ${alertType}:`, config);
         
         // Update the status badge
         const statusBadge = document.getElementById(`${alertType}-status-badge`);
         if (statusBadge) {
-            statusBadge.textContent = config.enabled ? 'Enabled' : 'Disabled';
-            statusBadge.className = `text-xs px-2 py-0.5 rounded-full ${
+            const newText = config.enabled ? 'Enabled' : 'Disabled';
+            const newClassName = `text-xs px-2 py-0.5 rounded-full ${
                 config.enabled 
                     ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300' 
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`;
+            
+            console.log(`[DEBUG] Updating status badge for ${alertType}: text="${newText}", className="${newClassName}"`);
+            statusBadge.textContent = newText;
+            statusBadge.className = newClassName;
+        } else {
+            console.log(`[DEBUG] Status badge element not found: ${alertType}-status-badge`);
+        }
+        
+        // Update the toggle button text and onclick
+        const toggleBtn = document.getElementById(`${alertType}-toggle-btn`);
+        if (toggleBtn) {
+            const newText = config.enabled ? 'Disable' : 'Enable';
+            toggleBtn.textContent = newText;
+            toggleBtn.onclick = () => toggleSystemAlert(alertType, !config.enabled);
+            console.log(`[DEBUG] Updated toggle button for ${alertType}: text="${newText}", enabled=${config.enabled}`);
+        } else {
+            console.log(`[DEBUG] Toggle button element not found: ${alertType}-toggle-btn`);
         }
         
         // Update the threshold display
         if (config.threshold && alertType !== 'down') {
             const display = document.getElementById(`${alertType}-threshold-display`);
-            if (display) display.textContent = `${config.threshold}%`;
+            if (display) {
+                display.textContent = `${config.threshold}%`;
+                console.log(`[DEBUG] Updated threshold display for ${alertType} to: ${config.threshold}%`);
+            } else {
+                console.log(`[DEBUG] Threshold display element not found: ${alertType}-threshold-display`);
+            }
         }
     }
 
     function loadSystemAlertConfiguration() {
-        // TODO: Load from backend and populate system alert displays
-        const config = PulseApp.config?.alerts || {};
+        // Load from current configuration and populate system alert displays
+        console.log('[DEBUG] loadSystemAlertConfiguration() called');
+        console.log('[DEBUG] currentConfig available:', !!currentConfig);
+        console.log('[DEBUG] currentConfig:', currentConfig);
+        
+        const config = currentConfig?.advanced?.alerts || {};
+        console.log('[DEBUG] Alert config extracted:', config);
         
         // Update system alert displays
         ['cpu', 'memory', 'disk', 'down'].forEach(alertType => {
@@ -1295,6 +1528,8 @@ PulseApp.ui.alertManagementModal = (() => {
             const enabled = alertConfig.enabled !== false;
             const defaultThresholds = { cpu: 85, memory: 90, disk: 95 };
             const threshold = alertConfig.threshold || defaultThresholds[alertType];
+            
+            console.log(`[DEBUG] ${alertType} alert - config:`, alertConfig, 'enabled:', enabled, 'threshold:', threshold);
             
             updateSystemAlertDisplay(alertType, { enabled, threshold });
         });
@@ -2061,18 +2296,28 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     }
 
     function openModal(targetTab = null) {
+        console.log('[DEBUG] openModal called with targetTab:', targetTab);
         const modal = document.getElementById('alert-management-modal');
         if (modal) {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             
             // Load current configuration if needed
+            console.log('[DEBUG] Loading configuration...');
             loadConfiguration();
+            
+            // Hide save button initially (only show on notifications tab)
+            const saveButton = document.getElementById('alert-management-save-button');
+            if (saveButton) {
+                saveButton.style.display = 'none';
+            }
             
             // Switch to target tab if specified
             if (targetTab && targetTab !== activeTab) {
+                console.log('[DEBUG] Switching to target tab:', targetTab);
                 switchTab(targetTab);
             } else {
+                console.log('[DEBUG] Rendering initial tab content for activeTab:', activeTab);
                 // Render initial tab content
                 renderTabContent();
             }
@@ -2089,28 +2334,105 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
     async function loadConfiguration() {
         try {
+            console.log('[DEBUG] loadConfiguration() called');
             
-            // Use the same configuration loading logic as settings
-            if (PulseApp.ui.settings && PulseApp.ui.settings.getCurrentConfig) {
-                currentConfig = await PulseApp.ui.settings.getCurrentConfig();
+            // Always load configuration directly from API to ensure fresh data
+            console.log('[DEBUG] Loading configuration directly from /api/config');
+            const response = await fetch('/api/config');
+            if (response.ok) {
+                currentConfig = await response.json();
+                console.log('[DEBUG] Configuration loaded from API:', currentConfig);
             } else {
-                // Fallback: load configuration directly
-                const response = await fetch('/api/config');
-                if (response.ok) {
-                    currentConfig = await response.json();
-                } else {
-                    console.error('Failed to load configuration');
-                    currentConfig = {};
-                }
+                console.error('[DEBUG] Failed to load configuration - response not ok');
+                currentConfig = {};
             }
+            
+            console.log('[DEBUG] Final currentConfig:', currentConfig);
+            console.log('[DEBUG] Alert settings from config:', currentConfig?.advanced?.alerts);
         } catch (error) {
-            console.error('Error loading configuration:', error);
+            console.error('[DEBUG] Error loading configuration:', error);
             currentConfig = {};
         }
     }
 
     async function saveConfiguration() {
-        // TODO: Save alert configuration
+        // The save configuration button in the alert management modal should 
+        // save any pending changes. Since individual system alerts are edited 
+        // in their own modals and saved immediately, and custom alerts have 
+        // their own save buttons, this function mainly handles email/webhook 
+        // configuration that might be pending.
+        
+        const saveButton = document.getElementById('alert-management-save-button');
+        if (!saveButton) return;
+
+        const originalText = saveButton.textContent;
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+
+        try {
+            let configToSave = {};
+            let hasChanges = false;
+
+            // Check for email configuration changes
+            const emailForm = document.getElementById('email-config-form');
+            if (emailForm) {
+                const smtpHost = emailForm.querySelector('input[name="smtp_host"]')?.value;
+                const smtpPort = emailForm.querySelector('input[name="smtp_port"]')?.value;
+                const smtpUser = emailForm.querySelector('input[name="smtp_user"]')?.value;
+                const smtpPass = emailForm.querySelector('input[name="smtp_pass"]')?.value;
+                const fromEmail = emailForm.querySelector('input[name="from_email"]')?.value;
+                const toEmail = emailForm.querySelector('input[name="to_email"]')?.value;
+                const smtpSecure = emailForm.querySelector('input[name="smtp_secure"]')?.checked;
+
+                if (smtpHost) { configToSave.SMTP_HOST = smtpHost; hasChanges = true; }
+                if (smtpPort) { configToSave.SMTP_PORT = smtpPort; hasChanges = true; }
+                if (smtpUser) { configToSave.SMTP_USER = smtpUser; hasChanges = true; }
+                if (smtpPass) { configToSave.SMTP_PASS = smtpPass; hasChanges = true; }
+                if (fromEmail) { configToSave.ALERT_FROM_EMAIL = fromEmail; hasChanges = true; }
+                if (toEmail) { configToSave.ALERT_TO_EMAIL = toEmail; hasChanges = true; }
+                configToSave.SMTP_SECURE = smtpSecure ? 'true' : 'false';
+                hasChanges = true;
+            }
+
+            // Check for webhook configuration changes
+            const webhookForm = document.getElementById('webhook-config-form');
+            if (webhookForm) {
+                const webhookUrl = webhookForm.querySelector('input[name="webhook_url"]')?.value;
+                const webhookEnabled = webhookForm.querySelector('input[name="webhook_enabled"]')?.checked;
+
+                if (webhookUrl !== undefined) { configToSave.WEBHOOK_URL = webhookUrl; hasChanges = true; }
+                configToSave.WEBHOOK_ENABLED = webhookEnabled ? 'true' : 'false';
+                hasChanges = true;
+            }
+
+            if (!hasChanges) {
+                PulseApp.ui.toast.alert('No changes to save');
+                return;
+            }
+
+            // Save configuration via API
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(configToSave)
+            });
+
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                PulseApp.ui.toast.success('Configuration saved successfully');
+                await loadConfiguration(); // Reload to reflect changes
+            } else {
+                throw new Error(result.error || 'Failed to save configuration');
+            }
+
+        } catch (error) {
+            console.error('Error saving configuration:', error);
+            PulseApp.ui.toast.error('Failed to save configuration: ' + error.message);
+        } finally {
+            saveButton.disabled = false;
+            saveButton.textContent = originalText;
+        }
     }
 
     async function toggleCustomAlert(alertId, enabled) {
@@ -2210,7 +2532,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             toggleBtn.onclick = () => toggleSystemAlert(alertId, !enabled);
         }
         
-        // TODO: Save the configuration to backend
+        // Save the configuration to backend
         updateSystemAlertStatus(alertId, enabled);
     };
 
