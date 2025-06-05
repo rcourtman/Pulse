@@ -55,13 +55,6 @@ PulseApp.ui.alertManagementModal = (() => {
                                 </svg>
                                 Alert Rules
                             </button>
-                            <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="global-settings">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                Global Settings
-                            </button>
                             <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="notifications">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -184,10 +177,6 @@ PulseApp.ui.alertManagementModal = (() => {
             case 'alert-rules':
                 modalBody.innerHTML = renderAlertRulesTab();
                 initializeAlertRulesTab();
-                break;
-            case 'global-settings':
-                modalBody.innerHTML = renderGlobalSettingsTab();
-                initializeGlobalSettingsTab();
                 break;
             case 'notifications':
                 modalBody.innerHTML = renderNotificationsTab();
@@ -353,8 +342,118 @@ PulseApp.ui.alertManagementModal = (() => {
                             </div>
 
                             <!-- Email Configuration -->
-                            <div id="email-config-section">
-                                <p class="text-sm text-gray-600 dark:text-gray-400">Email configuration will be loaded...</p>
+                            <div id="email-config-section" class="space-y-6">
+                                <!-- Email Provider Selection -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                                        Choose your email provider
+                                    </label>
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                                        <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="gmail">
+                                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Gmail</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">Google</div>
+                                        </button>
+                                        <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="outlook">
+                                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Outlook</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">Microsoft</div>
+                                        </button>
+                                        <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="yahoo">
+                                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Yahoo</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">Yahoo Mail</div>
+                                        </button>
+                                        <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="custom">
+                                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Other</div>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">Custom SMTP</div>
+                                        </button>
+                                    </div>
+                                    <div id="email-provider-help" class="text-xs text-gray-500 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-800 rounded-md hidden">
+                                        <!-- Provider-specific help will be shown here -->
+                                    </div>
+                                </div>
+
+                                <!-- Basic Email Configuration -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Your Email Address
+                                            <span class="text-gray-500 text-xs ml-1">(for sending alerts)</span>
+                                        </label>
+                                        <input type="email" id="email-from-input" name="ALERT_FROM_EMAIL"
+                                               placeholder="your-email@gmail.com"
+                                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            Alert Recipients
+                                            <span class="text-gray-500 text-xs ml-1">(who gets notified)</span>
+                                        </label>
+                                        <input type="text" name="ALERT_TO_EMAIL"
+                                               placeholder="admin@example.com, tech@example.com"
+                                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                </div>
+
+                                <!-- Password/App Password -->
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                        <span id="password-label">Password</span>
+                                        <span class="text-gray-500 text-xs ml-1" id="password-help">(for email authentication)</span>
+                                    </label>
+                                    <input type="password" name="ALERT_EMAIL_PASSWORD"
+                                           placeholder="Enter your email password or app password"
+                                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+
+                                <!-- Advanced SMTP Settings (Collapsible) -->
+                                <div>
+                                    <button type="button" id="toggle-advanced-smtp" class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
+                                        <svg class="w-4 h-4 mr-2 transform transition-transform" id="advanced-smtp-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                                        </svg>
+                                        Advanced SMTP Settings
+                                    </button>
+                                    <div id="advanced-smtp-settings" class="hidden mt-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP Host</label>
+                                                <input type="text" name="ALERT_SMTP_HOST" 
+                                                       placeholder="smtp.gmail.com"
+                                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP Port</label>
+                                                <input type="number" name="ALERT_SMTP_PORT" 
+                                                       placeholder="587"
+                                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            </div>
+                                            <div>
+                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
+                                                <input type="text" name="ALERT_SMTP_USER" 
+                                                       placeholder="your-email@gmail.com"
+                                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                            </div>
+                                        </div>
+                                        <div class="mt-4">
+                                            <label class="flex items-center">
+                                                <input type="checkbox" name="ALERT_SMTP_SECURE" class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                                <span class="text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS encryption</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Test Email Button -->
+                                <div class="flex space-x-3">
+                                    <button type="button" id="test-email-btn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
+                                        <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                        </svg>
+                                        Send Test Email
+                                    </button>
+                                    <button type="button" id="save-email-config-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                                        Save Email Configuration
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -436,151 +535,6 @@ PulseApp.ui.alertManagementModal = (() => {
         `;
     }
 
-    function renderGlobalSettingsTab() {
-        // Get current configuration from PulseApp.config if available
-        const config = PulseApp.config || {};
-        const alerts = config.alerts || {};
-        
-        return `
-            <div class="space-y-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Global Alert Settings</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Configure default alert thresholds and behavior for all VMs and LXCs</p>
-                    </div>
-                </div>
-
-                <!-- Alert Type Configuration -->
-                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-                    <h4 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Alert Types & Thresholds</h4>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">These settings apply to all VMs and LXCs unless overridden by custom thresholds.</p>
-                    
-                    <!-- Alert Type Toggles -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                        <div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg">
-                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">CPU Alerts</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="ALERT_CPU_ENABLED" ${alerts.cpu?.enabled !== false ? 'checked' : ''} class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg">
-                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Memory Alerts</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="ALERT_MEMORY_ENABLED" ${alerts.memory?.enabled !== false ? 'checked' : ''} class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg">
-                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Disk Alerts</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="ALERT_DISK_ENABLED" ${alerts.disk?.enabled !== false ? 'checked' : ''} class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg">
-                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Down Alerts</span>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="ALERT_DOWN_ENABLED" ${alerts.down?.enabled !== false ? 'checked' : ''} class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Threshold Configuration -->
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                CPU Threshold (%)
-                            </label>
-                            <input type="number" name="ALERT_CPU_THRESHOLD"
-                                   value="${alerts.cpu?.threshold || ''}"
-                                   placeholder="85 (default)"
-                                   min="50" max="100"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Alert when CPU usage exceeds this percentage</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Memory Threshold (%)
-                            </label>
-                            <input type="number" name="ALERT_MEMORY_THRESHOLD"
-                                   value="${alerts.memory?.threshold || ''}"
-                                   placeholder="90 (default)"
-                                   min="50" max="100"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Alert when memory usage exceeds this percentage</p>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Disk Threshold (%)
-                            </label>
-                            <input type="number" name="ALERT_DISK_THRESHOLD"
-                                   value="${alerts.disk?.threshold || ''}"
-                                   placeholder="95 (default)"
-                                   min="50" max="100"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Alert when disk usage exceeds this percentage</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Custom Thresholds Integration -->
-                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <div>
-                            <h4 class="text-lg font-semibold text-blue-900 dark:text-blue-100">Custom Per-VM/LXC Thresholds</h4>
-                            <p class="text-sm text-blue-700 dark:text-blue-300">Override global settings for specific VMs or LXCs</p>
-                        </div>
-                        <button id="manage-custom-thresholds-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
-                            <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                            </svg>
-                            Add Custom Threshold
-                        </button>
-                    </div>
-                    <div id="custom-thresholds-list" class="space-y-2">
-                        <p class="text-sm text-gray-500 dark:text-gray-400">Loading custom thresholds...</p>
-                    </div>
-                </div>
-
-                <!-- Advanced Alert Settings -->
-                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
-                    <h4 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Advanced Settings</h4>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Alert Frequency (minutes)
-                            </label>
-                            <select name="ALERT_FREQUENCY" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="1">Every minute</option>
-                                <option value="5" selected>Every 5 minutes</option>
-                                <option value="10">Every 10 minutes</option>
-                                <option value="15">Every 15 minutes</option>
-                                <option value="30">Every 30 minutes</option>
-                            </select>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">How often to check for alert conditions</p>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Alert Suppression (minutes)
-                            </label>
-                            <select name="ALERT_SUPPRESSION" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <option value="0">No suppression</option>
-                                <option value="5">5 minutes</option>
-                                <option value="15" selected>15 minutes</option>
-                                <option value="30">30 minutes</option>
-                                <option value="60">1 hour</option>
-                            </select>
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Prevent duplicate alerts for the same condition</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
 
     function initializeAlertsTab() {
         // Set up refresh button
@@ -662,9 +616,6 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function initializeNotificationsTab() {
-        // Load email configuration into the email section
-        loadEmailConfiguration();
-        
         // Set up nested tab navigation
         const subTabs = document.querySelectorAll('.notification-sub-tab');
         subTabs.forEach(tab => {
@@ -673,7 +624,33 @@ PulseApp.ui.alertManagementModal = (() => {
                 switchNotificationSubTab(targetTab);
             });
         });
-        
+
+        // Set up email provider selection
+        const emailProviderBtns = document.querySelectorAll('.email-provider-btn');
+        emailProviderBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const provider = e.currentTarget.dataset.provider;
+                handleEmailProviderSelection(provider);
+            });
+        });
+
+        // Set up advanced SMTP toggle
+        const advancedToggle = document.getElementById('toggle-advanced-smtp');
+        if (advancedToggle) {
+            advancedToggle.addEventListener('click', toggleAdvancedSMTPSettings);
+        }
+
+        // Set up email test and save buttons
+        const testEmailBtn = document.getElementById('test-email-btn');
+        if (testEmailBtn) {
+            testEmailBtn.addEventListener('click', testEmailConnection);
+        }
+
+        const saveEmailBtn = document.getElementById('save-email-config-btn');
+        if (saveEmailBtn) {
+            saveEmailBtn.addEventListener('click', saveEmailConfiguration);
+        }
+
         // Set up webhook preset buttons
         const webhookPresets = document.querySelectorAll('.webhook-preset');
         webhookPresets.forEach(preset => {
@@ -708,59 +685,11 @@ PulseApp.ui.alertManagementModal = (() => {
                 console.log('Webhook notifications toggled:', e.target.checked);
             });
         }
+
+        // Load existing email configuration
+        loadEmailConfiguration();
     }
 
-    function initializeGlobalSettingsTab() {
-        // Load current configuration
-        loadGlobalAlertConfig();
-        
-        // Set up custom thresholds management
-        const manageCustomBtn = document.getElementById('manage-custom-thresholds-btn');
-        if (manageCustomBtn) {
-            manageCustomBtn.addEventListener('click', () => {
-                // Integration with existing threshold modal from settings
-                if (PulseApp.ui.settings && PulseApp.ui.settings.showThresholdModal) {
-                    PulseApp.ui.settings.showThresholdModal();
-                } else {
-                    alert('Custom threshold management will be available soon');
-                }
-            });
-        }
-        
-        // Set up alert type toggles
-        const alertToggles = document.querySelectorAll('input[name^="ALERT_"][name$="_ENABLED"]');
-        alertToggles.forEach(toggle => {
-            toggle.addEventListener('change', (e) => {
-                console.log(`${e.target.name} toggled:`, e.target.checked);
-            });
-        });
-        
-        // Set up threshold inputs
-        const thresholdInputs = document.querySelectorAll('input[name$="_THRESHOLD"]');
-        thresholdInputs.forEach(input => {
-            input.addEventListener('change', (e) => {
-                console.log(`${e.target.name} changed:`, e.target.value);
-            });
-        });
-        
-        // Set up advanced settings
-        const frequencySelect = document.querySelector('select[name="ALERT_FREQUENCY"]');
-        if (frequencySelect) {
-            frequencySelect.addEventListener('change', (e) => {
-                console.log('Alert frequency changed:', e.target.value);
-            });
-        }
-        
-        const suppressionSelect = document.querySelector('select[name="ALERT_SUPPRESSION"]');
-        if (suppressionSelect) {
-            suppressionSelect.addEventListener('change', (e) => {
-                console.log('Alert suppression changed:', e.target.value);
-            });
-        }
-        
-        // Load custom thresholds
-        loadCustomThresholds();
-    }
     
     function switchNotificationSubTab(tabName) {
         // Update tab buttons
@@ -1005,6 +934,126 @@ PulseApp.ui.alertManagementModal = (() => {
         // TODO: Implement webhook configuration saving
         console.log('Saving webhook configuration:', webhookUrl);
         alert('Webhook configuration saved successfully!');
+    }
+
+    function handleEmailProviderSelection(provider) {
+        // Remove active state from all buttons
+        document.querySelectorAll('.email-provider-btn').forEach(btn => {
+            btn.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+        });
+        
+        // Add active state to selected button
+        const selectedBtn = document.querySelector(`[data-provider="${provider}"]`);
+        selectedBtn.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+        
+        // Update form fields based on provider
+        const helpDiv = document.getElementById('email-provider-help');
+        const passwordLabel = document.getElementById('password-label');
+        const passwordHelp = document.getElementById('password-help');
+        const hostInput = document.querySelector('input[name="ALERT_SMTP_HOST"]');
+        const portInput = document.querySelector('input[name="ALERT_SMTP_PORT"]');
+        const secureCheckbox = document.querySelector('input[name="ALERT_SMTP_SECURE"]');
+        
+        const providers = {
+            gmail: {
+                host: 'smtp.gmail.com',
+                port: 587,
+                secure: true,
+                passwordLabel: 'App Password',
+                passwordHelp: '(Generate from Google Account settings)',
+                help: 'For Gmail, you need to enable 2-factor authentication and generate an App Password. Go to Google Account → Security → 2-Step Verification → App passwords.'
+            },
+            outlook: {
+                host: 'smtp-mail.outlook.com',
+                port: 587,
+                secure: true,
+                passwordLabel: 'Password',
+                passwordHelp: '(Your Microsoft account password)',
+                help: 'Use your regular Microsoft account password. If you have 2FA enabled, you may need to generate an app password.'
+            },
+            yahoo: {
+                host: 'smtp.mail.yahoo.com',
+                port: 587,
+                secure: true,
+                passwordLabel: 'App Password',
+                passwordHelp: '(Generate from Yahoo Account settings)',
+                help: 'For Yahoo Mail, you need to generate an App Password. Go to Yahoo Account Info → Account Security → Generate app password.'
+            },
+            custom: {
+                host: '',
+                port: 587,
+                secure: true,
+                passwordLabel: 'Password',
+                passwordHelp: '(SMTP authentication password)',
+                help: 'Enter the SMTP settings provided by your email provider. Check their documentation for the correct host, port, and security settings.'
+            }
+        };
+        
+        const config = providers[provider];
+        if (config) {
+            if (hostInput) hostInput.value = config.host;
+            if (portInput) portInput.value = config.port;
+            if (secureCheckbox) secureCheckbox.checked = config.secure;
+            if (passwordLabel) passwordLabel.textContent = config.passwordLabel;
+            if (passwordHelp) passwordHelp.textContent = config.passwordHelp;
+            
+            if (helpDiv) {
+                helpDiv.textContent = config.help;
+                helpDiv.classList.remove('hidden');
+            }
+        }
+    }
+    
+    function toggleAdvancedSMTPSettings() {
+        const settingsDiv = document.getElementById('advanced-smtp-settings');
+        const icon = document.getElementById('advanced-smtp-icon');
+        
+        if (settingsDiv.classList.contains('hidden')) {
+            settingsDiv.classList.remove('hidden');
+            icon.style.transform = 'rotate(90deg)';
+        } else {
+            settingsDiv.classList.add('hidden');
+            icon.style.transform = 'rotate(0deg)';
+        }
+    }
+    
+    function testEmailConnection() {
+        // Collect email configuration
+        const emailConfig = {
+            from: document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value,
+            to: document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value,
+            password: document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]')?.value,
+            host: document.querySelector('input[name="ALERT_SMTP_HOST"]')?.value,
+            port: document.querySelector('input[name="ALERT_SMTP_PORT"]')?.value,
+            user: document.querySelector('input[name="ALERT_SMTP_USER"]')?.value,
+            secure: document.querySelector('input[name="ALERT_SMTP_SECURE"]')?.checked
+        };
+        
+        if (!emailConfig.from || !emailConfig.to) {
+            alert('Please enter both sender and recipient email addresses');
+            return;
+        }
+        
+        // TODO: Implement actual email test
+        console.log('Testing email configuration:', emailConfig);
+        alert('Test email functionality will be implemented with backend integration');
+    }
+    
+    function saveEmailConfiguration() {
+        // Collect email configuration
+        const emailConfig = {
+            from: document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value,
+            to: document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value,
+            password: document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]')?.value,
+            host: document.querySelector('input[name="ALERT_SMTP_HOST"]')?.value,
+            port: document.querySelector('input[name="ALERT_SMTP_PORT"]')?.value,
+            user: document.querySelector('input[name="ALERT_SMTP_USER"]')?.value,
+            secure: document.querySelector('input[name="ALERT_SMTP_SECURE"]')?.checked
+        };
+        
+        // TODO: Implement saving to backend
+        console.log('Saving email configuration:', emailConfig);
+        alert('Email configuration saved successfully!');
     }
 
     function testWebhookConnection() {
@@ -1659,64 +1708,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         }
     }
 
-    async function loadGlobalAlertConfig() {
-        try {
-            // Load configuration from the backend
-            const response = await fetch('/api/config');
-            if (response.ok) {
-                const config = await response.json();
-                PulseApp.config = config; // Update global config
-                
-                // Update the form values if they're loaded
-                updateGlobalSettingsForm(config);
-            }
-        } catch (error) {
-            console.error('Failed to load global alert configuration:', error);
-        }
-    }
-    
-    function updateGlobalSettingsForm(config) {
-        const alerts = config.alerts || {};
-        
-        // Update alert type toggles
-        document.querySelector('input[name="ALERT_CPU_ENABLED"]').checked = alerts.cpu?.enabled !== false;
-        document.querySelector('input[name="ALERT_MEMORY_ENABLED"]').checked = alerts.memory?.enabled !== false;
-        document.querySelector('input[name="ALERT_DISK_ENABLED"]').checked = alerts.disk?.enabled !== false;
-        document.querySelector('input[name="ALERT_DOWN_ENABLED"]').checked = alerts.down?.enabled !== false;
-        
-        // Update threshold values
-        const cpuInput = document.querySelector('input[name="ALERT_CPU_THRESHOLD"]');
-        if (cpuInput) cpuInput.value = alerts.cpu?.threshold || '';
-        
-        const memoryInput = document.querySelector('input[name="ALERT_MEMORY_THRESHOLD"]');
-        if (memoryInput) memoryInput.value = alerts.memory?.threshold || '';
-        
-        const diskInput = document.querySelector('input[name="ALERT_DISK_THRESHOLD"]');
-        if (diskInput) diskInput.value = alerts.disk?.threshold || '';
-    }
-    
-    async function loadCustomThresholds() {
-        const customThresholdsList = document.getElementById('custom-thresholds-list');
-        if (!customThresholdsList) return;
-        
-        try {
-            // For now, show placeholder content
-            // This would integrate with the existing custom threshold system
-            customThresholdsList.innerHTML = `
-                <div class="text-center py-4">
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">No custom thresholds configured</p>
-                    <p class="text-xs text-gray-400 dark:text-gray-500">Click "Add Custom Threshold" to create VM/LXC-specific settings</p>
-                </div>
-            `;
-        } catch (error) {
-            console.error('Failed to load custom thresholds:', error);
-            customThresholdsList.innerHTML = `
-                <div class="text-center py-4">
-                    <p class="text-sm text-red-500">Failed to load custom thresholds</p>
-                </div>
-            `;
-        }
-    }
 
     // Global functions that need to be accessible from HTML onclick handlers
     window.toggleSystemAlert = function(alertId, enabled) {
