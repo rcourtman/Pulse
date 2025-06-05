@@ -12,7 +12,6 @@ PulseApp.ui.settings = (() => {
     function init() {
         if (isInitialized) return;
         
-        console.log('[Settings] Initializing settings module...');
         
         // Set up modal event listeners
         const settingsButton = document.getElementById('settings-button');
@@ -58,7 +57,6 @@ PulseApp.ui.settings = (() => {
         setupTabNavigation();
 
         isInitialized = true;
-        console.log('[Settings] Settings module initialized');
     }
 
     function setupTabNavigation() {
@@ -1198,7 +1196,6 @@ PulseApp.ui.settings = (() => {
             } else {
             // Clear cache for this tab if no significant data
             delete formDataCache[activeTab];
-            console.log(`[Settings] No significant data to preserve for tab '${activeTab}', cleared cache`);
         }
     }
 
@@ -1365,7 +1362,6 @@ PulseApp.ui.settings = (() => {
             
             let data;
             if (cachedResult && (Date.now() - cachedResult.timestamp) < cacheExpiry) {
-                console.log(`[Settings] Using cached result for channel: ${cacheKey}`);
                 data = cachedResult.data;
             } else {
                 // Use the server's update check API with optional channel override
@@ -1431,7 +1427,6 @@ PulseApp.ui.settings = (() => {
                 const isCurrentRC = currentVersionLower.includes('-rc') || currentVersionLower.includes('-alpha') || currentVersionLower.includes('-beta');
                 const shouldShowRecommendation = (!isCurrentRC && updateChannel === 'rc');
                 
-                console.log('Channel debug:', { currentVersion, updateChannel, isCurrentRC, shouldShowRecommendation, serverResponse: data });
                 
                 if (shouldShowRecommendation && channelMismatchWarning) {
                     const messageElement = document.getElementById('channel-mismatch-message');
@@ -1524,7 +1519,6 @@ PulseApp.ui.settings = (() => {
                 const cacheKey = channelOverride || 'default';
                 const staleCache = updateCache.get(cacheKey);
                 if (staleCache) {
-                    console.log('[Settings] Using stale cache due to rate limiting');
                     // Recursively call with cached data
                     setTimeout(() => {
                         const cachedData = staleCache.data;
@@ -1651,7 +1645,6 @@ PulseApp.ui.settings = (() => {
             
             const compareUrl = `https://api.github.com/repos/rcourtman/Pulse/compare/v${cleanBaseVersion}...v${cleanHeadVersion}`;
             
-            console.log(`[Settings] Fetching version comparison: ${compareUrl}`);
             
             const response = await fetch(compareUrl);
             if (!response.ok) {
@@ -1843,7 +1836,6 @@ PulseApp.ui.settings = (() => {
     }
 
     async function applyUpdate() {
-        console.log('[Settings] applyUpdate called, latestReleaseData:', latestReleaseData);
         
         if (!latestReleaseData || !latestReleaseData.assets || latestReleaseData.assets.length === 0) {
             console.error('[Settings] No release data or assets:', { latestReleaseData, hasAssets: !!latestReleaseData?.assets, assetCount: latestReleaseData?.assets?.length });
@@ -1856,8 +1848,6 @@ PulseApp.ui.settings = (() => {
             asset.name.endsWith('.tar.gz') && asset.name.includes('pulse')
         );
         
-        console.log('[Settings] Looking for tarball asset in:', latestReleaseData.assets.map(a => ({ name: a.name, downloadUrl: a.downloadUrl, browser_download_url: a.browser_download_url })));
-        console.log('[Settings] Found tarball asset:', tarballAsset);
         
         if (!tarballAsset) {
             console.error('Available assets:', latestReleaseData.assets.map(a => a.name));
@@ -2275,14 +2265,6 @@ PulseApp.ui.settings = (() => {
                     nodeField.value = 'auto-detect';
                 }
                 
-                // Debug logging
-                console.log('[Settings] Guest selector changed:', {
-                    selectedEndpoint,
-                    selectedVmid,
-                    selectedGuest,
-                    nodeValue: nodeField.value,
-                    allGuestsCount: allGuests.length
-                });
             } else {
                 endpointField.value = '';
                 nodeField.value = '';
@@ -2336,7 +2318,6 @@ PulseApp.ui.settings = (() => {
                 return;
             }
             
-            console.log('[Settings] Saving thresholds for:', { endpointId, nodeId, vmid });
             
             try {
                 const method = existingThresholds ? 'PUT' : 'POST';
@@ -3302,11 +3283,9 @@ PulseApp.ui.settings = (() => {
     // Clear update cache (useful after saving settings)
     function clearUpdateCache() {
         updateCache.clear();
-        console.log('[Settings] Update cache cleared');
     }
 
     async function initializeAlertManagementTab() {
-        console.log('[Settings] Initializing Alert Management tab');
         
         // Set up event listeners for the alert management tab
         setTimeout(() => {

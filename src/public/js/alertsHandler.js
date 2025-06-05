@@ -622,7 +622,6 @@ PulseApp.alerts = (() => {
 
     function scheduleAcknowledgedCleanup(alertId) {
         setTimeout(() => {
-            console.log(`[Alerts] Auto-removing acknowledged alert: ${alertId}`);
             activeAlerts = activeAlerts.filter(a => a.id !== alertId);
             updateHeaderIndicator();
             if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
@@ -648,13 +647,11 @@ PulseApp.alerts = (() => {
                 arrow.classList.remove('rotate-180');
             }
             
-            console.log('[Alerts] Toggled acknowledged section:', isHidden ? 'opened' : 'closed');
         }
     }
 
     async function suppressAlert(ruleId, node, vmid) {
         try {
-            console.log(`[Alerts] Attempting to suppress alert: ${ruleId} for ${node}/${vmid}`);
             
             const response = await fetch('/api/alerts/suppress', {
                 method: 'POST',
@@ -667,11 +664,9 @@ PulseApp.alerts = (() => {
                 })
             });
             
-            console.log(`[Alerts] Suppress response status: ${response.status}`);
             
             if (response.ok) {
                 const result = await response.json().catch(() => ({}));
-                console.log('[Alerts] Alert suppressed successfully:', result);
                 await loadInitialData();
                 if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
                     updateDropdownContent();
@@ -688,40 +683,22 @@ PulseApp.alerts = (() => {
     }
 
     async function markAllAsAcknowledged() {
-        console.log('[Alerts] markAllAsAcknowledged called');
-        console.log('[Alerts] Current activeAlerts:', activeAlerts);
         
-        // Debug: Show the actual alert objects
-        activeAlerts.forEach((alert, index) => {
-            console.log(`[Alerts] Alert ${index}:`, {
-                id: alert.id,
-                name: alert.guest?.name,
-                acknowledged: alert.acknowledged,
-                acknowledgedType: typeof alert.acknowledged
-            });
-        });
         
         const unacknowledgedAlerts = activeAlerts.filter(alert => !alert.acknowledged);
-        console.log('[Alerts] Unacknowledged alerts:', unacknowledgedAlerts);
         
-        // Debug: Also try explicit filter
-        const explicitUnacknowledged = activeAlerts.filter(alert => alert.acknowledged === false);
-        console.log('[Alerts] Explicitly false acknowledged alerts:', explicitUnacknowledged);
         
         if (unacknowledgedAlerts.length === 0) {
-            console.log('[Alerts] No unacknowledged alerts found');
             // Don't show annoying "no alerts" popup - user can see this visually
             return;
         }
         
-        console.log(`[Alerts] Attempting to acknowledge ${unacknowledgedAlerts.length} alerts`);
         
         let successCount = 0;
         let errorCount = 0;
         
         for (const alert of unacknowledgedAlerts) {
             try {
-                console.log(`[Alerts] Acknowledging alert: ${alert.id}`);
                 
                 const response = await fetch(`/api/alerts/${alert.id}/acknowledge`, {
                     method: 'POST',
@@ -732,7 +709,6 @@ PulseApp.alerts = (() => {
                     })
                 });
                 
-                console.log(`[Alerts] Response for ${alert.id}:`, response.status, response.statusText);
                 
                 if (response.ok) {
                     successCount++;
@@ -745,7 +721,6 @@ PulseApp.alerts = (() => {
                         // Schedule cleanup of this acknowledged alert after 5 minutes
                         scheduleAcknowledgedCleanup(alert.id);
                         
-                        console.log(`[Alerts] Updated local alert ${alert.id} to acknowledged`);
                     }
                 } else {
                     errorCount++;
@@ -758,7 +733,6 @@ PulseApp.alerts = (() => {
             }
         }
         
-        console.log(`[Alerts] Bulk acknowledge completed: ${successCount} success, ${errorCount} errors`);
         
         // Update UI
         updateHeaderIndicator();

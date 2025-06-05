@@ -276,18 +276,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Check if configuration has placeholder values or no data is available
                         if (health.system && health.system.configPlaceholder) {
-                            console.log('[Main] Configuration contains placeholder values, opening settings modal...');
-                            
                             // Wait for settings module to be fully initialized
                             setTimeout(() => {
                                 if (PulseApp.ui.settings && typeof PulseApp.ui.settings.openModal === 'function') {
                                     PulseApp.ui.settings.openModal();
-                                } else {
-                                    console.warn('[Main] Settings module not available for auto-open');
                                 }
                             }, 500);
-                        } else {
-                            console.log('[Main] Configuration appears valid, not opening settings modal');
                         }
                     }
                 } catch (error) {

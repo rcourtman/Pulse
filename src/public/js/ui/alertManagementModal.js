@@ -9,7 +9,6 @@ PulseApp.ui.alertManagementModal = (() => {
     function init() {
         if (isInitialized) return;
         
-        console.log('[AlertManagementModal] Initializing alert management modal...');
         
         // Create modal HTML
         createModalHTML();
@@ -18,7 +17,6 @@ PulseApp.ui.alertManagementModal = (() => {
         setupEventListeners();
         
         isInitialized = true;
-        console.log('[AlertManagementModal] Alert management modal initialized');
     }
 
     function createModalHTML() {
@@ -671,7 +669,6 @@ PulseApp.ui.alertManagementModal = (() => {
         if (viewHistoryBtn) {
             viewHistoryBtn.addEventListener('click', () => {
                 // TODO: Implement alert history view
-                console.log('Alert history view not yet implemented');
             });
         }
 
@@ -702,7 +699,6 @@ PulseApp.ui.alertManagementModal = (() => {
         systemAlertToggles.forEach(toggle => {
             toggle.addEventListener('change', (e) => {
                 const alertType = e.target.id.replace('-alert-enabled', '');
-                console.log(`System ${alertType} alert toggled:`, e.target.checked);
                 updateSystemAlertStatus(alertType, e.target.checked);
             });
         });
@@ -810,14 +806,12 @@ PulseApp.ui.alertManagementModal = (() => {
         const emailToggle = document.querySelector('input[name="GLOBAL_EMAIL_ENABLED"]');
         if (emailToggle) {
             emailToggle.addEventListener('change', (e) => {
-                console.log('Email notifications toggled:', e.target.checked);
             });
         }
         
         const webhookToggle = document.querySelector('input[name="GLOBAL_WEBHOOK_ENABLED"]');
         if (webhookToggle) {
             webhookToggle.addEventListener('change', (e) => {
-                console.log('Webhook notifications toggled:', e.target.checked);
             });
         }
 
@@ -1069,7 +1063,6 @@ PulseApp.ui.alertManagementModal = (() => {
         }
         
         // TODO: Implement webhook configuration saving
-        console.log('Saving webhook configuration:', webhookUrl);
         PulseApp.ui.toast.success('Webhook configuration saved successfully!');
     }
 
@@ -1172,7 +1165,6 @@ PulseApp.ui.alertManagementModal = (() => {
         }
         
         // TODO: Implement actual email test
-        console.log('Testing email configuration:', emailConfig);
         PulseApp.ui.toast.info('Test email functionality will be implemented with backend integration');
     }
     
@@ -1189,7 +1181,6 @@ PulseApp.ui.alertManagementModal = (() => {
         };
         
         // TODO: Implement saving to backend
-        console.log('Saving email configuration:', emailConfig);
         PulseApp.ui.toast.success('Email configuration saved successfully!');
     }
 
@@ -1259,7 +1250,6 @@ PulseApp.ui.alertManagementModal = (() => {
         }
         
         // TODO: Save to backend
-        console.log(`Saving ${alertType} alert:`, alertConfig);
         
         // Update the UI immediately
         updateSystemAlertDisplay(alertType, alertConfig);
@@ -1270,7 +1260,6 @@ PulseApp.ui.alertManagementModal = (() => {
     
     function updateSystemAlertStatus(alertType, enabled) {
         // TODO: Save status change to backend
-        console.log(`${alertType} alert ${enabled ? 'enabled' : 'disabled'}`);
     }
     
     function updateSystemAlertDisplay(alertType, config) {
@@ -1323,7 +1312,6 @@ PulseApp.ui.alertManagementModal = (() => {
             PulseApp.ui.settings.setupWebhookTestButton();
         } else {
             // Fallback test
-            console.log('Testing webhook:', webhookUrl);
             PulseApp.ui.toast.info('Webhook test functionality will be implemented');
         }
     }
@@ -1837,7 +1825,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             // Parse the JSON data containing all the preset thresholds
             try {
                 thresholds = JSON.parse(multipleThresholdsData.replace(/&quot;/g, '"'));
-                console.log('Using multiple thresholds from dashboard:', thresholds);
             } catch (error) {
                 console.warn('Failed to parse multiple thresholds data:', error);
             }
@@ -1866,7 +1853,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 thresholds.push({type: 'status', operator: '=', value: 'stopped'});
             }
             
-            console.log('Using thresholds from simplified form:', thresholds);
         }
 
         // Validate that we have at least one threshold
@@ -1892,7 +1878,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             alertConfig.id = existingAlert.id;
         }
 
-        console.log(existingAlert ? 'Updating custom alert:' : 'Creating custom alert:', alertConfig);
 
         try {
             // Save to backend via API
@@ -1913,7 +1898,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             }
 
             const result = await response.json();
-            console.log(`Alert rule ${existingAlert ? 'updated' : 'created'} successfully:`, result);
             
             const thresholdSummary = thresholds.map(t => `${t.type.toUpperCase()}: ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}`).join(', ');
             PulseApp.ui.toast.success(`Custom alert ${existingAlert ? 'updated' : 'created'} successfully! Alert: ${alertConfig.name}`);
@@ -2105,7 +2089,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
     async function loadConfiguration() {
         try {
-            console.log('Loading alert configuration...');
             
             // Use the same configuration loading logic as settings
             if (PulseApp.ui.settings && PulseApp.ui.settings.getCurrentConfig) {
@@ -2128,7 +2111,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
     async function saveConfiguration() {
         // TODO: Save alert configuration
-        console.log('Saving alert configuration...');
     }
 
     async function toggleCustomAlert(alertId, enabled) {
@@ -2146,7 +2128,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 throw new Error(errorData.error || `Server error: ${response.status}`);
             }
 
-            console.log(`Custom alert ${alertId} ${enabled ? 'enabled' : 'disabled'}`);
             await loadCustomAlerts(); // Refresh display
             
         } catch (error) {
@@ -2210,7 +2191,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     window.saveSystemAlert = saveSystemAlert;
     
     window.toggleSystemAlert = function(alertId, enabled) {
-        console.log(`Toggling system alert ${alertId} to ${enabled ? 'enabled' : 'disabled'}`);
         
         // Update the status badge
         const statusBadge = document.getElementById(`${alertId}-status-badge`);

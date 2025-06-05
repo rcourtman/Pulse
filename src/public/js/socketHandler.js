@@ -129,8 +129,6 @@ PulseApp.socketHandler = (() => {
     }
     
     function handleConfigurationReloaded(data) {
-        console.log('[Socket] Configuration reloaded:', data.message);
-        
         // Show notification to user
         if (PulseApp.alerts && PulseApp.alerts.showNotification) {
             PulseApp.alerts.showNotification({

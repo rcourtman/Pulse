@@ -469,8 +469,6 @@ PulseApp.ui.thresholds = (() => {
             enabled: true
         };
 
-        console.log('[Thresholds] Creating alert rule:', alertRule);
-        console.log('[Thresholds] Active thresholds:', activeThresholds);
 
         try {
             const response = await fetch('/api/alerts/rules', {
@@ -828,20 +826,12 @@ PulseApp.ui.thresholds = (() => {
             const emailStatus = document.getElementById('email-status');
             const webhookStatus = document.getElementById('webhook-status');
             
-            console.log('[Thresholds] Config response:', config);
             
             // Update email status - check for SMTP configuration in advanced.smtp
             if (emailStatus) {
                 const hasEmailConfig = config.advanced && config.advanced.smtp && 
                     config.advanced.smtp.host && config.advanced.smtp.user;
                 
-                console.log('[Thresholds] Email config check:', {
-                    hasAdvanced: !!config.advanced,
-                    hasSmtp: !!(config.advanced && config.advanced.smtp),
-                    hasHost: !!(config.advanced && config.advanced.smtp && config.advanced.smtp.host),
-                    hasUser: !!(config.advanced && config.advanced.smtp && config.advanced.smtp.user),
-                    hasEmailConfig
-                });
                 
                 if (hasEmailConfig) {
                     emailStatus.innerHTML = `
@@ -852,7 +842,6 @@ PulseApp.ui.thresholds = (() => {
                     `;
                     emailStatus.className = 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
                 } else {
-                    console.log('[Thresholds] Email not configured - no SMTP settings found');
                 }
             }
             
@@ -910,12 +899,6 @@ PulseApp.ui.thresholds = (() => {
                     !webhookUrl.includes('discordapp.com/api/webhooks') &&
                     !webhookUrl.includes('hooks.slack.com'); // Exclude Discord/Slack URLs for custom webhook
                 
-                console.log('[Thresholds] Custom webhook config check:', {
-                    hasAdvanced: !!config.advanced,
-                    hasWebhook: !!(config.advanced && config.advanced.webhook),
-                    webhookUrl: webhookUrl,
-                    isRealWebhook
-                });
                 
                 if (isRealWebhook) {
                     webhookStatus.innerHTML = `
@@ -926,7 +909,6 @@ PulseApp.ui.thresholds = (() => {
                     `;
                     webhookStatus.className = 'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
                 } else {
-                    console.log('[Thresholds] Custom webhook not properly configured - URL appears to be test/placeholder:', webhookUrl);
                 }
             }
         } catch (error) {

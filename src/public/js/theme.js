@@ -24,8 +24,6 @@ PulseApp.theme = (() => {
                 const currentIsDark = htmlElement.classList.contains('dark');
                 applyTheme(currentIsDark ? 'light' : 'dark');
             });
-        } else {
-            console.warn('Element #theme-toggle-button not found - theme switching disabled.');
         }
     }
 
