@@ -1390,16 +1390,16 @@ PulseApp.ui.alertManagementModal = (() => {
                             </div>
 
                             ${multipleThresholds ? `
-                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 mb-4">
-                                <h4 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">Multiple Thresholds Detected</h4>
-                                <p class="text-xs text-blue-700 dark:text-blue-300 mb-2">
-                                    This alert will trigger when ANY of these conditions are met:
+                            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
+                                <h4 class="text-sm font-medium text-green-900 dark:text-green-100 mb-2">✓ Dashboard Thresholds Imported</h4>
+                                <p class="text-xs text-green-700 dark:text-green-300 mb-2">
+                                    Using your dashboard slider settings. Alert will trigger when ANY of these conditions are met:
                                 </p>
                                 <div class="space-y-1">
                                     ${presetThresholds.map(t => `
                                         <div class="flex items-center justify-between text-xs">
-                                            <span class="text-blue-800 dark:text-blue-200">${t.type.charAt(0).toUpperCase() + t.type.slice(1)}</span>
-                                            <span class="font-medium text-blue-900 dark:text-blue-100">≥ ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}</span>
+                                            <span class="text-green-800 dark:text-green-200">${t.type.charAt(0).toUpperCase() + t.type.slice(1)}</span>
+                                            <span class="font-medium text-green-900 dark:text-green-100">≥ ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}</span>
                                         </div>
                                     `).join('')}
                                 </div>
@@ -1436,15 +1436,15 @@ PulseApp.ui.alertManagementModal = (() => {
                                     Alert Configuration
                                 </label>
                                 <div class="space-y-3">
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-3">
                                         <span class="text-sm text-gray-700 dark:text-gray-300">Threshold Type:</span>
                                         <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                                             <input type="radio" id="threshold-mode-single" name="thresholdMode" value="single" class="hidden peer/single" checked>
-                                            <label for="threshold-mode-single" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/single:bg-blue-100 dark:peer-checked/single:bg-blue-800/50 peer-checked/single:text-blue-700 dark:peer-checked/single:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                                            <label for="threshold-mode-single" class="flex items-center justify-center px-3 py-1.5 text-sm cursor-pointer bg-white dark:bg-gray-800 peer-checked/single:bg-blue-100 dark:peer-checked/single:bg-blue-800/50 peer-checked/single:text-blue-700 dark:peer-checked/single:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors">
                                                 Single Metric
                                             </label>
                                             <input type="radio" id="threshold-mode-multiple" name="thresholdMode" value="multiple" class="hidden peer/multiple">
-                                            <label for="threshold-mode-multiple" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/multiple:bg-blue-100 dark:peer-checked/multiple:bg-blue-800/50 peer-checked/multiple:text-blue-700 dark:peer-checked/multiple:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">
+                                            <label for="threshold-mode-multiple" class="flex items-center justify-center px-3 py-1.5 text-sm cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/multiple:bg-blue-100 dark:peer-checked/multiple:bg-blue-800/50 peer-checked/multiple:text-blue-700 dark:peer-checked/multiple:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors">
                                                 Multiple Metrics
                                             </label>
                                         </div>
@@ -1484,12 +1484,18 @@ PulseApp.ui.alertManagementModal = (() => {
                                     </div>
                                 </div>
                             </div>
+                            ` : ''}
 
                             <div id="multiple-threshold-section" class="hidden">
-                                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-                                    <h4 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">Multiple Metric Thresholds</h4>
+                                <div class="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-600 rounded-lg p-4">
+                                    <div class="flex items-center gap-2 mb-3">
+                                        <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zM3 16a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-100">Multiple Metric Thresholds</h4>
+                                    </div>
                                     <p class="text-xs text-blue-700 dark:text-blue-300 mb-3">
-                                        Configure multiple thresholds similar to the dashboard sliders. Alert will trigger when ANY of these conditions are met.
+                                        Configure multiple thresholds exactly like the dashboard sliders. Alert will trigger when <strong>ANY</strong> of these conditions are met.
                                     </p>
                                     
                                     <div class="space-y-4">
@@ -1574,7 +1580,6 @@ PulseApp.ui.alertManagementModal = (() => {
                                     </div>
                                 </div>
                             </div>
-                            ` : ''}
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

@@ -718,7 +718,7 @@ PulseApp.ui.thresholds = (() => {
         const toastId = `toast-${Date.now()}`;
         const toast = document.createElement('div');
         toast.id = toastId;
-        toast.className = 'fixed top-4 right-4 z-50 max-w-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300';
+        toast.className = 'fixed bottom-4 left-4 z-50 max-w-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg transform -translate-x-full transition-transform duration-300';
         toast.innerHTML = `
             <div class="p-4">
                 <div class="flex items-start">
@@ -746,13 +746,13 @@ PulseApp.ui.thresholds = (() => {
         
         // Animate in
         requestAnimationFrame(() => {
-            toast.classList.remove('translate-x-full');
+            toast.classList.remove('-translate-x-full');
         });
         
         // Auto remove after 5 seconds
         setTimeout(() => {
             if (document.getElementById(toastId)) {
-                toast.classList.add('translate-x-full');
+                toast.classList.add('-translate-x-full');
                 setTimeout(() => toast.remove(), 300);
             }
         }, 5000);
