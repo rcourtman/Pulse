@@ -286,174 +286,129 @@ PulseApp.ui.alertManagementModal = (() => {
         const smtp = config.advanced?.smtp || {};
         
         return `
-            <div class="space-y-8">
-                <!-- Header -->
-                <div class="text-center pb-6 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-center mb-3">
-                        <div class="p-3 bg-blue-100 dark:bg-blue-900/50 rounded-full">
-                            <svg class="w-6 h-6 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19H6a2 2 0 01-2-2V7a2 2 0 012-2h5"/>
-                            </svg>
-                        </div>
-                    </div>
-                    <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">Notification Settings</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                        Configure how alerts are delivered beyond the Pulse dashboard. Set up email notifications and webhooks to stay informed wherever you are.
-                    </p>
-                </div>
-
-                <!-- Quick Setup Cards -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <!-- Email Card -->
-                    <div class="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-700 rounded-xl p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center space-x-3">
-                                <div class="p-2 bg-green-100 dark:bg-green-800 rounded-lg">
-                                    <svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h4 class="text-lg font-semibold text-green-900 dark:text-green-100">Email Notifications</h4>
-                                    <p class="text-sm text-green-700 dark:text-green-300">Get alerts delivered to your inbox</p>
-                                </div>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="GLOBAL_EMAIL_ENABLED" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-600"></div>
-                            </label>
-                        </div>
-                        <div class="space-y-3">
-                            <div id="email-status" class="text-sm">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                    <span class="w-2 h-2 mr-1.5 bg-gray-400 rounded-full"></span>
-                                    Not configured
-                                </span>
-                            </div>
-                            <button id="configure-email-btn" class="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                Configure Email Settings
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Webhook Card -->
-                    <div class="bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-900/20 dark:to-violet-900/20 border border-purple-200 dark:border-purple-700 rounded-xl p-6">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center space-x-3">
-                                <div class="p-2 bg-purple-100 dark:bg-purple-800 rounded-lg">
-                                    <svg class="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <h4 class="text-lg font-semibold text-purple-900 dark:text-purple-100">Webhook Integration</h4>
-                                    <p class="text-sm text-purple-700 dark:text-purple-300">Connect to Discord, Slack, Teams & more</p>
-                                </div>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" name="GLOBAL_WEBHOOK_ENABLED" class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 dark:peer-focus:ring-purple-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-purple-600"></div>
-                            </label>
-                        </div>
-                        <div class="space-y-3">
-                            <div id="webhook-status" class="text-sm">
-                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                    <span class="w-2 h-2 mr-1.5 bg-gray-400 rounded-full"></span>
-                                    Not configured
-                                </span>
-                            </div>
-                            <button id="configure-webhook-btn" class="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                Configure Webhook URL
-                            </button>
-                        </div>
+            <div class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Notification Settings</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Configure how alerts are delivered beyond the Pulse dashboard</p>
                     </div>
                 </div>
 
-                <!-- Configuration Panels (Initially Hidden) -->
-                <div id="email-config-panel" class="hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Email Configuration</h4>
-                        <button id="close-email-config" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                <!-- Nested Tabs -->
+                <div class="border-b border-gray-200 dark:border-gray-700">
+                    <nav class="flex space-x-8" id="notification-sub-tabs">
+                        <button class="notification-sub-tab active py-2 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="email">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                             </svg>
+                            Email
                         </button>
-                    </div>
-                    <div id="email-config-section">
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Email configuration will be loaded...</p>
-                    </div>
+                        <button class="notification-sub-tab py-2 px-1 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium text-sm" data-tab="webhook">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                            </svg>
+                            Webhooks
+                        </button>
+                    </nav>
                 </div>
 
-                <div id="webhook-config-panel" class="hidden bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h4 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Webhook Configuration</h4>
-                        <button id="close-webhook-config" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                        </button>
+                <!-- Tab Content -->
+                <div id="notification-sub-content">
+                    <!-- Email Tab Content (Default) -->
+                    <div id="email-notification-content" class="notification-sub-content">
+                        <div class="space-y-6">
+                            <!-- Email Toggle -->
+                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Email Notifications</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Send alerts to email addresses</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="GLOBAL_EMAIL_ENABLED" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+
+                            <!-- Email Configuration -->
+                            <div id="email-config-section">
+                                <p class="text-sm text-gray-600 dark:text-gray-400">Email configuration will be loaded...</p>
+                            </div>
+                        </div>
                     </div>
-                    
-                    <div class="space-y-6">
-                        <!-- Popular Services Quick Setup -->
-                        <div>
-                            <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Popular Services</h5>
-                            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="discord">
-                                    <div class="w-8 h-8 mx-auto mb-2 bg-indigo-100 dark:bg-indigo-900 rounded-lg flex items-center justify-center">
-                                        <span class="text-indigo-600 dark:text-indigo-400 font-bold text-xs">DC</span>
-                                    </div>
-                                    <span class="text-xs text-gray-700 dark:text-gray-300">Discord</span>
+
+                    <!-- Webhook Tab Content (Hidden by default) -->
+                    <div id="webhook-notification-content" class="notification-sub-content hidden">
+                        <div class="space-y-6">
+                            <!-- Webhook Toggle -->
+                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Webhook Notifications</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Send alerts to external services</p>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" name="GLOBAL_WEBHOOK_ENABLED" class="sr-only peer">
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+
+                            <!-- Popular Services -->
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Popular Services</h5>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                    <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="discord">
+                                        <div class="w-8 h-8 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                                            <span class="text-gray-600 dark:text-gray-400 font-bold text-xs">DC</span>
+                                        </div>
+                                        <span class="text-xs text-gray-700 dark:text-gray-300">Discord</span>
+                                    </button>
+                                    <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="slack">
+                                        <div class="w-8 h-8 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                                            <span class="text-gray-600 dark:text-gray-400 font-bold text-xs">SL</span>
+                                        </div>
+                                        <span class="text-xs text-gray-700 dark:text-gray-300">Slack</span>
+                                    </button>
+                                    <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="teams">
+                                        <div class="w-8 h-8 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                                            <span class="text-gray-600 dark:text-gray-400 font-bold text-xs">MS</span>
+                                        </div>
+                                        <span class="text-xs text-gray-700 dark:text-gray-300">Teams</span>
+                                    </button>
+                                    <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="custom">
+                                        <div class="w-8 h-8 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                                            <span class="text-gray-600 dark:text-gray-400 font-bold text-xs">+</span>
+                                        </div>
+                                        <span class="text-xs text-gray-700 dark:text-gray-300">Custom</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Webhook URL Input -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Webhook URL
+                                </label>
+                                <input type="url" name="WEBHOOK_URL" id="webhook-url-input"
+                                       placeholder="https://your-service.com/webhook"
+                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Enter your webhook URL from Discord, Slack, Teams, or any custom service
+                                </p>
+                            </div>
+                            
+                            <!-- Action Buttons -->
+                            <div class="flex space-x-3">
+                                <button id="test-webhook-btn" type="button" 
+                                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                                    Send Test Message
                                 </button>
-                                <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="slack">
-                                    <div class="w-8 h-8 mx-auto mb-2 bg-green-100 dark:bg-green-900 rounded-lg flex items-center justify-center">
-                                        <span class="text-green-600 dark:text-green-400 font-bold text-xs">SL</span>
-                                    </div>
-                                    <span class="text-xs text-gray-700 dark:text-gray-300">Slack</span>
-                                </button>
-                                <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="teams">
-                                    <div class="w-8 h-8 mx-auto mb-2 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                                        <span class="text-blue-600 dark:text-blue-400 font-bold text-xs">MS</span>
-                                    </div>
-                                    <span class="text-xs text-gray-700 dark:text-gray-300">Teams</span>
-                                </button>
-                                <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="custom">
-                                    <div class="w-8 h-8 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                                        <span class="text-gray-600 dark:text-gray-400 font-bold text-xs">+</span>
-                                    </div>
-                                    <span class="text-xs text-gray-700 dark:text-gray-300">Custom</span>
+                                <button id="save-webhook-btn" type="button"
+                                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
+                                    Save Configuration
                                 </button>
                             </div>
                         </div>
-
-                        <!-- Webhook URL Input -->
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Webhook URL
-                            </label>
-                            <input type="url" name="WEBHOOK_URL" id="webhook-url-input"
-                                   placeholder="https://your-service.com/webhook"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Enter your webhook URL from Discord, Slack, Teams, or any custom service
-                            </p>
-                        </div>
-                        
-                        <!-- Action Buttons -->
-                        <div class="flex justify-between">
-                            <button id="test-webhook-btn" type="button" 
-                                    class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                Send Test Message
-                            </button>
-                            <button id="save-webhook-btn" type="button"
-                                    class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                Save Configuration
-                            </button>
-                        </div>
                     </div>
                 </div>
-
             </div>
         `;
     }
@@ -510,35 +465,14 @@ PulseApp.ui.alertManagementModal = (() => {
         // Load email configuration into the email section
         loadEmailConfiguration();
         
-        // Set up configure buttons
-        const configureEmailBtn = document.getElementById('configure-email-btn');
-        if (configureEmailBtn) {
-            configureEmailBtn.addEventListener('click', () => {
-                document.getElementById('email-config-panel').classList.remove('hidden');
+        // Set up nested tab navigation
+        const subTabs = document.querySelectorAll('.notification-sub-tab');
+        subTabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const targetTab = e.currentTarget.dataset.tab;
+                switchNotificationSubTab(targetTab);
             });
-        }
-        
-        const configureWebhookBtn = document.getElementById('configure-webhook-btn');
-        if (configureWebhookBtn) {
-            configureWebhookBtn.addEventListener('click', () => {
-                document.getElementById('webhook-config-panel').classList.remove('hidden');
-            });
-        }
-        
-        // Set up close buttons for config panels
-        const closeEmailConfig = document.getElementById('close-email-config');
-        if (closeEmailConfig) {
-            closeEmailConfig.addEventListener('click', () => {
-                document.getElementById('email-config-panel').classList.add('hidden');
-            });
-        }
-        
-        const closeWebhookConfig = document.getElementById('close-webhook-config');
-        if (closeWebhookConfig) {
-            closeWebhookConfig.addEventListener('click', () => {
-                document.getElementById('webhook-config-panel').classList.add('hidden');
-            });
-        }
+        });
         
         // Set up webhook preset buttons
         const webhookPresets = document.querySelectorAll('.webhook-preset');
@@ -564,15 +498,43 @@ PulseApp.ui.alertManagementModal = (() => {
         const emailToggle = document.querySelector('input[name="GLOBAL_EMAIL_ENABLED"]');
         if (emailToggle) {
             emailToggle.addEventListener('change', (e) => {
-                updateNotificationStatus('email', e.target.checked);
+                console.log('Email notifications toggled:', e.target.checked);
             });
         }
         
         const webhookToggle = document.querySelector('input[name="GLOBAL_WEBHOOK_ENABLED"]');
         if (webhookToggle) {
             webhookToggle.addEventListener('change', (e) => {
-                updateNotificationStatus('webhook', e.target.checked);
+                console.log('Webhook notifications toggled:', e.target.checked);
             });
+        }
+    }
+    
+    function switchNotificationSubTab(tabName) {
+        // Update tab buttons
+        const subTabs = document.querySelectorAll('.notification-sub-tab');
+        subTabs.forEach(tab => {
+            const isActive = tab.dataset.tab === tabName;
+            if (isActive) {
+                tab.classList.add('active');
+                tab.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+                tab.classList.add('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+            } else {
+                tab.classList.remove('active');
+                tab.classList.remove('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+                tab.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            }
+        });
+
+        // Update content visibility
+        const contentDivs = document.querySelectorAll('.notification-sub-content');
+        contentDivs.forEach(div => {
+            div.classList.add('hidden');
+        });
+        
+        const targetContent = document.getElementById(`${tabName}-notification-content`);
+        if (targetContent) {
+            targetContent.classList.remove('hidden');
         }
     }
 
@@ -783,26 +745,6 @@ PulseApp.ui.alertManagementModal = (() => {
         document.querySelector(`[data-service="${service}"]`).classList.add('ring-2', 'ring-blue-500');
     }
     
-    function updateNotificationStatus(type, enabled) {
-        const statusElement = document.getElementById(`${type}-status`);
-        if (!statusElement) return;
-        
-        const statusSpan = statusElement.querySelector('span');
-        if (enabled) {
-            statusSpan.innerHTML = `
-                <span class="w-2 h-2 mr-1.5 bg-green-500 rounded-full"></span>
-                Enabled
-            `;
-            statusSpan.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-300';
-        } else {
-            statusSpan.innerHTML = `
-                <span class="w-2 h-2 mr-1.5 bg-gray-400 rounded-full"></span>
-                Disabled
-            `;
-            statusSpan.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-        }
-    }
-    
     function saveWebhookConfiguration() {
         const webhookUrl = document.getElementById('webhook-url-input')?.value;
         if (!webhookUrl) {
@@ -812,18 +754,6 @@ PulseApp.ui.alertManagementModal = (() => {
         
         // TODO: Implement webhook configuration saving
         console.log('Saving webhook configuration:', webhookUrl);
-        
-        // Update status to show it's configured
-        const webhookStatus = document.getElementById('webhook-status');
-        if (webhookStatus) {
-            const statusSpan = webhookStatus.querySelector('span');
-            statusSpan.innerHTML = `
-                <span class="w-2 h-2 mr-1.5 bg-green-500 rounded-full"></span>
-                Configured
-            `;
-            statusSpan.className = 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-300';
-        }
-        
         alert('Webhook configuration saved successfully!');
     }
 
