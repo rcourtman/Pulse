@@ -450,67 +450,6 @@ PulseApp.ui.settings = (() => {
         const smtp = config.advanced?.smtp || {};
         return `
             <div class="space-y-6">
-                <!-- Global Alert Settings -->
-                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                    <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Global Alert Settings</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">These settings apply to all VMs and LXCs unless overridden by custom thresholds below.</p>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                        <label class="flex items-center">
-                            <input type="checkbox" name="ALERT_CPU_ENABLED" ${alerts.cpu?.enabled !== false ? 'checked' : ''}
-                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <span class="text-sm text-gray-700 dark:text-gray-300">CPU Alerts</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="checkbox" name="ALERT_MEMORY_ENABLED" ${alerts.memory?.enabled !== false ? 'checked' : ''}
-                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Memory Alerts</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="checkbox" name="ALERT_DISK_ENABLED" ${alerts.disk?.enabled !== false ? 'checked' : ''}
-                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Disk Alerts</span>
-                        </label>
-                        <label class="flex items-center">
-                            <input type="checkbox" name="ALERT_DOWN_ENABLED" ${alerts.down?.enabled !== false ? 'checked' : ''}
-                                   class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Down Alerts</span>
-                        </label>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                CPU Threshold (%)
-                            </label>
-                            <input type="number" name="ALERT_CPU_THRESHOLD"
-                                   value="${alerts.cpu?.threshold || ''}"
-                                   placeholder="85 (default)"
-                                   min="50" max="100"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Memory Threshold (%)
-                            </label>
-                            <input type="number" name="ALERT_MEMORY_THRESHOLD"
-                                   value="${alerts.memory?.threshold || ''}"
-                                   placeholder="90 (default)"
-                                   min="50" max="100"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Disk Threshold (%)
-                            </label>
-                            <input type="number" name="ALERT_DISK_THRESHOLD"
-                                   value="${alerts.disk?.threshold || ''}"
-                                   placeholder="95 (default)"
-                                   min="50" max="100"
-                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                    </div>
-                </div>
 
                 <!-- Email Notification Settings -->
                 <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
