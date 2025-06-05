@@ -1430,72 +1430,16 @@ PulseApp.ui.alertManagementModal = (() => {
                                 </select>
                             </div>
 
-                            ${!multipleThresholds ? `
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Alert Configuration
-                                </label>
-                                <div class="space-y-3">
-                                    <div class="flex items-center gap-3">
-                                        <span class="text-sm text-gray-700 dark:text-gray-300">Threshold Type:</span>
-                                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                                            <input type="radio" id="threshold-mode-single" name="thresholdMode" value="single" class="hidden peer/single" checked>
-                                            <label for="threshold-mode-single" class="flex items-center justify-center px-3 py-1.5 text-sm cursor-pointer bg-white dark:bg-gray-800 peer-checked/single:bg-blue-100 dark:peer-checked/single:bg-blue-800/50 peer-checked/single:text-blue-700 dark:peer-checked/single:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors">
-                                                Single Metric
-                                            </label>
-                                            <input type="radio" id="threshold-mode-multiple" name="thresholdMode" value="multiple" class="hidden peer/multiple">
-                                            <label for="threshold-mode-multiple" class="flex items-center justify-center px-3 py-1.5 text-sm cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/multiple:bg-blue-100 dark:peer-checked/multiple:bg-blue-800/50 peer-checked/multiple:text-blue-700 dark:peer-checked/multiple:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none transition-colors">
-                                                Multiple Metrics
-                                            </label>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div id="single-threshold-section">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Metric to Monitor
-                                    </label>
-                                    <select name="metric" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="cpu" ${primaryMetric === 'cpu' ? 'selected' : ''}>CPU Usage (%)</option>
-                                        <option value="memory" ${primaryMetric === 'memory' ? 'selected' : ''}>Memory Usage (%)</option>
-                                        <option value="disk" ${primaryMetric === 'disk' ? 'selected' : ''}>Disk Usage (%)</option>
-                                        <option value="network" ${primaryMetric === 'network' ? 'selected' : ''}>Network Activity</option>
-                                        <option value="status" ${primaryMetric === 'status' ? 'selected' : ''}>VM/LXC Status</option>
-                                    </select>
-                                </div>
-
-                                <div id="threshold-section">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        Alert Threshold
-                                    </label>
-                                    <div class="flex items-center space-x-2">
-                                        <select name="operator" class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                                            <option value=">">&gt; Greater than</option>
-                                            <option value="<">&lt; Less than</option>
-                                            <option value="=">=  Equal to</option>
-                                        </select>
-                                        <input type="number" name="threshold" required min="0" max="100"
-                                               value="${primaryThreshold}"
-                                               placeholder="85"
-                                               class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <span class="text-sm text-gray-500 dark:text-gray-400">%</span>
-                                    </div>
-                                </div>
-                            </div>
-                            ` : ''}
-
-                            <div id="multiple-threshold-section" class="hidden">
+                            <div id="threshold-section">
                                 <div class="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-600 rounded-lg p-4">
                                     <div class="flex items-center gap-2 mb-3">
                                         <svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
                                             <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zM3 16a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
                                         </svg>
-                                        <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-100">Multiple Metric Thresholds</h4>
+                                        <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-100">Alert Thresholds</h4>
                                     </div>
                                     <p class="text-xs text-blue-700 dark:text-blue-300 mb-3">
-                                        Configure multiple thresholds exactly like the dashboard sliders. Alert will trigger when <strong>ANY</strong> of these conditions are met.
+                                        Set thresholds for the metrics you want to monitor. Alert will trigger when <strong>ANY</strong> of these conditions are met. Leave thresholds at 0 to disable.
                                     </p>
                                     
                                     <div class="space-y-4">
@@ -1529,51 +1473,28 @@ PulseApp.ui.alertManagementModal = (() => {
                                                    class="w-full h-2 bg-gray-200 dark:bg-gray-600 rounded-lg appearance-none cursor-pointer range-slider">
                                         </div>
                                         
-                                        <!-- Network I/O Thresholds -->
-                                        <div class="grid grid-cols-2 gap-3">
-                                            <div class="threshold-input-group">
-                                                <label class="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Disk Read</label>
-                                                <select name="diskReadThreshold" class="w-full px-2 py-1 text-xs border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                                                    <option value="0">Any</option>
-                                                    <option value="1048576">&gt; 1 MB/s</option>
-                                                    <option value="10485760">&gt; 10 MB/s</option>
-                                                    <option value="52428800">&gt; 50 MB/s</option>
-                                                    <option value="104857600">&gt; 100 MB/s</option>
-                                                </select>
-                                            </div>
-                                            <div class="threshold-input-group">
-                                                <label class="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Disk Write</label>
-                                                <select name="diskWriteThreshold" class="w-full px-2 py-1 text-xs border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                                                    <option value="0">Any</option>
-                                                    <option value="1048576">&gt; 1 MB/s</option>
-                                                    <option value="10485760">&gt; 10 MB/s</option>
-                                                    <option value="52428800">&gt; 50 MB/s</option>
-                                                    <option value="104857600">&gt; 100 MB/s</option>
-                                                </select>
-                                            </div>
-                                            <div class="threshold-input-group">
-                                                <label class="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Net In</label>
-                                                <select name="netInThreshold" class="w-full px-2 py-1 text-xs border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                                                    <option value="0">Any</option>
-                                                    <option value="1048576">&gt; 1 MB/s</option>
-                                                    <option value="10485760">&gt; 10 MB/s</option>
-                                                    <option value="52428800">&gt; 50 MB/s</option>
-                                                    <option value="104857600">&gt; 100 MB/s</option>
-                                                </select>
-                                            </div>
-                                            <div class="threshold-input-group">
-                                                <label class="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Net Out</label>
-                                                <select name="netOutThreshold" class="w-full px-2 py-1 text-xs border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                                                    <option value="0">Any</option>
-                                                    <option value="1048576">&gt; 1 MB/s</option>
-                                                    <option value="10485760">&gt; 10 MB/s</option>
-                                                    <option value="52428800">&gt; 50 MB/s</option>
-                                                    <option value="104857600">&gt; 100 MB/s</option>
-                                                </select>
-                                            </div>
+                                        <!-- Network Activity Threshold -->
+                                        <div class="threshold-input-group">
+                                            <label class="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">Network Activity</label>
+                                            <select name="networkThreshold" class="w-full px-2 py-1 text-xs border border-blue-300 dark:border-blue-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                                <option value="0">Disabled</option>
+                                                <option value="1048576">&gt; 1 MB/s</option>
+                                                <option value="10485760">&gt; 10 MB/s</option>
+                                                <option value="52428800">&gt; 50 MB/s</option>
+                                                <option value="104857600">&gt; 100 MB/s</option>
+                                            </select>
                                         </div>
                                         
-                                        <div id="multiple-threshold-preview" class="mt-3 p-2 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-600 rounded text-xs">
+                                        <!-- VM/LXC Status Monitoring -->
+                                        <div class="threshold-input-group">
+                                            <label class="flex items-center">
+                                                <input type="checkbox" name="statusMonitoring" class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                                                <span class="text-xs font-medium text-blue-800 dark:text-blue-200">Monitor VM/LXC Status</span>
+                                            </label>
+                                            <p class="text-xs text-blue-600 dark:text-blue-300 mt-1 ml-6">Alert when VM/LXC stops or becomes unavailable</p>
+                                        </div>
+                                        
+                                        <div id="threshold-preview" class="mt-3 p-2 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-600 rounded text-xs">
                                             <div class="text-blue-700 dark:text-blue-300 font-medium mb-1">Active Thresholds:</div>
                                             <div id="threshold-preview-list" class="text-gray-600 dark:text-gray-400">No thresholds set</div>
                                         </div>
@@ -1645,7 +1566,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             }, 10);
         }
         
-        setupCustomAlertModalEvents(existingAlert);
+        setupCustomAlertModalEvents(existingAlert, presetThresholds);
     }
 
     // Function to populate target dropdown with VM/LXC options
@@ -1697,7 +1618,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         }
     }
 
-    function setupCustomAlertModalEvents(existingAlert = null) {
+    function setupCustomAlertModalEvents(existingAlert = null, presetThresholds = null) {
         const modal = document.getElementById('custom-alert-modal');
         const closeBtn = document.getElementById('custom-alert-modal-close');
         const cancelBtn = document.getElementById('custom-alert-cancel-button');
@@ -1782,56 +1703,107 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             });
         }
 
-        // Handle threshold mode toggle
-        const thresholdModeRadios = document.querySelectorAll('input[name="thresholdMode"]');
-        thresholdModeRadios.forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                const singleSection = document.getElementById('single-threshold-section');
-                const multipleSection = document.getElementById('multiple-threshold-section');
-                
-                if (e.target.value === 'multiple') {
-                    singleSection.classList.add('hidden');
-                    multipleSection.classList.remove('hidden');
-                    // Disable single threshold validation
-                    const singleThresholdInput = document.querySelector('input[name="threshold"]');
-                    if (singleThresholdInput) singleThresholdInput.required = false;
-                } else {
-                    singleSection.classList.remove('hidden');
-                    multipleSection.classList.add('hidden');
-                    // Re-enable single threshold validation
-                    const singleThresholdInput = document.querySelector('input[name="threshold"]');
-                    if (singleThresholdInput) singleThresholdInput.required = true;
-                }
-                
-                // Update threshold preview when switching modes
-                updateMultipleThresholdPreview();
-            });
-        });
 
         // Handle multiple threshold slider inputs
         const rangeSliders = document.querySelectorAll('.range-slider');
         rangeSliders.forEach(slider => {
             slider.addEventListener('input', (e) => {
                 updateSliderValueDisplay(e.target);
-                updateMultipleThresholdPreview();
+                updateThresholdPreview();
             });
         });
 
-        // Handle multiple threshold select inputs  
+        // Handle threshold select inputs and status monitoring checkbox  
         const thresholdSelects = document.querySelectorAll('select[name$="Threshold"]');
         thresholdSelects.forEach(select => {
             select.addEventListener('change', () => {
-                updateMultipleThresholdPreview();
+                updateThresholdPreview();
             });
         });
+        
+        // Handle status monitoring checkbox
+        const statusCheckbox = document.querySelector('input[name="statusMonitoring"]');
+        if (statusCheckbox) {
+            statusCheckbox.addEventListener('change', () => {
+                updateThresholdPreview();
+            });
+        }
 
         // Initialize slider value displays
         rangeSliders.forEach(slider => {
             updateSliderValueDisplay(slider);
         });
         
+        // Pre-populate thresholds if provided (from dashboard or existing alert)
+        if (presetThresholds && presetThresholds.length > 0) {
+            presetThresholds.forEach(threshold => {
+                if (threshold.type === 'cpu' && threshold.value > 0) {
+                    const cpuSlider = document.querySelector('input[name="cpuThreshold"]');
+                    if (cpuSlider) {
+                        cpuSlider.value = threshold.value;
+                        updateSliderValueDisplay(cpuSlider);
+                    }
+                } else if (threshold.type === 'memory' && threshold.value > 0) {
+                    const memorySlider = document.querySelector('input[name="memoryThreshold"]');
+                    if (memorySlider) {
+                        memorySlider.value = threshold.value;
+                        updateSliderValueDisplay(memorySlider);
+                    }
+                } else if (threshold.type === 'disk' && threshold.value > 0) {
+                    const diskSlider = document.querySelector('input[name="diskThreshold"]');
+                    if (diskSlider) {
+                        diskSlider.value = threshold.value;
+                        updateSliderValueDisplay(diskSlider);
+                    }
+                } else if (threshold.type === 'network' && threshold.value > 0) {
+                    const networkSelect = document.querySelector('select[name="networkThreshold"]');
+                    if (networkSelect) {
+                        networkSelect.value = threshold.value;
+                    }
+                } else if (threshold.type === 'status') {
+                    const statusCheckbox = document.querySelector('input[name="statusMonitoring"]');
+                    if (statusCheckbox) {
+                        statusCheckbox.checked = true;
+                    }
+                }
+            });
+        } else if (existingAlert && existingAlert.thresholds) {
+            // Pre-populate from existing alert
+            existingAlert.thresholds.forEach(threshold => {
+                if (threshold.type === 'cpu' && threshold.value > 0) {
+                    const cpuSlider = document.querySelector('input[name="cpuThreshold"]');
+                    if (cpuSlider) {
+                        cpuSlider.value = threshold.value;
+                        updateSliderValueDisplay(cpuSlider);
+                    }
+                } else if (threshold.type === 'memory' && threshold.value > 0) {
+                    const memorySlider = document.querySelector('input[name="memoryThreshold"]');
+                    if (memorySlider) {
+                        memorySlider.value = threshold.value;
+                        updateSliderValueDisplay(memorySlider);
+                    }
+                } else if (threshold.type === 'disk' && threshold.value > 0) {
+                    const diskSlider = document.querySelector('input[name="diskThreshold"]');
+                    if (diskSlider) {
+                        diskSlider.value = threshold.value;
+                        updateSliderValueDisplay(diskSlider);
+                    }
+                } else if (threshold.type === 'network' && threshold.value > 0) {
+                    const networkSelect = document.querySelector('select[name="networkThreshold"]');
+                    if (networkSelect) {
+                        networkSelect.value = threshold.value;
+                    }
+                } else if (threshold.type === 'status') {
+                    const statusCheckbox = document.querySelector('input[name="statusMonitoring"]');
+                    if (statusCheckbox) {
+                        statusCheckbox.checked = true;
+                    }
+                }
+            });
+        }
+        
         // Initialize threshold preview
-        updateMultipleThresholdPreview();
+        updateThresholdPreview();
 
         // Handle save
         if (saveBtn) {
@@ -1862,54 +1834,31 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 console.warn('Failed to parse multiple thresholds data:', error);
             }
         } else {
-            // Check if we're using the new multiple threshold mode
-            const thresholdMode = formData.get('thresholdMode');
+            // Collect thresholds from the simplified form
+            const cpuThreshold = parseFloat(formData.get('cpuThreshold')) || 0;
+            const memoryThreshold = parseFloat(formData.get('memoryThreshold')) || 0;
+            const diskThreshold = parseFloat(formData.get('diskThreshold')) || 0;
+            const networkThreshold = parseFloat(formData.get('networkThreshold')) || 0;
+            const statusMonitoring = formData.has('statusMonitoring');
             
-            if (thresholdMode === 'multiple') {
-                // Collect multiple thresholds from the form
-                const cpuThreshold = parseFloat(formData.get('cpuThreshold')) || 0;
-                const memoryThreshold = parseFloat(formData.get('memoryThreshold')) || 0;
-                const diskThreshold = parseFloat(formData.get('diskThreshold')) || 0;
-                const diskReadThreshold = parseFloat(formData.get('diskReadThreshold')) || 0;
-                const diskWriteThreshold = parseFloat(formData.get('diskWriteThreshold')) || 0;
-                const netInThreshold = parseFloat(formData.get('netInThreshold')) || 0;
-                const netOutThreshold = parseFloat(formData.get('netOutThreshold')) || 0;
-                
-                // Build thresholds array (only include non-zero values)
-                if (cpuThreshold > 0) {
-                    thresholds.push({type: 'cpu', operator: '>', value: cpuThreshold});
-                }
-                if (memoryThreshold > 0) {
-                    thresholds.push({type: 'memory', operator: '>', value: memoryThreshold});
-                }
-                if (diskThreshold > 0) {
-                    thresholds.push({type: 'disk', operator: '>', value: diskThreshold});
-                }
-                if (diskReadThreshold > 0) {
-                    thresholds.push({type: 'diskread', operator: '>', value: diskReadThreshold});
-                }
-                if (diskWriteThreshold > 0) {
-                    thresholds.push({type: 'diskwrite', operator: '>', value: diskWriteThreshold});
-                }
-                if (netInThreshold > 0) {
-                    thresholds.push({type: 'netin', operator: '>', value: netInThreshold});
-                }
-                if (netOutThreshold > 0) {
-                    thresholds.push({type: 'netout', operator: '>', value: netOutThreshold});
-                }
-                
-                console.log('Using multiple thresholds from form:', thresholds);
-            } else {
-                // Single threshold mode
-                const threshold = formData.get('threshold') ? parseFloat(formData.get('threshold')) : null;
-                if (threshold !== null) {
-                    thresholds = [{
-                        type: formData.get('metric'),
-                        operator: formData.get('operator') || '>',
-                        value: threshold
-                    }];
-                }
+            // Build thresholds array (only include non-zero values and enabled options)
+            if (cpuThreshold > 0) {
+                thresholds.push({type: 'cpu', operator: '>', value: cpuThreshold});
             }
+            if (memoryThreshold > 0) {
+                thresholds.push({type: 'memory', operator: '>', value: memoryThreshold});
+            }
+            if (diskThreshold > 0) {
+                thresholds.push({type: 'disk', operator: '>', value: diskThreshold});
+            }
+            if (networkThreshold > 0) {
+                thresholds.push({type: 'network', operator: '>', value: networkThreshold});
+            }
+            if (statusMonitoring) {
+                thresholds.push({type: 'status', operator: '=', value: 'stopped'});
+            }
+            
+            console.log('Using thresholds from simplified form:', thresholds);
         }
 
         // Validate that we have at least one threshold
@@ -2303,8 +2252,8 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         }
     }
 
-    // Helper function to update the multiple threshold preview
-    function updateMultipleThresholdPreview() {
+    // Helper function to update the threshold preview
+    function updateThresholdPreview() {
         const previewList = document.getElementById('threshold-preview-list');
         if (!previewList) return;
         
@@ -2314,19 +2263,15 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         const cpuValue = parseInt(document.querySelector('input[name="cpuThreshold"]')?.value) || 0;
         const memoryValue = parseInt(document.querySelector('input[name="memoryThreshold"]')?.value) || 0;
         const diskValue = parseInt(document.querySelector('input[name="diskThreshold"]')?.value) || 0;
-        const diskReadValue = parseInt(document.querySelector('select[name="diskReadThreshold"]')?.value) || 0;
-        const diskWriteValue = parseInt(document.querySelector('select[name="diskWriteThreshold"]')?.value) || 0;
-        const netInValue = parseInt(document.querySelector('select[name="netInThreshold"]')?.value) || 0;
-        const netOutValue = parseInt(document.querySelector('select[name="netOutThreshold"]')?.value) || 0;
+        const networkValue = parseInt(document.querySelector('select[name="networkThreshold"]')?.value) || 0;
+        const statusMonitoring = document.querySelector('input[name="statusMonitoring"]')?.checked || false;
         
         // Add active thresholds to the list
         if (cpuValue > 0) thresholds.push(`CPU ≥ ${cpuValue}%`);
         if (memoryValue > 0) thresholds.push(`Memory ≥ ${memoryValue}%`);
         if (diskValue > 0) thresholds.push(`Disk ≥ ${diskValue}%`);
-        if (diskReadValue > 0) thresholds.push(`Disk Read ≥ ${_formatBytesForDisplay(diskReadValue)}`);
-        if (diskWriteValue > 0) thresholds.push(`Disk Write ≥ ${_formatBytesForDisplay(diskWriteValue)}`);
-        if (netInValue > 0) thresholds.push(`Net In ≥ ${_formatBytesForDisplay(netInValue)}`);
-        if (netOutValue > 0) thresholds.push(`Net Out ≥ ${_formatBytesForDisplay(netOutValue)}`);
+        if (networkValue > 0) thresholds.push(`Network ≥ ${_formatBytesForDisplay(networkValue)}`);
+        if (statusMonitoring) thresholds.push(`VM/LXC Status Changes`);
         
         // Update the preview display
         if (thresholds.length > 0) {
