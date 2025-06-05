@@ -1389,23 +1389,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
 
-                            ${multipleThresholds ? `
-                            <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 mb-4">
-                                <h4 class="text-sm font-medium text-green-900 dark:text-green-100 mb-2">✓ Dashboard Thresholds Imported</h4>
-                                <p class="text-xs text-green-700 dark:text-green-300 mb-2">
-                                    Using your dashboard slider settings. Alert will trigger when ANY of these conditions are met:
-                                </p>
-                                <div class="space-y-1">
-                                    ${presetThresholds.map(t => `
-                                        <div class="flex items-center justify-between text-xs">
-                                            <span class="text-green-800 dark:text-green-200">${t.type.charAt(0).toUpperCase() + t.type.slice(1)}</span>
-                                            <span class="font-medium text-green-900 dark:text-green-100">≥ ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}</span>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                                <input type="hidden" name="multipleThresholds" value="${JSON.stringify(presetThresholds).replace(/"/g, '&quot;')}">
-                            </div>
-                            ` : ''}
+                            ${multipleThresholds ? `<input type="hidden" name="multipleThresholds" value="${JSON.stringify(presetThresholds).replace(/"/g, '&quot;')}">` : ''}
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
