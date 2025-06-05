@@ -179,6 +179,9 @@ PulseApp.ui.settings = (() => {
             case 'system':
                 content = renderSystemTab(advanced, safeConfig);
                 break;
+            case 'alert-management':
+                content = renderAlertManagementTab();
+                break;
             case 'diagnostics':
                 content = renderDiagnosticsTab();
                 break;
@@ -209,10 +212,9 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'alerts') {
             // Load threshold configurations when alerts tab is opened
             loadThresholdConfigurations();
-            // Setup email and webhook test buttons
-            setupEmailTestButton();
-            setupEmailProviderSelection();
-            setupWebhookTestButton();
+        } else if (activeTab === 'alert-management') {
+            // Initialize alert management tab
+            initializeAlertManagementTab();
         }
     }
 
@@ -1542,7 +1544,7 @@ PulseApp.ui.settings = (() => {
             const result = await response.json();
             
             if (response.ok && result.success) {
-                showMessage('Configuration saved successfully!', 'success');
+                showSuccessToast('Configuration Saved', 'Your settings have been applied successfully');
                 setTimeout(() => {
                     closeModal();
                 }, 1500);
@@ -1746,6 +1748,50 @@ PulseApp.ui.settings = (() => {
                 container.innerHTML = '';
             }, 5000);
         }
+    }
+
+    function showSuccessToast(title, subtitle) {
+        const toastId = `toast-${Date.now()}`;
+        const toast = document.createElement('div');
+        toast.id = toastId;
+        toast.className = 'fixed top-4 right-4 z-50 max-w-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300';
+        toast.innerHTML = `
+            <div class="p-4">
+                <div class="flex items-start">
+                    <div class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-3 flex-1">
+                        <p class="text-sm font-medium text-gray-900 dark:text-gray-100">${title}</p>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">${subtitle}</p>
+                    </div>
+                    <div class="ml-4 flex-shrink-0">
+                        <button onclick="document.getElementById('${toastId}').remove()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // Animate in
+        requestAnimationFrame(() => {
+            toast.classList.remove('translate-x-full');
+        });
+        
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (document.getElementById(toastId)) {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }
+        }, 5000);
     }
 
     // Check for latest version from GitHub releases
@@ -3704,6 +3750,559 @@ PulseApp.ui.settings = (() => {
     function clearUpdateCache() {
         updateCache.clear();
         console.log('[Settings] Update cache cleared');
+    }
+
+    async function initializeAlertManagementTab() {
+        console.log('[Settings] Initializing Alert Management tab');
+        
+        // Set up event listeners for the alert management tab
+        setTimeout(() => {
+            setupAlertManagementEvents();
+            loadDynamicRules();
+            loadCustomThresholds();
+        }, 100);
+    }
+
+    function setupAlertManagementEvents() {
+        // Refresh buttons
+        const refreshDynamicBtn = document.getElementById('refresh-dynamic-rules');
+        const refreshCustomBtn = document.getElementById('refresh-custom-thresholds');
+        
+        if (refreshDynamicBtn) {
+            refreshDynamicBtn.addEventListener('click', loadDynamicRules);
+        }
+        
+        if (refreshCustomBtn) {
+            refreshCustomBtn.addEventListener('click', loadCustomThresholds);
+        }
+        
+        // Quick action buttons
+        const createRuleBtn = document.getElementById('create-threshold-rule');
+        const testNotificationsBtn = document.getElementById('test-notifications');
+        const exportAlertsBtn = document.getElementById('export-alerts');
+        const addCustomBtn = document.getElementById('add-custom-threshold');
+        
+        if (createRuleBtn) {
+            createRuleBtn.addEventListener('click', () => {
+                // Close settings modal and open threshold creation
+                closeModal();
+                // Enable thresholds toggle if not already enabled
+                const thresholdToggle = document.getElementById('toggle-thresholds-checkbox');
+                if (thresholdToggle && !thresholdToggle.checked) {
+                    thresholdToggle.click();
+                }
+                // Show a notification
+                showNotification('Set your thresholds above and click "Create Alert Rule" to create a new dynamic threshold rule.');
+            });
+        }
+        
+        if (testNotificationsBtn) {
+            testNotificationsBtn.addEventListener('click', testAllNotifications);
+        }
+        
+        if (exportAlertsBtn) {
+            exportAlertsBtn.addEventListener('click', exportAlertConfiguration);
+        }
+        
+        if (addCustomBtn) {
+            addCustomBtn.addEventListener('click', () => {
+                // Switch to alerts tab to add custom threshold
+                switchTab('alerts');
+                setTimeout(() => {
+                    // Scroll to the custom threshold section
+                    const customSection = document.querySelector('h3:contains("Custom Threshold Configurations")');
+                    if (customSection) {
+                        customSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }, 100);
+            });
+        }
+    }
+
+    async function loadDynamicRules() {
+        const container = document.getElementById('dynamic-rules-container');
+        if (!container) return;
+        
+        try {
+            container.innerHTML = `
+                <div class="flex items-center justify-center py-8">
+                    <div class="text-center">
+                        <svg class="mx-auto h-8 w-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading dynamic threshold rules...</p>
+                    </div>
+                </div>
+            `;
+            
+            const response = await fetch('/api/alerts/compound-rules');
+            const result = await response.json();
+            
+            if (result.success && result.rules) {
+                if (result.rules.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No dynamic threshold rules</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Create your first rule using the threshold sliders on the dashboard.</p>
+                            <div class="mt-4">
+                                <button id="goto-thresholds" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                    Go to Thresholds
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Add event listener for the goto button
+                    const gotoBtn = document.getElementById('goto-thresholds');
+                    if (gotoBtn) {
+                        gotoBtn.addEventListener('click', () => {
+                            closeModal();
+                            const thresholdToggle = document.getElementById('toggle-thresholds-checkbox');
+                            if (thresholdToggle && !thresholdToggle.checked) {
+                                thresholdToggle.click();
+                            }
+                        });
+                    }
+                } else {
+                    // Display the rules
+                    container.innerHTML = `
+                        <div class="space-y-4">
+                            ${result.rules.map(rule => formatDynamicRuleCard(rule)).join('')}
+                        </div>
+                    `;
+                    
+                    // Add event listeners for rule actions
+                    setupDynamicRuleActions();
+                }
+            } else {
+                throw new Error(result.error || 'Failed to load rules');
+            }
+        } catch (error) {
+            console.error('[Settings] Error loading dynamic rules:', error);
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <svg class="mx-auto h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                    <p class="mt-2 text-sm text-red-600 dark:text-red-400">Failed to load dynamic rules: ${error.message}</p>
+                    <button onclick="loadDynamicRules()" class="mt-2 text-sm text-blue-600 hover:text-blue-800">Try again</button>
+                </div>
+            `;
+        }
+    }
+
+    function formatDynamicRuleCard(rule) {
+        const createdDate = new Date(rule.createdAt || Date.now()).toLocaleDateString();
+        const severityColor = rule.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+        
+        const thresholdsList = rule.thresholds?.map(t => 
+            `<span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">
+                ${getThresholdDisplayName(t.type)} ≥ ${formatThresholdValue(t)}
+            </span>`
+        ).join('') || '';
+
+        const notificationMethods = rule.notificationChannels?.map(channel => {
+            switch (channel) {
+                case 'local': return 'In-app';
+                case 'email': return 'Email';
+                case 'discord': return 'Discord';
+                case 'slack': return 'Slack';
+                case 'webhook': return 'Webhook';
+                default: return channel;
+            }
+        }).join(', ') || 'None';
+        
+        return `
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-2">
+                            <h4 class="font-medium text-gray-900 dark:text-gray-100">${rule.name}</h4>
+                            <span class="px-2 py-1 text-xs font-medium rounded ${severityColor}">
+                                ${rule.severity?.toUpperCase() || 'WARNING'}
+                            </span>
+                            <span class="px-2 py-1 text-xs font-medium rounded ${rule.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
+                                ${rule.enabled ? 'ENABLED' : 'DISABLED'}
+                            </span>
+                        </div>
+                        ${rule.description ? `<p class="text-sm text-gray-600 dark:text-gray-400 mb-2">${rule.description}</p>` : ''}
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            Created: ${createdDate} • ID: ${rule.id}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            Notifications: ${notificationMethods}
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="toggleDynamicRule('${rule.id}', ${!rule.enabled})" 
+                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                            ${rule.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button onclick="deleteDynamicRule('${rule.id}')" 
+                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Alert triggers when ANY guest meets ALL conditions:</p>
+                    <div class="flex flex-wrap">
+                        ${thresholdsList}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function getThresholdDisplayName(type) {
+        const names = {
+            'cpu': 'CPU',
+            'memory': 'Memory', 
+            'disk': 'Disk',
+            'diskread': 'Disk Read',
+            'diskwrite': 'Disk Write',
+            'netin': 'Net In',
+            'netout': 'Net Out'
+        };
+        return names[type] || type;
+    }
+
+    function formatThresholdValue(threshold) {
+        if (['cpu', 'memory', 'disk'].includes(threshold.type)) {
+            return `${threshold.value}%`;
+        } else {
+            const mb = threshold.value / (1024 * 1024);
+            if (mb >= 100) return `${Math.round(mb)}MB/s`;
+            if (mb >= 10) return `${Math.round(mb)}MB/s`;
+            return `${Math.round(mb * 10) / 10}MB/s`;
+        }
+    }
+
+    async function loadCustomThresholds() {
+        const container = document.getElementById('custom-thresholds-container');
+        if (!container) return;
+        
+        try {
+            container.innerHTML = `
+                <div class="flex items-center justify-center py-8">
+                    <div class="text-center">
+                        <svg class="mx-auto h-8 w-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading custom thresholds...</p>
+                    </div>
+                </div>
+            `;
+            
+            const response = await fetch('/api/thresholds');
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                if (result.data.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No custom thresholds</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Create custom threshold overrides for specific VMs or containers.</p>
+                            <div class="mt-4">
+                                <button id="goto-custom-thresholds" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                    Add Custom Threshold
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    const gotoBtn = document.getElementById('goto-custom-thresholds');
+                    if (gotoBtn) {
+                        gotoBtn.addEventListener('click', () => switchTab('alerts'));
+                    }
+                } else {
+                    // Display the custom thresholds
+                    container.innerHTML = `
+                        <div class="space-y-4">
+                            ${result.data.map(config => formatCustomThresholdCard(config)).join('')}
+                        </div>
+                    `;
+                }
+            } else {
+                throw new Error(result.error || 'Failed to load custom thresholds');
+            }
+        } catch (error) {
+            console.error('[Settings] Error loading custom thresholds:', error);
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <svg class="mx-auto h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                    <p class="mt-2 text-sm text-red-600 dark:text-red-400">Failed to load custom thresholds: ${error.message}</p>
+                    <button onclick="loadCustomThresholds()" class="mt-2 text-sm text-blue-600 hover:text-blue-800">Try again</button>
+                </div>
+            `;
+        }
+    }
+
+    function formatCustomThresholdCard(config) {
+        const createdDate = new Date(config.createdAt || Date.now()).toLocaleDateString();
+        
+        // Build thresholds display
+        const thresholds = [];
+        if (config.thresholds.cpu) {
+            thresholds.push(`CPU: ${config.thresholds.cpu.warning || 'N/A'}%/${config.thresholds.cpu.critical || 'N/A'}%`);
+        }
+        if (config.thresholds.memory) {
+            thresholds.push(`Memory: ${config.thresholds.memory.warning || 'N/A'}%/${config.thresholds.memory.critical || 'N/A'}%`);
+        }
+        if (config.thresholds.disk) {
+            thresholds.push(`Disk: ${config.thresholds.disk.warning || 'N/A'}%/${config.thresholds.disk.critical || 'N/A'}%`);
+        }
+        
+        return `
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                <div class="flex items-start justify-between mb-3">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-2">
+                            <h4 class="font-medium text-gray-900 dark:text-gray-100">
+                                ${config.endpointId}:${config.vmid}
+                            </h4>
+                            <span class="px-2 py-1 text-xs font-medium rounded ${config.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
+                                ${config.enabled ? 'ENABLED' : 'DISABLED'}
+                            </span>
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            Node: ${config.nodeId} • Created: ${createdDate}
+                        </div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                            Thresholds: ${thresholds.join(', ') || 'None configured'}
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="editCustomThreshold('${config.endpointId}', '${config.nodeId}', '${config.vmid}')" 
+                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                            Edit
+                        </button>
+                        <button onclick="deleteCustomThreshold('${config.endpointId}', '${config.nodeId}', '${config.vmid}')" 
+                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Global functions for dynamic rule management (called from HTML onclick)
+    window.toggleDynamicRule = async function(ruleId, enabled) {
+        try {
+            const response = await fetch(`/api/alerts/rules/${ruleId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                loadDynamicRules(); // Reload the rules
+                showNotification(`Rule ${enabled ? 'enabled' : 'disabled'} successfully`);
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Error toggling dynamic rule:', error);
+            alert(`Failed to ${enabled ? 'enable' : 'disable'} rule: ${error.message}`);
+        }
+    };
+
+    window.deleteDynamicRule = async function(ruleId) {
+        if (!confirm('Are you sure you want to delete this alert rule? This action cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/alerts/rules/${ruleId}`, {
+                method: 'DELETE'
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                loadDynamicRules(); // Reload the rules
+                showNotification('Rule deleted successfully');
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Error deleting dynamic rule:', error);
+            alert(`Failed to delete rule: ${error.message}`);
+        }
+    };
+
+    window.editCustomThreshold = function(endpointId, nodeId, vmid) {
+        // Switch to alerts tab to edit
+        switchTab('alerts');
+        setTimeout(() => {
+            // Scroll to custom threshold section and highlight it
+            const customSection = document.querySelector('h3[contains("Custom Threshold Configurations")]');
+            if (customSection) {
+                customSection.scrollIntoView({ behavior: 'smooth' });
+            }
+            showNotification(`Navigate to the Custom Threshold section to edit ${endpointId}:${vmid}`);
+        }, 100);
+    };
+
+    window.deleteCustomThreshold = async function(endpointId, nodeId, vmid) {
+        if (!confirm(`Are you sure you want to delete the custom threshold for ${endpointId}:${vmid}?`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/thresholds/${endpointId}/${nodeId}/${vmid}`, {
+                method: 'DELETE'
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                loadCustomThresholds(); // Reload the thresholds
+                showNotification('Custom threshold deleted successfully');
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Error deleting custom threshold:', error);
+            alert(`Failed to delete custom threshold: ${error.message}`);
+        }
+    };
+
+    function testAllNotifications() {
+        showNotification('Testing all notification methods... (Feature coming soon)');
+    }
+
+    function exportAlertConfiguration() {
+        showNotification('Exporting alert configuration... (Feature coming soon)');
+    }
+
+    function showNotification(message) {
+        // Create a simple notification - you can enhance this
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 z-50 bg-blue-600 text-white px-4 py-2 rounded-md shadow-lg';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+
+    function renderAlertManagementTab() {
+        return `
+            <div class="space-y-6">
+                <!-- Header Section -->
+                <div class="text-center">
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Alert Management</h2>
+                    <p class="mt-2 text-gray-600 dark:text-gray-400">
+                        Manage all your alert configurations in one place
+                    </p>
+                </div>
+
+                <!-- Dynamic Threshold Alert Rules Section -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Dynamic Threshold Rules</h3>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Global alert rules that apply to all VMs/containers meeting threshold criteria
+                                </p>
+                            </div>
+                            <button id="refresh-dynamic-rules" class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div id="dynamic-rules-container" class="p-6">
+                        <div class="flex items-center justify-center py-8">
+                            <div class="text-center">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"></path>
+                                </svg>
+                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading dynamic threshold rules...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Per-VM/LXC Thresholds Section -->
+                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Per-VM/LXC Custom Thresholds</h3>
+                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                                    Individual threshold overrides for specific virtual machines and containers
+                                </p>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button id="refresh-custom-thresholds" class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                    </svg>
+                                    Refresh
+                                </button>
+                                <button id="add-custom-threshold" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                                    </svg>
+                                    Add Custom Threshold
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="custom-thresholds-container" class="p-6">
+                        <div class="flex items-center justify-center py-8">
+                            <div class="text-center">
+                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                </svg>
+                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading custom thresholds...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions Section -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Quick Actions</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <button id="create-threshold-rule" class="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            Create Threshold Rule
+                        </button>
+                        <button id="test-notifications" class="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zm-5-5l3 3m0 0l3-3m-3 3V8"></path>
+                            </svg>
+                            Test Notifications
+                        </button>
+                        <button id="export-alerts" class="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            Export Configuration
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
     }
     
     return {

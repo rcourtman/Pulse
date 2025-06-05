@@ -26,14 +26,16 @@ class AlertManager extends EventEmitter {
         
         this.maxHistorySize = 10000; // Increased for better analytics
         this.acknowledgementsFile = path.join(__dirname, '../data/acknowledgements.json');
+        this.alertRulesFile = path.join(__dirname, '../data/alert-rules.json');
         
         // Initialize default configuration
         this.initializeDefaultRules();
         this.initializeNotificationChannels();
         this.initializeAlertGroups();
         
-        // Load persisted acknowledgements
+        // Load persisted acknowledgements and alert rules
         this.loadAcknowledgements();
+        this.loadAlertRules();
         
         // Initialize custom threshold manager
         this.initializeCustomThresholds();
@@ -905,6 +907,14 @@ class AlertManager extends EventEmitter {
         const rule = this.alertRules.get(ruleId);
         if (rule) {
             Object.assign(rule, updates);
+            
+            // Save to disk if it's a custom or compound threshold rule
+            if (rule.type === 'compound_threshold' || rule.group === 'custom') {
+                this.saveAlertRules().catch(error => 
+                    console.error('[AlertManager] Failed to save alert rules after updating rule:', error)
+                );
+            }
+            
             this.emit('ruleUpdated', { ruleId, updates });
             return true;
         }
@@ -915,12 +925,15 @@ class AlertManager extends EventEmitter {
         // Support both single-metric rules and compound threshold rules
         const isCompoundRule = rule.thresholds && Array.isArray(rule.thresholds) && rule.thresholds.length > 0;
         
+        console.log('[AlertManager] Adding rule:', JSON.stringify(rule, null, 2));
+        console.log('[AlertManager] Is compound rule:', isCompoundRule);
+        
         if (!rule.name) {
             throw new Error('Rule must have a name');
         }
         
         if (!isCompoundRule && !rule.metric) {
-            throw new Error('Single-metric rule must have a metric, or provide thresholds for compound rule');
+            throw new Error('Single-metric rule must have a metric. For compound threshold rules, provide thresholds array.');
         }
         
         const ruleId = rule.id || (isCompoundRule ? 
@@ -946,13 +959,30 @@ class AlertManager extends EventEmitter {
         
         this.alertRules.set(ruleId, fullRule);
         console.log(`[AlertManager] Added ${isCompoundRule ? 'compound threshold' : 'single-metric'} rule: ${fullRule.name} (${ruleId})`);
+        
+        // Save to disk if it's a custom or compound threshold rule
+        if (isCompoundRule || fullRule.group === 'custom') {
+            this.saveAlertRules().catch(error => 
+                console.error('[AlertManager] Failed to save alert rules after adding rule:', error)
+            );
+        }
+        
         this.emit('ruleAdded', fullRule);
         return fullRule;
     }
 
     removeRule(ruleId) {
+        const rule = this.alertRules.get(ruleId);
         const success = this.alertRules.delete(ruleId);
+        
         if (success) {
+            // Save to disk if it was a custom or compound threshold rule
+            if (rule && (rule.type === 'compound_threshold' || rule.group === 'custom')) {
+                this.saveAlertRules().catch(error => 
+                    console.error('[AlertManager] Failed to save alert rules after removing rule:', error)
+                );
+            }
+            
             this.emit('ruleRemoved', { ruleId });
         }
         return success;
@@ -1255,6 +1285,55 @@ class AlertManager extends EventEmitter {
             );
         } catch (error) {
             console.error('Error saving acknowledgements:', error);
+        }
+    }
+
+    async loadAlertRules() {
+        try {
+            const data = await fs.readFile(this.alertRulesFile, 'utf-8');
+            const savedRules = JSON.parse(data);
+            
+            // Load saved alert rules into the map
+            for (const [key, rule] of Object.entries(savedRules)) {
+                // Only load non-default rules (compound threshold rules and custom rules)
+                if (rule.type === 'compound_threshold' || rule.group === 'custom') {
+                    this.alertRules.set(key, rule);
+                }
+            }
+            
+            console.log(`[AlertManager] Loaded ${Object.keys(savedRules).length} persisted alert rules`);
+        } catch (error) {
+            if (error.code !== 'ENOENT') {
+                console.error('[AlertManager] Error loading alert rules:', error);
+            }
+            // File doesn't exist yet, which is fine for first run
+        }
+    }
+    
+    async saveAlertRules() {
+        try {
+            // Ensure data directory exists
+            const dataDir = path.dirname(this.alertRulesFile);
+            await fs.mkdir(dataDir, { recursive: true });
+            
+            // Convert Map to plain object for JSON serialization
+            // Only save non-default rules (compound threshold rules and custom rules)
+            const rulesToSave = {};
+            for (const [key, rule] of this.alertRules) {
+                if (rule.type === 'compound_threshold' || rule.group === 'custom') {
+                    rulesToSave[key] = rule;
+                }
+            }
+            
+            await fs.writeFile(
+                this.alertRulesFile, 
+                JSON.stringify(rulesToSave, null, 2),
+                'utf-8'
+            );
+            
+            console.log(`[AlertManager] Saved ${Object.keys(rulesToSave).length} alert rules to disk`);
+        } catch (error) {
+            console.error('[AlertManager] Error saving alert rules:', error);
         }
     }
 

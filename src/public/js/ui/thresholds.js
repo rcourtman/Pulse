@@ -143,8 +143,13 @@ PulseApp.ui.thresholds = (() => {
     }
 
     function _handleViewAlertRules() {
-        // Show modal for viewing/managing existing alert rules
-        _showViewAlertRulesModal();
+        // Open the unified Alert Management interface in settings
+        if (PulseApp.ui && PulseApp.ui.settings && PulseApp.ui.settings.openModalWithTab) {
+            PulseApp.ui.settings.openModalWithTab('alert-management');
+        } else {
+            // Fallback to the old modal if settings isn't available
+            _showViewAlertRulesModal();
+        }
     }
 
     function _showCreateAlertRuleModal(activeThresholds) {
