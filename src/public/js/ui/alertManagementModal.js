@@ -256,10 +256,90 @@ PulseApp.ui.alertManagementModal = (() => {
                     <!-- System Alerts Tab Content (Default) -->
                     <div id="system-alert-rules-content" class="alert-rules-sub-content">
                         <div class="space-y-6">
+                            <!-- Global Thresholds Configuration -->
+                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
+                                <h4 class="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4">Global Alert Thresholds</h4>
+                                <p class="text-sm text-blue-700 dark:text-blue-300 mb-6">These thresholds apply to all VMs and LXCs unless overridden by custom settings.</p>
+                                
+                                <!-- Alert Type Toggles -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                    <div class="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-600 rounded-lg bg-white dark:bg-blue-800/20">
+                                        <span class="text-sm font-medium text-blue-900 dark:text-blue-100">CPU Alerts</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" name="ALERT_CPU_ENABLED" class="sr-only peer" checked>
+                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-600 rounded-lg bg-white dark:bg-blue-800/20">
+                                        <span class="text-sm font-medium text-blue-900 dark:text-blue-100">Memory Alerts</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" name="ALERT_MEMORY_ENABLED" class="sr-only peer" checked>
+                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-600 rounded-lg bg-white dark:bg-blue-800/20">
+                                        <span class="text-sm font-medium text-blue-900 dark:text-blue-100">Disk Alerts</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" name="ALERT_DISK_ENABLED" class="sr-only peer" checked>
+                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                    <div class="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-600 rounded-lg bg-white dark:bg-blue-800/20">
+                                        <span class="text-sm font-medium text-blue-900 dark:text-blue-100">Down Alerts</span>
+                                        <label class="relative inline-flex items-center cursor-pointer">
+                                            <input type="checkbox" name="ALERT_DOWN_ENABLED" class="sr-only peer" checked>
+                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Threshold Configuration -->
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                            CPU Threshold (%)
+                                        </label>
+                                        <input type="number" name="ALERT_CPU_THRESHOLD"
+                                               placeholder="85 (default)"
+                                               min="50" max="100"
+                                               class="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-blue-800/20 text-blue-900 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">Alert when CPU usage exceeds this percentage</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                            Memory Threshold (%)
+                                        </label>
+                                        <input type="number" name="ALERT_MEMORY_THRESHOLD"
+                                               placeholder="90 (default)"
+                                               min="50" max="100"
+                                               class="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-blue-800/20 text-blue-900 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">Alert when memory usage exceeds this percentage</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                                            Disk Threshold (%)
+                                        </label>
+                                        <input type="number" name="ALERT_DISK_THRESHOLD"
+                                               placeholder="95 (default)"
+                                               min="50" max="100"
+                                               class="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-blue-800/20 text-blue-900 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">Alert when disk usage exceeds this percentage</p>
+                                    </div>
+                                </div>
+
+                                <!-- Save Button -->
+                                <div class="flex justify-end">
+                                    <button id="save-global-thresholds-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                                        Save Global Thresholds
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- System Alert Rules List -->
                             <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                                 <div>
-                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">System Alert Rules</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Built-in monitoring alerts for CPU, Memory, Disk, and System Down</p>
+                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Active System Alert Rules</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Current monitoring rules based on the thresholds above</p>
                                 </div>
                                 <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-full">Built-in</span>
                             </div>
@@ -581,10 +661,32 @@ PulseApp.ui.alertManagementModal = (() => {
         if (addCustomBtn) {
             addCustomBtn.addEventListener('click', openCustomAlertModal);
         }
+
+        // Set up save global thresholds button
+        const saveThresholdsBtn = document.getElementById('save-global-thresholds-btn');
+        if (saveThresholdsBtn) {
+            saveThresholdsBtn.addEventListener('click', saveGlobalThresholds);
+        }
+
+        // Set up global threshold toggles and inputs
+        const globalAlertToggles = document.querySelectorAll('input[name^="ALERT_"][name$="_ENABLED"]');
+        globalAlertToggles.forEach(toggle => {
+            toggle.addEventListener('change', (e) => {
+                console.log(`${e.target.name} toggled:`, e.target.checked);
+            });
+        });
+
+        const thresholdInputs = document.querySelectorAll('input[name$="_THRESHOLD"]');
+        thresholdInputs.forEach(input => {
+            input.addEventListener('change', (e) => {
+                console.log(`${e.target.name} changed:`, e.target.value);
+            });
+        });
         
         // Load system and custom alerts
         loadSystemAlerts();
         loadCustomAlerts();
+        loadGlobalThresholds();
     }
     
     function switchAlertRulesSubTab(tabName) {
@@ -1054,6 +1156,60 @@ PulseApp.ui.alertManagementModal = (() => {
         // TODO: Implement saving to backend
         console.log('Saving email configuration:', emailConfig);
         alert('Email configuration saved successfully!');
+    }
+
+    function saveGlobalThresholds() {
+        // Collect global threshold configuration
+        const thresholdConfig = {
+            cpu: {
+                enabled: document.querySelector('input[name="ALERT_CPU_ENABLED"]')?.checked,
+                threshold: parseInt(document.querySelector('input[name="ALERT_CPU_THRESHOLD"]')?.value) || 85
+            },
+            memory: {
+                enabled: document.querySelector('input[name="ALERT_MEMORY_ENABLED"]')?.checked,
+                threshold: parseInt(document.querySelector('input[name="ALERT_MEMORY_THRESHOLD"]')?.value) || 90
+            },
+            disk: {
+                enabled: document.querySelector('input[name="ALERT_DISK_ENABLED"]')?.checked,
+                threshold: parseInt(document.querySelector('input[name="ALERT_DISK_THRESHOLD"]')?.value) || 95
+            },
+            down: {
+                enabled: document.querySelector('input[name="ALERT_DOWN_ENABLED"]')?.checked
+            }
+        };
+        
+        // TODO: Implement saving to backend
+        console.log('Saving global thresholds:', thresholdConfig);
+        alert('Global alert thresholds saved successfully!');
+    }
+
+    function loadGlobalThresholds() {
+        // TODO: Load from backend and populate form
+        // For now, just set defaults
+        const config = PulseApp.config?.alerts || {};
+        
+        // Update toggles
+        const cpuToggle = document.querySelector('input[name="ALERT_CPU_ENABLED"]');
+        if (cpuToggle) cpuToggle.checked = config.cpu?.enabled !== false;
+        
+        const memoryToggle = document.querySelector('input[name="ALERT_MEMORY_ENABLED"]');
+        if (memoryToggle) memoryToggle.checked = config.memory?.enabled !== false;
+        
+        const diskToggle = document.querySelector('input[name="ALERT_DISK_ENABLED"]');
+        if (diskToggle) diskToggle.checked = config.disk?.enabled !== false;
+        
+        const downToggle = document.querySelector('input[name="ALERT_DOWN_ENABLED"]');
+        if (downToggle) downToggle.checked = config.down?.enabled !== false;
+        
+        // Update threshold values
+        const cpuInput = document.querySelector('input[name="ALERT_CPU_THRESHOLD"]');
+        if (cpuInput && config.cpu?.threshold) cpuInput.value = config.cpu.threshold;
+        
+        const memoryInput = document.querySelector('input[name="ALERT_MEMORY_THRESHOLD"]');
+        if (memoryInput && config.memory?.threshold) memoryInput.value = config.memory.threshold;
+        
+        const diskInput = document.querySelector('input[name="ALERT_DISK_THRESHOLD"]');
+        if (diskInput && config.disk?.threshold) diskInput.value = config.disk.threshold;
     }
 
     function testWebhookConnection() {
