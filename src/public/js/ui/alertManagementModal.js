@@ -228,53 +228,65 @@ PulseApp.ui.alertManagementModal = (() => {
                         <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Alert Rules</h3>
                         <p class="text-sm text-gray-600 dark:text-gray-400">Manage system and custom alert rules</p>
                     </div>
-                    <div class="flex items-center space-x-3">
-                        <select id="alert-rules-filter" class="text-xs border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1">
-                            <option value="all">All Rules</option>
-                            <option value="system">System Alerts</option>
-                            <option value="custom">Custom Alerts</option>
-                            <option value="enabled">Enabled Only</option>
-                            <option value="disabled">Disabled Only</option>
-                        </select>
-                        <button id="add-custom-alert-btn" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-md transition-colors">
-                            + Add Custom Alert
-                        </button>
-                    </div>
+                    <button id="add-custom-alert-btn" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                        + Add Custom Alert
+                    </button>
                 </div>
 
-                <!-- System Alerts Section -->
-                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg">
-                    <div class="px-4 py-3 border-b border-blue-200 dark:border-blue-700">
-                        <div class="flex items-center space-x-2">
-                            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <!-- Nested Tabs -->
+                <div class="border-b border-gray-200 dark:border-gray-700">
+                    <nav class="flex space-x-8" id="alert-rules-sub-tabs">
+                        <button class="alert-rules-sub-tab active py-2 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="system">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
-                            <h4 class="text-sm font-semibold text-blue-900 dark:text-blue-100">System Alerts</h4>
-                            <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-full">Built-in</span>
-                        </div>
-                        <p class="text-xs text-blue-700 dark:text-blue-300 mt-1">Core monitoring alerts that cannot be deleted</p>
-                    </div>
-                    <div id="system-alerts-content" class="p-4 space-y-3">
-                        <!-- System alerts will be loaded here -->
-                        <p class="text-xs text-gray-500 dark:text-gray-400">Loading system alerts...</p>
-                    </div>
-                </div>
-
-                <!-- Custom Alerts Section -->
-                <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg">
-                    <div class="px-4 py-3 border-b border-green-200 dark:border-green-700">
-                        <div class="flex items-center space-x-2">
-                            <svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            System Alerts
+                        </button>
+                        <button class="alert-rules-sub-tab py-2 px-1 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium text-sm" data-tab="custom">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
                             </svg>
-                            <h4 class="text-sm font-semibold text-green-900 dark:text-green-100">Custom Alerts</h4>
-                            <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full">User-created</span>
+                            Custom Alerts
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Tab Content -->
+                <div id="alert-rules-sub-content">
+                    <!-- System Alerts Tab Content (Default) -->
+                    <div id="system-alert-rules-content" class="alert-rules-sub-content">
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">System Alert Rules</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Built-in monitoring alerts for CPU, Memory, Disk, and System Down</p>
+                                </div>
+                                <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-full">Built-in</span>
+                            </div>
+                            
+                            <div id="system-alerts-content" class="space-y-3">
+                                <!-- System alerts will be loaded here -->
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Loading system alerts...</p>
+                            </div>
                         </div>
-                        <p class="text-xs text-green-700 dark:text-green-300 mt-1">Custom threshold and rule-based alerts</p>
                     </div>
-                    <div id="custom-alerts-content" class="p-4 space-y-3">
-                        <!-- Custom alerts will be loaded here -->
-                        <p class="text-xs text-gray-500 dark:text-gray-400">Loading custom alerts...</p>
+
+                    <!-- Custom Alerts Tab Content (Hidden by default) -->
+                    <div id="custom-alert-rules-content" class="alert-rules-sub-content hidden">
+                        <div class="space-y-6">
+                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Custom Alert Rules</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">User-created alerts with custom thresholds and conditions</p>
+                                </div>
+                                <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full">User-created</span>
+                            </div>
+                            
+                            <div id="custom-alerts-content" class="space-y-3">
+                                <!-- Custom alerts will be loaded here -->
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Loading custom alerts...</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -444,11 +456,14 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function initializeAlertRulesTab() {
-        // Set up filter dropdown
-        const filterSelect = document.getElementById('alert-rules-filter');
-        if (filterSelect) {
-            filterSelect.addEventListener('change', filterAlertRules);
-        }
+        // Set up nested tab navigation
+        const subTabs = document.querySelectorAll('.alert-rules-sub-tab');
+        subTabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const targetTab = e.currentTarget.dataset.tab;
+                switchAlertRulesSubTab(targetTab);
+            });
+        });
         
         // Set up add custom alert button
         const addCustomBtn = document.getElementById('add-custom-alert-btn');
@@ -459,6 +474,34 @@ PulseApp.ui.alertManagementModal = (() => {
         // Load system and custom alerts
         loadSystemAlerts();
         loadCustomAlerts();
+    }
+    
+    function switchAlertRulesSubTab(tabName) {
+        // Update tab buttons
+        const subTabs = document.querySelectorAll('.alert-rules-sub-tab');
+        subTabs.forEach(tab => {
+            const isActive = tab.dataset.tab === tabName;
+            if (isActive) {
+                tab.classList.add('active');
+                tab.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+                tab.classList.add('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+            } else {
+                tab.classList.remove('active');
+                tab.classList.remove('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+                tab.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            }
+        });
+
+        // Update content visibility
+        const contentDivs = document.querySelectorAll('.alert-rules-sub-content');
+        contentDivs.forEach(div => {
+            div.classList.add('hidden');
+        });
+        
+        const targetContent = document.getElementById(`${tabName}-alert-rules-content`);
+        if (targetContent) {
+            targetContent.classList.remove('hidden');
+        }
     }
 
     function initializeNotificationsTab() {
@@ -536,12 +579,6 @@ PulseApp.ui.alertManagementModal = (() => {
         if (targetContent) {
             targetContent.classList.remove('hidden');
         }
-    }
-
-    function filterAlertRules() {
-        const filterValue = document.getElementById('alert-rules-filter')?.value;
-        // TODO: Implement filtering logic
-        console.log('Filtering alert rules by:', filterValue);
     }
 
     function loadSystemAlerts() {
