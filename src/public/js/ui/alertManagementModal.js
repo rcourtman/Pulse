@@ -670,6 +670,10 @@ PulseApp.ui.alertManagementModal = (() => {
                         </div>
                     </div>
                     <div class="flex gap-1">
+                        <button onclick="PulseApp.ui.alertManagementModal.editCustomAlert('${alert.id}')" 
+                                class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
+                            Edit
+                        </button>
                         <button onclick="PulseApp.ui.alertManagementModal.toggleCustomAlert('${alert.id}', ${alert.enabled === false})" 
                                 class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
                             ${alert.enabled !== false ? 'Disable' : 'Enable'}
@@ -811,31 +815,41 @@ PulseApp.ui.alertManagementModal = (() => {
         }
     }
 
-    function openCustomAlertModal(presetThresholds = null) {
+    function openCustomAlertModal(presetThresholds = null, existingAlert = null) {
         // Check if settings modal has the threshold functionality we can reuse
-        if (PulseApp.ui.settings && PulseApp.ui.settings.showThresholdModal && !presetThresholds) {
-            // Use the existing threshold modal from settings (only if no presets)
+        if (PulseApp.ui.settings && PulseApp.ui.settings.showThresholdModal && !presetThresholds && !existingAlert) {
+            // Use the existing threshold modal from settings (only if no presets and not editing)
             PulseApp.ui.settings.showThresholdModal();
         } else {
-            // Create our own custom alert modal with optional preset values
-            createCustomAlertModal(presetThresholds);
+            // Create our own custom alert modal with optional preset values or existing alert data
+            createCustomAlertModal(presetThresholds, existingAlert);
         }
     }
 
-    function createCustomAlertModal(presetThresholds = null) {
+    function createCustomAlertModal(presetThresholds = null, existingAlert = null) {
         // Remove any existing custom alert modal
         const existingModal = document.getElementById('custom-alert-modal');
         if (existingModal) {
             existingModal.remove();
         }
 
-        // Generate alert name and determine best metric from presets
+        // Generate alert name and determine best metric from presets or existing alert
         let suggestedName = 'Custom Alert';
         let primaryMetric = 'cpu';
         let primaryThreshold = 85;
         let multipleThresholds = false;
+        let isEditing = false;
         
-        if (presetThresholds && presetThresholds.length > 0) {
+        if (existingAlert) {
+            // Pre-fill form with existing alert data
+            suggestedName = existingAlert.name || existingAlert.alert || 'Custom Alert';
+            if (existingAlert.thresholds && existingAlert.thresholds.length > 0) {
+                primaryMetric = existingAlert.thresholds[0].type;
+                primaryThreshold = existingAlert.thresholds[0].value;
+                multipleThresholds = existingAlert.thresholds.length > 1;
+            }
+            isEditing = true;
+        } else if (presetThresholds && presetThresholds.length > 0) {
             // Create a descriptive name based on active thresholds
             const thresholdNames = presetThresholds.map(t => `${t.type.toUpperCase()}: ${t.value}${t.type === 'cpu' || t.type === 'memory' || t.type === 'disk' ? '%' : ''}`);
             suggestedName = `Alert for ${thresholdNames.join(', ')}`;
@@ -852,7 +866,7 @@ PulseApp.ui.alertManagementModal = (() => {
             <div id="custom-alert-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
                 <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col m-4">
                     <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-6 py-4">
-                        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Create Custom Alert</h2>
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">${isEditing ? 'Edit Custom Alert' : 'Create Custom Alert'}</h2>
                         <button id="custom-alert-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -972,7 +986,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                 Cancel
                             </button>
                             <button type="button" id="custom-alert-save-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
-                                Create Alert
+${isEditing ? 'Update Alert' : 'Create Alert'}
                             </button>
                         </div>
                     </div>
@@ -1068,11 +1082,11 @@ PulseApp.ui.alertManagementModal = (() => {
 
         // Handle save
         if (saveBtn) {
-            saveBtn.addEventListener('click', saveCustomAlert);
+            saveBtn.addEventListener('click', () => saveCustomAlert(existingAlert));
         }
     }
 
-    async function saveCustomAlert() {
+    async function saveCustomAlert(existingAlert = null) {
         const form = document.getElementById('custom-alert-form');
         const formData = new FormData(form);
         
@@ -1116,16 +1130,24 @@ PulseApp.ui.alertManagementModal = (() => {
             thresholds: thresholds, // Use array of thresholds instead of single values
             sendEmail: formData.has('sendEmail'),
             sendWebhook: formData.has('sendWebhook'),
-            enabled: true,
-            createdAt: Date.now()
+            enabled: existingAlert ? existingAlert.enabled : true,
+            createdAt: existingAlert ? existingAlert.createdAt : Date.now()
         };
 
-        console.log('Creating custom alert:', alertConfig);
+        // If editing, preserve the existing alert ID
+        if (existingAlert) {
+            alertConfig.id = existingAlert.id;
+        }
+
+        console.log(existingAlert ? 'Updating custom alert:' : 'Creating custom alert:', alertConfig);
 
         try {
             // Save to backend via API
-            const response = await fetch('/api/alerts/rules', {
-                method: 'POST',
+            const url = existingAlert ? `/api/alerts/rules/${existingAlert.id}` : '/api/alerts/rules';
+            const method = existingAlert ? 'PUT' : 'POST';
+            
+            const response = await fetch(url, {
+                method: method,
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -1138,10 +1160,10 @@ PulseApp.ui.alertManagementModal = (() => {
             }
 
             const result = await response.json();
-            console.log('Alert rule created successfully:', result);
+            console.log(`Alert rule ${existingAlert ? 'updated' : 'created'} successfully:`, result);
             
             const thresholdSummary = thresholds.map(t => `${t.type.toUpperCase()}: ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}`).join(', ');
-            alert(`Custom alert created successfully!\n\nAlert: ${alertConfig.name}\nThresholds: ${thresholdSummary}\n\nRule ID: ${result.rule?.id || 'Generated'}`);
+            alert(`Custom alert ${existingAlert ? 'updated' : 'created'} successfully!\n\nAlert: ${alertConfig.name}\nThresholds: ${thresholdSummary}\n\nRule ID: ${result.rule?.id || existingAlert?.id || 'Generated'}`);
             
             // Close modal
             document.getElementById('custom-alert-modal').remove();
@@ -1380,6 +1402,30 @@ PulseApp.ui.alertManagementModal = (() => {
         }
     }
 
+    async function editCustomAlert(alertId) {
+        try {
+            // First, fetch the current alert data
+            const response = await fetch('/api/alerts/rules');
+            if (!response.ok) {
+                throw new Error(`Failed to fetch alert rules: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const alert = data.rules ? data.rules.find(rule => rule.id === alertId) : null;
+            
+            if (!alert) {
+                throw new Error('Alert not found');
+            }
+            
+            // Open the custom alert modal with pre-filled data
+            openCustomAlertModal(alert.thresholds || [], alert);
+            
+        } catch (error) {
+            console.error('Failed to load alert for editing:', error);
+            alert(`Failed to load alert for editing: ${error.message}`);
+        }
+    }
+
     async function deleteCustomAlert(alertId) {
         if (!confirm('Are you sure you want to delete this custom alert? This action cannot be undone.')) {
             return;
@@ -1418,6 +1464,7 @@ PulseApp.ui.alertManagementModal = (() => {
         closeModal,
         switchTab: switchTab,
         openCustomAlertModal,
+        editCustomAlert,
         toggleCustomAlert,
         deleteCustomAlert,
         loadCurrentAlerts: () => {
