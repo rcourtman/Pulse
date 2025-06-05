@@ -256,97 +256,147 @@ PulseApp.ui.alertManagementModal = (() => {
                     <!-- System Alerts Tab Content (Default) -->
                     <div id="system-alert-rules-content" class="alert-rules-sub-content">
                         <div class="space-y-6">
-                            <!-- Global Thresholds Configuration -->
-                            <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
-                                <h4 class="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-4">Global Alert Thresholds</h4>
-                                <p class="text-sm text-blue-700 dark:text-blue-300 mb-6">These thresholds apply to all VMs and LXCs unless overridden by custom settings.</p>
-                                
-                                <!-- Alert Type Toggles -->
-                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                                    <div class="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-600 rounded-lg bg-white dark:bg-blue-800/20">
-                                        <span class="text-sm font-medium text-blue-900 dark:text-blue-100">CPU Alerts</span>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" name="ALERT_CPU_ENABLED" class="sr-only peer" checked>
-                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                        </label>
-                                    </div>
-                                    <div class="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-600 rounded-lg bg-white dark:bg-blue-800/20">
-                                        <span class="text-sm font-medium text-blue-900 dark:text-blue-100">Memory Alerts</span>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" name="ALERT_MEMORY_ENABLED" class="sr-only peer" checked>
-                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                        </label>
-                                    </div>
-                                    <div class="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-600 rounded-lg bg-white dark:bg-blue-800/20">
-                                        <span class="text-sm font-medium text-blue-900 dark:text-blue-100">Disk Alerts</span>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" name="ALERT_DISK_ENABLED" class="sr-only peer" checked>
-                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                        </label>
-                                    </div>
-                                    <div class="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-600 rounded-lg bg-white dark:bg-blue-800/20">
-                                        <span class="text-sm font-medium text-blue-900 dark:text-blue-100">Down Alerts</span>
-                                        <label class="relative inline-flex items-center cursor-pointer">
-                                            <input type="checkbox" name="ALERT_DOWN_ENABLED" class="sr-only peer" checked>
-                                            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <!-- Threshold Configuration -->
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                                            CPU Threshold (%)
-                                        </label>
-                                        <input type="number" name="ALERT_CPU_THRESHOLD"
-                                               placeholder="85 (default)"
-                                               min="50" max="100"
-                                               class="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-blue-800/20 text-blue-900 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">Alert when CPU usage exceeds this percentage</p>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                                            Memory Threshold (%)
-                                        </label>
-                                        <input type="number" name="ALERT_MEMORY_THRESHOLD"
-                                               placeholder="90 (default)"
-                                               min="50" max="100"
-                                               class="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-blue-800/20 text-blue-900 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">Alert when memory usage exceeds this percentage</p>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
-                                            Disk Threshold (%)
-                                        </label>
-                                        <input type="number" name="ALERT_DISK_THRESHOLD"
-                                               placeholder="95 (default)"
-                                               min="50" max="100"
-                                               class="w-full px-3 py-2 text-sm border border-blue-300 dark:border-blue-600 rounded-md bg-white dark:bg-blue-800/20 text-blue-900 dark:text-blue-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <p class="text-xs text-blue-600 dark:text-blue-300 mt-1">Alert when disk usage exceeds this percentage</p>
-                                    </div>
-                                </div>
-
-                                <!-- Save Button -->
-                                <div class="flex justify-end">
-                                    <button id="save-global-thresholds-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                        Save Global Thresholds
-                                    </button>
-                                </div>
-                            </div>
-
                             <!-- System Alert Rules List -->
-                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                                <div>
-                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Active System Alert Rules</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Current monitoring rules based on the thresholds above</p>
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-between">
+                                    <h4 class="text-lg font-medium text-gray-900 dark:text-gray-100">System Alert Rules</h4>
+                                    <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-full">Built-in</span>
                                 </div>
-                                <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-full">Built-in</span>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Global monitoring rules that apply to all VMs and LXCs unless overridden by custom settings.</p>
                             </div>
                             
                             <div id="system-alerts-content" class="space-y-3">
-                                <!-- System alerts will be loaded here -->
-                                <p class="text-sm text-gray-500 dark:text-gray-400">Loading system alerts...</p>
+                                <!-- CPU Alert Rule -->
+                                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-3">
+                                                <div class="flex-shrink-0">
+                                                    <div class="w-8 h-8 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                                                        <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">CPU Alert</h3>
+                                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Triggers when CPU usage exceeds <span id="cpu-threshold-display">85%</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="cpu-alert-enabled" class="sr-only peer" checked>
+                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                            </label>
+                                            <button onclick="editSystemAlert('cpu')" class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                </svg>
+                                                Edit
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Memory Alert Rule -->
+                                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-3">
+                                                <div class="flex-shrink-0">
+                                                    <div class="w-8 h-8 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center">
+                                                        <svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">Memory Alert</h3>
+                                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Triggers when memory usage exceeds <span id="memory-threshold-display">90%</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="memory-alert-enabled" class="sr-only peer" checked>
+                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                            </label>
+                                            <button onclick="editSystemAlert('memory')" class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                </svg>
+                                                Edit
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Disk Alert Rule -->
+                                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-3">
+                                                <div class="flex-shrink-0">
+                                                    <div class="w-8 h-8 bg-purple-100 dark:bg-purple-900/20 rounded-full flex items-center justify-center">
+                                                        <svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path>
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">Disk Alert</h3>
+                                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Triggers when disk usage exceeds <span id="disk-threshold-display">95%</span></p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="disk-alert-enabled" class="sr-only peer" checked>
+                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                            </label>
+                                            <button onclick="editSystemAlert('disk')" class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                </svg>
+                                                Edit
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Down Alert Rule -->
+                                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-3">
+                                                <div class="flex-shrink-0">
+                                                    <div class="w-8 h-8 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                                                        <svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"></path>
+                                                        </svg>
+                                                    </div>
+                                                </div>
+                                                <div class="flex-1">
+                                                    <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100">Down Alert</h3>
+                                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Triggers when VM/LXC becomes unreachable or stops responding</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center space-x-3">
+                                            <label class="relative inline-flex items-center cursor-pointer">
+                                                <input type="checkbox" id="down-alert-enabled" class="sr-only peer" checked>
+                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                            </label>
+                                            <button onclick="editSystemAlert('down')" class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                                </svg>
+                                                Edit
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -662,31 +712,19 @@ PulseApp.ui.alertManagementModal = (() => {
             addCustomBtn.addEventListener('click', openCustomAlertModal);
         }
 
-        // Set up save global thresholds button
-        const saveThresholdsBtn = document.getElementById('save-global-thresholds-btn');
-        if (saveThresholdsBtn) {
-            saveThresholdsBtn.addEventListener('click', saveGlobalThresholds);
-        }
-
-        // Set up global threshold toggles and inputs
-        const globalAlertToggles = document.querySelectorAll('input[name^="ALERT_"][name$="_ENABLED"]');
-        globalAlertToggles.forEach(toggle => {
+        // Set up system alert toggles
+        const systemAlertToggles = document.querySelectorAll('#system-alerts-content input[type="checkbox"]');
+        systemAlertToggles.forEach(toggle => {
             toggle.addEventListener('change', (e) => {
-                console.log(`${e.target.name} toggled:`, e.target.checked);
-            });
-        });
-
-        const thresholdInputs = document.querySelectorAll('input[name$="_THRESHOLD"]');
-        thresholdInputs.forEach(input => {
-            input.addEventListener('change', (e) => {
-                console.log(`${e.target.name} changed:`, e.target.value);
+                const alertType = e.target.id.replace('-alert-enabled', '');
+                console.log(`System ${alertType} alert toggled:`, e.target.checked);
+                updateSystemAlertStatus(alertType, e.target.checked);
             });
         });
         
         // Load system and custom alerts
         loadSystemAlerts();
         loadCustomAlerts();
-        loadGlobalThresholds();
     }
     
     function switchAlertRulesSubTab(tabName) {
@@ -822,18 +860,8 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function loadSystemAlerts() {
-        const systemAlertsContent = document.getElementById('system-alerts-content');
-        if (!systemAlertsContent) return;
-        
-        // Create system alert rules (CPU, Memory, Disk, Down)
-        const systemAlerts = [
-            { id: 'cpu', name: 'CPU Usage', description: 'Alert when CPU usage exceeds threshold', enabled: true, threshold: 85 },
-            { id: 'memory', name: 'Memory Usage', description: 'Alert when memory usage exceeds threshold', enabled: true, threshold: 90 },
-            { id: 'disk', name: 'Disk Usage', description: 'Alert when disk usage exceeds threshold', enabled: true, threshold: 95 },
-            { id: 'down', name: 'System Down', description: 'Alert when VM/LXC goes offline', enabled: true, threshold: null }
-        ];
-        
-        systemAlertsContent.innerHTML = systemAlerts.map(alert => createSystemAlertCard(alert)).join('');
+        // System alerts are now hardcoded in HTML, just load their configuration
+        loadSystemAlertConfiguration();
     }
 
     async function loadCustomAlerts() {
@@ -1158,58 +1186,111 @@ PulseApp.ui.alertManagementModal = (() => {
         alert('Email configuration saved successfully!');
     }
 
-    function saveGlobalThresholds() {
-        // Collect global threshold configuration
-        const thresholdConfig = {
-            cpu: {
-                enabled: document.querySelector('input[name="ALERT_CPU_ENABLED"]')?.checked,
-                threshold: parseInt(document.querySelector('input[name="ALERT_CPU_THRESHOLD"]')?.value) || 85
-            },
-            memory: {
-                enabled: document.querySelector('input[name="ALERT_MEMORY_ENABLED"]')?.checked,
-                threshold: parseInt(document.querySelector('input[name="ALERT_MEMORY_THRESHOLD"]')?.value) || 90
-            },
-            disk: {
-                enabled: document.querySelector('input[name="ALERT_DISK_ENABLED"]')?.checked,
-                threshold: parseInt(document.querySelector('input[name="ALERT_DISK_THRESHOLD"]')?.value) || 95
-            },
-            down: {
-                enabled: document.querySelector('input[name="ALERT_DOWN_ENABLED"]')?.checked
-            }
-        };
+    function editSystemAlert(alertType) {
+        // Create and show modal for editing system alert
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
         
-        // TODO: Implement saving to backend
-        console.log('Saving global thresholds:', thresholdConfig);
-        alert('Global alert thresholds saved successfully!');
+        const config = PulseApp.config?.alerts?.[alertType] || {};
+        const defaultThresholds = { cpu: 85, memory: 90, disk: 95 };
+        const currentThreshold = config.threshold || defaultThresholds[alertType] || 85;
+        const isEnabled = config.enabled !== false;
+        
+        modal.innerHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Edit ${alertType.charAt(0).toUpperCase() + alertType.slice(1)} Alert</h3>
+                </div>
+                <div class="px-6 py-4 space-y-4">
+                    <div>
+                        <label class="flex items-center">
+                            <input type="checkbox" id="system-alert-enabled" ${isEnabled ? 'checked' : ''} class="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Enable ${alertType} alerts</span>
+                        </label>
+                    </div>
+                    ${alertType !== 'down' ? `
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Alert Threshold (%)
+                            </label>
+                            <input type="number" id="system-alert-threshold" value="${currentThreshold}" min="50" max="100" 
+                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Alert when ${alertType} usage exceeds this percentage</p>
+                        </div>
+                    ` : ''}
+                </div>
+                <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
+                    <button onclick="closeSystemAlertModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600">
+                        Cancel
+                    </button>
+                    <button onclick="saveSystemAlert('${alertType}')" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">
+                        Save
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        window.currentSystemAlertModal = modal;
+    }
+    
+    function closeSystemAlertModal() {
+        if (window.currentSystemAlertModal) {
+            document.body.removeChild(window.currentSystemAlertModal);
+            window.currentSystemAlertModal = null;
+        }
+    }
+    
+    function saveSystemAlert(alertType) {
+        const enabled = document.getElementById('system-alert-enabled')?.checked;
+        const thresholdInput = document.getElementById('system-alert-threshold');
+        const threshold = thresholdInput ? parseInt(thresholdInput.value) : null;
+        
+        const alertConfig = { enabled };
+        if (threshold && alertType !== 'down') {
+            alertConfig.threshold = threshold;
+        }
+        
+        // TODO: Save to backend
+        console.log(`Saving ${alertType} alert:`, alertConfig);
+        
+        // Update the UI immediately
+        updateSystemAlertDisplay(alertType, alertConfig);
+        
+        alert(`${alertType.charAt(0).toUpperCase() + alertType.slice(1)} alert settings saved successfully!`);
+        closeSystemAlertModal();
+    }
+    
+    function updateSystemAlertStatus(alertType, enabled) {
+        // TODO: Save status change to backend
+        console.log(`${alertType} alert ${enabled ? 'enabled' : 'disabled'}`);
+    }
+    
+    function updateSystemAlertDisplay(alertType, config) {
+        // Update the toggle
+        const toggle = document.getElementById(`${alertType}-alert-enabled`);
+        if (toggle) toggle.checked = config.enabled;
+        
+        // Update the threshold display
+        if (config.threshold && alertType !== 'down') {
+            const display = document.getElementById(`${alertType}-threshold-display`);
+            if (display) display.textContent = `${config.threshold}%`;
+        }
     }
 
-    function loadGlobalThresholds() {
-        // TODO: Load from backend and populate form
-        // For now, just set defaults
+    function loadSystemAlertConfiguration() {
+        // TODO: Load from backend and populate system alert displays
         const config = PulseApp.config?.alerts || {};
         
-        // Update toggles
-        const cpuToggle = document.querySelector('input[name="ALERT_CPU_ENABLED"]');
-        if (cpuToggle) cpuToggle.checked = config.cpu?.enabled !== false;
-        
-        const memoryToggle = document.querySelector('input[name="ALERT_MEMORY_ENABLED"]');
-        if (memoryToggle) memoryToggle.checked = config.memory?.enabled !== false;
-        
-        const diskToggle = document.querySelector('input[name="ALERT_DISK_ENABLED"]');
-        if (diskToggle) diskToggle.checked = config.disk?.enabled !== false;
-        
-        const downToggle = document.querySelector('input[name="ALERT_DOWN_ENABLED"]');
-        if (downToggle) downToggle.checked = config.down?.enabled !== false;
-        
-        // Update threshold values
-        const cpuInput = document.querySelector('input[name="ALERT_CPU_THRESHOLD"]');
-        if (cpuInput && config.cpu?.threshold) cpuInput.value = config.cpu.threshold;
-        
-        const memoryInput = document.querySelector('input[name="ALERT_MEMORY_THRESHOLD"]');
-        if (memoryInput && config.memory?.threshold) memoryInput.value = config.memory.threshold;
-        
-        const diskInput = document.querySelector('input[name="ALERT_DISK_THRESHOLD"]');
-        if (diskInput && config.disk?.threshold) diskInput.value = config.disk.threshold;
+        // Update system alert displays
+        ['cpu', 'memory', 'disk', 'down'].forEach(alertType => {
+            const alertConfig = config[alertType] || {};
+            const enabled = alertConfig.enabled !== false;
+            const defaultThresholds = { cpu: 85, memory: 90, disk: 95 };
+            const threshold = alertConfig.threshold || defaultThresholds[alertType];
+            
+            updateSystemAlertDisplay(alertType, { enabled, threshold });
+        });
     }
 
     function testWebhookConnection() {
@@ -1866,6 +1947,10 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
 
     // Global functions that need to be accessible from HTML onclick handlers
+    window.editSystemAlert = editSystemAlert;
+    window.closeSystemAlertModal = closeSystemAlertModal;
+    window.saveSystemAlert = saveSystemAlert;
+    
     window.toggleSystemAlert = function(alertId, enabled) {
         console.log(`Toggling system alert ${alertId} to ${enabled ? 'enabled' : 'disabled'}`);
         // TODO: Implement system alert toggle functionality
