@@ -462,23 +462,95 @@ PulseApp.ui.alertManagementModal = (() => {
         const customAlertsContent = document.getElementById('custom-alerts-content');
         if (!customAlertsContent) return;
         
-        // Load custom alerts from settings if available
-        if (PulseApp.ui.settings && PulseApp.ui.settings.loadThresholdConfigurations) {
-            // This will populate custom threshold configurations
-            PulseApp.ui.settings.loadThresholdConfigurations();
+        // Load custom alerts from local storage (temporary solution until backend integration)
+        const storedAlerts = getCustomAlertsFromStorage();
+        
+        if (storedAlerts.length === 0) {
+            customAlertsContent.innerHTML = `
+                <div class="text-center py-6">
+                    <svg class="w-8 h-8 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">No custom alerts configured</p>
+                    <button onclick="PulseApp.ui.alertManagementModal.openCustomAlertModal()" 
+                            class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                        Create your first custom alert
+                    </button>
+                </div>
+            `;
+            return;
         }
         
-        // For now, show placeholder
-        customAlertsContent.innerHTML = `
-            <div class="text-center py-6">
-                <svg class="w-8 h-8 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">No custom alerts configured</p>
-                <button onclick="PulseApp.ui.alertManagementModal.openCustomAlertModal()" 
-                        class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
-                    Create your first custom alert
-                </button>
+        // Display the custom alerts
+        customAlertsContent.innerHTML = storedAlerts.map(alert => createCustomAlertCard(alert)).join('');
+    }
+
+    function getCustomAlertsFromStorage() {
+        try {
+            const stored = localStorage.getItem('pulse-custom-alerts');
+            return stored ? JSON.parse(stored) : [];
+        } catch (error) {
+            console.warn('[AlertManagementModal] Failed to load custom alerts from storage:', error);
+            return [];
+        }
+    }
+
+    function saveCustomAlertToStorage(alertConfig) {
+        try {
+            const existingAlerts = getCustomAlertsFromStorage();
+            const newAlert = {
+                ...alertConfig,
+                id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+            };
+            existingAlerts.push(newAlert);
+            localStorage.setItem('pulse-custom-alerts', JSON.stringify(existingAlerts));
+            return newAlert;
+        } catch (error) {
+            console.error('[AlertManagementModal] Failed to save custom alert to storage:', error);
+            throw error;
+        }
+    }
+
+    function createCustomAlertCard(alert) {
+        const thresholdsList = alert.thresholds?.map(t => 
+            `<span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">
+                ${t.type.charAt(0).toUpperCase() + t.type.slice(1)} ≥ ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}
+            </span>`
+        ).join('') || '';
+
+        const createdDate = new Date(alert.createdAt).toLocaleDateString();
+        
+        return `
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
+                <div class="flex items-start justify-between mb-2">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${alert.name}</h5>
+                            <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full">
+                                ${alert.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            Created: ${createdDate} • Target: ${alert.targetType === 'all' ? 'All VMs/LXCs' : alert.targetType.toUpperCase()}
+                        </div>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="PulseApp.ui.alertManagementModal.toggleCustomAlert('${alert.id}', ${!alert.enabled})" 
+                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                            ${alert.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button onclick="PulseApp.ui.alertManagementModal.deleteCustomAlert('${alert.id}')" 
+                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Alert triggers when ANY condition is met:</p>
+                    <div class="flex flex-wrap">
+                        ${thresholdsList}
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -882,16 +954,23 @@ PulseApp.ui.alertManagementModal = (() => {
 
         console.log('Creating custom alert:', alertConfig);
 
-        // TODO: Save to backend
-        // For now, just show success and close modal
-        const thresholdSummary = thresholds.map(t => `${t.type.toUpperCase()}: ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}`).join(', ');
-        alert(`Custom alert created successfully!\n\nAlert: ${alertConfig.name}\nThresholds: ${thresholdSummary}\n\nNote: Backend integration still needs to be implemented.`);
-        
-        // Close modal
-        document.getElementById('custom-alert-modal').remove();
-        
-        // Refresh the custom alerts list
-        loadCustomAlerts();
+        try {
+            // Save to local storage for now
+            const savedAlert = saveCustomAlertToStorage(alertConfig);
+            
+            const thresholdSummary = thresholds.map(t => `${t.type.toUpperCase()}: ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}`).join(', ');
+            alert(`Custom alert created successfully!\n\nAlert: ${alertConfig.name}\nThresholds: ${thresholdSummary}\n\nNote: Currently saved locally. Backend integration coming soon.`);
+            
+            // Close modal
+            document.getElementById('custom-alert-modal').remove();
+            
+            // Refresh the custom alerts list
+            loadCustomAlerts();
+            
+        } catch (error) {
+            console.error('Failed to save custom alert:', error);
+            alert('Failed to save custom alert. Please try again.');
+        }
     }
 
     function loadCurrentAlerts() {
@@ -1095,6 +1174,38 @@ PulseApp.ui.alertManagementModal = (() => {
         console.log('Saving alert configuration...');
     }
 
+    function toggleCustomAlert(alertId, enabled) {
+        try {
+            const alerts = getCustomAlertsFromStorage();
+            const alertIndex = alerts.findIndex(a => a.id === alertId);
+            
+            if (alertIndex >= 0) {
+                alerts[alertIndex].enabled = enabled;
+                localStorage.setItem('pulse-custom-alerts', JSON.stringify(alerts));
+                loadCustomAlerts(); // Refresh display
+                console.log(`Custom alert ${alertId} ${enabled ? 'enabled' : 'disabled'}`);
+            }
+        } catch (error) {
+            console.error('Failed to toggle custom alert:', error);
+        }
+    }
+
+    function deleteCustomAlert(alertId) {
+        if (!confirm('Are you sure you want to delete this custom alert? This action cannot be undone.')) {
+            return;
+        }
+        
+        try {
+            const alerts = getCustomAlertsFromStorage();
+            const filteredAlerts = alerts.filter(a => a.id !== alertId);
+            localStorage.setItem('pulse-custom-alerts', JSON.stringify(filteredAlerts));
+            loadCustomAlerts(); // Refresh display
+            console.log(`Custom alert ${alertId} deleted`);
+        } catch (error) {
+            console.error('Failed to delete custom alert:', error);
+        }
+    }
+
     // Global functions that need to be accessible from HTML onclick handlers
     window.toggleSystemAlert = function(alertId, enabled) {
         console.log(`Toggling system alert ${alertId} to ${enabled ? 'enabled' : 'disabled'}`);
@@ -1109,6 +1220,8 @@ PulseApp.ui.alertManagementModal = (() => {
         closeModal,
         switchTab: switchTab,
         openCustomAlertModal,
+        toggleCustomAlert,
+        deleteCustomAlert,
         loadCurrentAlerts: () => {
             if (activeTab === 'alerts') {
                 loadCurrentAlerts();
