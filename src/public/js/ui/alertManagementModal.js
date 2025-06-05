@@ -1486,10 +1486,10 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         `;
 
         document.body.insertAdjacentHTML('beforeend', modalHTML);
-        setupCustomAlertModalEvents();
+        setupCustomAlertModalEvents(existingAlert);
     }
 
-    function setupCustomAlertModalEvents() {
+    function setupCustomAlertModalEvents(existingAlert = null) {
         const modal = document.getElementById('custom-alert-modal');
         const closeBtn = document.getElementById('custom-alert-modal-close');
         const cancelBtn = document.getElementById('custom-alert-cancel-button');
