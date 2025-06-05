@@ -1878,9 +1878,15 @@ PulseApp.ui.settings = (() => {
         }
         
         // Confirm update
-        if (!confirm(`Update to version ${latestReleaseData.tag_name}?\n\nThe application will restart automatically after the update is applied.`)) {
-            return;
-        }
+        PulseApp.ui.toast.confirm(
+            `Update to version ${latestReleaseData.tag_name}? The application will restart automatically after the update is applied.`,
+            async () => {
+                await _performUpdate(latestReleaseData);
+            }
+        );
+    }
+
+    async function _performUpdate(latestReleaseData) {
         
         try {
             // Hide update details and show progress
@@ -2326,7 +2332,7 @@ PulseApp.ui.settings = (() => {
             
             // Validate required fields
             if (!endpointId || !nodeId || !vmid) {
-                alert('Please select a VM/LXC from the dropdown first.');
+                PulseApp.ui.toast.warning('Please select a VM/LXC from the dropdown first.');
                 return;
             }
             
@@ -2348,10 +2354,10 @@ PulseApp.ui.settings = (() => {
                     modal.remove();
                     await loadThresholdConfigurations(); // Reload the list
                 } else {
-                    alert('Failed to save threshold configuration: ' + result.error);
+                    PulseApp.ui.toast.error('Failed to save threshold configuration: ' + result.error);
                 }
             } catch (error) {
-                alert('Error saving threshold configuration: ' + error.message);
+                PulseApp.ui.toast.error('Error saving threshold configuration: ' + error.message);
             }
         });
     }
@@ -2389,10 +2395,10 @@ PulseApp.ui.settings = (() => {
             if (result.success) {
                 showThresholdModal(endpointId, nodeId, vmid, result.data.thresholds);
             } else {
-                alert('Failed to load threshold configuration: ' + result.error);
+                PulseApp.ui.toast.error('Failed to load threshold configuration: ' + result.error);
             }
         } catch (error) {
-            alert('Error loading threshold configuration: ' + error.message);
+            PulseApp.ui.toast.error('Error loading threshold configuration: ' + error.message);
         }
     }
     
@@ -2418,18 +2424,24 @@ PulseApp.ui.settings = (() => {
                 if (toggleResult.success) {
                     await loadThresholdConfigurations(); // Reload the list
                 } else {
-                    alert('Failed to toggle threshold configuration: ' + toggleResult.error);
+                    PulseApp.ui.toast.error('Failed to toggle threshold configuration: ' + toggleResult.error);
                 }
             }
         } catch (error) {
-            alert('Error toggling threshold configuration: ' + error.message);
+            PulseApp.ui.toast.error('Error toggling threshold configuration: ' + error.message);
         }
     }
     
     async function deleteThresholdConfiguration(endpointId, nodeId, vmid) {
-        if (!confirm(`Are you sure you want to delete the custom threshold configuration for ${endpointId}:${nodeId}:${vmid}?`)) {
-            return;
-        }
+        PulseApp.ui.toast.confirm(
+            `Are you sure you want to delete the custom threshold configuration for ${endpointId}:${nodeId}:${vmid}?`,
+            async () => {
+                await _performDeleteThresholdConfiguration(endpointId, nodeId, vmid);
+            }
+        );
+    }
+
+    async function _performDeleteThresholdConfiguration(endpointId, nodeId, vmid) {
         
         try {
             const response = await fetch(`/api/thresholds/${endpointId}/${nodeId}/${vmid}`, {
@@ -2441,10 +2453,10 @@ PulseApp.ui.settings = (() => {
             if (result.success) {
                 await loadThresholdConfigurations(); // Reload the list
             } else {
-                alert('Failed to delete threshold configuration: ' + result.error);
+                PulseApp.ui.toast.error('Failed to delete threshold configuration: ' + result.error);
             }
         } catch (error) {
-            alert('Error deleting threshold configuration: ' + error.message);
+            PulseApp.ui.toast.error('Error deleting threshold configuration: ' + error.message);
         }
     }
 
@@ -2674,7 +2686,7 @@ PulseApp.ui.settings = (() => {
                     } else {
                         testBtn.textContent = '✗ Failed';
                         testBtn.className = 'px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors';
-                        alert('Test email failed: ' + result.error);
+                        PulseApp.ui.toast.error('Test email failed: ' + result.error);
                         setTimeout(() => {
                             testBtn.textContent = originalText;
                             testBtn.className = 'px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors';
@@ -2683,7 +2695,7 @@ PulseApp.ui.settings = (() => {
                 } catch (error) {
                     testBtn.textContent = '✗ Error';
                     testBtn.className = 'px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors';
-                    alert('Error sending test email: ' + error.message);
+                    PulseApp.ui.toast.error('Error sending test email: ' + error.message);
                     setTimeout(() => {
                         testBtn.textContent = originalText;
                         testBtn.className = 'px-3 py-1 bg-green-600 hover:bg-green-700 text-white text-xs font-medium rounded transition-colors';
@@ -2734,7 +2746,7 @@ PulseApp.ui.settings = (() => {
                     } else {
                         testBtn.textContent = '✗ Failed';
                         testBtn.className = 'px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors';
-                        alert('Test webhook failed: ' + result.error);
+                        PulseApp.ui.toast.error('Test webhook failed: ' + result.error);
                         setTimeout(() => {
                             testBtn.textContent = originalText;
                             testBtn.className = 'px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded transition-colors';
@@ -2743,7 +2755,7 @@ PulseApp.ui.settings = (() => {
                 } catch (error) {
                     testBtn.textContent = '✗ Error';
                     testBtn.className = 'px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded transition-colors';
-                    alert('Error sending test webhook: ' + error.message);
+                    PulseApp.ui.toast.error('Error sending test webhook: ' + error.message);
                     setTimeout(() => {
                         testBtn.textContent = originalText;
                         testBtn.className = 'px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium rounded transition-colors';
@@ -3656,14 +3668,20 @@ PulseApp.ui.settings = (() => {
             }
         } catch (error) {
             console.error('Error toggling dynamic rule:', error);
-            alert(`Failed to ${enabled ? 'enable' : 'disable'} rule: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to ${enabled ? 'enable' : 'disable'} rule: ${error.message}`);
         }
     };
 
     window.deleteDynamicRule = async function(ruleId) {
-        if (!confirm('Are you sure you want to delete this alert rule? This action cannot be undone.')) {
-            return;
-        }
+        PulseApp.ui.toast.confirm(
+            'Are you sure you want to delete this alert rule? This action cannot be undone.',
+            async () => {
+                await _performDeleteDynamicRule(ruleId);
+            }
+        );
+    }
+
+    async function _performDeleteDynamicRule(ruleId) {
         
         try {
             const response = await fetch(`/api/alerts/rules/${ruleId}`, {
@@ -3679,7 +3697,7 @@ PulseApp.ui.settings = (() => {
             }
         } catch (error) {
             console.error('Error deleting dynamic rule:', error);
-            alert(`Failed to delete rule: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to delete rule: ${error.message}`);
         }
     };
 
@@ -3697,9 +3715,15 @@ PulseApp.ui.settings = (() => {
     };
 
     window.deleteCustomThreshold = async function(endpointId, nodeId, vmid) {
-        if (!confirm(`Are you sure you want to delete the custom threshold for ${endpointId}:${vmid}?`)) {
-            return;
-        }
+        PulseApp.ui.toast.confirm(
+            `Are you sure you want to delete the custom threshold for ${endpointId}:${vmid}?`,
+            async () => {
+                await _performDeleteCustomThreshold(endpointId, nodeId, vmid);
+            }
+        );
+    }
+
+    async function _performDeleteCustomThreshold(endpointId, nodeId, vmid) {
         
         try {
             const response = await fetch(`/api/thresholds/${endpointId}/${nodeId}/${vmid}`, {
@@ -3715,7 +3739,7 @@ PulseApp.ui.settings = (() => {
             }
         } catch (error) {
             console.error('Error deleting custom threshold:', error);
-            alert(`Failed to delete custom threshold: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to delete custom threshold: ${error.message}`);
         }
     };
 

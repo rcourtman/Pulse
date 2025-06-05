@@ -693,6 +693,8 @@ PulseApp.ui.alertManagementModal = (() => {
         const addCustomBtn = document.getElementById('add-custom-alert-btn');
         if (addCustomBtn) {
             addCustomBtn.addEventListener('click', openCustomAlertModal);
+            // Initially hide the button since system tab is active by default
+            addCustomBtn.classList.add('hidden');
         }
 
         // Set up system alert toggles
@@ -735,6 +737,16 @@ PulseApp.ui.alertManagementModal = (() => {
         const targetContent = document.getElementById(`${tabName}-alert-rules-content`);
         if (targetContent) {
             targetContent.classList.remove('hidden');
+        }
+
+        // Toggle Add Custom Alert button visibility
+        const addCustomAlertBtn = document.getElementById('add-custom-alert-btn');
+        if (addCustomAlertBtn) {
+            if (tabName === 'custom') {
+                addCustomAlertBtn.classList.remove('hidden');
+            } else {
+                addCustomAlertBtn.classList.add('hidden');
+            }
         }
     }
 
@@ -1042,13 +1054,13 @@ PulseApp.ui.alertManagementModal = (() => {
     function saveWebhookConfiguration() {
         const webhookUrl = document.getElementById('webhook-url-input')?.value;
         if (!webhookUrl) {
-            alert('Please enter a webhook URL');
+            PulseApp.ui.toast.warning('Please enter a webhook URL');
             return;
         }
         
         // TODO: Implement webhook configuration saving
         console.log('Saving webhook configuration:', webhookUrl);
-        alert('Webhook configuration saved successfully!');
+        PulseApp.ui.toast.success('Webhook configuration saved successfully!');
     }
 
     function handleEmailProviderSelection(provider) {
@@ -1145,13 +1157,13 @@ PulseApp.ui.alertManagementModal = (() => {
         };
         
         if (!emailConfig.from || !emailConfig.to) {
-            alert('Please enter both sender and recipient email addresses');
+            PulseApp.ui.toast.warning('Please enter both sender and recipient email addresses');
             return;
         }
         
         // TODO: Implement actual email test
         console.log('Testing email configuration:', emailConfig);
-        alert('Test email functionality will be implemented with backend integration');
+        PulseApp.ui.toast.info('Test email functionality will be implemented with backend integration');
     }
     
     function saveEmailConfiguration() {
@@ -1168,7 +1180,7 @@ PulseApp.ui.alertManagementModal = (() => {
         
         // TODO: Implement saving to backend
         console.log('Saving email configuration:', emailConfig);
-        alert('Email configuration saved successfully!');
+        PulseApp.ui.toast.success('Email configuration saved successfully!');
     }
 
     function editSystemAlert(alertType) {
@@ -1242,7 +1254,7 @@ PulseApp.ui.alertManagementModal = (() => {
         // Update the UI immediately
         updateSystemAlertDisplay(alertType, alertConfig);
         
-        alert(`${alertType.charAt(0).toUpperCase() + alertType.slice(1)} alert settings saved successfully!`);
+        PulseApp.ui.toast.success(`${alertType.charAt(0).toUpperCase() + alertType.slice(1)} alert settings saved successfully!`);
         closeSystemAlertModal();
     }
     
@@ -1292,7 +1304,7 @@ PulseApp.ui.alertManagementModal = (() => {
     function testWebhookConnection() {
         const webhookUrl = document.getElementById('webhook-url-input')?.value;
         if (!webhookUrl) {
-            alert('Please enter a webhook URL first');
+            PulseApp.ui.toast.warning('Please enter a webhook URL first');
             return;
         }
         
@@ -1302,7 +1314,7 @@ PulseApp.ui.alertManagementModal = (() => {
         } else {
             // Fallback test
             console.log('Testing webhook:', webhookUrl);
-            alert('Webhook test functionality will be implemented');
+            PulseApp.ui.toast.info('Webhook test functionality will be implemented');
         }
     }
 
@@ -1654,7 +1666,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             console.log(`Alert rule ${existingAlert ? 'updated' : 'created'} successfully:`, result);
             
             const thresholdSummary = thresholds.map(t => `${t.type.toUpperCase()}: ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}`).join(', ');
-            alert(`Custom alert ${existingAlert ? 'updated' : 'created'} successfully!\n\nAlert: ${alertConfig.name}\nThresholds: ${thresholdSummary}\n\nRule ID: ${result.rule?.id || existingAlert?.id || 'Generated'}`);
+            PulseApp.ui.toast.success(`Custom alert ${existingAlert ? 'updated' : 'created'} successfully! Alert: ${alertConfig.name}`);
             
             // Close modal
             document.getElementById('custom-alert-modal').remove();
@@ -1664,7 +1676,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             
         } catch (error) {
             console.error('Failed to save custom alert:', error);
-            alert(`Failed to create custom alert: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to create custom alert: ${error.message}`);
         }
     }
 
@@ -1889,7 +1901,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             
         } catch (error) {
             console.error('Failed to toggle custom alert:', error);
-            alert(`Failed to ${enabled ? 'enable' : 'disable'} alert: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to ${enabled ? 'enable' : 'disable'} alert: ${error.message}`);
         }
     }
 
@@ -1913,15 +1925,15 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             
         } catch (error) {
             console.error('Failed to load alert for editing:', error);
-            alert(`Failed to load alert for editing: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to load alert for editing: ${error.message}`);
         }
     }
 
     async function deleteCustomAlert(alertId) {
-        if (!confirm('Are you sure you want to delete this custom alert? This action cannot be undone.')) {
-            return;
-        }
-        
+        await _performDeleteCustomAlert(alertId);
+    }
+
+    async function _performDeleteCustomAlert(alertId) {
         try {
             const response = await fetch(`/api/alerts/rules/${alertId}`, {
                 method: 'DELETE'
@@ -1932,12 +1944,12 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 throw new Error(errorData.error || `Server error: ${response.status}`);
             }
 
-            console.log(`Custom alert ${alertId} deleted`);
+            PulseApp.ui.toast.success('Custom alert deleted successfully');
             await loadCustomAlerts(); // Refresh display
             
         } catch (error) {
             console.error('Failed to delete custom alert:', error);
-            alert(`Failed to delete alert: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to delete alert: ${error.message}`);
         }
     }
 

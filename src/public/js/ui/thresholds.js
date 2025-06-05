@@ -134,7 +134,7 @@ PulseApp.ui.thresholds = (() => {
         const activeThresholds = _getActiveThresholds(thresholdState);
         
         if (activeThresholds.length === 0) {
-            alert('Please set at least one threshold to create an alert rule.');
+            PulseApp.ui.toast.warning('Please set at least one threshold to create an alert rule.');
             return;
         }
 
@@ -521,7 +521,7 @@ PulseApp.ui.thresholds = (() => {
             _displayAlertRulesModal(rules);
         } catch (error) {
             console.error('Error fetching alert rules:', error);
-            alert(`❌ Failed to fetch alert rules: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to fetch alert rules: ${error.message}`);
         }
     }
 
@@ -647,14 +647,20 @@ PulseApp.ui.thresholds = (() => {
             }
         } catch (error) {
             console.error('Error updating rule:', error);
-            alert(`❌ Failed to update rule: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to update rule: ${error.message}`);
         }
     }
 
     async function deleteRule(ruleId) {
-        if (!confirm('Are you sure you want to delete this alert rule? This action cannot be undone.')) {
-            return;
-        }
+        PulseApp.ui.toast.confirm(
+            'Are you sure you want to delete this alert rule? This action cannot be undone.',
+            async () => {
+                await _performDeleteRule(ruleId);
+            }
+        );
+    }
+
+    async function _performDeleteRule(ruleId) {
 
         try {
             const response = await fetch(`/api/alerts/rules/${ruleId}`, {
@@ -672,7 +678,7 @@ PulseApp.ui.thresholds = (() => {
             }
         } catch (error) {
             console.error('Error deleting rule:', error);
-            alert(`❌ Failed to delete rule: ${error.message}`);
+            PulseApp.ui.toast.error(`Failed to delete rule: ${error.message}`);
         }
     }
 
