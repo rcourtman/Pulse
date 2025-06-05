@@ -55,6 +55,13 @@ PulseApp.ui.alertManagementModal = (() => {
                                 </svg>
                                 Alert Rules
                             </button>
+                            <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="global-settings">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                Global Settings
+                            </button>
                             <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="notifications">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -177,6 +184,10 @@ PulseApp.ui.alertManagementModal = (() => {
             case 'alert-rules':
                 modalBody.innerHTML = renderAlertRulesTab();
                 initializeAlertRulesTab();
+                break;
+            case 'global-settings':
+                modalBody.innerHTML = renderGlobalSettingsTab();
+                initializeGlobalSettingsTab();
                 break;
             case 'notifications':
                 modalBody.innerHTML = renderNotificationsTab();
@@ -425,6 +436,152 @@ PulseApp.ui.alertManagementModal = (() => {
         `;
     }
 
+    function renderGlobalSettingsTab() {
+        // Get current configuration from PulseApp.config if available
+        const config = PulseApp.config || {};
+        const alerts = config.alerts || {};
+        
+        return `
+            <div class="space-y-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Global Alert Settings</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Configure default alert thresholds and behavior for all VMs and LXCs</p>
+                    </div>
+                </div>
+
+                <!-- Alert Type Configuration -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                    <h4 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Alert Types & Thresholds</h4>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mb-6">These settings apply to all VMs and LXCs unless overridden by custom thresholds.</p>
+                    
+                    <!-- Alert Type Toggles -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                        <div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">CPU Alerts</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="ALERT_CPU_ENABLED" ${alerts.cpu?.enabled !== false ? 'checked' : ''} class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Memory Alerts</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="ALERT_MEMORY_ENABLED" ${alerts.memory?.enabled !== false ? 'checked' : ''} class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Disk Alerts</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="ALERT_DISK_ENABLED" ${alerts.disk?.enabled !== false ? 'checked' : ''} class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-600 rounded-lg">
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Down Alerts</span>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" name="ALERT_DOWN_ENABLED" ${alerts.down?.enabled !== false ? 'checked' : ''} class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Threshold Configuration -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                CPU Threshold (%)
+                            </label>
+                            <input type="number" name="ALERT_CPU_THRESHOLD"
+                                   value="${alerts.cpu?.threshold || ''}"
+                                   placeholder="85 (default)"
+                                   min="50" max="100"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Alert when CPU usage exceeds this percentage</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Memory Threshold (%)
+                            </label>
+                            <input type="number" name="ALERT_MEMORY_THRESHOLD"
+                                   value="${alerts.memory?.threshold || ''}"
+                                   placeholder="90 (default)"
+                                   min="50" max="100"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Alert when memory usage exceeds this percentage</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Disk Threshold (%)
+                            </label>
+                            <input type="number" name="ALERT_DISK_THRESHOLD"
+                                   value="${alerts.disk?.threshold || ''}"
+                                   placeholder="95 (default)"
+                                   min="50" max="100"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Alert when disk usage exceeds this percentage</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom Thresholds Integration -->
+                <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <div>
+                            <h4 class="text-lg font-semibold text-blue-900 dark:text-blue-100">Custom Per-VM/LXC Thresholds</h4>
+                            <p class="text-sm text-blue-700 dark:text-blue-300">Override global settings for specific VMs or LXCs</p>
+                        </div>
+                        <button id="manage-custom-thresholds-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
+                            <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                            Add Custom Threshold
+                        </button>
+                    </div>
+                    <div id="custom-thresholds-list" class="space-y-2">
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Loading custom thresholds...</p>
+                    </div>
+                </div>
+
+                <!-- Advanced Alert Settings -->
+                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-6">
+                    <h4 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Advanced Settings</h4>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Alert Frequency (minutes)
+                            </label>
+                            <select name="ALERT_FREQUENCY" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="1">Every minute</option>
+                                <option value="5" selected>Every 5 minutes</option>
+                                <option value="10">Every 10 minutes</option>
+                                <option value="15">Every 15 minutes</option>
+                                <option value="30">Every 30 minutes</option>
+                            </select>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">How often to check for alert conditions</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                Alert Suppression (minutes)
+                            </label>
+                            <select name="ALERT_SUPPRESSION" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="0">No suppression</option>
+                                <option value="5">5 minutes</option>
+                                <option value="15" selected>15 minutes</option>
+                                <option value="30">30 minutes</option>
+                                <option value="60">1 hour</option>
+                            </select>
+                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Prevent duplicate alerts for the same condition</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     function initializeAlertsTab() {
         // Set up refresh button
         const refreshBtn = document.getElementById('refresh-alerts-btn');
@@ -551,6 +708,58 @@ PulseApp.ui.alertManagementModal = (() => {
                 console.log('Webhook notifications toggled:', e.target.checked);
             });
         }
+    }
+
+    function initializeGlobalSettingsTab() {
+        // Load current configuration
+        loadGlobalAlertConfig();
+        
+        // Set up custom thresholds management
+        const manageCustomBtn = document.getElementById('manage-custom-thresholds-btn');
+        if (manageCustomBtn) {
+            manageCustomBtn.addEventListener('click', () => {
+                // Integration with existing threshold modal from settings
+                if (PulseApp.ui.settings && PulseApp.ui.settings.showThresholdModal) {
+                    PulseApp.ui.settings.showThresholdModal();
+                } else {
+                    alert('Custom threshold management will be available soon');
+                }
+            });
+        }
+        
+        // Set up alert type toggles
+        const alertToggles = document.querySelectorAll('input[name^="ALERT_"][name$="_ENABLED"]');
+        alertToggles.forEach(toggle => {
+            toggle.addEventListener('change', (e) => {
+                console.log(`${e.target.name} toggled:`, e.target.checked);
+            });
+        });
+        
+        // Set up threshold inputs
+        const thresholdInputs = document.querySelectorAll('input[name$="_THRESHOLD"]');
+        thresholdInputs.forEach(input => {
+            input.addEventListener('change', (e) => {
+                console.log(`${e.target.name} changed:`, e.target.value);
+            });
+        });
+        
+        // Set up advanced settings
+        const frequencySelect = document.querySelector('select[name="ALERT_FREQUENCY"]');
+        if (frequencySelect) {
+            frequencySelect.addEventListener('change', (e) => {
+                console.log('Alert frequency changed:', e.target.value);
+            });
+        }
+        
+        const suppressionSelect = document.querySelector('select[name="ALERT_SUPPRESSION"]');
+        if (suppressionSelect) {
+            suppressionSelect.addEventListener('change', (e) => {
+                console.log('Alert suppression changed:', e.target.value);
+            });
+        }
+        
+        // Load custom thresholds
+        loadCustomThresholds();
     }
     
     function switchNotificationSubTab(tabName) {
@@ -1447,6 +1656,65 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         } catch (error) {
             console.error('Failed to delete custom alert:', error);
             alert(`Failed to delete alert: ${error.message}`);
+        }
+    }
+
+    async function loadGlobalAlertConfig() {
+        try {
+            // Load configuration from the backend
+            const response = await fetch('/api/config');
+            if (response.ok) {
+                const config = await response.json();
+                PulseApp.config = config; // Update global config
+                
+                // Update the form values if they're loaded
+                updateGlobalSettingsForm(config);
+            }
+        } catch (error) {
+            console.error('Failed to load global alert configuration:', error);
+        }
+    }
+    
+    function updateGlobalSettingsForm(config) {
+        const alerts = config.alerts || {};
+        
+        // Update alert type toggles
+        document.querySelector('input[name="ALERT_CPU_ENABLED"]').checked = alerts.cpu?.enabled !== false;
+        document.querySelector('input[name="ALERT_MEMORY_ENABLED"]').checked = alerts.memory?.enabled !== false;
+        document.querySelector('input[name="ALERT_DISK_ENABLED"]').checked = alerts.disk?.enabled !== false;
+        document.querySelector('input[name="ALERT_DOWN_ENABLED"]').checked = alerts.down?.enabled !== false;
+        
+        // Update threshold values
+        const cpuInput = document.querySelector('input[name="ALERT_CPU_THRESHOLD"]');
+        if (cpuInput) cpuInput.value = alerts.cpu?.threshold || '';
+        
+        const memoryInput = document.querySelector('input[name="ALERT_MEMORY_THRESHOLD"]');
+        if (memoryInput) memoryInput.value = alerts.memory?.threshold || '';
+        
+        const diskInput = document.querySelector('input[name="ALERT_DISK_THRESHOLD"]');
+        if (diskInput) diskInput.value = alerts.disk?.threshold || '';
+    }
+    
+    async function loadCustomThresholds() {
+        const customThresholdsList = document.getElementById('custom-thresholds-list');
+        if (!customThresholdsList) return;
+        
+        try {
+            // For now, show placeholder content
+            // This would integrate with the existing custom threshold system
+            customThresholdsList.innerHTML = `
+                <div class="text-center py-4">
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">No custom thresholds configured</p>
+                    <p class="text-xs text-gray-400 dark:text-gray-500">Click "Add Custom Threshold" to create VM/LXC-specific settings</p>
+                </div>
+            `;
+        } catch (error) {
+            console.error('Failed to load custom thresholds:', error);
+            customThresholdsList.innerHTML = `
+                <div class="text-center py-4">
+                    <p class="text-sm text-red-500">Failed to load custom thresholds</p>
+                </div>
+            `;
         }
     }
 
