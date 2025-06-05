@@ -458,56 +458,49 @@ PulseApp.ui.alertManagementModal = (() => {
         systemAlertsContent.innerHTML = systemAlerts.map(alert => createSystemAlertCard(alert)).join('');
     }
 
-    function loadCustomAlerts() {
+    async function loadCustomAlerts() {
         const customAlertsContent = document.getElementById('custom-alerts-content');
         if (!customAlertsContent) return;
         
-        // Load custom alerts from local storage (temporary solution until backend integration)
-        const storedAlerts = getCustomAlertsFromStorage();
-        
-        if (storedAlerts.length === 0) {
+        try {
+            // Load custom alerts from the backend API
+            const response = await fetch('/api/alerts/rules');
+            if (!response.ok) {
+                throw new Error(`Failed to fetch alert rules: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const customAlerts = data.rules ? data.rules.filter(rule => 
+                rule.group === 'custom' || rule.type === 'compound_threshold'
+            ) : [];
+            
+            if (customAlerts.length === 0) {
+                customAlertsContent.innerHTML = `
+                    <div class="text-center py-6">
+                        <svg class="w-8 h-8 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">No custom alerts configured</p>
+                        <button onclick="PulseApp.ui.alertManagementModal.openCustomAlertModal()" 
+                                class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
+                            Create your first custom alert
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Display the custom alerts
+            customAlertsContent.innerHTML = customAlerts.map(alert => createCustomAlertCard(alert)).join('');
+            
+        } catch (error) {
+            console.error('[AlertManagementModal] Failed to load custom alerts:', error);
             customAlertsContent.innerHTML = `
-                <div class="text-center py-6">
-                    <svg class="w-8 h-8 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                    </svg>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mb-2">No custom alerts configured</p>
-                    <button onclick="PulseApp.ui.alertManagementModal.openCustomAlertModal()" 
-                            class="text-xs text-blue-600 dark:text-blue-400 hover:underline">
-                        Create your first custom alert
-                    </button>
+                <div class="text-center py-6 text-red-500 dark:text-red-400">
+                    <p class="text-sm">Failed to load custom alerts</p>
+                    <p class="text-xs">${error.message}</p>
                 </div>
             `;
-            return;
-        }
-        
-        // Display the custom alerts
-        customAlertsContent.innerHTML = storedAlerts.map(alert => createCustomAlertCard(alert)).join('');
-    }
-
-    function getCustomAlertsFromStorage() {
-        try {
-            const stored = localStorage.getItem('pulse-custom-alerts');
-            return stored ? JSON.parse(stored) : [];
-        } catch (error) {
-            console.warn('[AlertManagementModal] Failed to load custom alerts from storage:', error);
-            return [];
-        }
-    }
-
-    function saveCustomAlertToStorage(alertConfig) {
-        try {
-            const existingAlerts = getCustomAlertsFromStorage();
-            const newAlert = {
-                ...alertConfig,
-                id: `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-            };
-            existingAlerts.push(newAlert);
-            localStorage.setItem('pulse-custom-alerts', JSON.stringify(existingAlerts));
-            return newAlert;
-        } catch (error) {
-            console.error('[AlertManagementModal] Failed to save custom alert to storage:', error);
-            throw error;
         }
     }
 
@@ -518,26 +511,30 @@ PulseApp.ui.alertManagementModal = (() => {
             </span>`
         ).join('') || '';
 
-        const createdDate = new Date(alert.createdAt).toLocaleDateString();
+        const createdDate = alert.createdAt ? new Date(alert.createdAt).toLocaleDateString() : 'Unknown';
+        const targetDisplay = alert.targetType === 'all' ? 'All VMs/LXCs' : 
+                             alert.targetType === 'vm' ? 'VMs only' :
+                             alert.targetType === 'lxc' ? 'LXCs only' :
+                             alert.specificTarget || alert.targetType?.toUpperCase() || 'All';
         
         return `
             <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
                 <div class="flex items-start justify-between mb-2">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
-                            <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${alert.name}</h5>
-                            <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full">
-                                ${alert.enabled ? 'Enabled' : 'Disabled'}
+                            <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${alert.name || alert.description || 'Unnamed Alert'}</h5>
+                            <span class="text-xs px-2 py-0.5 ${alert.enabled !== false ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'} rounded-full">
+                                ${alert.enabled !== false ? 'Enabled' : 'Disabled'}
                             </span>
                         </div>
                         <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                            Created: ${createdDate} • Target: ${alert.targetType === 'all' ? 'All VMs/LXCs' : alert.targetType.toUpperCase()}
+                            Created: ${createdDate} • Target: ${targetDisplay}
                         </div>
                     </div>
                     <div class="flex gap-1">
-                        <button onclick="PulseApp.ui.alertManagementModal.toggleCustomAlert('${alert.id}', ${!alert.enabled})" 
+                        <button onclick="PulseApp.ui.alertManagementModal.toggleCustomAlert('${alert.id}', ${alert.enabled === false})" 
                                 class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
-                            ${alert.enabled ? 'Disable' : 'Enable'}
+                            ${alert.enabled !== false ? 'Disable' : 'Enable'}
                         </button>
                         <button onclick="PulseApp.ui.alertManagementModal.deleteCustomAlert('${alert.id}')" 
                                 class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
@@ -904,7 +901,7 @@ PulseApp.ui.alertManagementModal = (() => {
         }
     }
 
-    function saveCustomAlert() {
+    async function saveCustomAlert() {
         const form = document.getElementById('custom-alert-form');
         const formData = new FormData(form);
         
@@ -955,21 +952,35 @@ PulseApp.ui.alertManagementModal = (() => {
         console.log('Creating custom alert:', alertConfig);
 
         try {
-            // Save to local storage for now
-            const savedAlert = saveCustomAlertToStorage(alertConfig);
+            // Save to backend via API
+            const response = await fetch('/api/alerts/rules', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(alertConfig)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            console.log('Alert rule created successfully:', result);
             
             const thresholdSummary = thresholds.map(t => `${t.type.toUpperCase()}: ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}`).join(', ');
-            alert(`Custom alert created successfully!\n\nAlert: ${alertConfig.name}\nThresholds: ${thresholdSummary}\n\nNote: Currently saved locally. Backend integration coming soon.`);
+            alert(`Custom alert created successfully!\n\nAlert: ${alertConfig.name}\nThresholds: ${thresholdSummary}\n\nRule ID: ${result.rule?.id || 'Generated'}`);
             
             // Close modal
             document.getElementById('custom-alert-modal').remove();
             
             // Refresh the custom alerts list
-            loadCustomAlerts();
+            await loadCustomAlerts();
             
         } catch (error) {
             console.error('Failed to save custom alert:', error);
-            alert('Failed to save custom alert. Please try again.');
+            alert(`Failed to create custom alert: ${error.message}`);
         }
     }
 
@@ -1174,35 +1185,51 @@ PulseApp.ui.alertManagementModal = (() => {
         console.log('Saving alert configuration...');
     }
 
-    function toggleCustomAlert(alertId, enabled) {
+    async function toggleCustomAlert(alertId, enabled) {
         try {
-            const alerts = getCustomAlertsFromStorage();
-            const alertIndex = alerts.findIndex(a => a.id === alertId);
-            
-            if (alertIndex >= 0) {
-                alerts[alertIndex].enabled = enabled;
-                localStorage.setItem('pulse-custom-alerts', JSON.stringify(alerts));
-                loadCustomAlerts(); // Refresh display
-                console.log(`Custom alert ${alertId} ${enabled ? 'enabled' : 'disabled'}`);
+            const response = await fetch(`/api/alerts/rules/${alertId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ enabled })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
             }
+
+            console.log(`Custom alert ${alertId} ${enabled ? 'enabled' : 'disabled'}`);
+            await loadCustomAlerts(); // Refresh display
+            
         } catch (error) {
             console.error('Failed to toggle custom alert:', error);
+            alert(`Failed to ${enabled ? 'enable' : 'disable'} alert: ${error.message}`);
         }
     }
 
-    function deleteCustomAlert(alertId) {
+    async function deleteCustomAlert(alertId) {
         if (!confirm('Are you sure you want to delete this custom alert? This action cannot be undone.')) {
             return;
         }
         
         try {
-            const alerts = getCustomAlertsFromStorage();
-            const filteredAlerts = alerts.filter(a => a.id !== alertId);
-            localStorage.setItem('pulse-custom-alerts', JSON.stringify(filteredAlerts));
-            loadCustomAlerts(); // Refresh display
+            const response = await fetch(`/api/alerts/rules/${alertId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
             console.log(`Custom alert ${alertId} deleted`);
+            await loadCustomAlerts(); // Refresh display
+            
         } catch (error) {
             console.error('Failed to delete custom alert:', error);
+            alert(`Failed to delete alert: ${error.message}`);
         }
     }
 
