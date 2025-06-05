@@ -179,9 +179,6 @@ PulseApp.ui.settings = (() => {
             case 'system':
                 content = renderSystemTab(advanced, safeConfig);
                 break;
-            case 'alert-management':
-                content = renderAlertManagementTab();
-                break;
             case 'diagnostics':
                 content = renderDiagnosticsTab();
                 break;
@@ -212,9 +209,6 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'alerts') {
             // Load threshold configurations when alerts tab is opened
             loadThresholdConfigurations();
-        } else if (activeTab === 'alert-management') {
-            // Initialize alert management tab
-            initializeAlertManagementTab();
         }
     }
 
@@ -4325,7 +4319,16 @@ PulseApp.ui.settings = (() => {
         switchToChannel,
         acknowledgeStableChoice,
         proceedWithStableSwitch,
-        clearUpdateCache
+        clearUpdateCache,
+        // Expose alert-related functions for the alert management modal
+        renderAlertsTab,
+        renderAlertManagementTab,
+        loadThresholdConfigurations,
+        setupEmailProviderSelection,
+        setupEmailTestButton,
+        setupWebhookTestButton,
+        initializeAlertManagementTab,
+        getCurrentConfig: () => currentConfig
     };
 })();
 

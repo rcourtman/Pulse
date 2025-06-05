@@ -138,16 +138,21 @@ PulseApp.ui.thresholds = (() => {
             return;
         }
 
-        // Show modal for creating alert rule
-        _showCreateAlertRuleModal(activeThresholds);
+        // Open the custom alert creation modal with pre-populated threshold values
+        if (PulseApp.ui && PulseApp.ui.alertManagementModal && PulseApp.ui.alertManagementModal.openCustomAlertModal) {
+            PulseApp.ui.alertManagementModal.openCustomAlertModal(activeThresholds);
+        } else {
+            // Fallback - show legacy modal if alert management isn't available
+            _showCreateAlertRuleModal(activeThresholds);
+        }
     }
 
     function _handleViewAlertRules() {
-        // Open the unified Alert Management interface in settings
-        if (PulseApp.ui && PulseApp.ui.settings && PulseApp.ui.settings.openModalWithTab) {
-            PulseApp.ui.settings.openModalWithTab('alert-management');
+        // Open the Alert Management modal directly to the Alert Rules tab
+        if (PulseApp.ui && PulseApp.ui.alertManagementModal && PulseApp.ui.alertManagementModal.openModal) {
+            PulseApp.ui.alertManagementModal.openModal('alert-rules');
         } else {
-            // Fallback to the old modal if settings isn't available
+            // Fallback to the old modal if alert management isn't available
             _showViewAlertRulesModal();
         }
     }
