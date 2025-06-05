@@ -256,13 +256,12 @@ PulseApp.ui.alertManagementModal = (() => {
                     <!-- System Alerts Tab Content (Default) -->
                     <div id="system-alert-rules-content" class="alert-rules-sub-content">
                         <div class="space-y-6">
-                            <!-- System Alert Rules List -->
-                            <div class="space-y-4">
-                                <div class="flex items-center justify-between">
-                                    <h4 class="text-lg font-medium text-gray-900 dark:text-gray-100">System Alert Rules</h4>
-                                    <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-full">Built-in</span>
+                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                                <div>
+                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">System Alert Rules</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Global monitoring rules that apply to all VMs and LXCs unless overridden by custom settings</p>
                                 </div>
-                                <p class="text-sm text-gray-500 dark:text-gray-400">Global monitoring rules that apply to all VMs and LXCs unless overridden by custom settings.</p>
+                                <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-full">Built-in</span>
                             </div>
                             
                             <div id="system-alerts-content" class="space-y-3">
@@ -274,25 +273,23 @@ PulseApp.ui.alertManagementModal = (() => {
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">CPU Alert</h5>
                                                 <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full" id="cpu-status-badge">Enabled</span>
                                             </div>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">Triggers when CPU usage exceeds <span id="cpu-threshold-display">85%</span></p>
-                                            <div class="mt-2">
-                                                <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2">All VMs/LXCs</span>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                                Built-in system rule • Target: All VMs/LXCs
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">Built-in system rule</span>
-                                        <div class="flex items-center space-x-2">
-                                            <label class="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" id="cpu-alert-enabled" class="sr-only peer" checked>
-                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                            </label>
-                                            <button onclick="editSystemAlert('cpu')" class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                                </svg>
+                                        <div class="flex gap-1">
+                                            <button onclick="editSystemAlert('cpu')" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
                                                 Edit
                                             </button>
+                                            <button onclick="toggleSystemAlert('cpu', false)" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded" id="cpu-toggle-btn">
+                                                Disable
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Triggers when CPU usage exceeds <span id="cpu-threshold-display">85%</span></p>
+                                        <div class="flex flex-wrap">
+                                            <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">CPU ≥ <span id="cpu-threshold-badge">85</span>%</span>
                                         </div>
                                     </div>
                                 </div>
@@ -305,25 +302,23 @@ PulseApp.ui.alertManagementModal = (() => {
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Memory Alert</h5>
                                                 <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full" id="memory-status-badge">Enabled</span>
                                             </div>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">Triggers when memory usage exceeds <span id="memory-threshold-display">90%</span></p>
-                                            <div class="mt-2">
-                                                <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2">All VMs/LXCs</span>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                                Built-in system rule • Target: All VMs/LXCs
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">Built-in system rule</span>
-                                        <div class="flex items-center space-x-2">
-                                            <label class="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" id="memory-alert-enabled" class="sr-only peer" checked>
-                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                            </label>
-                                            <button onclick="editSystemAlert('memory')" class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                                </svg>
+                                        <div class="flex gap-1">
+                                            <button onclick="editSystemAlert('memory')" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
                                                 Edit
                                             </button>
+                                            <button onclick="toggleSystemAlert('memory', false)" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded" id="memory-toggle-btn">
+                                                Disable
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Triggers when memory usage exceeds <span id="memory-threshold-display">90%</span></p>
+                                        <div class="flex flex-wrap">
+                                            <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">Memory ≥ <span id="memory-threshold-badge">90</span>%</span>
                                         </div>
                                     </div>
                                 </div>
@@ -336,25 +331,23 @@ PulseApp.ui.alertManagementModal = (() => {
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Disk Alert</h5>
                                                 <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full" id="disk-status-badge">Enabled</span>
                                             </div>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">Triggers when disk usage exceeds <span id="disk-threshold-display">95%</span></p>
-                                            <div class="mt-2">
-                                                <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2">All VMs/LXCs</span>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                                Built-in system rule • Target: All VMs/LXCs
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">Built-in system rule</span>
-                                        <div class="flex items-center space-x-2">
-                                            <label class="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" id="disk-alert-enabled" class="sr-only peer" checked>
-                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                            </label>
-                                            <button onclick="editSystemAlert('disk')" class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                                </svg>
+                                        <div class="flex gap-1">
+                                            <button onclick="editSystemAlert('disk')" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
                                                 Edit
                                             </button>
+                                            <button onclick="toggleSystemAlert('disk', false)" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded" id="disk-toggle-btn">
+                                                Disable
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Triggers when disk usage exceeds <span id="disk-threshold-display">95%</span></p>
+                                        <div class="flex flex-wrap">
+                                            <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">Disk ≥ <span id="disk-threshold-badge">95</span>%</span>
                                         </div>
                                     </div>
                                 </div>
@@ -367,25 +360,23 @@ PulseApp.ui.alertManagementModal = (() => {
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Down Alert</h5>
                                                 <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full" id="down-status-badge">Enabled</span>
                                             </div>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400">Triggers when VM/LXC becomes unreachable or stops responding</p>
-                                            <div class="mt-2">
-                                                <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2">All VMs/LXCs</span>
+                                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                                                Built-in system rule • Target: All VMs/LXCs
                                             </div>
                                         </div>
-                                    </div>
-                                    <div class="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-gray-700">
-                                        <span class="text-xs text-gray-500 dark:text-gray-400">Built-in system rule</span>
-                                        <div class="flex items-center space-x-2">
-                                            <label class="relative inline-flex items-center cursor-pointer">
-                                                <input type="checkbox" id="down-alert-enabled" class="sr-only peer" checked>
-                                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                            </label>
-                                            <button onclick="editSystemAlert('down')" class="inline-flex items-center px-3 py-1.5 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                                                </svg>
+                                        <div class="flex gap-1">
+                                            <button onclick="editSystemAlert('down')" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
                                                 Edit
                                             </button>
+                                            <button onclick="toggleSystemAlert('down', false)" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded" id="down-toggle-btn">
+                                                Disable
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Triggers when VM/LXC becomes unreachable or stops responding</p>
+                                        <div class="flex flex-wrap">
+                                            <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">System Down Alert</span>
                                         </div>
                                     </div>
                                 </div>
@@ -955,41 +946,43 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function createSystemAlertCard(alert) {
-        const deliveryBadges = `
-            <div class="flex items-center space-x-1">
-                <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded font-medium" title="Always delivered to Pulse UI">
-                    Pulse
-                </span>
-                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded" title="Configure in Notifications tab">
-                    Email
-                </span>
-                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded" title="Configure in Notifications tab">
-                    Webhook
-                </span>
-            </div>
-        `;
+        const thresholdBadge = alert.threshold ? 
+            `<span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">
+                ${alert.name.split(' ')[0]} ≥ ${alert.threshold}%
+            </span>` : '';
         
         return `
-            <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg">
-                <div class="flex-1">
-                    <div class="flex items-center space-x-2 mb-1">
-                        <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${alert.name}</h5>
-                        ${alert.enabled ? 
-                            '<span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full">Enabled</span>' : 
-                            '<span class="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300 rounded-full">Disabled</span>'
-                        }
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
+                <div class="flex items-start justify-between mb-2">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${alert.name}</h5>
+                            <span class="text-xs px-2 py-0.5 ${alert.enabled ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'} rounded-full">
+                                ${alert.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            Built-in system rule • Target: All VMs/LXCs
+                        </div>
                     </div>
-                    <p class="text-xs text-gray-600 dark:text-gray-400 mb-2">${alert.description}</p>
-                    ${deliveryBadges}
+                    <div class="flex gap-1">
+                        ${alert.threshold ? `
+                            <button onclick="editSystemAlert('${alert.id}')" 
+                                    class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
+                                Edit
+                            </button>
+                        ` : ''}
+                        <button onclick="toggleSystemAlert('${alert.id}', ${!alert.enabled})" 
+                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                            ${alert.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                    </div>
                 </div>
-                <div class="flex items-center space-x-2">
-                    ${alert.threshold ? `
-                        <span class="text-xs text-gray-500 dark:text-gray-400">${alert.threshold}%</span>
-                    ` : ''}
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" ${alert.enabled ? 'checked' : ''} class="sr-only peer" onchange="toggleSystemAlert('${alert.id}', this.checked)">
-                        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                    </label>
+                <div>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">${alert.description}</p>
+                    <div class="flex flex-wrap">
+                        ${thresholdBadge}
+                    </div>
                 </div>
             </div>
         `;
@@ -1956,8 +1949,27 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     
     window.toggleSystemAlert = function(alertId, enabled) {
         console.log(`Toggling system alert ${alertId} to ${enabled ? 'enabled' : 'disabled'}`);
-        // TODO: Implement system alert toggle functionality
-        // This would update the configuration and save it
+        
+        // Update the status badge
+        const statusBadge = document.getElementById(`${alertId}-status-badge`);
+        if (statusBadge) {
+            statusBadge.textContent = enabled ? 'Enabled' : 'Disabled';
+            statusBadge.className = `text-xs px-2 py-0.5 rounded-full ${
+                enabled 
+                    ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300' 
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+            }`;
+        }
+        
+        // Update the toggle button
+        const toggleBtn = document.getElementById(`${alertId}-toggle-btn`);
+        if (toggleBtn) {
+            toggleBtn.textContent = enabled ? 'Disable' : 'Enable';
+            toggleBtn.onclick = () => toggleSystemAlert(alertId, !enabled);
+        }
+        
+        // TODO: Save the configuration to backend
+        updateSystemAlertStatus(alertId, enabled);
     };
 
     // Public API
