@@ -203,9 +203,6 @@ PulseApp.ui.settings = (() => {
                     onUpdateChannelChange(channelSelect.value);
                 }
             }, 0);
-        } else if (activeTab === 'alerts') {
-            // Load threshold configurations when alerts tab is opened
-            loadThresholdConfigurations();
         }
     }
 
@@ -1289,8 +1286,6 @@ PulseApp.ui.settings = (() => {
             return !!(data.PBS_HOST && data.PBS_HOST.trim()) ||
                    !!(data.PBS_HOST_2 && data.PBS_HOST_2.trim()) ||
                    !!(data.PBS_HOST_3 && data.PBS_HOST_3.trim());
-        } else if (tabName === 'alerts') {
-            // For alerts tab, any threshold value or email/webhook config is significant
             return Object.keys(data).some(key => {
                 const value = data[key];
                 if (typeof value === 'string' && value.trim()) return true;
@@ -3422,8 +3417,11 @@ PulseApp.ui.settings = (() => {
         
         if (addCustomBtn) {
             addCustomBtn.addEventListener('click', () => {
-                // Switch to alerts tab to add custom threshold
-                switchTab('alerts');
+                // Open alert management modal instead
+                if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.alertManagementModal) {
+                    closeModal();
+                    window.PulseApp.ui.alertManagementModal.openModal();
+                }
                 setTimeout(() => {
                     // Scroll to the custom threshold section
                     const customSection = document.querySelector('h3:contains("Custom Threshold Configurations")');
@@ -3759,8 +3757,10 @@ PulseApp.ui.settings = (() => {
     };
 
     window.editCustomThreshold = function(endpointId, nodeId, vmid) {
-        // Switch to alerts tab to edit
-        switchTab('alerts');
+        // Open alert management modal instead
+        if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.alertManagementModal) {
+            window.PulseApp.ui.alertManagementModal.openModal();
+        }
         setTimeout(() => {
             // Scroll to custom threshold section and highlight it
             const customSection = document.querySelector('h3[contains("Custom Threshold Configurations")]');
