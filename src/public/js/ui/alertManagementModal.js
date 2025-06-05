@@ -949,8 +949,18 @@ PulseApp.ui.alertManagementModal = (() => {
                 </div>
                 <div>
                     <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Alert triggers when ANY condition is met:</p>
-                    <div class="flex flex-wrap">
+                    <div class="flex flex-wrap mb-3">
                         ${thresholdsList}
+                    </div>
+                    <div class="text-xs text-gray-600 dark:text-gray-400">
+                        <strong>Notifications:</strong>
+                        <div class="flex items-center gap-1 mt-1">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300">
+                                Pulse UI
+                            </span>
+                            ${alert.sendEmail ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300">Email</span>' : ''}
+                            ${alert.sendWebhook ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300">Webhook</span>' : ''}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1788,6 +1798,20 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         
         // Initialize threshold preview
         updateThresholdPreview();
+
+        // Pre-populate notification checkboxes for existing alerts
+        if (existingAlert) {
+            const emailCheckbox = document.querySelector('input[name="sendEmail"]');
+            const webhookCheckbox = document.querySelector('input[name="sendWebhook"]');
+            
+            if (emailCheckbox && typeof existingAlert.sendEmail === 'boolean') {
+                emailCheckbox.checked = existingAlert.sendEmail;
+            }
+            
+            if (webhookCheckbox && typeof existingAlert.sendWebhook === 'boolean') {
+                webhookCheckbox.checked = existingAlert.sendWebhook;
+            }
+        }
 
         // Handle save
         if (saveBtn) {
