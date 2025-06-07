@@ -536,17 +536,122 @@ app.post('/api/alerts/rules/reload', async (req, res) => {
 // Endpoint to trigger immediate alert evaluation
 app.post('/api/alerts/evaluate', async (req, res) => {
     try {
-        console.log('====== API ENDPOINT HIT: /api/alerts/evaluate ======');
-        console.log('[AlertManager] Triggering immediate alert evaluation...');
-        console.log('[DEBUG] stateManager exists:', !!stateManager);
-        console.log('[DEBUG] stateManager.alertManager exists:', !!stateManager.alertManager);
-        console.log('[DEBUG] evaluateCurrentState method exists:', !!stateManager.alertManager?.evaluateCurrentState);
+        if (process.env.ALERT_DEBUG === 'true') {
+            console.log('[AlertDebug] Manual alert evaluation triggered via API');
+        }
         
         stateManager.alertManager.evaluateCurrentState();
         res.json({ success: true, message: "Alert evaluation triggered" });
     } catch (error) {
         console.error("Error triggering alert evaluation:", error);
         res.status(500).json({ error: "Failed to trigger alert evaluation" });
+    }
+});
+
+// Debug endpoint for alert threshold evaluation (without rule ID)
+app.get('/api/alerts/debug', (req, res) => {
+    try {
+        const ruleId = req.query.ruleId;
+        const currentState = stateManager.getState();
+        const allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
+        const metrics = currentState.metrics || [];
+        
+        const debugInfo = {
+            timestamp: new Date().toISOString(),
+            totalGuests: allGuests.length,
+            totalMetrics: metrics.length,
+            debugMode: process.env.ALERT_DEBUG === 'true',
+            guests: []
+        };
+        
+        // If specific rule requested, filter to that rule
+        let rulesToCheck = stateManager.alertManager.getRules();
+        if (ruleId) {
+            rulesToCheck = rulesToCheck.filter(r => r.id === ruleId);
+            if (rulesToCheck.length === 0) {
+                return res.status(404).json({ error: `Rule '${ruleId}' not found` });
+            }
+        }
+        
+        // Evaluate each guest against each rule
+        allGuests.forEach(guest => {
+            const guestMetrics = metrics.find(m => 
+                m.endpointId === guest.endpointId &&
+                m.node === guest.node &&
+                m.id === guest.vmid
+            );
+            
+            const guestDebug = {
+                name: guest.name,
+                vmid: guest.vmid,
+                node: guest.node,
+                type: guest.type,
+                hasMetrics: !!guestMetrics,
+                rules: []
+            };
+            
+            if (guestMetrics && guestMetrics.current) {
+                // Calculate disk percentage if available
+                if (guest.maxdisk && guestMetrics.current.disk) {
+                    const diskPercentage = (guestMetrics.current.disk / guest.maxdisk) * 100;
+                    guestDebug.diskUsage = {
+                        raw: guestMetrics.current.disk,
+                        max: guest.maxdisk,
+                        percentage: Math.round(diskPercentage * 100) / 100
+                    };
+                }
+                
+                guestDebug.currentMetrics = {
+                    cpu: guestMetrics.current.cpu,
+                    memory: guestMetrics.current.memory,
+                    disk: guestMetrics.current.disk
+                };
+            }
+            
+            // Check each rule
+            rulesToCheck.forEach(rule => {
+                if (rule.type === 'compound_threshold' && rule.thresholds) {
+                    const ruleDebug = {
+                        ruleId: rule.id,
+                        ruleName: rule.name,
+                        thresholds: [],
+                        allThresholdsMet: true
+                    };
+                    
+                    rule.thresholds.forEach(threshold => {
+                        let metricValue = null;
+                        let thresholdMet = false;
+                        
+                        if (guestMetrics && guestMetrics.current) {
+                            metricValue = stateManager.alertManager.evaluateThresholdCondition(threshold, guestMetrics.current, guest) ? 
+                                stateManager.alertManager.getThresholdCurrentValue(threshold, guestMetrics.current, guest) : null;
+                            thresholdMet = stateManager.alertManager.evaluateThresholdCondition(threshold, guestMetrics.current, guest);
+                        }
+                        
+                        ruleDebug.thresholds.push({
+                            metric: threshold.metric,
+                            condition: threshold.condition,
+                            threshold: threshold.threshold,
+                            currentValue: metricValue,
+                            met: thresholdMet
+                        });
+                        
+                        if (!thresholdMet) {
+                            ruleDebug.allThresholdsMet = false;
+                        }
+                    });
+                    
+                    guestDebug.rules.push(ruleDebug);
+                }
+            });
+            
+            debugInfo.guests.push(guestDebug);
+        });
+        
+        res.json(debugInfo);
+    } catch (error) {
+        console.error("Error in alert debug endpoint:", error);
+        res.status(500).json({ error: "Failed to generate debug information" });
     }
 });
 
@@ -1178,6 +1283,18 @@ stateManager.alertManager.on('alertResolved', (alert) => {
     }
 });
 
+stateManager.alertManager.on('alertEscalated', (alert) => {
+    if (io.engine.clientsCount > 0) {
+        io.emit('alertEscalated', alert);
+    }
+});
+
+stateManager.alertManager.on('alertAcknowledged', (alert) => {
+    if (io.engine.clientsCount > 0) {
+        io.emit('alertAcknowledged', alert);
+    }
+});
+
 // --- Global State Variables ---
 // These will hold the latest fetched data
 // let currentNodes = [];
@@ -1523,20 +1640,50 @@ async function startServer() {
         
         // Setup hot reload in development mode
         if (process.env.NODE_ENV === 'development' && chokidar) {
-          const publicPath = path.join(__dirname, '../src/public');
-          console.log(`Watching for changes in ${publicPath}`);
-          const watcher = chokidar.watch(publicPath, { 
-            ignored: /(^|[\\\/])\./, // ignore dotfiles
+          const watchPaths = [
+            path.join(__dirname, '../src/public'),    // Frontend files
+            path.join(__dirname, './'),                // Server files
+            path.join(__dirname, '../data'),           // Config files
+          ];
+          
+          console.log(`[Hot Reload] Watching for changes in:`);
+          watchPaths.forEach(watchPath => console.log(`  - ${watchPath}`));
+          
+          const watcher = chokidar.watch(watchPaths, { 
+            ignored: [
+              /(^|[\\\/])\../, // ignore dotfiles
+              /node_modules/,  // ignore node_modules
+              /\.log$/,        // ignore log files
+              /\.tmp$/,        // ignore temp files
+              /\.test\.js$/,   // ignore test files
+              /coverage/,      // ignore coverage directory
+              /temp/,          // ignore temp directory
+              /alert-rules\.json$/, // ignore alert rules runtime data
+              /acknowledgements\.json$/, // ignore acknowledgements runtime data
+              /custom-thresholds\.json$/ // ignore custom thresholds runtime data
+            ],
             persistent: true,
             ignoreInitial: true // Don't trigger on initial scan
           });
           
           watcher.on('change', (filePath) => {
-            // console.log(`File changed: ${filePath}. Triggering hot reload.`);
+            console.log(`[Hot Reload] File changed: ${path.relative(process.cwd(), filePath)}`);
             io.emit('hotReload'); // Notify clients to reload
           });
           
-          watcher.on('error', error => console.error(`Watcher error: ${error}`));
+          watcher.on('add', (filePath) => {
+            console.log(`[Hot Reload] File added: ${path.relative(process.cwd(), filePath)}`);
+            io.emit('hotReload'); // Notify clients to reload
+          });
+          
+          watcher.on('unlink', (filePath) => {
+            console.log(`[Hot Reload] File removed: ${path.relative(process.cwd(), filePath)}`);
+            io.emit('hotReload'); // Notify clients to reload
+          });
+          
+          watcher.on('error', error => console.error(`[Hot Reload] Watcher error: ${error}`));
+          
+          console.log(`[Hot Reload] File watcher active - changes will trigger browser reload`);
         }
     });
 }

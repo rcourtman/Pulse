@@ -940,9 +940,9 @@ class AlertManager extends EventEmitter {
         if (rule.type === 'compound_threshold' && rule.thresholds) {
             // For compound rules, show all threshold values
             const conditions = rule.thresholds.map(threshold => {
-                const value = currentValue && typeof currentValue === 'object' ? currentValue[threshold.type] : null;
-                const displayName = this.getThresholdDisplayName(threshold.type);
-                const unit = ['cpu', 'memory', 'disk'].includes(threshold.type) ? '%' : ' bytes/s';
+                const value = currentValue && typeof currentValue === 'object' ? currentValue[threshold.metric] : null;
+                const displayName = this.getThresholdDisplayName(threshold.metric);
+                const unit = ['cpu', 'memory', 'disk'].includes(threshold.metric) ? '%' : ' bytes/s';
                 const formattedValue = typeof value === 'number' ? Math.round(value * 10) / 10 : value;
                 return `${displayName}: ${formattedValue}${unit}`;
             }).join(', ');
@@ -1059,8 +1059,6 @@ class AlertManager extends EventEmitter {
         // Support both single-metric rules and compound threshold rules
         const isCompoundRule = rule.thresholds && Array.isArray(rule.thresholds) && rule.thresholds.length > 0;
         
-        console.log('[AlertManager] Adding rule:', JSON.stringify(rule, null, 2));
-        console.log('[AlertManager] Is compound rule:', isCompoundRule);
         
         // Enhanced validation
         if (!rule.name || typeof rule.name !== 'string' || rule.name.trim().length === 0) {
@@ -1078,13 +1076,21 @@ class AlertManager extends EventEmitter {
             }
             
             for (const threshold of rule.thresholds) {
-                if (!threshold.metric || !threshold.condition || threshold.threshold === undefined) {
-                    throw new Error('Each threshold must have metric, condition, and threshold value');
+                const foundProperties = Object.keys(threshold);
+                const requiredProperties = ['metric', 'condition', 'threshold'];
+                const missingProperties = requiredProperties.filter(prop => threshold[prop] === undefined);
+                
+                if (missingProperties.length > 0) {
+                    throw new Error(`Threshold validation failed. Missing required properties: ${missingProperties.join(', ')}. Found properties: ${foundProperties.join(', ')}. Expected properties: ${requiredProperties.join(', ')}`);
                 }
                 
                 const validConditions = ['greater_than', 'less_than', 'equals', 'not_equals', 'greater_than_or_equal', 'less_than_or_equal', 'contains', 'anomaly'];
                 if (!validConditions.includes(threshold.condition)) {
-                    throw new Error(`Invalid condition: ${threshold.condition}. Must be one of: ${validConditions.join(', ')}`);
+                    throw new Error(`Invalid condition '${threshold.condition}' for metric '${threshold.metric}'. Valid conditions: ${validConditions.join(', ')}`);
+                }
+                
+                if (typeof threshold.threshold !== 'number' && threshold.threshold !== 'stopped') {
+                    throw new Error(`Invalid threshold value '${threshold.threshold}' for metric '${threshold.metric}'. Expected number or 'stopped' for status checks.`);
                 }
             }
         } else {
@@ -1218,7 +1224,16 @@ class AlertManager extends EventEmitter {
             const allGuests = [...(currentState.vms || []), ...(currentState.containers || [])];
             const currentMetrics = currentState.metrics || [];
 
+            const isDebugMode = process.env.ALERT_DEBUG === 'true';
+            
+            if (isDebugMode) {
+                console.log(`[AlertDebug] evaluateCurrentState found ${allGuests.length} guests, ${currentMetrics.length} metrics`);
+            }
+
             if (allGuests.length === 0) {
+                if (isDebugMode) {
+                    console.log(`[AlertDebug] No guests found, skipping evaluation`);
+                }
                 return;
             }
 
@@ -1285,6 +1300,12 @@ class AlertManager extends EventEmitter {
         const stateManager = require('./state');
         const currentState = stateManager.getState();
         
+        const isDebugMode = process.env.ALERT_DEBUG === 'true';
+        
+        if (isDebugMode) {
+            console.log(`[AlertDebug] Evaluating rule "${rule.name}" for guest ${guest.name} (${guest.vmid})`);
+        }
+        
         const metrics = currentState.metrics || [];
         
         // Find metrics for this guest (metrics is an array, not an object)
@@ -1294,14 +1315,37 @@ class AlertManager extends EventEmitter {
             m.id === guest.vmid
         );
         
+        if (isDebugMode) {
+            console.log(`[AlertDebug] Guest metrics found for ${guest.name}:`, !!guestMetrics);
+        }
+        
         if (!guestMetrics || !guestMetrics.current) {
+            if (isDebugMode) {
+                console.log(`[AlertDebug] No metrics for guest ${guest.name}, skipping evaluation`);
+            }
             return;
+        }
+        
+        if (isDebugMode) {
+            console.log(`[AlertDebug] Guest ${guest.name} raw disk: ${guestMetrics.current.disk} bytes, maxdisk: ${guest.maxdisk} bytes`);
+            if (guest.maxdisk && guestMetrics.current.disk) {
+                const diskPercentage = (guestMetrics.current.disk / guest.maxdisk) * 100;
+                console.log(`[AlertDebug] Calculated disk percentage: ${diskPercentage.toFixed(2)}%`);
+            }
         }
 
         // Check if ALL threshold conditions are met (AND logic)
         const thresholdsMet = rule.thresholds.every(threshold => {
-            return this.evaluateThresholdCondition(threshold, guestMetrics.current, guest);
+            const result = this.evaluateThresholdCondition(threshold, guestMetrics.current, guest);
+            if (isDebugMode) {
+                console.log(`[AlertDebug] Threshold check for ${guest.name}: metric=${threshold.metric}, condition=${threshold.condition}, threshold=${threshold.threshold}, result=${result}`);
+            }
+            return result;
         });
+
+        if (isDebugMode) {
+            console.log(`[AlertDebug] All thresholds met for ${guest.name}: ${thresholdsMet}`);
+        }
 
         if (thresholdsMet) {
             // Create alert immediately without waiting for duration
@@ -1392,7 +1436,7 @@ class AlertManager extends EventEmitter {
     evaluateThresholdCondition(threshold, currentMetrics, guest) {
         let metricValue;
 
-        switch (threshold.type) {
+        switch (threshold.metric) {
             case 'cpu':
                 metricValue = currentMetrics.cpu;
                 // CPU values from Proxmox might be in decimal format (0.0-1.0)
@@ -1432,34 +1476,33 @@ class AlertManager extends EventEmitter {
             return false;
         }
 
-        // Apply the specified operator
-        switch (threshold.operator) {
-            case '>':
-                return metricValue > threshold.value;
-            case '>=':
-                return metricValue >= threshold.value;
-            case '<':
-                return metricValue < threshold.value;
-            case '<=':
-                return metricValue <= threshold.value;
-            case '==':
-            case '=':
-                return metricValue == threshold.value;
-            case '!=':
-                return metricValue != threshold.value;
+        // Apply the specified condition
+        switch (threshold.condition) {
+            case 'greater_than':
+                return metricValue > threshold.threshold;
+            case 'greater_than_or_equal':
+                return metricValue >= threshold.threshold;
+            case 'less_than':
+                return metricValue < threshold.threshold;
+            case 'less_than_or_equal':
+                return metricValue <= threshold.threshold;
+            case 'equals':
+                return metricValue == threshold.threshold;
+            case 'not_equals':
+                return metricValue != threshold.threshold;
             default:
                 // Default to >= for backward compatibility
-                return metricValue >= threshold.value;
+                return metricValue >= threshold.threshold;
         }
     }
 
     formatCompoundThresholdMessage(rule, currentMetrics, guest) {
         const conditions = rule.thresholds.map(threshold => {
             const value = this.getThresholdCurrentValue(threshold, currentMetrics, guest);
-            const displayName = this.getThresholdDisplayName(threshold.type);
-            const unit = ['cpu', 'memory', 'disk'].includes(threshold.type) ? '%' : ' bytes/s';
+            const displayName = this.getThresholdDisplayName(threshold.metric);
+            const unit = ['cpu', 'memory', 'disk'].includes(threshold.metric) ? '%' : ' bytes/s';
             
-            return `${displayName}: ${value}${unit} (≥ ${threshold.value}${unit})`;
+            return `${displayName}: ${value}${unit} (≥ ${threshold.threshold}${unit})`;
         }).join(', ');
 
         return `Dynamic threshold rule "${rule.name}" triggered for ${guest.name}: ${conditions}`;
@@ -1468,13 +1511,13 @@ class AlertManager extends EventEmitter {
     getCurrentThresholdValues(thresholds, currentMetrics, guest) {
         const values = {};
         thresholds.forEach(threshold => {
-            values[threshold.type] = this.getThresholdCurrentValue(threshold, currentMetrics, guest);
+            values[threshold.metric] = this.getThresholdCurrentValue(threshold, currentMetrics, guest);
         });
         return values;
     }
 
     getThresholdCurrentValue(threshold, currentMetrics, guest) {
-        switch (threshold.type) {
+        switch (threshold.metric) {
             case 'cpu': 
                 const cpuValue = currentMetrics.cpu || 0;
                 // CPU values from Proxmox might be in decimal format (0.0-1.0)

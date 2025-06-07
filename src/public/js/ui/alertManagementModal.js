@@ -728,9 +728,7 @@ PulseApp.ui.alertManagementModal = (() => {
         
         // Load system and custom alerts
         // Ensure we have the latest configuration before loading alerts
-        console.log('[DEBUG] About to load configuration for alert rules tab');
         loadConfiguration().then(() => {
-            console.log('[DEBUG] Configuration loaded, now loading system and custom alerts');
             loadSystemAlerts();
             loadCustomAlerts();
         });
@@ -885,7 +883,6 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function loadSystemAlerts() {
-        console.log('[DEBUG] loadSystemAlerts() called');
         // System alerts are now hardcoded in HTML, just load their configuration
         loadSystemAlertConfiguration();
     }
@@ -939,7 +936,7 @@ PulseApp.ui.alertManagementModal = (() => {
     function createCustomAlertCard(alert) {
         const thresholdsList = alert.thresholds?.map(t => 
             `<span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">
-                ${t.type.charAt(0).toUpperCase() + t.type.slice(1)} ≥ ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}
+                ${t.metric.charAt(0).toUpperCase() + t.metric.slice(1)} ≥ ${t.threshold}${['cpu', 'memory', 'disk'].includes(t.metric) ? '%' : ''}
             </span>`
         ).join('') || '';
 
@@ -1443,33 +1440,26 @@ PulseApp.ui.alertManagementModal = (() => {
     }
     
     function updateSystemAlertStatus(alertType, enabled) {
-        console.log(`[DEBUG] updateSystemAlertStatus called: ${alertType} = ${enabled}`);
         
         // Save status change to backend
         const configUpdate = {};
         configUpdate[`ALERT_${alertType.toUpperCase()}_ENABLED`] = enabled ? 'true' : 'false';
-        console.log('[DEBUG] Sending config update:', configUpdate);
         
         fetch('/api/config', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(configUpdate)
         }).then(response => response.json()).then(result => {
-            console.log('[DEBUG] Save response:', result);
             if (result.success) {
                 PulseApp.ui.toast.success(`${alertType.charAt(0).toUpperCase() + alertType.slice(1)} alert ${enabled ? 'enabled' : 'disabled'} successfully`);
-                console.log('[DEBUG] Save successful, reloading configuration...');
                 // Reload configuration to ensure UI reflects the saved state
                 loadConfiguration().then(() => {
-                    console.log('[DEBUG] Configuration reloaded, updating display...');
                     // Update the display with the fresh config
                     const alertConfig = currentConfig?.advanced?.alerts?.[alertType] || {};
-                    console.log(`[DEBUG] Fresh config for ${alertType}:`, alertConfig);
                     updateSystemAlertDisplay(alertType, { enabled: alertConfig.enabled !== false });
                     
                     // If we just enabled an alert, trigger immediate evaluation of current state
                     if (enabled) {
-                        console.log(`[DEBUG] Alert ${alertType} was enabled, triggering immediate evaluation...`);
                         triggerImmediateAlertEvaluation();
                     }
                 });
@@ -1484,7 +1474,6 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function triggerImmediateAlertEvaluation() {
-        console.log('[DEBUG] triggerImmediateAlertEvaluation() called - calling API endpoint');
         
         PulseApp.ui.toast.alert('Alert enabled - checking for existing conditions...');
         
@@ -1498,7 +1487,6 @@ PulseApp.ui.alertManagementModal = (() => {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                console.log('[DEBUG] Alert evaluation triggered successfully');
                 // Refresh the main page alerts display
                 setTimeout(() => {
                     if (typeof window.updateAlertsDisplay === 'function') {
@@ -1515,7 +1503,6 @@ PulseApp.ui.alertManagementModal = (() => {
     }
     
     function updateSystemAlertDisplay(alertType, config) {
-        console.log(`[DEBUG] updateSystemAlertDisplay called for ${alertType}:`, config);
         
         // Update the status badge
         const statusBadge = document.getElementById(`${alertType}-status-badge`);
@@ -1527,11 +1514,9 @@ PulseApp.ui.alertManagementModal = (() => {
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
             }`;
             
-            console.log(`[DEBUG] Updating status badge for ${alertType}: text="${newText}", className="${newClassName}"`);
             statusBadge.textContent = newText;
             statusBadge.className = newClassName;
         } else {
-            console.log(`[DEBUG] Status badge element not found: ${alertType}-status-badge`);
         }
         
         // Update the toggle button text and onclick
@@ -1540,9 +1525,7 @@ PulseApp.ui.alertManagementModal = (() => {
             const newText = config.enabled ? 'Disable' : 'Enable';
             toggleBtn.textContent = newText;
             toggleBtn.onclick = () => toggleSystemAlert(alertType, !config.enabled);
-            console.log(`[DEBUG] Updated toggle button for ${alertType}: text="${newText}", enabled=${config.enabled}`);
         } else {
-            console.log(`[DEBUG] Toggle button element not found: ${alertType}-toggle-btn`);
         }
         
         // Update the threshold display
@@ -1550,21 +1533,15 @@ PulseApp.ui.alertManagementModal = (() => {
             const display = document.getElementById(`${alertType}-threshold-display`);
             if (display) {
                 display.textContent = `${config.threshold}%`;
-                console.log(`[DEBUG] Updated threshold display for ${alertType} to: ${config.threshold}%`);
             } else {
-                console.log(`[DEBUG] Threshold display element not found: ${alertType}-threshold-display`);
             }
         }
     }
 
     function loadSystemAlertConfiguration() {
         // Load from current configuration and populate system alert displays
-        console.log('[DEBUG] loadSystemAlertConfiguration() called');
-        console.log('[DEBUG] currentConfig available:', !!currentConfig);
-        console.log('[DEBUG] currentConfig:', currentConfig);
         
         const config = currentConfig?.advanced?.alerts || {};
-        console.log('[DEBUG] Alert config extracted:', config);
         
         // Update system alert displays
         ['cpu', 'memory', 'disk', 'down'].forEach(alertType => {
@@ -1573,7 +1550,6 @@ PulseApp.ui.alertManagementModal = (() => {
             const defaultThresholds = { cpu: 85, memory: 90, disk: 95 };
             const threshold = alertConfig.threshold || defaultThresholds[alertType];
             
-            console.log(`[DEBUG] ${alertType} alert - config:`, alertConfig, 'enabled:', enabled, 'threshold:', threshold);
             
             updateSystemAlertDisplay(alertType, { enabled, threshold });
         });
@@ -1624,8 +1600,8 @@ PulseApp.ui.alertManagementModal = (() => {
             // Pre-fill form with existing alert data
             suggestedName = existingAlert.name || existingAlert.alert || 'Custom Alert';
             if (existingAlert.thresholds && existingAlert.thresholds.length > 0) {
-                primaryMetric = existingAlert.thresholds[0].type;
-                primaryThreshold = existingAlert.thresholds[0].value;
+                primaryMetric = existingAlert.thresholds[0].metric || existingAlert.thresholds[0].type;
+                primaryThreshold = existingAlert.thresholds[0].threshold || existingAlert.thresholds[0].value;
                 multipleThresholds = existingAlert.thresholds.length > 1;
             }
             isEditing = true;
@@ -2013,66 +1989,39 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             updateSliderValueDisplay(slider);
         });
         
-        // Pre-populate thresholds if provided (from dashboard or existing alert)
-        if (presetThresholds && presetThresholds.length > 0) {
-            presetThresholds.forEach(threshold => {
-                if (threshold.type === 'cpu' && threshold.value > 0) {
+        // Pre-populate thresholds (handle both preset thresholds from dashboard and existing alerts)
+        const thresholdsToPopulate = existingAlert ? existingAlert.thresholds : presetThresholds;
+        
+        if (thresholdsToPopulate && thresholdsToPopulate.length > 0) {
+            thresholdsToPopulate.forEach(threshold => {
+                // Support both old format (type/value) and new format (metric/threshold)
+                const metric = threshold.metric || threshold.type;
+                const value = threshold.threshold || threshold.value;
+                
+                if (metric === 'cpu' && value > 0) {
                     const cpuSlider = document.querySelector('input[name="cpuThreshold"]');
                     if (cpuSlider) {
-                        cpuSlider.value = threshold.value;
+                        cpuSlider.value = value;
                         updateSliderValueDisplay(cpuSlider);
                     }
-                } else if (threshold.type === 'memory' && threshold.value > 0) {
+                } else if (metric === 'memory' && value > 0) {
                     const memorySlider = document.querySelector('input[name="memoryThreshold"]');
                     if (memorySlider) {
-                        memorySlider.value = threshold.value;
+                        memorySlider.value = value;
                         updateSliderValueDisplay(memorySlider);
                     }
-                } else if (threshold.type === 'disk' && threshold.value > 0) {
+                } else if (metric === 'disk' && value > 0) {
                     const diskSlider = document.querySelector('input[name="diskThreshold"]');
                     if (diskSlider) {
-                        diskSlider.value = threshold.value;
+                        diskSlider.value = value;
                         updateSliderValueDisplay(diskSlider);
                     }
-                } else if (threshold.type === 'network' && threshold.value > 0) {
+                } else if (metric === 'network' && value > 0) {
                     const networkSelect = document.querySelector('select[name="networkThreshold"]');
                     if (networkSelect) {
-                        networkSelect.value = threshold.value;
+                        networkSelect.value = value;
                     }
-                } else if (threshold.type === 'status') {
-                    const statusCheckbox = document.querySelector('input[name="statusMonitoring"]');
-                    if (statusCheckbox) {
-                        statusCheckbox.checked = true;
-                    }
-                }
-            });
-        } else if (existingAlert && existingAlert.thresholds) {
-            // Pre-populate from existing alert
-            existingAlert.thresholds.forEach(threshold => {
-                if (threshold.type === 'cpu' && threshold.value > 0) {
-                    const cpuSlider = document.querySelector('input[name="cpuThreshold"]');
-                    if (cpuSlider) {
-                        cpuSlider.value = threshold.value;
-                        updateSliderValueDisplay(cpuSlider);
-                    }
-                } else if (threshold.type === 'memory' && threshold.value > 0) {
-                    const memorySlider = document.querySelector('input[name="memoryThreshold"]');
-                    if (memorySlider) {
-                        memorySlider.value = threshold.value;
-                        updateSliderValueDisplay(memorySlider);
-                    }
-                } else if (threshold.type === 'disk' && threshold.value > 0) {
-                    const diskSlider = document.querySelector('input[name="diskThreshold"]');
-                    if (diskSlider) {
-                        diskSlider.value = threshold.value;
-                        updateSliderValueDisplay(diskSlider);
-                    }
-                } else if (threshold.type === 'network' && threshold.value > 0) {
-                    const networkSelect = document.querySelector('select[name="networkThreshold"]');
-                    if (networkSelect) {
-                        networkSelect.value = threshold.value;
-                    }
-                } else if (threshold.type === 'status') {
+                } else if (metric === 'status') {
                     const statusCheckbox = document.querySelector('input[name="statusMonitoring"]');
                     if (statusCheckbox) {
                         statusCheckbox.checked = true;
@@ -2182,19 +2131,19 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             
             // Build thresholds array (only include non-zero values and enabled options)
             if (cpuThreshold > 0) {
-                thresholds.push({type: 'cpu', operator: '>', value: cpuThreshold});
+                thresholds.push({metric: 'cpu', condition: 'greater_than', threshold: cpuThreshold});
             }
             if (memoryThreshold > 0) {
-                thresholds.push({type: 'memory', operator: '>', value: memoryThreshold});
+                thresholds.push({metric: 'memory', condition: 'greater_than', threshold: memoryThreshold});
             }
             if (diskThreshold > 0) {
-                thresholds.push({type: 'disk', operator: '>', value: diskThreshold});
+                thresholds.push({metric: 'disk', condition: 'greater_than', threshold: diskThreshold});
             }
             if (networkThreshold > 0) {
-                thresholds.push({type: 'network', operator: '>', value: networkThreshold});
+                thresholds.push({metric: 'network', condition: 'greater_than', threshold: networkThreshold});
             }
             if (statusMonitoring) {
-                thresholds.push({type: 'status', operator: '=', value: 'stopped'});
+                thresholds.push({metric: 'status', condition: 'equals', threshold: 'stopped'});
             }
             
         }
@@ -2255,7 +2204,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
             const result = await response.json();
             
-            const thresholdSummary = thresholds.map(t => `${t.type.toUpperCase()}: ${t.value}${['cpu', 'memory', 'disk'].includes(t.type) ? '%' : ''}`).join(', ');
+            const thresholdSummary = thresholds.map(t => `${t.metric.toUpperCase()}: ${t.threshold}${['cpu', 'memory', 'disk'].includes(t.metric) ? '%' : ''}`).join(', ');
             PulseApp.ui.toast.success(`Custom alert ${existingAlert ? 'updated' : 'created'} successfully! Alert: ${alertConfig.name}`);
             
             // Close modal
@@ -2460,14 +2409,12 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     }
 
     function openModal(targetTab = null) {
-        console.log('[DEBUG] openModal called with targetTab:', targetTab);
         const modal = document.getElementById('alert-management-modal');
         if (modal) {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             
             // Load current configuration if needed
-            console.log('[DEBUG] Loading configuration...');
             loadConfiguration();
             
             // Hide save button initially (only show on notifications tab)
@@ -2478,10 +2425,8 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             
             // Switch to target tab if specified
             if (targetTab && targetTab !== activeTab) {
-                console.log('[DEBUG] Switching to target tab:', targetTab);
                 switchTab(targetTab);
             } else {
-                console.log('[DEBUG] Rendering initial tab content for activeTab:', activeTab);
                 // Render initial tab content
                 renderTabContent();
             }
@@ -2498,21 +2443,16 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
     async function loadConfiguration() {
         try {
-            console.log('[DEBUG] loadConfiguration() called');
             
             // Always load configuration directly from API to ensure fresh data
-            console.log('[DEBUG] Loading configuration directly from /api/config');
             const response = await fetch('/api/config');
             if (response.ok) {
                 currentConfig = await response.json();
-                console.log('[DEBUG] Configuration loaded from API:', currentConfig);
             } else {
                 console.error('[DEBUG] Failed to load configuration - response not ok');
                 currentConfig = {};
             }
             
-            console.log('[DEBUG] Final currentConfig:', currentConfig);
-            console.log('[DEBUG] Alert settings from config:', currentConfig?.advanced?.alerts);
         } catch (error) {
             console.error('[DEBUG] Error loading configuration:', error);
             currentConfig = {};
@@ -2636,6 +2576,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             if (!alert) {
                 throw new Error('Alert not found');
             }
+            
             
             // Open the custom alert modal with pre-filled data
             openCustomAlertModal(alert.thresholds || [], alert);
