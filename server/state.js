@@ -313,10 +313,10 @@ function addPerformanceSnapshot(type, duration, errorCount) {
   }
 }
 
-function checkAlertsForMetrics() {
+async function checkAlertsForMetrics() {
   try {
     const allGuests = [...state.vms, ...state.containers];
-    alertManager.checkMetrics(allGuests, state.metrics);
+    await alertManager.checkMetrics(allGuests, state.metrics);
   } catch (error) {
     console.error('[State Manager] Error checking alerts:', error);
   }

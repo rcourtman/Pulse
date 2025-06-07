@@ -1422,7 +1422,7 @@ async function fetchPbsData(currentPbsApiClients) {
             // Quick connectivity check for PBS to fail fast
             try {
                 await Promise.race([
-                    pbsClient.client.get('/api2/json/version'),
+                    pbsClient.client.get('/version'),
                     new Promise((_, reject) => 
                         setTimeout(() => reject(new Error('PBS connectivity check timeout')), 3000)
                     )

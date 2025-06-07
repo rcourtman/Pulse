@@ -225,7 +225,7 @@ describe('AlertManager Webhook Functionality', () => {
 
             await expect(
                 alertManager.sendWebhookNotification(mockWebhookChannel, mockAlert)
-            ).rejects.toThrow('Webhook failed: 404 Not Found');
+            ).rejects.toThrow('Webhook failed after 3 attempts: 404 Not Found');
         });
 
         test('should handle network errors gracefully', async () => {
@@ -235,7 +235,7 @@ describe('AlertManager Webhook Functionality', () => {
 
             await expect(
                 alertManager.sendWebhookNotification(mockWebhookChannel, mockAlert)
-            ).rejects.toThrow(`Webhook failed: No response from ${mockWebhookChannel.config.url}`);
+            ).rejects.toThrow(`Webhook failed after 3 attempts: No response from ${mockWebhookChannel.config.url}`);
         });
 
         test('should handle other errors gracefully', async () => {
@@ -244,7 +244,7 @@ describe('AlertManager Webhook Functionality', () => {
 
             await expect(
                 alertManager.sendWebhookNotification(mockWebhookChannel, mockAlert)
-            ).rejects.toThrow(`Webhook failed: ${errorMessage}`);
+            ).rejects.toThrow(`Webhook failed after 3 attempts: ${errorMessage}`);
         });
     });
 

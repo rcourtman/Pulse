@@ -179,11 +179,11 @@ PulseApp.ui.pbs = (() => {
 
     const getPbsStatusIcon = (status) => {
         if (status === 'OK') {
-            return `<span class="${CSS_CLASSES.TEXT_GREEN_500_DARK_GREEN_400}" title="OK">✓</span>`;
+            return `<span class="${CSS_CLASSES.TEXT_GREEN_500_DARK_GREEN_400}" title="OK">OK</span>`;
         } else if (status === 'running') {
             return `<span class="${CSS_CLASSES.INLINE_BLOCK} ${CSS_CLASSES.ANIMATE_SPIN} ${CSS_CLASSES.ROUNDED_FULL} ${CSS_CLASSES.H_3} ${CSS_CLASSES.W_3} ${CSS_CLASSES.BORDER_T_2} ${CSS_CLASSES.BORDER_B_2} ${CSS_CLASSES.BORDER_BLUE_500}" title="Running"></span>`;
         } else if (status) {
-            return `<span class="${CSS_CLASSES.TEXT_RED_500_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}" title="${status}">✗</span>`;
+            return `<span class="${CSS_CLASSES.TEXT_RED_500_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}" title="${status}">ERROR</span>`;
         } else {
             return `<span class="${CSS_CLASSES.TEXT_GRAY_400}" title="Unknown">?</span>`;
         }
@@ -191,13 +191,13 @@ PulseApp.ui.pbs = (() => {
 
     const getPbsStatusDisplay = (status) => {
         if (status === 'OK') {
-            return `<span class="${CSS_CLASSES.TEXT_GREEN_500_DARK_GREEN_400}">✓ OK</span>`;
+            return `<span class="${CSS_CLASSES.TEXT_GREEN_500_DARK_GREEN_400}">OK</span>`;
         } else if (status === 'running') {
             return `<span class="${CSS_CLASSES.INLINE_BLOCK} ${CSS_CLASSES.ANIMATE_SPIN} ${CSS_CLASSES.ROUNDED_FULL} ${CSS_CLASSES.H_3} ${CSS_CLASSES.W_3} ${CSS_CLASSES.BORDER_T_2} ${CSS_CLASSES.BORDER_B_2} ${CSS_CLASSES.BORDER_BLUE_500}" title="Running"></span> <span class="${CSS_CLASSES.TEXT_BLUE_600_DARK_BLUE_400}">Running</span>`;
         } else if (status) {
             // For failed tasks, show the full error message
             const shortStatus = status.length > 50 ? `${status.substring(0, 47)}...` : status;
-            return `<span class="${CSS_CLASSES.TEXT_RED_500_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}" title="${status}">✗</span> <span class="${CSS_CLASSES.TEXT_RED_600_DARK_RED_400} ${CSS_CLASSES.TEXT_XS}" title="${status}">${shortStatus}</span>`;
+            return `<span class="${CSS_CLASSES.TEXT_RED_500_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}" title="${status}">ERROR</span> <span class="${CSS_CLASSES.TEXT_RED_600_DARK_RED_400} ${CSS_CLASSES.TEXT_XS}" title="${status}">${shortStatus}</span>`;
         } else {
             return `<span class="${CSS_CLASSES.TEXT_GRAY_400}">? Unknown</span>`;
         }
@@ -288,7 +288,7 @@ PulseApp.ui.pbs = (() => {
         const targetElement = document.createElement('div');
         targetElement.className = 'font-medium text-sm truncate pr-2 flex-1';
         if (isFailed) {
-            targetElement.innerHTML = `<span class="text-xs text-gray-400 mr-1">▶</span>${target}`;
+            targetElement.innerHTML = `${target}`;
         } else {
             targetElement.textContent = target;
         }
@@ -331,7 +331,7 @@ PulseApp.ui.pbs = (() => {
         if (isFailed) {
             const expandButton = document.createElement('button');
             expandButton.className = 'mt-3 w-full py-2 px-3 text-xs text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-600 rounded bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors tap-target';
-            expandButton.textContent = 'Show Error Details ▼';
+            expandButton.textContent = 'Show Error Details';
             
             expandButton.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -343,15 +343,15 @@ PulseApp.ui.pbs = (() => {
                 if (existingDetailCard && existingDetailCard.classList.contains('mobile-task-detail-card')) {
                     // Toggle existing detail card - collapse
                     existingDetailCard.remove();
-                    expandButton.textContent = 'Show Error Details ▼';
-                    targetElement.innerHTML = `<span class="text-xs text-gray-400 mr-1">▶</span>${target}`;
+                    expandButton.textContent = 'Show Error Details';
+                    targetElement.innerHTML = `${target}`;
                     expandedTaskState.delete(upid);
                 } else {
                     // Create and show detail card - expand
                     const detailCard = _createMobileTaskDetailCard(task);
                     card.insertAdjacentElement('afterend', detailCard);
-                    expandButton.textContent = 'Hide Error Details ▲';
-                    targetElement.innerHTML = `<span class="text-xs text-gray-400 mr-1">▼</span>${target}`;
+                    expandButton.textContent = 'Hide Error Details';
+                    targetElement.innerHTML = `${target}`;
                     expandedTaskState.add(upid);
                 }
             });
@@ -449,7 +449,7 @@ PulseApp.ui.pbs = (() => {
         
         // Add expand indicator for failed tasks
         if (isFailed) {
-            targetCell.innerHTML = `<span class="text-xs text-gray-400 mr-1">▶</span>${target}`;
+            targetCell.innerHTML = `${target}`;
         } else {
             targetCell.textContent = target;
         }
@@ -488,13 +488,13 @@ PulseApp.ui.pbs = (() => {
                 if (existingDetailRow && existingDetailRow.classList.contains('task-detail-row')) {
                     // Toggle existing detail row - collapse
                     existingDetailRow.remove();
-                    targetCell.innerHTML = `<span class="text-xs text-gray-400 mr-1">▶</span>${target}`;
+                    targetCell.innerHTML = `${target}`;
                     expandedTaskState.delete(upid); // Remove from global state
                 } else {
                     // Create and show detail row - expand
                     const detailRow = _createTaskDetailRow(task);
                     row.insertAdjacentElement('afterend', detailRow);
-                    targetCell.innerHTML = `<span class="text-xs text-gray-400 mr-1">▼</span>${target}`;
+                    targetCell.innerHTML = `${target}`;
                     expandedTaskState.add(upid); // Add to global state
                 }
             });
@@ -658,7 +658,7 @@ PulseApp.ui.pbs = (() => {
                   const target = parsePbsTaskTarget(task);
                   const detailRow = _createTaskDetailRow(task);
                   taskRow.insertAdjacentElement('afterend', detailRow);
-                  targetCell.innerHTML = `<span class="text-xs text-gray-400 mr-1">▼</span>${target}`;
+                  targetCell.innerHTML = `${target}`;
               }
           });
 
@@ -739,9 +739,9 @@ PulseApp.ui.pbs = (() => {
         
         let nameContent = ds.name || 'N/A';
         if (usagePercent >= 95) {
-            nameElement.innerHTML = `<span class="text-red-700 dark:text-red-300">⚠ ${nameContent}</span><div class="text-xs text-red-600 dark:text-red-400 font-normal mt-1">CRITICAL: ${usagePercent}% full</div>`;
+            nameElement.innerHTML = `<span class="text-red-700 dark:text-red-300">${nameContent}</span><div class="text-xs text-red-600 dark:text-red-400 font-normal mt-1">CRITICAL: ${usagePercent}% full</div>`;
         } else if (usagePercent >= 85) {
-            nameElement.innerHTML = `<span class="text-yellow-700 dark:text-yellow-300">⚠ ${nameContent}</span><div class="text-xs text-yellow-600 dark:text-yellow-400 font-normal mt-1">WARNING: ${usagePercent}% full</div>`;
+            nameElement.innerHTML = `<span class="text-yellow-700 dark:text-yellow-300">${nameContent}</span><div class="text-xs text-yellow-600 dark:text-yellow-400 font-normal mt-1">WARNING: ${usagePercent}% full</div>`;
         } else {
             nameElement.textContent = nameContent;
         }
@@ -913,10 +913,10 @@ PulseApp.ui.pbs = (() => {
                     // Add usage alert to name if critical
                     let nameContent = ds.name || 'N/A';
                     if (usagePercent >= 95) {
-                        nameContent = `⚠ ${nameContent} [CRITICAL: ${usagePercent}% full]`;
+                        nameContent = `${nameContent} [CRITICAL: ${usagePercent}% full]`;
                         createCell(nameContent, ['text-red-700', 'dark:text-red-300', 'font-semibold', 'sticky', 'left-0', 'bg-white', 'dark:bg-gray-800', 'z-10']);
                     } else if (usagePercent >= 85) {
-                        nameContent = `⚠ ${nameContent} [WARNING: ${usagePercent}% full]`;
+                        nameContent = `${nameContent} [WARNING: ${usagePercent}% full]`;
                         createCell(nameContent, ['text-yellow-700', 'dark:text-yellow-300', 'font-semibold', 'sticky', 'left-0', 'bg-white', 'dark:bg-gray-800', 'z-10']);
                     } else {
                         createCell(nameContent, ['sticky', 'left-0', 'bg-white', 'dark:bg-gray-800', 'z-10']);
@@ -1124,12 +1124,12 @@ PulseApp.ui.pbs = (() => {
             // More descriptive status text
             let statusHtml = '';
             if (failed > 0) {
-                statusHtml = `<span class="${CSS_CLASSES.TEXT_RED_600_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}">⚠ ${failed} FAILED</span>`;
+                statusHtml = `<span class="${CSS_CLASSES.TEXT_RED_600_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}">${failed} FAILED</span>`;
                 if (ok > 0) {
                     statusHtml += ` / <span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">${ok} OK</span>`;
                 }
             } else if (ok > 0) {
-                statusHtml = `<span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">✓ All OK (${ok})</span>`;
+                statusHtml = `<span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">All OK (${ok})</span>`;
             } else {
                 statusHtml = `<span class="${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}">No recent tasks</span>`;
             }
@@ -1160,7 +1160,7 @@ PulseApp.ui.pbs = (() => {
 
         const heading = document.createElement('h4');
         heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
-        heading.innerHTML = `Recent ${title} Tasks <span id="${tableId}-status" class="text-xs font-normal text-gray-500"></span><span id="${tableId}-priority" class="text-xs text-red-600 dark:text-red-400 ml-2 hidden">⚠ Failed tasks shown first</span>`;
+        heading.innerHTML = `Recent ${title} Tasks <span id="${tableId}-status" class="text-xs font-normal text-gray-500"></span><span id="${tableId}-priority" class="text-xs text-red-600 dark:text-red-400 ml-2 hidden">Failed tasks shown first</span>`;
         fragment.appendChild(heading);
 
         const tableContainer = document.createElement('div');
@@ -1434,7 +1434,7 @@ PulseApp.ui.pbs = (() => {
             </div>
             <div class="summary-card p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center border border-gray-200 dark:border-gray-600">
                 <div class="text-lg font-semibold ${isServerHealthy ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">
-                    ${isServerHealthy ? '✓' : '✗'}
+                    ${isServerHealthy ? 'OK' : 'ERROR'}
                 </div>
                 <div class="text-xs text-gray-600 dark:text-gray-400">Server</div>
                 <div class="text-xs ${isServerHealthy ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}">${isServerHealthy ? 'Online' : 'Error'}</div>
@@ -1482,14 +1482,11 @@ PulseApp.ui.pbs = (() => {
             const overallHealthAndTitle = _calculateOverallHealth(pbsInstance);
             const statusInfo = _getInstanceStatusInfo(pbsInstance);
             
-            let statusIcon = '✓';
             let statusClass = 'text-green-600 dark:text-green-400';
             
             if (pbsInstance.status === 'error') {
-                statusIcon = '✗';
                 statusClass = 'text-red-600 dark:text-red-400';
             } else if (pbsInstance.status !== 'ok') {
-                statusIcon = '⚪';
                 statusClass = 'text-yellow-600 dark:text-yellow-400';
             }
             
@@ -1503,7 +1500,6 @@ PulseApp.ui.pbs = (() => {
             
             headerContent.innerHTML = `
                 <div class="flex items-center gap-2 mb-1">
-                    <span class="${statusClass} text-sm">${statusIcon}</span>
                     ${instanceNameHtml}
                 </div>
                 <div class="text-xs text-gray-500 dark:text-gray-400 truncate">${statusInfo.statusText}</div>
@@ -1511,7 +1507,7 @@ PulseApp.ui.pbs = (() => {
             
             const chevron = document.createElement('span');
             chevron.className = 'text-gray-400 transition-transform duration-200';
-            chevron.innerHTML = '▼';
+            chevron.innerHTML = '';
             
             header.appendChild(headerContent);
             header.appendChild(chevron);

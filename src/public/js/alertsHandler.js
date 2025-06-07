@@ -142,11 +142,29 @@ PulseApp.alerts = (() => {
     }
 
     function setupEventListeners() {
+        let socketListenersSetup = false;
+        
         // Wait for socket to be available and set up event listeners
         const setupSocketListeners = () => {
-            if (window.socket && window.socket.connected) {
+            if (window.socket && !socketListenersSetup) {
+                // Set up alert event listeners
                 window.socket.on('alert', handleNewAlert);
                 window.socket.on('alertResolved', handleResolvedAlert);
+                window.socket.on('alertEscalated', handleEscalatedAlert);
+                window.socket.on('alertAcknowledged', handleAcknowledgedAlert);
+                
+                // Handle reconnection - reload alert data when reconnected
+                window.socket.on('connect', () => {
+                    console.log('[Alerts] Socket reconnected, reloading alert data');
+                    loadInitialData();
+                });
+                
+                window.socket.on('disconnect', () => {
+                    console.log('[Alerts] Socket disconnected');
+                });
+                
+                socketListenersSetup = true;
+                console.log('[Alerts] Socket event listeners configured');
                 return true;
             }
             return false;
@@ -250,7 +268,7 @@ PulseApp.alerts = (() => {
                         ${SEVERITY_ICONS.info}
                     </svg>
                     <p class="text-xs mb-3">No active alerts</p>
-                    <button onclick="PulseApp.alerts.hideAlertsDropdown(); PulseApp.ui.alertManagementModal.openModal();" 
+                    <button onclick="PulseApp.alerts.hideAlertsDropdown(); if (PulseApp.ui && PulseApp.ui.alertManagementModal) { PulseApp.ui.alertManagementModal.openModal(); } else { console.error('Alert management modal not available'); }" 
                             class="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded transition-colors">
                         Manage Alerts
                     </button>
@@ -321,7 +339,7 @@ PulseApp.alerts = (() => {
         // Add Manage Alerts button to the bottom
         content += `
             <div class="border-t border-gray-200 dark:border-gray-700 p-2">
-                <button onclick="PulseApp.alerts.hideAlertsDropdown(); PulseApp.ui.alertManagementModal.openModal();" 
+                <button onclick="PulseApp.alerts.hideAlertsDropdown(); if (PulseApp.ui && PulseApp.ui.alertManagementModal) { PulseApp.ui.alertManagementModal.openModal(); } else { console.error('Alert management modal not available'); }" 
                         class="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded transition-colors">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -414,7 +432,8 @@ PulseApp.alerts = (() => {
                     <div class="flex-shrink-0 space-x-1">
                         ${!acknowledged ? `
                             <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}');" 
-                                    class="text-xs px-1 py-0.5 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none">
+                                    class="text-xs px-1 py-0.5 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none"
+                                    title="Acknowledge alert">
                                 ✓
                             </button>
                         ` : ''}
@@ -626,19 +645,30 @@ PulseApp.alerts = (() => {
             }
         } catch (error) {
             console.error('[Alerts] Failed to acknowledge alert:', error);
-            // Only show notification for actual errors
-            // showNotification({ message: `Failed to acknowledge alert: ${error.message}` }, 'warning');
+            // Show user feedback for acknowledgment failures
+            showToastNotification(`Failed to acknowledge alert: ${error.message}`, 'error');
         }
     }
 
+    // Track cleanup timeouts to prevent memory leaks
+    const cleanupTimeouts = new Map();
+    
     function scheduleAcknowledgedCleanup(alertId) {
-        setTimeout(() => {
+        // Clear any existing timeout for this alert
+        if (cleanupTimeouts.has(alertId)) {
+            clearTimeout(cleanupTimeouts.get(alertId));
+        }
+        
+        const timeoutId = setTimeout(() => {
             activeAlerts = activeAlerts.filter(a => a.id !== alertId);
             updateHeaderIndicator();
             if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
                 updateDropdownContent();
             }
+            cleanupTimeouts.delete(alertId);
         }, ACKNOWLEDGED_CLEANUP_DELAY);
+        
+        cleanupTimeouts.set(alertId, timeoutId);
     }
 
     function toggleAcknowledgedSection() {
@@ -689,7 +719,7 @@ PulseApp.alerts = (() => {
             }
         } catch (error) {
             console.error('[Alerts] Failed to suppress alert:', error);
-            // showNotification({ message: `Failed to suppress alert: ${error.message}` }, 'warning');
+            showToastNotification(`Failed to suppress alert: ${error.message}`, 'error');
         }
     }
 
@@ -771,6 +801,68 @@ PulseApp.alerts = (() => {
             }
         }
     }
+    
+    // Additional socket event handlers
+    function handleEscalatedAlert(alert) {
+        console.log('[Alerts] Alert escalated:', alert);
+        
+        // Update existing alert or add if not found
+        const existingIndex = activeAlerts.findIndex(a => a.id === alert.id);
+        if (existingIndex >= 0) {
+            activeAlerts[existingIndex] = { ...activeAlerts[existingIndex], ...alert };
+        } else {
+            activeAlerts.unshift(alert);
+        }
+        
+        updateHeaderIndicator();
+        if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+            updateDropdownContent();
+        }
+        
+        // Show escalation notification
+        showToastNotification(`Alert escalated: ${alert.rule.name} for ${alert.guest.name}`, 'critical');
+    }
+    
+    function handleAcknowledgedAlert(alert) {
+        console.log('[Alerts] Alert acknowledged:', alert);
+        
+        // Update existing alert
+        const existingIndex = activeAlerts.findIndex(a => a.id === alert.id);
+        if (existingIndex >= 0) {
+            activeAlerts[existingIndex] = { ...activeAlerts[existingIndex], acknowledged: true, acknowledgedAt: Date.now() };
+            updateHeaderIndicator();
+            if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+                updateDropdownContent();
+            }
+        }
+    }
+    
+    // Cleanup function to prevent memory leaks
+    function cleanup() {
+        // Clear all cleanup timeouts
+        for (const timeoutId of cleanupTimeouts.values()) {
+            clearTimeout(timeoutId);
+        }
+        cleanupTimeouts.clear();
+        
+        // Remove socket listeners if needed
+        if (window.socket) {
+            window.socket.off('alert', handleNewAlert);
+            window.socket.off('alertResolved', handleResolvedAlert);
+            window.socket.off('alertEscalated', handleEscalatedAlert);
+            window.socket.off('alertAcknowledged', handleAcknowledgedAlert);
+        }
+    }
+
+    // Helper function for toast notifications
+    function showToastNotification(message, type = 'info') {
+        if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.toastNotifications) {
+            window.PulseApp.ui.toastNotifications.show(message, type);
+        } else {
+            // Fallback to basic notification
+            showNotification({ message }, type);
+        }
+    }
 
     // Public API
     return {
@@ -784,7 +876,8 @@ PulseApp.alerts = (() => {
         markAllAsAcknowledged,
         toggleAcknowledgedSection,
         getActiveAlerts: () => activeAlerts,
-        getAlertHistory: () => alertHistory
+        getAlertHistory: () => alertHistory,
+        cleanup
     };
 })();
 
