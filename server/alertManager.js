@@ -28,6 +28,10 @@ class AlertManager extends EventEmitter {
         this.acknowledgementsFile = path.join(__dirname, '../data/acknowledgements.json');
         this.alertRulesFile = path.join(__dirname, '../data/alert-rules.json');
         
+        // Add synchronization flags
+        this.reloadingRules = false;
+        this.processingMetrics = false;
+        
         // Initialize default configuration
         this.initializeDefaultRules();
         this.initializeNotificationChannels();
@@ -69,11 +73,25 @@ class AlertManager extends EventEmitter {
             fs.watchFile(this.alertRulesFile, { interval: 1000 }, async (curr, prev) => {
                 if (curr.mtime !== prev.mtime) {
                     console.log('[AlertManager] Alert rules file changed, reloading...');
-                    await this.loadAlertRules();
-                    console.log('[AlertManager] Alert rules reloaded successfully');
                     
-                    // Immediately evaluate current state with new rules
-                    this.evaluateCurrentState();
+                    // Use a lock to prevent concurrent rule reloading
+                    if (this.reloadingRules) {
+                        console.log('[AlertManager] Rules already reloading, skipping...');
+                        return;
+                    }
+                    
+                    this.reloadingRules = true;
+                    try {
+                        await this.loadAlertRules();
+                        console.log('[AlertManager] Alert rules reloaded successfully');
+                        
+                        // Safely evaluate current state with new rules
+                        await this.evaluateCurrentState();
+                    } catch (error) {
+                        console.error('[AlertManager] Error during rule reload:', error);
+                    } finally {
+                        this.reloadingRules = false;
+                    }
                 }
             });
             
@@ -83,7 +101,33 @@ class AlertManager extends EventEmitter {
         }
     }
 
+    // Helper function to validate and parse environment variables
+    parseEnvInt(envVar, defaultValue, min = 0, max = null) {
+        const value = parseInt(process.env[envVar]);
+        if (isNaN(value) || value < min || (max !== null && value > max)) {
+            if (process.env[envVar]) {
+                console.warn(`[AlertManager] Invalid value for ${envVar}: ${process.env[envVar]}, using default: ${defaultValue}`);
+            }
+            return defaultValue;
+        }
+        return value;
+    }
+
     initializeDefaultRules() {
+        // Validate environment variable ranges
+        const cpuThreshold = this.parseEnvInt('ALERT_CPU_THRESHOLD', 85, 1, 100);
+        const cpuDuration = this.parseEnvInt('ALERT_CPU_DURATION', 300000, 1000); // Min 1 second
+        const memThreshold = this.parseEnvInt('ALERT_MEMORY_THRESHOLD', 90, 1, 100);
+        const memDuration = this.parseEnvInt('ALERT_MEMORY_DURATION', 300000, 1000);
+        const diskThreshold = this.parseEnvInt('ALERT_DISK_THRESHOLD', 90, 1, 100);
+        const diskDuration = this.parseEnvInt('ALERT_DISK_DURATION', 300000, 1000);
+        
+        console.log('[AlertManager] Alert thresholds configured:', {
+            cpu: `${cpuThreshold}% (${cpuDuration}ms)`,
+            memory: `${memThreshold}% (${memDuration}ms)`,
+            disk: `${diskThreshold}% (${diskDuration}ms)`
+        });
+        
         const defaultRules = [
             {
                 id: 'high_cpu',
@@ -91,8 +135,8 @@ class AlertManager extends EventEmitter {
                 description: 'Triggers when CPU usage exceeds threshold for specified duration',
                 metric: 'cpu',
                 condition: 'greater_than',
-                threshold: parseInt(process.env.ALERT_CPU_THRESHOLD) || 85,
-                duration: parseInt(process.env.ALERT_CPU_DURATION) || 300000, // 5 minutes
+                threshold: cpuThreshold,
+                duration: cpuDuration,
                 severity: 'warning',
                 enabled: process.env.ALERT_CPU_ENABLED !== 'false',
                 tags: ['performance', 'cpu'],
@@ -108,8 +152,8 @@ class AlertManager extends EventEmitter {
                 description: 'Critical CPU usage requiring immediate attention',
                 metric: 'cpu',
                 condition: 'greater_than',
-                threshold: parseInt(process.env.ALERT_CPU_CRITICAL_THRESHOLD) || 95,
-                duration: parseInt(process.env.ALERT_CPU_CRITICAL_DURATION) || 60000, // 1 minute
+                threshold: this.parseEnvInt('ALERT_CPU_CRITICAL_THRESHOLD', 95, 1, 100),
+                duration: this.parseEnvInt('ALERT_CPU_CRITICAL_DURATION', 60000, 1000),
                 severity: 'critical',
                 enabled: process.env.ALERT_CPU_CRITICAL_ENABLED !== 'false',
                 tags: ['performance', 'cpu', 'critical'],
@@ -125,8 +169,8 @@ class AlertManager extends EventEmitter {
                 description: 'Memory usage exceeds safe operating levels',
                 metric: 'memory',
                 condition: 'greater_than',
-                threshold: parseInt(process.env.ALERT_MEMORY_THRESHOLD) || 90,
-                duration: parseInt(process.env.ALERT_MEMORY_DURATION) || 300000, // 5 minutes
+                threshold: memThreshold,
+                duration: memDuration,
                 severity: 'warning',
                 enabled: process.env.ALERT_MEMORY_ENABLED !== 'false',
                 tags: ['performance', 'memory'],
@@ -142,8 +186,8 @@ class AlertManager extends EventEmitter {
                 description: 'Memory usage at critical levels - system stability at risk',
                 metric: 'memory',
                 condition: 'greater_than',
-                threshold: parseInt(process.env.ALERT_MEMORY_CRITICAL_THRESHOLD) || 98,
-                duration: parseInt(process.env.ALERT_MEMORY_CRITICAL_DURATION) || 120000, // 2 minutes
+                threshold: this.parseEnvInt('ALERT_MEMORY_CRITICAL_THRESHOLD', 98, 1, 100),
+                duration: this.parseEnvInt('ALERT_MEMORY_CRITICAL_DURATION', 120000, 1000),
                 severity: 'critical',
                 enabled: process.env.ALERT_MEMORY_CRITICAL_ENABLED !== 'false',
                 tags: ['performance', 'memory', 'critical'],
@@ -159,8 +203,8 @@ class AlertManager extends EventEmitter {
                 description: 'Disk usage approaching capacity limits',
                 metric: 'disk',
                 condition: 'greater_than',
-                threshold: parseInt(process.env.ALERT_DISK_THRESHOLD) || 85,
-                duration: parseInt(process.env.ALERT_DISK_DURATION) || 300000, // 5 minutes
+                threshold: diskThreshold,
+                duration: diskDuration,
                 severity: 'warning',
                 enabled: process.env.ALERT_DISK_ENABLED !== 'false',
                 tags: ['storage', 'disk'],
@@ -176,8 +220,8 @@ class AlertManager extends EventEmitter {
                 description: 'Disk space critically low - immediate action required',
                 metric: 'disk',
                 condition: 'greater_than',
-                threshold: parseInt(process.env.ALERT_DISK_CRITICAL_THRESHOLD) || 95,
-                duration: parseInt(process.env.ALERT_DISK_CRITICAL_DURATION) || 60000, // 1 minute
+                threshold: this.parseEnvInt('ALERT_DISK_CRITICAL_THRESHOLD', 95, 1, 100),
+                duration: this.parseEnvInt('ALERT_DISK_CRITICAL_DURATION', 60000, 1000),
                 severity: 'critical',
                 enabled: process.env.ALERT_DISK_CRITICAL_ENABLED !== 'false',
                 tags: ['storage', 'disk', 'critical'],
@@ -194,7 +238,7 @@ class AlertManager extends EventEmitter {
                 metric: 'status',
                 condition: 'equals',
                 threshold: 'stopped',
-                duration: parseInt(process.env.ALERT_DOWN_DURATION) || 60000, // 1 minute
+                duration: this.parseEnvInt('ALERT_DOWN_DURATION', 60000, 1000), // 1 minute
                 severity: 'critical',
                 enabled: process.env.ALERT_DOWN_ENABLED !== 'false',
                 tags: ['availability', 'guest'],
@@ -307,25 +351,60 @@ class AlertManager extends EventEmitter {
     }
 
     // Enhanced alert checking with custom conditions
-    checkMetrics(guests, metrics) {
-        const timestamp = Date.now();
+    async checkMetrics(guests, metrics) {
+        if (this.processingMetrics || this.reloadingRules) {
+            console.log('[AlertManager] Skipping metrics check - already processing or reloading rules');
+            return;
+        }
         
-        guests.forEach(guest => {
-            // Evaluate all alert rules (both single-metric and compound threshold rules)
-            this.alertRules.forEach(rule => {
-                if (this.isRuleSuppressed(rule.id, guest)) return;
-                
-                const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
-                
-                if (rule.type === 'compound_threshold' && rule.thresholds) {
-                    // Handle compound threshold rules
-                    this.evaluateCompoundThresholdRule(rule, guest, metrics, alertKey, timestamp);
-                } else {
-                    // Handle single-metric rules
-                    this.evaluateRule(rule, guest, metrics, alertKey, timestamp);
+        this.processingMetrics = true;
+        const timestamp = Date.now();
+        const newlyTriggeredAlerts = [];
+        
+        try {
+            // Validate inputs
+            if (!Array.isArray(guests) || !Array.isArray(metrics)) {
+                console.warn('[AlertManager] Invalid guests or metrics data provided');
+                return;
+            }
+            
+            guests.forEach(guest => {
+                try {
+                    // Evaluate all alert rules (both single-metric and compound threshold rules)
+                    this.alertRules.forEach(rule => {
+                        try {
+                            if (!rule.enabled || this.isRuleSuppressed(rule.id, guest)) return;
+                            
+                            const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
+                            
+                            if (rule.type === 'compound_threshold' && rule.thresholds) {
+                                // Handle compound threshold rules
+                                const triggered = this.evaluateCompoundThresholdRule(rule, guest, metrics, alertKey, timestamp);
+                                if (triggered) newlyTriggeredAlerts.push(triggered);
+                            } else {
+                                // Handle single-metric rules
+                                const triggered = this.evaluateRule(rule, guest, metrics, alertKey, timestamp);
+                                if (triggered) newlyTriggeredAlerts.push(triggered);
+                            }
+                        } catch (ruleError) {
+                            console.error(`[AlertManager] Error evaluating rule ${rule.id}:`, ruleError);
+                        }
+                    });
+                } catch (guestError) {
+                    console.error(`[AlertManager] Error processing guest ${guest.vmid}:`, guestError);
                 }
             });
-        });
+            
+            // Emit newly triggered alerts
+            newlyTriggeredAlerts.forEach(alert => {
+                this.emit('alert', alert);
+            });
+            
+        } catch (error) {
+            console.error('[AlertManager] Error in checkMetrics:', error);
+        } finally {
+            this.processingMetrics = false;
+        }
     }
 
     processMetrics(metricsData) {
@@ -372,80 +451,88 @@ class AlertManager extends EventEmitter {
     evaluateRule(rule, guest, metrics, alertKey, timestamp) {
         let isTriggered = false;
         let currentValue = null;
+        let newlyTriggeredAlert = null;
 
-        // Find metrics for this guest
-        const guestMetrics = metrics.find(m => 
-            m.endpointId === guest.endpointId &&
-            m.node === guest.node &&
-            m.id === guest.vmid
-        );
+        try {
+            // Find metrics for this guest
+            const guestMetrics = metrics.find(m => 
+                m.endpointId === guest.endpointId &&
+                m.node === guest.node &&
+                m.id === guest.vmid
+            );
 
-        // Get effective threshold (custom or global)
-        const effectiveThreshold = this.getEffectiveThreshold(rule, guest);
+            // Get effective threshold (custom or global)
+            const effectiveThreshold = this.getEffectiveThreshold(rule, guest);
 
-        // Enhanced condition evaluation
-        if (rule.metric === 'status') {
-            isTriggered = this.evaluateCondition(guest.status, rule.condition, effectiveThreshold);
-            currentValue = guest.status;
-        } else if (rule.metric === 'network_combined' && rule.condition === 'anomaly') {
-            // Network anomaly detection
-            isTriggered = this.detectNetworkAnomaly(guestMetrics, guest);
-            currentValue = 'anomaly_detected';
-        } else if (guestMetrics && guestMetrics.current) {
-            const metricValue = this.getMetricValue(guestMetrics.current, rule.metric, guest);
-            if (metricValue !== null) {
-                isTriggered = this.evaluateCondition(metricValue, rule.condition, effectiveThreshold);
-                currentValue = metricValue;
-            }
-        }
-
-        const existingAlert = this.activeAlerts.get(alertKey);
-
-        if (isTriggered) {
-            if (!existingAlert) {
-                // Create new alert with permanent ID
-                const newAlert = {
-                    id: this.generateAlertId(), // Generate ID once when alert is created
-                    rule,
-                    guest,
-                    startTime: timestamp,
-                    lastUpdate: timestamp,
-                    currentValue,
-                    effectiveThreshold: effectiveThreshold,
-                    state: 'pending',
-                    escalated: false,
-                    acknowledged: false
-                };
-                this.activeAlerts.set(alertKey, newAlert);
-            } else if (existingAlert.state === 'pending') {
-                // Check if duration threshold is met
-                const duration = timestamp - existingAlert.startTime;
-                if (duration >= rule.duration) {
-                    // Trigger alert
-                    existingAlert.state = 'active';
-                    existingAlert.triggeredAt = timestamp;
-                    this.triggerAlert(existingAlert);
+            // Enhanced condition evaluation
+            if (rule.metric === 'status') {
+                isTriggered = this.evaluateCondition(guest.status, rule.condition, effectiveThreshold);
+                currentValue = guest.status;
+            } else if (rule.metric === 'network_combined' && rule.condition === 'anomaly') {
+                // Network anomaly detection
+                isTriggered = this.detectNetworkAnomaly(guestMetrics, guest);
+                currentValue = 'anomaly_detected';
+            } else if (guestMetrics && guestMetrics.current) {
+                const metricValue = this.getMetricValue(guestMetrics.current, rule.metric, guest);
+                if (metricValue !== null) {
+                    isTriggered = this.evaluateCondition(metricValue, rule.condition, effectiveThreshold);
+                    currentValue = metricValue;
                 }
-                existingAlert.lastUpdate = timestamp;
-                existingAlert.currentValue = currentValue;
-            } else if (existingAlert.state === 'active') {
-                // Update existing active alert
-                existingAlert.lastUpdate = timestamp;
-                existingAlert.currentValue = currentValue;
             }
-        } else {
-            if (existingAlert && existingAlert.state === 'active') {
-                // Resolve alert
-                existingAlert.state = 'resolved';
-                existingAlert.resolvedAt = timestamp;
-                if (existingAlert.rule.autoResolve) {
-                    this.resolveAlert(existingAlert);
+
+            const existingAlert = this.activeAlerts.get(alertKey);
+
+            if (isTriggered) {
+                if (!existingAlert) {
+                    // Create new alert with permanent ID
+                    const newAlert = {
+                        id: this.generateAlertId(), // Generate ID once when alert is created
+                        rule,
+                        guest,
+                        startTime: timestamp,
+                        lastUpdate: timestamp,
+                        currentValue,
+                        effectiveThreshold: effectiveThreshold,
+                        state: 'pending',
+                        escalated: false,
+                        acknowledged: false
+                    };
+                    this.activeAlerts.set(alertKey, newAlert);
+                } else if (existingAlert.state === 'pending') {
+                    // Check if duration threshold is met
+                    const duration = timestamp - existingAlert.startTime;
+                    if (duration >= rule.duration) {
+                        // Trigger alert
+                        existingAlert.state = 'active';
+                        existingAlert.triggeredAt = timestamp;
+                        this.triggerAlert(existingAlert);
+                        newlyTriggeredAlert = existingAlert;
+                    }
+                    existingAlert.lastUpdate = timestamp;
+                    existingAlert.currentValue = currentValue;
+                } else if (existingAlert.state === 'active') {
+                    // Update existing active alert
+                    existingAlert.lastUpdate = timestamp;
+                    existingAlert.currentValue = currentValue;
                 }
-            } else if (existingAlert && existingAlert.state === 'pending') {
-                // Remove pending alert that didn't trigger
-                this.activeAlerts.delete(alertKey);
+            } else {
+                if (existingAlert && existingAlert.state === 'active') {
+                    // Resolve alert
+                    existingAlert.state = 'resolved';
+                    existingAlert.resolvedAt = timestamp;
+                    if (existingAlert.rule.autoResolve) {
+                        this.resolveAlert(existingAlert);
+                    }
+                } else if (existingAlert && existingAlert.state === 'pending') {
+                    // Remove pending alert that didn't trigger
+                    this.activeAlerts.delete(alertKey);
+                }
             }
+        } catch (error) {
+            console.error(`[AlertManager] Error in evaluateRule for ${alertKey}:`, error);
         }
+        
+        return newlyTriggeredAlert;
     }
 
     evaluateCondition(value, condition, threshold) {
@@ -956,9 +1043,10 @@ class AlertManager extends EventEmitter {
             
             // Save to disk if it's a custom or compound threshold rule
             if (rule.type === 'compound_threshold' || rule.group === 'custom') {
-                this.saveAlertRules().catch(error => 
-                    console.error('[AlertManager] Failed to save alert rules after updating rule:', error)
-                );
+                this.saveAlertRules().catch(error => {
+                    console.error('[AlertManager] Failed to save alert rules after updating rule:', error);
+                    this.emit('ruleSaveError', { ruleId, error: error.message });
+                });
             }
             
             this.emit('ruleUpdated', { ruleId, updates });
@@ -974,12 +1062,45 @@ class AlertManager extends EventEmitter {
         console.log('[AlertManager] Adding rule:', JSON.stringify(rule, null, 2));
         console.log('[AlertManager] Is compound rule:', isCompoundRule);
         
-        if (!rule.name) {
-            throw new Error('Rule must have a name');
+        // Enhanced validation
+        if (!rule.name || typeof rule.name !== 'string' || rule.name.trim().length === 0) {
+            throw new Error('Rule must have a valid name (non-empty string)');
         }
         
         if (!isCompoundRule && !rule.metric) {
             throw new Error('Single-metric rule must have a metric. For compound threshold rules, provide thresholds array.');
+        }
+        
+        if (isCompoundRule) {
+            // Validate compound threshold rule structure
+            if (!Array.isArray(rule.thresholds) || rule.thresholds.length === 0) {
+                throw new Error('Compound threshold rule must have at least one threshold');
+            }
+            
+            for (const threshold of rule.thresholds) {
+                if (!threshold.metric || !threshold.condition || threshold.threshold === undefined) {
+                    throw new Error('Each threshold must have metric, condition, and threshold value');
+                }
+                
+                const validConditions = ['greater_than', 'less_than', 'equals', 'not_equals', 'greater_than_or_equal', 'less_than_or_equal', 'contains', 'anomaly'];
+                if (!validConditions.includes(threshold.condition)) {
+                    throw new Error(`Invalid condition: ${threshold.condition}. Must be one of: ${validConditions.join(', ')}`);
+                }
+            }
+        } else {
+            // Validate single-metric rule
+            if (rule.threshold !== undefined && (typeof rule.threshold !== 'number' || rule.threshold < 0)) {
+                throw new Error('Threshold must be a non-negative number');
+            }
+            
+            if (rule.duration !== undefined && (typeof rule.duration !== 'number' || rule.duration < 0)) {
+                throw new Error('Duration must be a non-negative number (milliseconds)');
+            }
+            
+            const validSeverities = ['info', 'warning', 'critical'];
+            if (rule.severity && !validSeverities.includes(rule.severity)) {
+                throw new Error(`Invalid severity: ${rule.severity}. Must be one of: ${validSeverities.join(', ')}`);
+            }
         }
         
         const ruleId = rule.id || (isCompoundRule ? 
@@ -1008,12 +1129,17 @@ class AlertManager extends EventEmitter {
         
         // Save to disk if it's a custom or compound threshold rule
         if (isCompoundRule || fullRule.group === 'custom') {
-            this.saveAlertRules().catch(error => 
-                console.error('[AlertManager] Failed to save alert rules after adding rule:', error)
-            );
+            this.saveAlertRules().catch(error => {
+                console.error('[AlertManager] Failed to save alert rules after adding rule:', error);
+                this.emit('ruleSaveError', { ruleId: fullRule.id, error: error.message });
+            });
         }
         
         this.emit('ruleAdded', fullRule);
+        
+        // Trigger immediate evaluation for the new rule
+        this.evaluateCurrentState();
+        
         return fullRule;
     }
 
@@ -1024,9 +1150,10 @@ class AlertManager extends EventEmitter {
         if (success) {
             // Save to disk if it was a custom or compound threshold rule
             if (rule && (rule.type === 'compound_threshold' || rule.group === 'custom')) {
-                this.saveAlertRules().catch(error => 
-                    console.error('[AlertManager] Failed to save alert rules after removing rule:', error)
-                );
+                this.saveAlertRules().catch(error => {
+                    console.error('[AlertManager] Failed to save alert rules after removing rule:', error);
+                    this.emit('ruleSaveError', { ruleId, error: error.message });
+                });
             }
             
             this.emit('ruleRemoved', { ruleId });
@@ -1278,7 +1405,12 @@ class AlertManager extends EventEmitter {
                 metricValue = currentMetrics.memory;
                 break;
             case 'disk':
-                metricValue = currentMetrics.disk;
+                // Calculate disk usage percentage like single-metric rules do
+                if (guest.maxdisk && currentMetrics.disk) {
+                    metricValue = (currentMetrics.disk / guest.maxdisk) * 100;
+                } else {
+                    metricValue = null;
+                }
                 break;
             case 'diskread':
                 metricValue = currentMetrics.diskread;
@@ -1323,7 +1455,7 @@ class AlertManager extends EventEmitter {
 
     formatCompoundThresholdMessage(rule, currentMetrics, guest) {
         const conditions = rule.thresholds.map(threshold => {
-            const value = this.getThresholdCurrentValue(threshold, currentMetrics);
+            const value = this.getThresholdCurrentValue(threshold, currentMetrics, guest);
             const displayName = this.getThresholdDisplayName(threshold.type);
             const unit = ['cpu', 'memory', 'disk'].includes(threshold.type) ? '%' : ' bytes/s';
             
@@ -1336,12 +1468,12 @@ class AlertManager extends EventEmitter {
     getCurrentThresholdValues(thresholds, currentMetrics, guest) {
         const values = {};
         thresholds.forEach(threshold => {
-            values[threshold.type] = this.getThresholdCurrentValue(threshold, currentMetrics);
+            values[threshold.type] = this.getThresholdCurrentValue(threshold, currentMetrics, guest);
         });
         return values;
     }
 
-    getThresholdCurrentValue(threshold, currentMetrics) {
+    getThresholdCurrentValue(threshold, currentMetrics, guest) {
         switch (threshold.type) {
             case 'cpu': 
                 const cpuValue = currentMetrics.cpu || 0;
@@ -1352,7 +1484,13 @@ class AlertManager extends EventEmitter {
                 }
                 return Math.round(cpuValue * 10) / 10;
             case 'memory': return currentMetrics.memory || 0;
-            case 'disk': return currentMetrics.disk || 0;
+            case 'disk': 
+                // Calculate disk usage percentage like single-metric rules do
+                if (guest && guest.maxdisk && currentMetrics.disk) {
+                    const diskPercentage = (currentMetrics.disk / guest.maxdisk) * 100;
+                    return Math.round(diskPercentage * 10) / 10; // Round to 1 decimal place
+                }
+                return 0;
             case 'diskread': return currentMetrics.diskread || 0;
             case 'diskwrite': return currentMetrics.diskwrite || 0;
             case 'netin': return currentMetrics.netin || 0;
@@ -1946,22 +2084,45 @@ This alert was generated by Pulse monitoring system.
             ...channel.config.headers
         };
 
-        try {
-            const response = await axios.post(channel.config.url, payload, {
-                headers,
-                timeout: 10000, // 10 second timeout
-                maxRedirects: 3
-            });
+        const maxRetries = 3;
+        let lastError;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await axios.post(channel.config.url, payload, {
+                    headers,
+                    timeout: 10000, // 10 second timeout
+                    maxRedirects: 3
+                });
 
-            console.log(`[WEBHOOK] Alert sent to: ${channel.config.url} (${response.status})`);
-        } catch (error) {
-            if (error.response) {
-                throw new Error(`Webhook failed: ${error.response.status} ${error.response.statusText}`);
-            } else if (error.request) {
-                throw new Error(`Webhook failed: No response from ${channel.config.url}`);
-            } else {
-                throw new Error(`Webhook failed: ${error.message}`);
+                console.log(`[WEBHOOK] Alert sent to: ${channel.config.url} (${response.status}) - attempt ${attempt}`);
+                return; // Success, exit retry loop
+                
+            } catch (error) {
+                lastError = error;
+                console.warn(`[WEBHOOK] Attempt ${attempt}/${maxRetries} failed for ${channel.config.url}:`, error.message);
+                
+                // Don't retry on 4xx client errors (likely permanent)
+                if (error.response && error.response.status >= 400 && error.response.status < 500) {
+                    console.error(`[WEBHOOK] Permanent client error ${error.response.status}, not retrying`);
+                    break;
+                }
+                
+                // Wait before retry (exponential backoff)
+                if (attempt < maxRetries) {
+                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Max 5s delay
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
             }
+        }
+        
+        // All retries failed, throw final error
+        if (lastError.response) {
+            throw new Error(`Webhook failed after ${maxRetries} attempts: ${lastError.response.status} ${lastError.response.statusText}`);
+        } else if (lastError.request) {
+            throw new Error(`Webhook failed after ${maxRetries} attempts: No response from ${channel.config.url}`);
+        } else {
+            throw new Error(`Webhook failed after ${maxRetries} attempts: ${lastError.message}`);
         }
     }
 
