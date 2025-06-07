@@ -61,14 +61,14 @@ PulseApp.ui.backupDetailCard = (() => {
         
         // If no filters active, show summary view
         if (!hasActiveFilters) {
-            return getCompactOverview(backups, stats);
+            return getCompactOverview(backups, stats, filterInfo);
         }
         
         // Otherwise show detailed table view
         return getCompactDetailTable(backups, stats, filterInfo);
     }
 
-    function getCompactOverview(backups, stats) {
+    function getCompactOverview(backups, stats, filterInfo) {
         
         // Calculate critical metrics
         const now = new Date();
@@ -84,22 +84,72 @@ PulseApp.ui.backupDetailCard = (() => {
             none: []       // no backups
         };
         
+        // Debug: Show which guests are being processed by detail card
+        console.log(`[Debug] Detail card processing guests:`, backups.map(g => `${g.guestId} (${g.guestName})`));
+        
         // Analyze each guest
         backups.forEach(guest => {
             let mostRecentBackup = null;
             
-            // Find most recent backup - only use if it's a valid timestamp
-            if (guest.latestBackupTime && guest.latestBackupTime > 0) {
-                // latestBackupTime is a Unix timestamp from the main backup status
-                mostRecentBackup = new Date(guest.latestBackupTime * 1000);
-            } else if (guest.backupDates && guest.backupDates.length > 0) {
-                // Fallback to backupDates array - find the most recent actual backup
-                const validDates = guest.backupDates
-                    .filter(bd => bd.date && new Date(bd.date).getTime() > 0)
-                    .map(bd => new Date(bd.date))
-                    .sort((a, b) => b - a);
-                if (validDates.length > 0) {
-                    mostRecentBackup = validDates[0];
+            // Check if we have filter info to determine which backup types to consider
+            const activeBackupFilter = filterInfo?.backupType;
+            
+            // If a specific backup type filter is active, use filtered backup dates
+            if (activeBackupFilter && activeBackupFilter !== 'all' && guest.backupDates && guest.backupDates.length > 0) {
+                // Find the most recent backup of the filtered type
+                const filteredDates = guest.backupDates.filter(dateInfo => {
+                    if (activeBackupFilter === 'pbs') return dateInfo.types.includes('pbsSnapshots');
+                    if (activeBackupFilter === 'pve') return dateInfo.types.includes('pveBackups');
+                    if (activeBackupFilter === 'snapshots') return dateInfo.types.includes('vmSnapshots');
+                    return false;
+                });
+                
+                if (filteredDates.length > 0) {
+                    // backupDates are already sorted by date (newest first)
+                    mostRecentBackup = new Date(filteredDates[0].date);
+                }
+            } else {
+                // Use overall latest backup time for 'all' filter or when no filter is active
+                // Find most recent backup - only use if it's a valid timestamp
+                if (guest.latestBackupTime && guest.latestBackupTime > 0) {
+                    // latestBackupTime is a Unix timestamp from the main backup status
+                    mostRecentBackup = new Date(guest.latestBackupTime * 1000);
+                    
+                    // Debug for guest 111
+                    if (guest.guestId === 111 || guest.guestId === '111') {
+                        console.log(`[Debug] Detail card guest 111 timestamp:`, {
+                            guestId: guest.guestId,
+                            latestBackupTime: guest.latestBackupTime,
+                            mostRecentBackup: mostRecentBackup,
+                            now: now,
+                            ageInDays: (now - mostRecentBackup) / (1000 * 60 * 60 * 24),
+                            ageInHours: (now - mostRecentBackup) / (1000 * 60 * 60),
+                            backupDatesFallback: guest.backupDates ? guest.backupDates.length : 0,
+                            hasBackupDates: !!guest.backupDates,
+                            backupDatesLength: guest.backupDates?.length || 0
+                        });
+                    }
+                } else if (guest.backupDates && guest.backupDates.length > 0) {
+                    // Fallback to backupDates array - find the most recent actual backup
+                    const validDates = guest.backupDates
+                        .filter(bd => bd.date && new Date(bd.date).getTime() > 0)
+                        .map(bd => new Date(bd.date))
+                        .sort((a, b) => b - a);
+                    if (validDates.length > 0) {
+                        mostRecentBackup = validDates[0];
+                        
+                        // Debug when using fallback for guest 111
+                        if (guest.guestId === 111 || guest.guestId === '111') {
+                            console.log(`[Debug] Detail card guest 111 using FALLBACK backupDates:`, {
+                                guestId: guest.guestId,
+                                backupDates: guest.backupDates,
+                                validDates: validDates,
+                                selectedDate: mostRecentBackup,
+                                ageInDays: (now - mostRecentBackup) / (1000 * 60 * 60 * 24),
+                                ageInHours: (now - mostRecentBackup) / (1000 * 60 * 60)
+                            });
+                        }
+                    }
                 }
             }
             
@@ -304,11 +354,23 @@ PulseApp.ui.backupDetailCard = (() => {
                 <div class="flex-1 overflow-y-auto">
                     <div class="space-y-0.5">
                         ${sortedBackups.map(guest => {
-                            const mostRecent = guest.backupDates.length > 0 
-                                ? new Date(guest.backupDates[0].date)
-                                : null;
+                            // Calculate age based on filtered backup data when specific backup type is selected
+                            let mostRecent = null;
+                            const now = new Date();
+                            const backupTypeFilter = filterInfo?.backupType;
+                            
+                            // Always use overall backup age regardless of filter for health assessment
+                            // Filters affect display of backup types/counts, but age should show when guest was last backed up (any type)
+                            if (guest.latestBackupTime && guest.latestBackupTime > 0) {
+                                // latestBackupTime is a Unix timestamp from the main backup status
+                                mostRecent = new Date(guest.latestBackupTime * 1000);
+                            } else if (guest.backupDates && guest.backupDates.length > 0) {
+                                // Fallback to filtered backup dates
+                                mostRecent = new Date(guest.backupDates[0].date);
+                            }
+                            
                             const ageInDays = mostRecent 
-                                ? (new Date() - mostRecent) / (1000 * 60 * 60 * 24)
+                                ? (now - mostRecent) / (1000 * 60 * 60 * 24)
                                 : Infinity;
                             
                             // Get filtered backup types and counts based on active filter
@@ -524,6 +586,14 @@ PulseApp.ui.backupDetailCard = (() => {
 
     // Helper functions
     function formatAge(ageInDays) {
+        // Debug for unusual age calculations  
+        if (ageInDays > 0.5 || Math.floor(ageInDays * 24) > 10) {
+            console.log(`[Debug] formatAge called with unusual value:`, {
+                ageInDays: ageInDays,
+                result: ageInDays < 1 ? `${Math.floor(ageInDays * 24)}h` : `${Math.floor(ageInDays)}d`
+            });
+        }
+        
         if (ageInDays === Infinity) return 'Never';
         if (ageInDays < 1) return `${Math.floor(ageInDays * 24)}h`;
         if (ageInDays < 7) return `${Math.floor(ageInDays)}d`;
