@@ -370,8 +370,19 @@ PulseApp.alerts = (() => {
         } else if (typeof alert.currentValue === 'number') {
             const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.metric);
             currentValueDisplay = `${Math.round(alert.currentValue)}${isPercentageMetric ? '%' : ''}`;
+        } else if (typeof alert.currentValue === 'object' && alert.currentValue !== null) {
+            // Handle compound threshold alerts (multiple metrics)
+            const values = [];
+            for (const [metric, value] of Object.entries(alert.currentValue)) {
+                const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
+                const formattedValue = typeof value === 'number' 
+                    ? `${Math.round(value)}${isPercentageMetric ? '%' : ''}`
+                    : value;
+                values.push(`${metric}: ${formattedValue}`);
+            }
+            currentValueDisplay = values.join(', ');
         } else {
-            currentValueDisplay = alert.currentValue;
+            currentValueDisplay = alert.currentValue || '';
         }
         
         // Muted text classes for acknowledged alerts

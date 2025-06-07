@@ -1,6 +1,8 @@
 const axios = require('axios');
 const https = require('https');
 const axiosRetry = require('axios-retry').default;
+const ResilientApiClient = require('./resilientApiClient');
+const dnsResolver = require('./dnsResolver');
 
 /**
  * Creates a request interceptor for PVE API authentication.
@@ -69,18 +71,21 @@ function initializePveClients(endpoints) {
       retryConditionChecker: pveRetryConditionChecker,
     };
     
-    const apiClient = createApiClientInstance(baseURL, endpoint.allowSelfSignedCerts, authInterceptor, retryConfig);
+    // Enable resilient DNS handling if specified in endpoint config or if host ends with .lan
+    const useResilientDns = endpoint.useResilientDns || endpoint.host.includes('.lan');
+    
+    const apiClient = createApiClientInstance(baseURL, endpoint.allowSelfSignedCerts, authInterceptor, retryConfig, useResilientDns);
 
     apiClients[endpoint.id] = { client: apiClient, config: endpoint };
-    console.log(`INFO: Initialized PVE API client for endpoint: ${endpoint.name} (${endpoint.host})`);
+    console.log(`INFO: Initialized PVE API client for endpoint: ${endpoint.name} (${endpoint.host})${useResilientDns ? ' with resilient DNS' : ''}`);
   });
 
   return apiClients;
 }
 
 // Generic function to create an Axios API client instance
-function createApiClientInstance(baseURL, allowSelfSignedCerts, authInterceptor, retryConfig) {
-  const apiClient = axios.create({
+function createApiClientInstance(baseURL, allowSelfSignedCerts, authInterceptor, retryConfig, useResilientClient = false) {
+  const baseConfig = {
     baseURL: baseURL,
     timeout: 30000, // 30 second timeout
     httpsAgent: new https.Agent({
@@ -89,7 +94,20 @@ function createApiClientInstance(baseURL, allowSelfSignedCerts, authInterceptor,
     headers: {
       'Content-Type': 'application/json'
     }
-  });
+  };
+
+  // If resilient client is requested and the host appears to be a hostname (not IP)
+  if (useResilientClient) {
+    const hostname = dnsResolver.extractHostname(baseURL);
+    // Check if it's likely a hostname (not an IP)
+    if (hostname && !hostname.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
+      console.log(`[ApiClients] Creating resilient client for hostname: ${hostname}`);
+      return new ResilientApiClient(baseConfig, authInterceptor);
+    }
+  }
+
+  // Standard axios client
+  const apiClient = axios.create(baseConfig);
 
   if (authInterceptor) {
     apiClient.interceptors.request.use(authInterceptor);
@@ -166,10 +184,13 @@ async function initializePbsClients(pbsConfigs) {
                 retryConditionChecker: pbsRetryConditionChecker,
               };
 
-              const pbsAxiosInstance = createApiClientInstance(pbsBaseURL, config.allowSelfSignedCerts, authInterceptor, retryConfig);
+              // Enable resilient DNS handling if specified in config or if host ends with .lan
+              const useResilientDns = config.useResilientDns || config.host.includes('.lan');
+              
+              const pbsAxiosInstance = createApiClientInstance(pbsBaseURL, config.allowSelfSignedCerts, authInterceptor, retryConfig, useResilientDns);
               
               clientData = { client: pbsAxiosInstance, config: config };
-              console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)`);
+              console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)${useResilientDns ? ' with resilient DNS' : ''}`);
           } else {
               console.error(`ERROR: Unexpected authMethod '${config.authMethod}' found during PBS client initialization for: ${config.name}`);
           }

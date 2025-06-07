@@ -536,7 +536,12 @@ app.post('/api/alerts/rules/reload', async (req, res) => {
 // Endpoint to trigger immediate alert evaluation
 app.post('/api/alerts/evaluate', async (req, res) => {
     try {
+        console.log('====== API ENDPOINT HIT: /api/alerts/evaluate ======');
         console.log('[AlertManager] Triggering immediate alert evaluation...');
+        console.log('[DEBUG] stateManager exists:', !!stateManager);
+        console.log('[DEBUG] stateManager.alertManager exists:', !!stateManager.alertManager);
+        console.log('[DEBUG] evaluateCurrentState method exists:', !!stateManager.alertManager?.evaluateCurrentState);
+        
         stateManager.alertManager.evaluateCurrentState();
         res.json({ success: true, message: "Alert evaluation triggered" });
     } catch (error) {

@@ -2,6 +2,7 @@ const { processPbsTasks } = require('./pbsUtils'); // Assuming pbsUtils.js exist
 const { createApiClientInstance } = require('./apiClients');
 const axios = require('axios');
 const https = require('https');
+const dnsResolver = require('./dnsResolver');
 
 let pLimit;
 let requestLimiter;
@@ -253,28 +254,47 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             return { nodes: [], vms: [], containers: [] };
         }
 
-        // Get node IP addresses from cluster status (reuse the result we already have)
+        // Get node IP addresses and online status from cluster status (reuse the result we already have)
         const nodeIpMap = new Map();
+        const nodeStatusMap = new Map(); // Track online/offline status from cluster
         if (clusterStatusResult.status === 'fulfilled' && clusterStatusResult.value.data?.data) {
             const clusterStatus = clusterStatusResult.value.data.data;
             
             clusterStatus.forEach(item => {
-                if (item.type === 'node' && item.ip) {
-                    nodeIpMap.set(item.name, item.ip);
+                if (item.type === 'node') {
+                    if (item.ip) {
+                        nodeIpMap.set(item.name, item.ip);
+                    }
+                    // Check if node is online (1) or offline (0)
+                    nodeStatusMap.set(item.name, item.online === 1 ? 'online' : 'offline');
                 }
             });
             
             if (nodeIpMap.size > 0) {
                 console.log(`[DataFetcher - ${endpointName}] Found IP addresses for ${nodeIpMap.size} nodes`);
             }
+            
+            // Log offline nodes
+            const offlineNodes = Array.from(nodeStatusMap.entries())
+                .filter(([_, status]) => status === 'offline')
+                .map(([name, _]) => name);
+            if (offlineNodes.length > 0) {
+                console.log(`[DataFetcher - ${endpointName}] Detected offline nodes: ${offlineNodes.join(', ')}`);
+            }
         } else {
             console.warn(`[DataFetcher - ${endpointName}] Could not get cluster status for node IPs`);
         }
 
         // Pass the correct endpointId to fetchDataForNode with concurrency limiting
-        const guestPromises = nodes.map(node => 
-            requestLimiter(() => fetchDataForNode(apiClientInstance, endpointId, node.node))
-        ); 
+        // Skip fetching data for offline nodes to prevent timeouts
+        const guestPromises = nodes.map(node => {
+            const isOffline = nodeStatusMap.get(node.node) === 'offline';
+            if (isOffline) {
+                console.log(`[DataFetcher - ${endpointName}] Skipping data fetch for offline node: ${node.node}`);
+                return Promise.resolve({ skipped: true, reason: 'offline' });
+            }
+            return requestLimiter(() => fetchDataForNode(apiClientInstance, endpointId, node.node));
+        }); 
         const guestResults = await Promise.allSettled(guestPromises);
 
         let endpointVms = [];
@@ -295,6 +315,10 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 nodeDisplayName = `${config.name} - ${correspondingNodeInfo.node}`;
             }
             
+            // Check cluster status first for offline nodes
+            const clusterNodeStatus = nodeStatusMap.get(correspondingNodeInfo.node);
+            const isNodeOffline = clusterNodeStatus === 'offline';
+            
             const finalNode = {
                 cpu: null, mem: null, disk: null, maxdisk: null, uptime: 0, loadavg: null, storage: [],
                 node: correspondingNodeInfo.node,
@@ -302,7 +326,7 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 maxcpu: correspondingNodeInfo.maxcpu,
                 maxmem: correspondingNodeInfo.maxmem,
                 level: correspondingNodeInfo.level,
-                status: correspondingNodeInfo.status || 'unknown',
+                status: isNodeOffline ? 'offline' : (correspondingNodeInfo.status || 'unknown'),
                 id: `${endpointId}-${correspondingNodeInfo.node}`, // Use endpointId for node ID
                 endpointId: endpointId, // Use endpointId for tagging node
                 clusterIdentifier: actualClusterName, // Use actual cluster name or endpoint name
@@ -310,7 +334,7 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 ip: nodeIpMap.get(correspondingNodeInfo.node) || null, // Add IP address for direct connections
             };
 
-            if (result.status === 'fulfilled' && result.value) {
+            if (result.status === 'fulfilled' && result.value && !result.value.skipped) {
                 const nodeData = result.value;
                 // Use endpointId (the actual key) for constructing IDs and tagging
                 endpointVms.push(...(nodeData.vms || []).map(vm => ({ 
@@ -343,10 +367,12 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             } else {
                 if (result.status === 'rejected') {
                     console.error(`[DataFetcher - ${endpointName}-${correspondingNodeInfo.node}] Error fetching Node status: ${result.reason?.message || result.reason}`);
+                } else if (result.value?.skipped && result.value.reason === 'offline') {
+                    console.log(`[DataFetcher - ${endpointName}-${correspondingNodeInfo.node}] Node is offline, showing with offline status`);
                 } else {
                     // console.warn(`[DataFetcher - ${endpointName}-${correspondingNodeInfo.node}] Unexpected result status: ${result.status}`);
                 }
-                processedNodes.push(finalNode); // Push node with defaults on failure
+                processedNodes.push(finalNode); // Push node with defaults on failure or offline
             }
         });
 
@@ -1393,6 +1419,21 @@ async function fetchPbsData(currentPbsApiClients) {
         };
 
         try {
+            // Quick connectivity check for PBS to fail fast
+            try {
+                await Promise.race([
+                    pbsClient.client.get('/api2/json/version'),
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('PBS connectivity check timeout')), 3000)
+                    )
+                ]);
+            } catch (connectError) {
+                console.warn(`[DataFetcher] PBS instance ${instanceName} appears to be offline: ${connectError.message}`);
+                instanceData.status = 'offline';
+                instanceData.error = `PBS server unreachable: ${connectError.message}`;
+                return instanceData;
+            }
+            
             const nodeName = pbsClient.config.nodeName || await fetchPbsNodeName(pbsClient);
             // console.log(`[DataFetcher - PBS Data Debug - ${instanceName}] Fetched nodeName: '${nodeName}' (Configured: '${pbsClient.config.nodeName}')`); // REMOVED DEBUG LOG
 
@@ -1472,6 +1513,12 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
     const nodeBackupPromises = nodes.map(async node => {
         const endpointId = node.endpointId;
         const nodeName = node.node;
+        
+        // Skip offline nodes to prevent timeouts
+        if (node.status === 'offline') {
+            console.log(`[DataFetcher] Skipping backup fetch for offline node: ${nodeName}`);
+            return;
+        }
         
         if (!currentApiClients[endpointId]) {
             console.warn(`[DataFetcher] No API client found for endpoint: ${endpointId}`);

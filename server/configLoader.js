@@ -73,6 +73,7 @@ function loadPbsConfig(index = null) {
     const nodeNameVar = `PBS_NODE_NAME${suffix}`;
     const portVar = `PBS_PORT${suffix}`;
     const selfSignedVar = `PBS_ALLOW_SELF_SIGNED_CERTS${suffix}`;
+    const resilientDnsVar = `PBS_RESILIENT_DNS${suffix}`;
 
     const pbsHostUrl = process.env[hostVar];
     if (!pbsHostUrl) {
@@ -110,7 +111,8 @@ function loadPbsConfig(index = null) {
                 tokenSecret: pbsTokenSecret,
                 nodeName: process.env[nodeNameVar], // Keep nodeName field
                 allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
-                enabled: true
+                enabled: true,
+                useResilientDns: process.env[resilientDnsVar] === 'true'
             };
             console.log(`INFO: Found PBS configuration ${index || 'primary'} with ID: ${config.id}, name: ${config.name}, host: ${config.host}`);
         }
@@ -209,6 +211,10 @@ function loadConfiguration() {
             return null;
         }
         
+        // Check for resilient DNS configuration
+        const resilientDnsEnv = index ? `PROXMOX_RESILIENT_DNS_${index}` : 'PROXMOX_RESILIENT_DNS';
+        const useResilientDns = process.env[resilientDnsEnv] === 'true';
+        
         return {
             id: index ? `${idPrefix}_${index}` : idPrefix,
             name: nodeName || null, // Only use explicitly configured names
@@ -218,6 +224,7 @@ function loadConfiguration() {
             tokenSecret: tokenSecret,
             enabled: process.env[enabledEnv] !== 'false',
             allowSelfSignedCerts: process.env[selfSignedEnv] !== 'false',
+            useResilientDns: useResilientDns,
         };
     }
 

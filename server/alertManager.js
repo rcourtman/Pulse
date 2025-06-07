@@ -54,6 +54,33 @@ class AlertManager extends EventEmitter {
         this.escalationInterval = setInterval(() => {
             this.checkEscalations();
         }, 60000); // Every minute
+        
+        // Watch alert rules file for changes
+        this.setupAlertRulesWatcher();
+    }
+    
+    setupAlertRulesWatcher() {
+        const fs = require('fs');
+        const path = require('path');
+        
+        try {
+            console.log('[AlertManager] Setting up alert rules file watcher...');
+            
+            fs.watchFile(this.alertRulesFile, { interval: 1000 }, async (curr, prev) => {
+                if (curr.mtime !== prev.mtime) {
+                    console.log('[AlertManager] Alert rules file changed, reloading...');
+                    await this.loadAlertRules();
+                    console.log('[AlertManager] Alert rules reloaded successfully');
+                    
+                    // Immediately evaluate current state with new rules
+                    this.evaluateCurrentState();
+                }
+            });
+            
+            console.log('[AlertManager] Alert rules file watcher active');
+        } catch (error) {
+            console.error('[AlertManager] Failed to setup alert rules watcher:', error);
+        }
     }
 
     initializeDefaultRules() {
@@ -638,7 +665,9 @@ class AlertManager extends EventEmitter {
     getActiveAlerts(filters = {}) {
         const active = [];
         for (const alert of this.activeAlerts.values()) {
-            if (alert.state === 'active' && this.matchesFilters(alert, filters)) {
+            // Include both 'active' alerts and 'resolved' alerts that have autoResolve=false
+            if ((alert.state === 'active' || (alert.state === 'resolved' && !alert.rule.autoResolve)) 
+                && this.matchesFilters(alert, filters)) {
                 active.push(this.formatAlertForAPI(alert));
             }
         }
@@ -674,7 +703,7 @@ class AlertManager extends EventEmitter {
                 type: alert.guest.type,
                 endpointId: alert.guest.endpointId
             },
-            metric: alert.rule.metric,
+            metric: alert.rule.metric || (alert.rule.type === 'compound_threshold' ? 'compound' : null),
             threshold: alert.effectiveThreshold || alert.rule.threshold,
             currentValue: alert.currentValue,
             triggeredAt: alert.triggeredAt,
@@ -683,7 +712,9 @@ class AlertManager extends EventEmitter {
             acknowledgedBy: alert.acknowledgedBy,
             acknowledgedAt: alert.acknowledgedAt,
             escalated: alert.escalated || false,
-            message: this.generateAlertMessage(alert)
+            message: this.generateAlertMessage(alert),
+            type: alert.rule.type || 'single_metric',
+            thresholds: alert.rule.thresholds || null
         };
     }
 
@@ -700,7 +731,7 @@ class AlertManager extends EventEmitter {
         );
 
         const activeCount = Array.from(this.activeAlerts.values())
-            .filter(a => a.state === 'active').length;
+            .filter(a => a.state === 'active' || (a.state === 'resolved' && !a.rule.autoResolve)).length;
 
         const acknowledgedCount = Array.from(this.activeAlerts.values())
             .filter(a => a.acknowledged).length;
@@ -818,6 +849,21 @@ class AlertManager extends EventEmitter {
         const { guest, rule, currentValue } = alert;
         let valueStr = '';
         
+        // Handle compound threshold rules
+        if (rule.type === 'compound_threshold' && rule.thresholds) {
+            // For compound rules, show all threshold values
+            const conditions = rule.thresholds.map(threshold => {
+                const value = currentValue && typeof currentValue === 'object' ? currentValue[threshold.type] : null;
+                const displayName = this.getThresholdDisplayName(threshold.type);
+                const unit = ['cpu', 'memory', 'disk'].includes(threshold.type) ? '%' : ' bytes/s';
+                const formattedValue = typeof value === 'number' ? Math.round(value * 10) / 10 : value;
+                return `${displayName}: ${formattedValue}${unit}`;
+            }).join(', ');
+            
+            return `${rule.name} - ${guest.name} (${guest.type.toUpperCase()} ${guest.vmid}) on ${guest.node} - ${conditions}`;
+        }
+        
+        // Handle single-metric rules
         if (rule.metric === 'status') {
             valueStr = `Status: ${currentValue}`;
         } else if (rule.condition === 'anomaly') {
@@ -1033,14 +1079,11 @@ class AlertManager extends EventEmitter {
      */
     evaluateCurrentState() {
         try {
-            console.log('[AlertManager] evaluateCurrentState() called');
-            
             // Get current state from state manager
             const stateManager = require('./state');
             const currentState = stateManager.getState();
             
             if (!currentState) {
-                console.log('[AlertManager] No current state available for evaluation');
                 return;
             }
 
@@ -1049,19 +1092,8 @@ class AlertManager extends EventEmitter {
             const currentMetrics = currentState.metrics || [];
 
             if (allGuests.length === 0) {
-                console.log('[AlertManager] No guests found in current state');
                 return;
             }
-
-            console.log(`[AlertManager] Evaluating current state: ${allGuests.length} guests against ${this.alertRules.size} rules`);
-            
-            // Log some sample guests for debugging
-            const sampleGuests = allGuests.slice(0, 3).map(g => `${g.name}(${g.status})`).join(', ');
-            console.log(`[AlertManager] Sample guests: ${sampleGuests}`);
-            
-            // Check which rules are enabled for down alerts
-            const downRules = Array.from(this.alertRules.values()).filter(r => r.metric === 'status');
-            console.log(`[AlertManager] Found ${downRules.length} down alert rules enabled`);
 
             // For immediate evaluation, we need to check existing conditions and create alerts immediately
             // This bypasses the normal duration-based pending state
@@ -1069,16 +1101,21 @@ class AlertManager extends EventEmitter {
             
             allGuests.forEach(guest => {
                 this.alertRules.forEach(rule => {
-                    if (this.isRuleSuppressed(rule.id, guest)) return;
+                    if (this.isRuleSuppressed(rule.id, guest)) {
+                        return;
+                    }
                     
                     const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
                     const existingAlert = this.activeAlerts.get(alertKey);
                     
                     // Skip if alert already exists
-                    if (existingAlert) return;
+                    if (existingAlert) {
+                        return;
+                    }
                     
-                    // For immediate evaluation, we only care about status-based rules (down alerts)
+                    // Handle different rule types
                     if (rule.metric === 'status') {
+                        // Handle status-based rules (down alerts)
                         const effectiveThreshold = this.getEffectiveThreshold(rule, guest);
                         const isTriggered = this.evaluateCondition(guest.status, rule.condition, effectiveThreshold);
                         
@@ -1101,6 +1138,11 @@ class AlertManager extends EventEmitter {
                             this.activeAlerts.set(alertKey, newAlert);
                             this.triggerAlert(newAlert);
                         }
+                    } else if (rule.type === 'compound_threshold' && rule.thresholds) {
+                        // Handle compound threshold rules
+                        // We need current metrics for compound threshold evaluation
+                        // Use the regular compound threshold evaluation but bypass duration for immediate evaluation
+                        this.evaluateCompoundThresholdRuleImmediate(rule, guest, alertKey, timestamp);
                     }
                 });
             });
@@ -1111,8 +1153,59 @@ class AlertManager extends EventEmitter {
         }
     }
 
+    evaluateCompoundThresholdRuleImmediate(rule, guest, alertKey, timestamp) {
+        // Get current metrics from state manager
+        const stateManager = require('./state');
+        const currentState = stateManager.getState();
+        
+        const metrics = currentState.metrics || [];
+        
+        // Find metrics for this guest (metrics is an array, not an object)
+        const guestMetrics = metrics.find(m => 
+            m.endpointId === guest.endpointId &&
+            m.node === guest.node &&
+            m.id === guest.vmid
+        );
+        
+        if (!guestMetrics || !guestMetrics.current) {
+            return;
+        }
+
+        // Check if ALL threshold conditions are met (AND logic)
+        const thresholdsMet = rule.thresholds.every(threshold => {
+            return this.evaluateThresholdCondition(threshold, guestMetrics.current, guest);
+        });
+
+        if (thresholdsMet) {
+            // Create alert immediately without waiting for duration
+            const newAlert = {
+                id: this.generateAlertId(),
+                ruleId: rule.id,
+                rule: rule,
+                guest: guest,
+                severity: rule.severity,
+                message: this.formatCompoundThresholdMessage(rule, guestMetrics.current, guest),
+                startTime: timestamp,
+                lastUpdate: timestamp,
+                triggeredAt: timestamp, // Set immediately for instant alerts
+                currentValue: this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest),
+                state: 'active', // Make it active immediately
+                escalated: false,
+                acknowledged: false
+            };
+            
+            this.activeAlerts.set(alertKey, newAlert);
+            this.triggerAlert(newAlert);
+        }
+    }
+
     evaluateCompoundThresholdRule(rule, guest, metrics, alertKey, timestamp) {
-        const guestMetrics = metrics[guest.vmid] || metrics[guest.name];
+        // Find metrics for this guest (metrics is an array, not an object)
+        const guestMetrics = metrics.find(m => 
+            m.endpointId === guest.endpointId &&
+            m.node === guest.node &&
+            m.id === guest.vmid
+        );
         if (!guestMetrics || !guestMetrics.current) return;
 
         // Check if ALL threshold conditions are met (AND logic)
@@ -1124,24 +1217,48 @@ class AlertManager extends EventEmitter {
 
         if (thresholdsMet) {
             if (!existingAlert) {
-                // Create new alert
-                const alert = {
-                    id: alertKey,
-                    ruleId: rule.id,
-                    rule: rule,
-                    guest: guest,
-                    severity: rule.severity,
-                    message: this.formatCompoundThresholdMessage(rule, guestMetrics.current, guest),
-                    timestamp: timestamp,
-                    state: 'firing',
-                    values: this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest)
+                // Create new alert with permanent ID
+                const newAlert = {
+                    id: this.generateAlertId(), // Generate ID once when alert is created
+                    rule,
+                    guest,
+                    startTime: timestamp,
+                    lastUpdate: timestamp,
+                    currentValue: this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest),
+                    effectiveThreshold: rule.thresholds,
+                    state: 'pending',
+                    escalated: false,
+                    acknowledged: false
                 };
-
-                this.fireAlert(alert);
+                this.activeAlerts.set(alertKey, newAlert);
+            } else if (existingAlert.state === 'pending') {
+                // Check if duration threshold is met
+                const duration = timestamp - existingAlert.startTime;
+                if (duration >= rule.duration) {
+                    // Trigger alert
+                    existingAlert.state = 'active';
+                    existingAlert.triggeredAt = timestamp;
+                    this.triggerAlert(existingAlert);
+                }
+                existingAlert.lastUpdate = timestamp;
+                existingAlert.currentValue = this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest);
+            } else if (existingAlert.state === 'active') {
+                // Update existing active alert
+                existingAlert.lastUpdate = timestamp;
+                existingAlert.currentValue = this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest);
             }
-        } else if (existingAlert) {
-            // Resolve existing alert
-            this.resolveAlert(alertKey, timestamp, 'Thresholds no longer exceeded');
+        } else {
+            if (existingAlert && existingAlert.state === 'active') {
+                // Resolve alert
+                existingAlert.state = 'resolved';
+                existingAlert.resolvedAt = timestamp;
+                if (existingAlert.rule.autoResolve) {
+                    this.resolveAlert(existingAlert);
+                }
+            } else if (existingAlert && existingAlert.state === 'pending') {
+                // Remove pending alert that didn't trigger
+                this.activeAlerts.delete(alertKey);
+            }
         }
     }
 
@@ -1151,6 +1268,11 @@ class AlertManager extends EventEmitter {
         switch (threshold.type) {
             case 'cpu':
                 metricValue = currentMetrics.cpu;
+                // CPU values from Proxmox might be in decimal format (0.0-1.0)
+                // Convert to percentage if needed
+                if (metricValue !== undefined && metricValue !== null && metricValue <= 1.0) {
+                    metricValue = metricValue * 100;
+                }
                 break;
             case 'memory':
                 metricValue = currentMetrics.memory;
@@ -1178,7 +1300,25 @@ class AlertManager extends EventEmitter {
             return false;
         }
 
-        return metricValue >= threshold.value;
+        // Apply the specified operator
+        switch (threshold.operator) {
+            case '>':
+                return metricValue > threshold.value;
+            case '>=':
+                return metricValue >= threshold.value;
+            case '<':
+                return metricValue < threshold.value;
+            case '<=':
+                return metricValue <= threshold.value;
+            case '==':
+            case '=':
+                return metricValue == threshold.value;
+            case '!=':
+                return metricValue != threshold.value;
+            default:
+                // Default to >= for backward compatibility
+                return metricValue >= threshold.value;
+        }
     }
 
     formatCompoundThresholdMessage(rule, currentMetrics, guest) {
@@ -1203,7 +1343,14 @@ class AlertManager extends EventEmitter {
 
     getThresholdCurrentValue(threshold, currentMetrics) {
         switch (threshold.type) {
-            case 'cpu': return currentMetrics.cpu || 0;
+            case 'cpu': 
+                const cpuValue = currentMetrics.cpu || 0;
+                // CPU values from Proxmox might be in decimal format (0.0-1.0)
+                // Convert to percentage if needed
+                if (cpuValue <= 1.0) {
+                    return Math.round(cpuValue * 100 * 10) / 10; // Round to 1 decimal place
+                }
+                return Math.round(cpuValue * 10) / 10;
             case 'memory': return currentMetrics.memory || 0;
             case 'disk': return currentMetrics.disk || 0;
             case 'diskread': return currentMetrics.diskread || 0;
@@ -1382,6 +1529,15 @@ class AlertManager extends EventEmitter {
             const data = await fs.readFile(this.alertRulesFile, 'utf-8');
             const savedRules = JSON.parse(data);
             
+            // First, remove all existing compound threshold and custom rules
+            const rulesToRemove = [];
+            for (const [key, rule] of this.alertRules) {
+                if (rule.type === 'compound_threshold' || rule.group === 'custom') {
+                    rulesToRemove.push(key);
+                }
+            }
+            rulesToRemove.forEach(key => this.alertRules.delete(key));
+            
             // Load saved alert rules into the map
             for (const [key, rule] of Object.entries(savedRules)) {
                 // Only load non-default rules (compound threshold rules and custom rules)
@@ -1391,6 +1547,14 @@ class AlertManager extends EventEmitter {
             }
             
             console.log(`[AlertManager] Loaded ${Object.keys(savedRules).length} persisted alert rules`);
+            
+            // Clear any active alerts for rules that no longer exist or have been modified
+            for (const [alertKey, alert] of this.activeAlerts) {
+                const ruleStillExists = this.alertRules.has(alert.rule.id);
+                if (!ruleStillExists || this.alertRules.get(alert.rule.id) !== alert.rule) {
+                    this.activeAlerts.delete(alertKey);
+                }
+            }
         } catch (error) {
             if (error.code !== 'ENOENT') {
                 console.error('[AlertManager] Error loading alert rules:', error);
@@ -1687,7 +1851,9 @@ This alert was generated by Pulse monitoring system.
                         },
                         {
                             title: 'Metric',
-                            value: `${alert.rule.metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
+                            value: alert.rule.type === 'compound_threshold' ? 
+                                `Compound Rule: ${valueDisplay}` : 
+                                `${alert.rule.metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
                             short: false
                         }
                     ],
@@ -1738,7 +1904,9 @@ This alert was generated by Pulse monitoring system.
                         },
                         {
                             name: 'Metric',
-                            value: `${alert.rule.metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
+                            value: alert.rule.type === 'compound_threshold' ? 
+                                `Compound Rule: ${valueDisplay}` : 
+                                `${alert.rule.metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
                             inline: true
                         }
                     ],
@@ -1759,7 +1927,9 @@ This alert was generated by Pulse monitoring system.
                         },
                         {
                             title: 'Metric',
-                            value: `${alert.rule.metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
+                            value: alert.rule.type === 'compound_threshold' ? 
+                                `Compound Rule: ${valueDisplay}` : 
+                                `${alert.rule.metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
                             short: false
                         }
                     ],
@@ -1802,6 +1972,11 @@ This alert was generated by Pulse monitoring system.
         if (this.escalationInterval) {
             clearInterval(this.escalationInterval);
         }
+        
+        // Stop watching alert rules file
+        const fs = require('fs');
+        fs.unwatchFile(this.alertRulesFile);
+        
         this.removeAllListeners();
         this.activeAlerts.clear();
         this.alertRules.clear();

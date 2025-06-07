@@ -41,22 +41,12 @@ PulseApp.ui.alertManagementModal = (() => {
                     <div class="border-b border-gray-200 dark:border-gray-700">
                         <nav class="flex space-x-8 px-6" id="alert-management-tabs">
                             <button class="alert-tab active py-3 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="alerts">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19H6a2 2 0 01-2-2V7a2 2 0 012-2h5m5 16v-5a1 1 0 00-1-1h-4a1 1 0 00-1 1v5a1 1 0 001 1h4a1 1 0 001-1z" />
-                                </svg>
                                 Alerts
                             </button>
                             <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="alert-rules">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h2m0 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2m0 0h2a2 2 0 002-2V3a2 2 0 00-2-2H9a2 2 0 00-2 2v2a2 2 0 002 2z" />
-                                </svg>
                                 Alert Rules
                             </button>
                             <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="notifications">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                </svg>
                                 Notifications
                             </button>
                         </nav>
@@ -1055,9 +1045,53 @@ PulseApp.ui.alertManagementModal = (() => {
         const emailConfigSection = document.getElementById('email-config-section');
         if (!emailConfigSection) return;
         
+        // Get email configuration from currentConfig
+        const config = currentConfig || {};
+        const smtp = config.advanced?.smtp || {};
+        
+        // Populate email fields with values from configuration
+        const emailFromInput = document.querySelector('input[name="ALERT_FROM_EMAIL"]');
+        if (emailFromInput && smtp.from) {
+            emailFromInput.value = smtp.from;
+        }
+        
+        const emailToInput = document.querySelector('input[name="ALERT_TO_EMAIL"]');
+        if (emailToInput && smtp.to) {
+            emailToInput.value = smtp.to;
+        }
+        
+        const smtpHostInput = document.querySelector('input[name="ALERT_SMTP_HOST"]');
+        if (smtpHostInput && smtp.host) {
+            smtpHostInput.value = smtp.host;
+        }
+        
+        const smtpPortInput = document.querySelector('input[name="ALERT_SMTP_PORT"]');
+        if (smtpPortInput && smtp.port) {
+            smtpPortInput.value = smtp.port;
+        }
+        
+        const smtpUserInput = document.querySelector('input[name="ALERT_SMTP_USER"]');
+        if (smtpUserInput && smtp.user) {
+            smtpUserInput.value = smtp.user;
+        }
+        
+        const smtpSecureInput = document.querySelector('input[name="ALERT_SMTP_SECURE"]');
+        if (smtpSecureInput && smtp.secure !== undefined) {
+            smtpSecureInput.checked = smtp.secure;
+        }
+        
+        const smtpPassInput = document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]');
+        if (smtpPassInput && smtp.pass) {
+            smtpPassInput.value = smtp.pass;
+        }
+        
+        // Auto-detect email provider if from email is set
+        if (emailFromInput && emailFromInput.value) {
+            autoDetectEmailProvider(emailFromInput.value);
+        }
+        
         // Use existing email configuration from settings if available
         if (PulseApp.ui.settings && PulseApp.ui.settings.renderAlertsTab) {
-            const config = currentConfig || {};
             const fullContent = PulseApp.ui.settings.renderAlertsTab(config.alerts || {}, config);
             
             // Extract just the email configuration section
@@ -1267,12 +1301,12 @@ PulseApp.ui.alertManagementModal = (() => {
         }
     }
     
-    function testEmailConnection() {
+    async function testEmailConnection() {
         // Collect email configuration
         const emailConfig = {
             from: document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value,
             to: document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value,
-            password: document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]')?.value,
+            pass: document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]')?.value, // Backend expects 'pass' not 'password'
             host: document.querySelector('input[name="ALERT_SMTP_HOST"]')?.value,
             port: document.querySelector('input[name="ALERT_SMTP_PORT"]')?.value,
             user: document.querySelector('input[name="ALERT_SMTP_USER"]')?.value,
@@ -1284,23 +1318,33 @@ PulseApp.ui.alertManagementModal = (() => {
             return;
         }
         
-        // TODO: Implement actual email test
-        PulseApp.ui.toast.info('Test email functionality will be implemented with backend integration');
+        // Send test email via API
+        try {
+            const response = await fetch('/api/test-email', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(emailConfig)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                PulseApp.ui.toast.success('Test email sent successfully! Please check your inbox.');
+            } else {
+                PulseApp.ui.toast.error('Test email failed: ' + (result.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('[Email Test] Error:', error);
+            PulseApp.ui.toast.error('Error sending test email: ' + error.message);
+        }
     }
     
-    function saveEmailConfiguration() {
-        // Collect email configuration
-        const emailConfig = {
-            from: document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value,
-            to: document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value,
-            password: document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]')?.value,
-            host: document.querySelector('input[name="ALERT_SMTP_HOST"]')?.value,
-            port: document.querySelector('input[name="ALERT_SMTP_PORT"]')?.value,
-            user: document.querySelector('input[name="ALERT_SMTP_USER"]')?.value,
-            secure: document.querySelector('input[name="ALERT_SMTP_SECURE"]')?.checked
-        };
-        
-        // TODO: Implement saving to backend
+    async function saveEmailConfiguration() {
+        // This function is called by the specific save button in the email section
+        // It will trigger the main saveConfiguration function
+        await saveConfiguration();
         PulseApp.ui.toast.success('Email configuration saved successfully!');
     }
 
@@ -1721,6 +1765,24 @@ PulseApp.ui.alertManagementModal = (() => {
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Duration (how long condition must persist)
+                                </label>
+                                <div class="flex gap-2">
+                                    <input type="number" name="durationValue" min="1" max="60" step="1" value="5" required
+                                           class="flex-1 px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <select name="durationUnit" class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="seconds">seconds</option>
+                                        <option value="minutes" selected>minutes</option>
+                                    </select>
+                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    Alert will only trigger if the condition persists for this duration. Prevents false alarms from brief spikes.
+                                    Range: 5 seconds to 60 minutes.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                     Alert Delivery (optional overrides)
                                 </label>
                                 <div class="space-y-2">
@@ -2034,6 +2096,53 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             if (webhookCheckbox && typeof existingAlert.sendWebhook === 'boolean') {
                 webhookCheckbox.checked = existingAlert.sendWebhook;
             }
+            
+            // Pre-populate duration fields for existing alerts
+            if (existingAlert.duration) {
+                const durationValueInput = document.querySelector('input[name="durationValue"]');
+                const durationUnitSelect = document.querySelector('select[name="durationUnit"]');
+                
+                if (durationValueInput && durationUnitSelect) {
+                    // Convert duration from milliseconds to appropriate unit
+                    const durationMs = existingAlert.duration;
+                    if (durationMs >= 60000 && durationMs % 60000 === 0) {
+                        // Use minutes if duration is in whole minutes
+                        durationValueInput.value = durationMs / 60000;
+                        durationUnitSelect.value = 'minutes';
+                    } else {
+                        // Use seconds
+                        durationValueInput.value = durationMs / 1000;
+                        durationUnitSelect.value = 'seconds';
+                    }
+                }
+            }
+        }
+
+        // Handle duration unit changes to update input constraints
+        const durationUnitSelect = document.querySelector('select[name="durationUnit"]');
+        const durationValueInput = document.querySelector('input[name="durationValue"]');
+        if (durationUnitSelect && durationValueInput) {
+            durationUnitSelect.addEventListener('change', (e) => {
+                if (e.target.value === 'minutes') {
+                    durationValueInput.min = '1';
+                    durationValueInput.max = '60';
+                    durationValueInput.step = '1';
+                    // Convert seconds to minutes if current value is in seconds range
+                    const currentValue = parseInt(durationValueInput.value);
+                    if (currentValue >= 60) {
+                        durationValueInput.value = Math.round(currentValue / 60);
+                    }
+                } else {
+                    durationValueInput.min = '5';
+                    durationValueInput.max = '3600';
+                    durationValueInput.step = '5';
+                    // Convert minutes to seconds if current value is small
+                    const currentValue = parseInt(durationValueInput.value);
+                    if (currentValue <= 60) {
+                        durationValueInput.value = currentValue * 60;
+                    }
+                }
+            });
         }
 
         // Handle save
@@ -2096,12 +2205,24 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             return;
         }
 
+        // Collect duration and convert to milliseconds
+        const durationValue = parseInt(formData.get('durationValue')) || 5; // default 5 minutes
+        const durationUnit = formData.get('durationUnit') || 'minutes';
+        const durationMs = durationUnit === 'minutes' ? durationValue * 60 * 1000 : durationValue * 1000;
+        
+        // Validate duration range (5 seconds to 60 minutes)
+        if (durationMs < 5000 || durationMs > 3600000) {
+            PulseApp.ui.toast.warning('Duration must be between 5 seconds and 60 minutes.');
+            return;
+        }
+
         // Build alert configuration
         const alertConfig = {
             name: formData.get('alertName'),
             targetType: formData.get('targetType'),
             specificTarget: formData.get('specificTarget'),
             thresholds: thresholds, // Use array of thresholds instead of single values
+            duration: durationMs, // Duration in milliseconds
             sendEmail: formData.has('sendEmail'),
             sendWebhook: formData.has('sendWebhook'),
             enabled: existingAlert ? existingAlert.enabled : true,
@@ -2232,8 +2353,19 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         } else if (typeof alert.currentValue === 'number') {
             const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.metric);
             currentValueDisplay = `${Math.round(alert.currentValue)}${isPercentageMetric ? '%' : ''}`;
+        } else if (typeof alert.currentValue === 'object' && alert.currentValue !== null) {
+            // Handle compound threshold alerts (multiple metrics)
+            const values = [];
+            for (const [metric, value] of Object.entries(alert.currentValue)) {
+                const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
+                const formattedValue = typeof value === 'number' 
+                    ? `${Math.round(value)}${isPercentageMetric ? '%' : ''}`
+                    : value;
+                values.push(`${metric}: ${formattedValue}`);
+            }
+            currentValueDisplay = values.join(', ');
         } else {
-            currentValueDisplay = alert.currentValue;
+            currentValueDisplay = alert.currentValue || '';
         }
 
         // Delivery indicators - Pulse UI is always present
@@ -2374,15 +2506,15 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             let hasChanges = false;
 
             // Check for email configuration changes
-            const emailForm = document.getElementById('email-config-form');
-            if (emailForm) {
-                const smtpHost = emailForm.querySelector('input[name="smtp_host"]')?.value;
-                const smtpPort = emailForm.querySelector('input[name="smtp_port"]')?.value;
-                const smtpUser = emailForm.querySelector('input[name="smtp_user"]')?.value;
-                const smtpPass = emailForm.querySelector('input[name="smtp_pass"]')?.value;
-                const fromEmail = emailForm.querySelector('input[name="from_email"]')?.value;
-                const toEmail = emailForm.querySelector('input[name="to_email"]')?.value;
-                const smtpSecure = emailForm.querySelector('input[name="smtp_secure"]')?.checked;
+            const emailConfigSection = document.getElementById('email-config-section');
+            if (emailConfigSection) {
+                const smtpHost = document.querySelector('input[name="ALERT_SMTP_HOST"]')?.value;
+                const smtpPort = document.querySelector('input[name="ALERT_SMTP_PORT"]')?.value;
+                const smtpUser = document.querySelector('input[name="ALERT_SMTP_USER"]')?.value;
+                const smtpPass = document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]')?.value;
+                const fromEmail = document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value;
+                const toEmail = document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value;
+                const smtpSecure = document.querySelector('input[name="ALERT_SMTP_SECURE"]')?.checked;
 
                 if (smtpHost) { configToSave.SMTP_HOST = smtpHost; hasChanges = true; }
                 if (smtpPort) { configToSave.SMTP_PORT = smtpPort; hasChanges = true; }
