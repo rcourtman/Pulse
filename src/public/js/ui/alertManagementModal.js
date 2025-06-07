@@ -164,6 +164,8 @@ PulseApp.ui.alertManagementModal = (() => {
         }, 100);
     }
 
+    // Utility function to create consistent section banners
+
     function renderTabContent() {
         const modalBody = document.getElementById('alert-management-modal-body');
         if (!modalBody) return;
@@ -190,7 +192,10 @@ PulseApp.ui.alertManagementModal = (() => {
         return `
             <div class="space-y-6">
                 <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Current Alerts</h3>
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Alerts</h3>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">View and manage active alerts and alert history</p>
+                    </div>
                     <button id="refresh-alerts-btn" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -198,10 +203,31 @@ PulseApp.ui.alertManagementModal = (() => {
                         Refresh
                     </button>
                 </div>
-                
+
+                <!-- Sub-tabs for Alerts -->
+                <div class="border-b border-gray-200 dark:border-gray-700">
+                    <nav class="flex space-x-8" id="alerts-sub-tabs">
+                        <button class="alerts-sub-tab active py-2 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="current">
+                            Current Alerts
+                        </button>
+                        <button class="alerts-sub-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="history">
+                            Alert History
+                        </button>
+                    </nav>
+                </div>
+
+                <!-- Current Alerts Content -->
                 <div id="current-alerts-content" class="space-y-4">
-                    <!-- Alert content will be injected here -->
-                    <p class="text-gray-500 dark:text-gray-400">Loading current alerts...</p>
+                    <div id="current-alerts-list" class="space-y-4">
+                        <p class="text-gray-500 dark:text-gray-400">Loading current alerts...</p>
+                    </div>
+                </div>
+
+                <!-- Alert History Content -->
+                <div id="alert-history-content" class="space-y-4 hidden">
+                    <div id="alert-history-list" class="space-y-4">
+                        <p class="text-gray-500 dark:text-gray-400">Loading alert history...</p>
+                    </div>
                 </div>
                 
                 <div class="mt-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
@@ -210,8 +236,8 @@ PulseApp.ui.alertManagementModal = (() => {
                         <button id="acknowledge-all-alerts-btn" class="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
                             Acknowledge All
                         </button>
-                        <button id="view-alert-history-btn" class="px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-md transition-colors">
-                            View History
+                        <button id="clear-history-btn" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md transition-colors hidden">
+                            Clear History
                         </button>
                     </div>
                 </div>
@@ -255,13 +281,6 @@ PulseApp.ui.alertManagementModal = (() => {
                     <!-- System Alerts Tab Content (Default) -->
                     <div id="system-alert-rules-content" class="alert-rules-sub-content">
                         <div class="space-y-6">
-                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                                <div>
-                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">System Alert Rules</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Global monitoring rules that apply to all VMs and LXCs unless overridden by custom settings</p>
-                                </div>
-                                <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded-full">Built-in</span>
-                            </div>
                             
                             <div id="system-alerts-content" class="space-y-3">
                                 <!-- CPU Alert Rule -->
@@ -270,7 +289,6 @@ PulseApp.ui.alertManagementModal = (() => {
                                         <div class="flex-1">
                                             <div class="flex items-center gap-2 mb-1">
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">CPU Alert</h5>
-                                                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full" id="cpu-status-badge">Loading...</span>
                                             </div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                                 Built-in system rule • Target: All VMs/LXCs
@@ -299,7 +317,6 @@ PulseApp.ui.alertManagementModal = (() => {
                                         <div class="flex-1">
                                             <div class="flex items-center gap-2 mb-1">
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Memory Alert</h5>
-                                                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full" id="memory-status-badge">Loading...</span>
                                             </div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                                 Built-in system rule • Target: All VMs/LXCs
@@ -328,7 +345,6 @@ PulseApp.ui.alertManagementModal = (() => {
                                         <div class="flex-1">
                                             <div class="flex items-center gap-2 mb-1">
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Disk Alert</h5>
-                                                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full" id="disk-status-badge">Loading...</span>
                                             </div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                                 Built-in system rule • Target: All VMs/LXCs
@@ -357,7 +373,6 @@ PulseApp.ui.alertManagementModal = (() => {
                                         <div class="flex-1">
                                             <div class="flex items-center gap-2 mb-1">
                                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Down Alert</h5>
-                                                <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full" id="down-status-badge">Loading...</span>
                                             </div>
                                             <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
                                                 Built-in system rule • Target: All VMs/LXCs
@@ -386,13 +401,6 @@ PulseApp.ui.alertManagementModal = (() => {
                     <!-- Custom Alerts Tab Content (Hidden by default) -->
                     <div id="custom-alert-rules-content" class="alert-rules-sub-content hidden">
                         <div class="space-y-6">
-                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                                <div>
-                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Custom Alert Rules</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">User-created alerts with custom thresholds and conditions</p>
-                                </div>
-                                <span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full">User-created</span>
-                            </div>
                             
                             <div id="custom-alerts-content" class="space-y-3">
                                 <!-- Custom alerts will be loaded here -->
@@ -441,227 +449,119 @@ PulseApp.ui.alertManagementModal = (() => {
                     <!-- Email Tab Content (Default) -->
                     <div id="email-notification-content" class="notification-sub-content">
                         <div class="space-y-6">
-                            <!-- Email Toggle -->
-                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                                <div>
-                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Email Notifications</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Send alerts to email addresses</p>
-                                </div>
-                                <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" name="GLOBAL_EMAIL_ENABLED" class="sr-only peer">
-                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                </label>
-                            </div>
-
-                            <!-- Email Configuration -->
-                            <div id="email-config-section" class="space-y-6">
-                                <!-- Email Provider Selection -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                                        Choose your email provider
-                                    </label>
-                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                                        <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="gmail">
-                                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Gmail</div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">Google</div>
-                                        </button>
-                                        <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="outlook">
-                                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Outlook</div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">Microsoft</div>
-                                        </button>
-                                        <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="yahoo">
-                                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Yahoo</div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">Yahoo Mail</div>
-                                        </button>
-                                        <button type="button" class="email-provider-btn p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg text-center hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all" data-provider="custom">
-                                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Other</div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">Custom SMTP</div>
-                                        </button>
-                                    </div>
-                                    <div id="email-provider-help" class="text-xs text-gray-500 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-800 rounded-md hidden">
-                                        <!-- Provider-specific help will be shown here -->
-                                    </div>
-                                    
-                                    <!-- App Password Help -->
-                                    <div id="app-password-help" class="hidden bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-                                        <div class="flex items-start gap-3">
-                                            <svg class="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                            </svg>
-                                            <div class="flex-1">
-                                                <h5 class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-1" id="app-password-title">App Password Required</h5>
-                                                <p class="text-sm text-blue-700 dark:text-blue-300 mb-3" id="app-password-description">
-                                                    You need to create an app password for Pulse to send emails.
-                                                </p>
-                                                <a id="app-password-link" href="#" target="_blank" rel="noopener noreferrer" 
-                                                   class="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/50 transition-colors">
-                                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-1M14 6h6m0 0v6m0-6L10 16"/>
-                                                    </svg>
-                                                    Create App Password
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Basic Email Configuration -->
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <!-- Primary Email Configuration -->
+                            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+                                <div class="flex items-center justify-between mb-4">
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Your Email Address
-                                            <span class="text-gray-500 text-xs ml-1">(for sending alerts)</span>
-                                        </label>
-                                        <input type="email" id="email-from-input" name="ALERT_FROM_EMAIL"
-                                               placeholder="your-email@gmail.com"
-                                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Email Notifications</h3>
+                                        <p class="text-sm text-gray-600 dark:text-gray-400">Primary email configuration for alert delivery</p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="email-enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-500 peer-checked:after:bg-white dark:after:bg-gray-200"></div>
+                                    </label>
+                                </div>
+                                
+                                <div id="primary-email-config" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
+                                        <input type="email" id="email-from" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="alerts@yourcompany.com">
                                     </div>
                                     <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            Alert Recipients
-                                            <span class="text-gray-500 text-xs ml-1">(who gets notified)</span>
-                                        </label>
-                                        <input type="text" name="ALERT_TO_EMAIL"
-                                               placeholder="admin@example.com, tech@example.com"
-                                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Email</label>
+                                        <input type="email" id="email-to" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="admin@yourcompany.com">
                                     </div>
-                                </div>
-
-                                <!-- Password/App Password -->
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                        <span id="password-label">Password</span>
-                                        <span class="text-gray-500 text-xs ml-1" id="password-help">(for email authentication)</span>
-                                    </label>
-                                    <input type="password" name="ALERT_EMAIL_PASSWORD"
-                                           placeholder="Enter your email password or app password"
-                                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-
-                                <!-- Advanced SMTP Settings (Collapsible) -->
-                                <div>
-                                    <button type="button" id="toggle-advanced-smtp" class="flex items-center text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100">
-                                        <svg class="w-4 h-4 mr-2 transform transition-transform" id="advanced-smtp-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                                        </svg>
-                                        Advanced SMTP Settings
-                                    </button>
-                                    <div id="advanced-smtp-settings" class="hidden mt-3 p-4 border border-gray-200 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
-                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP Host</label>
-                                                <input type="text" name="ALERT_SMTP_HOST" 
-                                                       placeholder="smtp.gmail.com"
-                                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SMTP Port</label>
-                                                <input type="number" name="ALERT_SMTP_PORT" 
-                                                       placeholder="587"
-                                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                            </div>
-                                            <div>
-                                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Username</label>
-                                                <input type="text" name="ALERT_SMTP_USER" 
-                                                       placeholder="your-email@gmail.com"
-                                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                            </div>
-                                        </div>
-                                        <div class="mt-4">
-                                            <label class="flex items-center">
-                                                <input type="checkbox" name="ALERT_SMTP_SECURE" class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                                <span class="text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS encryption</span>
-                                            </label>
-                                        </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Server</label>
+                                        <input type="text" id="email-smtp" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="smtp.gmail.com">
                                     </div>
-                                </div>
-
-                                <!-- Test Email Button -->
-                                <div class="flex space-x-3">
-                                    <button type="button" id="test-email-btn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                        <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                                        </svg>
-                                        Send Test Email
-                                    </button>
-                                    <button type="button" id="save-email-config-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                        Save Email Configuration
-                                    </button>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Port</label>
+                                        <input type="number" id="email-port" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="587" value="587">
+                                    </div>
                                 </div>
                             </div>
+
+                            <!-- Additional Email Recipients -->
+                            <div id="additional-email-recipients">
+                                <div class="flex justify-between items-center mb-4">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional Email Recipients</h3>
+                                        <p class="text-sm text-gray-600 dark:text-gray-400">Add more email addresses beyond the primary recipient above</p>
+                                    </div>
+                                    <button type="button" onclick="PulseApp.ui.alertManagementModal.addEmailRecipient()" 
+                                            class="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        Add Recipient
+                                    </button>
+                                </div>
+                                <div id="additional-email-list" class="space-y-2">
+                                    <!-- Additional email recipients will be added here -->
+                                </div>
+                            </div>
+
                         </div>
                     </div>
 
                     <!-- Webhook Tab Content (Hidden by default) -->
                     <div id="webhook-notification-content" class="notification-sub-content hidden">
                         <div class="space-y-6">
-                            <!-- Webhook Toggle -->
-                            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
-                                <div>
-                                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Webhook Notifications</h4>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Send alerts to external services</p>
+                            <!-- Primary Webhook Configuration -->
+                            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Webhook Notifications</h3>
+                                        <p class="text-sm text-gray-600 dark:text-gray-400">Primary webhook configuration for external service alerts</p>
+                                    </div>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="webhook-enabled" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-500 peer-checked:after:bg-white dark:after:bg-gray-200"></div>
+                                    </label>
                                 </div>
-                                <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" name="GLOBAL_WEBHOOK_ENABLED" class="sr-only peer">
-                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                                </label>
-                            </div>
-
-                            <!-- Popular Services -->
-                            <div>
-                                <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Popular Services</h5>
-                                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                    <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="discord">
-                                        <div class="w-8 h-8 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                                            <span class="text-gray-600 dark:text-gray-400 font-bold text-xs">DC</span>
-                                        </div>
-                                        <span class="text-xs text-gray-700 dark:text-gray-300">Discord</span>
-                                    </button>
-                                    <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="slack">
-                                        <div class="w-8 h-8 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                                            <span class="text-gray-600 dark:text-gray-400 font-bold text-xs">SL</span>
-                                        </div>
-                                        <span class="text-xs text-gray-700 dark:text-gray-300">Slack</span>
-                                    </button>
-                                    <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="teams">
-                                        <div class="w-8 h-8 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                                            <span class="text-gray-600 dark:text-gray-400 font-bold text-xs">MS</span>
-                                        </div>
-                                        <span class="text-xs text-gray-700 dark:text-gray-300">Teams</span>
-                                    </button>
-                                    <button class="webhook-preset p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 text-center transition-colors" data-service="custom">
-                                        <div class="w-8 h-8 mx-auto mb-2 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
-                                            <span class="text-gray-600 dark:text-gray-400 font-bold text-xs">+</span>
-                                        </div>
-                                        <span class="text-xs text-gray-700 dark:text-gray-300">Custom</span>
-                                    </button>
+                                
+                                <div id="primary-webhook-config" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="md:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
+                                        <input type="url" id="webhook-url" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="https://discord.com/api/webhooks/...">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Service Type</label>
+                                        <select id="webhook-service" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                                            <option value="discord">Discord</option>
+                                            <option value="slack">Slack</option>
+                                            <option value="teams">Microsoft Teams</option>
+                                            <option value="custom">Custom</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Name</label>
+                                        <input type="text" id="webhook-name" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Production Alerts">
+                                    </div>
                                 </div>
                             </div>
 
-                            <!-- Webhook URL Input -->
-                            <div>
-                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                    Webhook URL
-                                </label>
-                                <input type="url" name="WEBHOOK_URL" id="webhook-url-input"
-                                       placeholder="https://your-service.com/webhook"
-                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    Enter your webhook URL from Discord, Slack, Teams, or any custom service
-                                </p>
+                            <!-- Additional Webhooks -->
+                            <div id="additional-webhooks">
+                                <div class="flex justify-between items-center mb-4">
+                                    <div>
+                                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional Webhooks</h3>
+                                        <p class="text-sm text-gray-600 dark:text-gray-400">Add more webhook endpoints beyond the primary one above</p>
+                                    </div>
+                                    <button type="button" onclick="PulseApp.ui.alertManagementModal.addWebhookEndpoint()" 
+                                            class="flex items-center gap-2 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-md">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        Add Webhook
+                                    </button>
+                                </div>
+                                <div id="additional-webhook-list" class="space-y-2">
+                                    <!-- Additional webhooks will be added here -->
+                                </div>
                             </div>
-                            
-                            <!-- Action Buttons -->
-                            <div class="flex space-x-3">
-                                <button id="test-webhook-btn" type="button" 
-                                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                    Send Test Message
-                                </button>
-                                <button id="save-webhook-btn" type="button"
-                                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors">
-                                    Save Configuration
-                                </button>
-                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -671,10 +571,26 @@ PulseApp.ui.alertManagementModal = (() => {
 
 
     function initializeAlertsTab() {
+        // Set up sub-tab navigation
+        const subTabs = document.querySelectorAll('.alerts-sub-tab');
+        subTabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const targetTab = e.currentTarget.dataset.tab;
+                switchAlertsSubTab(targetTab);
+            });
+        });
+
         // Set up refresh button
         const refreshBtn = document.getElementById('refresh-alerts-btn');
         if (refreshBtn) {
-            refreshBtn.addEventListener('click', loadCurrentAlerts);
+            refreshBtn.addEventListener('click', () => {
+                const activeSubTab = document.querySelector('.alerts-sub-tab.active')?.dataset.tab || 'current';
+                if (activeSubTab === 'current') {
+                    loadCurrentAlerts();
+                } else if (activeSubTab === 'history') {
+                    loadAlertHistory();
+                }
+            });
         }
 
         // Set up action buttons
@@ -688,15 +604,52 @@ PulseApp.ui.alertManagementModal = (() => {
             });
         }
 
-        const viewHistoryBtn = document.getElementById('view-alert-history-btn');
-        if (viewHistoryBtn) {
-            viewHistoryBtn.addEventListener('click', () => {
-                // TODO: Implement alert history view
-            });
+        const clearHistoryBtn = document.getElementById('clear-history-btn');
+        if (clearHistoryBtn) {
+            clearHistoryBtn.addEventListener('click', clearAlertHistory);
         }
 
-        // Load current alerts
+
+        // Load current alerts by default
         loadCurrentAlerts();
+    }
+
+    function switchAlertsSubTab(tabName) {
+        // Update tab buttons
+        const subTabs = document.querySelectorAll('.alerts-sub-tab');
+        subTabs.forEach(tab => {
+            const isActive = tab.dataset.tab === tabName;
+            
+            if (isActive) {
+                tab.classList.add('active');
+                tab.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+                tab.classList.add('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+            } else {
+                tab.classList.remove('active');
+                tab.classList.remove('border-blue-500', 'text-blue-600', 'dark:text-blue-400');
+                tab.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
+            }
+        });
+
+        // Show/hide content sections
+        const currentContent = document.getElementById('current-alerts-content');
+        const historyContent = document.getElementById('alert-history-content');
+        const acknowledgeAllBtn = document.getElementById('acknowledge-all-alerts-btn');
+        const clearHistoryBtn = document.getElementById('clear-history-btn');
+
+        if (tabName === 'current') {
+            currentContent?.classList.remove('hidden');
+            historyContent?.classList.add('hidden');
+            acknowledgeAllBtn?.classList.remove('hidden');
+            clearHistoryBtn?.classList.add('hidden');
+            loadCurrentAlerts();
+        } else if (tabName === 'history') {
+            currentContent?.classList.add('hidden');
+            historyContent?.classList.remove('hidden');
+            acknowledgeAllBtn?.classList.add('hidden');
+            clearHistoryBtn?.classList.remove('hidden');
+            loadAlertHistory();
+        }
     }
 
     function initializeAlertRulesTab() {
@@ -883,8 +836,42 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function loadSystemAlerts() {
-        // System alerts are now hardcoded in HTML, just load their configuration
-        loadSystemAlertConfiguration();
+        const systemAlertsContent = document.getElementById('system-alerts-content');
+        if (!systemAlertsContent) return;
+        
+        // Define system alerts with their configuration
+        const systemAlerts = [
+            {
+                id: 'cpu',
+                name: 'CPU Alert',
+                description: 'Triggers when CPU usage exceeds threshold',
+                threshold: currentConfig?.advanced?.alerts?.cpu?.threshold || 85,
+                enabled: currentConfig?.advanced?.alerts?.cpu?.enabled !== false
+            },
+            {
+                id: 'memory', 
+                name: 'Memory Alert',
+                description: 'Triggers when memory usage exceeds threshold',
+                threshold: currentConfig?.advanced?.alerts?.memory?.threshold || 90,
+                enabled: currentConfig?.advanced?.alerts?.memory?.enabled !== false
+            },
+            {
+                id: 'disk',
+                name: 'Disk Alert', 
+                description: 'Triggers when disk usage exceeds threshold',
+                threshold: currentConfig?.advanced?.alerts?.disk?.threshold || 95,
+                enabled: currentConfig?.advanced?.alerts?.disk?.enabled !== false
+            },
+            {
+                id: 'down',
+                name: 'Down Alert',
+                description: 'Triggers when VM/LXC becomes unreachable or stops responding',
+                enabled: currentConfig?.advanced?.alerts?.down?.enabled !== false
+            }
+        ];
+        
+        // Generate HTML for all system alerts using unified renderer
+        systemAlertsContent.innerHTML = systemAlerts.map(alert => createAlertCard({...alert, type: 'system'})).join('');
     }
 
     async function loadCustomAlerts() {
@@ -919,8 +906,8 @@ PulseApp.ui.alertManagementModal = (() => {
                 return;
             }
             
-            // Display the custom alerts
-            customAlertsContent.innerHTML = customAlerts.map(alert => createCustomAlertCard(alert)).join('');
+            // Display the custom alerts using unified renderer
+            customAlertsContent.innerHTML = customAlerts.map(alert => createAlertCard({...alert, type: 'custom'})).join('');
             
         } catch (error) {
             console.error('[AlertManagementModal] Failed to load custom alerts:', error);
@@ -933,109 +920,134 @@ PulseApp.ui.alertManagementModal = (() => {
         }
     }
 
-    function createCustomAlertCard(alert) {
-        const thresholdsList = alert.thresholds?.map(t => 
-            `<span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">
-                ${t.metric.charAt(0).toUpperCase() + t.metric.slice(1)} ≥ ${t.threshold}${['cpu', 'memory', 'disk'].includes(t.metric) ? '%' : ''}
-            </span>`
-        ).join('') || '';
-
-        const createdDate = alert.createdAt ? new Date(alert.createdAt).toLocaleDateString() : 'Unknown';
-        const targetDisplay = alert.targetType === 'all' ? 'All VMs/LXCs' : 
-                             alert.targetType === 'vm' ? 'VMs only' :
-                             alert.targetType === 'lxc' ? 'LXCs only' :
-                             alert.specificTarget || alert.targetType?.toUpperCase() || 'All';
+    // Unified alert card renderer for both system and custom alerts
+    function createAlertCard(alert) {
+        const isSystem = alert.type === 'system';
+        const isEnabled = alert.enabled !== false;
+        
+        // Format metadata line
+        const metadataLine = isSystem 
+            ? 'Built-in system rule • Target: All VMs/LXCs'
+            : `Created: ${alert.createdAt ? new Date(alert.createdAt).toLocaleDateString() : 'Unknown'} • Target: ${getTargetDisplay(alert)}`;
+        
+        // Generate action buttons
+        const actionButtons = isSystem 
+            ? getSystemAlertButtons(alert)
+            : getCustomAlertButtons(alert);
+        
+        // Generate alert content (conditions/description)
+        const alertContent = isSystem
+            ? getSystemAlertContent(alert)
+            : getCustomAlertContent(alert);
         
         return `
-            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 ${!isEnabled ? 'opacity-50' : ''}">
                 <div class="flex items-start justify-between mb-2">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                             <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${alert.name || alert.description || 'Unnamed Alert'}</h5>
-                            <span class="text-xs px-2 py-0.5 ${alert.enabled !== false ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'} rounded-full">
-                                ${alert.enabled !== false ? 'Enabled' : 'Disabled'}
-                            </span>
                         </div>
                         <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                            Created: ${createdDate} • Target: ${targetDisplay}
+                            ${metadataLine}
                         </div>
                     </div>
                     <div class="flex gap-1">
-                        <button onclick="PulseApp.ui.alertManagementModal.editCustomAlert('${alert.id}')" 
-                                class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
-                            Edit
-                        </button>
-                        <button onclick="PulseApp.ui.alertManagementModal.toggleCustomAlert('${alert.id}', ${alert.enabled === false})" 
-                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
-                            ${alert.enabled !== false ? 'Disable' : 'Enable'}
-                        </button>
-                        <button onclick="PulseApp.ui.alertManagementModal.deleteCustomAlert('${alert.id}')" 
-                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
-                            Delete
-                        </button>
+                        ${actionButtons}
                     </div>
                 </div>
                 <div>
-                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Alert triggers when ANY condition is met:</p>
-                    <div class="flex flex-wrap mb-3">
-                        ${thresholdsList}
-                    </div>
-                    <div class="text-xs text-gray-600 dark:text-gray-400">
-                        <strong>Notifications:</strong>
-                        <div class="flex items-center gap-1 mt-1">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300">
-                                Pulse UI
-                            </span>
-                            ${alert.sendEmail ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300">Email</span>' : ''}
-                            ${alert.sendWebhook ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300">Webhook</span>' : ''}
-                        </div>
-                    </div>
+                    ${alertContent}
                 </div>
             </div>
         `;
     }
-
-    function createSystemAlertCard(alert) {
+    
+    function getTargetDisplay(alert) {
+        return alert.targetType === 'all' ? 'All VMs/LXCs' :
+               alert.targetType === 'vm' ? 'VMs only' :
+               alert.targetType === 'lxc' ? 'LXCs only' :
+               alert.specificTarget || alert.targetType?.toUpperCase() || 'All';
+    }
+    
+    function getSystemAlertButtons(alert) {
+        const editButton = alert.threshold ? `
+            <button onclick="editSystemAlert('${alert.id}')" 
+                    class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
+                Edit
+            </button>
+        ` : '';
+        
+        return `
+            ${editButton}
+            <button onclick="PulseApp.ui.alertManagementModal.toggleAlert('${alert.id}', 'system', ${!alert.enabled})" 
+                    class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                ${alert.enabled ? 'Disable' : 'Enable'}
+            </button>
+        `;
+    }
+    
+    function getCustomAlertButtons(alert) {
+        return `
+            <button onclick="PulseApp.ui.alertManagementModal.editCustomAlert('${alert.id}')" 
+                    class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
+                Edit
+            </button>
+            <button onclick="PulseApp.ui.alertManagementModal.toggleAlert('${alert.id}', 'custom', ${alert.enabled === false})" 
+                    class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                ${alert.enabled !== false ? 'Disable' : 'Enable'}
+            </button>
+            <button onclick="PulseApp.ui.alertManagementModal.deleteCustomAlert('${alert.id}')" 
+                    class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
+                Delete
+            </button>
+        `;
+    }
+    
+    function getSystemAlertContent(alert) {
         const thresholdBadge = alert.threshold ? 
             `<span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">
                 ${alert.name.split(' ')[0]} ≥ ${alert.threshold}%
             </span>` : '';
         
         return `
-            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
-                <div class="flex items-start justify-between mb-2">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
-                            <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${alert.name}</h5>
-                            <span class="text-xs px-2 py-0.5 ${alert.enabled ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'} rounded-full">
-                                ${alert.enabled ? 'Enabled' : 'Disabled'}
-                            </span>
-                        </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                            Built-in system rule • Target: All VMs/LXCs
-                        </div>
-                    </div>
-                    <div class="flex gap-1">
-                        ${alert.threshold ? `
-                            <button onclick="editSystemAlert('${alert.id}')" 
-                                    class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
-                                Edit
-                            </button>
-                        ` : ''}
-                        <button onclick="toggleSystemAlert('${alert.id}', ${!alert.enabled})" 
-                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
-                            ${alert.enabled ? 'Disable' : 'Enable'}
-                        </button>
-                    </div>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">${alert.description}</p>
-                    <div class="flex flex-wrap">
-                        ${thresholdBadge}
-                    </div>
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">${alert.description}</p>
+            ${thresholdBadge}
+        `;
+    }
+    
+    function getCustomAlertContent(alert) {
+        const thresholdsList = alert.thresholds?.map(t => 
+            `<span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">
+                ${t.metric.charAt(0).toUpperCase() + t.metric.slice(1)} ≥ ${t.threshold}${['cpu', 'memory', 'disk'].includes(t.metric) ? '%' : ''}
+            </span>`
+        ).join('') || '';
+        
+        return `
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Alert triggers when ANY condition is met:</p>
+            <div class="flex flex-wrap mb-3">
+                ${thresholdsList}
+            </div>
+            <div class="text-xs text-gray-600 dark:text-gray-400">
+                <strong>Notifications:</strong>
+                <div class="flex items-center gap-1 mt-1">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300">
+                        Pulse UI
+                    </span>
+                    ${alert.sendEmail ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300">Email</span>' : ''}
+                    ${alert.sendWebhook ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300">Webhook</span>' : ''}
                 </div>
             </div>
         `;
+    }
+
+    // Legacy wrapper - now uses unified system
+    function createCustomAlertCard(alert) {
+        return createAlertCard({...alert, type: 'custom'});
+    }
+
+    // Legacy wrapper - now uses unified system
+    function createSystemAlertCard(alert) {
+        return createAlertCard({...alert, type: 'system'});
     }
 
     function loadEmailConfiguration() {
@@ -1425,17 +1437,14 @@ PulseApp.ui.alertManagementModal = (() => {
         }).then(response => response.json()).then(result => {
             if (!result.success) {
                 console.error('Failed to save alert configuration:', result.error);
-                PulseApp.ui.toast.error('Failed to save alert configuration');
             }
         }).catch(error => {
             console.error('Error saving alert configuration:', error);
-            PulseApp.ui.toast.error('Failed to save alert configuration');
         });
         
         // Update the UI immediately
         updateSystemAlertDisplay(alertType, alertConfig);
         
-        PulseApp.ui.toast.success(`${alertType.charAt(0).toUpperCase() + alertType.slice(1)} alert settings saved successfully!`);
         closeSystemAlertModal();
     }
     
@@ -1451,7 +1460,6 @@ PulseApp.ui.alertManagementModal = (() => {
             body: JSON.stringify(configUpdate)
         }).then(response => response.json()).then(result => {
             if (result.success) {
-                PulseApp.ui.toast.success(`${alertType.charAt(0).toUpperCase() + alertType.slice(1)} alert ${enabled ? 'enabled' : 'disabled'} successfully`);
                 // Reload configuration to ensure UI reflects the saved state
                 loadConfiguration().then(() => {
                     // Update the display with the fresh config
@@ -1465,17 +1473,14 @@ PulseApp.ui.alertManagementModal = (() => {
                 });
             } else {
                 console.error('[DEBUG] Failed to save alert status:', result.error);
-                PulseApp.ui.toast.error('Failed to save alert status');
             }
         }).catch(error => {
             console.error('[DEBUG] Error saving alert status:', error);
-            PulseApp.ui.toast.error('Failed to save alert status');
         });
     }
 
     function triggerImmediateAlertEvaluation() {
         
-        PulseApp.ui.toast.alert('Alert enabled - checking for existing conditions...');
         
         // Call the API endpoint to trigger immediate evaluation
         fetch('/api/alerts/evaluate', {
@@ -1503,30 +1508,8 @@ PulseApp.ui.alertManagementModal = (() => {
     }
     
     function updateSystemAlertDisplay(alertType, config) {
-        
-        // Update the status badge
-        const statusBadge = document.getElementById(`${alertType}-status-badge`);
-        if (statusBadge) {
-            const newText = config.enabled ? 'Enabled' : 'Disabled';
-            const newClassName = `text-xs px-2 py-0.5 rounded-full ${
-                config.enabled 
-                    ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-            }`;
-            
-            statusBadge.textContent = newText;
-            statusBadge.className = newClassName;
-        } else {
-        }
-        
-        // Update the toggle button text and onclick
-        const toggleBtn = document.getElementById(`${alertType}-toggle-btn`);
-        if (toggleBtn) {
-            const newText = config.enabled ? 'Disable' : 'Enable';
-            toggleBtn.textContent = newText;
-            toggleBtn.onclick = () => toggleSystemAlert(alertType, !config.enabled);
-        } else {
-        }
+        // Reload all system alerts to reflect the updated state
+        loadSystemAlerts();
         
         // Update the threshold display
         if (config.threshold && alertType !== 'down') {
@@ -2220,7 +2203,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     }
 
     function loadCurrentAlerts() {
-        const contentDiv = document.getElementById('current-alerts-content');
+        const contentDiv = document.getElementById('current-alerts-list');
         if (!contentDiv) return;
 
         // Get alerts from the alerts handler
@@ -2233,7 +2216,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     }
 
     function renderCurrentAlerts(alerts) {
-        const contentDiv = document.getElementById('current-alerts-content');
+        const contentDiv = document.getElementById('current-alerts-list');
         if (!contentDiv) return;
 
         if (!alerts || alerts.length === 0) {
@@ -2359,46 +2342,256 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         })();
 
         return `
-            <div class="border-l-4 ${colorClass} p-4 rounded-r-lg ${acknowledgedClass}">
-                <div class="flex items-start justify-between">
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 ${acknowledgedClass}">
+                <div class="flex items-start justify-between mb-2">
                     <div class="flex-1">
-                        <div class="flex items-center space-x-2 mb-2">
+                        <div class="flex items-center gap-2 mb-1">
                             <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                 ${alert.guest?.name || 'Unknown'}
                             </h5>
-                            <span class="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                            <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
                                 ${alert.guest?.type || 'unknown'} ${alert.guest?.vmid || ''}
                             </span>
-                            <span class="text-xs px-2 py-1 rounded-full ${severityBadgeClass}">
+                            <span class="text-xs px-2 py-0.5 rounded-full ${severityBadgeClass}">
                                 ${alert.severity || 'info'}
                             </span>
-                            ${alert.escalated ? '<span class="text-xs bg-red-500 text-white px-2 py-1 rounded">Escalated</span>' : ''}
-                            ${acknowledged ? '<span class="text-xs bg-green-500 text-white px-2 py-1 rounded">Acknowledged</span>' : ''}
+                            ${alert.escalated ? '<span class="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">Escalated</span>' : ''}
+                            ${acknowledged ? '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">Acknowledged</span>' : ''}
                         </div>
-                        ${deliveryIndicators}
-                        <div class="space-y-1">
-                            <p class="text-sm text-gray-900 dark:text-gray-100 font-medium">
-                                ${alertType}: ${currentValueDisplay}
-                            </p>
-                            ${thresholdInfo ? `<p class="text-xs text-gray-600 dark:text-gray-400">${thresholdInfo}</p>` : ''}
-                            <p class="text-xs text-gray-500 dark:text-gray-500">
-                                ${alert.guest?.node ? `Node: ${alert.guest.node} • ` : ''}Active for ${durationStr}
-                                ${acknowledged ? ` • Acknowledged ${Math.round((Date.now() - alert.acknowledgedAt) / 60000)}m ago` : ''}
-                            </p>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            ${alert.guest?.node ? `Node: ${alert.guest.node} • ` : ''}Active for ${durationStr}
+                            ${acknowledged ? ` • Acknowledged ${Math.round((Date.now() - alert.acknowledgedAt) / 60000)}m ago` : ''}
                         </div>
                     </div>
-                    <div class="flex space-x-2">
+                    <div class="flex gap-1">
                         ${!acknowledged ? `
                             <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}'); setTimeout(() => PulseApp.ui.alertManagementModal.loadCurrentAlerts(), 500);" 
-                                    class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-medium rounded transition-colors">
+                                    class="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded">
                                 Acknowledge
                             </button>
                         ` : ''}
+                        <button onclick="PulseApp.ui.alertManagementModal.showAlertDetails('${alert.id}')" 
+                                class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
+                            Details
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                        ${alertType}: ${currentValueDisplay}
+                    </p>
+                    ${thresholdInfo ? `
+                        <div class="flex flex-wrap mb-3">
+                            <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">
+                                ${thresholdInfo}
+                            </span>
+                        </div>
+                    ` : ''}
+                    <div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Notifications:</p>
+                        <div class="flex gap-1">
+                            <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">Pulse UI</span>
+                            ${alert.emailSent ? '<span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded">Email</span>' : ''}
+                            ${alert.webhookSent ? '<span class="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300 rounded">Webhook</span>' : ''}
+                        </div>
                     </div>
                 </div>
             </div>
         `;
     }
+
+    function loadAlertHistory() {
+        const contentDiv = document.getElementById('alert-history-list');
+        if (!contentDiv) return;
+
+        // Get historical alerts from the alerts handler
+        if (PulseApp.alerts && PulseApp.alerts.getAlertHistory) {
+            const historicalAlerts = PulseApp.alerts.getAlertHistory();
+            renderAlertHistory(historicalAlerts);
+        } else {
+            // Mock historical data for now
+            const mockHistory = generateMockAlertHistory();
+            renderAlertHistory(mockHistory);
+        }
+    }
+
+    function renderAlertHistory(alerts) {
+        const contentDiv = document.getElementById('alert-history-list');
+        if (!contentDiv) return;
+
+        if (!alerts || alerts.length === 0) {
+            contentDiv.innerHTML = `
+                <div class="text-center py-8">
+                    <svg class="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">No Alert History</h3>
+                    <p class="text-gray-500 dark:text-gray-400">No historical alerts found.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Group alerts by date
+        const groupedAlerts = groupAlertsByDate(alerts);
+        
+        let content = '';
+        Object.entries(groupedAlerts).forEach(([date, dayAlerts]) => {
+            content += `
+                <div class="space-y-3">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-700 pb-2">
+                        ${date} (${dayAlerts.length} alert${dayAlerts.length !== 1 ? 's' : ''})
+                    </h4>
+                    <div class="space-y-2">
+                        ${dayAlerts.map(alert => renderHistoricalAlertCard(alert)).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        contentDiv.innerHTML = content;
+    }
+
+    function renderHistoricalAlertCard(alert) {
+        const duration = alert.resolvedAt ? 
+            Math.round((alert.resolvedAt - alert.triggeredAt) / 1000) : 
+            Math.round((Date.now() - alert.triggeredAt) / 1000);
+        
+        const durationStr = duration < 60 ? `${duration}s` : 
+                           duration < 3600 ? `${Math.round(duration/60)}m` : 
+                           `${Math.round(duration/3600)}h`;
+
+        const resolutionBadge = alert.resolvedAt ? 
+            `<span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded-full">
+                Resolved
+            </span>` :
+            `<span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full">
+                Auto-cleared
+            </span>`;
+
+        const severityBadgeClass = alert.severity === 'critical' ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' :
+                                  alert.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' :
+                                  'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200';
+
+        return `
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
+                <div class="flex items-start justify-between mb-2">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                            <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                ${alert.guest?.name || 'Unknown'}
+                            </h5>
+                            <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
+                                ${alert.guest?.type || 'unknown'} ${alert.guest?.vmid || ''}
+                            </span>
+                            <span class="text-xs px-2 py-0.5 rounded-full ${severityBadgeClass}">
+                                ${alert.severity || 'info'}
+                            </span>
+                            ${resolutionBadge}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                            ${new Date(alert.triggeredAt).toLocaleString()} • Duration: ${durationStr}
+                            ${alert.guest?.node ? ` • Node: ${alert.guest.node}` : ''}
+                        </div>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="PulseApp.ui.alertManagementModal.showAlertDetails('${alert.id}')" 
+                                class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
+                            Details
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                        ${alert.rule?.metric?.toUpperCase() || 'System'} Alert: ${alert.peakValue || alert.currentValue || 'N/A'}
+                    </p>
+                    <div>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">Notifications:</p>
+                        <div class="flex gap-1">
+                            <span class="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-800 text-blue-700 dark:text-blue-300 rounded">Pulse UI</span>
+                            ${alert.emailSent ? '<span class="text-xs px-2 py-0.5 bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 rounded">Email</span>' : ''}
+                            ${alert.webhookSent ? '<span class="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-800 text-purple-700 dark:text-purple-300 rounded">Webhook</span>' : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function groupAlertsByDate(alerts) {
+        const groups = {};
+        
+        alerts.forEach(alert => {
+            const date = new Date(alert.triggeredAt).toLocaleDateString();
+            if (!groups[date]) {
+                groups[date] = [];
+            }
+            groups[date].push(alert);
+        });
+
+        // Sort groups by date (newest first)
+        const sortedGroups = {};
+        Object.keys(groups)
+            .sort((a, b) => new Date(b) - new Date(a))
+            .forEach(date => {
+                // Sort alerts within each day by time (newest first)
+                groups[date].sort((a, b) => b.triggeredAt - a.triggeredAt);
+                sortedGroups[date] = groups[date];
+            });
+
+        return sortedGroups;
+    }
+
+    function generateMockAlertHistory() {
+        const now = Date.now();
+        const oneDay = 24 * 60 * 60 * 1000;
+        
+        return [
+            {
+                id: 'hist-1',
+                guest: { name: 'prod-web-01', type: 'vm', vmid: '101', node: 'pve-node-1' },
+                rule: { metric: 'cpu' },
+                severity: 'warning',
+                triggeredAt: now - (2 * oneDay),
+                resolvedAt: now - (2 * oneDay) + (30 * 60 * 1000),
+                peakValue: '87%',
+                emailSent: true,
+                webhookSent: false
+            },
+            {
+                id: 'hist-2',
+                guest: { name: 'db-primary', type: 'vm', vmid: '102', node: 'pve-node-2' },
+                rule: { metric: 'memory' },
+                severity: 'critical',
+                triggeredAt: now - (3 * oneDay),
+                resolvedAt: now - (3 * oneDay) + (2 * 60 * 60 * 1000),
+                peakValue: '94%',
+                emailSent: true,
+                webhookSent: true
+            },
+            {
+                id: 'hist-3',
+                guest: { name: 'backup-server', type: 'vm', vmid: '103', node: 'pve-node-1' },
+                rule: { metric: 'disk' },
+                severity: 'warning',
+                triggeredAt: now - (7 * oneDay),
+                resolvedAt: now - (7 * oneDay) + (4 * 60 * 60 * 1000),
+                peakValue: '82%',
+                emailSent: false,
+                webhookSent: false
+            }
+        ];
+    }
+
+    function clearAlertHistory() {
+        if (confirm('Are you sure you want to clear all alert history? This action cannot be undone.')) {
+            if (PulseApp.alerts && PulseApp.alerts.clearHistory) {
+                PulseApp.alerts.clearHistory();
+            }
+            loadAlertHistory(); // Refresh the display
+        }
+    }
+
 
     function preserveCurrentFormData() {
         // TODO: Implement form data preservation
@@ -2558,7 +2751,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             
         } catch (error) {
             console.error('Failed to toggle custom alert:', error);
-            PulseApp.ui.toast.error(`Failed to ${enabled ? 'enable' : 'disable'} alert: ${error.message}`);
         }
     }
 
@@ -2862,16 +3054,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     
     window.toggleSystemAlert = function(alertId, enabled) {
         
-        // Update the status badge
-        const statusBadge = document.getElementById(`${alertId}-status-badge`);
-        if (statusBadge) {
-            statusBadge.textContent = enabled ? 'Enabled' : 'Disabled';
-            statusBadge.className = `text-xs px-2 py-0.5 rounded-full ${
-                enabled 
-                    ? 'bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300' 
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-            }`;
-        }
         
         // Update the toggle button
         const toggleBtn = document.getElementById(`${alertId}-toggle-btn`);
@@ -2951,6 +3133,76 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         return `${Math.round(mb * 10) / 10}MB/s`;
     }
 
+    // Unified alert toggle function
+    async function toggleAlert(alertId, alertType, enabled) {
+        if (alertType === 'system') {
+            return toggleSystemAlert(alertId, enabled);
+        } else if (alertType === 'custom') {
+            return toggleCustomAlert(alertId, enabled);
+        }
+    }
+
+    // Email recipient management - simple and clean like settings
+    function addEmailRecipient() {
+        const listContainer = document.getElementById('additional-email-list');
+        if (!listContainer) return;
+        
+        const recipientId = 'email-recipient-' + Date.now();
+        const recipientHtml = `
+            <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg" id="${recipientId}">
+                <div class="flex-1">
+                    <input type="email" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="additional@yourcompany.com">
+                </div>
+                <button onclick="PulseApp.ui.alertManagementModal.removeEmailRecipient('${recipientId}')" 
+                        class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
+                    Remove
+                </button>
+            </div>
+        `;
+        
+        listContainer.insertAdjacentHTML('beforeend', recipientHtml);
+    }
+    
+    function removeEmailRecipient(recipientId) {
+        const recipientElement = document.getElementById(recipientId);
+        if (recipientElement) {
+            recipientElement.remove();
+        }
+    }
+    
+    // Webhook endpoint management - simple and clean like settings
+    function addWebhookEndpoint() {
+        const listContainer = document.getElementById('additional-webhook-list');
+        if (!listContainer) return;
+        
+        const webhookId = 'webhook-endpoint-' + Date.now();
+        const webhookHtml = `
+            <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg" id="${webhookId}">
+                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div class="md:col-span-2">
+                        <input type="url" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="https://discord.com/api/webhooks/...">
+                    </div>
+                    <div>
+                        <input type="text" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Name (e.g., Dev Team)">
+                    </div>
+                </div>
+                <button onclick="PulseApp.ui.alertManagementModal.removeWebhookEndpoint('${webhookId}')" 
+                        class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
+                    Remove
+                </button>
+            </div>
+        `;
+        
+        listContainer.insertAdjacentHTML('beforeend', webhookHtml);
+    }
+    
+    function removeWebhookEndpoint(webhookId) {
+        const webhookElement = document.getElementById(webhookId);
+        if (webhookElement) {
+            webhookElement.remove();
+        }
+    }
+
     // Public API
     return {
         init,
@@ -2960,8 +3212,13 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         openCustomAlertModal,
         editCustomAlert,
         toggleCustomAlert,
+        toggleAlert,
         deleteCustomAlert,
         showAlertDetails,
+        addEmailRecipient,
+        removeEmailRecipient,
+        addWebhookEndpoint,
+        removeWebhookEndpoint,
         loadCurrentAlerts: () => {
             if (activeTab === 'alerts') {
                 loadCurrentAlerts();
