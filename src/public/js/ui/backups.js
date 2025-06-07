@@ -1108,7 +1108,17 @@ PulseApp.ui.backups = (() => {
             
             const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
             const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
-            const allGuestSnapshots = [...pbsSnapshots, ...pveEndpointSnapshots, ...pveSpecificSnapshots];
+            
+            // Deduplicate PVE snapshots by volid to avoid counting the same backup multiple times
+            const pveSnapshotsMap = new Map();
+            [...pveEndpointSnapshots, ...pveSpecificSnapshots].forEach(snap => {
+                if (snap.volid) {
+                    pveSnapshotsMap.set(snap.volid, snap);
+                }
+            });
+            const uniquePveSnapshots = Array.from(pveSnapshotsMap.values());
+            
+            const allGuestSnapshots = [...pbsSnapshots, ...uniquePveSnapshots];
             
             // Similar for tasks
             const pbsTasks = tasksByGuest.get(baseKey) || [];
@@ -1496,7 +1506,17 @@ PulseApp.ui.backups = (() => {
             
             const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
             const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
-            const allGuestSnapshots = [...pbsSnapshots, ...pveEndpointSnapshots, ...pveSpecificSnapshots];
+            
+            // Deduplicate PVE snapshots by volid to avoid counting the same backup multiple times
+            const pveSnapshotsMap = new Map();
+            [...pveEndpointSnapshots, ...pveSpecificSnapshots].forEach(snap => {
+                if (snap.volid) {
+                    pveSnapshotsMap.set(snap.volid, snap);
+                }
+            });
+            const uniquePveSnapshots = Array.from(pveSnapshotsMap.values());
+            
+            const allGuestSnapshots = [...pbsSnapshots, ...uniquePveSnapshots];
             
             // Similar for tasks
             const pbsTasks = tasksByGuest.get(baseKey) || [];
