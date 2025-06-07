@@ -26,7 +26,7 @@ PulseApp.ui.alertManagementModal = (() => {
         }
 
         const modalHTML = `
-            <div id="alert-management-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-50">
+            <div id="alert-management-modal" class="fixed inset-0 z-50 hidden items-start justify-center bg-black bg-opacity-50 pt-8">
                 <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col m-4">
                     <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-6 py-4">
                         <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Alert Management</h2>
@@ -2380,6 +2380,35 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             </div>
         `;
 
+        // Enhanced information display
+        const alertType = alert.rule?.metric === 'compound' || alert.rule?.type === 'compound_threshold' ? 'Compound Alert' : 
+                         alert.rule?.metric ? `${alert.rule.metric.toUpperCase()} Alert` : 'System Alert';
+        
+        const severityBadgeClass = alert.severity === 'critical' ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' :
+                                  alert.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' :
+                                  'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200';
+        
+        const thresholdInfo = (() => {
+            if (alert.rule?.metric === 'compound' || alert.rule?.type === 'compound_threshold') {
+                if (alert.rule?.thresholds && Array.isArray(alert.rule.thresholds)) {
+                    const thresholds = alert.rule.thresholds.map(t => {
+                        const isPercentage = ['cpu', 'memory', 'disk'].includes(t.metric);
+                        return `${t.metric.toUpperCase()} ≥ ${t.threshold}${isPercentage ? '%' : ''}`;
+                    });
+                    return thresholds.join(' AND ');
+                }
+                return 'Multiple thresholds';
+            } else {
+                const threshold = alert.effectiveThreshold !== undefined ? alert.effectiveThreshold : alert.rule?.threshold;
+                if (threshold !== undefined && threshold !== null) {
+                    const metric = alert.rule?.metric;
+                    const isPercentage = ['cpu', 'memory', 'disk'].includes(metric);
+                    return `Threshold: ${threshold}${isPercentage ? '%' : ''}`;
+                }
+                return '';
+            }
+        })();
+
         return `
             <div class="border-l-4 ${colorClass} p-4 rounded-r-lg ${acknowledgedClass}">
                 <div class="flex items-start justify-between">
@@ -2389,19 +2418,25 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                                 ${alert.guest?.name || 'Unknown'}
                             </h5>
                             <span class="text-xs px-2 py-1 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-                                ${currentValueDisplay}
+                                ${alert.guest?.type || 'unknown'} ${alert.guest?.vmid || ''}
+                            </span>
+                            <span class="text-xs px-2 py-1 rounded-full ${severityBadgeClass}">
+                                ${alert.severity || 'info'}
                             </span>
                             ${alert.escalated ? '<span class="text-xs bg-red-500 text-white px-2 py-1 rounded">Escalated</span>' : ''}
                             ${acknowledged ? '<span class="text-xs bg-green-500 text-white px-2 py-1 rounded">Acknowledged</span>' : ''}
                         </div>
                         ${deliveryIndicators}
-                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                            ${alert.ruleName || 'Unknown Rule'}
-                        </p>
-                        <p class="text-xs text-gray-500 dark:text-gray-500">
-                            Active for ${durationStr}
-                            ${acknowledged ? ` • Acknowledged ${Math.round((Date.now() - alert.acknowledgedAt) / 60000)}m ago` : ''}
-                        </p>
+                        <div class="space-y-1">
+                            <p class="text-sm text-gray-900 dark:text-gray-100 font-medium">
+                                ${alertType}: ${currentValueDisplay}
+                            </p>
+                            ${thresholdInfo ? `<p class="text-xs text-gray-600 dark:text-gray-400">${thresholdInfo}</p>` : ''}
+                            <p class="text-xs text-gray-500 dark:text-gray-500">
+                                ${alert.guest?.node ? `Node: ${alert.guest.node} • ` : ''}Active for ${durationStr}
+                                ${acknowledged ? ` • Acknowledged ${Math.round((Date.now() - alert.acknowledgedAt) / 60000)}m ago` : ''}
+                            </p>
+                        </div>
                     </div>
                     <div class="flex space-x-2">
                         ${!acknowledged ? `
@@ -2410,9 +2445,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                                 Acknowledge
                             </button>
                         ` : ''}
-                        <button class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs font-medium rounded transition-colors">
-                            Details
-                        </button>
                     </div>
                 </div>
             </div>
@@ -2618,6 +2650,249 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         await _performDeleteCustomAlert(alertId);
     }
 
+    function showAlertDetails(alertId) {
+        // Find the alert in the current alerts list
+        const alertsResponse = document.querySelector('#alert-management-modal-body');
+        if (!alertsResponse) return;
+
+        // Get the alert data from the current state
+        try {
+            const alerts = PulseApp.alerts.getActiveAlerts();
+            const alert = alerts.find(a => a.id === alertId);
+            
+            if (alert) {
+                displayAlertDetailsModal(alert);
+            } else {
+                // Fallback: try to get alert from server
+                fetch(`/api/alerts`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const alert = data.active ? data.active.find(a => a.id === alertId) : null;
+                        if (alert) {
+                            displayAlertDetailsModal(alert);
+                        } else {
+                            PulseApp.ui.toast.error('Alert not found');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Failed to fetch alert details:', error);
+                        PulseApp.ui.toast.error('Failed to load alert details');
+                    });
+            }
+        } catch (error) {
+            console.error('Error accessing alerts:', error);
+            PulseApp.ui.toast.error('Failed to access alert data');
+        }
+    }
+
+    function displayAlertDetailsModal(alert) {
+        // Create alert details modal
+        const modalHTML = `
+            <div id="alert-details-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50" style="z-index: 9999;">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col m-4">
+                    <div class="flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-6 py-4">
+                        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Alert Details</h2>
+                        <button onclick="document.getElementById('alert-details-modal').remove();" 
+                                class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    
+                    <div class="overflow-y-auto flex-grow p-6">
+                        <div class="space-y-4">
+                            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                                <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Alert Information</h3>
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Rule:</span>
+                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.rule?.name || alert.ruleName || 'Unknown'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Severity:</span>
+                                        <span class="ml-2 px-2 py-1 rounded text-xs font-medium 
+                                            ${alert.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                                              alert.severity === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                              'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">
+                                            ${alert.severity || 'info'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Status:</span>
+                                        <span class="ml-2 px-2 py-1 rounded text-xs font-medium 
+                                            ${alert.acknowledged ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                                              'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}">
+                                            ${alert.acknowledged ? 'Acknowledged' : 'Active'}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
+                                        <span class="text-gray-900 dark:text-gray-100 ml-2">
+                                            ${alert.triggeredAt ? Math.round((Date.now() - alert.triggeredAt) / 60000) + ' minutes' : 'Unknown'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                                <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Affected Resource</h3>
+                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Name:</span>
+                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.guest?.name || 'Unknown'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Type:</span>
+                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.guest?.type || 'Unknown'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Node:</span>
+                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.guest?.node || 'Unknown'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">VM/CT ID:</span>
+                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.guest?.vmid || 'Unknown'}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
+                                <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Metric Details</h3>
+                                <div class="space-y-2 text-sm">
+                                    <div>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Alert Type:</span>
+                                        <span class="text-gray-900 dark:text-gray-100 ml-2">
+                                            ${(() => {
+                                                const metric = alert.rule?.metric || alert.metric;
+                                                if (metric === 'compound' || alert.rule?.type === 'compound_threshold') {
+                                                    return 'Compound Threshold Alert';
+                                                }
+                                                return metric ? metric.charAt(0).toUpperCase() + metric.slice(1) + ' Alert' : 'Single Metric Alert';
+                                            })()}
+                                        </span>
+                                    </div>
+                                    ${(() => {
+                                        const metric = alert.rule?.metric || alert.metric;
+                                        if (metric === 'compound' || alert.rule?.type === 'compound_threshold') {
+                                            // Handle compound threshold alerts
+                                            let currentValuesHtml = '';
+                                            let thresholdsHtml = '';
+                                            
+                                            if (typeof alert.currentValue === 'object' && alert.currentValue !== null) {
+                                                const values = Object.entries(alert.currentValue).map(([key, value]) => {
+                                                    const isPercentage = ['cpu', 'memory', 'disk'].includes(key);
+                                                    return key.toUpperCase() + ': ' + (typeof value === 'number' ? Math.round(value) : value) + (isPercentage ? '%' : '');
+                                                });
+                                                currentValuesHtml = values.join(', ');
+                                            }
+                                            
+                                            if (alert.rule?.thresholds && Array.isArray(alert.rule.thresholds)) {
+                                                const thresholds = alert.rule.thresholds.map(t => {
+                                                    const isPercentage = ['cpu', 'memory', 'disk'].includes(t.metric);
+                                                    return t.metric.toUpperCase() + ' ' + t.condition.replace('_', ' ') + ' ' + t.threshold + (isPercentage ? '%' : '');
+                                                });
+                                                thresholdsHtml = thresholds.join(' AND ');
+                                            } else if (typeof alert.effectiveThreshold === 'object' && alert.effectiveThreshold !== null) {
+                                                thresholdsHtml = JSON.stringify(alert.effectiveThreshold);
+                                            }
+                                            
+                                            return '<div>' +
+                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Current Values:</span>' +
+                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + (currentValuesHtml || 'N/A') + '</span>' +
+                                                '</div>' +
+                                                '<div>' +
+                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Threshold Conditions:</span>' +
+                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + (thresholdsHtml || 'N/A') + '</span>' +
+                                                '</div>';
+                                        } else {
+                                            // Handle single metric alerts
+                                            const currentValue = typeof alert.currentValue === 'number' ? 
+                                                (['cpu', 'memory', 'disk'].includes(metric) ? Math.round(alert.currentValue) + '%' : alert.currentValue) : 
+                                                (alert.currentValue || 'N/A');
+                                            
+                                            const threshold = alert.effectiveThreshold !== undefined ? alert.effectiveThreshold : alert.rule?.threshold || alert.threshold;
+                                            const thresholdDisplay = threshold !== undefined && threshold !== null ? 
+                                                (typeof threshold === 'number' && ['cpu', 'memory', 'disk'].includes(metric) ? threshold + '%' : threshold) : 
+                                                'N/A';
+                                            
+                                            return '<div>' +
+                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Metric:</span>' +
+                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + (metric || 'Unknown') + '</span>' +
+                                                '</div>' +
+                                                '<div>' +
+                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Current Value:</span>' +
+                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + currentValue + '</span>' +
+                                                '</div>' +
+                                                '<div>' +
+                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Threshold:</span>' +
+                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + thresholdDisplay + '</span>' +
+                                                '</div>';
+                                        }
+                                    })()}
+                                    ${alert.rule?.description ? `
+                                        <div>
+                                            <span class="font-medium text-gray-700 dark:text-gray-300">Description:</span>
+                                            <p class="text-gray-900 dark:text-gray-100 mt-1">${alert.rule.description}</p>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+
+                            ${alert.acknowledged ? `
+                                <div class="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
+                                    <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Acknowledgment</h3>
+                                    <div class="text-sm">
+                                        <div>
+                                            <span class="font-medium text-gray-700 dark:text-gray-300">Acknowledged by:</span>
+                                            <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.acknowledgedBy || 'System'}</span>
+                                        </div>
+                                        <div>
+                                            <span class="font-medium text-gray-700 dark:text-gray-300">Time:</span>
+                                            <span class="text-gray-900 dark:text-gray-100 ml-2">
+                                                ${alert.acknowledgedAt ? new Date(alert.acknowledgedAt).toLocaleString() : 'Unknown'}
+                                            </span>
+                                        </div>
+                                        ${alert.acknowledgeNote ? `
+                                            <div>
+                                                <span class="font-medium text-gray-700 dark:text-gray-300">Note:</span>
+                                                <p class="text-gray-900 dark:text-gray-100 mt-1">${alert.acknowledgeNote}</p>
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-gray-300 dark:border-gray-700 px-6 py-4">
+                        <div class="flex gap-3 justify-end">
+                            ${!alert.acknowledged ? `
+                                <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}'); setTimeout(() => { document.getElementById('alert-details-modal').remove(); PulseApp.ui.alertManagementModal.loadCurrentAlerts(); }, 500);" 
+                                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
+                                    Acknowledge Alert
+                                </button>
+                            ` : ''}
+                            <button onclick="document.getElementById('alert-details-modal').remove();" 
+                                    class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md transition-colors">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Remove any existing details modal
+        const existingModal = document.getElementById('alert-details-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Add the modal to the page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+    }
+
     async function _performDeleteCustomAlert(alertId) {
         try {
             const response = await fetch(`/api/alerts/rules/${alertId}`, {
@@ -2745,6 +3020,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         editCustomAlert,
         toggleCustomAlert,
         deleteCustomAlert,
+        showAlertDetails,
         loadCurrentAlerts: () => {
             if (activeTab === 'alerts') {
                 loadCurrentAlerts();
