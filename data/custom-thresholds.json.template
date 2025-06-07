@@ -1,0 +1,27 @@
+{
+  "_readme": "This is a template file. Custom threshold configurations will be stored in custom-thresholds.json (not tracked by git)",
+  "_example": {
+    "endpointId:vmid": {
+      "endpointId": "primary",
+      "nodeId": "auto-detect",
+      "vmid": "103",
+      "thresholds": {
+        "cpu": {
+          "warning": 80,
+          "critical": 90
+        },
+        "memory": {
+          "warning": 85,
+          "critical": 95
+        },
+        "disk": {
+          "warning": 70,
+          "critical": 80
+        }
+      },
+      "enabled": true,
+      "createdAt": "2025-06-01T19:50:34.784Z",
+      "updatedAt": "2025-06-01T19:50:34.784Z"
+    }
+  }
+}

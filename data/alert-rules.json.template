@@ -1,0 +1,34 @@
+{
+  "_readme": "This is a template file. Custom alert rules will be stored in alert-rules.json (not tracked by git)",
+  "_example": {
+    "compound_example_123": {
+      "id": "compound_example_123",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "notificationChannels": [
+        "default"
+      ],
+      "type": "compound_threshold",
+      "name": "Example Alert",
+      "targetType": "all",
+      "specificTarget": "",
+      "thresholds": [
+        {
+          "type": "cpu",
+          "operator": ">",
+          "value": 80
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false,
+      "createdAt": 1749159848648
+    }
+  }
+}
