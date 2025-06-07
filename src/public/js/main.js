@@ -1,4 +1,5 @@
 document.addEventListener('DOMContentLoaded', function() {
+    // Hot reload test comment
     const PulseApp = window.PulseApp || {};
 
     function updateAllUITables() {
