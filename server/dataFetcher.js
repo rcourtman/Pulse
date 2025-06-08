@@ -512,6 +512,41 @@ function deduplicateContainersByNode(allContainers) {
     return Array.from(containerMap.values());
 }
 
+/**
+ * Deduplicates storage backups based on volid to prevent shared storage from showing duplicates
+ * @param {Array} allStorageBackups - Array of storage backup objects
+ * @returns {Array} - Deduplicated array of storage backups
+ */
+function deduplicateStorageBackups(allStorageBackups) {
+    const seenVolids = new Map(); // Map volid -> backup object with nodes array
+    let duplicatesFound = 0;
+    
+    allStorageBackups.forEach(backup => {
+        const volid = backup.volid;
+        
+        if (seenVolids.has(volid)) {
+            // Duplicate found - add this node to the list of nodes that see this backup
+            const existingBackup = seenVolids.get(volid);
+            if (!existingBackup.visibleOnNodes) {
+                existingBackup.visibleOnNodes = [existingBackup.node];
+            }
+            if (!existingBackup.visibleOnNodes.includes(backup.node)) {
+                existingBackup.visibleOnNodes.push(backup.node);
+            }
+            duplicatesFound++;
+        } else {
+            // First time seeing this backup
+            seenVolids.set(volid, { ...backup });
+        }
+    });
+    
+    if (duplicatesFound > 0) {
+        console.log(`[DataFetcher] Deduplicated ${duplicatesFound} shared storage backup(s) - kept ${seenVolids.size} unique backups`);
+    }
+    
+    return Array.from(seenVolids.values());
+}
+
 // Cache for cluster membership detection
 const clusterMembershipCache = new Map();
 const CLUSTER_CACHE_TTL = 300000; // 5 minutes
@@ -1596,9 +1631,12 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
     // Wait for all promises to complete
     await Promise.allSettled([...nodeBackupPromises, ...guestSnapshotPromises]);
     
+    // Deduplicate storage backups (fixes shared storage counting same backup multiple times)
+    const deduplicatedStorageBackups = deduplicateStorageBackups(allStorageBackups);
+    
     return {
         backupTasks: allBackupTasks,
-        storageBackups: allStorageBackups,
+        storageBackups: deduplicatedStorageBackups,
         guestSnapshots: allGuestSnapshots
     };
 }

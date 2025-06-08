@@ -714,6 +714,50 @@ PulseApp.ui.backups = (() => {
             }
         }
 
+        // Calculate type-specific latest backup times
+        const latestTimes = {};
+        
+        if (guestSnapshots && guestSnapshots.length > 0) {
+            // Separate snapshots by type
+            const pbsSnapshots = guestSnapshots.filter(snap => snap.source === 'pbs' || snap.pbsInstance);
+            const pveSnapshots = guestSnapshots.filter(snap => snap.source === 'pve' || (!snap.source && !snap.pbsInstance));
+            
+            // Calculate latest PBS backup time
+            if (pbsSnapshots.length > 0) {
+                const latestPbs = pbsSnapshots.reduce((latest, snap) => {
+                    return (!latest || (snap['backup-time'] && snap['backup-time'] > latest['backup-time'])) ? snap : latest;
+                }, null);
+                latestTimes.pbs = latestPbs ? latestPbs['backup-time'] : null;
+            }
+            
+            // Calculate latest PVE backup time  
+            if (pveSnapshots.length > 0) {
+                const latestPve = pveSnapshots.reduce((latest, snap) => {
+                    return (!latest || (snap['backup-time'] && snap['backup-time'] > latest['backup-time'])) ? snap : latest;
+                }, null);
+                latestTimes.pve = latestPve ? latestPve['backup-time'] : null;
+            }
+        }
+        
+        // VM/Container snapshots are tracked separately
+        if (guestSnapshotCount > 0) {
+            // Get latest snapshot time from VM/CT snapshots
+            const vmSnapshots = allSnapshots.filter(snap => {
+                if (parseInt(snap.vmid, 10) !== parseInt(guest.vmid, 10)) return false;
+                if (guest.node && snap.node) return snap.node === guest.node;
+                if (guest.endpointId && snap.endpointId) return snap.endpointId === guest.endpointId;
+                return true;
+            });
+            
+            if (vmSnapshots.length > 0) {
+                const latestVmSnapshot = vmSnapshots.reduce((latest, snap) => {
+                    const snapTime = snap.snaptime;
+                    const latestTime = latest ? latest.snaptime : 0;
+                    return (snapTime && snapTime > latestTime) ? snap : latest;
+                }, null);
+                latestTimes.snapshots = latestVmSnapshot ? latestVmSnapshot.snaptime : null;
+            }
+        }
         
         return {
             guestName: guest.name || `Guest ${guest.vmid}`,
@@ -722,6 +766,7 @@ PulseApp.ui.backups = (() => {
             node: guest.node,
             guestPveStatus: guest.status,
             latestBackupTime: displayTimestamp,
+            latestTimes: latestTimes, // NEW: Type-specific latest times
             pbsBackups: pbsBackupCount,
             pbsBackupInfo: pbsBackupInfo,
             pveBackups: pveBackupCount,

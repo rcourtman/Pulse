@@ -59,6 +59,7 @@ PulseApp.ui.backupDetailCard = (() => {
             (filterInfo.healthStatus && filterInfo.healthStatus !== 'all')
         );
         
+        
         // If no filters active, show summary view
         if (!hasActiveFilters) {
             return getCompactOverview(backups, stats, filterInfo);
@@ -84,8 +85,6 @@ PulseApp.ui.backupDetailCard = (() => {
             none: []       // no backups
         };
         
-        // Debug: Show which guests are being processed by detail card
-        console.log(`[Debug] Detail card processing guests:`, backups.map(g => `${g.guestId} (${g.guestName})`));
         
         // Analyze each guest
         backups.forEach(guest => {
@@ -94,41 +93,38 @@ PulseApp.ui.backupDetailCard = (() => {
             // Check if we have filter info to determine which backup types to consider
             const activeBackupFilter = filterInfo?.backupType;
             
-            // If a specific backup type filter is active, use filtered backup dates
-            if (activeBackupFilter && activeBackupFilter !== 'all' && guest.backupDates && guest.backupDates.length > 0) {
-                // Find the most recent backup of the filtered type
-                const filteredDates = guest.backupDates.filter(dateInfo => {
-                    if (activeBackupFilter === 'pbs') return dateInfo.types.includes('pbsSnapshots');
-                    if (activeBackupFilter === 'pve') return dateInfo.types.includes('pveBackups');
-                    if (activeBackupFilter === 'snapshots') return dateInfo.types.includes('vmSnapshots');
-                    return false;
-                });
+            
+            // If a specific backup type filter is active, use type-specific latest times
+            if (activeBackupFilter && activeBackupFilter !== 'all') {
+                let latestTimestamp = null;
                 
-                if (filteredDates.length > 0) {
-                    // backupDates are already sorted by date (newest first)
-                    mostRecentBackup = new Date(filteredDates[0].date);
+                // Use direct timestamp lookup from latestTimes
+                if (guest.latestTimes) {
+                    switch(activeBackupFilter) {
+                        case 'pve':
+                            latestTimestamp = guest.latestTimes.pve;
+                            break;
+                        case 'pbs':
+                            latestTimestamp = guest.latestTimes.pbs;
+                            break;
+                        case 'snapshots':
+                            latestTimestamp = guest.latestTimes.snapshots;
+                            break;
+                    }
                 }
+                
+                // Convert timestamp to Date object
+                if (latestTimestamp) {
+                    mostRecentBackup = new Date(latestTimestamp * 1000);
+                }
+                
             } else {
                 // Use overall latest backup time for 'all' filter or when no filter is active
+                
                 // Find most recent backup - only use if it's a valid timestamp
                 if (guest.latestBackupTime && guest.latestBackupTime > 0) {
                     // latestBackupTime is a Unix timestamp from the main backup status
                     mostRecentBackup = new Date(guest.latestBackupTime * 1000);
-                    
-                    // Debug for guest 111
-                    if (guest.guestId === 111 || guest.guestId === '111') {
-                        console.log(`[Debug] Detail card guest 111 timestamp:`, {
-                            guestId: guest.guestId,
-                            latestBackupTime: guest.latestBackupTime,
-                            mostRecentBackup: mostRecentBackup,
-                            now: now,
-                            ageInDays: (now - mostRecentBackup) / (1000 * 60 * 60 * 24),
-                            ageInHours: (now - mostRecentBackup) / (1000 * 60 * 60),
-                            backupDatesFallback: guest.backupDates ? guest.backupDates.length : 0,
-                            hasBackupDates: !!guest.backupDates,
-                            backupDatesLength: guest.backupDates?.length || 0
-                        });
-                    }
                 } else if (guest.backupDates && guest.backupDates.length > 0) {
                     // Fallback to backupDates array - find the most recent actual backup
                     const validDates = guest.backupDates
@@ -137,18 +133,6 @@ PulseApp.ui.backupDetailCard = (() => {
                         .sort((a, b) => b - a);
                     if (validDates.length > 0) {
                         mostRecentBackup = validDates[0];
-                        
-                        // Debug when using fallback for guest 111
-                        if (guest.guestId === 111 || guest.guestId === '111') {
-                            console.log(`[Debug] Detail card guest 111 using FALLBACK backupDates:`, {
-                                guestId: guest.guestId,
-                                backupDates: guest.backupDates,
-                                validDates: validDates,
-                                selectedDate: mostRecentBackup,
-                                ageInDays: (now - mostRecentBackup) / (1000 * 60 * 60 * 24),
-                                ageInHours: (now - mostRecentBackup) / (1000 * 60 * 60)
-                            });
-                        }
                     }
                 }
             }
@@ -359,14 +343,39 @@ PulseApp.ui.backupDetailCard = (() => {
                             const now = new Date();
                             const backupTypeFilter = filterInfo?.backupType;
                             
-                            // Always use overall backup age regardless of filter for health assessment
-                            // Filters affect display of backup types/counts, but age should show when guest was last backed up (any type)
-                            if (guest.latestBackupTime && guest.latestBackupTime > 0) {
-                                // latestBackupTime is a Unix timestamp from the main backup status
-                                mostRecent = new Date(guest.latestBackupTime * 1000);
-                            } else if (guest.backupDates && guest.backupDates.length > 0) {
-                                // Fallback to filtered backup dates
-                                mostRecent = new Date(guest.backupDates[0].date);
+                            // Use type-specific latest times when a specific backup type is selected
+                            if (backupTypeFilter && backupTypeFilter !== 'all') {
+                                let latestTimestamp = null;
+                                
+                                // Use direct timestamp lookup from latestTimes
+                                if (guest.latestTimes) {
+                                    switch(backupTypeFilter) {
+                                        case 'pve':
+                                            latestTimestamp = guest.latestTimes.pve;
+                                            break;
+                                        case 'pbs':
+                                            latestTimestamp = guest.latestTimes.pbs;
+                                            break;
+                                        case 'snapshots':
+                                            latestTimestamp = guest.latestTimes.snapshots;
+                                            break;
+                                    }
+                                }
+                                
+                                // Convert timestamp to Date object
+                                if (latestTimestamp) {
+                                    mostRecent = new Date(latestTimestamp * 1000);
+                                }
+                                
+                            } else {
+                                // Use overall backup age when no filter is active
+                                if (guest.latestBackupTime && guest.latestBackupTime > 0) {
+                                    // latestBackupTime is a Unix timestamp from the main backup status
+                                    mostRecent = new Date(guest.latestBackupTime * 1000);
+                                } else if (guest.backupDates && guest.backupDates.length > 0) {
+                                    // Fallback to filtered backup dates
+                                    mostRecent = new Date(guest.backupDates[0].date);
+                                }
                             }
                             
                             const ageInDays = mostRecent 
@@ -387,7 +396,7 @@ PulseApp.ui.backupDetailCard = (() => {
                                         ${filteredBackupData.typeLabels}
                                     </div>
                                     <div class="col-span-2 text-right text-gray-600 dark:text-gray-400">
-                                        ${filteredBackupData.totalCount}
+                                        
                                     </div>
                                     <div class="col-span-2 text-right font-medium ${getAgeColor(ageInDays)}">
                                         ${formatAge(ageInDays)}
@@ -446,7 +455,6 @@ PulseApp.ui.backupDetailCard = (() => {
                                         <div class="flex items-center gap-1 text-[9px]">
                                             ${filteredBackupData.typeLabels}
                                         </div>
-                                        <span class="text-gray-600 dark:text-gray-400">${filteredBackupData.backupCount}</span>
                                     </div>
                                 </div>
                             `;

@@ -604,16 +604,44 @@ PulseApp.ui.calendarHeatmap = (() => {
                 // Use unique key for guest lookup, fall back to vmid if not found
                 const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
                 
-                monthData[dateKey].guests.push({
-                    vmid: vmid,
-                    uniqueKey: uniqueGuestKey, // Include unique key for proper identification
-                    name: guestInfo.name,
-                    type: guestInfo.type,
-                    node: dateData[dateKey].node,
-                    endpointId: dateData[dateKey].endpointId,
-                    types: Array.from(dateData[dateKey].types),
-                    backupCount: dateData[dateKey].backups.length
-                });
+                // Check if this guest (by vmid) already exists for this date
+                const existingGuestIndex = monthData[dateKey].guests.findIndex(g => g.vmid === vmid);
+                
+                if (existingGuestIndex >= 0) {
+                    // Merge backup data for the same guest
+                    const existingGuest = monthData[dateKey].guests[existingGuestIndex];
+                    
+                    // Merge types
+                    const mergedTypes = new Set([...existingGuest.types, ...Array.from(dateData[dateKey].types)]);
+                    existingGuest.types = Array.from(mergedTypes);
+                    
+                    // Add backup count
+                    existingGuest.backupCount += dateData[dateKey].backups.length;
+                    
+                    // Keep track of all nodes/endpoints this guest has backups from
+                    if (!existingGuest.nodes) existingGuest.nodes = [];
+                    if (dateData[dateKey].node && !existingGuest.nodes.includes(dateData[dateKey].node)) {
+                        existingGuest.nodes.push(dateData[dateKey].node);
+                    }
+                    if (!existingGuest.endpointIds) existingGuest.endpointIds = [];
+                    if (dateData[dateKey].endpointId && !existingGuest.endpointIds.includes(dateData[dateKey].endpointId)) {
+                        existingGuest.endpointIds.push(dateData[dateKey].endpointId);
+                    }
+                } else {
+                    // Add new guest entry
+                    monthData[dateKey].guests.push({
+                        vmid: vmid,
+                        uniqueKey: uniqueGuestKey, // Include unique key for proper identification
+                        name: guestInfo.name,
+                        type: guestInfo.type,
+                        node: dateData[dateKey].node,
+                        endpointId: dateData[dateKey].endpointId,
+                        nodes: dateData[dateKey].node ? [dateData[dateKey].node] : [],
+                        endpointIds: dateData[dateKey].endpointId ? [dateData[dateKey].endpointId] : [],
+                        types: Array.from(dateData[dateKey].types),
+                        backupCount: dateData[dateKey].backups.length
+                    });
+                }
                 
                 dateData[dateKey].types.forEach(type => {
                     monthData[dateKey].allTypes.add(type);
@@ -1071,16 +1099,44 @@ PulseApp.ui.calendarHeatmap = (() => {
                 // Use unique key for guest lookup, fall back to vmid if not found
                 const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
                 
-                allData[dateKey].guests.push({
-                    vmid: vmid,
-                    uniqueKey: uniqueGuestKey, // Include unique key for proper identification
-                    name: guestInfo.name,
-                    type: guestInfo.type,
-                    node: dateData[dateKey].node,
-                    endpointId: dateData[dateKey].endpointId,
-                    types: Array.from(dateData[dateKey].types),
-                    backupCount: dateData[dateKey].backups.length
-                });
+                // Check if this guest (by vmid) already exists for this date
+                const existingGuestIndex = allData[dateKey].guests.findIndex(g => g.vmid === vmid);
+                
+                if (existingGuestIndex >= 0) {
+                    // Merge backup data for the same guest
+                    const existingGuest = allData[dateKey].guests[existingGuestIndex];
+                    
+                    // Merge types
+                    const mergedTypes = new Set([...existingGuest.types, ...Array.from(dateData[dateKey].types)]);
+                    existingGuest.types = Array.from(mergedTypes);
+                    
+                    // Add backup count
+                    existingGuest.backupCount += dateData[dateKey].backups.length;
+                    
+                    // Keep track of all nodes/endpoints this guest has backups from
+                    if (!existingGuest.nodes) existingGuest.nodes = [];
+                    if (dateData[dateKey].node && !existingGuest.nodes.includes(dateData[dateKey].node)) {
+                        existingGuest.nodes.push(dateData[dateKey].node);
+                    }
+                    if (!existingGuest.endpointIds) existingGuest.endpointIds = [];
+                    if (dateData[dateKey].endpointId && !existingGuest.endpointIds.includes(dateData[dateKey].endpointId)) {
+                        existingGuest.endpointIds.push(dateData[dateKey].endpointId);
+                    }
+                } else {
+                    // Add new guest entry
+                    allData[dateKey].guests.push({
+                        vmid: vmid,
+                        uniqueKey: uniqueGuestKey, // Include unique key for proper identification
+                        name: guestInfo.name,
+                        type: guestInfo.type,
+                        node: dateData[dateKey].node,
+                        endpointId: dateData[dateKey].endpointId,
+                        nodes: dateData[dateKey].node ? [dateData[dateKey].node] : [],
+                        endpointIds: dateData[dateKey].endpointId ? [dateData[dateKey].endpointId] : [],
+                        types: Array.from(dateData[dateKey].types),
+                        backupCount: dateData[dateKey].backups.length
+                    });
+                }
                 
                 dateData[dateKey].types.forEach(type => {
                     allData[dateKey].allTypes.add(type);
@@ -1304,8 +1360,8 @@ PulseApp.ui.calendarHeatmap = (() => {
                 // Use unique key for guest lookup, fall back to vmid if not found
                 const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
                 
-                // Check if this guest already exists in this retention level using unique key
-                const existingGuestIndex = yearData[dateKey].guestsByRetention[retentionLevel].findIndex(g => g.uniqueKey === uniqueGuestKey);
+                // Check if this guest already exists in this retention level by vmid (not unique key)
+                const existingGuestIndex = yearData[dateKey].guestsByRetention[retentionLevel].findIndex(g => g.vmid === vmid);
                 
                 if (existingGuestIndex >= 0) {
                     // Merge backup types if guest already exists
@@ -1313,6 +1369,16 @@ PulseApp.ui.calendarHeatmap = (() => {
                     const mergedTypes = new Set([...existingGuest.types, ...Array.from(dateData[dateKey].types)]);
                     existingGuest.types = Array.from(mergedTypes);
                     existingGuest.backupCount += dateData[dateKey].backups.length;
+                    
+                    // Keep track of all nodes/endpoints this guest has backups from
+                    if (!existingGuest.nodes) existingGuest.nodes = [];
+                    if (dateData[dateKey].node && !existingGuest.nodes.includes(dateData[dateKey].node)) {
+                        existingGuest.nodes.push(dateData[dateKey].node);
+                    }
+                    if (!existingGuest.endpointIds) existingGuest.endpointIds = [];
+                    if (dateData[dateKey].endpointId && !existingGuest.endpointIds.includes(dateData[dateKey].endpointId)) {
+                        existingGuest.endpointIds.push(dateData[dateKey].endpointId);
+                    }
                 } else {
                     // Add new guest
                     yearData[dateKey].guestsByRetention[retentionLevel].push({
@@ -1322,6 +1388,8 @@ PulseApp.ui.calendarHeatmap = (() => {
                         type: guestInfo.type,
                         node: dateData[dateKey].node,
                         endpointId: dateData[dateKey].endpointId,
+                        nodes: dateData[dateKey].node ? [dateData[dateKey].node] : [],
+                        endpointIds: dateData[dateKey].endpointId ? [dateData[dateKey].endpointId] : [],
                         types: Array.from(dateData[dateKey].types),
                         backupCount: dateData[dateKey].backups.length
                     });
