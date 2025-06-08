@@ -106,7 +106,7 @@ PulseApp.alerts = (() => {
             const alertsIndicator = document.createElement('div');
             alertsIndicator.id = 'alerts-indicator';
             alertsIndicator.className = 'text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-pointer relative flex-shrink-0 transition-colors';
-            alertsIndicator.title = 'Click to view alerts';
+            alertsIndicator.title = 'Click to manage alerts';
             alertsIndicator.textContent = '0';
             
             // Subtle styling that matches the header aesthetic
@@ -193,11 +193,11 @@ PulseApp.alerts = (() => {
             const clickedIndicator = indicator.contains(e.target);
             const clickedDropdown = dropdown.contains(e.target);
             
-            // If clicking the indicator (but not the dropdown), toggle dropdown
+            // If clicking the indicator, open alert management modal directly
             if (clickedIndicator && !clickedDropdown) {
                 e.preventDefault();
                 e.stopPropagation();
-                toggleDropdown();
+                openAlertManagementModal();
                 return;
             }
             
@@ -217,6 +217,15 @@ PulseApp.alerts = (() => {
                 closeDropdown();
             }
         });
+    }
+
+    function openAlertManagementModal() {
+        // Open the alert management modal directly on the "Alerts > Current Alerts" tab
+        if (PulseApp.ui && PulseApp.ui.alertManagementModal) {
+            PulseApp.ui.alertManagementModal.openModal();
+        } else {
+            console.error('Alert management modal not available');
+        }
     }
 
     function toggleDropdown() {
