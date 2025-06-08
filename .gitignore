@@ -86,6 +86,7 @@ jspm_packages/
 RELEASE_CHECKLIST.md
 AI_WORKFLOW.md
 AI_WORKFLOW_SETUP.md
+CLAUDE.md
 
 # Lockfiles
 # package-lock.json # Usually committed, but ignore if specified elsewhere

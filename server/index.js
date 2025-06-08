@@ -63,14 +63,12 @@ const { URL } = require('url'); // <--- ADD: Import URL constructor
 const axios = require('axios');
 const axiosRetry = require('axios-retry').default; // Import axios-retry
 
-// Development specific dependencies
+// Hot reload dependencies (always try to load for development convenience)
 let chokidar;
-if (process.env.NODE_ENV === 'development') {
-  try {
-    chokidar = require('chokidar');
-  } catch (e) {
-    console.warn('chokidar is not installed. Hot reload requires chokidar: npm install --save-dev chokidar');
-  }
+try {
+  chokidar = require('chokidar');
+} catch (e) {
+  console.warn('chokidar is not installed. Hot reload requires chokidar: npm install chokidar');
 }
 
 // --- API Client Initialization ---
@@ -1639,6 +1637,7 @@ async function startServer() {
         setupEnvFileWatcher();
         
         // Setup hot reload in development mode
+        console.log(`[Debug] NODE_ENV: ${process.env.NODE_ENV}, chokidar available: ${!!chokidar}`);
         if (process.env.NODE_ENV === 'development' && chokidar) {
           const watchPaths = [
             path.join(__dirname, '../src/public'),    // Frontend files
