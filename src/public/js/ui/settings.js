@@ -1212,15 +1212,6 @@ PulseApp.ui.settings = (() => {
             return !!(data.PBS_HOST && data.PBS_HOST.trim()) ||
                    !!(data.PBS_HOST_2 && data.PBS_HOST_2.trim()) ||
                    !!(data.PBS_HOST_3 && data.PBS_HOST_3.trim());
-        } else if (tabName === 'alerts') {
-            // For alerts tab, any threshold value or email/webhook config is significant
-            return Object.keys(data).some(key => {
-                const value = data[key];
-                if (typeof value === 'string' && value.trim()) return true;
-                if (typeof value === 'boolean' && value) return true;
-                if (typeof value === 'number' && value > 0) return true;
-                return false;
-            });
         }
         
         // For other tabs, check if any field has a non-empty value
@@ -3340,8 +3331,8 @@ PulseApp.ui.settings = (() => {
         
         if (addCustomBtn) {
             addCustomBtn.addEventListener('click', () => {
-                // Switch to alerts tab to add custom threshold
-                switchTab('alerts');
+                // Alert Configuration tab removed - switch to system tab
+                switchTab('system');
                 setTimeout(() => {
                     // Scroll to the custom threshold section
                     const customSection = document.querySelector('h3:contains("Custom Threshold Configurations")');
@@ -3555,7 +3546,7 @@ PulseApp.ui.settings = (() => {
                     
                     const gotoBtn = document.getElementById('goto-custom-thresholds');
                     if (gotoBtn) {
-                        gotoBtn.addEventListener('click', () => switchTab('alerts'));
+                        gotoBtn.addEventListener('click', () => switchTab('system'));
                     }
                 } else {
                     // Display the custom thresholds
@@ -3683,8 +3674,8 @@ PulseApp.ui.settings = (() => {
     };
 
     window.editCustomThreshold = function(endpointId, nodeId, vmid) {
-        // Switch to alerts tab to edit
-        switchTab('alerts');
+        // Alert Configuration tab removed - switch to system tab
+        switchTab('system');
         setTimeout(() => {
             // Scroll to custom threshold section and highlight it
             const customSection = document.querySelector('h3[contains("Custom Threshold Configurations")]');

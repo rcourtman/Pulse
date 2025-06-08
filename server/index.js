@@ -1623,7 +1623,7 @@ async function startServer() {
         global.runDiscoveryCycle = runDiscoveryCycle;
     } 
 
-    server.listen(PORT, () => {
+    server.listen(PORT, '0.0.0.0', () => {
         console.log(`Server listening on port ${PORT}`);
         console.log(`Enhanced monitoring with alerts enabled`);
         console.log(`Health endpoint: http://localhost:${PORT}/api/health`);

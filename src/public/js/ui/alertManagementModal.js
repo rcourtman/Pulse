@@ -462,45 +462,113 @@ PulseApp.ui.alertManagementModal = (() => {
                                     </label>
                                 </div>
                                 
+                                <!-- Email Provider Quick Setup -->
+                                <div class="mb-4">
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email Provider</label>
+                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                        <button type="button" onclick="PulseApp.ui.alertManagementModal.handleEmailProviderSelection('gmail')" 
+                                                class="email-provider-btn px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300">
+                                            Gmail
+                                        </button>
+                                        <button type="button" onclick="PulseApp.ui.alertManagementModal.handleEmailProviderSelection('outlook')" 
+                                                class="email-provider-btn px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300">
+                                            Outlook
+                                        </button>
+                                        <button type="button" onclick="PulseApp.ui.alertManagementModal.handleEmailProviderSelection('yahoo')" 
+                                                class="email-provider-btn px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300">
+                                            Yahoo
+                                        </button>
+                                        <button type="button" onclick="PulseApp.ui.alertManagementModal.handleEmailProviderSelection('custom')" 
+                                                class="email-provider-btn px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300">
+                                            Custom
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div id="primary-email-config" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
-                                        <input type="email" id="email-from" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="alerts@yourcompany.com">
+                                        <input type="email" id="email-from-input" name="ALERT_FROM_EMAIL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="alerts@yourcompany.com">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Email</label>
-                                        <input type="email" id="email-to" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="admin@yourcompany.com">
+                                        <input type="email" id="email-to" name="ALERT_TO_EMAIL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="admin@yourcompany.com">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Server</label>
-                                        <input type="text" id="email-smtp" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="smtp.gmail.com">
+                                        <input type="text" id="email-smtp" name="ALERT_SMTP_HOST" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="smtp.gmail.com">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Port</label>
-                                        <input type="number" id="email-port" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="587" value="587">
+                                        <input type="number" id="email-port" name="ALERT_SMTP_PORT" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="587" value="587">
                                     </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            <span id="smtp-username-label">Username</span>
+                                        </label>
+                                        <input type="text" id="email-username" name="ALERT_SMTP_USER" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="your.email@gmail.com">
+                                        <p id="smtp-username-help" class="text-xs text-gray-500 dark:text-gray-400 mt-1">(Usually your email address)</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                            <span id="smtp-password-label">Password</span>
+                                        </label>
+                                        <input type="password" id="email-password" name="ALERT_EMAIL_PASSWORD" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Enter password">
+                                        <p id="smtp-password-help" class="text-xs text-gray-500 dark:text-gray-400 mt-1">(Your email password)</p>
+                                    </div>
+                                </div>
+
+                                <!-- App Password Help -->
+                                <div id="app-password-help" class="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg hidden">
+                                    <div class="flex items-start">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.962-.833-2.732 0L4.082 18.5c-.77.833.192 2.5 1.732 2.5z" />
+                                        </svg>
+                                        <div>
+                                            <h4 id="app-password-title" class="text-sm font-medium text-yellow-800 dark:text-yellow-200">App Password Required</h4>
+                                            <p id="app-password-description" class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">Gmail requires an app password for third-party applications.</p>
+                                            <a id="app-password-link" href="#" target="_blank" class="text-sm text-yellow-600 dark:text-yellow-400 underline hover:text-yellow-800 dark:hover:text-yellow-200 mt-2 inline-block">
+                                                Generate App Password →
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Advanced SMTP Settings -->
+                                <div class="mt-4">
+                                    <button type="button" id="toggle-advanced-smtp" class="flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
+                                        <svg id="advanced-smtp-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                        Advanced Settings
+                                    </button>
+                                    
+                                    <div id="advanced-smtp-settings" class="mt-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hidden">
+                                        <div class="space-y-4">
+                                            <div class="flex items-center">
+                                                <input type="checkbox" id="smtp-secure" name="ALERT_SMTP_SECURE" class="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded">
+                                                <label for="smtp-secure" class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS encryption</label>
+                                            </div>
+                                            <div id="smtp-provider-help" class="text-sm text-gray-600 dark:text-gray-400 hidden">
+                                                Configure your email provider settings manually.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Test Email Button -->
+                                <div class="mt-4 flex gap-3">
+                                    <button type="button" id="test-email-btn" 
+                                            class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
+                                        Test Email
+                                    </button>
+                                    <button type="button" id="save-email-config-btn" 
+                                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                                        Save Configuration
+                                    </button>
                                 </div>
                             </div>
 
-                            <!-- Additional Email Recipients -->
-                            <div id="additional-email-recipients">
-                                <div class="flex justify-between items-center mb-4">
-                                    <div>
-                                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional Email Recipients</h3>
-                                        <p class="text-sm text-gray-600 dark:text-gray-400">Add more email addresses beyond the primary recipient above</p>
-                                    </div>
-                                    <button type="button" onclick="PulseApp.ui.alertManagementModal.addEmailRecipient()" 
-                                            class="flex items-center gap-2 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-md">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                                        </svg>
-                                        Add Recipient
-                                    </button>
-                                </div>
-                                <div id="additional-email-list" class="space-y-2">
-                                    <!-- Additional email recipients will be added here -->
-                                </div>
-                            </div>
 
                         </div>
                     </div>
@@ -558,7 +626,10 @@ PulseApp.ui.alertManagementModal = (() => {
                                     </button>
                                 </div>
                                 <div id="additional-webhook-list" class="space-y-2">
-                                    <!-- Additional webhooks will be added here -->
+                                    <div class="text-center py-8 text-gray-500 dark:text-gray-400 italic border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
+                                        No additional webhooks configured.<br>
+                                        <span class="text-sm">Click "Add Webhook" to add more.</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -735,20 +806,23 @@ PulseApp.ui.alertManagementModal = (() => {
             });
         });
 
-        // Set up email provider selection
-        const emailProviderBtns = document.querySelectorAll('.email-provider-btn');
-        emailProviderBtns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const provider = e.currentTarget.dataset.provider;
-                handleEmailProviderSelection(provider);
-            });
-        });
+        // Email provider selection is handled via inline onclick handlers in HTML
 
         // Set up auto-detection when email address is entered
         const emailFromInput = document.getElementById('email-from-input');
         if (emailFromInput) {
             emailFromInput.addEventListener('blur', () => {
                 autoDetectEmailProvider(emailFromInput.value);
+                
+                // Auto-fill username with email address for common providers
+                const usernameInput = document.querySelector('input[name="ALERT_SMTP_USER"]');
+                if (usernameInput && emailFromInput.value && emailFromInput.value.includes('@')) {
+                    const domain = emailFromInput.value.split('@')[1].toLowerCase();
+                    const commonProviders = ['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'yahoo.ca', 'ymail.com'];
+                    if (commonProviders.includes(domain)) {
+                        usernameInput.value = emailFromInput.value;
+                    }
+                }
             });
         }
 
@@ -803,6 +877,7 @@ PulseApp.ui.alertManagementModal = (() => {
         }
 
         // Load existing email configuration
+        console.log('[DEBUG] Calling loadEmailConfiguration from initializeNotificationsTab');
         loadEmailConfiguration();
     }
 
@@ -1051,12 +1126,20 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function loadEmailConfiguration() {
-        const emailConfigSection = document.getElementById('email-config-section');
+        const emailConfigSection = document.getElementById('primary-email-config');
         if (!emailConfigSection) return;
         
         // Get email configuration from currentConfig
         const config = currentConfig || {};
         const smtp = config.advanced?.smtp || {};
+        
+        console.log('[DEBUG] Loading email config:', {
+            currentConfig: config,
+            smtp: smtp,
+            smtpKeys: Object.keys(smtp),
+            smtpValues: smtp,
+            advancedSection: config.advanced
+        });
         
         // Populate email fields with values from configuration
         const emailFromInput = document.querySelector('input[name="ALERT_FROM_EMAIL"]');
@@ -1090,8 +1173,15 @@ PulseApp.ui.alertManagementModal = (() => {
         }
         
         const smtpPassInput = document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]');
-        if (smtpPassInput && smtp.pass) {
-            smtpPassInput.value = smtp.pass;
+        
+        // Check if SMTP config exists (indicating password is saved)
+        const hasSmtpConfig = smtp.host && smtp.user && smtp.from;
+        console.log('[DEBUG] Has SMTP config (password likely saved):', hasSmtpConfig);
+        
+        if (smtpPassInput && hasSmtpConfig) {
+            // Don't set a value, but update placeholder to indicate password is saved
+            smtpPassInput.placeholder = 'Password saved (click to change)';
+            console.log('[DEBUG] Updated password placeholder to indicate saved state');
         }
         
         // Auto-detect email provider if from email is set
@@ -1120,6 +1210,109 @@ PulseApp.ui.alertManagementModal = (() => {
                 if (PulseApp.ui.settings.setupEmailTestButton) {
                     setTimeout(() => PulseApp.ui.settings.setupEmailTestButton(), 100);
                 }
+            }
+        }
+    }
+
+    function markEmailConfigAsSaved() {
+        // Just show a brief success indicator on the save button itself
+        const saveBtn = document.getElementById('save-email-config-btn');
+        if (saveBtn) {
+            const originalText = saveBtn.textContent;
+            const originalClass = saveBtn.className;
+            
+            saveBtn.className = 'px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md transition-colors';
+            saveBtn.innerHTML = `
+                <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                Saved
+            `;
+            
+            // Reset after 2 seconds
+            setTimeout(() => {
+                saveBtn.textContent = originalText;
+                saveBtn.className = originalClass;
+            }, 2000);
+        }
+    }
+
+    function markEmailTestAsSuccessful() {
+        const testBtn = document.getElementById('test-email-btn');
+        if (testBtn) {
+            const originalText = testBtn.textContent;
+            testBtn.className = 'px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md transition-colors';
+            testBtn.innerHTML = `
+                <svg class="w-4 h-4 inline mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                Email Test Successful
+            `;
+            
+            // Reset after 3 seconds
+            setTimeout(() => {
+                testBtn.textContent = originalText;
+                testBtn.className = 'px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors';
+            }, 3000);
+        }
+    }
+
+    function updateSSLHelp(provider, config) {
+        const sslLabel = document.querySelector('label[for="smtp-secure"]');
+        const sslCheckbox = document.querySelector('input[name="ALERT_SMTP_SECURE"]');
+        const advancedSettings = document.getElementById('advanced-smtp-settings');
+        
+        if (sslLabel && sslCheckbox) {
+            // Update label text based on provider
+            if (provider === 'gmail') {
+                sslLabel.innerHTML = 'Use SSL/TLS encryption <span class="text-xs text-gray-500">(Gmail uses STARTTLS - leave unchecked)</span>';
+            } else if (provider === 'outlook' || provider === 'yahoo') {
+                sslLabel.innerHTML = 'Use SSL/TLS encryption <span class="text-xs text-gray-500">(recommended for port 465)</span>';
+            } else {
+                sslLabel.textContent = 'Use SSL/TLS encryption';
+            }
+        }
+    }
+
+    function updatePasswordPlaceholder(provider) {
+        const smtpPassInput = document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]');
+        if (!smtpPassInput) return;
+        
+        // Get current SMTP configuration
+        const config = currentConfig || {};
+        const smtp = config.advanced?.smtp || {};
+        
+        // Check if current provider matches the saved configuration
+        const providerConfigs = {
+            gmail: { host: 'smtp.gmail.com', port: '587' },
+            outlook: { host: 'smtp-mail.outlook.com', port: '587' },
+            yahoo: { host: 'smtp.mail.yahoo.com', port: '587' },
+            custom: null // Custom doesn't have a specific config to match
+        };
+        
+        const providerConfig = providerConfigs[provider];
+        
+        // For custom, check if there's SMTP config that's NOT a known provider
+        const hasMatchingConfig = provider === 'custom' 
+            ? (smtp.host && smtp.user && 
+               smtp.host !== 'smtp.gmail.com' && 
+               smtp.host !== 'smtp-mail.outlook.com' && 
+               smtp.host !== 'smtp.mail.yahoo.com') // Custom config that's not a known provider
+            : (smtp.host === providerConfig?.host && smtp.port === providerConfig?.port); // Exact match for specific providers
+        
+        console.log('[DEBUG] Provider:', provider, 'Has matching config:', hasMatchingConfig);
+        
+        // Check if we're switching away from a configured provider
+        const wasPreviouslyConfigured = smtpPassInput.placeholder.includes('Password saved');
+        
+        if (hasMatchingConfig) {
+            smtpPassInput.placeholder = 'Password saved (click to change)';
+            // Don't clear the value for configured providers
+        } else {
+            smtpPassInput.placeholder = provider === 'gmail' ? 'Enter app password' : 'Enter password';
+            // Only clear value if we were previously showing a configured provider
+            if (wasPreviouslyConfigured) {
+                smtpPassInput.value = '';
             }
         }
     }
@@ -1157,19 +1350,31 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function handleEmailProviderSelection(provider) {
+        console.log('[DEBUG] handleEmailProviderSelection called with provider:', provider);
+        
+        if (!provider) {
+            console.error('[ERROR] Provider is undefined in handleEmailProviderSelection');
+            return;
+        }
+        
         // Remove active state from all buttons
         document.querySelectorAll('.email-provider-btn').forEach(btn => {
             btn.classList.remove('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
         });
         
-        // Add active state to selected button
-        const selectedBtn = document.querySelector(`[data-provider="${provider}"]`);
-        selectedBtn.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+        // Add active state to selected button - find by text content since we don't have data-provider
+        const buttons = document.querySelectorAll('.email-provider-btn');
+        buttons.forEach(btn => {
+            if (btn.textContent && btn.textContent.trim().toLowerCase() === provider.toLowerCase()) {
+                btn.classList.add('border-blue-500', 'bg-blue-50', 'dark:bg-blue-900/20');
+            }
+        });
         
         // Update form fields based on provider
-        const helpDiv = document.getElementById('email-provider-help');
-        const passwordLabel = document.getElementById('password-label');
-        const passwordHelp = document.getElementById('password-help');
+        const passwordLabel = document.getElementById('smtp-password-label');
+        const passwordHelp = document.getElementById('smtp-password-help');
+        const usernameLabel = document.getElementById('smtp-username-label');
+        const usernameHelp = document.getElementById('smtp-username-help');
         const hostInput = document.querySelector('input[name="ALERT_SMTP_HOST"]');
         const portInput = document.querySelector('input[name="ALERT_SMTP_PORT"]');
         const secureCheckbox = document.querySelector('input[name="ALERT_SMTP_SECURE"]');
@@ -1178,13 +1383,13 @@ PulseApp.ui.alertManagementModal = (() => {
             gmail: {
                 host: 'smtp.gmail.com',
                 port: 587,
-                secure: true,
+                secure: false, // Gmail uses STARTTLS on port 587, not SSL/TLS
                 passwordLabel: 'App Password',
-                passwordHelp: '(Generate from Google Account settings)',
-                help: 'For Gmail, you need to enable 2-factor authentication and generate an App Password. Go to Google Account → Security → 2-Step Verification → App passwords.',
+                passwordHelp: '(Required - generate from Google Account settings)',
+                help: 'Gmail requires 2-factor authentication and an App Password. Regular passwords won\'t work for third-party apps.',
                 appPasswordUrl: 'https://myaccount.google.com/apppasswords',
                 appPasswordTitle: 'Gmail App Password Required',
-                appPasswordDesc: 'Gmail requires an app password for third-party applications. Your regular password won\'t work.'
+                appPasswordDesc: 'Gmail requires an app password for third-party applications. Enable 2FA first, then generate an app password from your Google Account security settings.'
             },
             outlook: {
                 host: 'smtp-mail.outlook.com',
@@ -1220,25 +1425,58 @@ PulseApp.ui.alertManagementModal = (() => {
         
         const config = providers[provider];
         if (config) {
-            if (hostInput) hostInput.value = config.host;
+            if (hostInput) {
+                hostInput.value = config.host;
+                // Update placeholder for custom provider
+                if (provider === 'custom') {
+                    hostInput.placeholder = 'smtp.yourprovider.com';
+                } else {
+                    hostInput.placeholder = config.host || 'smtp.gmail.com';
+                }
+            }
             if (portInput) portInput.value = config.port;
             if (secureCheckbox) secureCheckbox.checked = config.secure;
             if (passwordLabel) passwordLabel.textContent = config.passwordLabel;
             if (passwordHelp) passwordHelp.textContent = config.passwordHelp;
             
-            if (helpDiv) {
-                helpDiv.textContent = config.help;
-                helpDiv.classList.remove('hidden');
+            // Update username label and help based on provider
+            if (usernameLabel) {
+                usernameLabel.textContent = provider === 'custom' ? 'Username' : 'Email Address';
+            }
+            if (usernameHelp) {
+                const usernameHelpText = provider === 'custom' 
+                    ? '(SMTP authentication username)'
+                    : '(Your email address)';
+                usernameHelp.textContent = usernameHelpText;
             }
 
             // Show app password help for providers that need it
             showAppPasswordHelp(config);
             
-            // Auto-fill username with from email if available
-            const fromEmailInput = document.getElementById('email-from-input');
+            // Add provider-specific SSL/TLS explanation
+            updateSSLHelp(provider, config);
+            
+            // Update password placeholder based on provider
+            updatePasswordPlaceholder(provider);
+            
+            // Update username placeholder and auto-fill
             const usernameInput = document.querySelector('input[name="ALERT_SMTP_USER"]');
-            if (fromEmailInput && usernameInput && fromEmailInput.value && provider !== 'custom') {
-                usernameInput.value = fromEmailInput.value;
+            const fromEmailInput = document.getElementById('email-from-input');
+            
+            if (usernameInput) {
+                // Update placeholder based on provider
+                const placeholders = {
+                    gmail: 'your.email@gmail.com',
+                    outlook: 'your.email@outlook.com',
+                    yahoo: 'your.email@yahoo.com',
+                    custom: 'username'
+                };
+                usernameInput.placeholder = placeholders[provider] || placeholders.custom;
+                
+                // Auto-fill username with from email if available
+                if (fromEmailInput && fromEmailInput.value && provider !== 'custom') {
+                    usernameInput.value = fromEmailInput.value;
+                }
             }
             
             // Auto-expand advanced settings to show what was configured
@@ -1341,6 +1579,7 @@ PulseApp.ui.alertManagementModal = (() => {
             
             if (response.ok && result.success) {
                 PulseApp.ui.toast.success('Test email sent successfully! Please check your inbox.');
+                markEmailTestAsSuccessful();
             } else {
                 PulseApp.ui.toast.error('Test email failed: ' + (result.error || 'Unknown error'));
             }
@@ -1353,6 +1592,7 @@ PulseApp.ui.alertManagementModal = (() => {
     async function saveEmailConfiguration() {
         // This function is called by the specific save button in the email section
         // It will trigger the main saveConfiguration function
+        console.log('[DEBUG] Save email configuration button clicked');
         await saveConfiguration();
         PulseApp.ui.toast.success('Email configuration saved successfully!');
     }
@@ -1758,6 +1998,24 @@ PulseApp.ui.alertManagementModal = (() => {
                                     <p class="text-xs text-gray-500 dark:text-gray-400">Leave unchecked to use global notification defaults</p>
                                 </div>
                             </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Alert Resolution Behavior
+                                </label>
+                                <div class="space-y-2">
+                                    <label class="flex items-start">
+                                        <input type="checkbox" name="autoResolve" checked class="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-0.5">
+                                        <div>
+                                            <span class="text-sm text-gray-700 dark:text-gray-300 font-medium">Auto-resolve when condition clears</span>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                                When checked, alerts automatically resolve when the condition is no longer met (e.g., CPU drops below threshold).
+                                                When unchecked, alerts remain active until manually acknowledged, creating a permanent record.
+                                            </p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
                         </form>
                     </div>
                     
@@ -2029,6 +2287,12 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 webhookCheckbox.checked = existingAlert.sendWebhook;
             }
             
+            // Pre-populate auto-resolve checkbox
+            const autoResolveCheckbox = document.querySelector('input[name="autoResolve"]');
+            if (autoResolveCheckbox && typeof existingAlert.autoResolve === 'boolean') {
+                autoResolveCheckbox.checked = existingAlert.autoResolve;
+            }
+            
             // Pre-populate duration fields for existing alerts
             if (existingAlert.duration) {
                 const durationValueInput = document.querySelector('input[name="durationValue"]');
@@ -2157,6 +2421,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             duration: durationMs, // Duration in milliseconds
             sendEmail: formData.has('sendEmail'),
             sendWebhook: formData.has('sendWebhook'),
+            autoResolve: formData.has('autoResolve'), // User-configurable auto-resolve
             enabled: existingAlert ? existingAlert.enabled : true,
             createdAt: existingAlert ? existingAlert.createdAt : Date.now()
         };
@@ -2601,14 +2866,17 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         // TODO: Implement form data restoration
     }
 
-    function openModal(targetTab = null) {
+    async function openModal(targetTab = null) {
+        console.log('[DEBUG] Opening alert management modal');
         const modal = document.getElementById('alert-management-modal');
         if (modal) {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
             
-            // Load current configuration if needed
-            loadConfiguration();
+            // Load current configuration and wait for it to complete
+            console.log('[DEBUG] Loading configuration...');
+            await loadConfiguration();
+            console.log('[DEBUG] Configuration loaded');
             
             // Hide save button initially (only show on notifications tab)
             const saveButton = document.getElementById('alert-management-save-button');
@@ -2659,8 +2927,12 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         // their own save buttons, this function mainly handles email/webhook 
         // configuration that might be pending.
         
+        console.log('[DEBUG] saveConfiguration() called');
         const saveButton = document.getElementById('alert-management-save-button');
-        if (!saveButton) return;
+        if (!saveButton) {
+            console.log('[DEBUG] Save button not found, exiting saveConfiguration');
+            return;
+        }
 
         const originalText = saveButton.textContent;
         saveButton.disabled = true;
@@ -2671,7 +2943,8 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             let hasChanges = false;
 
             // Check for email configuration changes
-            const emailConfigSection = document.getElementById('email-config-section');
+            const emailConfigSection = document.getElementById('primary-email-config');
+            console.log('[DEBUG] Looking for primary-email-config:', emailConfigSection);
             if (emailConfigSection) {
                 const smtpHost = document.querySelector('input[name="ALERT_SMTP_HOST"]')?.value;
                 const smtpPort = document.querySelector('input[name="ALERT_SMTP_PORT"]')?.value;
@@ -2681,6 +2954,10 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 const toEmail = document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value;
                 const smtpSecure = document.querySelector('input[name="ALERT_SMTP_SECURE"]')?.checked;
 
+                console.log('[DEBUG] Email config values to save:', {
+                    smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, toEmail, smtpSecure
+                });
+
                 if (smtpHost) { configToSave.SMTP_HOST = smtpHost; hasChanges = true; }
                 if (smtpPort) { configToSave.SMTP_PORT = smtpPort; hasChanges = true; }
                 if (smtpUser) { configToSave.SMTP_USER = smtpUser; hasChanges = true; }
@@ -2689,6 +2966,8 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 if (toEmail) { configToSave.ALERT_TO_EMAIL = toEmail; hasChanges = true; }
                 configToSave.SMTP_SECURE = smtpSecure ? 'true' : 'false';
                 hasChanges = true;
+                
+                console.log('[DEBUG] Config to save:', configToSave);
             }
 
             // Check for webhook configuration changes
@@ -2708,16 +2987,22 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             }
 
             // Save configuration via API
+            console.log('[DEBUG] Sending config to server:', configToSave);
             const response = await fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(configToSave)
             });
+            console.log('[DEBUG] Server response status:', response.status);
 
             const result = await response.json();
             
             if (response.ok && result.success) {
                 PulseApp.ui.toast.success('Configuration saved successfully');
+                
+                // Add visual feedback to show config is saved
+                markEmailConfigAsSaved();
+                
                 await loadConfiguration(); // Reload to reflect changes
             } else {
                 throw new Error(result.error || 'Failed to save configuration');
@@ -3142,38 +3427,17 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         }
     }
 
-    // Email recipient management - simple and clean like settings
-    function addEmailRecipient() {
-        const listContainer = document.getElementById('additional-email-list');
-        if (!listContainer) return;
-        
-        const recipientId = 'email-recipient-' + Date.now();
-        const recipientHtml = `
-            <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg" id="${recipientId}">
-                <div class="flex-1">
-                    <input type="email" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="additional@yourcompany.com">
-                </div>
-                <button onclick="PulseApp.ui.alertManagementModal.removeEmailRecipient('${recipientId}')" 
-                        class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
-                    Remove
-                </button>
-            </div>
-        `;
-        
-        listContainer.insertAdjacentHTML('beforeend', recipientHtml);
-    }
-    
-    function removeEmailRecipient(recipientId) {
-        const recipientElement = document.getElementById(recipientId);
-        if (recipientElement) {
-            recipientElement.remove();
-        }
-    }
     
     // Webhook endpoint management - simple and clean like settings
     function addWebhookEndpoint() {
         const listContainer = document.getElementById('additional-webhook-list');
         if (!listContainer) return;
+        
+        // Hide empty state if it exists
+        const emptyState = listContainer.querySelector('.border-dashed');
+        if (emptyState) {
+            emptyState.style.display = 'none';
+        }
         
         const webhookId = 'webhook-endpoint-' + Date.now();
         const webhookHtml = `
@@ -3200,6 +3464,18 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         const webhookElement = document.getElementById(webhookId);
         if (webhookElement) {
             webhookElement.remove();
+            
+            // Check if there are any remaining webhooks
+            const listContainer = document.getElementById('additional-webhook-list');
+            const remainingWebhooks = listContainer.querySelectorAll('[id^="webhook-endpoint-"]');
+            
+            // Show empty state if no webhooks remain
+            if (remainingWebhooks.length === 0) {
+                const emptyState = listContainer.querySelector('.border-dashed');
+                if (emptyState) {
+                    emptyState.style.display = 'block';
+                }
+            }
         }
     }
 
@@ -3215,10 +3491,9 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         toggleAlert,
         deleteCustomAlert,
         showAlertDetails,
-        addEmailRecipient,
-        removeEmailRecipient,
         addWebhookEndpoint,
         removeWebhookEndpoint,
+        handleEmailProviderSelection,
         loadCurrentAlerts: () => {
             if (activeTab === 'alerts') {
                 loadCurrentAlerts();
