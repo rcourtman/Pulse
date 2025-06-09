@@ -1,12 +1,10 @@
 const customThresholdManager = require('./customThresholds');
 
 function setupThresholdRoutes(app) {
-    console.log('[ThresholdRoutes] Setting up threshold API routes...');
     
     // Get all custom thresholds
     app.get('/api/thresholds', async (req, res) => {
         try {
-            console.log('[API] GET /api/thresholds called');
             
             // Initialize the threshold manager if needed
             if (!customThresholdManager.initialized) {
@@ -14,7 +12,6 @@ function setupThresholdRoutes(app) {
             }
             
             const thresholds = customThresholdManager.getAllThresholds();
-            console.log('[API] Retrieved', thresholds.length, 'threshold configurations');
             res.json({ success: true, data: thresholds });
         } catch (error) {
             console.error('[API /api/thresholds] Error:', error);
@@ -77,11 +74,9 @@ function setupThresholdRoutes(app) {
                 
                 if (guest && guest.node) {
                     nodeId = guest.node;
-                    console.log(`[ThresholdRoutes] Auto-detected node '${nodeId}' for ${endpointId}:${vmid}`);
                 } else {
                     // If we can't find the node, use a wildcard that will match any node
                     nodeId = '*';
-                    console.log(`[ThresholdRoutes] Could not auto-detect node for ${endpointId}:${vmid}, using wildcard`);
                 }
             }
             
@@ -124,11 +119,9 @@ function setupThresholdRoutes(app) {
                 
                 if (guest && guest.node) {
                     nodeId = guest.node;
-                    console.log(`[ThresholdRoutes] Auto-detected node '${nodeId}' for ${endpointId}:${vmid}`);
                 } else {
                     // If we can't find the node, use a wildcard that will match any node
                     nodeId = '*';
-                    console.log(`[ThresholdRoutes] Could not auto-detect node for ${endpointId}:${vmid}, using wildcard`);
                 }
             }
             
@@ -215,7 +208,6 @@ function setupThresholdRoutes(app) {
         }
     });
 
-    console.log('[ThresholdRoutes] All threshold routes registered successfully');
 }
 
 module.exports = { setupThresholdRoutes };

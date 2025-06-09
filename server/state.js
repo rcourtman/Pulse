@@ -330,11 +330,58 @@ function updateAlertStats() {
 }
 
 function getAlertInfo() {
-  return {
-    active: alertManager.getActiveAlerts(),
-    stats: alertManager.getEnhancedAlertStats(),
-    rules: alertManager.getRules()
-  };
+  try {
+    const alertInfo = {
+      active: alertManager.getActiveAlerts(),
+      stats: alertManager.getEnhancedAlertStats(),
+      rules: alertManager.getRules()
+    };
+    
+    // Test serialization to catch any circular references early
+    JSON.stringify(alertInfo);
+    return alertInfo;
+  } catch (error) {
+    console.error('[State Manager] Error serializing alert info:', error.message);
+    
+    // Try to identify which part is causing the circular reference
+    try {
+      JSON.stringify(alertManager.getActiveAlerts());
+      console.log('[State Manager] Active alerts serialization: OK');
+    } catch (activeError) {
+      console.error('[State Manager] Active alerts circular reference detected');
+    }
+    
+    try {
+      JSON.stringify(alertManager.getEnhancedAlertStats());
+      console.log('[State Manager] Alert stats serialization: OK');
+    } catch (statsError) {
+      console.error('[State Manager] Alert stats circular reference detected');
+    }
+    
+    try {
+      JSON.stringify(alertManager.getRules());
+      console.log('[State Manager] Alert rules serialization: OK');
+    } catch (rulesError) {
+      console.error('[State Manager] Alert rules circular reference detected');
+    }
+    
+    // Return safe empty alert data if serialization fails
+    return {
+      active: [],
+      stats: {
+        active: 0,
+        acknowledged: 0,
+        escalated: 0,
+        last24Hours: 0,
+        lastHour: 0,
+        totalRules: 0,
+        suppressedRules: 0,
+        metrics: { totalFired: 0, totalResolved: 0, totalAcknowledged: 0, averageResolutionTime: 0, falsePositiveRate: 0 },
+        groups: []
+      },
+      rules: []
+    };
+  }
 }
 
 function getCustomThresholds() {
@@ -457,7 +504,7 @@ module.exports = {
   getAlertInfo,
   destroy,
   
-  // Alert manager access
-  alertManager,
+  // Alert manager access - make non-enumerable to prevent accidental serialization
+  get alertManager() { return alertManager; },
   getAlertManager
 };

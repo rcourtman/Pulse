@@ -346,10 +346,12 @@ PulseApp.ui.nodes = (() => {
         }
     }
 
+    let resizeTimeout;
+    let resizeHandler;
+
     function init() {
         // Add resize listener for responsive behavior
-        let resizeTimeout;
-        window.addEventListener('resize', () => {
+        resizeHandler = () => {
             clearTimeout(resizeTimeout);
             resizeTimeout = setTimeout(() => {
                 // Re-render cards if we have data
@@ -357,11 +359,24 @@ PulseApp.ui.nodes = (() => {
                     updateNodeSummaryCards(currentNodesData);
                 }
             }, 250); // Debounce resize events
-        });
+        };
+        window.addEventListener('resize', resizeHandler);
+    }
+
+    function cleanup() {
+        if (resizeHandler) {
+            window.removeEventListener('resize', resizeHandler);
+            resizeHandler = null;
+        }
+        if (resizeTimeout) {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = null;
+        }
     }
 
     return {
         init,
+        cleanup,
         updateNodesTable,
         updateNodeSummaryCards
     };

@@ -68,46 +68,32 @@ document.addEventListener('DOMContentLoaded', function() {
         // Check and show configuration banner if needed
         PulseApp.ui.configBanner?.checkAndShowBanner();
         
-        // Simple and direct scroll preservation - just focus on main table
+        // Optimized scroll preservation
         const mainTableContainer = document.querySelector('.table-container');
         if (mainTableContainer) {
             const savedScrollTop = mainTableContainer.scrollTop;
             const savedScrollLeft = mainTableContainer.scrollLeft;
             
             if (savedScrollTop > 0 || savedScrollLeft > 0) {
-                // Use multiple restoration strategies
-                const restoreMainScroll = () => {
-                    mainTableContainer.scrollTop = savedScrollTop;
-                    mainTableContainer.scrollLeft = savedScrollLeft;
+                // Single efficient restoration strategy
+                const restoreScroll = () => {
+                    mainTableContainer.scrollTo({
+                        top: savedScrollTop,
+                        left: savedScrollLeft,
+                        behavior: 'instant'
+                    });
                 };
                 
-                // Try multiple timings
-                setTimeout(restoreMainScroll, 0);
-                setTimeout(restoreMainScroll, 10);
-                setTimeout(restoreMainScroll, 50);
-                setTimeout(restoreMainScroll, 100);
-                setTimeout(restoreMainScroll, 200);
-                requestAnimationFrame(restoreMainScroll);
-                requestAnimationFrame(() => setTimeout(restoreMainScroll, 0));
+                // Primary restoration - immediate
+                requestAnimationFrame(restoreScroll);
                 
-                // Also try using scrollTo method
+                // Fallback restoration - after layout
                 setTimeout(() => {
-                    mainTableContainer.scrollTo(savedScrollLeft, savedScrollTop);
-                }, 50);
-                
-                setTimeout(() => {
-                    if (Math.abs(mainTableContainer.scrollTop - savedScrollTop) > 10) {
-                        // Try one more aggressive approach
-                        mainTableContainer.scrollTo({
-                            top: savedScrollTop,
-                            left: savedScrollLeft,
-                            behavior: 'instant'
-                        });
-                    } else {
+                    if (Math.abs(mainTableContainer.scrollTop - savedScrollTop) > 5) {
+                        restoreScroll();
                     }
-                }, 300);
+                }, 100);
             }
-        } else {
         }
     }
 

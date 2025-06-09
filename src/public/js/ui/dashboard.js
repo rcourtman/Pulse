@@ -420,8 +420,10 @@ PulseApp.ui.dashboard = (() => {
         let visibleCount = 0;
         let visibleNodes = new Set();
 
-        // Build maps of existing rows and node headers
-        Array.from(tableBody.children).forEach(row => {
+        // Build maps of existing rows and node headers (optimized)
+        const children = tableBody.children;
+        for (let i = 0; i < children.length; i++) {
+            const row = children[i];
             if (row.classList.contains('node-header')) {
                 const nodeText = row.querySelector('td').textContent.trim();
                 nodeHeaders.set(nodeText, row);
@@ -431,16 +433,17 @@ PulseApp.ui.dashboard = (() => {
                     existingRows.set(guestId, row);
                 }
             }
-        });
+        }
 
         if (groupByNode) {
-            // Group data by node
+            // Group data by node (optimized)
             const nodeGroups = {};
-            sortedData.forEach(guest => {
+            for (let i = 0; i < sortedData.length; i++) {
+                const guest = sortedData[i];
                 const nodeName = guest.node || 'Unknown Node';
                 if (!nodeGroups[nodeName]) nodeGroups[nodeName] = [];
                 nodeGroups[nodeName].push(guest);
-            });
+            }
 
             // Process each node group
             let currentIndex = 0;

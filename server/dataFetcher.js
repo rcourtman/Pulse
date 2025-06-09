@@ -92,7 +92,6 @@ async function getDirectNodeConnection(node, clusterConfig) {
                     setTimeout(() => reject(new Error('Connection test timeout')), 1500)
                 )
             ]);
-            console.log(`[DataFetcher] Successfully tested direct connection to node ${node.node} at ${nodeIp}`);
         } catch (testError) {
             console.warn(`[DataFetcher] Direct connection test failed for ${node.node}: ${testError.message}`);
             // Don't cache failed connections
@@ -102,7 +101,6 @@ async function getDirectNodeConnection(node, clusterConfig) {
         // Cache the connection
         nodeConnectionCache.set(cacheKey, nodeClient);
         
-        console.log(`[DataFetcher] Created direct connection to node ${node.node} at ${nodeIp}`);
         return nodeClient;
         
     } catch (error) {
@@ -541,7 +539,6 @@ function deduplicateStorageBackups(allStorageBackups) {
     });
     
     if (duplicatesFound > 0) {
-        console.log(`[DataFetcher] Deduplicated ${duplicatesFound} shared storage backup(s) - kept ${seenVolids.size} unique backups`);
     }
     
     return Array.from(seenVolids.values());
@@ -562,7 +559,6 @@ async function detectClusterMembership(currentApiClients) {
     const standaloneEndpoints = [];
     const now = Date.now();
 
-    console.log(`[DataFetcher] Detecting cluster membership for ${pveEndpointIds.length} endpoints...`);
 
     // First pass: Detect cluster membership for each endpoint
     const membershipPromises = pveEndpointIds.map(async (endpointId) => {
@@ -658,7 +654,6 @@ async function detectClusterMembership(currentApiClients) {
     // Add cluster groups (with prioritization)
     clusterGroups.forEach((endpoints, clusterId) => {
         if (endpoints.length > 1) {
-            console.log(`[DataFetcher] Found ${endpoints.length} endpoints for cluster '${clusterId}': ${endpoints.map(e => e.endpointId).join(', ')}`);
             
             // Sort by health status (no errors first) and then by endpoint ID for consistency
             endpoints.sort((a, b) => {
@@ -708,12 +703,10 @@ async function fetchFromEndpointGroup(endpointGroup, currentApiClients) {
         
         try {
             const { client: apiClientInstance, config } = currentApiClients[endpointId];
-            console.log(`[DataFetcher] Trying ${endpointGroup.type === 'cluster' ? `cluster '${endpointGroup.clusterId}'` : 'standalone'} endpoint: ${endpointId}`);
             
             const result = await fetchDataForPveEndpoint(endpointId, apiClientInstance, config);
             
             if (result && (result.nodes?.length > 0 || result.vms?.length > 0 || result.containers?.length > 0)) {
-                console.log(`[DataFetcher] Successfully fetched data from ${endpointId}${endpointId !== endpointGroup.primary ? ' (backup)' : ''}`);
                 return { ...result, sourceEndpoint: endpointId, endpointGroup };
             }
         } catch (error) {
@@ -741,7 +734,6 @@ async function fetchPveDiscoveryData(currentApiClients) {
 
     // Detect cluster membership and prioritize endpoints
     const endpointGroups = await detectClusterMembership(currentApiClients);
-    console.log(`[DataFetcher] Processing ${endpointGroups.length} endpoint groups (${pveEndpointIds.length} total endpoints)`);
 
     // Fetch from each endpoint group (only one endpoint per cluster)
     const groupPromises = endpointGroups.map(group => 
@@ -758,14 +750,12 @@ async function fetchPveDiscoveryData(currentApiClients) {
             allVms.push(...(data.vms || []));
             allContainers.push(...(data.containers || []));
             
-            console.log(`[DataFetcher] Added data from ${data.sourceEndpoint}: ${data.nodes?.length || 0} nodes, ${data.vms?.length || 0} VMs, ${data.containers?.length || 0} containers`);
         } else if (result.status === 'rejected') {
             const group = endpointGroups[index];
             console.error(`[DataFetcher] Failed to fetch data from ${group?.type === 'cluster' ? `cluster '${group.clusterId}'` : 'endpoint group'}: ${result.reason?.message || result.reason}`);
         }
     });
 
-    console.log(`[DataFetcher] Discovery completed. Total: ${allNodes.length} nodes, ${allVms.length} VMs, ${allContainers.length} containers (no deduplication needed)`);
 
     // No need for complex deduplication since we only fetch from one endpoint per cluster
     return { 
@@ -1396,7 +1386,6 @@ async function fetchGuestSnapshots(apiClient, endpointId, nodeName, vmid, type) 
         const snapshots = response.data?.data || [];
         
         if (snapshots.length > 0) {
-            console.log(`[DataFetcher] Found ${snapshots.length} snapshots for ${type} ${vmid} on node ${nodeName}`);
         }
         
         // Filter out the 'current' snapshot which is not a real snapshot
@@ -1435,7 +1424,6 @@ async function fetchPbsData(currentPbsApiClients) {
     const pbsClientIds = Object.keys(currentPbsApiClients);
     const pbsDataResults = [];
 
-    console.log(`[DataFetcher] fetchPbsData called with ${pbsClientIds.length} PBS clients:`, pbsClientIds);
 
     if (pbsClientIds.length === 0) {
         // console.log("[DataFetcher] No PBS instances configured or initialized.");
@@ -1445,7 +1433,6 @@ async function fetchPbsData(currentPbsApiClients) {
     const pbsPromises = pbsClientIds.map(async (pbsClientId) => {
         const pbsClient = currentPbsApiClients[pbsClientId]; // { client, config }
         const instanceName = pbsClient.config.name;
-        console.log(`[DataFetcher] Processing PBS instance: ${pbsClientId} (${instanceName})`);
         // Initialize status and include identifiers early
         let instanceData = { 
             pbsEndpointId: pbsClientId, 

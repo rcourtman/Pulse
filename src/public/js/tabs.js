@@ -107,7 +107,6 @@ PulseApp.ui.tabs = (() => {
             }
 
             if (tabId === 'settings') {
-                console.log('[Tabs] Settings tab activated');
                 if (PulseApp.ui && PulseApp.ui.settings) {
                     PulseApp.ui.settings.load();
                 } else {
@@ -416,7 +415,6 @@ PulseApp.ui.tabs = (() => {
                 break;
             case 'settings':
                 // Settings tab loading
-                console.log('[Tabs] Loading settings content');
                 break;
         }
     }

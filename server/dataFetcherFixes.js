@@ -16,7 +16,6 @@ function deduplicateGuests(guests) {
         const key = `${guest.vmid}-${guest.node}`;
         
         if (seen.has(key)) {
-            console.log(`[DataFetcher] Duplicate guest found: VMID ${guest.vmid} on node ${guest.node}`);
             return false;
         }
         
@@ -60,7 +59,6 @@ async function fetchPveDiscoveryDataFixed(currentApiClients) {
     const deduplicatedVms = deduplicateGuests(allVms);
     const deduplicatedContainers = deduplicateGuests(allContainers);
     
-    console.log(`[DataFetcher] Guest deduplication: VMs ${allVms.length} -> ${deduplicatedVms.length}, Containers ${allContainers.length} -> ${deduplicatedContainers.length}`);
 
     return { 
         nodes: allNodes, 

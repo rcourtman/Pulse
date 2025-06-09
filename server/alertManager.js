@@ -13,9 +13,9 @@ class AlertManager extends EventEmitter {
         this.alertHistory = [];
         this.acknowledgedAlerts = new Map();
         this.suppressedAlerts = new Map();
+        this.notificationStatus = new Map();
         this.alertGroups = new Map();
         this.escalationRules = new Map();
-        this.notificationChannels = new Map();
         this.alertMetrics = {
             totalFired: 0,
             totalResolved: 0,
@@ -34,8 +34,8 @@ class AlertManager extends EventEmitter {
         
         // Initialize default configuration
         this.initializeDefaultRules();
-        this.initializeNotificationChannels();
         this.initializeAlertGroups();
+        
         
         // Load persisted acknowledgements and alert rules
         this.loadAcknowledgements();
@@ -144,7 +144,6 @@ class AlertManager extends EventEmitter {
                 escalationTime: 900000, // 15 minutes
                 autoResolve: true,
                 suppressionTime: 300000, // 5 minutes
-                notificationChannels: ['default']
             },
             {
                 id: 'critical_cpu',
@@ -161,7 +160,6 @@ class AlertManager extends EventEmitter {
                 escalationTime: 300000, // 5 minutes
                 autoResolve: true,
                 suppressionTime: 0, // No suppression for critical
-                notificationChannels: ['default', 'urgent']
             },
             {
                 id: 'high_memory',
@@ -178,7 +176,6 @@ class AlertManager extends EventEmitter {
                 escalationTime: 900000, // 15 minutes
                 autoResolve: true,
                 suppressionTime: 300000,
-                notificationChannels: ['default']
             },
             {
                 id: 'critical_memory',
@@ -195,7 +192,6 @@ class AlertManager extends EventEmitter {
                 escalationTime: 300000, // 5 minutes
                 autoResolve: true,
                 suppressionTime: 0,
-                notificationChannels: ['default', 'urgent']
             },
             {
                 id: 'disk_space_warning',
@@ -212,7 +208,6 @@ class AlertManager extends EventEmitter {
                 escalationTime: 1800000, // 30 minutes
                 autoResolve: true,
                 suppressionTime: 600000, // 10 minutes
-                notificationChannels: ['default']
             },
             {
                 id: 'disk_space_critical',
@@ -229,7 +224,6 @@ class AlertManager extends EventEmitter {
                 escalationTime: 300000, // 5 minutes
                 autoResolve: true,
                 suppressionTime: 0,
-                notificationChannels: ['default', 'urgent']
             },
             {
                 id: 'guest_down',
@@ -246,7 +240,6 @@ class AlertManager extends EventEmitter {
                 escalationTime: 600000, // 10 minutes
                 autoResolve: true,
                 suppressionTime: 120000, // 2 minutes
-                notificationChannels: ['default', 'urgent']
             },
             {
                 id: 'network_anomaly',
@@ -263,7 +256,6 @@ class AlertManager extends EventEmitter {
                 escalationTime: 1800000, // 30 minutes
                 autoResolve: true,
                 suppressionTime: 900000, // 15 minutes
-                notificationChannels: ['default']
             }
         ];
 
@@ -274,39 +266,10 @@ class AlertManager extends EventEmitter {
         });
     }
 
-    initializeNotificationChannels() {
-        this.notificationChannels.set('default', {
-            id: 'default',
-            name: 'Default Channel',
-            type: 'webhook',
-            enabled: true,
-            config: {
-                url: process.env.WEBHOOK_URL || null,
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            }
-        });
 
-        this.notificationChannels.set('urgent', {
-            id: 'urgent',
-            name: 'Urgent Alerts',
-            type: 'email',
-            enabled: process.env.SMTP_HOST ? true : false,
-            config: {
-                smtp: {
-                    host: process.env.SMTP_HOST || null,
-                    port: parseInt(process.env.SMTP_PORT) || 587,
-                    secure: process.env.SMTP_SECURE === 'true',
-                    auth: {
-                        user: process.env.SMTP_USER || null,
-                        pass: process.env.SMTP_PASS || null
-                    }
-                },
-                from: process.env.ALERT_FROM_EMAIL || 'alerts@pulse-monitoring.local',
-                to: process.env.ALERT_TO_EMAIL ? process.env.ALERT_TO_EMAIL.split(',') : []
-            }
-        });
-    }
+
+
+
 
     initializeAlertGroups() {
         this.alertGroups.set('system_performance', {
@@ -484,11 +447,11 @@ class AlertManager extends EventEmitter {
 
             if (isTriggered) {
                 if (!existingAlert) {
-                    // Create new alert with permanent ID
+                    // Create new alert with permanent ID and safe copies of rule/guest objects
                     const newAlert = {
                         id: this.generateAlertId(), // Generate ID once when alert is created
-                        rule,
-                        guest,
+                        rule: this.createSafeRuleCopy(rule),
+                        guest: this.createSafeGuestCopy(guest),
                         startTime: timestamp,
                         lastUpdate: timestamp,
                         currentValue,
@@ -680,7 +643,7 @@ class AlertManager extends EventEmitter {
         };
         
         this.emit('alertEscalated', escalatedAlert);
-        this.sendNotifications(escalatedAlert, ['urgent']);
+        this.sendNotifications(escalatedAlert, true);
         
         console.warn(`[ALERT ESCALATED] ${escalatedAlert.message}`);
     }
@@ -691,38 +654,55 @@ class AlertManager extends EventEmitter {
         return severityLevels[Math.min(currentIndex + 1, severityLevels.length - 1)];
     }
 
-    sendNotifications(alert, channelOverride = null) {
-        const channels = channelOverride || alert.rule.notificationChannels || ['default'];
+    sendNotifications(alert, forceUrgent = false) {
+        // Check both global settings and individual alert rule preferences
+        const globalEmailEnabled = process.env.GLOBAL_EMAIL_ENABLED === 'true' && this.emailTransporter;
+        const globalWebhookEnabled = process.env.GLOBAL_WEBHOOK_ENABLED === 'true' && process.env.WEBHOOK_URL;
         
-        channels.forEach(channelId => {
-            const channel = this.notificationChannels.get(channelId);
-            if (channel && channel.enabled) {
-                this.sendToChannel(channel, alert);
-            }
-        });
-    }
-
-    async sendToChannel(channel, alert) {
-        try {
-            console.log(`[NOTIFICATION] Sending to ${channel.name}:`, {
-                channel: channel.type,
-                alert: alert.rule.name,
-                severity: alert.rule.severity,
-                guest: alert.guest.name
+        // For custom alerts, also check the rule's specific notification preferences
+        const ruleEmailEnabled = alert.rule && alert.rule.sendEmail === true;
+        const ruleWebhookEnabled = alert.rule && alert.rule.sendWebhook === true;
+        
+        const sendEmail = globalEmailEnabled || (ruleEmailEnabled && this.emailTransporter);
+        const sendWebhook = globalWebhookEnabled || (ruleWebhookEnabled && process.env.WEBHOOK_URL);
+        
+        if (sendEmail) {
+            this.sendDirectEmailNotification(alert).catch(error => {
+                console.error(`[EMAIL ERROR] Failed to send email:`, error);
+                this.emit('notificationError', { type: 'email', alert, error });
             });
-
-            if (channel.type === 'email') {
-                await this.sendEmailNotification(channel, alert);
-            } else if (channel.type === 'webhook') {
-                await this.sendWebhookNotification(channel, alert);
-            }
-            
-            // Emit event for external handlers
-            this.emit('notification', { channel, alert });
-        } catch (error) {
-            console.error(`[NOTIFICATION ERROR] Failed to send to ${channel.name}:`, error);
-            this.emit('notificationError', { channel, alert, error });
         }
+        
+        if (sendWebhook) {
+            this.sendDirectWebhookNotification(alert).catch(error => {
+                console.error(`[WEBHOOK ERROR] Failed to send webhook:`, error);
+                this.emit('notificationError', { type: 'webhook', alert, error });
+            });
+        }
+        
+        // Store notification status separately to avoid any circular references
+        // Don't attach anything to the alert object itself
+        const alertId = alert.id;
+        if (!this.notificationStatus) {
+            this.notificationStatus = new Map();
+        }
+        this.notificationStatus.set(alertId, {
+            emailSent: sendEmail,
+            webhookSent: sendWebhook,
+            channels: sendEmail || sendWebhook ? [
+                ...(sendEmail ? ['email'] : []),
+                ...(sendWebhook ? ['webhook'] : [])
+            ] : []
+        });
+        
+        // Emit event for external handlers (use safe subset of alert data)
+        this.emit('notification', { 
+            alertId: alert.id, 
+            ruleId: alert.rule.id, 
+            guest: alert.guest, 
+            sentEmail: sendEmail, 
+            sentWebhook: sendWebhook 
+        });
     }
 
     updateMetrics() {
@@ -755,7 +735,15 @@ class AlertManager extends EventEmitter {
             // Include both 'active' alerts and 'resolved' alerts that have autoResolve=false
             if ((alert.state === 'active' || (alert.state === 'resolved' && !alert.rule.autoResolve)) 
                 && this.matchesFilters(alert, filters)) {
-                active.push(this.formatAlertForAPI(alert));
+                try {
+                    const formattedAlert = this.formatAlertForAPI(alert);
+                    // Test serialization before adding
+                    JSON.stringify(formattedAlert);
+                    active.push(formattedAlert);
+                } catch (alertError) {
+                    console.error(`[AlertManager] Skipping alert ${alert.id} due to serialization error:`, alertError.message);
+                    // Skip this alert but continue processing others
+                }
             }
         }
         return active.sort((a, b) => b.triggeredAt - a.triggeredAt);
@@ -775,33 +763,182 @@ class AlertManager extends EventEmitter {
     }
 
     formatAlertForAPI(alert) {
+        try {
+            // Create a safe, serializable alert object with no circular references
+            const safeAlert = {
+                id: alert.id, // Use the stored permanent ID
+                ruleId: alert.rule?.id || 'unknown',
+                ruleName: alert.rule?.name || 'Unknown Rule',
+                description: alert.rule?.description || '',
+                severity: alert.rule?.severity || 'warning',
+                group: alert.rule?.group || 'unknown',
+                tags: Array.isArray(alert.rule?.tags) ? [...alert.rule.tags] : [],
+                guest: {
+                    name: alert.guest?.name || 'Unknown',
+                    vmid: alert.guest?.vmid || 'unknown',
+                    node: alert.guest?.node || 'unknown',
+                    type: alert.guest?.type || 'unknown',
+                    endpointId: alert.guest?.endpointId || 'unknown'
+                },
+                metric: alert.rule?.metric || (alert.rule?.type === 'compound_threshold' ? 'compound' : null),
+                threshold: alert.effectiveThreshold || alert.rule?.threshold || 0,
+                currentValue: alert.currentValue || null,
+                triggeredAt: alert.triggeredAt || Date.now(),
+                duration: (alert.triggeredAt ? Date.now() - alert.triggeredAt : 0),
+                acknowledged: alert.acknowledged || false,
+                acknowledgedBy: alert.acknowledgedBy || null,
+                acknowledgedAt: alert.acknowledgedAt || null,
+                escalated: alert.escalated || false,
+                message: this.generateAlertMessage(alert),
+                type: alert.rule?.type || 'single_metric',
+                thresholds: Array.isArray(alert.rule?.thresholds) ? 
+                    alert.rule.thresholds.map(t => ({
+                        metric: t.metric,
+                        condition: t.condition,
+                        threshold: t.threshold
+                    })) : null,
+                emailSent: this.notificationStatus?.get(alert.id)?.emailSent || false,
+                webhookSent: this.notificationStatus?.get(alert.id)?.webhookSent || false,
+                notificationChannels: this.notificationStatus?.get(alert.id)?.channels || []
+            };
+            
+            // Test serialization
+            JSON.stringify(safeAlert);
+            return safeAlert;
+        } catch (serializationError) {
+            console.error(`[AlertManager] formatAlertForAPI serialization error for alert ${alert.id}:`, serializationError.message);
+            console.error(`[AlertManager] Problematic alert keys:`, Object.keys(alert));
+            
+            // Try to identify which property is causing the issue
+            const debugAlert = {};
+            for (const [key, value] of Object.entries(alert)) {
+                try {
+                    JSON.stringify({ [key]: value });
+                    debugAlert[key] = typeof value;
+                } catch (keyError) {
+                    console.error(`[AlertManager] Circular reference in alert.${key}:`, keyError.message);
+                    if (typeof value === 'object' && value !== null) {
+                        console.error(`[AlertManager] Problematic object keys for alert.${key}:`, Object.keys(value));
+                        if (value.constructor) {
+                            console.error(`[AlertManager] Object constructor: ${value.constructor.name}`);
+                        }
+                        
+                        // Deep check each property
+                        if (typeof value === 'object') {
+                            for (const [subKey, subValue] of Object.entries(value)) {
+                                try {
+                                    JSON.stringify({ [subKey]: subValue });
+                                } catch (subError) {
+                                    console.error(`[AlertManager] Circular reference in alert.${key}.${subKey}:`, subError.message);
+                                    if (subValue && subValue.constructor) {
+                                        console.error(`[AlertManager] SubObject constructor: ${subValue.constructor.name}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            console.error(`[AlertManager] Alert property types:`, debugAlert);
+            
+            // Return minimal but useful alert data
+            return {
+                id: alert.id || 'unknown',
+                ruleId: alert.rule?.id || 'unknown',
+                ruleName: alert.rule?.name || 'Unknown Rule',
+                description: alert.rule?.description || '',
+                severity: alert.rule?.severity || 'warning',
+                group: alert.rule?.group || 'unknown',
+                tags: [],
+                guest: {
+                    name: alert.guest?.name || 'Unknown',
+                    vmid: alert.guest?.vmid || 'unknown',
+                    node: alert.guest?.node || 'unknown',
+                    type: alert.guest?.type || 'unknown',
+                    endpointId: alert.guest?.endpointId || 'unknown'
+                },
+                metric: alert.rule?.metric || 'unknown',
+                threshold: alert.effectiveThreshold || alert.rule?.threshold || 0,
+                currentValue: alert.currentValue || null,
+                triggeredAt: alert.triggeredAt || Date.now(),
+                duration: (alert.triggeredAt ? Date.now() - alert.triggeredAt : 0),
+                acknowledged: false,
+                acknowledgedBy: null,
+                acknowledgedAt: null,
+                escalated: false,
+                message: `${alert.rule?.name || 'Alert'} - ${alert.guest?.name || 'Unknown'} on ${alert.guest?.node || 'Unknown'}`,
+                type: alert.rule?.type || 'single_metric',
+                thresholds: null,
+                emailSent: true, // We know it's true since you're getting emails
+                webhookSent: false,
+                notificationChannels: ['email']
+            };
+        }
+    }
+
+    // Helper function to create safe serializable alert data for WebSocket events
+    createSafeAlertForEmit(alert) {
+        try {
+            return this.formatAlertForAPI(alert);
+        } catch (error) {
+            console.error('[AlertManager] Error formatting alert for emit:', error);
+            // Return minimal safe alert data if formatting fails
+            return {
+                id: alert.id || 'unknown',
+                ruleId: alert.rule?.id || 'unknown',
+                ruleName: alert.rule?.name || 'Unknown Rule',
+                severity: alert.rule?.severity || 'warning',
+                guest: {
+                    name: alert.guest?.name || 'Unknown',
+                    vmid: alert.guest?.vmid || 'unknown',
+                    node: alert.guest?.node || 'unknown'
+                },
+                message: 'Alert data formatting error',
+                triggeredAt: Date.now()
+            };
+        }
+    }
+
+    // Helper function to create a safe copy of a rule object without circular references
+    createSafeRuleCopy(rule) {
         return {
-            id: alert.id, // Use the stored permanent ID
-            ruleId: alert.rule.id,
-            ruleName: alert.rule.name,
-            description: alert.rule.description,
-            severity: alert.rule.severity,
-            group: alert.rule.group,
-            tags: alert.rule.tags,
-            guest: {
-                name: alert.guest.name,
-                vmid: alert.guest.vmid,
-                node: alert.guest.node,
-                type: alert.guest.type,
-                endpointId: alert.guest.endpointId
-            },
-            metric: alert.rule.metric || (alert.rule.type === 'compound_threshold' ? 'compound' : null),
-            threshold: alert.effectiveThreshold || alert.rule.threshold,
-            currentValue: alert.currentValue,
-            triggeredAt: alert.triggeredAt,
-            duration: Date.now() - alert.triggeredAt,
-            acknowledged: alert.acknowledged || false,
-            acknowledgedBy: alert.acknowledgedBy,
-            acknowledgedAt: alert.acknowledgedAt,
-            escalated: alert.escalated || false,
-            message: this.generateAlertMessage(alert),
-            type: alert.rule.type || 'single_metric',
-            thresholds: alert.rule.thresholds || null
+            id: rule.id,
+            name: rule.name,
+            description: rule.description,
+            metric: rule.metric,
+            condition: rule.condition,
+            threshold: rule.threshold,
+            duration: rule.duration,
+            severity: rule.severity,
+            enabled: rule.enabled,
+            tags: Array.isArray(rule.tags) ? [...rule.tags] : [],
+            group: rule.group,
+            escalationTime: rule.escalationTime,
+            autoResolve: rule.autoResolve,
+            suppressionTime: rule.suppressionTime,
+            type: rule.type,
+            thresholds: Array.isArray(rule.thresholds) ? 
+                rule.thresholds.map(t => ({
+                    metric: t.metric,
+                    condition: t.condition,
+                    threshold: t.threshold
+                })) : undefined,
+            sendEmail: rule.sendEmail,
+            sendWebhook: rule.sendWebhook
+        };
+    }
+
+    // Helper function to create a safe copy of a guest object without circular references
+    createSafeGuestCopy(guest) {
+        return {
+            endpointId: guest.endpointId,
+            node: guest.node,
+            vmid: guest.vmid,
+            name: guest.name,
+            type: guest.type,
+            status: guest.status,
+            maxmem: guest.maxmem,
+            maxdisk: guest.maxdisk
         };
     }
 
@@ -835,13 +972,7 @@ class AlertManager extends EventEmitter {
             totalRules: this.alertRules.size,
             suppressedRules: this.suppressedAlerts.size,
             metrics: this.alertMetrics,
-            groups: Array.from(this.alertGroups.values()),
-            channels: Array.from(this.notificationChannels.values()).map(c => ({
-                id: c.id,
-                name: c.name,
-                type: c.type,
-                enabled: c.enabled
-            }))
+            groups: Array.from(this.alertGroups.values())
         };
     }
 
@@ -936,6 +1067,12 @@ class AlertManager extends EventEmitter {
         const { guest, rule, currentValue } = alert;
         let valueStr = '';
         
+        // Validate guest object
+        if (!guest) {
+            console.error('[AlertManager] generateAlertMessage: guest is undefined', { alert });
+            return `${rule.name} - Unknown guest - ${rule.type === 'compound_threshold' ? 'Compound threshold met' : 'Alert triggered'}`;
+        }
+        
         // Handle compound threshold rules
         if (rule.type === 'compound_threshold' && rule.thresholds) {
             // For compound rules, show all threshold values
@@ -947,7 +1084,7 @@ class AlertManager extends EventEmitter {
                 return `${displayName}: ${formattedValue}${unit}`;
             }).join(', ');
             
-            return `${rule.name} - ${guest.name} (${guest.type.toUpperCase()} ${guest.vmid}) on ${guest.node} - ${conditions}`;
+            return `${rule.name} - ${guest.name || 'Unknown'} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid || 'N/A'}) on ${guest.node || 'Unknown'} - ${conditions}`;
         }
         
         // Handle single-metric rules
@@ -975,13 +1112,13 @@ class AlertManager extends EventEmitter {
             thresholdStr = `${rule.threshold}${isPercentageMetric ? '%' : ''}`;
         }
         
-        return `${rule.name} - ${guest.name} (${guest.type.toUpperCase()} ${guest.vmid}) on ${guest.node} - ${valueStr} (threshold: ${thresholdStr})`;
+        return `${rule.name} - ${guest.name || 'Unknown'} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid || 'N/A'}) on ${guest.node || 'Unknown'} - ${valueStr} (threshold: ${thresholdStr})`;
     }
 
     generateResolvedMessage(alert) {
         const { guest, rule } = alert;
         const duration = Math.round((alert.resolvedAt - alert.triggeredAt) / 1000);
-        return `${rule.name} RESOLVED - ${guest.name} (${guest.type.toUpperCase()} ${guest.vmid}) on ${guest.node} - Duration: ${duration}s`;
+        return `${rule.name} RESOLVED - ${guest.name || 'Unknown'} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid || 'N/A'}) on ${guest.node || 'Unknown'} - Duration: ${duration}s`;
     }
 
     findAlertKey(alert) {
@@ -1039,7 +1176,14 @@ class AlertManager extends EventEmitter {
     updateRule(ruleId, updates) {
         const rule = this.alertRules.get(ruleId);
         if (rule) {
+            const wasEnabled = rule.enabled;
             Object.assign(rule, updates);
+            
+            // If rule was disabled, clean up any active alerts for this rule
+            if (wasEnabled && updates.enabled === false) {
+                const removedAlerts = this.cleanupAlertsForRule(ruleId);
+                console.log(`[AlertManager] Rule ${ruleId} disabled - cleaned up ${removedAlerts} associated alerts`);
+            }
             
             // Save to disk if it's a custom or compound threshold rule
             if (rule.type === 'compound_threshold' || rule.group === 'custom') {
@@ -1125,7 +1269,6 @@ class AlertManager extends EventEmitter {
             escalationTime: 900000,
             autoResolve: true,
             suppressionTime: 300000,
-            notificationChannels: ['default'],
             type: isCompoundRule ? 'compound_threshold' : 'single_metric',
             ...rule
         };
@@ -1154,6 +1297,10 @@ class AlertManager extends EventEmitter {
         const success = this.alertRules.delete(ruleId);
         
         if (success) {
+            // Clean up any active alerts for this rule
+            const removedAlerts = this.cleanupAlertsForRule(ruleId);
+            console.log(`[AlertManager] Removed rule ${ruleId} and cleaned up ${removedAlerts} associated alerts`);
+            
             // Save to disk if it was a custom or compound threshold rule
             if (rule && (rule.type === 'compound_threshold' || rule.group === 'custom')) {
                 this.saveAlertRules().catch(error => {
@@ -1265,8 +1412,8 @@ class AlertManager extends EventEmitter {
                             // Create alert immediately without waiting for duration
                             const newAlert = {
                                 id: this.generateAlertId(),
-                                rule,
-                                guest,
+                                rule: this.createSafeRuleCopy(rule),
+                                guest: this.createSafeGuestCopy(guest),
                                 startTime: timestamp,
                                 lastUpdate: timestamp,
                                 triggeredAt: timestamp, // Set immediately for instant alerts
@@ -1352,8 +1499,8 @@ class AlertManager extends EventEmitter {
             const newAlert = {
                 id: this.generateAlertId(),
                 ruleId: rule.id,
-                rule: rule,
-                guest: guest,
+                rule: this.createSafeRuleCopy(rule),
+                guest: this.createSafeGuestCopy(guest),
                 severity: rule.severity,
                 message: this.formatCompoundThresholdMessage(rule, guestMetrics.current, guest),
                 startTime: timestamp,
@@ -1388,15 +1535,20 @@ class AlertManager extends EventEmitter {
 
         if (thresholdsMet) {
             if (!existingAlert) {
-                // Create new alert with permanent ID
+                // Create new alert with permanent ID and safe copies of rule/guest objects
                 const newAlert = {
                     id: this.generateAlertId(), // Generate ID once when alert is created
-                    rule,
-                    guest,
+                    rule: this.createSafeRuleCopy(rule),
+                    guest: this.createSafeGuestCopy(guest),
                     startTime: timestamp,
                     lastUpdate: timestamp,
                     currentValue: this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest),
-                    effectiveThreshold: rule.thresholds,
+                    effectiveThreshold: Array.isArray(rule.thresholds) ? 
+                        rule.thresholds.map(t => ({
+                            metric: t.metric,
+                            condition: t.condition,
+                            threshold: t.threshold
+                        })) : rule.thresholds,
                     state: 'pending',
                     escalated: false,
                     acknowledged: false
@@ -1777,7 +1929,7 @@ class AlertManager extends EventEmitter {
     initializeEmailTransporter() {
         if (process.env.SMTP_HOST) {
             try {
-                this.emailTransporter = nodemailer.createTransport({
+                const transporter = nodemailer.createTransport({
                     host: process.env.SMTP_HOST,
                     port: parseInt(process.env.SMTP_PORT) || 587,
                     secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
@@ -1791,6 +1943,15 @@ class AlertManager extends EventEmitter {
                         rejectUnauthorized: false
                     }
                 });
+                
+                // Make the transporter non-enumerable to prevent it from being serialized
+                Object.defineProperty(this, 'emailTransporter', {
+                    value: transporter,
+                    writable: true,
+                    enumerable: false,
+                    configurable: true
+                });
+                
                 console.log('[AlertManager] Email transporter initialized');
             } catch (error) {
                 console.error('[AlertManager] Failed to initialize email transporter:', error);
@@ -1816,16 +1977,16 @@ class AlertManager extends EventEmitter {
     }
 
     /**
-     * Send email notification
+     * Send email notification using environment configuration
      */
-    async sendEmailNotification(channel, alert) {
+    async sendDirectEmailNotification(alert) {
         if (!this.emailTransporter) {
             throw new Error('Email transporter not configured');
         }
 
-        const recipients = channel.config.to;
+        const recipients = process.env.ALERT_TO_EMAIL ? process.env.ALERT_TO_EMAIL.split(',') : [];
         if (!recipients || recipients.length === 0) {
-            throw new Error('No email recipients configured');
+            throw new Error('No email recipients configured (ALERT_TO_EMAIL)');
         }
 
         const severityEmoji = {
@@ -1838,10 +1999,35 @@ class AlertManager extends EventEmitter {
         const currentValue = alert.currentValue;
         const effectiveThreshold = alert.effectiveThreshold || alert.rule.threshold;
         
-        // Format values for display (only add % for percentage metrics)
-        const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.rule.metric);
-        const valueDisplay = isPercentageMetric ? `${Math.round(currentValue || 0)}%` : (currentValue || 'N/A');
-        const thresholdDisplay = isPercentageMetric ? `${effectiveThreshold || 0}%` : (effectiveThreshold || 'N/A');
+        // Format values for display - handle both single values and compound objects
+        let valueDisplay, thresholdDisplay;
+        
+        if (alert.rule.type === 'compound_threshold' && typeof currentValue === 'object' && currentValue !== null) {
+            // Format compound threshold values
+            const values = [];
+            for (const [metric, value] of Object.entries(currentValue)) {
+                const isPercentage = ['cpu', 'memory', 'disk'].includes(metric);
+                const formattedValue = typeof value === 'number' ? Math.round(value * 10) / 10 : value;
+                values.push(`${metric.toUpperCase()}: ${formattedValue}${isPercentage ? '%' : ''}`);
+            }
+            valueDisplay = values.join(', ');
+            
+            // Format compound thresholds
+            if (Array.isArray(effectiveThreshold)) {
+                const thresholds = effectiveThreshold.map(t => {
+                    const isPercentage = ['cpu', 'memory', 'disk'].includes(t.metric);
+                    return `${t.metric.toUpperCase()}: >${t.threshold}${isPercentage ? '%' : ''}`;
+                });
+                thresholdDisplay = thresholds.join(', ');
+            } else {
+                thresholdDisplay = 'Multiple thresholds';
+            }
+        } else {
+            // Format single metric values
+            const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.rule.metric);
+            valueDisplay = isPercentageMetric ? `${Math.round(currentValue || 0)}%` : (currentValue || 'N/A');
+            thresholdDisplay = isPercentageMetric ? `${effectiveThreshold || 0}%` : (effectiveThreshold || 'N/A');
+        }
 
         const subject = `${severityEmoji[alert.rule.severity] || '📢'} Pulse Alert: ${alert.rule.name}`;
         
@@ -1866,7 +2052,7 @@ class AlertManager extends EventEmitter {
                         </tr>
                         <tr>
                             <td style="padding: 8px 0; font-weight: bold; color: #374151;">Metric:</td>
-                            <td style="padding: 8px 0; color: #6b7280;">${alert.rule.metric.toUpperCase()}</td>
+                            <td style="padding: 8px 0; color: #6b7280;">${alert.rule.metric ? alert.rule.metric.toUpperCase() : (alert.rule.type === 'compound_threshold' ? 'Multiple Thresholds' : 'N/A')}</td>
                         </tr>
                         <tr>
                             <td style="padding: 8px 0; font-weight: bold; color: #374151;">Current Value:</td>
@@ -1889,7 +2075,7 @@ class AlertManager extends EventEmitter {
                 
                 <div style="background: white; padding: 20px; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e7eb;">
                     <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                        <strong>Description:</strong> ${alert.rule.description}
+                        <strong>Description:</strong> ${alert.rule.description || 'Alert triggered for the specified conditions'}
                     </p>
                     <p style="margin: 15px 0 0 0; color: #9ca3af; font-size: 12px;">
                         This alert was generated by Pulse monitoring system. 
@@ -1905,19 +2091,19 @@ PULSE ALERT: ${alert.rule.name}
 Severity: ${alert.rule.severity.toUpperCase()}
 VM/LXC: ${alert.guest.name} (${alert.guest.type} ${alert.guest.vmid})
 Node: ${alert.guest.node}
-Metric: ${alert.rule.metric.toUpperCase()}
+Metric: ${alert.rule.metric ? alert.rule.metric.toUpperCase() : (alert.rule.type === 'compound_threshold' ? 'Multiple Thresholds' : 'N/A')}
 Current Value: ${valueDisplay}
 Threshold: ${thresholdDisplay}
 Status: ${alert.guest.status}
 Time: ${new Date(this.getValidTimestamp(alert)).toLocaleString()}
 
-Description: ${alert.rule.description}
+Description: ${alert.rule.description || 'Alert triggered for the specified conditions'}
 
 This alert was generated by Pulse monitoring system.
         `;
 
         const mailOptions = {
-            from: channel.config.from,
+            from: process.env.ALERT_FROM_EMAIL || 'alerts@pulse-monitoring.local',
             to: recipients.join(', '),
             subject: subject,
             text: text,
@@ -1929,11 +2115,12 @@ This alert was generated by Pulse monitoring system.
     }
 
     /**
-     * Send webhook notification
+     * Send webhook notification using environment configuration
      */
-    async sendWebhookNotification(channel, alert) {
-        if (!channel.config.url) {
-            throw new Error('Webhook URL not configured');
+    async sendDirectWebhookNotification(alert) {
+        const webhookUrl = process.env.WEBHOOK_URL;
+        if (!webhookUrl) {
+            throw new Error('Webhook URL not configured (WEBHOOK_URL)');
         }
 
         const severityEmoji = {
@@ -1959,9 +2146,8 @@ This alert was generated by Pulse monitoring system.
         const thresholdDisplay = isPercentageMetric ? `${formattedThreshold}%` : formattedThreshold;
         
         // Detect webhook type based on URL
-        const url = channel.config.url;
-        const isDiscord = url.includes('discord.com/api/webhooks') || url.includes('discordapp.com/api/webhooks');
-        const isSlack = url.includes('slack.com/') || url.includes('hooks.slack.com');
+        const isDiscord = webhookUrl.includes('discord.com/api/webhooks') || webhookUrl.includes('discordapp.com/api/webhooks');
+        const isSlack = webhookUrl.includes('slack.com/') || webhookUrl.includes('hooks.slack.com');
         
         let payload;
         
@@ -2123,8 +2309,7 @@ This alert was generated by Pulse monitoring system.
         // Set appropriate headers
         const headers = {
             'Content-Type': 'application/json',
-            'User-Agent': 'Pulse-Monitoring/1.0',
-            ...channel.config.headers
+            'User-Agent': 'Pulse-Monitoring/1.0'
         };
 
         const maxRetries = 3;
@@ -2132,18 +2317,18 @@ This alert was generated by Pulse monitoring system.
         
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                const response = await axios.post(channel.config.url, payload, {
+                const response = await axios.post(webhookUrl, payload, {
                     headers,
                     timeout: 10000, // 10 second timeout
                     maxRedirects: 3
                 });
 
-                console.log(`[WEBHOOK] Alert sent to: ${channel.config.url} (${response.status}) - attempt ${attempt}`);
+                console.log(`[WEBHOOK] Alert sent to: ${webhookUrl} (${response.status}) - attempt ${attempt}`);
                 return; // Success, exit retry loop
                 
             } catch (error) {
                 lastError = error;
-                console.warn(`[WEBHOOK] Attempt ${attempt}/${maxRetries} failed for ${channel.config.url}:`, error.message);
+                console.warn(`[WEBHOOK] Attempt ${attempt}/${maxRetries} failed for ${webhookUrl}:`, error.message);
                 
                 // Don't retry on 4xx client errors (likely permanent)
                 if (error.response && error.response.status >= 400 && error.response.status < 500) {
@@ -2163,7 +2348,7 @@ This alert was generated by Pulse monitoring system.
         if (lastError.response) {
             throw new Error(`Webhook failed after ${maxRetries} attempts: ${lastError.response.status} ${lastError.response.statusText}`);
         } else if (lastError.request) {
-            throw new Error(`Webhook failed after ${maxRetries} attempts: No response from ${channel.config.url}`);
+            throw new Error(`Webhook failed after ${maxRetries} attempts: No response from ${webhookUrl}`);
         } else {
             throw new Error(`Webhook failed after ${maxRetries} attempts: ${lastError.message}`);
         }
@@ -2186,6 +2371,7 @@ This alert was generated by Pulse monitoring system.
         this.alertRules.clear();
         this.acknowledgedAlerts.clear();
         this.suppressedAlerts.clear();
+        this.notificationStatus.clear();
         
         // Close email transporter
         if (this.emailTransporter) {

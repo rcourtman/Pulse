@@ -19,6 +19,24 @@ PulseApp.ui.alertManagementModal = (() => {
         isInitialized = true;
     }
 
+    function openModal() {
+        const modal = document.getElementById('alert-management-modal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            // Default to alerts tab when opening
+            switchTab('alerts');
+        }
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('alert-management-modal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+    }
+
     function createModalHTML() {
         const existingModal = document.getElementById('alert-management-modal');
         if (existingModal) {
@@ -877,7 +895,6 @@ PulseApp.ui.alertManagementModal = (() => {
         }
 
         // Load existing email configuration
-        console.log('[DEBUG] Calling loadEmailConfiguration from initializeNotificationsTab');
         loadEmailConfiguration();
     }
 
@@ -1133,14 +1150,6 @@ PulseApp.ui.alertManagementModal = (() => {
         const config = currentConfig || {};
         const smtp = config.advanced?.smtp || {};
         
-        console.log('[DEBUG] Loading email config:', {
-            currentConfig: config,
-            smtp: smtp,
-            smtpKeys: Object.keys(smtp),
-            smtpValues: smtp,
-            advancedSection: config.advanced
-        });
-        
         // Populate email fields with values from configuration
         const emailFromInput = document.querySelector('input[name="ALERT_FROM_EMAIL"]');
         if (emailFromInput && smtp.from) {
@@ -1176,12 +1185,10 @@ PulseApp.ui.alertManagementModal = (() => {
         
         // Check if SMTP config exists (indicating password is saved)
         const hasSmtpConfig = smtp.host && smtp.user && smtp.from;
-        console.log('[DEBUG] Has SMTP config (password likely saved):', hasSmtpConfig);
         
         if (smtpPassInput && hasSmtpConfig) {
             // Don't set a value, but update placeholder to indicate password is saved
             smtpPassInput.placeholder = 'Password saved (click to change)';
-            console.log('[DEBUG] Updated password placeholder to indicate saved state');
         }
         
         // Auto-detect email provider if from email is set
@@ -1300,7 +1307,6 @@ PulseApp.ui.alertManagementModal = (() => {
                smtp.host !== 'smtp.mail.yahoo.com') // Custom config that's not a known provider
             : (smtp.host === providerConfig?.host && smtp.port === providerConfig?.port); // Exact match for specific providers
         
-        console.log('[DEBUG] Provider:', provider, 'Has matching config:', hasMatchingConfig);
         
         // Check if we're switching away from a configured provider
         const wasPreviouslyConfigured = smtpPassInput.placeholder.includes('Password saved');
@@ -1350,7 +1356,6 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function handleEmailProviderSelection(provider) {
-        console.log('[DEBUG] handleEmailProviderSelection called with provider:', provider);
         
         if (!provider) {
             console.error('[ERROR] Provider is undefined in handleEmailProviderSelection');
@@ -1592,7 +1597,6 @@ PulseApp.ui.alertManagementModal = (() => {
     async function saveEmailConfiguration() {
         // This function is called by the specific save button in the email section
         // It will trigger the main saveConfiguration function
-        console.log('[DEBUG] Save email configuration button clicked');
         await saveConfiguration();
         PulseApp.ui.toast.success('Email configuration saved successfully!');
     }
@@ -2857,65 +2861,28 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         }
     }
 
-
     function preserveCurrentFormData() {
-        // TODO: Implement form data preservation
+        // TODO: Implement form data preservation if needed
+        // Currently just a stub to prevent errors
     }
 
     function restoreFormData(tabName) {
-        // TODO: Implement form data restoration
-    }
-
-    async function openModal(targetTab = null) {
-        console.log('[DEBUG] Opening alert management modal');
-        const modal = document.getElementById('alert-management-modal');
-        if (modal) {
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            
-            // Load current configuration and wait for it to complete
-            console.log('[DEBUG] Loading configuration...');
-            await loadConfiguration();
-            console.log('[DEBUG] Configuration loaded');
-            
-            // Hide save button initially (only show on notifications tab)
-            const saveButton = document.getElementById('alert-management-save-button');
-            if (saveButton) {
-                saveButton.style.display = 'none';
-            }
-            
-            // Switch to target tab if specified
-            if (targetTab && targetTab !== activeTab) {
-                switchTab(targetTab);
-            } else {
-                // Render initial tab content
-                renderTabContent();
-            }
-        }
-    }
-
-    function closeModal() {
-        const modal = document.getElementById('alert-management-modal');
-        if (modal) {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
+        // TODO: Implement form data restoration if needed
+        // Currently just a stub to prevent errors
     }
 
     async function loadConfiguration() {
         try {
-            
             // Always load configuration directly from API to ensure fresh data
             const response = await fetch('/api/config');
             if (response.ok) {
                 currentConfig = await response.json();
             } else {
-                console.error('[DEBUG] Failed to load configuration - response not ok');
+                console.error('Failed to load configuration - response not ok');
                 currentConfig = {};
             }
-            
         } catch (error) {
-            console.error('[DEBUG] Error loading configuration:', error);
+            console.error('Error loading configuration:', error);
             currentConfig = {};
         }
     }
@@ -2927,10 +2894,8 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         // their own save buttons, this function mainly handles email/webhook 
         // configuration that might be pending.
         
-        console.log('[DEBUG] saveConfiguration() called');
         const saveButton = document.getElementById('alert-management-save-button');
         if (!saveButton) {
-            console.log('[DEBUG] Save button not found, exiting saveConfiguration');
             return;
         }
 
@@ -2944,7 +2909,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
             // Check for email configuration changes
             const emailConfigSection = document.getElementById('primary-email-config');
-            console.log('[DEBUG] Looking for primary-email-config:', emailConfigSection);
             if (emailConfigSection) {
                 const smtpHost = document.querySelector('input[name="ALERT_SMTP_HOST"]')?.value;
                 const smtpPort = document.querySelector('input[name="ALERT_SMTP_PORT"]')?.value;
@@ -2954,10 +2918,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 const toEmail = document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value;
                 const smtpSecure = document.querySelector('input[name="ALERT_SMTP_SECURE"]')?.checked;
 
-                console.log('[DEBUG] Email config values to save:', {
-                    smtpHost, smtpPort, smtpUser, smtpPass, fromEmail, toEmail, smtpSecure
-                });
-
                 if (smtpHost) { configToSave.SMTP_HOST = smtpHost; hasChanges = true; }
                 if (smtpPort) { configToSave.SMTP_PORT = smtpPort; hasChanges = true; }
                 if (smtpUser) { configToSave.SMTP_USER = smtpUser; hasChanges = true; }
@@ -2966,8 +2926,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 if (toEmail) { configToSave.ALERT_TO_EMAIL = toEmail; hasChanges = true; }
                 configToSave.SMTP_SECURE = smtpSecure ? 'true' : 'false';
                 hasChanges = true;
-                
-                console.log('[DEBUG] Config to save:', configToSave);
             }
 
             // Check for webhook configuration changes
@@ -2982,23 +2940,21 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             }
 
             if (!hasChanges) {
-                PulseApp.ui.toast.alert('No changes to save');
+                console.log('No changes to save');
                 return;
             }
 
             // Save configuration via API
-            console.log('[DEBUG] Sending config to server:', configToSave);
             const response = await fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(configToSave)
             });
-            console.log('[DEBUG] Server response status:', response.status);
 
             const result = await response.json();
             
             if (response.ok && result.success) {
-                PulseApp.ui.toast.success('Configuration saved successfully');
+                console.log('Configuration saved successfully');
                 
                 // Add visual feedback to show config is saved
                 markEmailConfigAsSaved();
@@ -3010,10 +2966,18 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
         } catch (error) {
             console.error('Error saving configuration:', error);
-            PulseApp.ui.toast.error('Failed to save configuration: ' + error.message);
         } finally {
             saveButton.disabled = false;
             saveButton.textContent = originalText;
+        }
+    }
+
+    // Missing functions that were referenced in the public API
+    async function toggleAlert(alertId, alertType, enabled) {
+        if (alertType === 'system') {
+            return toggleSystemAlert(alertId, enabled);
+        } else if (alertType === 'custom') {
+            return toggleCustomAlert(alertId, enabled);
         }
     }
 
@@ -3054,28 +3018,36 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 throw new Error('Alert not found');
             }
             
-            
             // Open the custom alert modal with pre-filled data
             openCustomAlertModal(alert.thresholds || [], alert);
             
         } catch (error) {
             console.error('Failed to load alert for editing:', error);
-            PulseApp.ui.toast.error(`Failed to load alert for editing: ${error.message}`);
         }
     }
 
     async function deleteCustomAlert(alertId) {
-        await _performDeleteCustomAlert(alertId);
+        try {
+            const response = await fetch(`/api/alerts/rules/${alertId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server error: ${response.status}`);
+            }
+
+            await loadCustomAlerts(); // Refresh display
+            
+        } catch (error) {
+            console.error('Failed to delete custom alert:', error);
+        }
     }
 
     function showAlertDetails(alertId) {
         // Find the alert in the current alerts list
-        const alertsResponse = document.querySelector('#alert-management-modal-body');
-        if (!alertsResponse) return;
-
-        // Get the alert data from the current state
         try {
-            const alerts = PulseApp.alerts.getActiveAlerts();
+            const alerts = PulseApp.alerts ? PulseApp.alerts.getActiveAlerts() : [];
             const alert = alerts.find(a => a.id === alertId);
             
             if (alert) {
@@ -3089,17 +3061,15 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                         if (alert) {
                             displayAlertDetailsModal(alert);
                         } else {
-                            PulseApp.ui.toast.error('Alert not found');
+                            console.error('Alert not found');
                         }
                     })
                     .catch(error => {
                         console.error('Failed to fetch alert details:', error);
-                        PulseApp.ui.toast.error('Failed to load alert details');
                     });
             }
         } catch (error) {
             console.error('Error accessing alerts:', error);
-            PulseApp.ui.toast.error('Failed to access alert data');
         }
     }
 
@@ -3117,318 +3087,42 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                             </svg>
                         </button>
                     </div>
-                    
-                    <div class="overflow-y-auto flex-grow p-6">
+                    <div class="flex-1 overflow-y-auto p-6">
                         <div class="space-y-4">
-                            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                                <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Alert Information</h3>
-                                <div class="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">Rule:</span>
-                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.rule?.name || alert.ruleName || 'Unknown'}</span>
-                                    </div>
-                                    <div>
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">Severity:</span>
-                                        <span class="ml-2 px-2 py-1 rounded text-xs font-medium 
-                                            ${alert.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                                              alert.severity === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                                              'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">
-                                            ${alert.severity || 'info'}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">Status:</span>
-                                        <span class="ml-2 px-2 py-1 rounded text-xs font-medium 
-                                            ${alert.acknowledged ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                              'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}">
-                                            ${alert.acknowledged ? 'Acknowledged' : 'Active'}
-                                        </span>
-                                    </div>
-                                    <div>
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
-                                        <span class="text-gray-900 dark:text-gray-100 ml-2">
-                                            ${alert.triggeredAt ? Math.round((Date.now() - alert.triggeredAt) / 60000) + ' minutes' : 'Unknown'}
-                                        </span>
-                                    </div>
-                                </div>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Alert Rule</h3>
+                                <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">${alert.ruleName || alert.name}</p>
                             </div>
-
-                            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                                <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Affected Resource</h3>
-                                <div class="grid grid-cols-2 gap-4 text-sm">
-                                    <div>
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">Name:</span>
-                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.guest?.name || 'Unknown'}</span>
-                                    </div>
-                                    <div>
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">Type:</span>
-                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.guest?.type || 'Unknown'}</span>
-                                    </div>
-                                    <div>
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">Node:</span>
-                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.guest?.node || 'Unknown'}</span>
-                                    </div>
-                                    <div>
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">VM/CT ID:</span>
-                                        <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.guest?.vmid || 'Unknown'}</span>
-                                    </div>
-                                </div>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Guest System</h3>
+                                <p class="text-gray-900 dark:text-gray-100">${alert.guest.name} (${alert.guest.type} ${alert.guest.vmid}) on ${alert.guest.node}</p>
                             </div>
-
-                            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                                <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Metric Details</h3>
-                                <div class="space-y-2 text-sm">
-                                    <div>
-                                        <span class="font-medium text-gray-700 dark:text-gray-300">Alert Type:</span>
-                                        <span class="text-gray-900 dark:text-gray-100 ml-2">
-                                            ${(() => {
-                                                const metric = alert.rule?.metric || alert.metric;
-                                                if (metric === 'compound' || alert.rule?.type === 'compound_threshold') {
-                                                    return 'Compound Threshold Alert';
-                                                }
-                                                return metric ? metric.charAt(0).toUpperCase() + metric.slice(1) + ' Alert' : 'Single Metric Alert';
-                                            })()}
-                                        </span>
-                                    </div>
-                                    ${(() => {
-                                        const metric = alert.rule?.metric || alert.metric;
-                                        if (metric === 'compound' || alert.rule?.type === 'compound_threshold') {
-                                            // Handle compound threshold alerts
-                                            let currentValuesHtml = '';
-                                            let thresholdsHtml = '';
-                                            
-                                            if (typeof alert.currentValue === 'object' && alert.currentValue !== null) {
-                                                const values = Object.entries(alert.currentValue).map(([key, value]) => {
-                                                    const isPercentage = ['cpu', 'memory', 'disk'].includes(key);
-                                                    return key.toUpperCase() + ': ' + (typeof value === 'number' ? Math.round(value) : value) + (isPercentage ? '%' : '');
-                                                });
-                                                currentValuesHtml = values.join(', ');
-                                            }
-                                            
-                                            if (alert.rule?.thresholds && Array.isArray(alert.rule.thresholds)) {
-                                                const thresholds = alert.rule.thresholds.map(t => {
-                                                    const isPercentage = ['cpu', 'memory', 'disk'].includes(t.metric);
-                                                    return t.metric.toUpperCase() + ' ' + t.condition.replace('_', ' ') + ' ' + t.threshold + (isPercentage ? '%' : '');
-                                                });
-                                                thresholdsHtml = thresholds.join(' AND ');
-                                            } else if (typeof alert.effectiveThreshold === 'object' && alert.effectiveThreshold !== null) {
-                                                thresholdsHtml = JSON.stringify(alert.effectiveThreshold);
-                                            }
-                                            
-                                            return '<div>' +
-                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Current Values:</span>' +
-                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + (currentValuesHtml || 'N/A') + '</span>' +
-                                                '</div>' +
-                                                '<div>' +
-                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Threshold Conditions:</span>' +
-                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + (thresholdsHtml || 'N/A') + '</span>' +
-                                                '</div>';
-                                        } else {
-                                            // Handle single metric alerts
-                                            const currentValue = typeof alert.currentValue === 'number' ? 
-                                                (['cpu', 'memory', 'disk'].includes(metric) ? Math.round(alert.currentValue) + '%' : alert.currentValue) : 
-                                                (alert.currentValue || 'N/A');
-                                            
-                                            const threshold = alert.effectiveThreshold !== undefined ? alert.effectiveThreshold : alert.rule?.threshold || alert.threshold;
-                                            const thresholdDisplay = threshold !== undefined && threshold !== null ? 
-                                                (typeof threshold === 'number' && ['cpu', 'memory', 'disk'].includes(metric) ? threshold + '%' : threshold) : 
-                                                'N/A';
-                                            
-                                            return '<div>' +
-                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Metric:</span>' +
-                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + (metric || 'Unknown') + '</span>' +
-                                                '</div>' +
-                                                '<div>' +
-                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Current Value:</span>' +
-                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + currentValue + '</span>' +
-                                                '</div>' +
-                                                '<div>' +
-                                                '<span class="font-medium text-gray-700 dark:text-gray-300">Threshold:</span>' +
-                                                '<span class="text-gray-900 dark:text-gray-100 ml-2">' + thresholdDisplay + '</span>' +
-                                                '</div>';
-                                        }
-                                    })()}
-                                    ${alert.rule?.description ? `
-                                        <div>
-                                            <span class="font-medium text-gray-700 dark:text-gray-300">Description:</span>
-                                            <p class="text-gray-900 dark:text-gray-100 mt-1">${alert.rule.description}</p>
-                                        </div>
-                                    ` : ''}
-                                </div>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Current Value</h3>
+                                <p class="text-gray-900 dark:text-gray-100">${alert.currentValue}</p>
                             </div>
-
-                            ${alert.acknowledged ? `
-                                <div class="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                                    <h3 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Acknowledgment</h3>
-                                    <div class="text-sm">
-                                        <div>
-                                            <span class="font-medium text-gray-700 dark:text-gray-300">Acknowledged by:</span>
-                                            <span class="text-gray-900 dark:text-gray-100 ml-2">${alert.acknowledgedBy || 'System'}</span>
-                                        </div>
-                                        <div>
-                                            <span class="font-medium text-gray-700 dark:text-gray-300">Time:</span>
-                                            <span class="text-gray-900 dark:text-gray-100 ml-2">
-                                                ${alert.acknowledgedAt ? new Date(alert.acknowledgedAt).toLocaleString() : 'Unknown'}
-                                            </span>
-                                        </div>
-                                        ${alert.acknowledgeNote ? `
-                                            <div>
-                                                <span class="font-medium text-gray-700 dark:text-gray-300">Note:</span>
-                                                <p class="text-gray-900 dark:text-gray-100 mt-1">${alert.acknowledgeNote}</p>
-                                            </div>
-                                        ` : ''}
-                                    </div>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
-                    
-                    <div class="border-t border-gray-300 dark:border-gray-700 px-6 py-4">
-                        <div class="flex gap-3 justify-end">
-                            ${!alert.acknowledged ? `
-                                <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}'); setTimeout(() => { document.getElementById('alert-details-modal').remove(); PulseApp.ui.alertManagementModal.loadCurrentAlerts(); }, 500);" 
-                                        class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
-                                    Acknowledge Alert
-                                </button>
-                            ` : ''}
-                            <button onclick="document.getElementById('alert-details-modal').remove();" 
-                                    class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md transition-colors">
-                                Close
-                            </button>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Triggered At</h3>
+                                <p class="text-gray-900 dark:text-gray-100">${new Date(alert.triggeredAt).toLocaleString()}</p>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Severity</h3>
+                                <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full 
+                                    ${alert.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
+                                      alert.severity === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                                      'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">
+                                    ${alert.severity}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         `;
-
-        // Remove any existing details modal
-        const existingModal = document.getElementById('alert-details-modal');
-        if (existingModal) {
-            existingModal.remove();
-        }
-
-        // Add the modal to the page
+        
         document.body.insertAdjacentHTML('beforeend', modalHTML);
     }
 
-    async function _performDeleteCustomAlert(alertId) {
-        try {
-            const response = await fetch(`/api/alerts/rules/${alertId}`, {
-                method: 'DELETE'
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                throw new Error(errorData.error || `Server error: ${response.status}`);
-            }
-
-            PulseApp.ui.toast.success('Custom alert deleted successfully');
-            await loadCustomAlerts(); // Refresh display
-            
-        } catch (error) {
-            console.error('Failed to delete custom alert:', error);
-            PulseApp.ui.toast.error(`Failed to delete alert: ${error.message}`);
-        }
-    }
-
-
-    // Global functions that need to be accessible from HTML onclick handlers
-    window.editSystemAlert = editSystemAlert;
-    window.closeSystemAlertModal = closeSystemAlertModal;
-    window.saveSystemAlert = saveSystemAlert;
-    
-    window.toggleSystemAlert = function(alertId, enabled) {
-        
-        
-        // Update the toggle button
-        const toggleBtn = document.getElementById(`${alertId}-toggle-btn`);
-        if (toggleBtn) {
-            toggleBtn.textContent = enabled ? 'Disable' : 'Enable';
-            toggleBtn.onclick = () => toggleSystemAlert(alertId, !enabled);
-        }
-        
-        // Save the configuration to backend
-        updateSystemAlertStatus(alertId, enabled);
-    };
-
-    // Helper function to update slider value displays
-    function updateSliderValueDisplay(slider) {
-        const value = slider.value;
-        const name = slider.name;
-        
-        // Find the corresponding value display element
-        let displayElement;
-        if (name === 'cpuThreshold') {
-            displayElement = document.getElementById('cpu-threshold-value');
-        } else if (name === 'memoryThreshold') {
-            displayElement = document.getElementById('memory-threshold-value');
-        } else if (name === 'diskThreshold') {
-            displayElement = document.getElementById('disk-threshold-value');
-        }
-        
-        if (displayElement) {
-            if (value > 0) {
-                displayElement.textContent = `${value}%`;
-                displayElement.classList.add('font-bold');
-            } else {
-                displayElement.textContent = '0%';
-                displayElement.classList.remove('font-bold');
-            }
-        }
-    }
-
-    // Helper function to update the threshold preview
-    function updateThresholdPreview() {
-        const previewList = document.getElementById('threshold-preview-list');
-        if (!previewList) return;
-        
-        const thresholds = [];
-        
-        // Check all threshold inputs
-        const cpuValue = parseInt(document.querySelector('input[name="cpuThreshold"]')?.value) || 0;
-        const memoryValue = parseInt(document.querySelector('input[name="memoryThreshold"]')?.value) || 0;
-        const diskValue = parseInt(document.querySelector('input[name="diskThreshold"]')?.value) || 0;
-        const networkValue = parseInt(document.querySelector('select[name="networkThreshold"]')?.value) || 0;
-        const statusMonitoring = document.querySelector('input[name="statusMonitoring"]')?.checked || false;
-        
-        // Add active thresholds to the list
-        if (cpuValue > 0) thresholds.push(`CPU ≥ ${cpuValue}%`);
-        if (memoryValue > 0) thresholds.push(`Memory ≥ ${memoryValue}%`);
-        if (diskValue > 0) thresholds.push(`Disk ≥ ${diskValue}%`);
-        if (networkValue > 0) thresholds.push(`Network ≥ ${_formatBytesForDisplay(networkValue)}`);
-        if (statusMonitoring) thresholds.push(`VM/LXC Status Changes`);
-        
-        // Update the preview display
-        if (thresholds.length > 0) {
-            previewList.innerHTML = thresholds.join(' • ');
-            previewList.classList.remove('text-gray-600', 'dark:text-gray-400');
-            previewList.classList.add('text-blue-700', 'dark:text-blue-300', 'font-medium');
-        } else {
-            previewList.textContent = 'No thresholds set';
-            previewList.classList.remove('text-blue-700', 'dark:text-blue-300', 'font-medium');
-            previewList.classList.add('text-gray-600', 'dark:text-gray-400');
-        }
-    }
-
-    // Helper function to format bytes for display
-    function _formatBytesForDisplay(bytes) {
-        const mb = bytes / (1024 * 1024);
-        if (mb >= 100) return `${Math.round(mb)}MB/s`;
-        if (mb >= 10) return `${Math.round(mb)}MB/s`;
-        return `${Math.round(mb * 10) / 10}MB/s`;
-    }
-
-    // Unified alert toggle function
-    async function toggleAlert(alertId, alertType, enabled) {
-        if (alertType === 'system') {
-            return toggleSystemAlert(alertId, enabled);
-        } else if (alertType === 'custom') {
-            return toggleCustomAlert(alertId, enabled);
-        }
-    }
-
-    
-    // Webhook endpoint management - simple and clean like settings
     function addWebhookEndpoint() {
         const listContainer = document.getElementById('additional-webhook-list');
         if (!listContainer) return;
@@ -3469,13 +3163,80 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             const listContainer = document.getElementById('additional-webhook-list');
             const remainingWebhooks = listContainer.querySelectorAll('[id^="webhook-endpoint-"]');
             
-            // Show empty state if no webhooks remain
             if (remainingWebhooks.length === 0) {
+                // Show empty state
                 const emptyState = listContainer.querySelector('.border-dashed');
                 if (emptyState) {
                     emptyState.style.display = 'block';
                 }
             }
+        }
+    }
+
+    // Update slider value display for custom alert modal
+    function updateSliderValueDisplay(slider) {
+        if (!slider) return;
+        
+        const value = slider.value;
+        const name = slider.name;
+        
+        // Map slider names to their display element IDs
+        const displayIds = {
+            'cpuThreshold': 'cpu-threshold-value',
+            'memoryThreshold': 'memory-threshold-value', 
+            'diskThreshold': 'disk-threshold-value'
+        };
+        
+        const displayElement = document.getElementById(displayIds[name]);
+        if (displayElement) {
+            displayElement.textContent = `${value}%`;
+        }
+    }
+
+    // Update threshold preview for custom alert modal
+    function updateThresholdPreview() {
+        const previewList = document.getElementById('threshold-preview-list');
+        if (!previewList) return;
+        
+        const activeThresholds = [];
+        
+        // Check CPU threshold
+        const cpuSlider = document.querySelector('input[name="cpuThreshold"]');
+        if (cpuSlider && parseInt(cpuSlider.value) > 0) {
+            activeThresholds.push(`CPU > ${cpuSlider.value}%`);
+        }
+        
+        // Check Memory threshold
+        const memorySlider = document.querySelector('input[name="memoryThreshold"]');
+        if (memorySlider && parseInt(memorySlider.value) > 0) {
+            activeThresholds.push(`Memory > ${memorySlider.value}%`);
+        }
+        
+        // Check Disk threshold
+        const diskSlider = document.querySelector('input[name="diskThreshold"]');
+        if (diskSlider && parseInt(diskSlider.value) > 0) {
+            activeThresholds.push(`Disk > ${diskSlider.value}%`);
+        }
+        
+        // Check Network threshold
+        const networkSelect = document.querySelector('select[name="networkThreshold"]');
+        if (networkSelect && parseInt(networkSelect.value) > 0) {
+            const networkValue = parseInt(networkSelect.value);
+            const networkMB = networkValue / (1024 * 1024);
+            activeThresholds.push(`Network > ${networkMB} MB/s`);
+        }
+        
+        // Check Status monitoring
+        const statusCheckbox = document.querySelector('input[name="statusMonitoring"]');
+        if (statusCheckbox && statusCheckbox.checked) {
+            activeThresholds.push('VM/LXC Status monitoring');
+        }
+        
+        // Update display
+        if (activeThresholds.length > 0) {
+            previewList.innerHTML = activeThresholds.join('<br>');
+        } else {
+            previewList.textContent = 'No thresholds set';
         }
     }
 

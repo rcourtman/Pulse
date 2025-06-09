@@ -110,13 +110,11 @@ class ResilientApiClient {
     // Try each IP in sequence
     for (const ip of ips) {
       if (dnsResolver.isHostFailed(ip)) {
-        console.log(`[ResilientApiClient] Skipping failed IP ${ip} for ${this.hostname}`);
         continue;
       }
 
       try {
         const client = this.getClientForIp(ip);
-        console.log(`[ResilientApiClient] Attempting request to ${this.hostname} via IP ${ip}`);
         
         const response = await client.request(config);
         return response;

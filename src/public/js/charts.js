@@ -611,42 +611,58 @@ PulseApp.charts = (() => {
         return result;
     }
 
-    // Calculate importance score for each data point
+    // Calculate importance score for each data point (optimized)
     function calculateImportanceScores(data) {
-        const scores = new Array(data.length).fill(0);
+        const scores = new Array(data.length);
         const windowSize = Math.max(3, Math.floor(data.length / 50)); // Adaptive window size
+        
+        // Pre-calculate values array to avoid repeated property access
+        const values = new Array(data.length);
+        for (let i = 0; i < data.length; i++) {
+            values[i] = data[i].value;
+        }
         
         for (let i = 0; i < data.length; i++) {
             let score = 0;
             
             // 1. Rate of change importance (derivative)
             if (i > 0 && i < data.length - 1) {
-                const prevValue = data[i - 1].value;
-                const currValue = data[i].value;
-                const nextValue = data[i + 1].value;
+                const prevValue = values[i - 1];
+                const currValue = values[i];
+                const nextValue = values[i + 1];
                 
                 // First derivative (rate of change)
-                const derivative = Math.abs(nextValue - prevValue) / 2;
+                const derivative = Math.abs(nextValue - prevValue) * 0.5;
                 
                 // Second derivative (acceleration/curvature)
                 const secondDerivative = Math.abs((nextValue - currValue) - (currValue - prevValue));
                 
-                score += derivative * 1.0 + secondDerivative * 2.0; // Weight curvature more
+                score += derivative + secondDerivative * 2.0; // Weight curvature more
             }
             
-            // 2. Local variance importance
+            // 2. Local variance importance (optimized calculation)
             const start = Math.max(0, i - windowSize);
             const end = Math.min(data.length, i + windowSize + 1);
-            const window = data.slice(start, end);
-            const values = window.map(p => p.value);
-            const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
-            const variance = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / values.length;
+            let sum = 0;
+            let count = end - start;
             
-            score += Math.sqrt(variance) * 0.5; // Square root to avoid extreme values
+            for (let j = start; j < end; j++) {
+                sum += values[j];
+            }
+            const mean = sum / count;
+            
+            let variance = 0;
+            for (let j = start; j < end; j++) {
+                const diff = values[j] - mean;
+                variance += diff * diff;
+            }
+            variance /= count;
+            
+            score += Math.sqrt(variance) * 0.5;
             
             // 3. Distance from neighbors (avoid clustering)
             if (i > 0) {
-                score += Math.abs(data[i].value - data[i - 1].value) * 0.3;
+                score += Math.abs(values[i] - values[i - 1]) * 0.3;
             }
             
             scores[i] = score;

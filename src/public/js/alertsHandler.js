@@ -155,16 +155,13 @@ PulseApp.alerts = (() => {
                 
                 // Handle reconnection - reload alert data when reconnected
                 window.socket.on('connect', () => {
-                    console.log('[Alerts] Socket reconnected, reloading alert data');
                     loadInitialData();
                 });
                 
                 window.socket.on('disconnect', () => {
-                    console.log('[Alerts] Socket disconnected');
                 });
                 
                 socketListenersSetup = true;
-                console.log('[Alerts] Socket event listeners configured');
                 return true;
             }
             return false;
@@ -813,7 +810,6 @@ PulseApp.alerts = (() => {
     
     // Additional socket event handlers
     function handleEscalatedAlert(alert) {
-        console.log('[Alerts] Alert escalated:', alert);
         
         // Update existing alert or add if not found
         const existingIndex = activeAlerts.findIndex(a => a.id === alert.id);
@@ -833,7 +829,6 @@ PulseApp.alerts = (() => {
     }
     
     function handleAcknowledgedAlert(alert) {
-        console.log('[Alerts] Alert acknowledged:', alert);
         
         // Update existing alert
         const existingIndex = activeAlerts.findIndex(a => a.id === alert.id);

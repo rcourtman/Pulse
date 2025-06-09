@@ -164,6 +164,7 @@ configApi.setupRoutes(app);
 const { setupThresholdRoutes } = require('./thresholdRoutes');
 setupThresholdRoutes(app);
 
+
 // Set up update API routes
 const UpdateManager = require('./updateManager');
 const updateManager = new UpdateManager();
@@ -324,11 +325,44 @@ app.get('/api/alerts', (req, res) => {
                          req.query.acknowledged === 'false' ? false : undefined
         };
         
-        const alertInfo = {
-            active: stateManager.alertManager.getActiveAlerts(filters),
-            stats: stateManager.alertManager.getEnhancedAlertStats(),
-            rules: stateManager.alertManager.getRules()
-        };
+        // Get alert data with safe serialization
+        let alertInfo;
+        try {
+            const activeAlerts = stateManager.alertManager.getActiveAlerts(filters);
+            const stats = stateManager.alertManager.getEnhancedAlertStats();
+            const rules = stateManager.alertManager.getRules();
+            
+            alertInfo = {
+                active: activeAlerts,
+                stats: stats,
+                rules: rules
+            };
+            
+            // Test serialization of each part to identify the issue
+            JSON.stringify(activeAlerts);
+            JSON.stringify(stats);
+            JSON.stringify(rules);
+            
+        } catch (serializationError) {
+            console.error('[API] Serialization error in /api/alerts:', serializationError.message);
+            
+            // Return empty data if serialization fails
+            alertInfo = {
+                active: [],
+                stats: {
+                    active: 0,
+                    acknowledged: 0,
+                    escalated: 0,
+                    last24Hours: 0,
+                    lastHour: 0,
+                    totalRules: 0,
+                    suppressedRules: 0,
+                    metrics: { totalFired: 0, totalResolved: 0, totalAcknowledged: 0, averageResolutionTime: 0, falsePositiveRate: 0 },
+                    groups: []
+                },
+                rules: []
+            };
+        }
         
         res.json(alertInfo);
     } catch (error) {
@@ -407,16 +441,6 @@ app.get('/api/alerts/groups', (req, res) => {
     }
 });
 
-// Notification channels endpoint
-app.get('/api/alerts/channels', (req, res) => {
-    try {
-        const stats = stateManager.alertManager.getEnhancedAlertStats();
-        res.json({ channels: stats.channels });
-    } catch (error) {
-        console.error("Error in /api/alerts/channels:", error);
-        res.status(500).json({ error: "Failed to fetch notification channels" });
-    }
-});
 
 // Enhanced alert metrics endpoint
 app.get('/api/alerts/metrics', (req, res) => {
@@ -520,10 +544,8 @@ app.get('/api/alerts/compound-rules', (req, res) => {
 // Debug endpoint to manually reload alert rules
 app.post('/api/alerts/rules/reload', async (req, res) => {
     try {
-        console.log('[DEBUG] Manually reloading alert rules...');
         await stateManager.alertManager.loadAlertRules();
         const allRules = stateManager.alertManager.getRules();
-        console.log(`[DEBUG] Total rules after reload: ${allRules.length}`);
         res.json({ success: true, message: "Alert rules reloaded", rulesCount: allRules.length });
     } catch (error) {
         console.error("Error reloading alert rules:", error);
@@ -534,9 +556,6 @@ app.post('/api/alerts/rules/reload', async (req, res) => {
 // Endpoint to trigger immediate alert evaluation
 app.post('/api/alerts/evaluate', async (req, res) => {
     try {
-        if (process.env.ALERT_DEBUG === 'true') {
-            console.log('[AlertDebug] Manual alert evaluation triggered via API');
-        }
         
         stateManager.alertManager.evaluateCurrentState();
         res.json({ success: true, message: "Alert evaluation triggered" });
@@ -1235,14 +1254,26 @@ const io = new Server(server, {
 });
 
 function sendCurrentStateToSocket(socket) {
-  const fullCurrentState = stateManager.getState(); // This includes isConfigPlaceholder and alerts
-  const currentPlaceholderStatus = fullCurrentState.isConfigPlaceholder; // Extract for clarity if needed
+  try {
+    const fullCurrentState = stateManager.getState(); // This includes isConfigPlaceholder and alerts
+    const currentPlaceholderStatus = fullCurrentState.isConfigPlaceholder; // Extract for clarity if needed
 
-  if (stateManager.hasData()) {
-socket.emit('rawData', fullCurrentState);
-  } else {
-    console.log('No data available yet, sending initial/loading state.');
-    socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
+    if (stateManager.hasData()) {
+      // Test serialization first to catch circular reference errors
+      JSON.stringify(fullCurrentState);
+      socket.emit('rawData', fullCurrentState);
+    } else {
+      console.log('No data available yet, sending initial/loading state.');
+      socket.emit('initialState', { loading: true, isConfigPlaceholder: currentPlaceholderStatus });
+    }
+  } catch (error) {
+    console.error('[WebSocket] Error serializing state data:', error.message);
+    // Send minimal safe state if serialization fails
+    socket.emit('initialState', { 
+      loading: false, 
+      error: 'State serialization error',
+      isConfigPlaceholder: stateManager.getState().isConfigPlaceholder || false 
+    });
   }
 }
 
@@ -1271,25 +1302,33 @@ io.on('connection', (socket) => {
 // Set up alert event forwarding to connected clients
 stateManager.alertManager.on('alert', (alert) => {
     if (io.engine.clientsCount > 0) {
-        io.emit('alert', alert);
+        // Use safe serialization to prevent circular reference errors
+        const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
+        io.emit('alert', safeAlert);
     }
 });
 
 stateManager.alertManager.on('alertResolved', (alert) => {
     if (io.engine.clientsCount > 0) {
-        io.emit('alertResolved', alert);
+        // Use safe serialization to prevent circular reference errors
+        const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
+        io.emit('alertResolved', safeAlert);
     }
 });
 
 stateManager.alertManager.on('alertEscalated', (alert) => {
     if (io.engine.clientsCount > 0) {
-        io.emit('alertEscalated', alert);
+        // Use safe serialization to prevent circular reference errors
+        const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
+        io.emit('alertEscalated', safeAlert);
     }
 });
 
 stateManager.alertManager.on('alertAcknowledged', (alert) => {
     if (io.engine.clientsCount > 0) {
-        io.emit('alertAcknowledged', alert);
+        // Use safe serialization to prevent circular reference errors
+        const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
+        io.emit('alertAcknowledged', safeAlert);
     }
 });
 
@@ -1346,9 +1385,16 @@ async function runDiscoveryCycle() {
 
     // Emit combined data using updated state manager state (which includes the flag)
     if (io.engine.clientsCount > 0) {
-        const pveBackups = updatedState.pveBackups || {};
-        console.log(`[Discovery Broadcast] Broadcasting state with PVE backups: ${(pveBackups.backupTasks || []).length} tasks, ${(pveBackups.storageBackups || []).length} storage, ${(pveBackups.guestSnapshots || []).length} snapshots`);
-        io.emit('rawData', updatedState);
+        try {
+            const pveBackups = updatedState.pveBackups || {};
+            console.log(`[Discovery Broadcast] Broadcasting state with PVE backups: ${(pveBackups.backupTasks || []).length} tasks, ${(pveBackups.storageBackups || []).length} storage, ${(pveBackups.guestSnapshots || []).length} snapshots`);
+            // Test serialization first to catch circular reference errors
+            JSON.stringify(updatedState);
+            io.emit('rawData', updatedState);
+        } catch (serializationError) {
+            console.error('[Discovery Broadcast] Error serializing state data:', serializationError.message);
+            // Don't emit anything if serialization fails
+        }
     }
   } catch (error) {
       console.error(`[Discovery Cycle] Error during execution: ${error.message}`, error.stack);
@@ -1410,7 +1456,15 @@ async function runMetricCycle() {
         }
 
         // Emit rawData with updated global state (which includes metrics, alerts, and placeholder flag)
-        io.emit('rawData', stateManager.getState());
+        try {
+            const currentState = stateManager.getState();
+            // Test serialization first to catch circular reference errors
+            JSON.stringify(currentState);
+            io.emit('rawData', currentState);
+        } catch (serializationError) {
+            console.error('[Metrics Broadcast] Error serializing state data:', serializationError.message);
+            // Don't emit anything if serialization fails
+        }
     } else {
         const currentMetrics = stateManager.getState().metrics;
         if (currentMetrics.length > 0) {
@@ -1419,7 +1473,15 @@ async function runMetricCycle() {
            // Emit state update with cleared metrics only if clients are connected
            // (Avoid unnecessary emits if no one is listening and nothing changed except clearing metrics)
            if (io.engine.clientsCount > 0) {
-               io.emit('rawData', stateManager.getState());
+               try {
+                   const currentState = stateManager.getState();
+                   // Test serialization first to catch circular reference errors
+                   JSON.stringify(currentState);
+                   io.emit('rawData', currentState);
+               } catch (serializationError) {
+                   console.error('[Metrics Clear Broadcast] Error serializing state data:', serializationError.message);
+                   // Don't emit anything if serialization fails
+               }
            }
         }
     }
@@ -1476,6 +1538,10 @@ function gracefulShutdown(signal) {
         envWatcher.close();
         envWatcher = null;
     }
+    if (devWatcher) {
+        devWatcher.close();
+        devWatcher = null;
+    }
     clearTimeout(reloadDebounceTimer);
     
     // Close WebSocket connections
@@ -1524,6 +1590,7 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 // --- Environment File Watcher ---
 let envWatcher = null;
+let devWatcher = null;
 let reloadDebounceTimer = null;
 let lastReloadTime = 0;
 global.lastReloadTime = 0;  // Make it globally accessible
@@ -1637,7 +1704,6 @@ async function startServer() {
         setupEnvFileWatcher();
         
         // Setup hot reload in development mode
-        console.log(`[Debug] NODE_ENV: ${process.env.NODE_ENV}, chokidar available: ${!!chokidar}`);
         if (process.env.NODE_ENV === 'development' && chokidar) {
           const watchPaths = [
             path.join(__dirname, '../src/public'),    // Frontend files
@@ -1645,10 +1711,7 @@ async function startServer() {
             path.join(__dirname, '../data'),           // Config files
           ];
           
-          console.log(`[Hot Reload] Watching for changes in:`);
-          watchPaths.forEach(watchPath => console.log(`  - ${watchPath}`));
-          
-          const watcher = chokidar.watch(watchPaths, { 
+          devWatcher = chokidar.watch(watchPaths, { 
             ignored: [
               /(^|[\\\/])\../, // ignore dotfiles
               /node_modules/,  // ignore node_modules
@@ -1665,24 +1728,19 @@ async function startServer() {
             ignoreInitial: true // Don't trigger on initial scan
           });
           
-          watcher.on('change', (filePath) => {
-            console.log(`[Hot Reload] File changed: ${path.relative(process.cwd(), filePath)}`);
+          devWatcher.on('change', () => {
             io.emit('hotReload'); // Notify clients to reload
           });
           
-          watcher.on('add', (filePath) => {
-            console.log(`[Hot Reload] File added: ${path.relative(process.cwd(), filePath)}`);
+          devWatcher.on('add', () => {
             io.emit('hotReload'); // Notify clients to reload
           });
           
-          watcher.on('unlink', (filePath) => {
-            console.log(`[Hot Reload] File removed: ${path.relative(process.cwd(), filePath)}`);
+          devWatcher.on('unlink', () => {
             io.emit('hotReload'); // Notify clients to reload
           });
           
-          watcher.on('error', error => console.error(`[Hot Reload] Watcher error: ${error}`));
-          
-          console.log(`[Hot Reload] File watcher active - changes will trigger browser reload`);
+          devWatcher.on('error', error => console.error(`[Hot Reload] Watcher error: ${error}`));
         }
     });
 }

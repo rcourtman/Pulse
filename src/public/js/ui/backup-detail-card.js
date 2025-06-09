@@ -596,10 +596,6 @@ PulseApp.ui.backupDetailCard = (() => {
     function formatAge(ageInDays) {
         // Debug for unusual age calculations  
         if (ageInDays > 0.5 || Math.floor(ageInDays * 24) > 10) {
-            console.log(`[Debug] formatAge called with unusual value:`, {
-                ageInDays: ageInDays,
-                result: ageInDays < 1 ? `${Math.floor(ageInDays * 24)}h` : `${Math.floor(ageInDays)}d`
-            });
         }
         
         if (ageInDays === Infinity) return 'Never';

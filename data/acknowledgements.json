@@ -709,5 +709,469 @@
     "acknowledgedAt": 1749418700564,
     "acknowledgeNote": "Acknowledged via web interface",
     "note": "Acknowledged via web interface"
+  },
+  "compound_1749419953073_94t4wprz3_primary_delly_101": {
+    "id": "alert_1749438731821_17dg6yn8c",
+    "rule": {
+      "id": "compound_1749419953073_94t4wprz3",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "notificationChannels": [
+        "default"
+      ],
+      "type": "compound_threshold",
+      "name": "Alert for CPU: 5%",
+      "targetType": "all",
+      "specificTarget": "",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 7
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false,
+      "createdAt": 1749419773406
+    },
+    "guest": {
+      "disk": 10592186368,
+      "vmid": 101,
+      "cpus": 2,
+      "maxdisk": 14687412224,
+      "name": "homeassistant",
+      "pid": 22194,
+      "diskread": 16140693504,
+      "swap": 0,
+      "netout": 2378139199,
+      "tags": "192.168.0.120",
+      "cpu": 0.00159911791820155,
+      "mem": 723369984,
+      "diskwrite": 50880475136,
+      "maxswap": 536870912,
+      "status": "running",
+      "netin": 1145313252,
+      "uptime": 200175,
+      "type": "lxc",
+      "maxmem": 2147483648,
+      "node": "delly",
+      "endpointId": "primary",
+      "id": "primary-delly-101",
+      "nodeDisplayName": "homelab - delly"
+    },
+    "startTime": 1749438731821,
+    "lastUpdate": 1749438773676,
+    "currentValue": {
+      "cpu": 10.4
+    },
+    "effectiveThreshold": [
+      {
+        "metric": "cpu",
+        "condition": "greater_than",
+        "threshold": 7
+      }
+    ],
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "triggeredAt": 1749438738374,
+    "resolvedAt": 1749438775841,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749457619212,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "compound_1749419953073_94t4wprz3_primary_desktop_102": {
+    "id": "alert_1749438036579_7wluy0v7z",
+    "rule": {
+      "id": "compound_1749419953073_94t4wprz3",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "notificationChannels": [
+        "default"
+      ],
+      "type": "compound_threshold",
+      "name": "Alert for CPU: 5%",
+      "targetType": "all",
+      "specificTarget": "",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 7
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false,
+      "createdAt": 1749419773406
+    },
+    "guest": {
+      "name": "windows11",
+      "maxmem": 8589934592,
+      "diskread": 0,
+      "diskwrite": 0,
+      "vmid": 102,
+      "disk": 0,
+      "mem": 96866681,
+      "serial": 1,
+      "cpus": 4,
+      "status": "running",
+      "netin": 82,
+      "uptime": 16,
+      "netout": 0,
+      "cpu": 0,
+      "pid": 2309921,
+      "lock": "backup",
+      "maxdisk": 68719476736,
+      "node": "desktop",
+      "endpointId": "primary",
+      "type": "qemu",
+      "id": "primary-desktop-102",
+      "nodeDisplayName": "homelab - desktop"
+    },
+    "startTime": 1749438036579,
+    "lastUpdate": 1749438042453,
+    "currentValue": {
+      "cpu": 42.1
+    },
+    "effectiveThreshold": [
+      {
+        "metric": "cpu",
+        "condition": "greater_than",
+        "threshold": 7
+      }
+    ],
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "triggeredAt": 1749438042453,
+    "resolvedAt": 1749438045103,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749457619220,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "compound_1749419953073_94t4wprz3_primary_minipc_107": {
+    "id": "alert_1749431664363_0fz4072sg",
+    "rule": {
+      "id": "compound_1749419953073_94t4wprz3",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "notificationChannels": [
+        "default"
+      ],
+      "type": "compound_threshold",
+      "name": "Alert for CPU: 5%",
+      "targetType": "all",
+      "specificTarget": "",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 7
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false,
+      "createdAt": 1749419773406
+    },
+    "guest": {
+      "disk": 21067505664,
+      "vmid": 107,
+      "diskread": 1252864000,
+      "mem": 811044864,
+      "name": "jellyfin",
+      "netin": 114723774,
+      "swap": 0,
+      "cpus": 4,
+      "netout": 14269142278,
+      "cpu": 0.0000237785777776508,
+      "type": "lxc",
+      "tags": "192.168.0.50;community-script;media",
+      "maxmem": 4294967296,
+      "pid": 17528,
+      "diskwrite": 15591014400,
+      "maxswap": 536870912,
+      "status": "running",
+      "maxdisk": 45324972032,
+      "uptime": 129775,
+      "node": "minipc",
+      "endpointId": "primary",
+      "id": "primary-minipc-107",
+      "nodeDisplayName": "homelab - minipc"
+    },
+    "startTime": 1749431664363,
+    "lastUpdate": 1749431670958,
+    "currentValue": {
+      "cpu": 26.3
+    },
+    "effectiveThreshold": [
+      {
+        "metric": "cpu",
+        "condition": "greater_than",
+        "threshold": 7
+      }
+    ],
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "triggeredAt": 1749431670958,
+    "resolvedAt": 1749431673189,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749457619238,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "compound_1749419953073_94t4wprz3_primary_desktop_100": {
+    "id": "alert_1749423601356_koy0xrf56",
+    "rule": {
+      "id": "compound_1749419953073_94t4wprz3",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "notificationChannels": [
+        "default"
+      ],
+      "type": "compound_threshold",
+      "name": "Alert for CPU: 5%",
+      "targetType": "all",
+      "specificTarget": "",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 7
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false,
+      "createdAt": 1749419773406
+    },
+    "guest": {
+      "netin": 17148582847,
+      "uptime": 175579,
+      "netout": 2735821763,
+      "cpu": 0.0085544909862106,
+      "pid": 1913,
+      "tags": "192.168.0.16;backup;community-script",
+      "maxdisk": 10464022528,
+      "swap": 8192,
+      "cpus": 2,
+      "status": "running",
+      "vmid": 100,
+      "disk": 2287230976,
+      "mem": 102424576,
+      "name": "pbs",
+      "maxmem": 2147483648,
+      "diskread": 26439334912,
+      "maxswap": 536870912,
+      "type": "lxc",
+      "diskwrite": 7349248000,
+      "node": "desktop",
+      "endpointId": "primary",
+      "id": "primary-desktop-100",
+      "nodeDisplayName": "homelab - desktop"
+    },
+    "startTime": 1749423601356,
+    "lastUpdate": 1749423646279,
+    "currentValue": {
+      "cpu": 55.9
+    },
+    "effectiveThreshold": [
+      {
+        "metric": "cpu",
+        "condition": "greater_than",
+        "threshold": 7
+      }
+    ],
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "triggeredAt": 1749423607930,
+    "resolvedAt": 1749423648449,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749457619247,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "compound_1749419953073_94t4wprz3_primary_desktop_111": {
+    "id": "alert_1749423585774_ix2023q1r",
+    "rule": {
+      "id": "compound_1749419953073_94t4wprz3",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "notificationChannels": [
+        "default"
+      ],
+      "type": "compound_threshold",
+      "name": "Alert for CPU: 5%",
+      "targetType": "all",
+      "specificTarget": "",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 7
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false,
+      "createdAt": 1749419773406
+    },
+    "guest": {
+      "disk": 2265378816,
+      "mem": 943087616,
+      "vmid": 111,
+      "diskread": 985522176,
+      "name": "debian",
+      "maxmem": 2147483648,
+      "diskwrite": 3266838528,
+      "maxswap": 536870912,
+      "type": "lxc",
+      "uptime": 49333,
+      "netin": 4564836510,
+      "tags": "192.168.0.122;community-script;os",
+      "maxdisk": 4152066048,
+      "cpu": 0.0218147493027058,
+      "netout": 24555852749,
+      "pid": 1424302,
+      "swap": 144523264,
+      "cpus": 2,
+      "status": "running",
+      "node": "desktop",
+      "endpointId": "primary",
+      "id": "primary-desktop-111",
+      "nodeDisplayName": "homelab - desktop"
+    },
+    "startTime": 1749423585774,
+    "lastUpdate": 1749423592427,
+    "currentValue": {
+      "cpu": 10.8
+    },
+    "effectiveThreshold": [
+      {
+        "metric": "cpu",
+        "condition": "greater_than",
+        "threshold": 7
+      }
+    ],
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "triggeredAt": 1749423592427,
+    "resolvedAt": 1749423594637,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749457619257,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "compound_1749471240848_s7tobb06w_primary_desktop_100": {
+    "id": "alert_1749471662330_i3g6glcrp",
+    "rule": {
+      "id": "compound_1749471240848_s7tobb06w",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "type": "compound_threshold",
+      "name": "Custom Alert",
+      "targetType": "all",
+      "specificTarget": "",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 4
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false,
+      "createdAt": 1749471063174
+    },
+    "guest": {
+      "status": "running",
+      "cpus": 2,
+      "swap": 16384,
+      "maxdisk": 10464022528,
+      "tags": "192.168.0.16;backup;community-script",
+      "pid": 1913,
+      "netout": 3372199282,
+      "cpu": 0.00387859060346829,
+      "uptime": 223605,
+      "netin": 20916268096,
+      "diskwrite": 9291116544,
+      "type": "lxc",
+      "maxswap": 536870912,
+      "diskread": 63496791040,
+      "maxmem": 2147483648,
+      "name": "pbs",
+      "mem": 104505344,
+      "disk": 2326437888,
+      "vmid": 100,
+      "node": "desktop",
+      "endpointId": "primary",
+      "id": "primary-desktop-100",
+      "nodeDisplayName": "homelab - desktop"
+    },
+    "startTime": 1749471662330,
+    "lastUpdate": 1749471668917,
+    "currentValue": {
+      "cpu": 5.8
+    },
+    "effectiveThreshold": [
+      {
+        "metric": "cpu",
+        "condition": "greater_than",
+        "threshold": 4
+      }
+    ],
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "triggeredAt": 1749471668917,
+    "resolvedAt": 1749471671163,
+    "acknowledgedBy": "test-user",
+    "acknowledgedAt": 1749471692553,
+    "acknowledgeNote": "Testing email fix",
+    "note": "Testing email fix"
   }
 }

@@ -2,7 +2,7 @@
 PulseApp.virtualScroll = (() => {
     const ITEM_HEIGHT = 40; // Height of each row in pixels
     const BUFFER_SIZE = 5; // Number of items to render outside viewport
-    const SCROLL_DEBOUNCE = 10; // Debounce scroll events
+    const SCROLL_DEBOUNCE = 16; // Debounce scroll events (~60fps)
     
     class VirtualScroller {
         constructor(container, items, rowRenderer) {
@@ -85,28 +85,58 @@ PulseApp.virtualScroll = (() => {
         }
         
         render() {
-            const fragment = document.createDocumentFragment();
             const visibleItems = this.items.slice(this.visibleStart, this.visibleEnd);
+            const existingRows = Array.from(this.content.children);
+            const fragment = document.createDocumentFragment();
+            let rowsUsed = 0;
             
-            // Create rows for visible items
+            // Create or reuse rows for visible items
             visibleItems.forEach((item, index) => {
                 const actualIndex = this.visibleStart + index;
-                const row = this.rowRenderer(item, actualIndex);
+                let row;
                 
-                if (row) {
-                    // Position the row
+                // Reuse existing row if available
+                if (rowsUsed < existingRows.length) {
+                    row = existingRows[rowsUsed];
+                    // Clear existing content for reuse
+                    row.innerHTML = '';
+                } else {
+                    // Create new row
+                    row = document.createElement('div');
                     row.style.position = 'absolute';
-                    row.style.top = `${actualIndex * this.itemHeight}px`;
                     row.style.left = '0';
                     row.style.right = '0';
                     row.style.height = `${this.itemHeight}px`;
-                    fragment.appendChild(row);
+                }
+                
+                // Let the renderer populate the row
+                const renderedContent = this.rowRenderer(item, actualIndex);
+                if (renderedContent) {
+                    if (typeof renderedContent === 'string') {
+                        row.innerHTML = renderedContent;
+                    } else {
+                        row.appendChild(renderedContent);
+                    }
+                    
+                    // Position the row
+                    row.style.top = `${actualIndex * this.itemHeight}px`;
+                    
+                    if (rowsUsed >= existingRows.length) {
+                        fragment.appendChild(row);
+                    }
+                    rowsUsed++;
                 }
             });
             
-            // Clear content and add new rows
-            this.content.innerHTML = '';
-            this.content.appendChild(fragment);
+            // Remove excess rows
+            for (let i = existingRows.length - 1; i >= rowsUsed; i--) {
+                existingRows[i].remove();
+            }
+            
+            // Add new rows if any
+            if (fragment.hasChildNodes()) {
+                this.content.appendChild(fragment);
+            }
         }
         
         updateItems(newItems) {
