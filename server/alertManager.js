@@ -655,22 +655,42 @@ class AlertManager extends EventEmitter {
     }
 
     sendNotifications(alert, forceUrgent = false) {
-        // Check both global settings and individual alert rule preferences
-        const globalEmailEnabled = process.env.GLOBAL_EMAIL_ENABLED === 'true' && this.emailTransporter;
-        const globalWebhookEnabled = process.env.GLOBAL_WEBHOOK_ENABLED === 'true' && process.env.WEBHOOK_URL;
+        // Check global settings first - these act as master switches
+        const globalEmailEnabled = process.env.GLOBAL_EMAIL_ENABLED === 'true';
+        const globalWebhookEnabled = process.env.GLOBAL_WEBHOOK_ENABLED === 'true';
         
-        // For custom alerts, also check the rule's specific notification preferences
-        const ruleEmailEnabled = alert.rule && alert.rule.sendEmail === true;
-        const ruleWebhookEnabled = alert.rule && alert.rule.sendWebhook === true;
+        console.log(`[AlertManager] Email notification check - GLOBAL_EMAIL_ENABLED: ${process.env.GLOBAL_EMAIL_ENABLED}, globalEmailEnabled: ${globalEmailEnabled}`);
         
-        const sendEmail = globalEmailEnabled || (ruleEmailEnabled && this.emailTransporter);
-        const sendWebhook = globalWebhookEnabled || (ruleWebhookEnabled && process.env.WEBHOOK_URL);
+        let sendEmail, sendWebhook;
+        
+        // Global email acts as master switch - if disabled, never send emails
+        if (!globalEmailEnabled) {
+            sendEmail = false;
+            console.log(`[AlertManager] Email disabled globally - sendEmail set to false`);
+        } else {
+            // Global email is enabled - check individual rule preferences and transporter
+            const ruleEmailEnabled = alert.rule && alert.rule.sendEmail !== false; // Default to true for system rules
+            sendEmail = ruleEmailEnabled && this.emailTransporter;
+            console.log(`[AlertManager] Email enabled globally - ruleEmailEnabled: ${ruleEmailEnabled}, hasTransporter: ${!!this.emailTransporter}, sendEmail: ${sendEmail}`);
+        }
+        
+        // Global webhook acts as master switch - if disabled, never send webhooks  
+        if (!globalWebhookEnabled) {
+            sendWebhook = false;
+        } else {
+            // Global webhook is enabled - check individual rule preferences
+            const ruleWebhookEnabled = alert.rule && alert.rule.sendWebhook === true;
+            sendWebhook = ruleWebhookEnabled && process.env.WEBHOOK_URL;
+        }
         
         if (sendEmail) {
+            console.log(`[AlertManager] Sending email notification for alert ${alert.id}`);
             this.sendDirectEmailNotification(alert).catch(error => {
                 console.error(`[EMAIL ERROR] Failed to send email:`, error);
                 this.emit('notificationError', { type: 'email', alert, error });
             });
+        } else {
+            console.log(`[AlertManager] NOT sending email notification for alert ${alert.id} - sendEmail: ${sendEmail}`);
         }
         
         if (sendWebhook) {
@@ -876,25 +896,69 @@ class AlertManager extends EventEmitter {
         }
     }
 
+    // Helper function to sanitize currentValue for safe serialization
+    sanitizeCurrentValue(currentValue) {
+        if (currentValue === null || currentValue === undefined) {
+            return null;
+        }
+        
+        try {
+            // If it's a simple value, return as-is
+            if (typeof currentValue !== 'object') {
+                return currentValue;
+            }
+            
+            // For objects, create a clean copy with only safe values
+            const sanitized = {};
+            for (const [key, value] of Object.entries(currentValue)) {
+                if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+                    sanitized[key] = value;
+                }
+            }
+            return sanitized;
+        } catch (error) {
+            console.error('[AlertManager] Error sanitizing currentValue:', error);
+            return null;
+        }
+    }
+
     // Helper function to create safe serializable alert data for WebSocket events
     createSafeAlertForEmit(alert) {
         try {
-            return this.formatAlertForAPI(alert);
-        } catch (error) {
-            console.error('[AlertManager] Error formatting alert for emit:', error);
-            // Return minimal safe alert data if formatting fails
-            return {
-                id: alert.id || 'unknown',
-                ruleId: alert.rule?.id || 'unknown',
-                ruleName: alert.rule?.name || 'Unknown Rule',
-                severity: alert.rule?.severity || 'warning',
+            // Create a safe alert with necessary data for frontend
+            const safeAlert = {
+                id: String(alert.id || 'unknown'),
+                ruleId: String(alert.rule?.id || 'unknown'),
+                ruleName: String(alert.rule?.name || 'Unknown Rule'),
+                severity: String(alert.rule?.severity || 'warning'),
+                acknowledged: Boolean(alert.acknowledged),
+                triggeredAt: Number(alert.triggeredAt || Date.now()),
+                message: String(alert.rule?.name || 'Alert triggered'),
                 guest: {
-                    name: alert.guest?.name || 'Unknown',
-                    vmid: alert.guest?.vmid || 'unknown',
-                    node: alert.guest?.node || 'unknown'
-                },
-                message: 'Alert data formatting error',
-                triggeredAt: Date.now()
+                    name: String(alert.guest?.name || 'Unknown'),
+                    vmid: String(alert.guest?.vmid || 'unknown'),
+                    node: String(alert.guest?.node || 'unknown'),
+                    type: String(alert.guest?.type || 'unknown')
+                }
+            };
+            
+            // Test serialization
+            JSON.stringify(safeAlert);
+            return safeAlert;
+        } catch (error) {
+            console.error('[AlertManager] Even safe emit failed:', error);
+            // Return absolute minimal data with guest fallback
+            return {
+                id: 'unknown',
+                ruleId: 'unknown',
+                message: 'Alert update',
+                triggeredAt: Date.now(),
+                guest: {
+                    name: 'Unknown',
+                    vmid: 'unknown',
+                    node: 'unknown',
+                    type: 'unknown'
+                }
             };
         }
     }

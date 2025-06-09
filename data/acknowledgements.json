@@ -1100,9 +1100,10 @@
     "note": "Bulk acknowledged via dropdown"
   },
   "compound_1749471240848_s7tobb06w_primary_desktop_100": {
-    "id": "alert_1749471662330_i3g6glcrp",
+    "id": "alert_1749502225872_hi8xpxptm",
     "rule": {
       "id": "compound_1749471240848_s7tobb06w",
+      "name": "Custom Alert",
       "condition": "greater_than",
       "duration": 5000,
       "severity": "warning",
@@ -1113,9 +1114,6 @@
       "autoResolve": false,
       "suppressionTime": 300000,
       "type": "compound_threshold",
-      "name": "Custom Alert",
-      "targetType": "all",
-      "specificTarget": "",
       "thresholds": [
         {
           "metric": "cpu",
@@ -1124,38 +1122,22 @@
         }
       ],
       "sendEmail": true,
-      "sendWebhook": false,
-      "createdAt": 1749471063174
+      "sendWebhook": false
     },
     "guest": {
-      "status": "running",
-      "cpus": 2,
-      "swap": 16384,
-      "maxdisk": 10464022528,
-      "tags": "192.168.0.16;backup;community-script",
-      "pid": 1913,
-      "netout": 3372199282,
-      "cpu": 0.00387859060346829,
-      "uptime": 223605,
-      "netin": 20916268096,
-      "diskwrite": 9291116544,
-      "type": "lxc",
-      "maxswap": 536870912,
-      "diskread": 63496791040,
-      "maxmem": 2147483648,
-      "name": "pbs",
-      "mem": 104505344,
-      "disk": 2326437888,
-      "vmid": 100,
-      "node": "desktop",
       "endpointId": "primary",
-      "id": "primary-desktop-100",
-      "nodeDisplayName": "homelab - desktop"
+      "node": "desktop",
+      "vmid": 100,
+      "name": "pbs",
+      "type": "lxc",
+      "status": "running",
+      "maxmem": 2147483648,
+      "maxdisk": 10464022528
     },
-    "startTime": 1749471662330,
-    "lastUpdate": 1749471668917,
+    "startTime": 1749502225871,
+    "lastUpdate": 1749502234638,
     "currentValue": {
-      "cpu": 5.8
+      "cpu": 9.7
     },
     "effectiveThreshold": [
       {
@@ -1167,11 +1149,174 @@
     "state": "resolved",
     "escalated": false,
     "acknowledged": true,
-    "triggeredAt": 1749471668917,
-    "resolvedAt": 1749471671163,
-    "acknowledgedBy": "test-user",
-    "acknowledgedAt": 1749471692553,
-    "acknowledgeNote": "Testing email fix",
-    "note": "Testing email fix"
+    "triggeredAt": 1749502232450,
+    "resolvedAt": 1749502236824,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749503811808,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "compound_1749471240848_s7tobb06w_primary_delly_106": {
+    "id": "alert_1749483060691_ekyg6236x",
+    "rule": {
+      "id": "compound_1749471240848_s7tobb06w",
+      "name": "Custom Alert",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "type": "compound_threshold",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 4
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "delly",
+      "vmid": 106,
+      "name": "pulse",
+      "type": "lxc",
+      "status": "running",
+      "maxmem": 1073741824,
+      "maxdisk": 4152066048
+    },
+    "startTime": 1749483060691,
+    "lastUpdate": 1749483067231,
+    "currentValue": {
+      "cpu": 4.5
+    },
+    "effectiveThreshold": [
+      {
+        "metric": "cpu",
+        "condition": "greater_than",
+        "threshold": 4
+      }
+    ],
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "triggeredAt": 1749483067231,
+    "resolvedAt": 1749483069418,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749485485769,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "compound_1749471240848_s7tobb06w_primary_delly_108": {
+    "id": "alert_1749502224406_0h5guvkiz",
+    "ruleId": "compound_1749471240848_s7tobb06w",
+    "rule": {
+      "id": "compound_1749471240848_s7tobb06w",
+      "name": "Custom Alert",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "type": "compound_threshold",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 4
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "delly",
+      "vmid": 108,
+      "name": "frigate",
+      "type": "lxc",
+      "status": "running",
+      "maxmem": 4294967296,
+      "maxdisk": 21474836480
+    },
+    "severity": "warning",
+    "message": "Dynamic threshold rule \"Custom Alert\" triggered for frigate: CPU: 4.1% (≥ 4%)",
+    "startTime": 1749502224405,
+    "lastUpdate": 1749502224405,
+    "triggeredAt": 1749502224405,
+    "currentValue": {
+      "cpu": 4.1
+    },
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "resolvedAt": 1749502225871,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749503811812,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "compound_1749471240848_s7tobb06w_primary_desktop_111": {
+    "id": "alert_1749502224406_5r7jkmoga",
+    "ruleId": "compound_1749471240848_s7tobb06w",
+    "rule": {
+      "id": "compound_1749471240848_s7tobb06w",
+      "name": "Custom Alert",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "type": "compound_threshold",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 4
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "desktop",
+      "vmid": 111,
+      "name": "debian",
+      "type": "lxc",
+      "status": "running",
+      "maxmem": 2147483648,
+      "maxdisk": 4152066048
+    },
+    "severity": "warning",
+    "message": "Dynamic threshold rule \"Custom Alert\" triggered for debian: CPU: 10.5% (≥ 4%)",
+    "startTime": 1749502224405,
+    "lastUpdate": 1749502224405,
+    "triggeredAt": 1749502224405,
+    "currentValue": {
+      "cpu": 10.5
+    },
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "resolvedAt": 1749502225871,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749503811814,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
   }
 }

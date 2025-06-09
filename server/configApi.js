@@ -87,10 +87,13 @@ class ConfigApi {
             // Add all additional endpoint configurations to the response
             // This allows the settings modal to properly display them
             Object.keys(config).forEach(key => {
-                // Include all additional PVE and PBS endpoint variables and webhook config
+                // Include all additional PVE and PBS endpoint variables, webhook config, and email config
                 if ((key.startsWith('PROXMOX_') && key.includes('_')) || 
                     (key.startsWith('PBS_') && key.includes('_')) ||
-                    key.startsWith('WEBHOOK_')) {
+                    key.startsWith('WEBHOOK_') ||
+                    key.startsWith('SMTP_') ||
+                    key.startsWith('ALERT_') ||
+                    key === 'GLOBAL_EMAIL_ENABLED') {
                     response[key] = config[key];
                 }
             });

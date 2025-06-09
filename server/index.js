@@ -1302,33 +1302,50 @@ io.on('connection', (socket) => {
 // Set up alert event forwarding to connected clients
 stateManager.alertManager.on('alert', (alert) => {
     if (io.engine.clientsCount > 0) {
-        // Use safe serialization to prevent circular reference errors
-        const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
-        io.emit('alert', safeAlert);
+        try {
+            // Emit the actual alert data using safe serialization
+            const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
+            console.log(`[Socket] Emitting new alert: ${safeAlert.id}`);
+            io.emit('alert', safeAlert);
+        } catch (error) {
+            console.error('[Socket] Failed to emit alert:', error);
+        }
     }
 });
 
 stateManager.alertManager.on('alertResolved', (alert) => {
     if (io.engine.clientsCount > 0) {
-        // Use safe serialization to prevent circular reference errors
-        const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
-        io.emit('alertResolved', safeAlert);
+        try {
+            const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
+            console.log(`[Socket] Emitting alert resolved: ${safeAlert.id}`);
+            io.emit('alertResolved', safeAlert);
+        } catch (error) {
+            console.error('[Socket] Failed to emit alert resolved:', error);
+        }
     }
 });
 
 stateManager.alertManager.on('alertEscalated', (alert) => {
     if (io.engine.clientsCount > 0) {
-        // Use safe serialization to prevent circular reference errors
-        const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
-        io.emit('alertEscalated', safeAlert);
+        try {
+            const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
+            console.log(`[Socket] Emitting alert escalated: ${safeAlert.id}`);
+            io.emit('alertEscalated', safeAlert);
+        } catch (error) {
+            console.error('[Socket] Failed to emit alert escalated:', error);
+        }
     }
 });
 
 stateManager.alertManager.on('alertAcknowledged', (alert) => {
     if (io.engine.clientsCount > 0) {
-        // Use safe serialization to prevent circular reference errors
-        const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
-        io.emit('alertAcknowledged', safeAlert);
+        try {
+            const safeAlert = stateManager.alertManager.createSafeAlertForEmit(alert);
+            console.log(`[Socket] Emitting alert acknowledged: ${safeAlert.id}`);
+            io.emit('alertAcknowledged', safeAlert);
+        } catch (error) {
+            console.error('[Socket] Failed to emit alert acknowledged:', error);
+        }
     }
 });
 
