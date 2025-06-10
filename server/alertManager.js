@@ -130,9 +130,9 @@ class AlertManager extends EventEmitter {
         
         const defaultRules = [
             {
-                id: 'high_cpu',
-                name: 'High CPU Usage',
-                description: 'Triggers when CPU usage exceeds threshold for specified duration',
+                id: 'cpu',
+                name: 'CPU Usage',
+                description: 'Monitors CPU usage across all VMs and containers',
                 metric: 'cpu',
                 condition: 'greater_than',
                 threshold: cpuThreshold,
@@ -146,25 +146,9 @@ class AlertManager extends EventEmitter {
                 suppressionTime: 300000, // 5 minutes
             },
             {
-                id: 'critical_cpu',
-                name: 'Critical CPU Usage',
-                description: 'Critical CPU usage requiring immediate attention',
-                metric: 'cpu',
-                condition: 'greater_than',
-                threshold: this.parseEnvInt('ALERT_CPU_CRITICAL_THRESHOLD', 95, 1, 100),
-                duration: this.parseEnvInt('ALERT_CPU_CRITICAL_DURATION', 60000, 1000),
-                severity: 'critical',
-                enabled: process.env.ALERT_CPU_CRITICAL_ENABLED !== 'false',
-                tags: ['performance', 'cpu', 'critical'],
-                group: 'critical_alerts',
-                escalationTime: 300000, // 5 minutes
-                autoResolve: true,
-                suppressionTime: 0, // No suppression for critical
-            },
-            {
-                id: 'high_memory',
-                name: 'High Memory Usage',
-                description: 'Memory usage exceeds safe operating levels',
+                id: 'memory',
+                name: 'Memory Usage',
+                description: 'Monitors memory usage across all VMs and containers',
                 metric: 'memory',
                 condition: 'greater_than',
                 threshold: memThreshold,
@@ -178,25 +162,9 @@ class AlertManager extends EventEmitter {
                 suppressionTime: 300000,
             },
             {
-                id: 'critical_memory',
-                name: 'Critical Memory Usage',
-                description: 'Memory usage at critical levels - system stability at risk',
-                metric: 'memory',
-                condition: 'greater_than',
-                threshold: this.parseEnvInt('ALERT_MEMORY_CRITICAL_THRESHOLD', 98, 1, 100),
-                duration: this.parseEnvInt('ALERT_MEMORY_CRITICAL_DURATION', 120000, 1000),
-                severity: 'critical',
-                enabled: process.env.ALERT_MEMORY_CRITICAL_ENABLED !== 'false',
-                tags: ['performance', 'memory', 'critical'],
-                group: 'critical_alerts',
-                escalationTime: 300000, // 5 minutes
-                autoResolve: true,
-                suppressionTime: 0,
-            },
-            {
-                id: 'disk_space_warning',
-                name: 'Low Disk Space',
-                description: 'Disk usage approaching capacity limits',
+                id: 'disk',
+                name: 'Disk Usage',
+                description: 'Monitors disk space usage across all VMs and containers',
                 metric: 'disk',
                 condition: 'greater_than',
                 threshold: diskThreshold,
@@ -210,25 +178,9 @@ class AlertManager extends EventEmitter {
                 suppressionTime: 600000, // 10 minutes
             },
             {
-                id: 'disk_space_critical',
-                name: 'Critical Disk Space',
-                description: 'Disk space critically low - immediate action required',
-                metric: 'disk',
-                condition: 'greater_than',
-                threshold: this.parseEnvInt('ALERT_DISK_CRITICAL_THRESHOLD', 95, 1, 100),
-                duration: this.parseEnvInt('ALERT_DISK_CRITICAL_DURATION', 60000, 1000),
-                severity: 'critical',
-                enabled: process.env.ALERT_DISK_CRITICAL_ENABLED !== 'false',
-                tags: ['storage', 'disk', 'critical'],
-                group: 'critical_alerts',
-                escalationTime: 300000, // 5 minutes
-                autoResolve: true,
-                suppressionTime: 0,
-            },
-            {
-                id: 'guest_down',
-                name: 'Guest System Down',
-                description: 'Virtual machine or container has stopped unexpectedly',
+                id: 'down',
+                name: 'System Availability',
+                description: 'Monitors VM/container availability and uptime',
                 metric: 'status',
                 condition: 'equals',
                 threshold: 'stopped',
@@ -240,29 +192,13 @@ class AlertManager extends EventEmitter {
                 escalationTime: 600000, // 10 minutes
                 autoResolve: true,
                 suppressionTime: 120000, // 2 minutes
-            },
-            {
-                id: 'network_anomaly',
-                name: 'Network Traffic Anomaly',
-                description: 'Unusual network traffic patterns detected',
-                metric: 'network_combined',
-                condition: 'anomaly',
-                threshold: 'auto', // Machine learning based
-                duration: 180000, // 3 minutes
-                severity: 'info',
-                enabled: process.env.ALERT_NETWORK_ANOMALY_ENABLED === 'true',
-                tags: ['network', 'anomaly'],
-                group: 'network_alerts',
-                escalationTime: 1800000, // 30 minutes
-                autoResolve: true,
-                suppressionTime: 900000, // 15 minutes
             }
         ];
 
         defaultRules.forEach(rule => {
-            if (rule.enabled) {
-                this.alertRules.set(rule.id, rule);
-            }
+            // Always add rules to the map, regardless of enabled state
+            // This allows them to be displayed and toggled in the UI
+            this.alertRules.set(rule.id, rule);
         });
     }
 
@@ -2440,6 +2376,122 @@ This alert was generated by Pulse monitoring system.
         // Close email transporter
         if (this.emailTransporter) {
             this.emailTransporter.close();
+        }
+    }
+
+    async sendTestEmail() {
+        try {
+            console.log('[AlertManager] Sending test email...');
+            
+            if (!this.emailTransporter) {
+                return { success: false, error: 'Email transporter not configured' };
+            }
+
+            const config = await this.loadEmailConfig();
+            if (!config.to) {
+                return { success: false, error: 'No recipient email address configured' };
+            }
+
+            return await this.sendTestEmailWithConfig({
+                ALERT_FROM_EMAIL: config.from,
+                ALERT_TO_EMAIL: config.to,
+                SMTP_HOST: config.host,
+                SMTP_PORT: config.port,
+                SMTP_USER: config.user,
+                SMTP_SECURE: config.secure
+            });
+            
+        } catch (error) {
+            console.error('[AlertManager] Error sending test email:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async sendTestEmailWithConfig(config) {
+        try {
+            console.log('[AlertManager] Sending test email with provided config...');
+            
+            if (!this.emailTransporter) {
+                return { success: false, error: 'Email transporter not configured' };
+            }
+
+            if (!config.ALERT_TO_EMAIL) {
+                return { success: false, error: 'No recipient email address configured' };
+            }
+
+            const testEmailOptions = {
+                from: config.ALERT_FROM_EMAIL || 'noreply@pulse.local',
+                to: config.ALERT_TO_EMAIL,
+                subject: 'Pulse Alert System - Test Email',
+                text: `This is a test email from your Pulse monitoring system.
+
+Sent at: ${new Date().toISOString()}
+From: ${require('os').hostname()}
+
+If you received this email, your email configuration is working correctly!
+
+Configuration used:
+- SMTP Host: ${config.SMTP_HOST}
+- SMTP Port: ${config.SMTP_PORT}
+- From: ${config.ALERT_FROM_EMAIL}
+- To: ${config.ALERT_TO_EMAIL}
+
+Best regards,
+Pulse Monitoring System`,
+                html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <h2 style="color: #3b82f6;">Pulse Alert System - Test Email</h2>
+    <p>This is a test email from your Pulse monitoring system.</p>
+    
+    <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <strong>Test Details:</strong><br>
+        <strong>Sent at:</strong> ${new Date().toISOString()}<br>
+        <strong>From:</strong> ${require('os').hostname()}<br><br>
+        <strong>Configuration used:</strong><br>
+        <strong>SMTP Host:</strong> ${config.SMTP_HOST}<br>
+        <strong>SMTP Port:</strong> ${config.SMTP_PORT}<br>
+        <strong>From:</strong> ${config.ALERT_FROM_EMAIL}<br>
+        <strong>To:</strong> ${config.ALERT_TO_EMAIL}
+    </div>
+    
+    <p style="color: #16a34a;"><strong>✅ Success!</strong> If you received this email, your email configuration is working correctly!</p>
+    
+    <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
+    <p style="color: #6b7280; font-size: 12px;">
+        Best regards,<br>
+        Pulse Monitoring System
+    </p>
+</div>`
+            };
+
+            await this.emailTransporter.sendMail(testEmailOptions);
+            console.log('[AlertManager] Test email sent successfully');
+            return { success: true };
+            
+        } catch (error) {
+            console.error('[AlertManager] Error sending test email:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async loadEmailConfig() {
+        try {
+            // Load email configuration from environment or config
+            const { loadConfiguration } = require('./configLoader');
+            const config = await loadConfiguration();
+            
+            console.log('[AlertManager] Loading email config, ALERT_TO_EMAIL:', config.ALERT_TO_EMAIL);
+            
+            return {
+                from: config.ALERT_FROM_EMAIL,
+                to: config.ALERT_TO_EMAIL,
+                host: config.SMTP_HOST,
+                port: config.SMTP_PORT,
+                user: config.SMTP_USER,
+                secure: config.SMTP_SECURE === 'true'
+            };
+        } catch (error) {
+            console.error('[AlertManager] Error loading email config:', error);
+            return {};
         }
     }
 }

@@ -1,6 +1,6 @@
 {
   "guest_down_endpoint_2_pi_102": {
-    "id": "alert_1749383901524_ii0r1wvj6",
+    "id": "alert_1749506759853_8lji2gh42",
     "rule": {
       "id": "guest_down",
       "name": "Guest System Down",
@@ -18,110 +18,77 @@
       "group": "availability_alerts",
       "escalationTime": 600000,
       "autoResolve": true,
-      "suppressionTime": 120000,
-      "notificationChannels": [
-        "default",
-        "urgent"
-      ]
+      "suppressionTime": 120000
     },
     "guest": {
-      "maxmem": 536870912,
-      "status": "stopped",
-      "mem": 0,
-      "cpus": 1,
-      "swap": 0,
-      "tags": "proxmox-helper-scripts",
-      "cpu": 0,
-      "diskwrite": 0,
-      "netout": 0,
-      "vmid": 102,
-      "maxswap": 536870912,
-      "type": "lxc",
-      "diskread": 0,
-      "uptime": 0,
-      "netin": 0,
-      "maxdisk": 4401922048,
-      "disk": 0,
-      "name": "pi-docker",
-      "node": "pi",
       "endpointId": "endpoint_2",
-      "id": "endpoint_2-pi-102",
-      "nodeDisplayName": "pimox"
-    },
-    "startTime": 1749383901523,
-    "lastUpdate": 1749383916078,
-    "triggeredAt": 1749383901523,
-    "currentValue": "stopped",
-    "effectiveThreshold": "stopped",
-    "state": "active",
-    "escalated": false,
-    "acknowledged": true,
-    "acknowledgedBy": "web-user",
-    "acknowledgedAt": 1749383916175,
-    "acknowledgeNote": "Acknowledged via web interface",
-    "note": "Acknowledged via web interface"
-  },
-  "guest_down_primary_desktop_400": {
-    "id": "alert_1749383901523_u7e6l7r1v",
-    "rule": {
-      "id": "guest_down",
-      "name": "Guest System Down",
-      "description": "Virtual machine or container has stopped unexpectedly",
-      "metric": "status",
-      "condition": "equals",
-      "threshold": "stopped",
-      "duration": 60000,
-      "severity": "critical",
-      "enabled": true,
-      "tags": [
-        "availability",
-        "guest"
-      ],
-      "group": "availability_alerts",
-      "escalationTime": 600000,
-      "autoResolve": true,
-      "suppressionTime": 120000,
-      "notificationChannels": [
-        "default",
-        "urgent"
-      ]
-    },
-    "guest": {
-      "diskread": 0,
-      "name": "ubuntu-gpu-vm",
-      "maxmem": 2147483648,
-      "diskwrite": 0,
-      "disk": 0,
-      "mem": 0,
-      "vmid": 400,
+      "node": "pi",
+      "vmid": 102,
+      "name": "pi-docker",
+      "type": "lxc",
       "status": "stopped",
-      "cpus": 2,
-      "uptime": 0,
-      "netin": 0,
-      "maxdisk": 34359738368,
-      "cpu": 0,
-      "netout": 0,
-      "node": "desktop",
-      "endpointId": "primary",
-      "type": "qemu",
-      "id": "primary-desktop-400",
-      "nodeDisplayName": "homelab - desktop"
+      "maxmem": 536870912,
+      "maxdisk": 4401922048
     },
-    "startTime": 1749383901523,
-    "lastUpdate": 1749383922611,
-    "triggeredAt": 1749383901523,
+    "startTime": 1749506759851,
+    "lastUpdate": 1749506768059,
+    "triggeredAt": 1749506759851,
     "currentValue": "stopped",
     "effectiveThreshold": "stopped",
     "state": "active",
     "escalated": false,
     "acknowledged": true,
     "acknowledgedBy": "bulk-operation",
-    "acknowledgedAt": 1749383923304,
+    "acknowledgedAt": 1749506768114,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "guest_down_primary_desktop_400": {
+    "id": "alert_1749506759852_1huz9md0u",
+    "rule": {
+      "id": "guest_down",
+      "name": "Guest System Down",
+      "description": "Virtual machine or container has stopped unexpectedly",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 600000,
+      "autoResolve": true,
+      "suppressionTime": 120000
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "desktop",
+      "vmid": 400,
+      "name": "ubuntu-gpu-vm",
+      "type": "qemu",
+      "status": "stopped",
+      "maxmem": 2147483648,
+      "maxdisk": 34359738368
+    },
+    "startTime": 1749506759851,
+    "lastUpdate": 1749506768059,
+    "triggeredAt": 1749506759851,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749506768076,
     "acknowledgeNote": "Bulk acknowledged via dropdown",
     "note": "Bulk acknowledged via dropdown"
   },
   "guest_down_primary_desktop_102": {
-    "id": "alert_1749383901524_5sdux0hpp",
+    "id": "alert_1749569747925_cr09csaa4",
     "rule": {
       "id": "guest_down",
       "name": "Guest System Down",
@@ -139,49 +106,33 @@
       "group": "availability_alerts",
       "escalationTime": 600000,
       "autoResolve": true,
-      "suppressionTime": 120000,
-      "notificationChannels": [
-        "default",
-        "urgent"
-      ]
+      "suppressionTime": 120000
     },
     "guest": {
-      "diskwrite": 0,
-      "name": "windows11",
-      "maxmem": 8589934592,
-      "diskread": 0,
-      "vmid": 102,
-      "disk": 0,
-      "mem": 0,
-      "cpus": 4,
-      "status": "stopped",
-      "serial": 1,
-      "cpu": 0,
-      "netout": 0,
-      "maxdisk": 68719476736,
-      "netin": 0,
-      "uptime": 0,
-      "node": "desktop",
       "endpointId": "primary",
+      "node": "desktop",
+      "vmid": 102,
+      "name": "windows11",
       "type": "qemu",
-      "id": "primary-desktop-102",
-      "nodeDisplayName": "homelab - desktop"
+      "status": "stopped",
+      "maxmem": 8589934592,
+      "maxdisk": 68719476736
     },
-    "startTime": 1749383901523,
-    "lastUpdate": 1749383922611,
-    "triggeredAt": 1749383901523,
+    "startTime": 1749569747925,
+    "lastUpdate": 1749569831486,
     "currentValue": "stopped",
     "effectiveThreshold": "stopped",
     "state": "active",
     "escalated": false,
     "acknowledged": true,
-    "acknowledgedBy": "bulk-operation",
-    "acknowledgedAt": 1749383923312,
-    "acknowledgeNote": "Bulk acknowledged via dropdown",
-    "note": "Bulk acknowledged via dropdown"
+    "triggeredAt": 1749569809584,
+    "acknowledgedBy": "web-user",
+    "acknowledgedAt": 1749569832402,
+    "acknowledgeNote": "Acknowledged via web interface",
+    "note": "Acknowledged via web interface"
   },
   "guest_down_primary_desktop_200": {
-    "id": "alert_1749383901524_wc8c7l96a",
+    "id": "alert_1749569747925_g5yxjcnmv",
     "rule": {
       "id": "guest_down",
       "name": "Guest System Down",
@@ -199,48 +150,33 @@
       "group": "availability_alerts",
       "escalationTime": 600000,
       "autoResolve": true,
-      "suppressionTime": 120000,
-      "notificationChannels": [
-        "default",
-        "urgent"
-      ]
+      "suppressionTime": 120000
     },
     "guest": {
-      "diskread": 0,
-      "maxmem": 8589934592,
-      "name": "UnraidServer",
-      "diskwrite": 0,
-      "mem": 0,
-      "disk": 0,
-      "vmid": 200,
-      "cpus": 6,
-      "status": "stopped",
-      "uptime": 0,
-      "netin": 0,
-      "maxdisk": 0,
-      "netout": 0,
-      "cpu": 0,
-      "node": "desktop",
       "endpointId": "primary",
+      "node": "desktop",
+      "vmid": 200,
+      "name": "UnraidServer",
       "type": "qemu",
-      "id": "primary-desktop-200",
-      "nodeDisplayName": "homelab - desktop"
+      "status": "stopped",
+      "maxmem": 8589934592,
+      "maxdisk": 0
     },
-    "startTime": 1749383901523,
-    "lastUpdate": 1749383922611,
-    "triggeredAt": 1749383901523,
+    "startTime": 1749569747925,
+    "lastUpdate": 1749569829318,
     "currentValue": "stopped",
     "effectiveThreshold": "stopped",
     "state": "active",
     "escalated": false,
     "acknowledged": true,
-    "acknowledgedBy": "bulk-operation",
-    "acknowledgedAt": 1749383923314,
-    "acknowledgeNote": "Bulk acknowledged via dropdown",
-    "note": "Bulk acknowledged via dropdown"
+    "triggeredAt": 1749569809584,
+    "acknowledgedBy": "web-user",
+    "acknowledgedAt": 1749569829548,
+    "acknowledgeNote": "Acknowledged via web interface",
+    "note": "Acknowledged via web interface"
   },
   "guest_down_primary_desktop_109": {
-    "id": "alert_1749383901524_884o95b7f",
+    "id": "alert_1749506759852_h7fxa1ycd",
     "rule": {
       "id": "guest_down",
       "name": "Guest System Down",
@@ -258,51 +194,33 @@
       "group": "availability_alerts",
       "escalationTime": 600000,
       "autoResolve": true,
-      "suppressionTime": 120000,
-      "notificationChannels": [
-        "default",
-        "urgent"
-      ]
+      "suppressionTime": 120000
     },
     "guest": {
-      "vmid": 109,
-      "mem": 0,
-      "disk": 0,
-      "type": "lxc",
-      "maxswap": 536870912,
-      "diskwrite": 0,
-      "maxmem": 4294967296,
-      "name": "pbs2",
-      "diskread": 0,
-      "netout": 0,
-      "cpu": 0,
-      "maxdisk": 10737418240,
-      "tags": "backup;community-script",
-      "netin": 0,
-      "uptime": 0,
-      "status": "stopped",
-      "cpus": 4,
-      "swap": 0,
-      "node": "desktop",
       "endpointId": "primary",
-      "id": "primary-desktop-109",
-      "nodeDisplayName": "homelab - desktop"
+      "node": "desktop",
+      "vmid": 109,
+      "name": "pbs2",
+      "type": "lxc",
+      "status": "stopped",
+      "maxmem": 4294967296,
+      "maxdisk": 10737418240
     },
-    "startTime": 1749383901523,
-    "lastUpdate": 1749383922611,
-    "triggeredAt": 1749383901523,
+    "startTime": 1749506759851,
+    "lastUpdate": 1749506768059,
+    "triggeredAt": 1749506759851,
     "currentValue": "stopped",
     "effectiveThreshold": "stopped",
     "state": "active",
     "escalated": false,
     "acknowledged": true,
     "acknowledgedBy": "bulk-operation",
-    "acknowledgedAt": 1749383923317,
+    "acknowledgedAt": 1749506768101,
     "acknowledgeNote": "Bulk acknowledged via dropdown",
     "note": "Bulk acknowledged via dropdown"
   },
   "guest_down_primary_desktop_112": {
-    "id": "alert_1749383901524_e6h94me1n",
+    "id": "alert_1749506759852_xx9hn6622",
     "rule": {
       "id": "guest_down",
       "name": "Guest System Down",
@@ -320,51 +238,33 @@
       "group": "availability_alerts",
       "escalationTime": 600000,
       "autoResolve": true,
-      "suppressionTime": 120000,
-      "notificationChannels": [
-        "default",
-        "urgent"
-      ]
+      "suppressionTime": 120000
     },
     "guest": {
-      "status": "stopped",
-      "cpus": 1,
-      "swap": 0,
-      "tags": "community-script;monitoring;proxmox",
-      "maxdisk": 4294967296,
-      "cpu": 0,
-      "netout": 0,
-      "uptime": 0,
-      "netin": 0,
-      "diskwrite": 0,
-      "maxswap": 536870912,
-      "type": "lxc",
-      "diskread": 0,
-      "name": "pulse",
-      "maxmem": 1073741824,
-      "disk": 0,
-      "mem": 0,
-      "vmid": 112,
-      "node": "desktop",
       "endpointId": "primary",
-      "id": "primary-desktop-112",
-      "nodeDisplayName": "homelab - desktop"
+      "node": "desktop",
+      "vmid": 112,
+      "name": "pulse",
+      "type": "lxc",
+      "status": "stopped",
+      "maxmem": 1073741824,
+      "maxdisk": 4294967296
     },
-    "startTime": 1749383901523,
-    "lastUpdate": 1749383922611,
-    "triggeredAt": 1749383901523,
+    "startTime": 1749506759851,
+    "lastUpdate": 1749506768059,
+    "triggeredAt": 1749506759851,
     "currentValue": "stopped",
     "effectiveThreshold": "stopped",
     "state": "active",
     "escalated": false,
     "acknowledged": true,
     "acknowledgedBy": "bulk-operation",
-    "acknowledgedAt": 1749383923320,
+    "acknowledgedAt": 1749506768098,
     "acknowledgeNote": "Bulk acknowledged via dropdown",
     "note": "Bulk acknowledged via dropdown"
   },
   "guest_down_endpoint_2_pi_101": {
-    "id": "alert_1749383901524_ew3vhj38x",
+    "id": "alert_1749506759853_fqm539ogq",
     "rule": {
       "id": "guest_down",
       "name": "Guest System Down",
@@ -382,51 +282,33 @@
       "group": "availability_alerts",
       "escalationTime": 600000,
       "autoResolve": true,
-      "suppressionTime": 120000,
-      "notificationChannels": [
-        "default",
-        "urgent"
-      ]
+      "suppressionTime": 120000
     },
     "guest": {
-      "diskwrite": 0,
-      "cpu": 0,
-      "tags": "alpine;community-script;os",
-      "swap": 0,
-      "cpus": 1,
-      "mem": 0,
-      "maxmem": 536870912,
-      "status": "stopped",
-      "disk": 0,
-      "name": "pi-influxdb",
-      "maxdisk": 2254438400,
-      "netin": 0,
-      "diskread": 0,
-      "uptime": 0,
-      "type": "lxc",
-      "maxswap": 536870912,
-      "vmid": 101,
-      "netout": 0,
-      "node": "pi",
       "endpointId": "endpoint_2",
-      "id": "endpoint_2-pi-101",
-      "nodeDisplayName": "pimox"
+      "node": "pi",
+      "vmid": 101,
+      "name": "pi-influxdb",
+      "type": "lxc",
+      "status": "stopped",
+      "maxmem": 536870912,
+      "maxdisk": 2254438400
     },
-    "startTime": 1749383901523,
-    "lastUpdate": 1749383922611,
-    "triggeredAt": 1749383901523,
+    "startTime": 1749506759851,
+    "lastUpdate": 1749506768059,
+    "triggeredAt": 1749506759851,
     "currentValue": "stopped",
     "effectiveThreshold": "stopped",
     "state": "active",
     "escalated": false,
     "acknowledged": true,
     "acknowledgedBy": "bulk-operation",
-    "acknowledgedAt": 1749383923322,
+    "acknowledgedAt": 1749506768110,
     "acknowledgeNote": "Bulk acknowledged via dropdown",
     "note": "Bulk acknowledged via dropdown"
   },
   "guest_down_endpoint_2_pi_100": {
-    "id": "alert_1749383901524_z3xuybdjm",
+    "id": "alert_1749506759853_efv9jpkmk",
     "rule": {
       "id": "guest_down",
       "name": "Guest System Down",
@@ -444,46 +326,28 @@
       "group": "availability_alerts",
       "escalationTime": 600000,
       "autoResolve": true,
-      "suppressionTime": 120000,
-      "notificationChannels": [
-        "default",
-        "urgent"
-      ]
+      "suppressionTime": 120000
     },
     "guest": {
-      "tags": "proxmox-helper-scripts",
-      "swap": 0,
-      "cpus": 1,
-      "mem": 0,
+      "endpointId": "endpoint_2",
+      "node": "pi",
+      "vmid": 100,
+      "name": "pihole",
+      "type": "lxc",
       "status": "stopped",
       "maxmem": 536870912,
-      "diskwrite": 0,
-      "cpu": 0,
-      "type": "lxc",
-      "maxswap": 536870912,
-      "vmid": 100,
-      "netout": 0,
-      "disk": 0,
-      "name": "pihole",
-      "maxdisk": 6442450944,
-      "netin": 0,
-      "diskread": 0,
-      "uptime": 0,
-      "node": "pi",
-      "endpointId": "endpoint_2",
-      "id": "endpoint_2-pi-100",
-      "nodeDisplayName": "pimox"
+      "maxdisk": 6442450944
     },
-    "startTime": 1749383901523,
-    "lastUpdate": 1749383922611,
-    "triggeredAt": 1749383901523,
+    "startTime": 1749506759851,
+    "lastUpdate": 1749506768059,
+    "triggeredAt": 1749506759851,
     "currentValue": "stopped",
     "effectiveThreshold": "stopped",
     "state": "active",
     "escalated": false,
     "acknowledged": true,
     "acknowledgedBy": "bulk-operation",
-    "acknowledgedAt": 1749383923326,
+    "acknowledgedAt": 1749506768116,
     "acknowledgeNote": "Bulk acknowledged via dropdown",
     "note": "Bulk acknowledged via dropdown"
   },
@@ -1100,7 +964,7 @@
     "note": "Bulk acknowledged via dropdown"
   },
   "compound_1749471240848_s7tobb06w_primary_desktop_100": {
-    "id": "alert_1749502225872_hi8xpxptm",
+    "id": "alert_1749506911287_7s6evevo5",
     "rule": {
       "id": "compound_1749471240848_s7tobb06w",
       "name": "Custom Alert",
@@ -1134,10 +998,10 @@
       "maxmem": 2147483648,
       "maxdisk": 10464022528
     },
-    "startTime": 1749502225871,
-    "lastUpdate": 1749502234638,
+    "startTime": 1749506911287,
+    "lastUpdate": 1749506917939,
     "currentValue": {
-      "cpu": 9.7
+      "cpu": 4.6
     },
     "effectiveThreshold": [
       {
@@ -1149,10 +1013,10 @@
     "state": "resolved",
     "escalated": false,
     "acknowledged": true,
-    "triggeredAt": 1749502232450,
-    "resolvedAt": 1749502236824,
+    "triggeredAt": 1749506917939,
+    "resolvedAt": 1749506920164,
     "acknowledgedBy": "bulk-operation",
-    "acknowledgedAt": 1749503811808,
+    "acknowledgedAt": 1749506987457,
     "acknowledgeNote": "Bulk acknowledged via dropdown",
     "note": "Bulk acknowledged via dropdown"
   },
@@ -1267,8 +1131,7 @@
     "note": "Bulk acknowledged via dropdown"
   },
   "compound_1749471240848_s7tobb06w_primary_desktop_111": {
-    "id": "alert_1749502224406_5r7jkmoga",
-    "ruleId": "compound_1749471240848_s7tobb06w",
+    "id": "alert_1749568238371_r7qnu045w",
     "rule": {
       "id": "compound_1749471240848_s7tobb06w",
       "name": "Custom Alert",
@@ -1302,21 +1165,83 @@
       "maxmem": 2147483648,
       "maxdisk": 4152066048
     },
-    "severity": "warning",
-    "message": "Dynamic threshold rule \"Custom Alert\" triggered for debian: CPU: 10.5% (≥ 4%)",
-    "startTime": 1749502224405,
-    "lastUpdate": 1749502224405,
-    "triggeredAt": 1749502224405,
+    "startTime": 1749568238370,
+    "lastUpdate": 1749568244956,
     "currentValue": {
-      "cpu": 10.5
+      "cpu": 4
     },
+    "effectiveThreshold": [
+      {
+        "metric": "cpu",
+        "condition": "greater_than",
+        "threshold": 4
+      }
+    ],
     "state": "resolved",
     "escalated": false,
     "acknowledged": true,
-    "resolvedAt": 1749502225871,
-    "acknowledgedBy": "bulk-operation",
-    "acknowledgedAt": 1749503811814,
-    "acknowledgeNote": "Bulk acknowledged via dropdown",
-    "note": "Bulk acknowledged via dropdown"
+    "triggeredAt": 1749568244956,
+    "resolvedAt": 1749568247148,
+    "acknowledgedBy": "web-user",
+    "acknowledgedAt": 1749568251499,
+    "acknowledgeNote": "Acknowledged via web interface",
+    "note": "Acknowledged via web interface"
+  },
+  "compound_1749471240848_s7tobb06w_primary_delly_101": {
+    "id": "alert_1749505855170_5srfusl2c",
+    "rule": {
+      "id": "compound_1749471240848_s7tobb06w",
+      "name": "Custom Alert",
+      "condition": "greater_than",
+      "duration": 5000,
+      "severity": "warning",
+      "enabled": true,
+      "tags": [],
+      "group": "compound_threshold",
+      "escalationTime": 900000,
+      "autoResolve": false,
+      "suppressionTime": 300000,
+      "type": "compound_threshold",
+      "thresholds": [
+        {
+          "metric": "cpu",
+          "condition": "greater_than",
+          "threshold": 4
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "delly",
+      "vmid": 101,
+      "name": "homeassistant",
+      "type": "lxc",
+      "status": "running",
+      "maxmem": 2147483648,
+      "maxdisk": 14687412224
+    },
+    "startTime": 1749505855169,
+    "lastUpdate": 1749505863903,
+    "currentValue": {
+      "cpu": 4.4
+    },
+    "effectiveThreshold": [
+      {
+        "metric": "cpu",
+        "condition": "greater_than",
+        "threshold": 4
+      }
+    ],
+    "state": "resolved",
+    "escalated": false,
+    "acknowledged": true,
+    "triggeredAt": 1749505861716,
+    "resolvedAt": 1749505866083,
+    "acknowledgedBy": "web-user",
+    "acknowledgedAt": 1749506285411,
+    "acknowledgeNote": "Acknowledged via web interface",
+    "note": "Acknowledged via web interface"
   }
 }

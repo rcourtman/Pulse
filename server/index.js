@@ -466,6 +466,47 @@ app.get('/api/alerts/metrics', (req, res) => {
     }
 });
 
+// Test email configuration
+app.post('/api/alerts/test-email', async (req, res) => {
+    try {
+        console.log('[Test Email] Sending test email...');
+        
+        // Get email configuration from process.env (loaded by configLoader)
+        const config = {
+            ALERT_TO_EMAIL: process.env.ALERT_TO_EMAIL,
+            ALERT_FROM_EMAIL: process.env.ALERT_FROM_EMAIL,
+            SMTP_HOST: process.env.SMTP_HOST,
+            SMTP_PORT: process.env.SMTP_PORT,
+            SMTP_USER: process.env.SMTP_USER,
+            SMTP_SECURE: process.env.SMTP_SECURE
+        };
+        
+        console.log('[Test Email] Config loaded, ALERT_TO_EMAIL:', config.ALERT_TO_EMAIL);
+        
+        if (!config.ALERT_TO_EMAIL) {
+            return res.status(400).json({ success: false, error: 'No recipient email address configured' });
+        }
+        
+        if (!config.SMTP_HOST) {
+            return res.status(400).json({ success: false, error: 'SMTP server not configured' });
+        }
+        
+        // Use the alert manager to send a test email with the config
+        const testResult = await stateManager.alertManager.sendTestEmailWithConfig(config);
+        
+        if (testResult.success) {
+            console.log('[Test Email] Test email sent successfully');
+            res.json({ success: true, message: 'Test email sent successfully' });
+        } else {
+            console.error('[Test Email] Failed to send test email:', testResult.error);
+            res.status(400).json({ success: false, error: testResult.error || 'Failed to send test email' });
+        }
+    } catch (error) {
+        console.error('[Test Email] Error sending test email:', error);
+        res.status(500).json({ success: false, error: 'Internal server error while sending test email' });
+    }
+});
+
 // Alert rules management with filtering
 app.get('/api/alerts/rules', (req, res) => {
     try {

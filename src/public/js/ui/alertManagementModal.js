@@ -5,6 +5,8 @@ PulseApp.ui.alertManagementModal = (() => {
     let activeTab = 'alerts';
     let currentConfig = {};
     let formDataCache = {};
+    let isLoading = false;
+    let refreshInterval = null;
 
     function init() {
         if (isInitialized) return;
@@ -15,67 +17,153 @@ PulseApp.ui.alertManagementModal = (() => {
         // Set up event listeners
         setupEventListeners();
         
+        // Expose global functions after they are defined
+        exposeGlobalFunctions();
+        
         // Set up real-time updates for alert management modal
         if (window.socket) {
             // Auto-refresh when alerts change
             window.socket.on('alert', () => {
-                if (isModalOpen()) {
-                    loadCurrentAlerts();
-                    // Update alert rules to refresh count badges
-                    loadSystemAlerts();
-                    loadCustomAlerts();
+                try {
+                    if (isModalOpen()) {
+                        coordinatedRefresh();
+                    }
+                } catch (error) {
+                    console.error('[Alert Modal] Error handling alert event:', error);
                 }
             });
             
             window.socket.on('alertResolved', () => {
-                if (isModalOpen()) {
-                    loadCurrentAlerts();
-                    // Update alert rules to refresh count badges
-                    loadSystemAlerts();
-                    loadCustomAlerts();
+                try {
+                    if (isModalOpen()) {
+                        coordinatedRefresh();
+                    }
+                } catch (error) {
+                    console.error('[Alert Modal] Error handling alertResolved event:', error);
                 }
             });
             
             window.socket.on('alertAcknowledged', () => {
-                if (isModalOpen()) {
-                    loadCurrentAlerts();
-                    // Update alert rules to refresh count badges
-                    loadSystemAlerts();
-                    loadCustomAlerts();
+                try {
+                    if (isModalOpen()) {
+                        coordinatedRefresh();
+                    }
+                } catch (error) {
+                    console.error('[Alert Modal] Error handling alertAcknowledged event:', error);
                 }
             });
             
             window.socket.on('alertEscalated', () => {
-                if (isModalOpen()) {
-                    loadCurrentAlerts();
-                    // Update alert rules to refresh count badges
-                    loadSystemAlerts();
-                    loadCustomAlerts();
+                try {
+                    if (isModalOpen()) {
+                        coordinatedRefresh();
+                    }
+                } catch (error) {
+                    console.error('[Alert Modal] Error handling alertEscalated event:', error);
                 }
             });
         }
 
         // Set up periodic refresh to update durations every 2 seconds (for near real-time updates)
-        setInterval(() => {
+        refreshInterval = setInterval(() => {
             if (isModalOpen()) {
-                loadCurrentAlerts();
-                // Also refresh alert rules to update count badges
-                loadSystemAlerts();
-                loadCustomAlerts();
+                coordinatedRefresh();
             }
         }, 2000);
         
         isInitialized = true;
     }
+    
+    function filterAlertsBySeverity(severity) {
+        // Switch to monitor tab to show alerts
+        switchTab('monitor');
+        
+        // Clear any existing search since we no longer filter by severity
+        const searchInput = document.getElementById('alert-search');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input'));
+        }
+    }
+
+    function exposeGlobalFunctions() {
+        // Make all onclick handler functions globally accessible immediately
+        // This prevents timing issues where HTML is rendered before functions are exposed
+        const functions = {
+            deleteCustomAlert,
+            openCustomAlertModal,
+            showAlertDetails,
+            toggleAlert,
+            addWebhookEndpoint,
+            removeWebhookEndpoint,
+            handleEmailProviderSelection,
+            filterAlertsBySeverity,
+            switchTab,
+            // Unified alert rule functions
+            openAlertRuleModal,
+            editAlertRule,
+            toggleAlertRule,
+            deleteAlertRule
+        };
+        
+        Object.entries(functions).forEach(([name, func]) => {
+            window[name] = func;
+        });
+    }
+
+    function coordinatedRefresh() {
+        // Prevent concurrent refreshes
+        if (isLoading) return;
+        
+        isLoading = true;
+        try {
+            loadCurrentAlerts();
+            loadSystemAlerts();
+            loadCustomAlerts();
+        } catch (error) {
+            console.error('[Alert Modal] Error during coordinated refresh:', error);
+        } finally {
+            isLoading = false;
+        }
+    }
+
 
     function openModal() {
         const modal = document.getElementById('alert-management-modal');
         if (modal) {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            // Default to alerts tab when opening
-            switchTab('alerts');
+            // Default to monitor tab when opening
+            switchTab('monitor');
+            
+            // Restart the refresh interval if it was cleaned up
+            if (!refreshInterval) {
+                refreshInterval = setInterval(() => {
+                    if (isModalOpen()) {
+                        coordinatedRefresh();
+                    }
+                }, 2000);
+            }
         }
+    }
+
+    function cleanup() {
+        // Clear the refresh interval to prevent memory leaks
+        if (refreshInterval) {
+            clearInterval(refreshInterval);
+            refreshInterval = null;
+        }
+        
+        // Remove socket event listeners to prevent memory leaks
+        if (window.socket) {
+            window.socket.off('alert');
+            window.socket.off('alertResolved');
+            window.socket.off('alertAcknowledged');
+            window.socket.off('alertEscalated');
+        }
+        
+        // Reset state
+        isLoading = false;
     }
 
     function closeModal() {
@@ -84,6 +172,9 @@ PulseApp.ui.alertManagementModal = (() => {
             modal.classList.add('hidden');
             modal.classList.remove('flex');
         }
+        
+        // Clean up resources to prevent memory leaks
+        cleanup();
     }
 
     function createModalHTML() {
@@ -107,14 +198,19 @@ PulseApp.ui.alertManagementModal = (() => {
                     <!-- Tab Navigation -->
                     <div class="border-b border-gray-200 dark:border-gray-700">
                         <nav class="flex space-x-8 px-6" id="alert-management-tabs">
-                            <button class="alert-tab active py-3 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="alerts">
-                                Alerts
+                            <button class="alert-tab active py-3 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="monitor">
+                                <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                </svg>
+                                Monitor
                             </button>
-                            <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="alert-rules">
-                                Alert Rules
-                            </button>
-                            <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="notifications">
-                                Notifications
+                            <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="configure">
+                                <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                Configure
                             </button>
                         </nav>
                     </div>
@@ -127,9 +223,6 @@ PulseApp.ui.alertManagementModal = (() => {
                         <div class="flex gap-3 justify-end">
                             <button type="button" id="alert-management-cancel-button" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md transition-colors">
                                 Close
-                            </button>
-                            <button type="button" id="alert-management-save-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
-                                Save Changes
                             </button>
                         </div>
                     </div>
@@ -144,7 +237,6 @@ PulseApp.ui.alertManagementModal = (() => {
         const modal = document.getElementById('alert-management-modal');
         const closeButton = document.getElementById('alert-management-modal-close');
         const cancelButton = document.getElementById('alert-management-cancel-button');
-        const saveButton = document.getElementById('alert-management-save-button');
 
         if (closeButton) {
             closeButton.addEventListener('click', closeModal);
@@ -152,10 +244,6 @@ PulseApp.ui.alertManagementModal = (() => {
 
         if (cancelButton) {
             cancelButton.addEventListener('click', closeModal);
-        }
-
-        if (saveButton) {
-            saveButton.addEventListener('click', saveConfiguration);
         }
 
         // Close modal when clicking outside
@@ -211,16 +299,6 @@ PulseApp.ui.alertManagementModal = (() => {
             }
         });
 
-        // Show/hide the save button based on the active tab
-        // Only show save button on notifications tab where there might be unsaved changes
-        const saveButton = document.getElementById('alert-management-save-button');
-        if (saveButton) {
-            if (tabName === 'notifications') {
-                saveButton.style.display = 'block';
-            } else {
-                saveButton.style.display = 'none';
-            }
-        }
 
         // Update content
         renderTabContent();
@@ -238,30 +316,1037 @@ PulseApp.ui.alertManagementModal = (() => {
         if (!modalBody) return;
 
         switch (activeTab) {
-            case 'alerts':
-                modalBody.innerHTML = renderAlertsTab();
-                initializeAlertsTab();
+            case 'monitor':
+                modalBody.innerHTML = renderMonitorTab();
+                initializeMonitorTab();
                 break;
-            case 'alert-rules':
-                modalBody.innerHTML = renderAlertRulesTab();
-                initializeAlertRulesTab();
-                break;
-            case 'notifications':
-                modalBody.innerHTML = renderNotificationsTab();
-                initializeNotificationsTab();
-                // Ensure configuration is loaded before populating email fields
+            case 'configure':
+                modalBody.innerHTML = renderConfigureTab();
+                initializeConfigureTab();
+                // Load configuration for the configure tab
                 if (currentConfig && Object.keys(currentConfig).length > 0) {
-                    // Config already loaded, populate immediately
-                    setTimeout(() => loadEmailConfiguration(), 50);
-                } else {
-                    // Config not loaded yet, wait for it
-                    loadConfiguration().then(() => {
+                    setTimeout(async () => {
                         loadEmailConfiguration();
+                        await loadGlobalToggles();
+                    }, 50);
+                } else {
+                    loadConfiguration().then(async () => {
+                        // Add a small delay to ensure DOM is ready
+                        setTimeout(async () => {
+                            loadEmailConfiguration();
+                            await loadGlobalToggles();
+                        }, 100);
                     });
                 }
                 break;
             default:
                 modalBody.innerHTML = '<p class="text-gray-500 dark:text-gray-400">Unknown tab</p>';
+        }
+    }
+
+    function renderMonitorTab() {
+        return `
+            <div class="space-y-6">
+                <!-- Alert Summary Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-orange-600 dark:text-orange-400">Active Alerts</p>
+                                <p class="text-2xl font-bold text-orange-900 dark:text-orange-100" id="active-alerts-count">0</p>
+                            </div>
+                            <svg class="w-8 h-8 text-orange-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-green-600 dark:text-green-400">Acknowledged</p>
+                                <p class="text-2xl font-bold text-green-900 dark:text-green-100" id="acknowledged-alerts-count">0</p>
+                            </div>
+                            <svg class="w-8 h-8 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-blue-600 dark:text-blue-400">Alert Rules</p>
+                                <p class="text-2xl font-bold text-blue-900 dark:text-blue-100" id="total-rules-count">0</p>
+                            </div>
+                            <svg class="w-8 h-8 text-blue-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-800 rounded-lg p-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-600 dark:text-gray-400">Monitoring</p>
+                                <p class="text-xl font-bold text-gray-900 dark:text-gray-100" id="monitoring-status">Active</p>
+                            </div>
+                            <svg class="w-8 h-8 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Alerts Section -->
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Active Alerts</h3>
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" id="active-alerts-badge">0</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button id="refresh-alerts-btn" class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors">
+                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Refresh
+                            </button>
+                            <button id="acknowledge-all-alerts-btn" class="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
+                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                </svg>
+                                Acknowledge All
+                            </button>
+                        </div>
+                    </div>
+                    <div id="active-alerts-list" class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <p class="p-6 text-gray-500 dark:text-gray-400">Loading active alerts...</p>
+                    </div>
+                </div>
+
+                <!-- Recent Activity Section -->
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Recent Activity</h3>
+                            <span class="text-sm text-gray-500 dark:text-gray-400">(Last 24 hours)</span>
+                        </div>
+                    </div>
+                    <div id="recent-activity-list" class="divide-y divide-gray-200 dark:divide-gray-700 max-h-64 overflow-y-auto">
+                        <p class="p-6 text-gray-500 dark:text-gray-400">Loading recent activity...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function renderConfigureTab() {
+        return `
+            <div class="space-y-8">
+                <!-- Unified Alert Rules Section -->
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                </svg>
+                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Alert Rules</h3>
+                            </div>
+                            <div class="flex gap-3">
+                                <button onclick="openAlertRuleModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                                    <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                                    </svg>
+                                    Create Rule
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Unified Alert Rules List -->
+                    <div class="px-6 py-4">
+                        <div id="alert-rules-list" class="space-y-3">
+                            <p class="text-gray-500 dark:text-gray-400">Loading alert rules...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notification Settings Section -->
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zM4 5h5L4 0v5zm7 12l4-4m-4 4l4-4"/>
+                            </svg>
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Notification Settings</h3>
+                        </div>
+                    </div>
+                    
+                    <!-- Global Controls -->
+                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Global Notification Controls</h4>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Master switches for all alert notifications</p>
+                            </div>
+                            <div class="flex items-center space-x-6">
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="global-email-toggle" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Email Notifications</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" id="global-webhook-toggle" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Webhook Notifications</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Email Configuration -->
+                    <div class="px-6 py-4 space-y-4" id="email-config-section">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Email Configuration</h4>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
+                                <input type="email" name="ALERT_FROM_EMAIL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="alerts@yourdomain.com">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Email</label>
+                                <input type="email" name="ALERT_TO_EMAIL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="admin@yourdomain.com">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Server</label>
+                                <input type="text" name="SMTP_HOST" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="smtp.gmail.com">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Port</label>
+                                <input type="number" name="SMTP_PORT" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="587" value="587">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Username</label>
+                                <input type="text" name="SMTP_USER" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="your.email@gmail.com">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
+                                <input type="password" name="SMTP_PASS" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Enter password">
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="SMTP_SECURE" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                                <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS encryption</span>
+                            </label>
+                            <div class="flex gap-3">
+                                <button id="test-email-btn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
+                                    Test Email
+                                </button>
+                                <button id="save-email-config-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                                    Save Configuration
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Webhook Configuration -->
+                    <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700" id="webhook-config-section">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-4">Webhook Configuration</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
+                                <input type="url" name="WEBHOOK_URL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="https://hooks.slack.com/services/...">
+                            </div>
+                            <div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <div class="flex gap-3">
+                                    <button id="test-webhook-btn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
+                                        Test Webhook
+                                    </button>
+                                    <button id="save-webhook-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                                        Save Configuration
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function initializeMonitorTab() {
+        // Load current alerts and populate the monitor tab
+        loadCurrentAlerts();
+        loadRecentActivity();
+        updateAlertSummary();
+        
+        // Set up button event listeners
+        const refreshBtn = document.getElementById('refresh-alerts-btn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', () => {
+                coordinatedRefresh();
+                loadRecentActivity();
+                updateAlertSummary();
+            });
+        }
+        
+        const acknowledgeAllBtn = document.getElementById('acknowledge-all-alerts-btn');
+        if (acknowledgeAllBtn) {
+            acknowledgeAllBtn.addEventListener('click', () => {
+                if (PulseApp.alerts && PulseApp.alerts.markAllAsAcknowledged) {
+                    PulseApp.alerts.markAllAsAcknowledged();
+                }
+            });
+        }
+    }
+
+    function initializeConfigureTab() {
+        // Load all alert rules (unified)
+        loadAllAlertRules();
+        
+        // Set up event listeners for notifications
+        setupNotificationToggles();
+        setupEmailTestButton();
+        
+        // Create rule button now uses onclick attribute directly
+    }
+
+    async function loadAllAlertRules() {
+        const alertRulesList = document.getElementById('alert-rules-list');
+        if (!alertRulesList) return;
+
+        try {
+            // Load all alert rules from the API
+            const response = await fetch('/api/alerts/rules');
+            const data = await response.json();
+            const rules = data.rules || [];
+
+            if (rules.length === 0) {
+                alertRulesList.innerHTML = `
+                    <div class="text-center py-8">
+                        <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-gray-500 dark:text-gray-400 mb-4">No alert rules configured</p>
+                        <button onclick="openAlertRuleModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md">
+                            Create First Rule
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort rules by type (built-in first) then by name
+            rules.sort((a, b) => {
+                if (a.isBuiltIn && !b.isBuiltIn) return -1;
+                if (!a.isBuiltIn && b.isBuiltIn) return 1;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+
+            alertRulesList.innerHTML = rules.map(rule => renderUnifiedAlertRule(rule)).join('');
+
+        } catch (error) {
+            console.error('Error loading alert rules:', error);
+            alertRulesList.innerHTML = `
+                <div class="text-center py-8 text-red-500">
+                    <p>Error loading alert rules</p>
+                </div>
+            `;
+        }
+    }
+
+    function renderUnifiedAlertRule(rule) {
+        const isBuiltIn = rule.isBuiltIn || rule.type === 'built-in' || 
+                         ['cpu', 'memory', 'disk', 'down'].includes(rule.id);
+        
+        // Generate threshold display
+        const thresholdDisplay = (() => {
+            if (rule.thresholds && Array.isArray(rule.thresholds)) {
+                // Custom compound rule
+                const thresholds = rule.thresholds.map(t => {
+                    const unit = ['cpu', 'memory', 'disk'].includes(t.metric) ? '%' : '';
+                    return `${t.metric.toUpperCase()} ${t.condition === 'greater_than' ? '>' : t.condition === 'less_than' ? '<' : '≥'} ${t.threshold}${unit}`;
+                });
+                return thresholds.join(' AND ');
+            } else if (rule.threshold !== undefined) {
+                // Simple rule with single threshold
+                const unit = ['cpu', 'memory', 'disk'].includes(rule.metric) ? '%' : '';
+                const condition = rule.condition === 'greater_than' ? '>' : rule.condition === 'less_than' ? '<' : '≥';
+                return `${rule.metric ? rule.metric.toUpperCase() : 'VALUE'} ${condition} ${rule.threshold}${unit}`;
+            }
+            return '';
+        })();
+        
+        // Generate duration display
+        const durationDisplay = (() => {
+            if (rule.duration) {
+                const minutes = Math.round(rule.duration / 60000);
+                return minutes === 1 ? '1 min' : `${minutes} mins`;
+            }
+            return '';
+        })();
+        
+        return `
+            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                        <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${rule.name || rule.id}</h5>
+                        ${isBuiltIn ? 
+                            '<span class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">Built-in</span>' : 
+                            '<span class="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">Custom</span>'
+                        }
+                    </div>
+                    <div class="space-y-1">
+                        ${thresholdDisplay ? `
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Condition:</span>
+                                <code class="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded">${thresholdDisplay}</code>
+                                ${durationDisplay ? `<span class="text-xs text-gray-500 dark:text-gray-400">for ${durationDisplay}</span>` : ''}
+                            </div>
+                        ` : ''}
+                        <p class="text-xs text-gray-500 dark:text-gray-400">${rule.description || getAlertRuleDescription(rule)}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" ${rule.enabled !== false ? 'checked' : ''} class="sr-only peer" onchange="toggleAlertRule('${rule.id}', this.checked)">
+                        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                    <button onclick="editAlertRule('${rule.id}')" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="${isBuiltIn ? 'View rule details' : 'Edit rule'}">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </button>
+                    ${!isBuiltIn ? `
+                        <button onclick="deleteAlertRule('${rule.id}')" class="p-1 text-red-400 hover:text-red-600" title="Delete rule">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    function getAlertRuleDescription(rule) {
+        if (rule.description) return rule.description;
+        
+        // Generate description for built-in rules
+        switch (rule.id) {
+            case 'cpu':
+                return 'Monitors CPU usage across all VMs and containers';
+            case 'memory':
+                return 'Monitors memory usage across all VMs and containers';
+            case 'disk':
+                return 'Monitors disk space usage across all VMs and containers';
+            case 'down':
+                return 'Monitors VM/container availability and uptime';
+            default:
+                if (rule.thresholds && rule.thresholds.length > 0) {
+                    return `Custom rule with ${rule.thresholds.length} threshold${rule.thresholds.length > 1 ? 's' : ''}`;
+                }
+                return 'Custom alert rule';
+        }
+    }
+
+    // Unified alert rule functions
+    function openAlertRuleModal(existingRule = null) {
+        // For now, redirect to the existing custom alert modal
+        // TODO: Create a unified modal that handles both built-in and custom rules
+        openCustomAlertModal([], existingRule);
+    }
+
+    async function editAlertRule(ruleId) {
+        try {
+            // Fetch the current alert rule data from API
+            const response = await fetch('/api/alerts/rules');
+            if (!response.ok) {
+                throw new Error(`Failed to fetch alert rules: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const rule = data.rules ? data.rules.find(r => r.id === ruleId) : null;
+            
+            if (!rule) {
+                throw new Error('Alert rule not found');
+            }
+            
+            // Convert built-in rules to compound threshold format for unified editing
+            let thresholds = [];
+            let alertData = rule;
+            
+            if (['cpu', 'memory', 'disk', 'down'].includes(ruleId)) {
+                // Convert simple built-in rule to compound threshold format
+                if (rule.metric && rule.threshold !== undefined) {
+                    thresholds = [{
+                        metric: rule.metric,
+                        condition: rule.condition || 'greater_than',
+                        threshold: rule.threshold
+                    }];
+                }
+                
+                // Create alertData object that openCustomAlertModal can understand
+                alertData = {
+                    ...rule,
+                    type: 'compound_threshold',
+                    thresholds: thresholds
+                };
+            } else {
+                // Custom rule - use existing thresholds
+                thresholds = rule.thresholds || [];
+            }
+            
+            // Open the unified custom alert modal with pre-filled data
+            openCustomAlertModal(thresholds, alertData);
+            
+        } catch (error) {
+            console.error('Failed to load alert rule for editing:', error);
+            PulseApp.ui.toast.error('Failed to load alert rule for editing');
+        }
+    }
+
+    async function toggleAlertRule(ruleId, enabled) {
+        // Check if it's a built-in rule or custom rule
+        const isBuiltIn = ['cpu', 'memory', 'disk', 'down'].includes(ruleId);
+        
+        if (isBuiltIn) {
+            return toggleSystemAlert(ruleId, enabled);
+        } else {
+            return toggleCustomAlert(ruleId, enabled);
+        }
+    }
+
+    async function deleteAlertRule(ruleId) {
+        if (confirm('Are you sure you want to delete this alert rule? This action cannot be undone.')) {
+            try {
+                const response = await fetch(`/api/alerts/rules/${ruleId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || `Server error: ${response.status}`);
+                }
+
+                PulseApp.ui.toast.success('Alert rule deleted successfully');
+                await loadAllAlertRules(); // Refresh the list
+                
+            } catch (error) {
+                console.error('Failed to delete alert rule:', error);
+                PulseApp.ui.toast.error('Failed to delete alert rule');
+            }
+        }
+    }
+
+    function updateAlertSummary() {
+        // Get current alerts and update summary cards
+        if (PulseApp.alerts && PulseApp.alerts.getActiveAlerts) {
+            const alerts = PulseApp.alerts.getActiveAlerts();
+            const acknowledgedAlerts = alerts.filter(alert => alert.acknowledged);
+            const activeAlerts = alerts.filter(alert => !alert.acknowledged);
+            
+            // Update the count displays with null checks
+            const activeAlertsEl = document.getElementById('active-alerts-count');
+            const acknowledgedAlertsEl = document.getElementById('acknowledged-alerts-count');
+            const badgeEl = document.getElementById('active-alerts-badge');
+            
+            if (activeAlertsEl) activeAlertsEl.textContent = activeAlerts.length;
+            if (acknowledgedAlertsEl) acknowledgedAlertsEl.textContent = acknowledgedAlerts.length;
+            if (badgeEl) badgeEl.textContent = activeAlerts.length; // Badge shows only active alerts
+            
+            console.log(`[Alert Summary] Updated counts: Active=${activeAlerts.length}, Acknowledged=${acknowledgedAlerts.length}, Total=${alerts.length}`);
+        } else {
+            console.log('[Alert Summary] PulseApp.alerts not available or getCurrentAlerts not found');
+        }
+        
+        // Update rules count
+        updateRulesCount();
+    }
+    
+    async function updateRulesCount() {
+        try {
+            const response = await fetch('/api/alerts/rules');
+            if (response.ok) {
+                const data = await response.json();
+                const rulesCount = data.rules ? data.rules.length : 0;
+                const totalRulesEl = document.getElementById('total-rules-count');
+                if (totalRulesEl) totalRulesEl.textContent = rulesCount;
+            }
+        } catch (error) {
+            console.error('Failed to load rules count:', error);
+        }
+    }
+
+    async function loadRecentActivity() {
+        const activityList = document.getElementById('recent-activity-list');
+        if (!activityList) return;
+
+        try {
+            // Load recent alert history (last 24 hours)
+            const response = await fetch('/api/alerts/history?limit=20');
+            if (!response.ok) throw new Error('Failed to fetch recent activity');
+            
+            const data = await response.json();
+            const recentAlerts = data.history || [];
+            
+            // Filter to last 24 hours
+            const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+            const recent = recentAlerts.filter(alert => 
+                (alert.triggeredAt || alert.resolvedAt || alert.acknowledgedAt) >= oneDayAgo
+            );
+            
+            if (recent.length === 0) {
+                activityList.innerHTML = `
+                    <div class="p-6 text-center">
+                        <svg class="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-gray-500 dark:text-gray-400">No recent activity</p>
+                        <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">This is a good thing!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            // Render recent activity items
+            const content = recent.map(alert => renderActivityItem(alert)).join('');
+            activityList.innerHTML = content;
+            
+        } catch (error) {
+            console.error('Error loading recent activity:', error);
+            activityList.innerHTML = `
+                <div class="p-6 text-center">
+                    <svg class="w-12 h-12 mx-auto mb-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p class="text-red-500 dark:text-red-400">Error loading recent activity</p>
+                </div>
+            `;
+        }
+    }
+
+    function renderActivityItem(alert) {
+        const time = new Date(alert.triggeredAt || alert.resolvedAt || alert.acknowledgedAt);
+        const timeAgo = getTimeAgo(time);
+        const severityColor = getSeverityColor(alert.severity);
+        
+        let statusIcon = '';
+        let statusText = '';
+        
+        if (alert.resolvedAt) {
+            statusIcon = '<svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>';
+            statusText = 'Resolved';
+        } else if (alert.acknowledgedAt) {
+            statusIcon = '<svg class="w-4 h-4 text-blue-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/></svg>';
+            statusText = 'Acknowledged';
+        } else {
+            statusIcon = '<svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>';
+            statusText = 'Triggered';
+        }
+        
+        return `
+            <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        ${statusIcon}
+                        <div>
+                            <p class="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                ${alert.ruleName || 'Unknown Rule'}
+                            </p>
+                            <p class="text-xs text-gray-500 dark:text-gray-400">
+                                ${alert.guest?.name || 'Unknown'} on ${alert.guest?.node || 'Unknown'}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${severityColor}">
+                            ${(alert.severity || 'warning').charAt(0).toUpperCase() + (alert.severity || 'warning').slice(1)}
+                        </span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">${timeAgo}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function getSeverityColor(severity) {
+        const colors = {
+            critical: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+            warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+            info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+        };
+        return colors[severity] || colors.warning;
+    }
+
+    function getTimeAgo(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        return `${diffDays}d ago`;
+    }
+
+    function loadSystemRules() {
+        const systemRulesList = document.getElementById('system-rules-list');
+        if (!systemRulesList) return;
+        
+        renderSystemRulesForConfigure();
+    }
+
+    function loadCustomRules() {
+        const customRulesList = document.getElementById('custom-rules-list');
+        if (!customRulesList) return;
+        
+        renderCustomRulesForConfigure();
+    }
+
+    function renderSystemRulesForConfigure() {
+        const systemRulesList = document.getElementById('system-rules-list');
+        if (!systemRulesList) return;
+
+        // System rules with current state from environment variables
+        const systemRules = [
+            { 
+                id: 'cpu', 
+                name: 'CPU Usage', 
+                description: 'Monitor CPU usage across VMs/LXCs', 
+                enabled: currentConfig?.ALERT_CPU_ENABLED !== 'false'
+            },
+            { 
+                id: 'memory', 
+                name: 'Memory Usage', 
+                description: 'Monitor memory usage across VMs/LXCs', 
+                enabled: currentConfig?.ALERT_MEMORY_ENABLED !== 'false'
+            },
+            { 
+                id: 'disk', 
+                name: 'Disk Usage', 
+                description: 'Monitor disk space across VMs/LXCs', 
+                enabled: currentConfig?.ALERT_DISK_ENABLED === 'true'
+            },
+            { 
+                id: 'down', 
+                name: 'VM/LXC Down', 
+                description: 'Alert when VMs or LXCs go offline', 
+                enabled: currentConfig?.ALERT_DOWN_ENABLED === 'true'
+            }
+        ];
+
+        const rulesHTML = systemRules.map(rule => `
+            <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md">
+                <div class="flex items-center space-x-3">
+                    <div class="flex-shrink-0">
+                        <div class="w-2 h-2 rounded-full ${rule.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}"></div>
+                    </div>
+                    <div>
+                        <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${rule.name}</h5>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">${rule.description}</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" ${rule.enabled ? 'checked' : ''} class="sr-only peer" onchange="toggleSystemAlert('${rule.id}', this.checked)">
+                        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                    <button onclick="editSystemAlert('${rule.id}')" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        `).join('');
+
+        systemRulesList.innerHTML = rulesHTML;
+    }
+
+    function renderCustomRulesForConfigure() {
+        const customRulesList = document.getElementById('custom-rules-list');
+        if (!customRulesList) return;
+
+        // Get custom alert rules from the existing system
+        fetch('/api/alerts/rules?group=custom')
+            .then(response => response.json())
+            .then(data => {
+                const customRules = data.rules || [];
+                
+                if (customRules.length === 0) {
+                    customRulesList.innerHTML = `
+                        <div class="text-center py-6">
+                            <svg class="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                            <p class="text-gray-500 dark:text-gray-400 mb-3">No custom rules yet</p>
+                            <button onclick="openCustomAlertModal()" class="text-blue-600 hover:text-blue-700 dark:text-blue-400 text-sm font-medium">
+                                Create your first custom rule
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const rulesHTML = customRules.map(rule => `
+                    <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-md">
+                        <div class="flex items-center space-x-3">
+                            <div class="flex-shrink-0">
+                                <div class="w-2 h-2 rounded-full ${rule.enabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}"></div>
+                            </div>
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${rule.name || 'Unnamed Rule'}</h5>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">${rule.description || 'No description'}</p>
+                                <div class="flex items-center space-x-2 mt-1">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSeverityBadgeColor(rule.severity)}">
+                                        ${(rule.severity || 'warning').charAt(0).toUpperCase() + (rule.severity || 'warning').slice(1)}
+                                    </span>
+                                    ${getActiveAlertsCount(rule.id) > 0 ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">${getActiveAlertsCount(rule.id)} active</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" ${rule.enabled ? 'checked' : ''} class="sr-only peer" onchange="toggleCustomAlert('${rule.id}', this.checked)">
+                                <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                            </label>
+                            <button onclick="editCustomAlert('${rule.id}')" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                </svg>
+                            </button>
+                            <button onclick="deleteCustomAlert('${rule.id}')" class="p-1 text-red-400 hover:text-red-600">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+
+                customRulesList.innerHTML = rulesHTML;
+            })
+            .catch(error => {
+                console.error('Error loading custom rules:', error);
+                customRulesList.innerHTML = `
+                    <div class="p-4 text-center">
+                        <svg class="w-8 h-8 mx-auto mb-2 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p class="text-red-500 dark:text-red-400 text-sm">Error loading custom rules</p>
+                    </div>
+                `;
+            });
+    }
+
+    function getSeverityBadgeColor(severity) {
+        const colors = {
+            critical: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+            warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+            info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+        };
+        return colors[severity] || colors.warning;
+    }
+
+    function getActiveAlertsCount(ruleId) {
+        if (PulseApp.alerts && PulseApp.alerts.getCurrentAlerts) {
+            const alerts = PulseApp.alerts.getCurrentAlerts();
+            return alerts.filter(alert => alert.ruleId === ruleId).length;
+        }
+        return 0;
+    }
+
+    function setupNotificationToggles() {
+        const emailToggle = document.getElementById('global-email-toggle');
+        const webhookToggle = document.getElementById('global-webhook-toggle');
+        
+        if (emailToggle) {
+            emailToggle.addEventListener('change', (e) => {
+                handleGlobalEmailToggle(e.target.checked);
+            });
+        }
+        
+        if (webhookToggle) {
+            webhookToggle.addEventListener('change', (e) => {
+                handleGlobalWebhookToggle(e.target.checked);
+            });
+        }
+    }
+
+    function setupEmailTestButton() {
+        const testBtn = document.getElementById('test-email-btn');
+        if (testBtn) {
+            testBtn.addEventListener('click', testEmailConfiguration);
+        }
+    }
+    
+    async function testEmailConfiguration() {
+        const testBtn = document.getElementById('test-email-btn');
+        const originalText = testBtn.textContent;
+        
+        try {
+            testBtn.disabled = true;
+            testBtn.textContent = 'Testing...';
+            
+            const response = await fetch('/api/alerts/test-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                testBtn.textContent = 'Test Sent!';
+                testBtn.classList.remove('bg-gray-200', 'hover:bg-gray-300');
+                testBtn.classList.add('bg-green-500', 'text-white');
+                PulseApp.ui.toast.success('Test email sent successfully! Check your inbox.');
+            } else {
+                testBtn.textContent = 'Test Failed';
+                testBtn.classList.remove('bg-gray-200', 'hover:bg-gray-300');
+                testBtn.classList.add('bg-red-500', 'text-white');
+                PulseApp.ui.toast.error(result.error || 'Failed to send test email');
+            }
+            
+            // Reset button after 3 seconds
+            setTimeout(() => {
+                testBtn.textContent = originalText;
+                testBtn.classList.remove('bg-green-500', 'bg-red-500', 'text-white');
+                testBtn.classList.add('bg-gray-200', 'hover:bg-gray-300');
+                testBtn.disabled = false;
+            }, 3000);
+            
+        } catch (error) {
+            console.error('[Test Email] Error:', error);
+            testBtn.textContent = originalText;
+            testBtn.disabled = false;
+            PulseApp.ui.toast.error('Failed to test email configuration');
+        }
+    }
+
+    function handleGlobalEmailToggle(enabled) {
+        console.log(`[Email Toggle] Setting GLOBAL_EMAIL_ENABLED to: ${enabled}`);
+        
+        // Save the setting
+        fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ GLOBAL_EMAIL_ENABLED: enabled ? 'true' : 'false' })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log(`[Email Toggle] Successfully ${enabled ? 'enabled' : 'disabled'} global email notifications`);
+                PulseApp.ui.toast.success(`Email notifications ${enabled ? 'enabled' : 'disabled'}`);
+                updateEmailConfigVisibility(enabled);
+                // Update currentConfig immediately
+                if (currentConfig) {
+                    currentConfig.GLOBAL_EMAIL_ENABLED = enabled ? 'true' : 'false';
+                }
+            } else {
+                console.error('[Email Toggle] Failed to save setting');
+                PulseApp.ui.toast.error('Failed to save email setting');
+            }
+        })
+        .catch(error => {
+            console.error('[Email Toggle] Error saving setting:', error);
+            PulseApp.ui.toast.error('Failed to save email setting');
+        });
+    }
+
+    function handleGlobalWebhookToggle(enabled) {
+        console.log(`[Webhook Toggle] Setting GLOBAL_WEBHOOK_ENABLED to: ${enabled}`);
+        
+        // Save the setting
+        fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ GLOBAL_WEBHOOK_ENABLED: enabled ? 'true' : 'false' })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log(`[Webhook Toggle] Successfully ${enabled ? 'enabled' : 'disabled'} global webhook notifications`);
+                PulseApp.ui.toast.success(`Webhook notifications ${enabled ? 'enabled' : 'disabled'}`);
+                updateWebhookConfigVisibility(enabled);
+                // Update currentConfig immediately
+                if (currentConfig) {
+                    currentConfig.GLOBAL_WEBHOOK_ENABLED = enabled ? 'true' : 'false';
+                }
+            } else {
+                console.error('[Webhook Toggle] Failed to save setting');
+                PulseApp.ui.toast.error('Failed to save webhook setting');
+            }
+        })
+        .catch(error => {
+            console.error('[Webhook Toggle] Error saving setting:', error);
+            PulseApp.ui.toast.error('Failed to save webhook setting');
+        });
+    }
+
+    function updateEmailConfigVisibility(enabled) {
+        const emailSection = document.getElementById('email-config-section');
+        if (emailSection) {
+            emailSection.style.opacity = enabled ? '1' : '0.5';
+            // Only disable input fields, not test/save buttons
+            const inputs = emailSection.querySelectorAll('input[name*="SMTP"], input[name*="ALERT_"]');
+            inputs.forEach(input => {
+                input.disabled = !enabled;
+            });
+        }
+    }
+
+    function updateWebhookConfigVisibility(enabled) {
+        const webhookSection = document.getElementById('webhook-config-section');
+        if (webhookSection) {
+            webhookSection.style.opacity = enabled ? '1' : '0.5';
+            // Only disable input fields, not test/save buttons
+            const inputs = webhookSection.querySelectorAll('input[name*="WEBHOOK"]');
+            inputs.forEach(input => {
+                input.disabled = !enabled;
+            });
+        }
+    }
+
+    async function loadGlobalToggles() {
+        // Load and set the current state of global toggles
+        const emailToggle = document.getElementById('global-email-toggle');
+        const webhookToggle = document.getElementById('global-webhook-toggle');
+        
+        // Ensure we have fresh config
+        if (!currentConfig || Object.keys(currentConfig).length === 0) {
+            await loadConfiguration();
+        }
+        
+        console.log('[Global Toggles] Loading with config:', {
+            GLOBAL_EMAIL_ENABLED: currentConfig.GLOBAL_EMAIL_ENABLED,
+            GLOBAL_WEBHOOK_ENABLED: currentConfig.GLOBAL_WEBHOOK_ENABLED
+        });
+        
+        if (emailToggle && currentConfig) {
+            const emailEnabled = currentConfig.GLOBAL_EMAIL_ENABLED === 'true';
+            console.log('[Global Toggles] Setting email toggle to:', emailEnabled);
+            emailToggle.checked = emailEnabled;
+            updateEmailConfigVisibility(emailEnabled);
+        }
+        
+        if (webhookToggle && currentConfig) {
+            const webhookEnabled = currentConfig.GLOBAL_WEBHOOK_ENABLED === 'true';
+            console.log('[Global Toggles] Setting webhook toggle to:', webhookEnabled);
+            webhookToggle.checked = webhookEnabled;
+            updateWebhookConfigVisibility(webhookEnabled);
         }
     }
 
@@ -573,24 +1658,24 @@ PulseApp.ui.alertManagementModal = (() => {
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Server</label>
-                                        <input type="text" id="email-smtp" name="ALERT_SMTP_HOST" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="smtp.gmail.com">
+                                        <input type="text" id="email-smtp" name="SMTP_HOST" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="smtp.gmail.com">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Port</label>
-                                        <input type="number" id="email-port" name="ALERT_SMTP_PORT" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="587" value="587">
+                                        <input type="number" id="email-port" name="SMTP_PORT" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="587" value="587">
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                             <span id="smtp-username-label">Username</span>
                                         </label>
-                                        <input type="text" id="email-username" name="ALERT_SMTP_USER" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="your.email@gmail.com">
+                                        <input type="text" id="email-username" name="SMTP_USER" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="your.email@gmail.com">
                                         <p id="smtp-username-help" class="text-xs text-gray-500 dark:text-gray-400 mt-1">(Usually your email address)</p>
                                     </div>
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                                             <span id="smtp-password-label">Password</span>
                                         </label>
-                                        <input type="password" id="email-password" name="ALERT_EMAIL_PASSWORD" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Enter password">
+                                        <input type="password" id="email-password" name="SMTP_PASS" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Enter password">
                                         <p id="smtp-password-help" class="text-xs text-gray-500 dark:text-gray-400 mt-1">(Your email password)</p>
                                     </div>
                                 </div>
@@ -623,7 +1708,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                     <div id="advanced-smtp-settings" class="mt-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hidden">
                                         <div class="space-y-4">
                                             <div class="flex items-center">
-                                                <input type="checkbox" id="smtp-secure" name="ALERT_SMTP_SECURE" class="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded">
+                                                <input type="checkbox" id="smtp-secure" name="SMTP_SECURE" class="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded">
                                                 <label for="smtp-secure" class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS encryption</label>
                                             </div>
                                             <div id="smtp-provider-help" class="text-sm text-gray-600 dark:text-gray-400 hidden">
@@ -747,7 +1832,7 @@ PulseApp.ui.alertManagementModal = (() => {
             acknowledgeAllBtn.addEventListener('click', () => {
                 if (PulseApp.alerts && PulseApp.alerts.markAllAsAcknowledged) {
                     PulseApp.alerts.markAllAsAcknowledged();
-                    setTimeout(loadCurrentAlerts, 500); // Refresh after acknowledging
+                    // Socket events will handle the real-time updates
                 }
             });
         }
@@ -896,7 +1981,7 @@ PulseApp.ui.alertManagementModal = (() => {
                 autoDetectEmailProvider(emailFromInput.value);
                 
                 // Auto-fill username with email address for common providers
-                const usernameInput = document.querySelector('input[name="ALERT_SMTP_USER"]');
+                const usernameInput = document.querySelector('input[name="SMTP_USER"]');
                 if (usernameInput && emailFromInput.value && emailFromInput.value.includes('@')) {
                     const domain = emailFromInput.value.split('@')[1].toLowerCase();
                     const commonProviders = ['gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com', 'msn.com', 'yahoo.com', 'yahoo.co.uk', 'yahoo.ca', 'ymail.com'];
@@ -1401,94 +2486,108 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function loadEmailConfiguration() {
-        const emailConfigSection = document.getElementById('primary-email-config');
-        if (!emailConfigSection) return;
+        console.log('[Email Config] loadEmailConfiguration called');
+        
+        // Check if we're in the configure tab (different structure)
+        const isConfigureTab = document.getElementById('email-config-section');
+        if (!isConfigureTab) {
+            console.log('[Email Config] Not in configure tab, looking for primary-email-config');
+            const emailConfigSection = document.getElementById('primary-email-config');
+            if (!emailConfigSection) {
+                console.log('[Email Config] primary-email-config not found either, returning');
+                return;
+            }
+        } else {
+            console.log('[Email Config] In configure tab');
+        }
         
         // Get email configuration from currentConfig
         const config = currentConfig || {};
         const smtp = config.advanced?.smtp || {};
         
+        console.log('[Email Config] Loading email configuration:', smtp);
+        console.log('[Email Config] Full config:', config);
+        console.log('[Email Config] Direct config keys:', {
+            SMTP_HOST: config.SMTP_HOST,
+            SMTP_PORT: config.SMTP_PORT,
+            SMTP_USER: config.SMTP_USER,
+            ALERT_FROM_EMAIL: config.ALERT_FROM_EMAIL,
+            ALERT_TO_EMAIL: config.ALERT_TO_EMAIL,
+            GLOBAL_EMAIL_ENABLED: config.GLOBAL_EMAIL_ENABLED
+        });
+        
         // Set toggle states based on current config
-        const emailToggle = document.getElementById('email-enabled');
+        const emailToggle = document.getElementById('email-enabled') || document.getElementById('global-email-toggle');
         if (emailToggle) {
             const emailEnabled = config.GLOBAL_EMAIL_ENABLED === 'true' || config.GLOBAL_EMAIL_ENABLED === true;
             emailToggle.checked = emailEnabled;
+            console.log('[Email Config] Email toggle set to:', emailEnabled);
+        } else {
+            console.log('[Email Config] Email toggle not found (looking for email-enabled or global-email-toggle)');
         }
         
-        const webhookToggle = document.getElementById('webhook-enabled');
+        const webhookToggle = document.getElementById('webhook-enabled') || document.getElementById('global-webhook-toggle');
         if (webhookToggle) {
             const webhookEnabled = config.GLOBAL_WEBHOOK_ENABLED === 'true' || config.GLOBAL_WEBHOOK_ENABLED === true;
             webhookToggle.checked = webhookEnabled;
         }
         
         // Populate email fields with values from configuration
+        // Check both nested (smtp) and direct config locations
         const emailFromInput = document.querySelector('input[name="ALERT_FROM_EMAIL"]');
-        if (emailFromInput && smtp.from) {
-            emailFromInput.value = smtp.from;
+        const fromValue = config.ALERT_FROM_EMAIL || smtp.from;
+        console.log('[Email Config] From input found:', !!emailFromInput, 'Value to set:', fromValue);
+        if (emailFromInput && fromValue) {
+            emailFromInput.value = fromValue;
         }
         
         const emailToInput = document.querySelector('input[name="ALERT_TO_EMAIL"]');
-        if (emailToInput && smtp.to) {
-            emailToInput.value = smtp.to;
+        const toValue = config.ALERT_TO_EMAIL || smtp.to;
+        console.log('[Email Config] To input found:', !!emailToInput, 'Value to set:', toValue);
+        if (emailToInput && toValue) {
+            emailToInput.value = toValue;
         }
         
-        const smtpHostInput = document.querySelector('input[name="ALERT_SMTP_HOST"]');
-        if (smtpHostInput && smtp.host) {
-            smtpHostInput.value = smtp.host;
+        // Populate SMTP fields
+        const smtpHostInput = document.querySelector('input[name="SMTP_HOST"]');
+        const hostValue = config.SMTP_HOST || smtp.host;
+        console.log('[Email Config] Host input found:', !!smtpHostInput, 'Value to set:', hostValue);
+        if (smtpHostInput && hostValue) {
+            smtpHostInput.value = hostValue;
         }
         
-        const smtpPortInput = document.querySelector('input[name="ALERT_SMTP_PORT"]');
-        if (smtpPortInput && smtp.port) {
-            smtpPortInput.value = smtp.port;
+        const smtpPortInput = document.querySelector('input[name="SMTP_PORT"]');
+        const portValue = config.SMTP_PORT || smtp.port;
+        console.log('[Email Config] Port input found:', !!smtpPortInput, 'Value to set:', portValue);
+        if (smtpPortInput && portValue) {
+            smtpPortInput.value = portValue;
         }
         
-        const smtpUserInput = document.querySelector('input[name="ALERT_SMTP_USER"]');
-        if (smtpUserInput && smtp.user) {
-            smtpUserInput.value = smtp.user;
+        const smtpUserInput = document.querySelector('input[name="SMTP_USER"]');
+        const userValue = config.SMTP_USER || smtp.user;
+        console.log('[Email Config] User input found:', !!smtpUserInput, 'Value to set:', userValue);
+        if (smtpUserInput && userValue) {
+            smtpUserInput.value = userValue;
         }
         
-        const smtpSecureInput = document.querySelector('input[name="ALERT_SMTP_SECURE"]');
-        if (smtpSecureInput && smtp.secure !== undefined) {
-            smtpSecureInput.checked = smtp.secure;
+        const smtpSecureCheckbox = document.querySelector('input[name="SMTP_SECURE"]');
+        const secureValue = config.SMTP_SECURE || smtp.secure;
+        if (smtpSecureCheckbox) {
+            smtpSecureCheckbox.checked = secureValue === true || secureValue === 'true';
         }
         
-        const smtpPassInput = document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]');
-        
-        // Check if SMTP config exists (indicating password is saved)
-        const hasSmtpConfig = smtp.host && smtp.user && smtp.from;
-        
+        // Note: SMTP_PASS is not returned by the API for security reasons
+        // Show a placeholder to indicate it's already set
+        const smtpPassInput = document.querySelector('input[name="SMTP_PASS"]');
+        const hasSmtpConfig = hostValue || smtp.host;
         if (smtpPassInput && hasSmtpConfig) {
-            // Don't set a value, but update placeholder to indicate password is saved
-            smtpPassInput.placeholder = 'Password saved (click to change)';
+            smtpPassInput.placeholder = '••••••••• (configured)';
         }
         
-        // Auto-detect email provider if from email is set
-        if (emailFromInput && emailFromInput.value) {
-            autoDetectEmailProvider(emailFromInput.value);
-        }
-        
-        // Use existing email configuration from settings if available
-        if (PulseApp.ui.settings && PulseApp.ui.settings.renderAlertsTab) {
-            const fullContent = PulseApp.ui.settings.renderAlertsTab(config.alerts || {}, config);
-            
-            // Extract just the email configuration section
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = fullContent;
-            const emailSection = tempDiv.querySelector('.bg-gray-50:nth-child(2)'); // Email section
-            
-            if (emailSection) {
-                // Remove the outer container and just show the inner content
-                const emailContent = emailSection.innerHTML;
-                emailConfigSection.innerHTML = emailContent;
-                
-                // Initialize email functionality
-                if (PulseApp.ui.settings.setupEmailProviderSelection) {
-                    setTimeout(() => PulseApp.ui.settings.setupEmailProviderSelection(), 100);
-                }
-                if (PulseApp.ui.settings.setupEmailTestButton) {
-                    setTimeout(() => PulseApp.ui.settings.setupEmailTestButton(), 100);
-                }
-            }
+        // Populate webhook configuration
+        const webhookUrlInput = document.querySelector('input[name="WEBHOOK_URL"]');
+        if (webhookUrlInput && config.WEBHOOK_URL) {
+            webhookUrlInput.value = config.WEBHOOK_URL;
         }
     }
 
@@ -1537,7 +2636,7 @@ PulseApp.ui.alertManagementModal = (() => {
 
     function updateSSLHelp(provider, config) {
         const sslLabel = document.querySelector('label[for="smtp-secure"]');
-        const sslCheckbox = document.querySelector('input[name="ALERT_SMTP_SECURE"]');
+        const sslCheckbox = document.querySelector('input[name="SMTP_SECURE"]');
         const advancedSettings = document.getElementById('advanced-smtp-settings');
         
         if (sslLabel && sslCheckbox) {
@@ -1553,7 +2652,7 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function updatePasswordPlaceholder(provider) {
-        const smtpPassInput = document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]');
+        const smtpPassInput = document.querySelector('input[name="SMTP_PASS"]');
         if (!smtpPassInput) return;
         
         // Get current SMTP configuration
@@ -1651,9 +2750,9 @@ PulseApp.ui.alertManagementModal = (() => {
         const passwordHelp = document.getElementById('smtp-password-help');
         const usernameLabel = document.getElementById('smtp-username-label');
         const usernameHelp = document.getElementById('smtp-username-help');
-        const hostInput = document.querySelector('input[name="ALERT_SMTP_HOST"]');
-        const portInput = document.querySelector('input[name="ALERT_SMTP_PORT"]');
-        const secureCheckbox = document.querySelector('input[name="ALERT_SMTP_SECURE"]');
+        const hostInput = document.querySelector('input[name="SMTP_HOST"]');
+        const portInput = document.querySelector('input[name="SMTP_PORT"]');
+        const secureCheckbox = document.querySelector('input[name="SMTP_SECURE"]');
         
         const providers = {
             gmail: {
@@ -1736,7 +2835,7 @@ PulseApp.ui.alertManagementModal = (() => {
             updatePasswordPlaceholder(provider);
             
             // Update username placeholder and auto-fill
-            const usernameInput = document.querySelector('input[name="ALERT_SMTP_USER"]');
+            const usernameInput = document.querySelector('input[name="SMTP_USER"]');
             const fromEmailInput = document.getElementById('email-from-input');
             
             if (usernameInput) {
@@ -1829,11 +2928,11 @@ PulseApp.ui.alertManagementModal = (() => {
         const emailConfig = {
             from: document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value,
             to: document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value,
-            pass: document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]')?.value, // Backend expects 'pass' not 'password'
-            host: document.querySelector('input[name="ALERT_SMTP_HOST"]')?.value,
-            port: document.querySelector('input[name="ALERT_SMTP_PORT"]')?.value,
-            user: document.querySelector('input[name="ALERT_SMTP_USER"]')?.value,
-            secure: document.querySelector('input[name="ALERT_SMTP_SECURE"]')?.checked
+            pass: document.querySelector('input[name="SMTP_PASS"]')?.value, // Backend expects 'pass' not 'password'
+            host: document.querySelector('input[name="SMTP_HOST"]')?.value,
+            port: document.querySelector('input[name="SMTP_PORT"]')?.value,
+            user: document.querySelector('input[name="SMTP_USER"]')?.value,
+            secure: document.querySelector('input[name="SMTP_SECURE"]')?.checked
         };
         
         if (!emailConfig.from || !emailConfig.to) {
@@ -1866,10 +2965,130 @@ PulseApp.ui.alertManagementModal = (() => {
     }
     
     async function saveEmailConfiguration() {
-        // This function is called by the specific save button in the email section
-        // It will trigger the main saveConfiguration function
-        await saveConfiguration();
-        PulseApp.ui.toast.success('Email configuration saved successfully!');
+        const saveBtn = document.getElementById('save-email-config-btn');
+        if (!saveBtn) return;
+        
+        const originalText = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        
+        try {
+            // Validate SMTP configuration
+            const validationErrors = validateSMTPConfiguration();
+            if (validationErrors.length > 0) {
+                const errorMessage = 'Please fix the following errors:\n\n• ' + validationErrors.join('\n• ');
+                alert(errorMessage);
+                saveBtn.textContent = originalText;
+                saveBtn.disabled = false;
+                return;
+            }
+            
+            // Collect email configuration
+            const configToSave = {};
+            const smtpHost = document.querySelector('input[name="SMTP_HOST"]')?.value;
+            const smtpPort = document.querySelector('input[name="SMTP_PORT"]')?.value;
+            const smtpUser = document.querySelector('input[name="SMTP_USER"]')?.value;
+            const smtpPass = document.querySelector('input[name="SMTP_PASS"]')?.value;
+            const fromEmail = document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value;
+            const toEmail = document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value;
+            const smtpSecure = document.querySelector('input[name="SMTP_SECURE"]')?.checked;
+            const emailEnabled = (document.getElementById('email-enabled') || document.getElementById('global-email-toggle'))?.checked;
+            
+            // Only include values that are set
+            if (smtpHost) configToSave.SMTP_HOST = smtpHost;
+            if (smtpPort) configToSave.SMTP_PORT = smtpPort;
+            if (smtpUser) configToSave.SMTP_USER = smtpUser;
+            if (smtpPass) configToSave.SMTP_PASS = smtpPass;
+            if (fromEmail) configToSave.ALERT_FROM_EMAIL = fromEmail;
+            if (toEmail) configToSave.ALERT_TO_EMAIL = toEmail;
+            configToSave.SMTP_SECURE = smtpSecure ? 'true' : 'false';
+            configToSave.GLOBAL_EMAIL_ENABLED = emailEnabled ? 'true' : 'false';
+            
+            // Save via API
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(configToSave)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                PulseApp.ui.toast.success('Email configuration saved successfully!');
+                await loadConfiguration(); // Reload to reflect changes
+                
+                // Update button to show success
+                saveBtn.textContent = 'Saved!';
+                saveBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                saveBtn.classList.add('bg-green-600');
+                
+                setTimeout(() => {
+                    saveBtn.textContent = originalText;
+                    saveBtn.classList.remove('bg-green-600');
+                    saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                    saveBtn.disabled = false;
+                }, 2000);
+            } else {
+                throw new Error(result.error || 'Failed to save configuration');
+            }
+        } catch (error) {
+            console.error('Error saving email configuration:', error);
+            PulseApp.ui.toast.error('Failed to save email configuration');
+            saveBtn.textContent = originalText;
+            saveBtn.disabled = false;
+        }
+    }
+    
+    async function saveWebhookConfiguration() {
+        const saveBtn = document.getElementById('save-webhook-btn');
+        if (!saveBtn) return;
+        
+        const originalText = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        
+        try {
+            // Collect webhook configuration
+            const configToSave = {};
+            const webhookUrl = document.querySelector('input[name="WEBHOOK_URL"]')?.value;
+            const webhookEnabled = (document.getElementById('webhook-enabled') || document.getElementById('global-webhook-toggle'))?.checked;
+            
+            configToSave.WEBHOOK_URL = webhookUrl || '';
+            configToSave.GLOBAL_WEBHOOK_ENABLED = webhookEnabled ? 'true' : 'false';
+            
+            // Save via API
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(configToSave)
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                PulseApp.ui.toast.success('Webhook configuration saved successfully!');
+                await loadConfiguration(); // Reload to reflect changes
+                
+                // Update button to show success
+                saveBtn.textContent = 'Saved!';
+                saveBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                saveBtn.classList.add('bg-green-600');
+                
+                setTimeout(() => {
+                    saveBtn.textContent = originalText;
+                    saveBtn.classList.remove('bg-green-600');
+                    saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                    saveBtn.disabled = false;
+                }, 2000);
+            } else {
+                throw new Error(result.error || 'Failed to save configuration');
+            }
+        } catch (error) {
+            console.error('Error saving webhook configuration:', error);
+            PulseApp.ui.toast.error('Failed to save webhook configuration');
+            saveBtn.textContent = originalText;
+            saveBtn.disabled = false;
+        }
     }
 
     function editSystemAlert(alertType) {
@@ -2746,20 +3965,31 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     }
 
     function loadCurrentAlerts() {
-        const contentDiv = document.getElementById('current-alerts-list');
+        // Try both old and new alert list containers for compatibility
+        let contentDiv = document.getElementById('active-alerts-list');
+        if (!contentDiv) {
+            contentDiv = document.getElementById('current-alerts-list');
+        }
         if (!contentDiv) return;
 
         // Get alerts from the alerts handler
         if (PulseApp.alerts && PulseApp.alerts.getActiveAlerts) {
             const activeAlerts = PulseApp.alerts.getActiveAlerts();
-            renderCurrentAlerts(activeAlerts);
+            renderCurrentAlerts(activeAlerts, contentDiv);
+            
+            // Update alert summary if we're in monitor tab
+            if (activeTab === 'monitor') {
+                updateAlertSummary();
+            }
         } else {
-            contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400">Alert system not initialized</p>';
+            contentDiv.innerHTML = '<p class="p-6 text-gray-500 dark:text-gray-400">Alert system not initialized</p>';
         }
     }
 
-    function renderCurrentAlerts(alerts) {
-        const contentDiv = document.getElementById('current-alerts-list');
+    function renderCurrentAlerts(alerts, contentDiv = null) {
+        if (!contentDiv) {
+            contentDiv = document.getElementById('active-alerts-list') || document.getElementById('current-alerts-list');
+        }
         if (!contentDiv) return;
 
         if (!alerts || alerts.length === 0) {
@@ -2916,7 +4146,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                     </div>
                     <div class="flex gap-1">
                         ${!acknowledged ? `
-                            <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}'); setTimeout(() => PulseApp.ui.alertManagementModal.loadCurrentAlerts(), 500);" 
+                            <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}');" 
                                     class="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded">
                                 Acknowledge
                             </button>
@@ -2967,18 +4197,36 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         `;
     }
 
-    function loadAlertHistory() {
+    async function loadAlertHistory() {
         const contentDiv = document.getElementById('alert-history-list');
         if (!contentDiv) return;
 
-        // Get historical alerts from the alerts handler
-        if (PulseApp.alerts && PulseApp.alerts.getAlertHistory) {
-            const historicalAlerts = PulseApp.alerts.getAlertHistory();
+        try {
+            // Show loading state
+            contentDiv.innerHTML = '<p class="text-gray-500 dark:text-gray-400">Loading alert history...</p>';
+            
+            // Fetch actual alert history from the backend
+            const response = await fetch('/api/alerts/history?limit=100');
+            if (!response.ok) {
+                throw new Error('Failed to fetch alert history');
+            }
+            
+            const data = await response.json();
+            const historicalAlerts = data.history || [];
+            
             renderAlertHistory(historicalAlerts);
-        } else {
-            // Mock historical data for now
-            const mockHistory = generateMockAlertHistory();
-            renderAlertHistory(mockHistory);
+            
+        } catch (error) {
+            console.error('Error loading alert history:', error);
+            contentDiv.innerHTML = `
+                <div class="text-center py-8">
+                    <svg class="w-12 h-12 mx-auto mb-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Error Loading History</h3>
+                    <p class="text-red-500 dark:text-red-400">Failed to load alert history: ${error.message}</p>
+                </div>
+            `;
         }
     }
 
@@ -3185,6 +4433,75 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         }
     }
 
+    function validateSMTPConfiguration() {
+        const errors = [];
+        
+        // Get SMTP configuration values
+        const smtpHost = document.querySelector('input[name="SMTP_HOST"]')?.value?.trim();
+        const smtpPort = document.querySelector('input[name="SMTP_PORT"]')?.value?.trim();
+        const smtpUser = document.querySelector('input[name="SMTP_USER"]')?.value?.trim();
+        const smtpPass = document.querySelector('input[name="SMTP_PASS"]')?.value?.trim();
+        const fromEmail = document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value?.trim();
+        const toEmail = document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value?.trim();
+        
+        // Check if there's already a saved SMTP configuration
+        const existingSmtpConfig = currentConfig?.advanced?.smtp;
+        const hasExistingConfig = existingSmtpConfig?.host && existingSmtpConfig?.user;
+        
+        // If all fields are empty and we have an existing config, skip validation
+        // This handles the case where the form hasn't been populated yet
+        const allFieldsEmpty = !smtpHost && !smtpPort && !smtpUser && !smtpPass && !fromEmail && !toEmail;
+        if (allFieldsEmpty && hasExistingConfig) {
+            return errors; // No errors, using existing config
+        }
+        
+        // Validate required fields if any SMTP field is filled (partial configuration check)
+        const hasAnySMTPField = smtpHost || smtpPort || smtpUser || smtpPass || fromEmail || toEmail;
+        
+        if (hasAnySMTPField) {
+            if (!smtpHost) {
+                errors.push('SMTP Host is required when configuring email');
+            }
+            
+            if (!smtpPort) {
+                errors.push('SMTP Port is required when configuring email');
+            } else {
+                const port = parseInt(smtpPort);
+                if (isNaN(port) || port < 1 || port > 65535) {
+                    errors.push('SMTP Port must be a valid port number (1-65535)');
+                }
+            }
+            
+            if (!smtpUser) {
+                errors.push('SMTP Username is required when configuring email');
+            }
+            
+            // Only require password for new configurations or if user is trying to change it
+            if (!smtpPass && !hasExistingConfig) {
+                errors.push('SMTP Password is required when configuring email');
+            }
+            
+            if (!fromEmail) {
+                errors.push('From Email address is required when configuring email');
+            } else if (!isValidEmail(fromEmail)) {
+                errors.push('From Email must be a valid email address');
+            }
+            
+            if (!toEmail) {
+                errors.push('To Email address is required when configuring email');
+            } else if (!isValidEmail(toEmail)) {
+                errors.push('To Email must be a valid email address');
+            }
+        }
+        
+        return errors;
+    }
+    
+    function isValidEmail(email) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return emailRegex.test(email);
+    }
+
     async function saveConfiguration() {
         // The save configuration button in the alert management modal should 
         // save any pending changes. Since individual system alerts are edited 
@@ -3204,17 +4521,46 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         try {
             let configToSave = {};
             let hasChanges = false;
-
-            // Check for email configuration changes
+            
+            // First check if we have any changes to save
             const emailConfigSection = document.getElementById('primary-email-config');
+            let hasEmailChanges = false;
+            
             if (emailConfigSection) {
-                const smtpHost = document.querySelector('input[name="ALERT_SMTP_HOST"]')?.value;
-                const smtpPort = document.querySelector('input[name="ALERT_SMTP_PORT"]')?.value;
-                const smtpUser = document.querySelector('input[name="ALERT_SMTP_USER"]')?.value;
-                const smtpPass = document.querySelector('input[name="ALERT_EMAIL_PASSWORD"]')?.value;
+                const smtpHost = document.querySelector('input[name="SMTP_HOST"]')?.value;
+                const smtpPort = document.querySelector('input[name="SMTP_PORT"]')?.value;
+                const smtpUser = document.querySelector('input[name="SMTP_USER"]')?.value;
+                const smtpPass = document.querySelector('input[name="SMTP_PASS"]')?.value;
                 const fromEmail = document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value;
                 const toEmail = document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value;
-                const smtpSecure = document.querySelector('input[name="ALERT_SMTP_SECURE"]')?.checked;
+                
+                // Check if any email field has a value (indicating user wants to save email config)
+                hasEmailChanges = smtpHost || smtpPort || smtpUser || smtpPass || fromEmail || toEmail;
+            }
+            
+            // Only validate SMTP configuration if there are email changes
+            if (hasEmailChanges) {
+                const validationErrors = validateSMTPConfiguration();
+                if (validationErrors.length > 0) {
+                    const errorMessage = 'Please fix the following errors:\n\n• ' + validationErrors.join('\n• ');
+                    alert(errorMessage);
+                    
+                    // Re-enable save button since validation failed
+                    saveButton.disabled = false;
+                    saveButton.textContent = originalText;
+                    return;
+                }
+            }
+
+            // Process email configuration changes
+            if (emailConfigSection && hasEmailChanges) {
+                const smtpHost = document.querySelector('input[name="SMTP_HOST"]')?.value;
+                const smtpPort = document.querySelector('input[name="SMTP_PORT"]')?.value;
+                const smtpUser = document.querySelector('input[name="SMTP_USER"]')?.value;
+                const smtpPass = document.querySelector('input[name="SMTP_PASS"]')?.value;
+                const fromEmail = document.querySelector('input[name="ALERT_FROM_EMAIL"]')?.value;
+                const toEmail = document.querySelector('input[name="ALERT_TO_EMAIL"]')?.value;
+                const smtpSecure = document.querySelector('input[name="SMTP_SECURE"]')?.checked;
 
                 if (smtpHost) { configToSave.SMTP_HOST = smtpHost; hasChanges = true; }
                 if (smtpPort) { configToSave.SMTP_PORT = smtpPort; hasChanges = true; }
@@ -3287,7 +4633,12 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 'memory_usage_warning': 'memory', 
                 'disk_space_warning': 'disk',
                 'disk_space_critical': 'disk', // Both disk alerts use same config
-                'guest_down': 'down'
+                'guest_down': 'down',
+                // Also handle short form IDs that come from UI
+                'cpu': 'cpu',
+                'memory': 'memory',
+                'disk': 'disk',
+                'down': 'down'
             };
             
             const alertType = alertTypeMap[alertId];
@@ -3330,28 +4681,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         }
     }
 
-    async function editCustomAlert(alertId) {
-        try {
-            // First, fetch the current alert data
-            const response = await fetch('/api/alerts/rules');
-            if (!response.ok) {
-                throw new Error(`Failed to fetch alert rules: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            const alert = data.rules ? data.rules.find(rule => rule.id === alertId) : null;
-            
-            if (!alert) {
-                throw new Error('Alert not found');
-            }
-            
-            // Open the custom alert modal with pre-filled data
-            openCustomAlertModal(alert.thresholds || [], alert);
-            
-        } catch (error) {
-            console.error('Failed to load alert for editing:', error);
-        }
-    }
+    // editCustomAlert function removed - now using unified editAlertRule
 
     async function deleteCustomAlert(alertId) {
         try {
@@ -3574,17 +4904,17 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         closeModal,
         switchTab: switchTab,
         openCustomAlertModal,
-        editCustomAlert,
+        editAlertRule,
         toggleCustomAlert,
         toggleAlert,
-        toggleSystemAlert,
+        toggleAlertRule,
         deleteCustomAlert,
         showAlertDetails,
         addWebhookEndpoint,
         removeWebhookEndpoint,
         handleEmailProviderSelection,
         loadCurrentAlerts: () => {
-            if (activeTab === 'alerts') {
+            if (activeTab === 'monitor' || activeTab === 'alerts') {
                 loadCurrentAlerts();
             }
         }
@@ -3598,5 +4928,4 @@ if (document.readyState === 'loading') {
     PulseApp.ui.alertManagementModal.init();
 }
 
-// Make toggleSystemAlert available globally for HTML onclick handlers
-window.toggleSystemAlert = PulseApp.ui.alertManagementModal.toggleSystemAlert;
+// Global functions are now exposed in the init() function to prevent timing issues
