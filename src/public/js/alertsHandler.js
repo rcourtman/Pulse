@@ -12,17 +12,13 @@ PulseApp.alerts = (() => {
     const MAX_NOTIFICATIONS = 3; // Reduced from 5
     const NOTIFICATION_TIMEOUT = 5000; // Reduced from 10 seconds to 5
     const ACKNOWLEDGED_CLEANUP_DELAY = 300000; // 5 minutes
-    const SEVERITY_COLORS = {
-        'critical': 'bg-red-500 border-red-600 text-white',
-        'warning': 'bg-yellow-500 border-yellow-600 text-white',
-        'info': 'bg-blue-500 border-blue-600 text-white',
+    const ALERT_COLORS = {
+        'active': 'bg-red-500 border-red-600 text-white',
         'resolved': 'bg-green-500 border-green-600 text-white'
     };
 
-    const SEVERITY_ICONS = {
-        'critical': `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>`,
-        'warning': `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>`,
-        'info': `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>`,
+    const ALERT_ICONS = {
+        'active': `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path></svg>`,
         'resolved': `<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>`
     };
 
@@ -271,7 +267,7 @@ PulseApp.alerts = (() => {
             alertDropdown.innerHTML = `
                 <div class="p-3 text-center text-gray-500 dark:text-gray-400">
                     <svg class="w-6 h-6 mx-auto mb-1 text-gray-300 dark:text-gray-600" fill="currentColor" viewBox="0 0 20 20">
-                        ${SEVERITY_ICONS.info}
+                        ${ALERT_ICONS.active}
                     </svg>
                     <p class="text-xs mb-3">No active alerts</p>
                     <button onclick="PulseApp.alerts.hideAlertsDropdown(); if (PulseApp.ui && PulseApp.ui.alertManagementModal) { PulseApp.ui.alertManagementModal.openModal(); } else { console.error('Alert management modal not available'); }" 
@@ -334,7 +330,7 @@ PulseApp.alerts = (() => {
             content = `
                 <div class="p-3 text-center text-gray-500 dark:text-gray-400">
                     <svg class="w-6 h-6 mx-auto mb-1 text-green-300 dark:text-green-600" fill="currentColor" viewBox="0 0 20 20">
-                        ${SEVERITY_ICONS.resolved}
+                        ${ALERT_ICONS.resolved}
                     </svg>
                     <p class="text-xs">All alerts acknowledged</p>
                 </div>
@@ -368,11 +364,8 @@ PulseApp.alerts = (() => {
     }
 
     function createCompactAlertCard(alert, acknowledged = false) {
-        const severityColor = alert.severity === 'critical' ? 'border-red-400' :
-                             alert.severity === 'warning' ? 'border-yellow-400' : 'border-blue-400';
-        
-        const severityBg = alert.severity === 'critical' ? 'bg-red-50 dark:bg-red-900/10' :
-                          alert.severity === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/10' : 'bg-blue-50 dark:bg-blue-900/10';
+        const alertColor = 'border-red-400';
+        const alertBg = 'bg-red-50 dark:bg-red-900/10';
         
         // If acknowledged, heavily grey out the entire card
         const cardClasses = acknowledged ? 
@@ -384,7 +377,7 @@ PulseApp.alerts = (() => {
                            duration < 3600 ? `${Math.round(duration/60)}m` : 
                            `${Math.round(duration/3600)}h`;
         
-        const icon = SEVERITY_ICONS[alert.severity] || SEVERITY_ICONS.info;
+        const icon = ALERT_ICONS.active;
         
         let currentValueDisplay = '';
         if (alert.metric === 'status') {
@@ -465,8 +458,8 @@ PulseApp.alerts = (() => {
         
         updateHeaderIndicator();
         
-        // Only show notifications for critical alerts or escalated alerts to reduce noise
-        const shouldShowNotification = alert.severity === 'critical' || alert.escalated;
+        // Only show notifications for escalated alerts to reduce noise
+        const shouldShowNotification = alert.escalated;
         if (shouldShowNotification) {
             // showNotification(alert, alert.severity);
         }
@@ -488,8 +481,8 @@ PulseApp.alerts = (() => {
         
         updateHeaderIndicator();
         
-        // Only show resolved notifications for previously critical/escalated alerts
-        const shouldShowNotification = alert.severity === 'critical' || alert.escalated;
+        // Only show resolved notifications for previously escalated alerts
+        const shouldShowNotification = alert.escalated;
         if (shouldShowNotification) {
             // showNotification(alert, 'resolved');
         }
@@ -515,18 +508,12 @@ PulseApp.alerts = (() => {
         if (count === 0) {
             className = 'text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-pointer relative flex-shrink-0 transition-colors';
         } else {
-            const hasCritical = unacknowledgedAlerts.some(a => a.severity === 'critical');
-            const hasWarnings = unacknowledgedAlerts.some(a => a.severity === 'warning');
             const hasEscalated = escalatedCount > 0;
             
             if (hasEscalated) {
                 className = 'text-xs px-1.5 py-0.5 rounded bg-red-500 text-white cursor-pointer relative flex-shrink-0 transition-colors';
-            } else if (hasCritical) {
-                className = 'text-xs px-1.5 py-0.5 rounded bg-red-400 text-white cursor-pointer relative flex-shrink-0 transition-colors';
-            } else if (hasWarnings) {
-                className = 'text-xs px-1.5 py-0.5 rounded bg-yellow-400 text-white cursor-pointer relative flex-shrink-0 transition-colors';
             } else {
-                className = 'text-xs px-1.5 py-0.5 rounded bg-blue-400 text-white cursor-pointer relative flex-shrink-0 transition-colors';
+                className = 'text-xs px-1.5 py-0.5 rounded bg-red-400 text-white cursor-pointer relative flex-shrink-0 transition-colors';
             }
         }
         
@@ -556,7 +543,7 @@ PulseApp.alerts = (() => {
         };
         
         const colorClass = colorClasses[type] || colorClasses.info;
-        const icon = SEVERITY_ICONS[type] || SEVERITY_ICONS.info;
+        const icon = ALERT_ICONS.active;
         
         const title = type === 'resolved' ? 'Resolved' : 
                      alert.escalated ? 'Escalated' : 
@@ -799,7 +786,17 @@ PulseApp.alerts = (() => {
     function updateAlertsFromState(state) {
         if (state && state.alerts) {
             if (state.alerts.active) {
-                activeAlerts = state.alerts.active;
+                // Preserve local acknowledgment state to prevent race conditions
+                const newAlerts = state.alerts.active.map(serverAlert => {
+                    const localAlert = activeAlerts.find(local => local.id === serverAlert.id);
+                    if (localAlert && localAlert.acknowledged && !serverAlert.acknowledged) {
+                        // Keep local acknowledgment if server hasn't caught up yet
+                        return { ...serverAlert, acknowledged: true, acknowledgedAt: localAlert.acknowledgedAt };
+                    }
+                    return serverAlert;
+                });
+                
+                activeAlerts = newAlerts;
                 updateHeaderIndicator();
                 if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
                     updateDropdownContent();
@@ -830,10 +827,15 @@ PulseApp.alerts = (() => {
     
     function handleAcknowledgedAlert(alert) {
         
-        // Update existing alert
+        // Update existing alert with server data
         const existingIndex = activeAlerts.findIndex(a => a.id === alert.id);
         if (existingIndex >= 0) {
-            activeAlerts[existingIndex] = { ...activeAlerts[existingIndex], acknowledged: true, acknowledgedAt: Date.now() };
+            activeAlerts[existingIndex] = { 
+                ...activeAlerts[existingIndex], 
+                acknowledged: true, 
+                acknowledgedAt: alert.acknowledgedAt || Date.now(),
+                acknowledgedBy: alert.acknowledgedBy
+            };
             updateHeaderIndicator();
             if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
                 updateDropdownContent();

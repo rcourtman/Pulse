@@ -2041,11 +2041,12 @@ PulseApp.ui.backups = (() => {
         
         // Handle snapshot button clicks
         document.addEventListener('click', (e) => {
-            if (e.target.classList.contains('view-snapshots-btn')) {
-                const vmid = e.target.dataset.vmid;
-                const node = e.target.dataset.node;
-                const endpoint = e.target.dataset.endpoint;
-                const type = e.target.dataset.type;
+            const button = e.target.closest('.view-snapshots-btn');
+            if (button) {
+                const vmid = button.dataset.vmid;
+                const node = button.dataset.node;
+                const endpoint = button.dataset.endpoint;
+                const type = button.dataset.type;
                 
                 _showSnapshotModal(vmid, node, endpoint, type);
             }

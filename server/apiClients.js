@@ -171,6 +171,12 @@ async function initializePbsClients(pbsConfigs) {
 
   console.log(`INFO: Initializing API clients for ${pbsConfigs.length} PBS instances...`);
   const initPromises = pbsConfigs.map(async (config) => {
+      // Skip disabled PBS configurations
+      if (!config.enabled) {
+          console.log(`INFO: Skipping disabled PBS endpoint: ${config.name} (${config.host})`);
+          return;
+      }
+      
       let clientData = null;
       try {
           if (config.authMethod === 'token') {

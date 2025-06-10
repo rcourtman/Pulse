@@ -1243,5 +1243,491 @@
     "acknowledgedAt": 1749506285411,
     "acknowledgeNote": "Acknowledged via web interface",
     "note": "Acknowledged via web interface"
+  },
+  "down_primary_desktop_400": {
+    "id": "alert_1749592617079_yo7ti97hw",
+    "rule": {
+      "id": "down",
+      "name": "System Availability",
+      "description": "Monitors VM/container availability and uptime",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 900000,
+      "autoResolve": true,
+      "suppressionTime": 300000,
+      "type": "single_metric",
+      "thresholds": [
+        {
+          "metric": "status",
+          "condition": "equals",
+          "threshold": "stopped"
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "desktop",
+      "vmid": 400,
+      "name": "ubuntu-gpu-vm",
+      "type": "qemu",
+      "status": "stopped",
+      "maxmem": 2147483648,
+      "maxdisk": 34359738368
+    },
+    "startTime": 1749592617067,
+    "lastUpdate": 1749592786712,
+    "triggeredAt": 1749592617067,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749592798220,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "down_primary_desktop_200": {
+    "id": "alert_1749592617067_einpllnea",
+    "rule": {
+      "id": "down",
+      "name": "System Availability",
+      "description": "Monitors VM/container availability and uptime",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 900000,
+      "autoResolve": true,
+      "suppressionTime": 300000,
+      "type": "single_metric",
+      "thresholds": [
+        {
+          "metric": "status",
+          "condition": "equals",
+          "threshold": "stopped"
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "desktop",
+      "vmid": 200,
+      "name": "UnraidServer",
+      "type": "qemu",
+      "status": "stopped",
+      "maxmem": 8589934592,
+      "maxdisk": 0
+    },
+    "startTime": 1749592617067,
+    "lastUpdate": 1749592786712,
+    "triggeredAt": 1749592617067,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749592798209,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "down_primary_desktop_102": {
+    "id": "alert_1749592617079_bnzd6fszz",
+    "rule": {
+      "id": "down",
+      "name": "System Availability",
+      "description": "Monitors VM/container availability and uptime",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 900000,
+      "autoResolve": true,
+      "suppressionTime": 300000,
+      "type": "single_metric",
+      "thresholds": [
+        {
+          "metric": "status",
+          "condition": "equals",
+          "threshold": "stopped"
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "desktop",
+      "vmid": 102,
+      "name": "windows11",
+      "type": "qemu",
+      "status": "stopped",
+      "maxmem": 8589934592,
+      "maxdisk": 68719476736
+    },
+    "startTime": 1749592617067,
+    "lastUpdate": 1749592786712,
+    "triggeredAt": 1749592617067,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749592798218,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "down_primary_desktop_109": {
+    "id": "alert_1749592617080_x3v4e076s",
+    "rule": {
+      "id": "down",
+      "name": "System Availability",
+      "description": "Monitors VM/container availability and uptime",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 900000,
+      "autoResolve": true,
+      "suppressionTime": 300000,
+      "type": "single_metric",
+      "thresholds": [
+        {
+          "metric": "status",
+          "condition": "equals",
+          "threshold": "stopped"
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "desktop",
+      "vmid": 109,
+      "name": "pbs2",
+      "type": "lxc",
+      "status": "stopped",
+      "maxmem": 4294967296,
+      "maxdisk": 10737418240
+    },
+    "startTime": 1749592617067,
+    "lastUpdate": 1749592786712,
+    "triggeredAt": 1749592617067,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749592798224,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "down_primary_desktop_112": {
+    "id": "alert_1749592617080_2z4b49hac",
+    "rule": {
+      "id": "down",
+      "name": "System Availability",
+      "description": "Monitors VM/container availability and uptime",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 900000,
+      "autoResolve": true,
+      "suppressionTime": 300000,
+      "type": "single_metric",
+      "thresholds": [
+        {
+          "metric": "status",
+          "condition": "equals",
+          "threshold": "stopped"
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "desktop",
+      "vmid": 112,
+      "name": "pulse",
+      "type": "lxc",
+      "status": "stopped",
+      "maxmem": 1073741824,
+      "maxdisk": 4294967296
+    },
+    "startTime": 1749592617067,
+    "lastUpdate": 1749592786712,
+    "triggeredAt": 1749592617067,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749592798222,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "down_endpoint_2_pi_102": {
+    "id": "alert_1749592617081_hc5818rzl",
+    "rule": {
+      "id": "down",
+      "name": "System Availability",
+      "description": "Monitors VM/container availability and uptime",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 900000,
+      "autoResolve": true,
+      "suppressionTime": 300000,
+      "type": "single_metric",
+      "thresholds": [
+        {
+          "metric": "status",
+          "condition": "equals",
+          "threshold": "stopped"
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "endpoint_2",
+      "node": "pi",
+      "vmid": 102,
+      "name": "pi-docker",
+      "type": "lxc",
+      "status": "stopped",
+      "maxmem": 536870912,
+      "maxdisk": 4401922048
+    },
+    "startTime": 1749592617067,
+    "lastUpdate": 1749592786712,
+    "triggeredAt": 1749592617067,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749592798226,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "down_endpoint_2_pi_100": {
+    "id": "alert_1749592617081_qwcwii5t0",
+    "rule": {
+      "id": "down",
+      "name": "System Availability",
+      "description": "Monitors VM/container availability and uptime",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 900000,
+      "autoResolve": true,
+      "suppressionTime": 300000,
+      "type": "single_metric",
+      "thresholds": [
+        {
+          "metric": "status",
+          "condition": "equals",
+          "threshold": "stopped"
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "endpoint_2",
+      "node": "pi",
+      "vmid": 100,
+      "name": "pihole",
+      "type": "lxc",
+      "status": "stopped",
+      "maxmem": 536870912,
+      "maxdisk": 6442450944
+    },
+    "startTime": 1749592617067,
+    "lastUpdate": 1749592786712,
+    "triggeredAt": 1749592617067,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749592798227,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "down_endpoint_2_pi_101": {
+    "id": "alert_1749592617081_ahtvzvo4z",
+    "rule": {
+      "id": "down",
+      "name": "System Availability",
+      "description": "Monitors VM/container availability and uptime",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 900000,
+      "autoResolve": true,
+      "suppressionTime": 300000,
+      "type": "single_metric",
+      "thresholds": [
+        {
+          "metric": "status",
+          "condition": "equals",
+          "threshold": "stopped"
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "endpoint_2",
+      "node": "pi",
+      "vmid": 101,
+      "name": "pi-influxdb",
+      "type": "lxc",
+      "status": "stopped",
+      "maxmem": 536870912,
+      "maxdisk": 2254438400
+    },
+    "startTime": 1749592617067,
+    "lastUpdate": 1749592786712,
+    "triggeredAt": 1749592617067,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "acknowledgedBy": "bulk-operation",
+    "acknowledgedAt": 1749592798229,
+    "acknowledgeNote": "Bulk acknowledged via dropdown",
+    "note": "Bulk acknowledged via dropdown"
+  },
+  "down_primary_delly_105": {
+    "id": "alert_1749593458602_qbke062cb",
+    "rule": {
+      "id": "down",
+      "name": "System Availability",
+      "description": "Monitors VM/container availability and uptime",
+      "metric": "status",
+      "condition": "equals",
+      "threshold": "stopped",
+      "duration": 60000,
+      "severity": "critical",
+      "enabled": true,
+      "tags": [
+        "availability",
+        "guest"
+      ],
+      "group": "availability_alerts",
+      "escalationTime": 900000,
+      "autoResolve": true,
+      "suppressionTime": 300000,
+      "type": "single_metric",
+      "thresholds": [
+        {
+          "metric": "status",
+          "condition": "equals",
+          "threshold": "stopped"
+        }
+      ],
+      "sendEmail": true,
+      "sendWebhook": false
+    },
+    "guest": {
+      "endpointId": "primary",
+      "node": "delly",
+      "vmid": 105,
+      "name": "homepage",
+      "type": "lxc",
+      "status": "stopped",
+      "maxmem": 1073741824,
+      "maxdisk": 6442450944
+    },
+    "startTime": 1749593458602,
+    "lastUpdate": 1749593528590,
+    "currentValue": "stopped",
+    "effectiveThreshold": "stopped",
+    "state": "active",
+    "escalated": false,
+    "acknowledged": true,
+    "triggeredAt": 1749593519850,
+    "acknowledgedBy": "web-user",
+    "acknowledgedAt": 1749593811640,
+    "acknowledgeNote": "Acknowledged via web interface",
+    "note": "Acknowledged via web interface"
   }
 }

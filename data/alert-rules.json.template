@@ -5,7 +5,6 @@
       "id": "compound_example_123",
       "condition": "greater_than",
       "duration": 5000,
-      "severity": "warning",
       "enabled": true,
       "tags": [],
       "group": "compound_threshold",

@@ -74,17 +74,6 @@ PulseApp.ui.alertManagementModal = (() => {
         isInitialized = true;
     }
     
-    function filterAlertsBySeverity(severity) {
-        // Switch to monitor tab to show alerts
-        switchTab('monitor');
-        
-        // Clear any existing search since we no longer filter by severity
-        const searchInput = document.getElementById('alert-search');
-        if (searchInput) {
-            searchInput.value = '';
-            searchInput.dispatchEvent(new Event('input'));
-        }
-    }
 
     function exposeGlobalFunctions() {
         // Make all onclick handler functions globally accessible immediately
@@ -97,7 +86,6 @@ PulseApp.ui.alertManagementModal = (() => {
             addWebhookEndpoint,
             removeWebhookEndpoint,
             handleEmailProviderSelection,
-            filterAlertsBySeverity,
             switchTab,
             // Unified alert rule functions
             openAlertRuleModal,
@@ -184,10 +172,10 @@ PulseApp.ui.alertManagementModal = (() => {
         }
 
         const modalHTML = `
-            <div id="alert-management-modal" class="fixed inset-0 z-50 hidden items-start justify-center bg-black bg-opacity-50 pt-8">
-                <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col m-4">
-                    <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-6 py-4">
-                        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Alert Management</h2>
+            <div id="alert-management-modal" class="fixed inset-0 z-50 hidden items-start justify-center bg-black bg-opacity-50 pt-4 sm:pt-8">
+                <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] flex flex-col m-2 sm:m-4">
+                    <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
+                        <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Alert Management</h2>
                         <button id="alert-management-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -197,31 +185,33 @@ PulseApp.ui.alertManagementModal = (() => {
                     
                     <!-- Tab Navigation -->
                     <div class="border-b border-gray-200 dark:border-gray-700">
-                        <nav class="flex space-x-8 px-6" id="alert-management-tabs">
-                            <button class="alert-tab active py-3 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="monitor">
-                                <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <nav class="flex space-x-4 sm:space-x-8 px-4 sm:px-6 overflow-x-auto" id="alert-management-tabs">
+                            <button class="alert-tab active py-3 px-2 sm:px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm whitespace-nowrap" data-tab="monitor">
+                                <svg class="w-4 h-4 inline mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                 </svg>
-                                Monitor
+                                <span class="hidden sm:inline">Monitor</span>
+                                <span class="sm:hidden">Mon</span>
                             </button>
-                            <button class="alert-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="configure">
-                                <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <button class="alert-tab py-3 px-2 sm:px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm whitespace-nowrap" data-tab="configure">
+                                <svg class="w-4 h-4 inline mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                                 </svg>
-                                Configure
+                                <span class="hidden sm:inline">Configure</span>
+                                <span class="sm:hidden">Config</span>
                             </button>
                         </nav>
                     </div>
                     
-                    <div id="alert-management-modal-body" class="overflow-y-auto flex-grow p-6 scrollbar">
+                    <div id="alert-management-modal-body" class="overflow-y-auto flex-grow p-4 sm:p-6 scrollbar">
                         <p class="text-gray-500 dark:text-gray-400">Loading...</p>
                     </div>
                     
-                    <div class="modal-footer border-t border-gray-300 dark:border-gray-700 px-6 py-4">
-                        <div class="flex gap-3 justify-end">
-                            <button type="button" id="alert-management-cancel-button" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md transition-colors">
+                    <div class="modal-footer border-t border-gray-300 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
+                        <div class="flex gap-2 sm:gap-3 justify-end">
+                            <button type="button" id="alert-management-cancel-button" class="px-3 sm:px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md transition-colors">
                                 Close
                             </button>
                         </div>
@@ -271,7 +261,8 @@ PulseApp.ui.alertManagementModal = (() => {
         
         tabButtons.forEach(button => {
             button.addEventListener('click', (e) => {
-                const tabName = e.target.getAttribute('data-tab');
+                e.preventDefault();
+                const tabName = e.currentTarget.getAttribute('data-tab');
                 switchTab(tabName);
             });
         });
@@ -321,22 +312,28 @@ PulseApp.ui.alertManagementModal = (() => {
                 initializeMonitorTab();
                 break;
             case 'configure':
-                modalBody.innerHTML = renderConfigureTab();
-                initializeConfigureTab();
-                // Load configuration for the configure tab
-                if (currentConfig && Object.keys(currentConfig).length > 0) {
-                    setTimeout(async () => {
-                        loadEmailConfiguration();
-                        await loadGlobalToggles();
-                    }, 50);
-                } else {
-                    loadConfiguration().then(async () => {
-                        // Add a small delay to ensure DOM is ready
+                try {
+                    const configureTabContent = renderConfigureTab();
+                    modalBody.innerHTML = configureTabContent;
+                    initializeConfigureTab();
+                    // Load configuration for the configure tab
+                    if (currentConfig && Object.keys(currentConfig).length > 0) {
                         setTimeout(async () => {
                             loadEmailConfiguration();
                             await loadGlobalToggles();
-                        }, 100);
-                    });
+                        }, 50);
+                    } else {
+                        loadConfiguration().then(async () => {
+                            // Add a small delay to ensure DOM is ready
+                            setTimeout(async () => {
+                                loadEmailConfiguration();
+                                await loadGlobalToggles();
+                            }, 100);
+                        });
+                    }
+                } catch (error) {
+                    console.error('[Alert Modal] Error rendering configure tab:', error);
+                    modalBody.innerHTML = '<p class="text-red-500">Error loading configure tab: ' + error.message + '</p>';
                 }
                 break;
             default:
@@ -348,7 +345,7 @@ PulseApp.ui.alertManagementModal = (() => {
         return `
             <div class="space-y-6">
                 <!-- Alert Summary Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
                     <div class="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
                         <div class="flex items-center justify-between">
                             <div>
@@ -408,18 +405,19 @@ PulseApp.ui.alertManagementModal = (() => {
                             <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Active Alerts</h3>
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" id="active-alerts-badge">0</span>
                         </div>
-                        <div class="flex items-center space-x-2">
-                            <button id="refresh-alerts-btn" class="px-3 py-1 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors">
-                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div class="flex items-center space-x-1 sm:space-x-2">
+                            <button id="refresh-alerts-btn" class="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors">
+                                <svg class="w-3 h-3 sm:w-4 sm:h-4 inline mr-0 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                                 </svg>
-                                Refresh
+                                <span class="hidden sm:inline">Refresh</span>
                             </button>
-                            <button id="acknowledge-all-alerts-btn" class="px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
-                                <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <button id="acknowledge-all-alerts-btn" class="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
+                                <svg class="w-3 h-3 sm:w-4 sm:h-4 inline mr-0 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                 </svg>
-                                Acknowledge All
+                                <span class="hidden sm:inline">Acknowledge All</span>
+                                <span class="sm:hidden">Ack All</span>
                             </button>
                         </div>
                     </div>
@@ -460,12 +458,13 @@ PulseApp.ui.alertManagementModal = (() => {
                                 </svg>
                                 <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Alert Rules</h3>
                             </div>
-                            <div class="flex gap-3">
-                                <button onclick="openAlertRuleModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
-                                    <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div class="flex gap-2 sm:gap-3">
+                                <button onclick="openAlertRuleModal()" class="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium rounded-md transition-colors">
+                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                                     </svg>
-                                    Create Rule
+                                    <span class="hidden sm:inline">Create Rule</span>
+                                    <span class="sm:hidden">Create</span>
                                 </button>
                             </div>
                         </div>
@@ -514,7 +513,7 @@ PulseApp.ui.alertManagementModal = (() => {
                     <div class="px-6 py-4 space-y-4" id="email-config-section">
                         <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Email Configuration</h4>
                         
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
                                 <input type="email" name="ALERT_FROM_EMAIL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="alerts@yourdomain.com">
@@ -644,10 +643,13 @@ PulseApp.ui.alertManagementModal = (() => {
                 return;
             }
 
-            // Sort rules by type (built-in first) then by name
+            // Sort rules by group then by name
             rules.sort((a, b) => {
-                if (a.isBuiltIn && !b.isBuiltIn) return -1;
-                if (!a.isBuiltIn && b.isBuiltIn) return 1;
+                const groupA = a.group || 'zz_custom';
+                const groupB = b.group || 'zz_custom';
+                if (groupA !== groupB) {
+                    return groupA.localeCompare(groupB);
+                }
                 return (a.name || '').localeCompare(b.name || '');
             });
 
@@ -664,8 +666,7 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function renderUnifiedAlertRule(rule) {
-        const isBuiltIn = rule.isBuiltIn || rule.type === 'built-in' || 
-                         ['cpu', 'memory', 'disk', 'down'].includes(rule.id);
+        const isCompoundRule = rule.thresholds && Array.isArray(rule.thresholds) && rule.thresholds.length > 0;
         
         // Generate threshold display
         const thresholdDisplay = (() => {
@@ -699,10 +700,6 @@ PulseApp.ui.alertManagementModal = (() => {
                 <div class="flex-1">
                     <div class="flex items-center gap-3 mb-2">
                         <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${rule.name || rule.id}</h5>
-                        ${isBuiltIn ? 
-                            '<span class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">Built-in</span>' : 
-                            '<span class="px-2 py-1 text-xs font-medium rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">Custom</span>'
-                        }
                     </div>
                     <div class="space-y-1">
                         ${thresholdDisplay ? `
@@ -720,19 +717,17 @@ PulseApp.ui.alertManagementModal = (() => {
                         <input type="checkbox" ${rule.enabled !== false ? 'checked' : ''} class="sr-only peer" onchange="toggleAlertRule('${rule.id}', this.checked)">
                         <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
                     </label>
-                    <button onclick="editAlertRule('${rule.id}')" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="${isBuiltIn ? 'View rule details' : 'Edit rule'}">
+                    <button onclick="editAlertRule('${rule.id}')" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Edit rule">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                         </svg>
                     </button>
-                    ${!isBuiltIn ? `
-                        <button onclick="deleteAlertRule('${rule.id}')" class="p-1 text-red-400 hover:text-red-600" title="Delete rule">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                            </svg>
-                        </button>
-                    ` : ''}
+                    <button onclick="deleteAlertRule('${rule.id}')" class="p-1 text-red-400 hover:text-red-600" title="Delete rule">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
                 </div>
             </div>
         `;
@@ -741,7 +736,7 @@ PulseApp.ui.alertManagementModal = (() => {
     function getAlertRuleDescription(rule) {
         if (rule.description) return rule.description;
         
-        // Generate description for built-in rules
+        // Generate description for system rules
         switch (rule.id) {
             case 'cpu':
                 return 'Monitors CPU usage across all VMs and containers';
@@ -762,7 +757,7 @@ PulseApp.ui.alertManagementModal = (() => {
     // Unified alert rule functions
     function openAlertRuleModal(existingRule = null) {
         // For now, redirect to the existing custom alert modal
-        // TODO: Create a unified modal that handles both built-in and custom rules
+        // TODO: Create a unified modal that handles all rules
         openCustomAlertModal([], existingRule);
     }
 
@@ -781,19 +776,17 @@ PulseApp.ui.alertManagementModal = (() => {
                 throw new Error('Alert rule not found');
             }
             
-            // Convert built-in rules to compound threshold format for unified editing
+            // Convert single-metric rules to compound threshold format for unified editing
             let thresholds = [];
             let alertData = rule;
             
-            if (['cpu', 'memory', 'disk', 'down'].includes(ruleId)) {
-                // Convert simple built-in rule to compound threshold format
-                if (rule.metric && rule.threshold !== undefined) {
-                    thresholds = [{
-                        metric: rule.metric,
-                        condition: rule.condition || 'greater_than',
-                        threshold: rule.threshold
-                    }];
-                }
+            if (rule.metric && rule.threshold !== undefined && !rule.thresholds) {
+                // Convert simple single-metric rule to compound threshold format
+                thresholds = [{
+                    metric: rule.metric,
+                    condition: rule.condition || 'greater_than',
+                    threshold: rule.threshold
+                }];
                 
                 // Create alertData object that openCustomAlertModal can understand
                 alertData = {
@@ -802,7 +795,7 @@ PulseApp.ui.alertManagementModal = (() => {
                     thresholds: thresholds
                 };
             } else {
-                // Custom rule - use existing thresholds
+                // Multi-threshold rule - use existing thresholds
                 thresholds = rule.thresholds || [];
             }
             
@@ -816,13 +809,26 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     async function toggleAlertRule(ruleId, enabled) {
-        // Check if it's a built-in rule or custom rule
-        const isBuiltIn = ['cpu', 'memory', 'disk', 'down'].includes(ruleId);
-        
-        if (isBuiltIn) {
-            return toggleSystemAlert(ruleId, enabled);
-        } else {
-            return toggleCustomAlert(ruleId, enabled);
+        // All rules use the same unified API endpoint now
+        try {
+            const response = await fetch(`/api/alerts/rules/${ruleId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ enabled })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Failed to toggle alert rule: ${response.status}`);
+            }
+
+            PulseApp.ui.toast.success(`Alert rule ${enabled ? 'enabled' : 'disabled'}`);
+            return true;
+        } catch (error) {
+            console.error('Failed to toggle alert rule:', error);
+            PulseApp.ui.toast.error('Failed to toggle alert rule');
+            return false;
         }
     }
 
@@ -938,7 +944,6 @@ PulseApp.ui.alertManagementModal = (() => {
     function renderActivityItem(alert) {
         const time = new Date(alert.triggeredAt || alert.resolvedAt || alert.acknowledgedAt);
         const timeAgo = getTimeAgo(time);
-        const severityColor = getSeverityColor(alert.severity);
         
         let statusIcon = '';
         let statusText = '';
@@ -969,23 +974,11 @@ PulseApp.ui.alertManagementModal = (() => {
                         </div>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${severityColor}">
-                            ${(alert.severity || 'warning').charAt(0).toUpperCase() + (alert.severity || 'warning').slice(1)}
-                        </span>
                         <span class="text-xs text-gray-500 dark:text-gray-400">${timeAgo}</span>
                     </div>
                 </div>
             </div>
         `;
-    }
-
-    function getSeverityColor(severity) {
-        const colors = {
-            critical: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-            warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-            info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-        };
-        return colors[severity] || colors.warning;
     }
 
     function getTimeAgo(date) {
@@ -1063,7 +1056,7 @@ PulseApp.ui.alertManagementModal = (() => {
                         <input type="checkbox" ${rule.enabled ? 'checked' : ''} class="sr-only peer" onchange="toggleSystemAlert('${rule.id}', this.checked)">
                         <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
                     </label>
-                    <button onclick="editSystemAlert('${rule.id}')" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <button onclick="editAlertRule('${rule.id}')" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
@@ -1111,9 +1104,6 @@ PulseApp.ui.alertManagementModal = (() => {
                                 <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${rule.name || 'Unnamed Rule'}</h5>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">${rule.description || 'No description'}</p>
                                 <div class="flex items-center space-x-2 mt-1">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getSeverityBadgeColor(rule.severity)}">
-                                        ${(rule.severity || 'warning').charAt(0).toUpperCase() + (rule.severity || 'warning').slice(1)}
-                                    </span>
                                     ${getActiveAlertsCount(rule.id) > 0 ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">${getActiveAlertsCount(rule.id)} active</span>` : ''}
                                 </div>
                             </div>
@@ -1152,14 +1142,6 @@ PulseApp.ui.alertManagementModal = (() => {
             });
     }
 
-    function getSeverityBadgeColor(severity) {
-        const colors = {
-            critical: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-            warning: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-            info: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-        };
-        return colors[severity] || colors.warning;
-    }
 
     function getActiveAlertsCount(ruleId) {
         if (PulseApp.alerts && PulseApp.alerts.getCurrentAlerts) {
@@ -1445,117 +1427,8 @@ PulseApp.ui.alertManagementModal = (() => {
                         <div class="space-y-6">
                             
                             <div id="system-alerts-content" class="space-y-3">
-                                <!-- CPU Alert Rule -->
-                                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
-                                    <div class="flex items-start justify-between mb-2">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">CPU Alert</h5>
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                                                Built-in system rule • Target: All VMs/LXCs
-                                            </div>
-                                        </div>
-                                        <div class="flex gap-1">
-                                            <button onclick="editSystemAlert('cpu')" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
-                                                Edit
-                                            </button>
-                                            <button onclick="toggleSystemAlert('cpu', false)" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded" id="cpu-toggle-btn">
-                                                Disable
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Triggers when CPU usage exceeds <span id="cpu-threshold-display">85%</span></p>
-                                        <div class="flex flex-wrap">
-                                            <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">CPU ≥ <span id="cpu-threshold-badge">85</span>%</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Memory Alert Rule -->
-                                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
-                                    <div class="flex items-start justify-between mb-2">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Memory Alert</h5>
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                                                Built-in system rule • Target: All VMs/LXCs
-                                            </div>
-                                        </div>
-                                        <div class="flex gap-1">
-                                            <button onclick="editSystemAlert('memory')" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
-                                                Edit
-                                            </button>
-                                            <button onclick="toggleSystemAlert('memory', false)" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded" id="memory-toggle-btn">
-                                                Disable
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Triggers when memory usage exceeds <span id="memory-threshold-display">90%</span></p>
-                                        <div class="flex flex-wrap">
-                                            <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">Memory ≥ <span id="memory-threshold-badge">90</span>%</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Disk Alert Rule -->
-                                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
-                                    <div class="flex items-start justify-between mb-2">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Disk Alert</h5>
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                                                Built-in system rule • Target: All VMs/LXCs
-                                            </div>
-                                        </div>
-                                        <div class="flex gap-1">
-                                            <button onclick="editSystemAlert('disk')" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
-                                                Edit
-                                            </button>
-                                            <button onclick="toggleSystemAlert('disk', false)" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded" id="disk-toggle-btn">
-                                                Disable
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Triggers when disk usage exceeds <span id="disk-threshold-display">95%</span></p>
-                                        <div class="flex flex-wrap">
-                                            <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">Disk ≥ <span id="disk-threshold-badge">95</span>%</span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Down Alert Rule -->
-                                <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
-                                    <div class="flex items-start justify-between mb-2">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">Down Alert</h5>
-                                            </div>
-                                            <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                                                Built-in system rule • Target: All VMs/LXCs
-                                            </div>
-                                        </div>
-                                        <div class="flex gap-1">
-                                            <button onclick="editSystemAlert('down')" class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
-                                                Edit
-                                            </button>
-                                            <button onclick="toggleSystemAlert('down', false)" class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded" id="down-toggle-btn">
-                                                Disable
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Triggers when VM/LXC becomes unreachable or stops responding</p>
-                                        <div class="flex flex-wrap">
-                                            <span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">System Down Alert</span>
-                                        </div>
-                                    </div>
-                                </div>
+                                <!-- System alerts will be loaded dynamically here -->
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Loading system alerts...</p>
                             </div>
                         </div>
                     </div>
@@ -1627,7 +1500,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                 <!-- Email Provider Quick Setup -->
                                 <div class="mb-4">
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email Provider</label>
-                                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                         <button type="button" onclick="PulseApp.ui.alertManagementModal.handleEmailProviderSelection('gmail')" 
                                                 class="email-provider-btn px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300">
                                             Gmail
@@ -1647,7 +1520,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                     </div>
                                 </div>
 
-                                <div id="primary-email-config" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div id="primary-email-config" class="grid grid-cols-1 gap-4">
                                     <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
                                         <input type="email" id="email-from-input" name="ALERT_FROM_EMAIL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="alerts@yourcompany.com">
@@ -1751,8 +1624,8 @@ PulseApp.ui.alertManagementModal = (() => {
                                     </label>
                                 </div>
                                 
-                                <div id="primary-webhook-config" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div class="md:col-span-2">
+                                <div id="primary-webhook-config" class="grid grid-cols-1 gap-4">
+                                    <div>
                                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
                                         <input type="url" id="webhook-url" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="https://discord.com/api/webhooks/...">
                                     </div>
@@ -1903,14 +1776,7 @@ PulseApp.ui.alertManagementModal = (() => {
             addCustomBtn.classList.add('hidden');
         }
 
-        // Set up system alert toggles
-        const systemAlertToggles = document.querySelectorAll('#system-alerts-content input[type="checkbox"]');
-        systemAlertToggles.forEach(toggle => {
-            toggle.addEventListener('change', (e) => {
-                const alertType = e.target.id.replace('-alert-enabled', '');
-                updateSystemAlertStatus(alertType, e.target.checked);
-            });
-        });
+        // System alert toggles are now handled via the unified alert system
         
         // Load system and custom alerts
         // Ensure we have the latest configuration before loading alerts
@@ -2258,25 +2124,20 @@ PulseApp.ui.alertManagementModal = (() => {
         }
     }
 
-    // Unified alert card renderer for both system and custom alerts
+    // Unified alert card renderer for all alerts
     function createAlertCard(alert) {
-        const isSystem = alert.type === 'system';
         const isEnabled = alert.enabled !== false;
         
         // Format metadata line
-        const metadataLine = isSystem 
-            ? 'Built-in system rule • Target: All VMs/LXCs'
+        const metadataLine = alert.group === 'system_performance' || alert.group === 'storage_alerts' || alert.group === 'availability_alerts'
+            ? 'System alert rule • Target: All VMs/LXCs'
             : `Created: ${alert.createdAt ? new Date(alert.createdAt).toLocaleDateString() : 'Unknown'} • Target: ${getTargetDisplay(alert)}`;
         
-        // Generate action buttons
-        const actionButtons = isSystem 
-            ? getSystemAlertButtons(alert)
-            : getCustomAlertButtons(alert);
+        // Generate action buttons - all rules use same button style now
+        const actionButtons = getSystemAlertButtons(alert);
         
         // Generate alert content (conditions/description)
-        const alertContent = isSystem
-            ? getSystemAlertContent(alert)
-            : getCustomAlertContent(alert);
+        const alertContent = getSystemAlertContent(alert);
             
         // Get active alert count for this rule
         const activeCount = getActiveAlertCountForRule(alert.id);
@@ -2286,9 +2147,9 @@ PulseApp.ui.alertManagementModal = (() => {
         
         return `
             <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 ${!isEnabled ? 'opacity-50' : ''}">
-                <div class="flex items-start justify-between mb-2">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2">
+                    <div class="flex-1 mb-2 sm:mb-0">
+                        <div class="flex flex-wrap items-center gap-2 mb-1">
                             <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${alert.name || alert.description || 'Unnamed Alert'}</h5>
                             ${countBadge}
                         </div>
@@ -2296,7 +2157,7 @@ PulseApp.ui.alertManagementModal = (() => {
                             ${metadataLine}
                         </div>
                     </div>
-                    <div class="flex gap-1">
+                    <div class="flex gap-1 flex-wrap">
                         ${actionButtons}
                     </div>
                 </div>
@@ -2316,8 +2177,8 @@ PulseApp.ui.alertManagementModal = (() => {
     
     function getSystemAlertButtons(alert) {
         const editButton = alert.threshold ? `
-            <button onclick="editSystemAlert('${alert.id}')" 
-                    class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
+            <button onclick="editAlertRule('${alert.id}')" 
+                    class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded whitespace-nowrap">
                 Edit
             </button>
         ` : '';
@@ -2325,7 +2186,7 @@ PulseApp.ui.alertManagementModal = (() => {
         return `
             ${editButton}
             <button onclick="PulseApp.ui.alertManagementModal.toggleAlert('${alert.id}', 'system', ${!alert.enabled})" 
-                    class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                    class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded whitespace-nowrap">
                 ${alert.enabled ? 'Disable' : 'Enable'}
             </button>
         `;
@@ -2334,15 +2195,15 @@ PulseApp.ui.alertManagementModal = (() => {
     function getCustomAlertButtons(alert) {
         return `
             <button onclick="PulseApp.ui.alertManagementModal.editCustomAlert('${alert.id}')" 
-                    class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
+                    class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded whitespace-nowrap">
                 Edit
             </button>
             <button onclick="PulseApp.ui.alertManagementModal.toggleAlert('${alert.id}', 'custom', ${alert.enabled === false})" 
-                    class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                    class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded whitespace-nowrap">
                 ${alert.enabled !== false ? 'Disable' : 'Enable'}
             </button>
             <button onclick="PulseApp.ui.alertManagementModal.deleteCustomAlert('${alert.id}')" 
-                    class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
+                    class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded whitespace-nowrap">
                 Delete
             </button>
         `;
@@ -3091,186 +2952,9 @@ PulseApp.ui.alertManagementModal = (() => {
         }
     }
 
-    function editSystemAlert(alertType) {
-        // Create and show modal for editing system alert
-        const modal = document.createElement('div');
-        modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50';
-        
-        const config = PulseApp.config?.alerts?.[alertType] || {};
-        const defaultThresholds = { cpu: 85, memory: 90, disk: 95 };
-        const currentThreshold = config.threshold || defaultThresholds[alertType] || 85;
-        const isEnabled = config.enabled !== false;
-        
-        modal.innerHTML = `
-            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
-                <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Edit ${alertType.charAt(0).toUpperCase() + alertType.slice(1)} Alert</h3>
-                </div>
-                <div class="px-6 py-4 space-y-4">
-                    <div>
-                        <label class="flex items-center">
-                            <input type="checkbox" id="system-alert-enabled" ${isEnabled ? 'checked' : ''} class="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Enable ${alertType} alerts</span>
-                        </label>
-                    </div>
-                    ${alertType !== 'down' ? `
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                Alert Threshold (%)
-                            </label>
-                            <input type="number" id="system-alert-threshold" value="${currentThreshold}" min="50" max="100" 
-                                   class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Alert when ${alertType} usage exceeds this percentage</p>
-                        </div>
-                    ` : ''}
-                </div>
-                <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end space-x-3">
-                    <button onclick="closeSystemAlertModal()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600">
-                        Cancel
-                    </button>
-                    <button onclick="saveSystemAlert('${alertType}')" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md">
-                        Save
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        document.body.appendChild(modal);
-        window.currentSystemAlertModal = modal;
-    }
+    // Old system alert functions removed - now using unified editAlertRule
     
-    function closeSystemAlertModal() {
-        if (window.currentSystemAlertModal) {
-            document.body.removeChild(window.currentSystemAlertModal);
-            window.currentSystemAlertModal = null;
-        }
-    }
-    
-    function saveSystemAlert(alertType) {
-        const enabled = document.getElementById('system-alert-enabled')?.checked;
-        const thresholdInput = document.getElementById('system-alert-threshold');
-        const threshold = thresholdInput ? parseInt(thresholdInput.value) : null;
-        
-        const alertConfig = { enabled };
-        if (threshold && alertType !== 'down') {
-            alertConfig.threshold = threshold;
-        }
-        
-        // Save to backend
-        const configUpdate = {};
-        configUpdate[`ALERT_${alertType.toUpperCase()}_ENABLED`] = enabled ? 'true' : 'false';
-        if (threshold && alertType !== 'down') {
-            configUpdate[`ALERT_${alertType.toUpperCase()}_THRESHOLD`] = threshold.toString();
-        }
-        
-        // Save via config API
-        fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(configUpdate)
-        }).then(response => response.json()).then(result => {
-            if (!result.success) {
-                console.error('Failed to save alert configuration:', result.error);
-            }
-        }).catch(error => {
-            console.error('Error saving alert configuration:', error);
-        });
-        
-        // Update the UI immediately
-        updateSystemAlertDisplay(alertType, alertConfig);
-        
-        closeSystemAlertModal();
-    }
-    
-    function updateSystemAlertStatus(alertType, enabled) {
-        
-        // Save status change to backend
-        const configUpdate = {};
-        configUpdate[`ALERT_${alertType.toUpperCase()}_ENABLED`] = enabled ? 'true' : 'false';
-        
-        fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(configUpdate)
-        }).then(response => response.json()).then(result => {
-            if (result.success) {
-                // Reload configuration to ensure UI reflects the saved state
-                loadConfiguration().then(() => {
-                    // Update the display with the fresh config
-                    const alertConfig = currentConfig?.advanced?.alerts?.[alertType] || {};
-                    updateSystemAlertDisplay(alertType, { enabled: alertConfig.enabled !== false });
-                    
-                    // If we just enabled an alert, trigger immediate evaluation of current state
-                    if (enabled) {
-                        triggerImmediateAlertEvaluation();
-                    }
-                });
-            } else {
-                console.error('[DEBUG] Failed to save alert status:', result.error);
-            }
-        }).catch(error => {
-            console.error('[DEBUG] Error saving alert status:', error);
-        });
-    }
-
-    function triggerImmediateAlertEvaluation() {
-        
-        
-        // Call the API endpoint to trigger immediate evaluation
-        fetch('/api/alerts/evaluate', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Refresh the main page alerts display
-                setTimeout(() => {
-                    if (typeof window.updateAlertsDisplay === 'function') {
-                        window.updateAlertsDisplay();
-                    }
-                }, 1000);
-            } else {
-                console.error('[DEBUG] Failed to trigger alert evaluation:', data.error);
-            }
-        })
-        .catch(error => {
-            console.error('[DEBUG] Error calling alert evaluation endpoint:', error);
-        });
-    }
-    
-    function updateSystemAlertDisplay(alertType, config) {
-        // Reload all system alerts to reflect the updated state
-        loadSystemAlerts();
-        
-        // Update the threshold display
-        if (config.threshold && alertType !== 'down') {
-            const display = document.getElementById(`${alertType}-threshold-display`);
-            if (display) {
-                display.textContent = `${config.threshold}%`;
-            } else {
-            }
-        }
-    }
-
-    function loadSystemAlertConfiguration() {
-        // Load from current configuration and populate system alert displays
-        
-        const config = currentConfig?.advanced?.alerts || {};
-        
-        // Update system alert displays
-        ['cpu', 'memory', 'disk', 'down'].forEach(alertType => {
-            const alertConfig = config[alertType] || {};
-            const enabled = alertConfig.enabled !== false;
-            const defaultThresholds = { cpu: 85, memory: 90, disk: 95 };
-            const threshold = alertConfig.threshold || defaultThresholds[alertType];
-            
-            
-            updateSystemAlertDisplay(alertType, { enabled, threshold });
-        });
-    }
+    // Old system alert status and display functions removed - now using unified approach
 
     function testWebhookConnection() {
         const webhookUrl = document.getElementById('webhook-url-input')?.value;
@@ -3336,10 +3020,10 @@ PulseApp.ui.alertManagementModal = (() => {
         }
 
         const modalHTML = `
-            <div id="custom-alert-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col m-4">
-                    <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-6 py-4">
-                        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">${isEditing ? 'Edit Custom Alert' : 'Create Custom Alert'}</h2>
+            <div id="custom-alert-modal" class="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black bg-opacity-50 pt-4 sm:pt-0">
+                <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col m-2 sm:m-4">
+                    <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
+                        <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">${isEditing ? 'Edit Custom Alert' : 'Create Custom Alert'}</h2>
                         <button id="custom-alert-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -3347,7 +3031,7 @@ PulseApp.ui.alertManagementModal = (() => {
                         </button>
                     </div>
                     
-                    <div class="overflow-y-auto flex-grow p-6 scrollbar">
+                    <div class="overflow-y-auto flex-grow p-4 sm:p-6 scrollbar">
                         <form id="custom-alert-form" class="space-y-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -3513,12 +3197,12 @@ PulseApp.ui.alertManagementModal = (() => {
                         </form>
                     </div>
                     
-                    <div class="modal-footer border-t border-gray-300 dark:border-gray-700 px-6 py-4">
-                        <div class="flex gap-3 justify-end">
-                            <button type="button" id="custom-alert-cancel-button" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md transition-colors">
+                    <div class="modal-footer border-t border-gray-300 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
+                        <div class="flex gap-2 sm:gap-3 justify-end">
+                            <button type="button" id="custom-alert-cancel-button" class="px-3 sm:px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md transition-colors">
                                 Cancel
                             </button>
-                            <button type="button" id="custom-alert-save-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                            <button type="button" id="custom-alert-save-button" class="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
 ${isEditing ? 'Update Alert' : 'Create Alert'}
                             </button>
                         </div>
@@ -3858,14 +3542,9 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         const multipleThresholdsData = formData.get('multipleThresholds');
         let thresholds = [];
         
-        if (multipleThresholdsData) {
-            // Parse the JSON data containing all the preset thresholds
-            try {
-                thresholds = JSON.parse(multipleThresholdsData.replace(/&quot;/g, '"'));
-            } catch (error) {
-                console.warn('Failed to parse multiple thresholds data:', error);
-            }
-        } else {
+        // Always collect thresholds from current form state (ignore preset data when editing)
+        // This ensures user changes to sliders are respected
+        {
             // Collect thresholds from the simplified form
             const cpuThreshold = parseFloat(formData.get('cpuThreshold')) || 0;
             const memoryThreshold = parseFloat(formData.get('memoryThreshold')) || 0;
@@ -3873,7 +3552,10 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             const networkThreshold = parseFloat(formData.get('networkThreshold')) || 0;
             const statusMonitoring = formData.has('statusMonitoring');
             
-            // Build thresholds array (only include non-zero values and enabled options)
+            // Build thresholds array - ONLY include actively configured thresholds
+            // Clear any existing thresholds and rebuild from scratch
+            thresholds = [];
+            
             if (cpuThreshold > 0) {
                 thresholds.push({metric: 'cpu', condition: 'greater_than', threshold: cpuThreshold});
             }
@@ -3955,8 +3637,9 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             // Close modal
             document.getElementById('custom-alert-modal').remove();
             
-            // Refresh the custom alerts list
+            // Refresh all alert rules lists
             await loadCustomAlerts();
+            await loadAllAlertRules();
             
         } catch (error) {
             console.error('Failed to save custom alert:', error);
@@ -4036,14 +3719,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     }
 
     function renderAlertCard(alert, acknowledged = false) {
-        const severityColors = {
-            'critical': 'border-red-400 bg-red-50 dark:bg-red-900/10',
-            'warning': 'border-yellow-400 bg-yellow-50 dark:bg-yellow-900/10',
-            'info': 'border-blue-400 bg-blue-50 dark:bg-blue-900/10'
-        };
-
-        const severity = alert.severity || 'info';
-        const colorClass = severityColors[severity] || severityColors.info;
+        const colorClass = 'border-red-400 bg-red-50 dark:bg-red-900/10';
         
         // Use the duration from the API if available, otherwise calculate it
         const duration = alert.duration ? Math.round(alert.duration / 1000) : 
@@ -4097,9 +3773,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                          alert.rule?.metric ? `${alert.rule.metric.toUpperCase()} Alert` : 
                          'System Alert';
         
-        const severityBadgeClass = alert.severity === 'critical' ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' :
-                                  alert.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' :
-                                  'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200';
         
         const thresholdInfo = (() => {
             if (alert.rule?.metric === 'compound' || alert.rule?.type === 'compound_threshold') {
@@ -4124,17 +3797,14 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
         return `
             <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800 ${acknowledgedClass}">
-                <div class="flex items-start justify-between mb-2">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2">
+                    <div class="flex-1 mb-2 sm:mb-0">
+                        <div class="flex flex-wrap items-center gap-2 mb-1">
                             <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                 ${alert.guest?.name || 'Unknown'}
                             </h5>
                             <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
                                 ${alert.guest?.type || 'unknown'} ${alert.guest?.vmid || ''}
-                            </span>
-                            <span class="text-xs px-2 py-0.5 rounded-full ${severityBadgeClass}">
-                                ${alert.severity || 'info'}
                             </span>
                             ${alert.escalated ? '<span class="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">Escalated</span>' : ''}
                             ${acknowledged ? '<span class="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">Acknowledged</span>' : ''}
@@ -4144,10 +3814,10 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                             ${acknowledged ? ` • Acknowledged ${Math.round((Date.now() - alert.acknowledgedAt) / 60000)}m ago` : ''}
                         </div>
                     </div>
-                    <div class="flex gap-1">
+                    <div class="flex gap-1 flex-wrap">
                         ${!acknowledged ? `
                             <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}');" 
-                                    class="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded">
+                                    class="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded whitespace-nowrap">
                                 Acknowledge
                             </button>
                         ` : ''}
@@ -4284,23 +3954,17 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 Auto-cleared
             </span>`;
 
-        const severityBadgeClass = alert.severity === 'critical' ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200' :
-                                  alert.severity === 'warning' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' :
-                                  'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200';
 
         return `
             <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-3 bg-white dark:bg-gray-800">
-                <div class="flex items-start justify-between mb-2">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-2">
+                    <div class="flex-1 mb-2 sm:mb-0">
+                        <div class="flex flex-wrap items-center gap-2 mb-1">
                             <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">
                                 ${alert.guest?.name || 'Unknown'}
                             </h5>
                             <span class="text-xs px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-full">
                                 ${alert.guest?.type || 'unknown'} ${alert.guest?.vmid || ''}
-                            </span>
-                            <span class="text-xs px-2 py-0.5 rounded-full ${severityBadgeClass}">
-                                ${alert.severity || 'info'}
                             </span>
                             ${resolutionBadge}
                         </div>
@@ -4309,9 +3973,9 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                             ${alert.guest?.node ? ` • Node: ${alert.guest.node}` : ''}
                         </div>
                     </div>
-                    <div class="flex gap-1">
+                    <div class="flex gap-1 flex-wrap">
                         <button onclick="PulseApp.ui.alertManagementModal.showAlertDetails('${alert.id}')" 
-                                class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded">
+                                class="px-2 py-1 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded whitespace-nowrap">
                             Details
                         </button>
                     </div>
@@ -4366,7 +4030,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 id: 'hist-1',
                 guest: { name: 'prod-web-01', type: 'vm', vmid: '101', node: 'pve-node-1' },
                 rule: { metric: 'cpu' },
-                severity: 'warning',
                 triggeredAt: now - (2 * oneDay),
                 resolvedAt: now - (2 * oneDay) + (30 * 60 * 1000),
                 peakValue: '87%',
@@ -4377,7 +4040,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 id: 'hist-2',
                 guest: { name: 'db-primary', type: 'vm', vmid: '102', node: 'pve-node-2' },
                 rule: { metric: 'memory' },
-                severity: 'critical',
                 triggeredAt: now - (3 * oneDay),
                 resolvedAt: now - (3 * oneDay) + (2 * 60 * 60 * 1000),
                 peakValue: '94%',
@@ -4388,7 +4050,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                 id: 'hist-3',
                 guest: { name: 'backup-server', type: 'vm', vmid: '103', node: 'pve-node-1' },
                 rule: { metric: 'disk' },
-                severity: 'warning',
                 triggeredAt: now - (7 * oneDay),
                 resolvedAt: now - (7 * oneDay) + (4 * 60 * 60 * 1000),
                 peakValue: '82%',
@@ -4626,37 +4287,9 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     }
 
     async function toggleSystemAlert(alertId, enabled) {
-        try {
-            // Map the full alert ID back to the config key
-            const alertTypeMap = {
-                'cpu_usage_warning': 'cpu',
-                'memory_usage_warning': 'memory', 
-                'disk_space_warning': 'disk',
-                'disk_space_critical': 'disk', // Both disk alerts use same config
-                'guest_down': 'down',
-                // Also handle short form IDs that come from UI
-                'cpu': 'cpu',
-                'memory': 'memory',
-                'disk': 'disk',
-                'down': 'down'
-            };
-            
-            const alertType = alertTypeMap[alertId];
-            if (!alertType) {
-                throw new Error(`Unknown system alert ID: ${alertId}`);
-            }
-            
-            // Use the existing updateSystemAlertStatus function
-            updateSystemAlertStatus(alertType, enabled);
-            
-            // Update the UI display
-            updateSystemAlertDisplay(alertType, { enabled: enabled });
-            
-            return { success: true };
-        } catch (error) {
-            console.error(`Failed to toggle system alert ${alertId}:`, error);
-            return { success: false, error: error.message };
-        }
+        // System alerts are now handled via the unified alert system
+        // Use the same logic as custom alerts
+        return toggleCustomAlert(alertId, enabled);
     }
 
     async function toggleCustomAlert(alertId, enabled) {
@@ -4733,10 +4366,10 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     function displayAlertDetailsModal(alert) {
         // Create alert details modal
         const modalHTML = `
-            <div id="alert-details-modal" class="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50" style="z-index: 9999;">
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col m-4">
-                    <div class="flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-6 py-4">
-                        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Alert Details</h2>
+            <div id="alert-details-modal" class="fixed inset-0 flex items-start sm:items-center justify-center bg-black bg-opacity-50 pt-4 sm:pt-0" style="z-index: 9999;">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[95vh] sm:max-h-[80vh] flex flex-col m-2 sm:m-4">
+                    <div class="flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
+                        <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Alert Details</h2>
                         <button onclick="document.getElementById('alert-details-modal').remove();" 
                                 class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                             <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -4744,7 +4377,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                             </svg>
                         </button>
                     </div>
-                    <div class="flex-1 overflow-y-auto p-6">
+                    <div class="flex-1 overflow-y-auto p-4 sm:p-6">
                         <div class="space-y-4">
                             <div>
                                 <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Alert Rule</h3>
@@ -4761,15 +4394,6 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                             <div>
                                 <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Triggered At</h3>
                                 <p class="text-gray-900 dark:text-gray-100">${new Date(alert.triggeredAt).toLocaleString()}</p>
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Severity</h3>
-                                <span class="inline-flex px-2 py-1 text-xs font-medium rounded-full 
-                                    ${alert.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' :
-                                      alert.severity === 'warning' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                                      'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'}">
-                                    ${alert.severity}
-                                </span>
                             </div>
                         </div>
                     </div>
@@ -4793,8 +4417,8 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         const webhookId = 'webhook-endpoint-' + Date.now();
         const webhookHtml = `
             <div class="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg" id="${webhookId}">
-                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div class="md:col-span-2">
+                <div class="flex-1 space-y-2 sm:space-y-0 sm:grid sm:grid-cols-3 sm:gap-3">
+                    <div class="sm:col-span-2">
                         <input type="url" class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="https://discord.com/api/webhooks/...">
                     </div>
                     <div>

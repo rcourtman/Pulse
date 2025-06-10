@@ -84,7 +84,10 @@ function setupThresholdRoutes(app) {
                 await customThresholdManager.init();
             }
             
-            await customThresholdManager.setThresholds(endpointId, nodeId, vmid, thresholds);
+            // Determine enabled state - if thresholds object has any metric, it's enabled
+            const enabled = Object.keys(thresholds).length > 0;
+            
+            await customThresholdManager.setThresholds(endpointId, nodeId, vmid, thresholds, enabled);
             res.json({ success: true, message: 'Custom thresholds saved successfully' });
         } catch (error) {
             console.error('[API /api/thresholds/:endpointId/:nodeId/:vmid] Error:', error);

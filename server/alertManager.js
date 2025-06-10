@@ -27,19 +27,21 @@ class AlertManager extends EventEmitter {
         this.maxHistorySize = 10000; // Increased for better analytics
         this.acknowledgementsFile = path.join(__dirname, '../data/acknowledgements.json');
         this.alertRulesFile = path.join(__dirname, '../data/alert-rules.json');
+        this.activeAlertsFile = path.join(__dirname, '../data/active-alerts.json');
+        this.notificationHistoryFile = path.join(__dirname, '../data/notification-history.json');
         
         // Add synchronization flags
         this.reloadingRules = false;
         this.processingMetrics = false;
         
-        // Initialize default configuration
-        this.initializeDefaultRules();
+        // Initialize alert groups
         this.initializeAlertGroups();
         
-        
-        // Load persisted acknowledgements and alert rules
+        // Load persisted state
         this.loadAcknowledgements();
         this.loadAlertRules();
+        this.loadActiveAlerts();
+        this.loadNotificationHistory();
         
         // Initialize custom threshold manager
         this.initializeCustomThresholds();
@@ -112,100 +114,6 @@ class AlertManager extends EventEmitter {
         }
         return value;
     }
-
-    initializeDefaultRules() {
-        // Validate environment variable ranges
-        const cpuThreshold = this.parseEnvInt('ALERT_CPU_THRESHOLD', 85, 1, 100);
-        const cpuDuration = this.parseEnvInt('ALERT_CPU_DURATION', 300000, 1000); // Min 1 second
-        const memThreshold = this.parseEnvInt('ALERT_MEMORY_THRESHOLD', 90, 1, 100);
-        const memDuration = this.parseEnvInt('ALERT_MEMORY_DURATION', 300000, 1000);
-        const diskThreshold = this.parseEnvInt('ALERT_DISK_THRESHOLD', 90, 1, 100);
-        const diskDuration = this.parseEnvInt('ALERT_DISK_DURATION', 300000, 1000);
-        
-        console.log('[AlertManager] Alert thresholds configured:', {
-            cpu: `${cpuThreshold}% (${cpuDuration}ms)`,
-            memory: `${memThreshold}% (${memDuration}ms)`,
-            disk: `${diskThreshold}% (${diskDuration}ms)`
-        });
-        
-        const defaultRules = [
-            {
-                id: 'cpu',
-                name: 'CPU Usage',
-                description: 'Monitors CPU usage across all VMs and containers',
-                metric: 'cpu',
-                condition: 'greater_than',
-                threshold: cpuThreshold,
-                duration: cpuDuration,
-                severity: 'warning',
-                enabled: process.env.ALERT_CPU_ENABLED !== 'false',
-                tags: ['performance', 'cpu'],
-                group: 'system_performance',
-                escalationTime: 900000, // 15 minutes
-                autoResolve: true,
-                suppressionTime: 300000, // 5 minutes
-            },
-            {
-                id: 'memory',
-                name: 'Memory Usage',
-                description: 'Monitors memory usage across all VMs and containers',
-                metric: 'memory',
-                condition: 'greater_than',
-                threshold: memThreshold,
-                duration: memDuration,
-                severity: 'warning',
-                enabled: process.env.ALERT_MEMORY_ENABLED !== 'false',
-                tags: ['performance', 'memory'],
-                group: 'system_performance',
-                escalationTime: 900000, // 15 minutes
-                autoResolve: true,
-                suppressionTime: 300000,
-            },
-            {
-                id: 'disk',
-                name: 'Disk Usage',
-                description: 'Monitors disk space usage across all VMs and containers',
-                metric: 'disk',
-                condition: 'greater_than',
-                threshold: diskThreshold,
-                duration: diskDuration,
-                severity: 'warning',
-                enabled: process.env.ALERT_DISK_ENABLED !== 'false',
-                tags: ['storage', 'disk'],
-                group: 'storage_alerts',
-                escalationTime: 1800000, // 30 minutes
-                autoResolve: true,
-                suppressionTime: 600000, // 10 minutes
-            },
-            {
-                id: 'down',
-                name: 'System Availability',
-                description: 'Monitors VM/container availability and uptime',
-                metric: 'status',
-                condition: 'equals',
-                threshold: 'stopped',
-                duration: this.parseEnvInt('ALERT_DOWN_DURATION', 60000, 1000), // 1 minute
-                severity: 'critical',
-                enabled: process.env.ALERT_DOWN_ENABLED !== 'false',
-                tags: ['availability', 'guest'],
-                group: 'availability_alerts',
-                escalationTime: 600000, // 10 minutes
-                autoResolve: true,
-                suppressionTime: 120000, // 2 minutes
-            }
-        ];
-
-        defaultRules.forEach(rule => {
-            // Always add rules to the map, regardless of enabled state
-            // This allows them to be displayed and toggled in the UI
-            this.alertRules.set(rule.id, rule);
-        });
-    }
-
-
-
-
-
 
     initializeAlertGroups() {
         this.alertGroups.set('system_performance', {
@@ -409,14 +317,14 @@ class AlertManager extends EventEmitter {
                     }
                     existingAlert.lastUpdate = timestamp;
                     existingAlert.currentValue = currentValue;
-                } else if (existingAlert.state === 'active') {
-                    // Update existing active alert
+                } else if (existingAlert.state === 'active' && !existingAlert.acknowledged) {
+                    // Update existing active alert (only if not acknowledged)
                     existingAlert.lastUpdate = timestamp;
                     existingAlert.currentValue = currentValue;
                 }
             } else {
-                if (existingAlert && existingAlert.state === 'active') {
-                    // Resolve alert
+                if (existingAlert && existingAlert.state === 'active' && !existingAlert.acknowledged) {
+                    // Resolve alert (only if not acknowledged)
                     existingAlert.state = 'resolved';
                     existingAlert.resolvedAt = timestamp;
                     if (existingAlert.rule.autoResolve) {
@@ -584,13 +492,15 @@ class AlertManager extends EventEmitter {
         console.warn(`[ALERT ESCALATED] ${escalatedAlert.message}`);
     }
 
-    escalateSeverity(currentSeverity) {
-        const severityLevels = ['info', 'warning', 'critical'];
-        const currentIndex = severityLevels.indexOf(currentSeverity);
-        return severityLevels[Math.min(currentIndex + 1, severityLevels.length - 1)];
-    }
 
     sendNotifications(alert, forceUrgent = false) {
+        // Check if we've already sent notifications for this alert
+        const existingStatus = this.notificationStatus.get(alert.id);
+        if (existingStatus && (existingStatus.emailSent || existingStatus.webhookSent)) {
+            console.log(`[AlertManager] Skipping notifications for alert ${alert.id} - already sent (email: ${existingStatus.emailSent}, webhook: ${existingStatus.webhookSent})`);
+            return;
+        }
+        
         // Check global settings first - these act as master switches
         const globalEmailEnabled = process.env.GLOBAL_EMAIL_ENABLED === 'true';
         const globalWebhookEnabled = process.env.GLOBAL_WEBHOOK_ENABLED === 'true';
@@ -698,6 +608,14 @@ class AlertManager extends EventEmitter {
                     active.push(formattedAlert);
                 } catch (alertError) {
                     console.error(`[AlertManager] Skipping alert ${alert.id} due to serialization error:`, alertError.message);
+                    // Find and remove the problematic alert from activeAlerts to prevent repeated errors
+                    for (const [key, storedAlert] of this.activeAlerts) {
+                        if (storedAlert.id === alert.id) {
+                            console.warn(`[AlertManager] Removing corrupted alert ${alert.id} from activeAlerts`);
+                            this.activeAlerts.delete(key);
+                            break;
+                        }
+                    }
                     // Skip this alert but continue processing others
                 }
             }
@@ -711,7 +629,6 @@ class AlertManager extends EventEmitter {
     }
 
     matchesFilters(alert, filters) {
-        if (filters.severity && alert.rule.severity !== filters.severity) return false;
         if (filters.group && alert.rule.group !== filters.group) return false;
         if (filters.node && alert.guest.node !== filters.node) return false;
         if (filters.acknowledged !== undefined && alert.acknowledged !== filters.acknowledged) return false;
@@ -726,7 +643,6 @@ class AlertManager extends EventEmitter {
                 ruleId: alert.rule?.id || 'unknown',
                 ruleName: alert.rule?.name || 'Unknown Rule',
                 description: alert.rule?.description || '',
-                severity: alert.rule?.severity || 'warning',
                 group: alert.rule?.group || 'unknown',
                 tags: Array.isArray(alert.rule?.tags) ? [...alert.rule.tags] : [],
                 guest: {
@@ -803,7 +719,6 @@ class AlertManager extends EventEmitter {
                 ruleId: alert.rule?.id || 'unknown',
                 ruleName: alert.rule?.name || 'Unknown Rule',
                 description: alert.rule?.description || '',
-                severity: alert.rule?.severity || 'warning',
                 group: alert.rule?.group || 'unknown',
                 tags: [],
                 guest: {
@@ -866,7 +781,6 @@ class AlertManager extends EventEmitter {
                 id: String(alert.id || 'unknown'),
                 ruleId: String(alert.rule?.id || 'unknown'),
                 ruleName: String(alert.rule?.name || 'Unknown Rule'),
-                severity: String(alert.rule?.severity || 'warning'),
                 acknowledged: Boolean(alert.acknowledged),
                 triggeredAt: Number(alert.triggeredAt || Date.now()),
                 message: String(alert.rule?.name || 'Alert triggered'),
@@ -1006,18 +920,34 @@ class AlertManager extends EventEmitter {
     }
 
     triggerAlert(alert) {
-        const alertInfo = this.formatAlertForAPI(alert);
-        
-        // Add to history
-        this.addToHistory(alertInfo);
-        
-        // Send notifications
-        this.sendNotifications(alert);
-        
-        // Emit event for external handling
-        this.emit('alert', alertInfo);
+        try {
+            const alertInfo = this.formatAlertForAPI(alert);
+            
+            // Add to history
+            this.addToHistory(alertInfo);
+            
+            // Send notifications
+            this.sendNotifications(alert);
+            
+            // Save active alerts and notification history to disk
+            this.saveActiveAlerts();
+            this.saveNotificationHistory();
+            
+            // Emit event for external handling
+            this.emit('alert', alertInfo);
 
-        console.warn(`[ALERT] ${alertInfo.message}`);
+            console.warn(`[ALERT] ${alertInfo.message}`);
+        } catch (error) {
+            console.error(`[AlertManager] Error in triggerAlert for ${alert.id}:`, error.message);
+            // Remove the corrupted alert to prevent future issues
+            for (const [key, storedAlert] of this.activeAlerts) {
+                if (storedAlert.id === alert.id) {
+                    console.warn(`[AlertManager] Removing corrupted alert ${alert.id} from activeAlerts in triggerAlert`);
+                    this.activeAlerts.delete(key);
+                    break;
+                }
+            }
+        }
     }
 
     resolveAlert(alert) {
@@ -1061,6 +991,9 @@ class AlertManager extends EventEmitter {
         if (alertKey) {
             this.activeAlerts.delete(alertKey);
         }
+        
+        // Save updated state to disk
+        this.saveActiveAlerts();
     }
 
     generateAlertMessage(alert) {
@@ -1143,10 +1076,14 @@ class AlertManager extends EventEmitter {
 
     cleanupResolvedAlerts() {
         const cutoffTime = Date.now() - (24 * 60 * 60 * 1000); // 24 hours
+        let alertsRemoved = false;
         
         for (const [key, alert] of this.activeAlerts) {
             if (alert.state === 'resolved' && alert.resolvedAt < cutoffTime) {
                 this.activeAlerts.delete(key);
+                // Also clean up notification history for this alert
+                this.notificationStatus.delete(alert.id);
+                alertsRemoved = true;
             }
         }
 
@@ -1171,6 +1108,12 @@ class AlertManager extends EventEmitter {
         if (acknowledgementsChanged) {
             this.saveAcknowledgements();
         }
+        
+        // Save if alerts or notification history were cleaned up
+        if (alertsRemoved) {
+            this.saveActiveAlerts();
+            this.saveNotificationHistory();
+        }
     }
 
     updateRule(ruleId, updates) {
@@ -1185,13 +1128,11 @@ class AlertManager extends EventEmitter {
                 console.log(`[AlertManager] Rule ${ruleId} disabled - cleaned up ${removedAlerts} associated alerts`);
             }
             
-            // Save to disk if it's a custom or compound threshold rule
-            if (rule.type === 'compound_threshold' || rule.group === 'custom') {
-                this.saveAlertRules().catch(error => {
-                    console.error('[AlertManager] Failed to save alert rules after updating rule:', error);
-                    this.emit('ruleSaveError', { ruleId, error: error.message });
-                });
-            }
+            // Save all rules to JSON file
+            this.saveAlertRules().catch(error => {
+                console.error('[AlertManager] Failed to save alert rules after updating rule:', error);
+                this.emit('ruleSaveError', { ruleId, error: error.message });
+            });
             
             this.emit('ruleUpdated', { ruleId, updates });
             return true;
@@ -1247,10 +1188,6 @@ class AlertManager extends EventEmitter {
                 throw new Error('Duration must be a non-negative number (milliseconds)');
             }
             
-            const validSeverities = ['info', 'warning', 'critical'];
-            if (rule.severity && !validSeverities.includes(rule.severity)) {
-                throw new Error(`Invalid severity: ${rule.severity}. Must be one of: ${validSeverities.join(', ')}`);
-            }
         }
         
         const ruleId = rule.id || (isCompoundRule ? 
@@ -1262,7 +1199,6 @@ class AlertManager extends EventEmitter {
             id: ruleId,
             condition: 'greater_than',
             duration: 300000,
-            severity: 'warning',
             enabled: true,
             tags: [],
             group: isCompoundRule ? 'compound_threshold' : 'custom',
@@ -1276,13 +1212,11 @@ class AlertManager extends EventEmitter {
         this.alertRules.set(ruleId, fullRule);
         console.log(`[AlertManager] Added ${isCompoundRule ? 'compound threshold' : 'single-metric'} rule: ${fullRule.name} (${ruleId})`);
         
-        // Save to disk if it's a custom or compound threshold rule
-        if (isCompoundRule || fullRule.group === 'custom') {
-            this.saveAlertRules().catch(error => {
-                console.error('[AlertManager] Failed to save alert rules after adding rule:', error);
-                this.emit('ruleSaveError', { ruleId: fullRule.id, error: error.message });
-            });
-        }
+        // Save all rules to disk
+        this.saveAlertRules().catch(error => {
+            console.error('[AlertManager] Failed to save alert rules after adding rule:', error);
+            this.emit('ruleSaveError', { ruleId: fullRule.id, error: error.message });
+        });
         
         this.emit('ruleAdded', fullRule);
         
@@ -1301,13 +1235,11 @@ class AlertManager extends EventEmitter {
             const removedAlerts = this.cleanupAlertsForRule(ruleId);
             console.log(`[AlertManager] Removed rule ${ruleId} and cleaned up ${removedAlerts} associated alerts`);
             
-            // Save to disk if it was a custom or compound threshold rule
-            if (rule && (rule.type === 'compound_threshold' || rule.group === 'custom')) {
-                this.saveAlertRules().catch(error => {
-                    console.error('[AlertManager] Failed to save alert rules after removing rule:', error);
-                    this.emit('ruleSaveError', { ruleId, error: error.message });
-                });
-            }
+            // Save all rules to disk
+            this.saveAlertRules().catch(error => {
+                console.error('[AlertManager] Failed to save alert rules after removing rule:', error);
+                this.emit('ruleSaveError', { ruleId, error: error.message });
+            });
             
             this.emit('ruleRemoved', { ruleId });
         }
@@ -1319,18 +1251,12 @@ class AlertManager extends EventEmitter {
      * This should be called after configuration changes
      */
     async refreshRules() {
-        console.log('[AlertManager] Refreshing alert rules based on current environment variables');
+        console.log('[AlertManager] Refreshing alert rules from JSON file');
         
         // Store currently disabled rule IDs to clean up their alerts
         const previouslyActiveRules = new Set(this.alertRules.keys());
         
-        // Clear existing rules
-        this.alertRules.clear();
-        
-        // Re-initialize rules with current environment variables
-        this.initializeDefaultRules();
-        
-        // Reload custom and compound threshold rules from JSON file
+        // Reload all rules from JSON file
         await this.loadAlertRules();
         
         // Find rules that were disabled
@@ -1390,7 +1316,8 @@ class AlertManager extends EventEmitter {
             
             allGuests.forEach(guest => {
                 this.alertRules.forEach(rule => {
-                    if (this.isRuleSuppressed(rule.id, guest)) {
+                    // Check if rule is enabled first
+                    if (!rule.enabled || this.isRuleSuppressed(rule.id, guest)) {
                         return;
                     }
                     
@@ -1565,14 +1492,14 @@ class AlertManager extends EventEmitter {
                 }
                 existingAlert.lastUpdate = timestamp;
                 existingAlert.currentValue = this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest);
-            } else if (existingAlert.state === 'active') {
-                // Update existing active alert
+            } else if (existingAlert.state === 'active' && !existingAlert.acknowledged) {
+                // Update existing active alert (only if not acknowledged)
                 existingAlert.lastUpdate = timestamp;
                 existingAlert.currentValue = this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest);
             }
         } else {
-            if (existingAlert && existingAlert.state === 'active') {
-                // Resolve alert
+            if (existingAlert && existingAlert.state === 'active' && !existingAlert.acknowledged) {
+                // Resolve alert (only if not acknowledged)
                 existingAlert.state = 'resolved';
                 existingAlert.resolvedAt = timestamp;
                 if (existingAlert.rule.autoResolve) {
@@ -1764,9 +1691,6 @@ class AlertManager extends EventEmitter {
         if (filters.group) {
             return rules.filter(rule => rule.group === filters.group);
         }
-        if (filters.severity) {
-            return rules.filter(rule => rule.severity === filters.severity);
-        }
         return rules;
     }
 
@@ -1785,15 +1709,9 @@ class AlertManager extends EventEmitter {
             if (customConfig && customConfig.enabled && customConfig.thresholds) {
                 const metricThresholds = customConfig.thresholds[rule.metric];
                 
-                if (metricThresholds) {
-                    // Determine which threshold to use based on rule severity
-                    if (rule.severity === 'critical' && metricThresholds.critical !== undefined) {
-                        console.log(`[AlertManager] Using custom critical ${rule.metric} threshold ${metricThresholds.critical}% for ${guest.endpointId}:${guest.node}:${guest.vmid}`);
-                        return metricThresholds.critical;
-                    } else if (rule.severity === 'warning' && metricThresholds.warning !== undefined) {
-                        console.log(`[AlertManager] Using custom warning ${rule.metric} threshold ${metricThresholds.warning}% for ${guest.endpointId}:${guest.node}:${guest.vmid}`);
-                        return metricThresholds.warning;
-                    }
+                if (metricThresholds && metricThresholds.threshold !== undefined) {
+                    console.log(`[AlertManager] Using custom ${rule.metric} threshold ${metricThresholds.threshold}% for ${guest.endpointId}:${guest.node}:${guest.vmid}`);
+                    return metricThresholds.threshold;
                 }
             }
         } catch (error) {
@@ -1862,37 +1780,30 @@ class AlertManager extends EventEmitter {
             const data = await fs.readFile(this.alertRulesFile, 'utf-8');
             const savedRules = JSON.parse(data);
             
-            // First, remove all existing compound threshold and custom rules
-            const rulesToRemove = [];
-            for (const [key, rule] of this.alertRules) {
-                if (rule.type === 'compound_threshold' || rule.group === 'custom') {
-                    rulesToRemove.push(key);
-                }
-            }
-            rulesToRemove.forEach(key => this.alertRules.delete(key));
+            // Clear all existing rules
+            this.alertRules.clear();
             
-            // Load saved alert rules into the map
+            // Load all rules from JSON
             for (const [key, rule] of Object.entries(savedRules)) {
-                // Only load non-default rules (compound threshold rules and custom rules)
-                if (rule.type === 'compound_threshold' || rule.group === 'custom') {
-                    this.alertRules.set(key, rule);
-                }
+                this.alertRules.set(key, rule);
             }
             
-            console.log(`[AlertManager] Loaded ${Object.keys(savedRules).length} persisted alert rules`);
+            console.log(`[AlertManager] Loaded ${Object.keys(savedRules).length} alert rules`);
             
-            // Clear any active alerts for rules that no longer exist or have been modified
+            // Clear any active alerts for rules that no longer exist
             for (const [alertKey, alert] of this.activeAlerts) {
-                const ruleStillExists = this.alertRules.has(alert.rule.id);
-                if (!ruleStillExists || this.alertRules.get(alert.rule.id) !== alert.rule) {
+                if (!this.alertRules.has(alert.rule.id)) {
                     this.activeAlerts.delete(alertKey);
                 }
             }
         } catch (error) {
-            if (error.code !== 'ENOENT') {
+            if (error.code === 'ENOENT') {
+                // File doesn't exist - this is first run, create default template rules
+                console.log('[AlertManager] No alert rules file found, creating default templates...');
+                await this.createDefaultTemplateRules();
+            } else {
                 console.error('[AlertManager] Error loading alert rules:', error);
             }
-            // File doesn't exist yet, which is fine for first run
         }
     }
     
@@ -1903,12 +1814,10 @@ class AlertManager extends EventEmitter {
             await fs.mkdir(dataDir, { recursive: true });
             
             // Convert Map to plain object for JSON serialization
-            // Only save non-default rules (compound threshold rules and custom rules)
+            // Save ALL rules to JSON
             const rulesToSave = {};
             for (const [key, rule] of this.alertRules) {
-                if (rule.type === 'compound_threshold' || rule.group === 'custom') {
-                    rulesToSave[key] = rule;
-                }
+                rulesToSave[key] = rule;
             }
             
             await fs.writeFile(
@@ -1920,6 +1829,203 @@ class AlertManager extends EventEmitter {
             console.log(`[AlertManager] Saved ${Object.keys(rulesToSave).length} alert rules to disk`);
         } catch (error) {
             console.error('[AlertManager] Error saving alert rules:', error);
+        }
+    }
+
+    async createDefaultTemplateRules() {
+        try {
+            // Migrate any existing environment variables to rule configuration
+            const defaultTemplates = [
+                {
+                    id: 'cpu',
+                    name: 'CPU Usage',
+                    description: 'Monitors CPU usage across all VMs and containers',
+                    metric: 'cpu',
+                    condition: 'greater_than',
+                    threshold: this.parseEnvInt('ALERT_CPU_THRESHOLD', 85, 1, 100),
+                    duration: this.parseEnvInt('ALERT_CPU_DURATION', 300000, 1000),
+                    enabled: process.env.ALERT_CPU_ENABLED !== 'false',
+                    tags: ['performance', 'cpu'],
+                    group: 'system_performance',
+                    escalationTime: 900000, // 15 minutes
+                    autoResolve: true,
+                    suppressionTime: 300000, // 5 minutes
+                },
+                {
+                    id: 'memory',
+                    name: 'Memory Usage',
+                    description: 'Monitors memory usage across all VMs and containers',
+                    metric: 'memory',
+                    condition: 'greater_than',
+                    threshold: this.parseEnvInt('ALERT_MEMORY_THRESHOLD', 90, 1, 100),
+                    duration: this.parseEnvInt('ALERT_MEMORY_DURATION', 300000, 1000),
+                    enabled: process.env.ALERT_MEMORY_ENABLED !== 'false',
+                    tags: ['performance', 'memory'],
+                    group: 'system_performance',
+                    escalationTime: 900000, // 15 minutes
+                    autoResolve: true,
+                    suppressionTime: 300000,
+                },
+                {
+                    id: 'disk',
+                    name: 'Disk Usage',
+                    description: 'Monitors disk space usage across all VMs and containers',
+                    metric: 'disk',
+                    condition: 'greater_than',
+                    threshold: this.parseEnvInt('ALERT_DISK_THRESHOLD', 90, 1, 100),
+                    duration: this.parseEnvInt('ALERT_DISK_DURATION', 300000, 1000),
+                    enabled: process.env.ALERT_DISK_ENABLED !== 'false',
+                    tags: ['storage', 'disk'],
+                    group: 'storage_alerts',
+                    escalationTime: 1800000, // 30 minutes
+                    autoResolve: true,
+                    suppressionTime: 600000, // 10 minutes
+                },
+                {
+                    id: 'down',
+                    name: 'System Availability',
+                    description: 'Monitors VM/container availability and uptime',
+                    metric: 'status',
+                    condition: 'equals',
+                    threshold: 'stopped',
+                    duration: this.parseEnvInt('ALERT_DOWN_DURATION', 60000, 1000),
+                    enabled: process.env.ALERT_DOWN_ENABLED !== 'false',
+                    tags: ['availability', 'guest'],
+                    group: 'availability_alerts',
+                    escalationTime: 600000, // 10 minutes
+                    autoResolve: true,
+                    suppressionTime: 120000, // 2 minutes
+                }
+            ];
+
+            // Add templates to rules map
+            for (const template of defaultTemplates) {
+                this.alertRules.set(template.id, template);
+            }
+
+            // Save to disk
+            await this.saveAlertRules();
+            
+            console.log('[AlertManager] Created default template rules with environment variable settings');
+            
+        } catch (error) {
+            console.error('[AlertManager] Error creating default template rules:', error);
+        }
+    }
+
+
+    /**
+     * Load persisted active alerts from disk
+     * This ensures alerts survive service restarts
+     */
+    async loadActiveAlerts() {
+        try {
+            const data = await fs.readFile(this.activeAlertsFile, 'utf-8');
+            const persistedAlerts = JSON.parse(data);
+            
+            // Restore alerts to the activeAlerts Map
+            Object.entries(persistedAlerts).forEach(([key, alert]) => {
+                // Validate the alert has required fields
+                if (alert.id && alert.rule && alert.guest) {
+                    this.activeAlerts.set(key, alert);
+                }
+            });
+            
+            console.log(`[AlertManager] Loaded ${this.activeAlerts.size} active alerts from disk`);
+        } catch (error) {
+            if (error.code !== 'ENOENT') {
+                console.error('[AlertManager] Error loading active alerts:', error);
+            }
+            // File doesn't exist yet, which is fine for first run
+        }
+    }
+
+    /**
+     * Save active alerts to disk
+     */
+    async saveActiveAlerts() {
+        try {
+            // Ensure data directory exists
+            const dataDir = path.dirname(this.activeAlertsFile);
+            await fs.mkdir(dataDir, { recursive: true });
+            
+            // Convert Map to plain object for JSON serialization
+            const alertsToSave = {};
+            for (const [key, alert] of this.activeAlerts) {
+                // Only save essential data, not circular references
+                alertsToSave[key] = {
+                    id: alert.id,
+                    rule: this.createSafeRuleCopy(alert.rule),
+                    guest: this.createSafeGuestCopy(alert.guest),
+                    startTime: alert.startTime,
+                    lastUpdate: alert.lastUpdate,
+                    triggeredAt: alert.triggeredAt,
+                    currentValue: alert.currentValue,
+                    effectiveThreshold: alert.effectiveThreshold,
+                    state: alert.state,
+                    escalated: alert.escalated,
+                    acknowledged: alert.acknowledged,
+                    acknowledgedBy: alert.acknowledgedBy,
+                    acknowledgedAt: alert.acknowledgedAt
+                };
+            }
+            
+            await fs.writeFile(
+                this.activeAlertsFile,
+                JSON.stringify(alertsToSave, null, 2),
+                'utf-8'
+            );
+            
+        } catch (error) {
+            console.error('[AlertManager] Error saving active alerts:', error);
+        }
+    }
+
+    /**
+     * Load notification history from disk
+     */
+    async loadNotificationHistory() {
+        try {
+            const data = await fs.readFile(this.notificationHistoryFile, 'utf-8');
+            const history = JSON.parse(data);
+            
+            // Restore notification status Map
+            Object.entries(history).forEach(([alertId, status]) => {
+                this.notificationStatus.set(alertId, status);
+            });
+            
+            console.log(`[AlertManager] Loaded notification history for ${this.notificationStatus.size} alerts`);
+        } catch (error) {
+            if (error.code !== 'ENOENT') {
+                console.error('[AlertManager] Error loading notification history:', error);
+            }
+            // File doesn't exist yet, which is fine for first run
+        }
+    }
+
+    /**
+     * Save notification history to disk
+     */
+    async saveNotificationHistory() {
+        try {
+            // Ensure data directory exists
+            const dataDir = path.dirname(this.notificationHistoryFile);
+            await fs.mkdir(dataDir, { recursive: true });
+            
+            // Convert Map to plain object
+            const historyToSave = {};
+            for (const [alertId, status] of this.notificationStatus) {
+                historyToSave[alertId] = status;
+            }
+            
+            await fs.writeFile(
+                this.notificationHistoryFile,
+                JSON.stringify(historyToSave, null, 2),
+                'utf-8'
+            );
+            
+        } catch (error) {
+            console.error('[AlertManager] Error saving notification history:', error);
         }
     }
 
@@ -1989,12 +2095,6 @@ class AlertManager extends EventEmitter {
             throw new Error('No email recipients configured (ALERT_TO_EMAIL)');
         }
 
-        const severityEmoji = {
-            'info': '💙',
-            'warning': '⚠️',
-            'critical': '🚨'
-        };
-
         // Get the current value and effective threshold for this alert
         const currentValue = alert.currentValue;
         const effectiveThreshold = alert.effectiveThreshold || alert.rule.threshold;
@@ -2029,16 +2129,16 @@ class AlertManager extends EventEmitter {
             thresholdDisplay = isPercentageMetric ? `${effectiveThreshold || 0}%` : (effectiveThreshold || 'N/A');
         }
 
-        const subject = `${severityEmoji[alert.rule.severity] || '📢'} Pulse Alert: ${alert.rule.name}`;
+        const subject = `🚨 Pulse Alert: ${alert.rule.name}`;
         
         const html = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: ${alert.rule.severity === 'critical' ? '#dc2626' : alert.rule.severity === 'warning' ? '#ea580c' : '#2563eb'}; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-                    <h1 style="margin: 0; font-size: 24px;">${severityEmoji[alert.rule.severity] || '📢'} ${alert.rule.name}</h1>
-                    <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 16px;">Severity: ${alert.rule.severity.toUpperCase()}</p>
+                <div style="background: #dc2626; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                    <h1 style="margin: 0; font-size: 24px;">🚨 ${alert.rule.name}</h1>
+                    <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 16px;">Alert Triggered</p>
                 </div>
                 
-                <div style="background: #f9fafb; padding: 20px; border-left: 4px solid ${alert.rule.severity === 'critical' ? '#dc2626' : alert.rule.severity === 'warning' ? '#ea580c' : '#2563eb'};">
+                <div style="background: #f9fafb; padding: 20px; border-left: 4px solid #dc2626;">
                     <h2 style="margin: 0 0 15px 0; color: #374151;">Alert Details</h2>
                     
                     <table style="width: 100%; border-collapse: collapse;">
@@ -2123,12 +2223,6 @@ This alert was generated by Pulse monitoring system.
             throw new Error('Webhook URL not configured (WEBHOOK_URL)');
         }
 
-        const severityEmoji = {
-            'info': '💙',
-            'warning': '⚠️',
-            'critical': '🚨'
-        };
-
         const validTimestamp = this.getValidTimestamp(alert);
         
         // Get the current value and effective threshold for this alert
@@ -2155,11 +2249,9 @@ This alert was generated by Pulse monitoring system.
             // Discord-specific format
             payload = {
                 embeds: [{
-                title: `${severityEmoji[alert.rule.severity] || '📢'} ${alert.rule.name}`,
+                title: `🚨 ${alert.rule.name}`,
                 description: alert.rule.description,
-                color: alert.rule.severity === 'critical' ? 15158332 : // Red
-                       alert.rule.severity === 'warning' ? 15844367 : // Orange
-                       3447003, // Blue
+                color: 15158332, // Red
                 fields: [
                     {
                         name: 'VM/LXC',
@@ -2201,10 +2293,9 @@ This alert was generated by Pulse monitoring system.
         } else if (isSlack) {
             // Slack-specific format
             payload = {
-                text: `${severityEmoji[alert.rule.severity] || '📢'} *${alert.rule.name}*`,
+                text: `🚨 *${alert.rule.name}*`,
                 attachments: [{
-                    color: alert.rule.severity === 'critical' ? 'danger' :
-                           alert.rule.severity === 'warning' ? 'warning' : 'good',
+                    color: 'danger',
                     fields: [
                         {
                             title: 'VM/LXC',
@@ -2249,11 +2340,11 @@ This alert was generated by Pulse monitoring system.
                     },
                     value: formattedValue,
                     threshold: formattedThreshold,
-                    emoji: severityEmoji[alert.rule.severity] || '📢'
+                    emoji: '🚨'
                 },
                 // Include both formats for generic webhooks
                 embeds: [{
-                    title: `${severityEmoji[alert.rule.severity] || '📢'} ${alert.rule.name}`,
+                    title: `🚨 ${alert.rule.name}`,
                     description: alert.rule.description,
                     color: alert.rule.severity === 'critical' ? 15158332 :
                            alert.rule.severity === 'warning' ? 15844367 :
@@ -2282,10 +2373,9 @@ This alert was generated by Pulse monitoring system.
                     },
                     timestamp: new Date(validTimestamp).toISOString()
                 }],
-                text: `${severityEmoji[alert.rule.severity] || '📢'} *${alert.rule.name}*`,
+                text: `🚨 *${alert.rule.name}*`,
                 attachments: [{
-                    color: alert.rule.severity === 'critical' ? 'danger' :
-                           alert.rule.severity === 'warning' ? 'warning' : 'good',
+                    color: 'danger',
                     fields: [
                         {
                             title: 'VM/LXC',

@@ -704,6 +704,33 @@ class ConfigApi {
     }
 
     /**
+     * Update a single environment variable in the .env file
+     * This is used for persisting individual setting changes like alert rule states
+     */
+    async updateEnvironmentVariable(variableName, value) {
+        try {
+            // Read current configuration
+            const config = await this.readEnvFile();
+            
+            // Update the specific variable
+            config[variableName] = value;
+            
+            // Write back to file
+            await this.writeEnvFile(config);
+            
+            // Update the current process environment
+            process.env[variableName] = value;
+            
+            console.log(`[ConfigApi] Updated environment variable ${variableName} = ${value}`);
+            
+            return { success: true };
+        } catch (error) {
+            console.error(`[ConfigApi] Error updating environment variable ${variableName}:`, error);
+            throw error;
+        }
+    }
+
+    /**
      * Reload configuration without restarting the server
      */
     async reloadConfiguration() {
@@ -862,4 +889,8 @@ class ConfigApi {
     }
 }
 
+// Create a singleton instance for use by other modules
+const configApiInstance = new ConfigApi();
+
 module.exports = ConfigApi;
+module.exports.updateEnvironmentVariable = (variableName, value) => configApiInstance.updateEnvironmentVariable(variableName, value);

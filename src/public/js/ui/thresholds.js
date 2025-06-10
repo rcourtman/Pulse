@@ -213,16 +213,6 @@ PulseApp.ui.thresholds = (() => {
                                 </div>
                                 
                                 <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Alert Severity
-                                    </label>
-                                    <select id="rule-severity" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                                        <option value="warning">Warning</option>
-                                        <option value="critical">Critical</option>
-                                    </select>
-                                </div>
-                                
-                                <div>
                                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                                         Notification methods
                                     </label>
@@ -439,7 +429,6 @@ PulseApp.ui.thresholds = (() => {
     async function _handleAlertRuleSubmit(activeThresholds) {
         const ruleName = document.getElementById('rule-name').value;
         const ruleDescription = document.getElementById('rule-description').value;
-        const ruleSeverity = document.getElementById('rule-severity').value;
         
         // Collect notification preferences
         const notifyLocal = document.getElementById('notify-local').checked;
@@ -463,7 +452,6 @@ PulseApp.ui.thresholds = (() => {
         const alertRule = {
             name: ruleName,
             description: ruleDescription,
-            severity: ruleSeverity,
             thresholds: activeThresholds,
             notificationChannels: notificationChannels,
             enabled: true
@@ -569,7 +557,7 @@ PulseApp.ui.thresholds = (() => {
         ).join('');
 
         const createdDate = new Date(rule.createdAt).toLocaleDateString();
-        const severityColor = rule.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+        const alertColor = 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
 
         return `
             <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
@@ -577,9 +565,6 @@ PulseApp.ui.thresholds = (() => {
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-2">
                             <h4 class="font-medium text-gray-900 dark:text-gray-100">${rule.name}</h4>
-                            <span class="px-2 py-1 text-xs font-medium rounded ${severityColor}">
-                                ${rule.severity.toUpperCase()}
-                            </span>
                             <span class="px-2 py-1 text-xs font-medium rounded ${rule.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
                                 ${rule.enabled ? 'ENABLED' : 'DISABLED'}
                             </span>

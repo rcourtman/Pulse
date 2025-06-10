@@ -123,7 +123,13 @@ PulseApp.socketHandler = (() => {
     }
 
     function handleHotReload() {
-        if (process.env.NODE_ENV === 'development') {
+        // Check if we're in development mode (hot reload is only enabled in dev)
+        // Since this is client-side code, we can't access process.env directly
+        const isDevelopment = window.location.hostname === 'localhost' || 
+                             window.location.hostname === '127.0.0.1' ||
+                             window.location.port === '7655';
+        
+        if (isDevelopment) {
             window.location.reload();
         }
     }

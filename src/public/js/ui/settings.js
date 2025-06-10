@@ -64,7 +64,8 @@ PulseApp.ui.settings = (() => {
         
         tabButtons.forEach(button => {
             button.addEventListener('click', (e) => {
-                const tabName = e.target.getAttribute('data-tab');
+                e.preventDefault();
+                const tabName = e.currentTarget.getAttribute('data-tab');
                 switchTab(tabName);
             });
         });

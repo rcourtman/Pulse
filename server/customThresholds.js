@@ -90,7 +90,7 @@ class CustomThresholdManager {
     /**
      * Set custom thresholds for a VM/LXC
      */
-    async setThresholds(endpointId, nodeId, vmid, thresholds) {
+    async setThresholds(endpointId, nodeId, vmid, thresholds, enabled = true) {
         try {
             const key = this.generateKey(endpointId, nodeId, vmid);
             
@@ -102,7 +102,7 @@ class CustomThresholdManager {
                 nodeId,
                 vmid,
                 thresholds: validatedThresholds,
-                enabled: true,
+                enabled: enabled,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             });
