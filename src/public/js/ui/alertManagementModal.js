@@ -1,12 +1,86 @@
 PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.alertManagementModal = (() => {
+    // Constants
+    const TIMEOUTS = {
+        SHORT: 1000,
+        MEDIUM: 2000,
+        LONG: 3000,
+        REFRESH: 2000
+    };
+    
+    const VALIDATION = {
+        MIN_DURATION_MS: 5000,
+        MAX_DURATION_MS: 3600000,
+        MIN_THRESHOLD: 1,
+        MAX_THRESHOLD: 100
+    };
+    
+    const DEFAULTS = {
+        THRESHOLD_CPU: 85,
+        THRESHOLD_MEMORY: 85,
+        THRESHOLD_DISK: 85,
+        THRESHOLD_TEMPERATURE: 70,
+        THRESHOLD_IOWAIT: 50,
+        SMTP_PORT: 587,
+        SMTP_PORT_STRING: '587'
+    };
+    
+    const TIME_UNITS = {
+        SECOND: 1000,
+        MINUTE: 60 * 1000,
+        HOUR: 60 * 60 * 1000,
+        DAY: 24 * 60 * 60 * 1000
+    };
+    
     let isInitialized = false;
     let activeTab = 'alerts';
     let currentConfig = {};
     let formDataCache = {};
     let isLoading = false;
     let refreshInterval = null;
+    
+    // DOM element cache
+    const domCache = {};
+    
+    // Event listener tracking
+    const eventListeners = [];
+    
+    function getElement(id) {
+        if (!domCache[id]) {
+            domCache[id] = document.getElementById(id);
+        }
+        return domCache[id];
+    }
+    
+    function clearDomCache() {
+        Object.keys(domCache).forEach(key => delete domCache[key]);
+    }
+    
+    function addTrackedEventListener(element, event, handler, options) {
+        if (!element) return;
+        element.addEventListener(event, handler, options);
+        eventListeners.push({ element, event, handler, options });
+    }
+    
+    function removeAllEventListeners() {
+        eventListeners.forEach(({ element, event, handler, options }) => {
+            if (element) {
+                element.removeEventListener(event, handler, options);
+            }
+        });
+        eventListeners.length = 0;
+    }
+    
+    // Common error handling function
+    function handleError(component, error, userMessage) {
+        console.error(`[${component}] ${error.message || error}`);
+        if (userMessage) {
+            PulseApp.ui.toast.error(userMessage);
+        } else {
+            PulseApp.ui.toast.error(`Error in ${component}: ${error.message || 'Unknown error'}`);
+        }
+    }
 
     function init() {
         if (isInitialized) return;
@@ -29,7 +103,7 @@ PulseApp.ui.alertManagementModal = (() => {
                         coordinatedRefresh();
                     }
                 } catch (error) {
-                    console.error('[Alert Modal] Error handling alert event:', error);
+                    handleError('Alert Modal', error, null);
                 }
             });
             
@@ -69,7 +143,7 @@ PulseApp.ui.alertManagementModal = (() => {
             if (isModalOpen()) {
                 coordinatedRefresh();
             }
-        }, 2000);
+        }, TIMEOUTS.MEDIUM);
         
         isInitialized = true;
     }
@@ -117,7 +191,7 @@ PulseApp.ui.alertManagementModal = (() => {
 
 
     function openModal() {
-        const modal = document.getElementById('alert-management-modal');
+        const modal = getElement('alert-management-modal');
         if (modal) {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
@@ -130,7 +204,7 @@ PulseApp.ui.alertManagementModal = (() => {
                     if (isModalOpen()) {
                         coordinatedRefresh();
                     }
-                }, 2000);
+                }, TIMEOUTS.MEDIUM);
             }
         }
     }
@@ -152,10 +226,13 @@ PulseApp.ui.alertManagementModal = (() => {
         
         // Reset state
         isLoading = false;
+        
+        // Remove all tracked event listeners
+        removeAllEventListeners();
     }
 
     function closeModal() {
-        const modal = document.getElementById('alert-management-modal');
+        const modal = getElement('alert-management-modal');
         if (modal) {
             modal.classList.add('hidden');
             modal.classList.remove('flex');
@@ -163,10 +240,13 @@ PulseApp.ui.alertManagementModal = (() => {
         
         // Clean up resources to prevent memory leaks
         cleanup();
+        
+        // Clear DOM cache when modal closes
+        clearDomCache();
     }
 
     function createModalHTML() {
-        const existingModal = document.getElementById('alert-management-modal');
+        const existingModal = getElement('alert-management-modal');
         if (existingModal) {
             existingModal.remove();
         }
@@ -224,21 +304,21 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function setupEventListeners() {
-        const modal = document.getElementById('alert-management-modal');
-        const closeButton = document.getElementById('alert-management-modal-close');
-        const cancelButton = document.getElementById('alert-management-cancel-button');
+        const modal = getElement('alert-management-modal');
+        const closeButton = getElement('alert-management-modal-close');
+        const cancelButton = getElement('alert-management-cancel-button');
 
         if (closeButton) {
             closeButton.addEventListener('click', closeModal);
         }
 
         if (cancelButton) {
-            cancelButton.addEventListener('click', closeModal);
+            addTrackedEventListener(cancelButton, 'click', closeModal);
         }
 
         // Close modal when clicking outside
         if (modal) {
-            modal.addEventListener('click', (e) => {
+            addTrackedEventListener(modal, 'click', (e) => {
                 if (e.target === modal) {
                     closeModal();
                 }
@@ -246,11 +326,12 @@ PulseApp.ui.alertManagementModal = (() => {
         }
 
         // Handle escape key
-        document.addEventListener('keydown', (e) => {
+        const escapeHandler = (e) => {
             if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
                 closeModal();
             }
-        });
+        };
+        addTrackedEventListener(document, 'keydown', escapeHandler);
 
         // Set up tab navigation
         setupTabNavigation();
@@ -329,11 +410,15 @@ PulseApp.ui.alertManagementModal = (() => {
                                 loadEmailConfiguration();
                                 await loadGlobalToggles();
                             }, 100);
+                        }).catch(error => {
+                            handleError('Configure Tab', error, 'Failed to load configuration');
                         });
                     }
                 } catch (error) {
                     console.error('[Alert Modal] Error rendering configure tab:', error);
-                    modalBody.innerHTML = '<p class="text-red-500">Error loading configure tab: ' + error.message + '</p>';
+                    modalBody.innerHTML = '<p class="text-red-500">Error loading configure tab: <span id="error-message"></span></p>';
+                    const errorSpan = modalBody.querySelector('#error-message');
+                    if (errorSpan) errorSpan.textContent = error.message;
                 }
                 break;
             default:
@@ -526,7 +611,7 @@ PulseApp.ui.alertManagementModal = (() => {
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Port</label>
-                                <input type="number" name="SMTP_PORT" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="587" value="587">
+                                <input type="number" name="SMTP_PORT" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="${DEFAULTS.SMTP_PORT}" value="${DEFAULTS.SMTP_PORT}">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Username</label>
@@ -535,6 +620,33 @@ PulseApp.ui.alertManagementModal = (() => {
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
                                 <input type="password" name="SMTP_PASS" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Enter password">
+                            </div>
+                        </div>
+                        
+                        <!-- Email Provider Setup Guides -->
+                        <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                            <div class="flex items-start">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div class="w-full">
+                                    <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Email Provider Setup Guides</h4>
+                                    <p class="text-sm text-blue-700 dark:text-blue-300 mb-3">Most email providers require app-specific passwords for security. Follow these guides to set up your email:</p>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <a href="https://support.google.com/accounts/answer/185833" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline">
+                                            Gmail App Password →
+                                        </a>
+                                        <a href="https://support.microsoft.com/en-us/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline">
+                                            Outlook App Password →
+                                        </a>
+                                        <a href="https://help.yahoo.com/kb/generate-third-party-passwords-sln15241.html" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline">
+                                            Yahoo App Password →
+                                        </a>
+                                        <a href="https://support.apple.com/en-us/102654" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline">
+                                            iCloud App Password →
+                                        </a>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
@@ -611,7 +723,7 @@ PulseApp.ui.alertManagementModal = (() => {
         
         // Set up event listeners for notifications
         setupNotificationToggles();
-        setupEmailTestButton();
+        // setupEmailTestButton(); // Redundant - handled in initializeNotificationsTab
         
         // Create rule button now uses onclick attribute directly
     }
@@ -879,9 +991,9 @@ PulseApp.ui.alertManagementModal = (() => {
             if (acknowledgedAlertsEl) acknowledgedAlertsEl.textContent = acknowledgedAlerts.length;
             if (badgeEl) badgeEl.textContent = activeAlerts.length; // Badge shows only active alerts
             
-            console.log(`[Alert Summary] Updated counts: Active=${activeAlerts.length}, Acknowledged=${acknowledgedAlerts.length}, Total=${alerts.length}`);
+            // console.log(`[Alert Summary] Updated counts: Active=${activeAlerts.length}, Acknowledged=${acknowledgedAlerts.length}, Total=${alerts.length}`);
         } else {
-            console.log('[Alert Summary] PulseApp.alerts not available or getCurrentAlerts not found');
+            // console.log('[Alert Summary] PulseApp.alerts not available or getCurrentAlerts not found');
         }
         
         // Update rules count
@@ -915,7 +1027,7 @@ PulseApp.ui.alertManagementModal = (() => {
             const recentAlerts = data.history || [];
             
             // Filter to last 24 hours
-            const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000);
+            const oneDayAgo = Date.now() - TIME_UNITS.DAY;
             const recent = recentAlerts.filter(alert => 
                 (alert.triggeredAt || alert.resolvedAt || alert.acknowledgedAt) >= oneDayAgo
             );
@@ -1166,13 +1278,21 @@ PulseApp.ui.alertManagementModal = (() => {
         
         if (emailToggle) {
             emailToggle.addEventListener('change', async (e) => {
-                await handleGlobalEmailToggle(e.target.checked);
+                try {
+                    await handleGlobalEmailToggle(e.target.checked);
+                } catch (error) {
+                    handleError('Email Toggle', error, 'Failed to update email settings');
+                }
             });
         }
         
         if (webhookToggle) {
             webhookToggle.addEventListener('change', async (e) => {
-                await handleGlobalWebhookToggle(e.target.checked);
+                try {
+                    await handleGlobalWebhookToggle(e.target.checked);
+                } catch (error) {
+                    handleError('Webhook Toggle', error, 'Failed to update webhook settings');
+                }
             });
         }
     }
@@ -1251,116 +1371,15 @@ PulseApp.ui.alertManagementModal = (() => {
         }
     }
 
-    function setupEmailTestButton() {
-        const testBtn = document.getElementById('test-email-btn');
-        if (testBtn) {
-            testBtn.addEventListener('click', testEmailConfiguration);
-        }
-    }
+    // }
     
+    // Consolidated test email function - redirects to testEmailConnection
     async function testEmailConfiguration() {
-        const testBtn = document.getElementById('test-email-btn');
-        const originalText = testBtn.textContent;
-        
-        try {
-            testBtn.disabled = true;
-            testBtn.textContent = 'Testing...';
-            
-            const response = await fetch('/api/alerts/test-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            
-            const result = await response.json();
-            
-            if (result.success) {
-                testBtn.textContent = 'Test Sent!';
-                testBtn.classList.remove('bg-gray-200', 'hover:bg-gray-300');
-                testBtn.classList.add('bg-green-500', 'text-white');
-                PulseApp.ui.toast.success('Test email sent successfully! Check your inbox.');
-            } else {
-                testBtn.textContent = 'Test Failed';
-                testBtn.classList.remove('bg-gray-200', 'hover:bg-gray-300');
-                testBtn.classList.add('bg-red-500', 'text-white');
-                PulseApp.ui.toast.error(result.error || 'Failed to send test email');
-            }
-            
-            // Reset button after 3 seconds
-            setTimeout(() => {
-                testBtn.textContent = originalText;
-                testBtn.classList.remove('bg-green-500', 'bg-red-500', 'text-white');
-                testBtn.classList.add('bg-gray-200', 'hover:bg-gray-300');
-                testBtn.disabled = false;
-            }, 3000);
-            
-        } catch (error) {
-            console.error('[Test Email] Error:', error);
-            testBtn.textContent = originalText;
-            testBtn.disabled = false;
-            PulseApp.ui.toast.error('Failed to test email configuration');
-        }
+        return testEmailConnection();
     }
 
-    function handleGlobalEmailToggle(enabled) {
-        console.log(`[Email Toggle] Setting GLOBAL_EMAIL_ENABLED to: ${enabled}`);
-        
-        // Save the setting
-        fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ GLOBAL_EMAIL_ENABLED: enabled ? 'true' : 'false' })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                console.log(`[Email Toggle] Successfully ${enabled ? 'enabled' : 'disabled'} global email notifications`);
-                PulseApp.ui.toast.success(`Email notifications ${enabled ? 'enabled' : 'disabled'}`);
-                updateEmailConfigVisibility(enabled);
-                // Update currentConfig immediately
-                if (currentConfig) {
-                    currentConfig.GLOBAL_EMAIL_ENABLED = enabled ? 'true' : 'false';
-                }
-            } else {
-                console.error('[Email Toggle] Failed to save setting');
-                PulseApp.ui.toast.error('Failed to save email setting');
-            }
-        })
-        .catch(error => {
-            console.error('[Email Toggle] Error saving setting:', error);
-            PulseApp.ui.toast.error('Failed to save email setting');
-        });
-    }
 
-    function handleGlobalWebhookToggle(enabled) {
-        console.log(`[Webhook Toggle] Setting GLOBAL_WEBHOOK_ENABLED to: ${enabled}`);
-        
-        // Save the setting
-        fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ GLOBAL_WEBHOOK_ENABLED: enabled ? 'true' : 'false' })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                console.log(`[Webhook Toggle] Successfully ${enabled ? 'enabled' : 'disabled'} global webhook notifications`);
-                PulseApp.ui.toast.success(`Webhook notifications ${enabled ? 'enabled' : 'disabled'}`);
-                updateWebhookConfigVisibility(enabled);
-                // Update currentConfig immediately
-                if (currentConfig) {
-                    currentConfig.GLOBAL_WEBHOOK_ENABLED = enabled ? 'true' : 'false';
-                }
-            } else {
-                console.error('[Webhook Toggle] Failed to save setting');
-                PulseApp.ui.toast.error('Failed to save webhook setting');
-            }
-        })
-        .catch(error => {
-            console.error('[Webhook Toggle] Error saving setting:', error);
-            PulseApp.ui.toast.error('Failed to save webhook setting');
-        });
-    }
-
+    // Duplicate function - using async version above
     function updateEmailConfigVisibility(enabled) {
         const emailSection = document.getElementById('email-config-section');
         if (emailSection) {
@@ -1395,413 +1414,30 @@ PulseApp.ui.alertManagementModal = (() => {
             await loadConfiguration();
         }
         
-        console.log('[Global Toggles] Loading with config:', {
-            ALERT_EMAIL_ENABLED: currentConfig.ALERT_EMAIL_ENABLED,
-            ALERT_WEBHOOK_ENABLED: currentConfig.ALERT_WEBHOOK_ENABLED
-        });
+        // console.log('[Global Toggles] Loading with config:', {
+        //     ALERT_EMAIL_ENABLED: currentConfig.ALERT_EMAIL_ENABLED,
+        //     ALERT_WEBHOOK_ENABLED: currentConfig.ALERT_WEBHOOK_ENABLED
+        // });
         
         if (emailToggle && currentConfig) {
             const emailEnabled = currentConfig.ALERT_EMAIL_ENABLED === 'true';
-            console.log('[Global Toggles] Setting email toggle to:', emailEnabled);
+            // console.log('[Global Toggles] Setting email toggle to:', emailEnabled);
             emailToggle.checked = emailEnabled;
             updateEmailConfigVisibility(emailEnabled);
         }
         
         if (webhookToggle && currentConfig) {
             const webhookEnabled = currentConfig.ALERT_WEBHOOK_ENABLED === 'true';
-            console.log('[Global Toggles] Setting webhook toggle to:', webhookEnabled);
+            // console.log('[Global Toggles] Setting webhook toggle to:', webhookEnabled);
             webhookToggle.checked = webhookEnabled;
             updateWebhookConfigVisibility(webhookEnabled);
         }
     }
 
-    function renderAlertsTab() {
-        return `
-            <div class="space-y-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Alerts</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">View and manage active alerts and alert history</p>
-                    </div>
-                    <button id="refresh-alerts-btn" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                        Refresh
-                    </button>
-                </div>
-
-                <!-- Sub-tabs for Alerts -->
-                <div class="border-b border-gray-200 dark:border-gray-700">
-                    <nav class="flex space-x-8" id="alerts-sub-tabs">
-                        <button class="alerts-sub-tab active py-2 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="current">
-                            Current Alerts
-                        </button>
-                        <button class="alerts-sub-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="history">
-                            Alert History
-                        </button>
-                    </nav>
-                </div>
-
-                <!-- Current Alerts Content -->
-                <div id="current-alerts-content" class="space-y-4">
-                    <div id="current-alerts-list" class="space-y-4">
-                        <p class="text-gray-500 dark:text-gray-400">Loading current alerts...</p>
-                    </div>
-                </div>
-
-                <!-- Alert History Content -->
-                <div id="alert-history-content" class="space-y-4 hidden">
-                    <div id="alert-history-list" class="space-y-4">
-                        <p class="text-gray-500 dark:text-gray-400">Loading alert history...</p>
-                    </div>
-                </div>
-                
-                <div class="mt-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
-                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">Quick Actions</h4>
-                    <div class="flex gap-2">
-                        <button id="acknowledge-all-alerts-btn" class="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
-                            Acknowledge All
-                        </button>
-                        <button id="clear-history-btn" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md transition-colors hidden">
-                            Clear History
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function renderAlertRulesTab() {
-        return `
-            <div class="space-y-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Alert Rules</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Manage system and custom alert rules</p>
-                    </div>
-                    <button id="add-custom-alert-btn" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
-                        + Add Custom Alert
-                    </button>
-                </div>
-
-                <!-- Nested Tabs -->
-                <div class="border-b border-gray-200 dark:border-gray-700">
-                    <nav class="flex space-x-8" id="alert-rules-sub-tabs">
-                        <button class="alert-rules-sub-tab active py-2 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="system">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            System Alerts
-                        </button>
-                        <button class="alert-rules-sub-tab py-2 px-1 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium text-sm" data-tab="custom">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
-                            </svg>
-                            Custom Alerts
-                        </button>
-                    </nav>
-                </div>
-
-                <!-- Tab Content -->
-                <div id="alert-rules-sub-content">
-                    <!-- System Alerts Tab Content (Default) -->
-                    <div id="system-alert-rules-content" class="alert-rules-sub-content">
-                        <div class="space-y-6">
-                            
-                            <div id="system-alerts-content" class="space-y-3">
-                                <!-- System alerts will be loaded dynamically here -->
-                                <p class="text-sm text-gray-500 dark:text-gray-400">Loading system alerts...</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Custom Alerts Tab Content (Hidden by default) -->
-                    <div id="custom-alert-rules-content" class="alert-rules-sub-content hidden">
-                        <div class="space-y-6">
-                            
-                            <div id="custom-alerts-content" class="space-y-3">
-                                <!-- Custom alerts will be loaded here -->
-                                <p class="text-sm text-gray-500 dark:text-gray-400">Loading custom alerts...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function renderNotificationsTab() {
-        const config = currentConfig || {};
-        const smtp = config.advanced?.smtp || {};
-        
-        return `
-            <div class="space-y-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Notification Settings</h3>
-                        <p class="text-sm text-gray-600 dark:text-gray-400">Configure how alerts are delivered beyond the Pulse dashboard</p>
-                    </div>
-                </div>
-
-                <!-- Nested Tabs -->
-                <div class="border-b border-gray-200 dark:border-gray-700">
-                    <nav class="flex space-x-8" id="notification-sub-tabs">
-                        <button class="notification-sub-tab active py-2 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="email">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                            </svg>
-                            Email
-                        </button>
-                        <button class="notification-sub-tab py-2 px-1 border-b-2 border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium text-sm" data-tab="webhook">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
-                            </svg>
-                            Webhooks
-                        </button>
-                    </nav>
-                </div>
-
-                <!-- Tab Content -->
-                <div id="notification-sub-content">
-                    <!-- Email Tab Content (Default) -->
-                    <div id="email-notification-content" class="notification-sub-content">
-                        <div class="space-y-6">
-                            <!-- Primary Email Configuration -->
-                            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-                                <div class="flex items-center justify-between mb-4">
-                                    <div>
-                                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Email Notifications</h3>
-                                        <p class="text-sm text-gray-600 dark:text-gray-400">Primary email configuration for alert delivery</p>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="email-enabled" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-500 peer-checked:after:bg-white dark:after:bg-gray-200"></div>
-                                    </label>
-                                </div>
-                                
-                                <!-- Email Provider Quick Setup -->
-                                <div class="mb-4">
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email Provider</label>
-                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                        <button type="button" onclick="PulseApp.ui.alertManagementModal.handleEmailProviderSelection('gmail')" 
-                                                class="email-provider-btn px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300">
-                                            Gmail
-                                        </button>
-                                        <button type="button" onclick="PulseApp.ui.alertManagementModal.handleEmailProviderSelection('outlook')" 
-                                                class="email-provider-btn px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300">
-                                            Outlook
-                                        </button>
-                                        <button type="button" onclick="PulseApp.ui.alertManagementModal.handleEmailProviderSelection('yahoo')" 
-                                                class="email-provider-btn px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300">
-                                            Yahoo
-                                        </button>
-                                        <button type="button" onclick="PulseApp.ui.alertManagementModal.handleEmailProviderSelection('custom')" 
-                                                class="email-provider-btn px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900 text-gray-700 dark:text-gray-300">
-                                            Custom
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div id="primary-email-config" class="grid grid-cols-1 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
-                                        <input type="email" id="email-from-input" name="ALERT_FROM_EMAIL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="alerts@yourcompany.com">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Email</label>
-                                        <input type="email" id="email-to" name="ALERT_TO_EMAIL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="admin@yourcompany.com">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Server</label>
-                                        <input type="text" id="email-smtp" name="SMTP_HOST" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="smtp.gmail.com">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Port</label>
-                                        <input type="number" id="email-port" name="SMTP_PORT" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="587" value="587">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            <span id="smtp-username-label">Username</span>
-                                        </label>
-                                        <input type="text" id="email-username" name="SMTP_USER" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="your.email@gmail.com">
-                                        <p id="smtp-username-help" class="text-xs text-gray-500 dark:text-gray-400 mt-1">(Usually your email address)</p>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                                            <span id="smtp-password-label">Password</span>
-                                        </label>
-                                        <input type="password" id="email-password" name="SMTP_PASS" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Enter password">
-                                        <p id="smtp-password-help" class="text-xs text-gray-500 dark:text-gray-400 mt-1">(Your email password)</p>
-                                    </div>
-                                </div>
-
-                                <!-- App Password Help -->
-                                <div id="app-password-help" class="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg hidden">
-                                    <div class="flex items-start">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.962-.833-2.732 0L4.082 18.5c-.77.833.192 2.5 1.732 2.5z" />
-                                        </svg>
-                                        <div>
-                                            <h4 id="app-password-title" class="text-sm font-medium text-yellow-800 dark:text-yellow-200">App Password Required</h4>
-                                            <p id="app-password-description" class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">Gmail requires an app password for third-party applications.</p>
-                                            <a id="app-password-link" href="#" target="_blank" class="text-sm text-yellow-600 dark:text-yellow-400 underline hover:text-yellow-800 dark:hover:text-yellow-200 mt-2 inline-block">
-                                                Generate App Password →
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Advanced SMTP Settings -->
-                                <div class="mt-4">
-                                    <button type="button" id="toggle-advanced-smtp" class="flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">
-                                        <svg id="advanced-smtp-icon" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-                                        </svg>
-                                        Advanced Settings
-                                    </button>
-                                    
-                                    <div id="advanced-smtp-settings" class="mt-3 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hidden">
-                                        <div class="space-y-4">
-                                            <div class="flex items-center">
-                                                <input type="checkbox" id="smtp-secure" name="SMTP_SECURE" class="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 rounded">
-                                                <label for="smtp-secure" class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS encryption</label>
-                                            </div>
-                                            <div id="smtp-provider-help" class="text-sm text-gray-600 dark:text-gray-400 hidden">
-                                                Configure your email provider settings manually.
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Test Email Button -->
-                                <div class="mt-4 flex gap-3">
-                                    <button type="button" id="test-email-btn" 
-                                            class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
-                                        Test Email
-                                    </button>
-                                    <button type="button" id="save-email-config-btn" 
-                                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
-                                        Save Configuration
-                                    </button>
-                                </div>
-                            </div>
 
 
-                        </div>
-                    </div>
-
-                    <!-- Webhook Tab Content (Hidden by default) -->
-                    <div id="webhook-notification-content" class="notification-sub-content hidden">
-                        <div class="space-y-6">
-                            <!-- Primary Webhook Configuration -->
-                            <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-                                <div class="flex items-center justify-between mb-4">
-                                    <div>
-                                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Webhook Notifications</h3>
-                                        <p class="text-sm text-gray-600 dark:text-gray-400">Primary webhook configuration for external service alerts</p>
-                                    </div>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="webhook-enabled" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-green-500 peer-checked:after:bg-white dark:after:bg-gray-200"></div>
-                                    </label>
-                                </div>
-                                
-                                <div id="primary-webhook-config" class="grid grid-cols-1 gap-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
-                                        <input type="url" id="webhook-url" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="https://discord.com/api/webhooks/...">
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Service Type</label>
-                                        <select id="webhook-service" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
-                                            <option value="discord">Discord</option>
-                                            <option value="slack">Slack</option>
-                                            <option value="teams">Microsoft Teams</option>
-                                            <option value="custom">Custom</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Name</label>
-                                        <input type="text" id="webhook-name" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="Production Alerts">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Additional Webhooks -->
-                            <div id="additional-webhooks">
-                                <div class="flex justify-between items-center mb-4">
-                                    <div>
-                                        <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200">Additional Webhooks</h3>
-                                        <p class="text-sm text-gray-600 dark:text-gray-400">Add more webhook endpoints beyond the primary one above</p>
-                                    </div>
-                                    <button type="button" onclick="PulseApp.ui.alertManagementModal.addWebhookEndpoint()" 
-                                            class="flex items-center gap-2 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-sm rounded-md">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                                        </svg>
-                                        Add Webhook
-                                    </button>
-                                </div>
-                                <div id="additional-webhook-list" class="space-y-2">
-                                    <div class="text-center py-8 text-gray-500 dark:text-gray-400 italic border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                                        No additional webhooks configured.<br>
-                                        <span class="text-sm">Click "Add Webhook" to add more.</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
 
 
-    function initializeAlertsTab() {
-        // Set up sub-tab navigation
-        const subTabs = document.querySelectorAll('.alerts-sub-tab');
-        subTabs.forEach(tab => {
-            tab.addEventListener('click', (e) => {
-                const targetTab = e.currentTarget.dataset.tab;
-                switchAlertsSubTab(targetTab);
-            });
-        });
-
-        // Set up refresh button
-        const refreshBtn = document.getElementById('refresh-alerts-btn');
-        if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => {
-                const activeSubTab = document.querySelector('.alerts-sub-tab.active')?.dataset.tab || 'current';
-                if (activeSubTab === 'current') {
-                    loadCurrentAlerts();
-                } else if (activeSubTab === 'history') {
-                    loadAlertHistory();
-                }
-            });
-        }
-
-        // Set up action buttons
-        const acknowledgeAllBtn = document.getElementById('acknowledge-all-alerts-btn');
-        if (acknowledgeAllBtn) {
-            acknowledgeAllBtn.addEventListener('click', () => {
-                if (PulseApp.alerts && PulseApp.alerts.markAllAsAcknowledged) {
-                    PulseApp.alerts.markAllAsAcknowledged();
-                    // Socket events will handle the real-time updates
-                }
-            });
-        }
-
-        const clearHistoryBtn = document.getElementById('clear-history-btn');
-        if (clearHistoryBtn) {
-            clearHistoryBtn.addEventListener('click', clearAlertHistory);
-        }
-
-
-        // Load current alerts by default
-        loadCurrentAlerts();
-    }
 
     function switchAlertsSubTab(tabName) {
         // Update tab buttons
@@ -1870,6 +1506,8 @@ PulseApp.ui.alertManagementModal = (() => {
             if (activeTab === 'notifications') {
                 loadEmailConfiguration();
             }
+        }).catch(error => {
+            handleError('Alert Rules', error, 'Failed to load configuration');
         });
     }
     
@@ -1983,7 +1621,7 @@ PulseApp.ui.alertManagementModal = (() => {
         if (emailToggle) {
             emailToggle.addEventListener('change', async (e) => {
                 const enabled = e.target.checked;
-                console.log('[Email Toggle] Setting GLOBAL_EMAIL_ENABLED to:', enabled);
+                // console.log('[Email Toggle] Setting GLOBAL_EMAIL_ENABLED to:', enabled);
                 
                 try {
                     const response = await fetch('/api/config', {
@@ -1995,7 +1633,7 @@ PulseApp.ui.alertManagementModal = (() => {
                     });
                     
                     if (response.ok) {
-                        console.log('[Email Toggle] Successfully saved global email setting');
+                        // console.log('[Email Toggle] Successfully saved global email setting');
                         PulseApp.ui.toast.success(`Email notifications ${enabled ? 'enabled' : 'disabled'}`);
                     } else {
                         console.error('[Email Toggle] Failed to save setting');
@@ -2016,7 +1654,7 @@ PulseApp.ui.alertManagementModal = (() => {
         if (webhookToggle) {
             webhookToggle.addEventListener('change', async (e) => {
                 const enabled = e.target.checked;
-                console.log('[Webhook Toggle] Setting GLOBAL_WEBHOOK_ENABLED to:', enabled);
+                // console.log('[Webhook Toggle] Setting GLOBAL_WEBHOOK_ENABLED to:', enabled);
                 
                 try {
                     const response = await fetch('/api/config', {
@@ -2028,7 +1666,7 @@ PulseApp.ui.alertManagementModal = (() => {
                     });
                     
                     if (response.ok) {
-                        console.log('[Webhook Toggle] Successfully saved global webhook setting');
+                        // console.log('[Webhook Toggle] Successfully saved global webhook setting');
                         PulseApp.ui.toast.success(`Webhook notifications ${enabled ? 'enabled' : 'disabled'}`);
                     } else {
                         console.error('[Webhook Toggle] Failed to save setting');
@@ -2051,7 +1689,7 @@ PulseApp.ui.alertManagementModal = (() => {
 
     // Helper function to check if modal is open
     function isModalOpen() {
-        const modal = document.getElementById('alert-management-modal');
+        const modal = getElement('alert-management-modal');
         return modal && !modal.classList.contains('hidden');
     }
 
@@ -2363,15 +2001,6 @@ PulseApp.ui.alertManagementModal = (() => {
         `;
     }
 
-    // Legacy wrapper - now uses unified system
-    function createCustomAlertCard(alert) {
-        return createAlertCard({...alert, type: 'custom'});
-    }
-
-    // Legacy wrapper - now uses unified system
-    function createSystemAlertCard(alert) {
-        return createAlertCard({...alert, type: 'system'});
-    }
     
     function updateNotificationCheckboxes() {
         const emailLabel = document.getElementById('email-notification-label');
@@ -2430,44 +2059,44 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function loadEmailConfiguration() {
-        console.log('[Email Config] loadEmailConfiguration called');
+        // console.log('[Email Config] loadEmailConfiguration called');
         
         // Check if we're in the configure tab (different structure)
         const isConfigureTab = document.getElementById('email-config-section');
         if (!isConfigureTab) {
-            console.log('[Email Config] Not in configure tab, looking for primary-email-config');
+            // console.log('[Email Config] Not in configure tab, looking for primary-email-config');
             const emailConfigSection = document.getElementById('primary-email-config');
             if (!emailConfigSection) {
-                console.log('[Email Config] primary-email-config not found either, returning');
+                // console.log('[Email Config] primary-email-config not found either, returning');
                 return;
             }
         } else {
-            console.log('[Email Config] In configure tab');
+            // console.log('[Email Config] In configure tab');
         }
         
         // Get email configuration from currentConfig
         const config = currentConfig || {};
         const smtp = config.advanced?.smtp || {};
         
-        console.log('[Email Config] Loading email configuration:', smtp);
-        console.log('[Email Config] Full config:', config);
-        console.log('[Email Config] Direct config keys:', {
-            SMTP_HOST: config.SMTP_HOST,
-            SMTP_PORT: config.SMTP_PORT,
-            SMTP_USER: config.SMTP_USER,
-            ALERT_FROM_EMAIL: config.ALERT_FROM_EMAIL,
-            ALERT_TO_EMAIL: config.ALERT_TO_EMAIL,
-            GLOBAL_EMAIL_ENABLED: config.GLOBAL_EMAIL_ENABLED
-        });
+        // console.log('[Email Config] Loading email configuration:', smtp);
+        // console.log('[Email Config] Full config:', config);
+        // console.log('[Email Config] Direct config keys:', {
+        //     SMTP_HOST: config.SMTP_HOST,
+        //     SMTP_PORT: config.SMTP_PORT,
+        //     SMTP_USER: config.SMTP_USER,
+        //     ALERT_FROM_EMAIL: config.ALERT_FROM_EMAIL,
+        //     ALERT_TO_EMAIL: config.ALERT_TO_EMAIL,
+        //     GLOBAL_EMAIL_ENABLED: config.GLOBAL_EMAIL_ENABLED
+        // });
         
         // Set toggle states based on current config
         const emailToggle = document.getElementById('email-enabled') || document.getElementById('global-email-toggle');
         if (emailToggle) {
             const emailEnabled = config.GLOBAL_EMAIL_ENABLED === 'true' || config.GLOBAL_EMAIL_ENABLED === true;
             emailToggle.checked = emailEnabled;
-            console.log('[Email Config] Email toggle set to:', emailEnabled);
+            // console.log('[Email Config] Email toggle set to:', emailEnabled);
         } else {
-            console.log('[Email Config] Email toggle not found (looking for email-enabled or global-email-toggle)');
+            // console.log('[Email Config] Email toggle not found (looking for email-enabled or global-email-toggle)');
         }
         
         const webhookToggle = document.getElementById('webhook-enabled') || document.getElementById('global-webhook-toggle');
@@ -2480,14 +2109,14 @@ PulseApp.ui.alertManagementModal = (() => {
         // Check both nested (smtp) and direct config locations
         const emailFromInput = document.querySelector('input[name="ALERT_FROM_EMAIL"]');
         const fromValue = config.ALERT_FROM_EMAIL || smtp.from;
-        console.log('[Email Config] From input found:', !!emailFromInput, 'Value to set:', fromValue);
+        // console.log('[Email Config] From input found:', !!emailFromInput, 'Value to set:', fromValue);
         if (emailFromInput && fromValue) {
             emailFromInput.value = fromValue;
         }
         
         const emailToInput = document.querySelector('input[name="ALERT_TO_EMAIL"]');
         const toValue = config.ALERT_TO_EMAIL || smtp.to;
-        console.log('[Email Config] To input found:', !!emailToInput, 'Value to set:', toValue);
+        // console.log('[Email Config] To input found:', !!emailToInput, 'Value to set:', toValue);
         if (emailToInput && toValue) {
             emailToInput.value = toValue;
         }
@@ -2495,21 +2124,21 @@ PulseApp.ui.alertManagementModal = (() => {
         // Populate SMTP fields
         const smtpHostInput = document.querySelector('input[name="SMTP_HOST"]');
         const hostValue = config.SMTP_HOST || smtp.host;
-        console.log('[Email Config] Host input found:', !!smtpHostInput, 'Value to set:', hostValue);
+        // console.log('[Email Config] Host input found:', !!smtpHostInput, 'Value to set:', hostValue);
         if (smtpHostInput && hostValue) {
             smtpHostInput.value = hostValue;
         }
         
         const smtpPortInput = document.querySelector('input[name="SMTP_PORT"]');
         const portValue = config.SMTP_PORT || smtp.port;
-        console.log('[Email Config] Port input found:', !!smtpPortInput, 'Value to set:', portValue);
+        // console.log('[Email Config] Port input found:', !!smtpPortInput, 'Value to set:', portValue);
         if (smtpPortInput && portValue) {
             smtpPortInput.value = portValue;
         }
         
         const smtpUserInput = document.querySelector('input[name="SMTP_USER"]');
         const userValue = config.SMTP_USER || smtp.user;
-        console.log('[Email Config] User input found:', !!smtpUserInput, 'Value to set:', userValue);
+        // console.log('[Email Config] User input found:', !!smtpUserInput, 'Value to set:', userValue);
         if (smtpUserInput && userValue) {
             smtpUserInput.value = userValue;
         }
@@ -2554,12 +2183,12 @@ PulseApp.ui.alertManagementModal = (() => {
             setTimeout(() => {
                 saveBtn.textContent = originalText;
                 saveBtn.className = originalClass;
-            }, 2000);
+            }, TIMEOUTS.MEDIUM);
         }
     }
 
     function markEmailTestAsSuccessful() {
-        const testBtn = document.getElementById('test-email-btn');
+        const testBtn = getElement('test-email-btn');
         if (testBtn) {
             const originalText = testBtn.textContent;
             testBtn.className = 'px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md transition-colors';
@@ -2574,7 +2203,7 @@ PulseApp.ui.alertManagementModal = (() => {
             setTimeout(() => {
                 testBtn.textContent = originalText;
                 testBtn.className = 'px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors';
-            }, 3000);
+            }, TIMEOUTS.LONG);
         }
     }
 
@@ -2638,7 +2267,7 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function handleWebhookPreset(service) {
-        const webhookInput = document.getElementById('webhook-url-input');
+        const webhookInput = document.querySelector('input[name="WEBHOOK_URL"]');
         if (!webhookInput) return;
         
         const placeholders = {
@@ -2658,16 +2287,6 @@ PulseApp.ui.alertManagementModal = (() => {
         document.querySelector(`[data-service="${service}"]`).classList.add('ring-2', 'ring-blue-500');
     }
     
-    function saveWebhookConfiguration() {
-        const webhookUrl = document.getElementById('webhook-url-input')?.value;
-        if (!webhookUrl) {
-            PulseApp.ui.toast.warning('Please enter a webhook URL');
-            return;
-        }
-        
-        // TODO: Implement webhook configuration saving
-        PulseApp.ui.toast.success('Webhook configuration saved successfully!');
-    }
 
     function handleEmailProviderSelection(provider) {
         
@@ -2971,7 +2590,7 @@ PulseApp.ui.alertManagementModal = (() => {
                     saveBtn.classList.remove('bg-green-600');
                     saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
                     saveBtn.disabled = false;
-                }, 2000);
+                }, TIMEOUTS.MEDIUM);
             } else {
                 throw new Error(result.error || 'Failed to save configuration');
             }
@@ -3023,7 +2642,7 @@ PulseApp.ui.alertManagementModal = (() => {
                     saveBtn.classList.remove('bg-green-600');
                     saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
                     saveBtn.disabled = false;
-                }, 2000);
+                }, TIMEOUTS.MEDIUM);
             } else {
                 throw new Error(result.error || 'Failed to save configuration');
             }
@@ -3040,7 +2659,7 @@ PulseApp.ui.alertManagementModal = (() => {
     // Old system alert status and display functions removed - now using unified approach
 
     function testWebhookConnection() {
-        const webhookUrl = document.getElementById('webhook-url-input')?.value;
+        const webhookUrl = document.querySelector('input[name="WEBHOOK_URL"]')?.value;
         if (!webhookUrl) {
             PulseApp.ui.toast.warning('Please enter a webhook URL first');
             return;
@@ -3066,17 +2685,42 @@ PulseApp.ui.alertManagementModal = (() => {
         }
     }
 
-    function createCustomAlertModal(presetThresholds = null, existingAlert = null) {
-        // Remove any existing custom alert modal
-        const existingModal = document.getElementById('custom-alert-modal');
-        if (existingModal) {
-            existingModal.remove();
+    // Helper function for button state management during async operations
+    async function withButtonState(button, loadingText, asyncOperation) {
+        if (!button) return;
+        
+        const originalText = button.textContent;
+        const originalClasses = button.className;
+        button.disabled = true;
+        button.textContent = loadingText;
+        
+        try {
+            const result = await asyncOperation();
+            
+            // Success state
+            button.textContent = 'Saved!';
+            button.className = button.className.replace(/bg-\w+-\d+/g, 'bg-green-600');
+            
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.className = originalClasses;
+                button.disabled = false;
+            }, TIMEOUTS.MEDIUM);
+            
+            return result;
+        } catch (error) {
+            button.textContent = originalText;
+            button.className = originalClasses;
+            button.disabled = false;
+            throw error;
         }
-
-        // Generate alert name and determine best metric from presets or existing alert
+    }
+    
+    // Helper functions for creating custom alert modal
+    function extractAlertDefaults(presetThresholds, existingAlert) {
         let suggestedName = 'Custom Alert';
         let primaryMetric = 'cpu';
-        let primaryThreshold = 85;
+        let primaryThreshold = DEFAULTS.THRESHOLD_CPU;
         let multipleThresholds = false;
         let isEditing = false;
         
@@ -3101,18 +2745,128 @@ PulseApp.ui.alertManagementModal = (() => {
             // Track if we have multiple thresholds
             multipleThresholds = presetThresholds.length > 1;
         }
+        
+        return { suggestedName, primaryMetric, primaryThreshold, multipleThresholds, isEditing };
+    }
+    
+    function createCustomAlertModalHeader(isEditing) {
+        return `
+            <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
+                <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">${isEditing ? 'Edit Custom Alert' : 'Create Custom Alert'}</h2>
+                <button id="custom-alert-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        `;
+    }
+    
+    function createCustomAlertModalForm(defaults, existingAlert) {
+        const { suggestedName, primaryMetric, primaryThreshold, multipleThresholds } = defaults;
+        
+        return `
+            <form id="custom-alert-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Alert Name</label>
+                    <input type="text" id="custom-alert-name" name="name" value="${suggestedName}" 
+                           class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                           placeholder="Enter alert name" required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Target</label>
+                    <select id="custom-alert-target" name="target" 
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="any" ${(!existingAlert || !existingAlert.target || existingAlert.target === 'any') ? 'selected' : ''}>Any VM/Node</option>
+                        <option value="node" ${existingAlert && existingAlert.target === 'node' ? 'selected' : ''}>Specific Node</option>
+                        <option value="vm" ${existingAlert && existingAlert.target === 'vm' ? 'selected' : ''}>Specific VM</option>
+                    </select>
+                </div>
+                
+                <div id="specific-target-section" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select <span id="target-type-label">Node</span></label>
+                    <select id="custom-alert-specific-target" name="specificTarget" 
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Metric</label>
+                    <select id="custom-alert-metric" name="metric" 
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="cpu" ${primaryMetric === 'cpu' ? 'selected' : ''}>CPU Usage</option>
+                        <option value="memory" ${primaryMetric === 'memory' ? 'selected' : ''}>Memory Usage</option>
+                        <option value="disk" ${primaryMetric === 'disk' ? 'selected' : ''}>Disk Usage</option>
+                        <option value="temperature" ${primaryMetric === 'temperature' ? 'selected' : ''}>Temperature</option>
+                        <option value="iowait" ${primaryMetric === 'iowait' ? 'selected' : ''}>IO Wait</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Threshold</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="number" id="custom-alert-threshold" name="threshold" 
+                               value="${primaryThreshold}"
+                               min="1" max="100" step="1"
+                               class="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <span class="text-sm text-gray-600 dark:text-gray-400" id="threshold-unit">%</span>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Condition</label>
+                    <select id="custom-alert-condition" name="condition" 
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="above" ${!existingAlert || !existingAlert.condition || existingAlert.condition === 'above' ? 'selected' : ''}>Above</option>
+                        <option value="below" ${existingAlert && existingAlert.condition === 'below' ? 'selected' : ''}>Below</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Priority</label>
+                    <select id="custom-alert-priority" name="priority" 
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        <option value="low" ${existingAlert && existingAlert.priority === 'low' ? 'selected' : ''}>Low</option>
+                        <option value="medium" ${!existingAlert || !existingAlert.priority || existingAlert.priority === 'medium' ? 'selected' : ''}>Medium</option>
+                        <option value="high" ${existingAlert && existingAlert.priority === 'high' ? 'selected' : ''}>High</option>
+                        <option value="critical" ${existingAlert && existingAlert.priority === 'critical' ? 'selected' : ''}>Critical</option>
+                    </select>
+                </div>
+                
+                ${multipleThresholds ? `
+                <div class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <div class="flex items-start">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.962-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        <div class="text-sm text-yellow-700 dark:text-yellow-300">
+                            <p class="font-medium">Multiple thresholds detected</p>
+                            <p class="mt-1">Currently only the primary threshold (${primaryMetric.toUpperCase()}: ${primaryThreshold}${primaryMetric === 'temperature' ? '°C' : '%'}) will be configured. Support for multiple thresholds in a single alert is coming soon.</p>
+                        </div>
+                    </div>
+                </div>
+                ` : ''}
+            </form>
+        `;
+    }
+
+    function createCustomAlertModal(presetThresholds = null, existingAlert = null) {
+        // Remove any existing custom alert modal
+        const existingModal = document.getElementById('custom-alert-modal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+
+        // Extract defaults from presets or existing alert
+        const defaults = extractAlertDefaults(presetThresholds, existingAlert);
+        const { suggestedName, primaryMetric, primaryThreshold, multipleThresholds, isEditing } = defaults;
 
         const modalHTML = `
             <div id="custom-alert-modal" class="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black bg-opacity-50 pt-4 sm:pt-0">
                 <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md max-h-[95vh] sm:max-h-[90vh] flex flex-col m-2 sm:m-4">
-                    <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
-                        <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">${isEditing ? 'Edit Custom Alert' : 'Create Custom Alert'}</h2>
-                        <button id="custom-alert-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                    </div>
+                    ${createCustomAlertModalHeader(isEditing)}
                     
                     <div class="overflow-y-auto flex-grow p-4 sm:p-6 scrollbar">
                         <form id="custom-alert-form" class="space-y-4">
@@ -3137,7 +2891,7 @@ PulseApp.ui.alertManagementModal = (() => {
                                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none">${existingAlert?.description || ''}</textarea>
                             </div>
 
-                            ${multipleThresholds ? `<input type="hidden" name="multipleThresholds" value="${JSON.stringify(presetThresholds).replace(/"/g, '&quot;')}">` : ''}
+                            ${multipleThresholds && presetThresholds ? `<input type="hidden" name="multipleThresholds" value="${JSON.stringify(presetThresholds).replace(/"/g, '&quot;')}">` : ''}
 
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -4119,7 +3873,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
     function generateMockAlertHistory() {
         const now = Date.now();
-        const oneDay = 24 * 60 * 60 * 1000;
+        const oneDay = TIME_UNITS.DAY;
         
         return [
             {
@@ -4165,13 +3919,13 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     }
 
     function preserveCurrentFormData() {
-        // TODO: Implement form data preservation if needed
-        // Currently just a stub to prevent errors
+        // Store form data before switching tabs
+        // Currently no implementation needed as forms are re-rendered
     }
 
     function restoreFormData(tabName) {
-        // TODO: Implement form data restoration if needed
-        // Currently just a stub to prevent errors
+        // Restore form data after switching tabs
+        // Currently no implementation needed as forms are re-rendered
     }
 
     async function loadConfiguration() {
@@ -4341,7 +4095,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             }
 
             if (!hasChanges) {
-                console.log('No changes to save');
+                // console.log('No changes to save');
                 return;
             }
 
@@ -4355,7 +4109,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
             const result = await response.json();
             
             if (response.ok && result.success) {
-                console.log('Configuration saved successfully');
+                // console.log('Configuration saved successfully');
                 
                 // Add visual feedback to show config is saved
                 markEmailConfigAsSaved();
@@ -4375,16 +4129,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
     // Missing functions that were referenced in the public API
     async function toggleAlert(alertId, alertType, enabled) {
-        if (alertType === 'system') {
-            return toggleSystemAlert(alertId, enabled);
-        } else if (alertType === 'custom') {
-            return toggleCustomAlert(alertId, enabled);
-        }
-    }
-
-    async function toggleSystemAlert(alertId, enabled) {
-        // System alerts are now handled via the unified alert system
-        // Use the same logic as custom alerts
+        // All alerts now use unified system
         return toggleCustomAlert(alertId, enabled);
     }
 
