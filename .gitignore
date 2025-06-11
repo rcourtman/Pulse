@@ -87,6 +87,7 @@ RELEASE_CHECKLIST.md
 AI_WORKFLOW.md
 AI_WORKFLOW_SETUP.md
 CLAUDE.md
+ALERT_MANAGEMENT_REFACTOR_PLAN.md
 
 # Lockfiles
 # package-lock.json # Usually committed, but ignore if specified elsewhere
