@@ -3126,6 +3126,17 @@ PulseApp.ui.alertManagementModal = (() => {
                                        class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             </div>
 
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                                    Description
+                                </label>
+                                <textarea name="alertDescription"
+                                          value="${existingAlert?.description || ''}"
+                                          placeholder="e.g., Monitors CPU usage across production VMs and triggers when it exceeds 80%"
+                                          rows="2"
+                                          class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none">${existingAlert?.description || ''}</textarea>
+                            </div>
+
                             ${multipleThresholds ? `<input type="hidden" name="multipleThresholds" value="${JSON.stringify(presetThresholds).replace(/"/g, '&quot;')}">` : ''}
 
                             <div>
@@ -3677,6 +3688,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
         // Build alert configuration
         const alertConfig = {
             name: formData.get('alertName'),
+            description: formData.get('alertDescription') || '',
             targetType: formData.get('targetType'),
             specificTarget: formData.get('specificTarget'),
             thresholds: thresholds, // Use array of thresholds instead of single values
