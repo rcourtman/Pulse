@@ -3778,7 +3778,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
         if (unacknowledgedAlerts.length > 0) {
             content += `
-                <div class="space-y-3">
+                <div class="p-6 space-y-3">
                     <h4 class="text-md font-medium text-gray-900 dark:text-gray-100">
                         Unacknowledged Alerts (${unacknowledgedAlerts.length})
                     </h4>
@@ -3789,7 +3789,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
 
         if (acknowledgedAlerts.length > 0) {
             content += `
-                <div class="space-y-3 mt-6">
+                <div class="p-6 space-y-3 ${unacknowledgedAlerts.length > 0 ? 'border-t border-gray-200 dark:border-gray-700' : ''}">
                     <h4 class="text-md font-medium text-gray-500 dark:text-gray-400">
                         Acknowledged Alerts (${acknowledgedAlerts.length})
                     </h4>
