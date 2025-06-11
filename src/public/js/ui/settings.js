@@ -3471,38 +3471,38 @@ PulseApp.ui.settings = (() => {
         
         return `
             <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                <div class="flex items-start justify-between mb-3">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-2">
-                            <h4 class="font-medium text-gray-900 dark:text-gray-100">${rule.name}</h4>
-                            <span class="px-2 py-1 text-xs font-medium rounded ${severityColor}">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <h4 class="font-medium text-gray-900 dark:text-gray-100 break-words">${rule.name}</h4>
+                            <span class="px-2 py-1 text-xs font-medium rounded whitespace-nowrap ${severityColor}">
                                 ${rule.severity?.toUpperCase() || 'WARNING'}
                             </span>
-                            <span class="px-2 py-1 text-xs font-medium rounded ${rule.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
+                            <span class="px-2 py-1 text-xs font-medium rounded whitespace-nowrap ${rule.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
                                 ${rule.enabled ? 'ENABLED' : 'DISABLED'}
                             </span>
                         </div>
-                        ${rule.description ? `<p class="text-sm text-gray-600 dark:text-gray-400 mb-2">${rule.description}</p>` : ''}
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        ${rule.description ? `<p class="text-sm text-gray-600 dark:text-gray-400 mb-2 break-words">${rule.description}</p>` : ''}
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2 break-words">
                             Created: ${createdDate} • ID: ${rule.id}
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2 break-words">
                             Notifications: ${notificationMethods}
                         </div>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 flex-shrink-0">
                         <button onclick="toggleDynamicRule('${rule.id}', ${!rule.enabled})" 
-                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded whitespace-nowrap">
                             ${rule.enabled ? 'Disable' : 'Enable'}
                         </button>
                         <button onclick="deleteDynamicRule('${rule.id}')" 
-                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
+                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded whitespace-nowrap">
                             Delete
                         </button>
                     </div>
                 </div>
                 <div>
-                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">Alert triggers when ANY guest meets ALL conditions:</p>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2 break-words">Alert triggers when ANY guest meets ALL conditions:</p>
                     <div class="flex flex-wrap">
                         ${thresholdsList}
                     </div>
@@ -3618,30 +3618,30 @@ PulseApp.ui.settings = (() => {
         
         return `
             <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
-                <div class="flex items-start justify-between mb-3">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-2">
-                            <h4 class="font-medium text-gray-900 dark:text-gray-100">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <h4 class="font-medium text-gray-900 dark:text-gray-100 break-words">
                                 ${config.endpointId}:${config.vmid}
                             </h4>
-                            <span class="px-2 py-1 text-xs font-medium rounded ${config.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
+                            <span class="px-2 py-1 text-xs font-medium rounded whitespace-nowrap ${config.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
                                 ${config.enabled ? 'ENABLED' : 'DISABLED'}
                             </span>
                         </div>
-                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2 break-words">
                             Node: ${config.nodeId} • Created: ${createdDate}
                         </div>
-                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                        <div class="text-sm text-gray-600 dark:text-gray-400 break-words">
                             Thresholds: ${thresholds.join(', ') || 'None configured'}
                         </div>
                     </div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 flex-shrink-0">
                         <button onclick="editCustomThreshold('${config.endpointId}', '${config.nodeId}', '${config.vmid}')" 
-                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded">
+                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded whitespace-nowrap">
                             Edit
                         </button>
                         <button onclick="deleteCustomThreshold('${config.endpointId}', '${config.nodeId}', '${config.vmid}')" 
-                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded">
+                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded whitespace-nowrap">
                             Delete
                         </button>
                     </div>

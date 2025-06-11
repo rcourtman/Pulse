@@ -447,73 +447,71 @@ PulseApp.ui.alertManagementModal = (() => {
 
     function renderConfigureTab() {
         return `
-            <div class="space-y-8">
+            <div class="space-y-6">
                 <!-- Unified Alert Rules Section -->
-                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-3">
-                                <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                </svg>
-                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Alert Rules</h3>
-                            </div>
-                            <div class="flex gap-2 sm:gap-3">
-                                <button onclick="openAlertRuleModal()" class="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium rounded-md transition-colors">
-                                    <svg class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                                    </svg>
-                                    <span class="hidden sm:inline">Create Rule</span>
-                                    <span class="sm:hidden">Create</span>
-                                </button>
-                            </div>
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center space-x-3">
+                            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Alert Rules</h3>
                         </div>
+                        <button onclick="openAlertRuleModal()" class="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium rounded-md transition-colors">
+                            <svg class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                            </svg>
+                            <span class="hidden sm:inline">Create Rule</span>
+                            <span class="sm:hidden">Create</span>
+                        </button>
                     </div>
                     
                     <!-- Unified Alert Rules List -->
-                    <div class="px-6 py-4">
-                        <div id="alert-rules-list" class="space-y-3">
-                            <p class="text-gray-500 dark:text-gray-400">Loading alert rules...</p>
-                        </div>
+                    <div id="alert-rules-list" class="space-y-3">
+                        <p class="text-gray-500 dark:text-gray-400">Loading alert rules...</p>
                     </div>
                 </div>
 
                 <!-- Notification Settings Section -->
-                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center space-x-3">
-                            <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zM4 5h5L4 0v5zm7 12l4-4m-4 4l4-4"/>
-                            </svg>
-                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Notification Settings</h3>
-                        </div>
+                <div>
+                    <div class="flex items-center space-x-3 mb-4">
+                        <svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zM4 5h5L4 0v5zm7 12l4-4m-4 4l4-4"/>
+                        </svg>
+                        <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Notification Settings</h3>
                     </div>
                     
                     <!-- Global Controls -->
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-900/20">
-                        <div class="flex items-center justify-between">
+                    <div class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-blue-50 dark:bg-blue-900/20 mb-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                             <div>
                                 <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Global Notification Controls</h4>
                                 <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Master switches for all alert notifications</p>
                             </div>
-                            <div class="flex items-center space-x-6">
-                                <label class="flex items-center">
-                                    <input type="checkbox" id="global-email-toggle" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Email Notifications</span>
+                            <div class="flex flex-wrap items-center gap-6">
+                                <label class="flex items-center gap-3">
+                                    <span class="text-sm text-gray-700 dark:text-gray-300">Email Notifications</span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="global-email-toggle" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                    </label>
                                 </label>
-                                <label class="flex items-center">
-                                    <input type="checkbox" id="global-webhook-toggle" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
-                                    <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Webhook Notifications</span>
+                                <label class="flex items-center gap-3">
+                                    <span class="text-sm text-gray-700 dark:text-gray-300">Webhook Notifications</span>
+                                    <label class="relative inline-flex items-center cursor-pointer">
+                                        <input type="checkbox" id="global-webhook-toggle" class="sr-only peer">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                    </label>
                                 </label>
                             </div>
                         </div>
                     </div>
                     
                     <!-- Email Configuration -->
-                    <div class="px-6 py-4 space-y-4" id="email-config-section">
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4" id="email-config-section">
                         <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Email Configuration</h4>
                         
-                        <div class="grid grid-cols-1 gap-4">
+                        <div class="grid grid-cols-1 gap-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
                                 <input type="email" name="ALERT_FROM_EMAIL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="alerts@yourdomain.com">
@@ -540,16 +538,16 @@ PulseApp.ui.alertManagementModal = (() => {
                             </div>
                         </div>
                         
-                        <div class="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-3 border-t border-gray-200 dark:border-gray-700">
                             <label class="flex items-center">
                                 <input type="checkbox" name="SMTP_SECURE" class="h-4 w-4 text-blue-600 border-gray-300 rounded">
                                 <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS encryption</span>
                             </label>
                             <div class="flex gap-3">
-                                <button id="test-email-btn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
+                                <button id="test-email-btn" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
                                     Test Email
                                 </button>
-                                <button id="save-email-config-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                                <button id="save-email-config-btn" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
                                     Save Configuration
                                 </button>
                             </div>
@@ -557,19 +555,19 @@ PulseApp.ui.alertManagementModal = (() => {
                     </div>
                     
                     <!-- Webhook Configuration -->
-                    <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700" id="webhook-config-section">
-                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-4">Webhook Configuration</h4>
-                        <div class="space-y-4">
+                    <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mt-4" id="webhook-config-section">
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Webhook Configuration</h4>
+                        <div class="space-y-3">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
                                 <input type="url" name="WEBHOOK_URL" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" placeholder="https://hooks.slack.com/services/...">
                             </div>
-                            <div class="flex justify-end pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <div class="flex justify-end pt-3 border-t border-gray-200 dark:border-gray-700">
                                 <div class="flex gap-3">
-                                    <button id="test-webhook-btn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
+                                    <button id="test-webhook-btn" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
                                         Test Webhook
                                     </button>
-                                    <button id="save-webhook-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+                                    <button id="save-webhook-btn" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
                                         Save Configuration
                                     </button>
                                 </div>
@@ -696,38 +694,49 @@ PulseApp.ui.alertManagementModal = (() => {
         })();
         
         return `
-            <div class="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                <div class="flex-1">
-                    <div class="flex items-center gap-3 mb-2">
-                        <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100">${rule.name || rule.id}</h5>
+            <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                <div class="flex flex-col gap-3">
+                    <!-- Header with title and toggle -->
+                    <div class="flex items-start justify-between gap-3">
+                        <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100 flex-1">${rule.name || rule.id}</h5>
+                        <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                            <input type="checkbox" ${rule.enabled !== false ? 'checked' : ''} class="sr-only peer" onchange="toggleAlertRule('${rule.id}', this.checked)">
+                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                        </label>
                     </div>
-                    <div class="space-y-1">
-                        ${thresholdDisplay ? `
-                            <div class="flex items-center gap-2">
+                    
+                    <!-- Condition section -->
+                    ${thresholdDisplay ? `
+                        <div class="bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 p-2">
+                            <div class="flex flex-col gap-1">
                                 <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Condition:</span>
-                                <code class="text-xs px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded">${thresholdDisplay}</code>
-                                ${durationDisplay ? `<span class="text-xs text-gray-500 dark:text-gray-400">for ${durationDisplay}</span>` : ''}
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <code class="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded font-mono">${thresholdDisplay}</code>
+                                    ${durationDisplay ? `<span class="text-xs text-gray-500 dark:text-gray-400">for ${durationDisplay}</span>` : ''}
+                                </div>
                             </div>
-                        ` : ''}
-                        <p class="text-xs text-gray-500 dark:text-gray-400">${rule.description || getAlertRuleDescription(rule)}</p>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Description -->
+                    <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">${rule.description || getAlertRuleDescription(rule)}</p>
+                    
+                    <!-- Action buttons -->
+                    <div class="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <button onclick="editAlertRule('${rule.id}')" class="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            </svg>
+                            Edit
+                        </button>
+                        <button onclick="deleteAlertRule('${rule.id}')" class="px-3 py-1.5 text-xs bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded transition-colors flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            Delete
+                        </button>
                     </div>
-                </div>
-                <div class="flex items-center gap-2">
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" ${rule.enabled !== false ? 'checked' : ''} class="sr-only peer" onchange="toggleAlertRule('${rule.id}', this.checked)">
-                        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                    </label>
-                    <button onclick="editAlertRule('${rule.id}')" class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Edit rule">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        </svg>
-                    </button>
-                    <button onclick="deleteAlertRule('${rule.id}')" class="p-1 text-red-400 hover:text-red-600" title="Delete rule">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                        </svg>
-                    </button>
                 </div>
             </div>
         `;
@@ -1156,15 +1165,89 @@ PulseApp.ui.alertManagementModal = (() => {
         const webhookToggle = document.getElementById('global-webhook-toggle');
         
         if (emailToggle) {
-            emailToggle.addEventListener('change', (e) => {
-                handleGlobalEmailToggle(e.target.checked);
+            emailToggle.addEventListener('change', async (e) => {
+                await handleGlobalEmailToggle(e.target.checked);
             });
         }
         
         if (webhookToggle) {
-            webhookToggle.addEventListener('change', (e) => {
-                handleGlobalWebhookToggle(e.target.checked);
+            webhookToggle.addEventListener('change', async (e) => {
+                await handleGlobalWebhookToggle(e.target.checked);
             });
+        }
+    }
+    
+    async function handleGlobalEmailToggle(enabled) {
+        try {
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ALERT_EMAIL_ENABLED: enabled ? 'true' : 'false' })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update email notification setting');
+            }
+            
+            // Update currentConfig
+            if (currentConfig) {
+                currentConfig.ALERT_EMAIL_ENABLED = enabled ? 'true' : 'false';
+            }
+            
+            // Show visual feedback
+            const toggleEl = document.getElementById('global-email-toggle');
+            if (toggleEl) {
+                // Briefly flash the toggle to indicate success
+                const parent = toggleEl.parentElement;
+                parent.classList.add('ring-2', 'ring-green-500');
+                setTimeout(() => parent.classList.remove('ring-2', 'ring-green-500'), 1000);
+            }
+            
+        } catch (error) {
+            console.error('Error updating email toggle:', error);
+            // Revert the toggle on error
+            const toggleEl = document.getElementById('global-email-toggle');
+            if (toggleEl) {
+                toggleEl.checked = !enabled;
+            }
+            PulseApp.ui.toast.error('Failed to update email notifications');
+        }
+    }
+    
+    async function handleGlobalWebhookToggle(enabled) {
+        try {
+            const response = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ALERT_WEBHOOK_ENABLED: enabled ? 'true' : 'false' })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to update webhook notification setting');
+            }
+            
+            // Update currentConfig
+            if (currentConfig) {
+                currentConfig.ALERT_WEBHOOK_ENABLED = enabled ? 'true' : 'false';
+            }
+            
+            // Show visual feedback
+            const toggleEl = document.getElementById('global-webhook-toggle');
+            if (toggleEl) {
+                // Briefly flash the toggle to indicate success
+                const parent = toggleEl.parentElement;
+                parent.classList.add('ring-2', 'ring-green-500');
+                setTimeout(() => parent.classList.remove('ring-2', 'ring-green-500'), 1000);
+            }
+            
+        } catch (error) {
+            console.error('Error updating webhook toggle:', error);
+            // Revert the toggle on error
+            const toggleEl = document.getElementById('global-webhook-toggle');
+            if (toggleEl) {
+                toggleEl.checked = !enabled;
+            }
+            PulseApp.ui.toast.error('Failed to update webhook notifications');
         }
     }
 
@@ -1313,19 +1396,19 @@ PulseApp.ui.alertManagementModal = (() => {
         }
         
         console.log('[Global Toggles] Loading with config:', {
-            GLOBAL_EMAIL_ENABLED: currentConfig.GLOBAL_EMAIL_ENABLED,
-            GLOBAL_WEBHOOK_ENABLED: currentConfig.GLOBAL_WEBHOOK_ENABLED
+            ALERT_EMAIL_ENABLED: currentConfig.ALERT_EMAIL_ENABLED,
+            ALERT_WEBHOOK_ENABLED: currentConfig.ALERT_WEBHOOK_ENABLED
         });
         
         if (emailToggle && currentConfig) {
-            const emailEnabled = currentConfig.GLOBAL_EMAIL_ENABLED === 'true';
+            const emailEnabled = currentConfig.ALERT_EMAIL_ENABLED === 'true';
             console.log('[Global Toggles] Setting email toggle to:', emailEnabled);
             emailToggle.checked = emailEnabled;
             updateEmailConfigVisibility(emailEnabled);
         }
         
         if (webhookToggle && currentConfig) {
-            const webhookEnabled = currentConfig.GLOBAL_WEBHOOK_ENABLED === 'true';
+            const webhookEnabled = currentConfig.ALERT_WEBHOOK_ENABLED === 'true';
             console.log('[Global Toggles] Setting webhook toggle to:', webhookEnabled);
             webhookToggle.checked = webhookEnabled;
             updateWebhookConfigVisibility(webhookEnabled);
