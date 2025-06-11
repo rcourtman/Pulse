@@ -1751,8 +1751,9 @@ async function startServer() {
               /coverage/,      // ignore coverage directory
               /temp/,          // ignore temp directory
               /alert-rules\.json$/, // ignore alert rules runtime data
-              /acknowledgements\.json$/, // ignore acknowledgements runtime data
-              /custom-thresholds\.json$/ // ignore custom thresholds runtime data
+              /custom-thresholds\.json$/, // ignore custom thresholds runtime data
+              /active-alerts\.json$/, // ignore active alerts runtime data
+              /notification-history\.json$/ // ignore notification history runtime data
             ],
             persistent: true,
             ignoreInitial: true // Don't trigger on initial scan

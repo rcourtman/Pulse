@@ -25,7 +25,6 @@ class AlertManager extends EventEmitter {
         };
         
         this.maxHistorySize = 10000; // Increased for better analytics
-        this.acknowledgementsFile = path.join(__dirname, '../data/acknowledgements.json');
         this.alertRulesFile = path.join(__dirname, '../data/alert-rules.json');
         this.activeAlertsFile = path.join(__dirname, '../data/active-alerts.json');
         this.notificationHistoryFile = path.join(__dirname, '../data/notification-history.json');
@@ -38,7 +37,6 @@ class AlertManager extends EventEmitter {
         this.initializeAlertGroups();
         
         // Load persisted state
-        this.loadAcknowledgements();
         this.loadAlertRules();
         this.loadActiveAlerts();
         this.loadNotificationHistory();
@@ -464,8 +462,8 @@ class AlertManager extends EventEmitter {
                 
                 this.emit('alertAcknowledged', alert);
                 
-                // Save acknowledgements to file
-                this.saveAcknowledgements();
+                // Save active alerts (which now includes acknowledgements)
+                this.saveActiveAlerts();
                 
                 return true;
             }
@@ -1161,11 +1159,11 @@ class AlertManager extends EventEmitter {
         
         // Save if acknowledgements were cleaned up
         if (acknowledgementsChanged) {
-            this.saveAcknowledgements();
+            // No need to save separately - acknowledgements are part of active alerts
         }
         
         // Save if alerts or notification history were cleaned up
-        if (alertsRemoved) {
+        if (alertsRemoved || acknowledgementsChanged) {
             this.saveActiveAlerts();
             this.saveNotificationHistory();
         }
@@ -1787,46 +1785,19 @@ class AlertManager extends EventEmitter {
         }
     }
 
+    // Deprecated: acknowledgements are now loaded from active alerts
     async loadAcknowledgements() {
-        try {
-            const data = await fs.readFile(this.acknowledgementsFile, 'utf-8');
-            const acknowledgements = JSON.parse(data);
-            
-            // Restore acknowledgements to the map
-            for (const [key, ack] of Object.entries(acknowledgements)) {
-                this.acknowledgedAlerts.set(key, ack);
-            }
-            
-            console.log(`Loaded ${this.acknowledgedAlerts.size} persisted acknowledgements`);
-        } catch (error) {
-            if (error.code !== 'ENOENT') {
-                console.error('Error loading acknowledgements:', error);
-            }
-            // File doesn't exist yet, which is fine for first run
-        }
+        // This method is kept for backward compatibility but does nothing
+        // Acknowledgements are now loaded from activeAlerts in loadActiveAlerts()
     }
     
+    // Deprecated: acknowledgements are now saved with active alerts
     async saveAcknowledgements() {
-        try {
-            // Ensure data directory exists
-            const dataDir = path.dirname(this.acknowledgementsFile);
-            await fs.mkdir(dataDir, { recursive: true });
-            
-            // Convert Map to plain object for JSON serialization
-            const acknowledgements = {};
-            for (const [key, ack] of this.acknowledgedAlerts) {
-                acknowledgements[key] = ack;
-            }
-            
-            await fs.writeFile(
-                this.acknowledgementsFile, 
-                JSON.stringify(acknowledgements, null, 2),
-                'utf-8'
-            );
-        } catch (error) {
-            console.error('Error saving acknowledgements:', error);
-        }
+        // This method is kept for backward compatibility but does nothing
+        // Acknowledgements are now saved in saveActiveAlerts()
     }
+    
+    // Old saveAcknowledgements code removed - acknowledgements are now part of active alerts
 
     async loadAlertRules() {
         try {
@@ -1981,10 +1952,16 @@ class AlertManager extends EventEmitter {
                 // Validate the alert has required fields
                 if (alert.id && alert.rule && alert.guest) {
                     this.activeAlerts.set(key, alert);
+                    
+                    // If this alert is acknowledged, also add it to acknowledgedAlerts
+                    if (alert.acknowledged) {
+                        this.acknowledgedAlerts.set(key, alert);
+                    }
                 }
             });
             
             console.log(`[AlertManager] Loaded ${this.activeAlerts.size} active alerts from disk`);
+            console.log(`[AlertManager] Loaded ${this.acknowledgedAlerts.size} acknowledged alerts from active alerts`);
         } catch (error) {
             if (error.code !== 'ENOENT') {
                 console.error('[AlertManager] Error loading active alerts:', error);
@@ -2019,7 +1996,8 @@ class AlertManager extends EventEmitter {
                     escalated: alert.escalated,
                     acknowledged: alert.acknowledged,
                     acknowledgedBy: alert.acknowledgedBy,
-                    acknowledgedAt: alert.acknowledgedAt
+                    acknowledgedAt: alert.acknowledgedAt,
+                    acknowledgeNote: alert.acknowledgeNote
                 };
             }
             
