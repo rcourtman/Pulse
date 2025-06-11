@@ -48,6 +48,7 @@ class AlertManager extends EventEmitter {
         
         // Initialize email transporter
         this.emailTransporter = null;
+        this.emailConfig = null;
         this.initializeEmailTransporter();
         
         // Cleanup timer for resolved alerts
@@ -159,6 +160,11 @@ class AlertManager extends EventEmitter {
 
     // Enhanced alert checking with custom conditions
     async checkMetrics(guests, metrics) {
+        // Check if alerts are globally disabled
+        if (process.env.ALERTS_ENABLED === 'false') {
+            return;
+        }
+        
         if (this.processingMetrics || this.reloadingRules) {
             console.log('[AlertManager] Skipping metrics check - already processing or reloading rules');
             return;
@@ -215,6 +221,11 @@ class AlertManager extends EventEmitter {
     }
 
     processMetrics(metricsData) {
+        // Check if alerts are globally disabled
+        if (process.env.ALERTS_ENABLED === 'false') {
+            return;
+        }
+        
         const beforeAlertCount = this.activeAlerts.size;
         
         // Convert metricsData to guests format expected by checkMetrics
@@ -430,6 +441,27 @@ class AlertManager extends EventEmitter {
                     note
                 });
                 
+                // Add acknowledgment to history
+                const ackInfo = {
+                    id: `ack_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    type: 'acknowledgment',
+                    alertId: alert.id,
+                    ruleId: alert.rule.id,
+                    ruleName: alert.rule.name,
+                    guest: {
+                        name: alert.guest.name,
+                        vmid: alert.guest.vmid,
+                        node: alert.guest.node,
+                        type: alert.guest.type,
+                        endpointId: alert.guest.endpointId
+                    },
+                    acknowledgedBy: userId,
+                    acknowledgedAt: Date.now(),
+                    note: note,
+                    message: `Alert acknowledged by ${userId}: ${alert.rule.name} on ${alert.guest.name}`
+                };
+                this.addToHistory(ackInfo);
+                
                 this.emit('alertAcknowledged', alert);
                 
                 // Save acknowledgements to file
@@ -481,7 +513,6 @@ class AlertManager extends EventEmitter {
         
         const escalatedAlert = {
             ...alert,
-            severity: this.escalateSeverity(alert.rule.severity),
             message: `ESCALATED: ${alert.rule.name}`,
             escalated: true
         };
@@ -516,7 +547,7 @@ class AlertManager extends EventEmitter {
         } else {
             // Global email is enabled - check individual rule preferences and transporter
             const ruleEmailEnabled = alert.rule && alert.rule.sendEmail !== false; // Default to true for system rules
-            sendEmail = ruleEmailEnabled && this.emailTransporter;
+            sendEmail = ruleEmailEnabled && !!this.emailTransporter;
             console.log(`[AlertManager] Email enabled globally - ruleEmailEnabled: ${ruleEmailEnabled}, hasTransporter: ${!!this.emailTransporter}, sendEmail: ${sendEmail}`);
         }
         
@@ -823,7 +854,6 @@ class AlertManager extends EventEmitter {
             condition: rule.condition,
             threshold: rule.threshold,
             duration: rule.duration,
-            severity: rule.severity,
             enabled: rule.enabled,
             tags: Array.isArray(rule.tags) ? [...rule.tags] : [],
             group: rule.group,
@@ -853,6 +883,32 @@ class AlertManager extends EventEmitter {
             status: guest.status,
             maxmem: guest.maxmem,
             maxdisk: guest.maxdisk
+        };
+    }
+
+    createSafeRuleCopy(rule) {
+        return {
+            id: rule.id,
+            name: rule.name,
+            description: rule.description,
+            metric: rule.metric,
+            condition: rule.condition,
+            threshold: rule.threshold,
+            duration: rule.duration,
+            enabled: rule.enabled,
+            tags: rule.tags ? [...rule.tags] : [],
+            group: rule.group,
+            escalationTime: rule.escalationTime,
+            autoResolve: rule.autoResolve,
+            suppressionTime: rule.suppressionTime,
+            type: rule.type,
+            thresholds: rule.thresholds ? rule.thresholds.map(t => ({
+                metric: t.metric,
+                condition: t.condition,
+                threshold: t.threshold
+            })) : [],
+            sendEmail: rule.sendEmail,
+            sendWebhook: rule.sendWebhook
         };
     }
 
@@ -955,7 +1011,6 @@ class AlertManager extends EventEmitter {
             id: alert.id, // Use the stored alert ID
             ruleId: alert.rule.id,
             ruleName: alert.rule.name,
-            severity: 'resolved',
             guest: {
                 name: alert.guest.name,
                 vmid: alert.guest.vmid,
@@ -1199,7 +1254,7 @@ class AlertManager extends EventEmitter {
             id: ruleId,
             condition: 'greater_than',
             duration: 300000,
-            enabled: true,
+            enabled: false,
             tags: [],
             group: isCompoundRule ? 'compound_threshold' : 'custom',
             escalationTime: 900000,
@@ -1428,7 +1483,6 @@ class AlertManager extends EventEmitter {
                 ruleId: rule.id,
                 rule: this.createSafeRuleCopy(rule),
                 guest: this.createSafeGuestCopy(guest),
-                severity: rule.severity,
                 message: this.formatCompoundThresholdMessage(rule, guestMetrics.current, guest),
                 startTime: timestamp,
                 lastUpdate: timestamp,
@@ -1656,7 +1710,6 @@ class AlertManager extends EventEmitter {
                     id: alert.id,
                     ruleId: alert.rule.id,
                     ruleName: alert.rule.name,
-                    severity: 'resolved',
                     guest: {
                         name: alert.guest.name,
                         vmid: alert.guest.vmid,
@@ -1844,7 +1897,7 @@ class AlertManager extends EventEmitter {
                     condition: 'greater_than',
                     threshold: this.parseEnvInt('ALERT_CPU_THRESHOLD', 85, 1, 100),
                     duration: this.parseEnvInt('ALERT_CPU_DURATION', 300000, 1000),
-                    enabled: process.env.ALERT_CPU_ENABLED !== 'false',
+                    enabled: process.env.ALERT_CPU_ENABLED === 'true',
                     tags: ['performance', 'cpu'],
                     group: 'system_performance',
                     escalationTime: 900000, // 15 minutes
@@ -1859,7 +1912,7 @@ class AlertManager extends EventEmitter {
                     condition: 'greater_than',
                     threshold: this.parseEnvInt('ALERT_MEMORY_THRESHOLD', 90, 1, 100),
                     duration: this.parseEnvInt('ALERT_MEMORY_DURATION', 300000, 1000),
-                    enabled: process.env.ALERT_MEMORY_ENABLED !== 'false',
+                    enabled: process.env.ALERT_MEMORY_ENABLED === 'true',
                     tags: ['performance', 'memory'],
                     group: 'system_performance',
                     escalationTime: 900000, // 15 minutes
@@ -1874,7 +1927,7 @@ class AlertManager extends EventEmitter {
                     condition: 'greater_than',
                     threshold: this.parseEnvInt('ALERT_DISK_THRESHOLD', 90, 1, 100),
                     duration: this.parseEnvInt('ALERT_DISK_DURATION', 300000, 1000),
-                    enabled: process.env.ALERT_DISK_ENABLED !== 'false',
+                    enabled: process.env.ALERT_DISK_ENABLED === 'true',
                     tags: ['storage', 'disk'],
                     group: 'storage_alerts',
                     escalationTime: 1800000, // 30 minutes
@@ -1889,7 +1942,7 @@ class AlertManager extends EventEmitter {
                     condition: 'equals',
                     threshold: 'stopped',
                     duration: this.parseEnvInt('ALERT_DOWN_DURATION', 60000, 1000),
-                    enabled: process.env.ALERT_DOWN_ENABLED !== 'false',
+                    enabled: process.env.ALERT_DOWN_ENABLED === 'true',
                     tags: ['availability', 'guest'],
                     group: 'availability_alerts',
                     escalationTime: 600000, // 10 minutes
@@ -2012,10 +2065,16 @@ class AlertManager extends EventEmitter {
             const dataDir = path.dirname(this.notificationHistoryFile);
             await fs.mkdir(dataDir, { recursive: true });
             
-            // Convert Map to plain object
+            // Convert Map to plain object with safe serialization
             const historyToSave = {};
             for (const [alertId, status] of this.notificationStatus) {
-                historyToSave[alertId] = status;
+                // Create safe copy excluding any potential circular references
+                historyToSave[alertId] = {
+                    emailSent: Boolean(status.emailSent),
+                    webhookSent: Boolean(status.webhookSent),
+                    channels: Array.isArray(status.channels) ? status.channels.slice() : [],
+                    timestamp: status.timestamp || Date.now()
+                };
             }
             
             await fs.writeFile(
@@ -2032,17 +2091,20 @@ class AlertManager extends EventEmitter {
     /**
      * Initialize email transporter for sending notifications
      */
-    initializeEmailTransporter() {
-        if (process.env.SMTP_HOST) {
-            try {
+    async initializeEmailTransporter() {
+        try {
+            // Try to load config from config API first
+            const config = await this.loadEmailConfig();
+            
+            if (config.host || process.env.SMTP_HOST) {
                 const transporter = nodemailer.createTransport({
-                    host: process.env.SMTP_HOST,
-                    port: parseInt(process.env.SMTP_PORT) || 587,
-                    secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
+                    host: config.host || process.env.SMTP_HOST,
+                    port: parseInt(config.port || process.env.SMTP_PORT) || 587,
+                    secure: config.secure || process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
                     requireTLS: true, // Force TLS encryption
                     auth: {
-                        user: process.env.SMTP_USER,
-                        pass: process.env.SMTP_PASS
+                        user: config.user || process.env.SMTP_USER,
+                        pass: config.pass || process.env.SMTP_PASS
                     },
                     tls: {
                         // Do not fail on invalid certs
@@ -2058,13 +2120,40 @@ class AlertManager extends EventEmitter {
                     configurable: true
                 });
                 
-                console.log('[AlertManager] Email transporter initialized');
-            } catch (error) {
-                console.error('[AlertManager] Failed to initialize email transporter:', error);
+                // Store email config for use in notifications
+                this.emailConfig = {
+                    from: config.from || process.env.ALERT_FROM_EMAIL,
+                    to: config.to || process.env.ALERT_TO_EMAIL
+                };
+                
+                console.log('[AlertManager] Email transporter initialized with config:', {
+                    host: config.host || process.env.SMTP_HOST,
+                    hasAuth: !!(config.user || process.env.SMTP_USER),
+                    from: this.emailConfig.from,
+                    to: this.emailConfig.to
+                });
+            } else {
+                console.log('[AlertManager] SMTP not configured, email notifications disabled');
             }
-        } else {
-            console.log('[AlertManager] SMTP not configured, email notifications disabled');
+        } catch (error) {
+            console.error('[AlertManager] Failed to initialize email transporter:', error);
         }
+    }
+
+    /**
+     * Reload email configuration (call this when settings change)
+     */
+    async reloadEmailConfiguration() {
+        console.log('[AlertManager] Reloading email configuration...');
+        
+        // Close existing transporter
+        if (this.emailTransporter) {
+            this.emailTransporter.close();
+            this.emailTransporter = null;
+        }
+        
+        // Reinitialize
+        await this.initializeEmailTransporter();
     }
 
     /**
@@ -2090,7 +2179,9 @@ class AlertManager extends EventEmitter {
             throw new Error('Email transporter not configured');
         }
 
-        const recipients = process.env.ALERT_TO_EMAIL ? process.env.ALERT_TO_EMAIL.split(',') : [];
+        // Use stored email config or fall back to env vars
+        const toEmail = this.emailConfig?.to || process.env.ALERT_TO_EMAIL;
+        const recipients = toEmail ? toEmail.split(',') : [];
         if (!recipients || recipients.length === 0) {
             throw new Error('No email recipients configured (ALERT_TO_EMAIL)');
         }
@@ -2188,7 +2279,6 @@ class AlertManager extends EventEmitter {
         const text = `
 PULSE ALERT: ${alert.rule.name}
 
-Severity: ${alert.rule.severity.toUpperCase()}
 VM/LXC: ${alert.guest.name} (${alert.guest.type} ${alert.guest.vmid})
 Node: ${alert.guest.node}
 Metric: ${alert.rule.metric ? alert.rule.metric.toUpperCase() : (alert.rule.type === 'compound_threshold' ? 'Multiple Thresholds' : 'N/A')}
@@ -2203,7 +2293,7 @@ This alert was generated by Pulse monitoring system.
         `;
 
         const mailOptions = {
-            from: process.env.ALERT_FROM_EMAIL || 'alerts@pulse-monitoring.local',
+            from: this.emailConfig?.from || process.env.ALERT_FROM_EMAIL || 'alerts@pulse-monitoring.local',
             to: recipients.join(', '),
             subject: subject,
             text: text,
@@ -2328,7 +2418,6 @@ This alert was generated by Pulse monitoring system.
                     rule: {
                         name: alert.rule.name,
                         description: alert.rule.description,
-                        severity: alert.rule.severity,
                         metric: alert.rule.metric
                     },
                     guest: {
@@ -2346,9 +2435,7 @@ This alert was generated by Pulse monitoring system.
                 embeds: [{
                     title: `🚨 ${alert.rule.name}`,
                     description: alert.rule.description,
-                    color: alert.rule.severity === 'critical' ? 15158332 :
-                           alert.rule.severity === 'warning' ? 15844367 :
-                           3447003,
+                    color: 15158332, // Red color for all alerts
                     fields: [
                         {
                             name: 'VM/LXC',
@@ -2565,11 +2652,13 @@ Pulse Monitoring System`,
 
     async loadEmailConfig() {
         try {
-            // Load email configuration from environment or config
-            const { loadConfiguration } = require('./configLoader');
-            const config = await loadConfiguration();
+            // Load email configuration from config API
+            const axios = require('axios');
             
-            console.log('[AlertManager] Loading email config, ALERT_TO_EMAIL:', config.ALERT_TO_EMAIL);
+            const response = await axios.get('http://localhost:7655/api/config');
+            const config = response.data;
+            
+            console.log('[AlertManager] Loading email config from API, ALERT_TO_EMAIL:', config.ALERT_TO_EMAIL);
             
             return {
                 from: config.ALERT_FROM_EMAIL,
@@ -2577,11 +2666,21 @@ Pulse Monitoring System`,
                 host: config.SMTP_HOST,
                 port: config.SMTP_PORT,
                 user: config.SMTP_USER,
+                pass: config.SMTP_PASS,
                 secure: config.SMTP_SECURE === 'true'
             };
         } catch (error) {
-            console.error('[AlertManager] Error loading email config:', error);
-            return {};
+            console.error('[AlertManager] Error loading email config from API:', error);
+            // Fallback to environment variables
+            return {
+                from: process.env.ALERT_FROM_EMAIL,
+                to: process.env.ALERT_TO_EMAIL,
+                host: process.env.SMTP_HOST,
+                port: process.env.SMTP_PORT,
+                user: process.env.SMTP_USER,
+                pass: process.env.SMTP_PASS,
+                secure: process.env.SMTP_SECURE === 'true'
+            };
         }
     }
 }
