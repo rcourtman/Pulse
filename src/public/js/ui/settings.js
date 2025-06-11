@@ -491,6 +491,33 @@ PulseApp.ui.settings = (() => {
                 </div>
             </div>
 
+            <!-- Alert Settings -->
+            <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 mb-6">
+                <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Alert System</h3>
+                <div class="flex items-center justify-between">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Enable Alerts
+                        </label>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">
+                            Master switch to enable or disable all alert notifications
+                        </p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" name="ALERTS_ENABLED" value="true"
+                               ${advanced.alerts?.enabled !== false ? 'checked' : ''}
+                               class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                </div>
+                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <p class="text-sm text-gray-600 dark:text-gray-400">
+                        When disabled, no alerts will be triggered or sent regardless of individual alert rule settings.
+                        Use the <a href="#" onclick="PulseApp.ui.alertManagementModal.openModal(); return false;" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200">Alert Management</a> modal to configure specific alert rules and notification channels.
+                    </p>
+                </div>
+            </div>
+
             <!-- Update Management -->
             <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
                 <h3 class="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">Software Updates</h3>

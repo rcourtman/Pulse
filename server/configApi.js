@@ -52,6 +52,7 @@ class ConfigApi {
                     discoveryInterval: config.PULSE_DISCOVERY_INTERVAL_MS,
                     updateChannel: config.UPDATE_CHANNEL || 'stable',
                     alerts: {
+                        enabled: config.ALERTS_ENABLED !== 'false',
                         cpu: {
                             enabled: config.ALERT_CPU_ENABLED !== 'false',
                             threshold: config.ALERT_CPU_THRESHOLD
@@ -179,6 +180,9 @@ class ConfigApi {
             // Alert settings
             if (config.advanced.alerts) {
                 const alerts = config.advanced.alerts;
+                if (alerts.enabled !== undefined) {
+                    existingConfig.ALERTS_ENABLED = alerts.enabled ? 'true' : 'false';
+                }
                 if (alerts.cpu) {
                     existingConfig.ALERT_CPU_ENABLED = alerts.cpu.enabled ? 'true' : 'false';
                     if (alerts.cpu.threshold) {
