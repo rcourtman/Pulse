@@ -59,7 +59,6 @@ const http = require('http');
 const cors = require('cors');
 const compression = require('compression');
 const { Server } = require('socket.io');
-const { URL } = require('url'); // <--- ADD: Import URL constructor
 const axios = require('axios');
 const axiosRetry = require('axios-retry').default; // Import axios-retry
 
@@ -82,18 +81,12 @@ let pbsApiClients = {};
 const ConfigApi = require('./configApi');
 const configApi = new ConfigApi();
 
-// --- REMOVED OLD CLIENT INIT LOGIC --- 
-// The following blocks were moved to apiClients.js
-// endpoints.forEach(endpoint => { ... });
-// async function initializeAllPbsClients() { ... }
-// --- END REMOVED OLD CLIENT INIT LOGIC ---
 
 // --- Data Fetching (Imported) ---
 const { fetchDiscoveryData, fetchMetricsData } = require('./dataFetcher');
 // --- END Data Fetching ---
 
 // Server configuration
-const DEBUG_METRICS = false; // Set to true to show detailed metrics logs
 const PORT = 7655; // Using a different port from the main server
 
 // --- Define Update Intervals (Configurable via Env Vars) ---
@@ -755,21 +748,6 @@ app.get('/api/version', async (req, res) => {
     }
 });
 
-// Simple version comparison function
-function compareVersions(v1, v2) {
-    const parts1 = v1.split('.').map(Number);
-    const parts2 = v2.split('.').map(Number);
-    
-    for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-        const part1 = parts1[i] || 0;
-        const part2 = parts2[i] || 0;
-        
-        if (part1 > part2) return 1;
-        if (part1 < part2) return -1;
-    }
-    
-    return 0;
-}
 
 app.get('/api/storage', async (req, res) => {
     try {
@@ -1403,12 +1381,6 @@ let discoveryTimeoutId = null;
 let metricTimeoutId = null;
 // --- End Global State ---
 
-// --- Data Fetching Helper Functions (MOVED TO dataFetcher.js) ---
-// async function fetchDataForNode(...) { ... } // MOVED
-
-// --- Main Data Fetching Logic (MOVED TO dataFetcher.js) ---
-// async function fetchDiscoveryData(...) { ... } // MOVED
-// async function fetchMetricsData(...) { ... } // MOVED
 
 // --- Update Cycle Logic --- 
 // Uses imported fetch functions and updates global state
@@ -1805,8 +1777,3 @@ async function startServer() {
 
 startServer();
 
-// --- PBS Data Fetching Functions (MOVED TO dataFetcher.js / pbsUtils.js) ---
-// async function fetchPbsNodeName(...) { ... } // MOVED
-// async function fetchAllPbsTasksForProcessing(...) { ... } // MOVED
-// function processPbsTasks(...) { ... } // MOVED
-// async function fetchPbsDatastoreData(...) { ... } // MOVED

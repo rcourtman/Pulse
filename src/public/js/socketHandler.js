@@ -29,8 +29,6 @@ PulseApp.socketHandler = (() => {
         socket.on('requestError', handleRequestError);
         
         // Enhanced monitoring events
-        socket.on('alert', handleAlert);
-        socket.on('alertResolved', handleAlertResolved);
         
         // Development features
         socket.on('hotReload', handleHotReload);
@@ -104,23 +102,6 @@ PulseApp.socketHandler = (() => {
         updateConnectionStatus('error');
     }
 
-    function handleAlert(alert) {
-        
-        // Forward to alerts handler
-        if (PulseApp.alerts) {
-            // The alerts handler will be called directly from its socket listeners
-            // This is just for any additional processing
-        }
-    }
-
-    function handleAlertResolved(alert) {
-        
-        // Forward to alerts handler
-        if (PulseApp.alerts) {
-            // The alerts handler will be called directly from its socket listeners
-            // This is just for any additional processing
-        }
-    }
 
     function handleHotReload() {
         // Check if we're in development mode (hot reload is only enabled in dev)

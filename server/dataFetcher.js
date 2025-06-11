@@ -378,7 +378,6 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
 
     } catch (error) {
         const status = error.response?.status ? ` (Status: ${error.response.status})` : '';
-        // console.error(`[DataFetcher - ${endpointName}] Error fetching PVE discovery data${status}: ${error.message}`);
         // Return empty structure on endpoint-level failure
         return { nodes: [], vms: [], containers: [] };
     }
@@ -776,18 +775,14 @@ async function fetchPveDiscoveryData(currentApiClients) {
 async function fetchPbsNodeName({ client, config }) {
     try {
         const response = await client.get('/nodes');
-        // console.log(`[DataFetcher - PBS Node Name Debug - ${config.name}] /nodes response:`, JSON.stringify(response.data, null, 2)); // REMOVED DEBUG LOG
         if (response.data && response.data.data && response.data.data.length > 0 && response.data.data[0].node) {
             const nodeName = response.data.data[0].node;
-            // console.log(`[DataFetcher - PBS Node Name Debug - ${config.name}] Detected node name: ${nodeName}`); // REMOVED DEBUG LOG
             return nodeName;
         } else {
-            // console.warn(`WARN: [DataFetcher - PBS Node Name Debug - ${config.name}] Could not automatically detect PBS node name. Response format unexpected or node property missing. Full response:`, JSON.stringify(response.data, null, 2)); // REMOVED DEBUG LOG
             console.warn(`WARN: [DataFetcher] Could not automatically detect PBS node name for ${config.name}. Response format unexpected.`); // Restored original warning
             return 'localhost';
         }
     } catch (error) {
-        // console.error(`ERROR: [DataFetcher - PBS Node Name Debug - ${config.name}] Failed to fetch PBS nodes list: ${error.message}`, error.response ? JSON.stringify(error.response.data, null, 2) : error); // REMOVED DEBUG LOG
         console.error(`ERROR: [DataFetcher] Failed to fetch PBS nodes list for ${config.name}: ${error.message}`); // Restored original error
         return 'localhost';
     }
@@ -1457,7 +1452,6 @@ async function fetchPbsData(currentPbsApiClients) {
             }
             
             const nodeName = pbsClient.config.nodeName || await fetchPbsNodeName(pbsClient);
-            // console.log(`[DataFetcher - PBS Data Debug - ${instanceName}] Fetched nodeName: '${nodeName}' (Configured: '${pbsClient.config.nodeName}')`); // REMOVED DEBUG LOG
 
             if (nodeName && nodeName !== 'localhost' && !pbsClient.config.nodeName) {
                  pbsClient.config.nodeName = nodeName; // Store detected name back
@@ -1503,12 +1497,10 @@ async function fetchPbsData(currentPbsApiClients) {
     });
 
     const settledPbsResults = await Promise.allSettled(pbsPromises);
-    // console.log('[DataFetcher] Settled PBS fetch results:', settledPbsResults); // REMOVED DEBUG LOG
     settledPbsResults.forEach(result => {
         if (result.status === 'fulfilled') {
             pbsDataResults.push(result.value);
         } else {
-            // console.error(`ERROR: [DataFetcher] Unhandled rejection fetching PBS data: ${result.reason}`);
         }
     });
     return pbsDataResults;
