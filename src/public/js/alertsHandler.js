@@ -431,7 +431,8 @@ PulseApp.alerts = (() => {
                     <div class="flex-shrink-0 space-x-1">
                         ${!acknowledged ? `
                             <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}');" 
-                                    class="text-xs px-1 py-0.5 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none"
+                                    class="text-xs px-1 py-0.5 bg-green-500 text-white rounded hover:bg-green-600 focus:outline-none transition-all"
+                                    data-alert-id="${alert.id}"
                                     title="Acknowledge alert">
                                 ✓
                             </button>
@@ -604,8 +605,25 @@ PulseApp.alerts = (() => {
         }
     }
 
+    // Track alerts currently being acknowledged to prevent duplicate requests
+    const acknowledgeInProgress = new Set();
+    
     async function acknowledgeAlert(alertId, ruleId) {
+        // Prevent duplicate acknowledgements
+        if (acknowledgeInProgress.has(alertId)) {
+            return;
+        }
+        
+        acknowledgeInProgress.add(alertId);
+        
         try {
+            // Update button immediately to show loading state
+            const buttons = document.querySelectorAll(`button[data-alert-id="${alertId}"]`);
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+                btn.innerHTML = '<span class="inline-block animate-spin">⟳</span>';
+            });
             
             const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
                 method: 'POST',
@@ -640,6 +658,16 @@ PulseApp.alerts = (() => {
             console.error('[Alerts] Failed to acknowledge alert:', error);
             // Show user feedback for acknowledgment failures
             showToastNotification(`Failed to acknowledge alert: ${error.message}`, 'error');
+            
+            // Restore button state on error
+            const buttons = document.querySelectorAll(`button[data-alert-id="${alertId}"]`);
+            buttons.forEach(btn => {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                btn.innerHTML = '✓';
+            });
+        } finally {
+            acknowledgeInProgress.delete(alertId);
         }
     }
 

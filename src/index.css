@@ -82,6 +82,20 @@ tr:hover td.sticky {
   @apply bg-gray-50 dark:bg-gray-700 !important;
 }
 
+/* Spin animation for loading indicators */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
 /* Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
   * {

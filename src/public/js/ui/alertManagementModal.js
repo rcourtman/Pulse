@@ -3817,7 +3817,8 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                     <div class="flex gap-1 flex-wrap">
                         ${!acknowledged ? `
                             <button onclick="PulseApp.alerts.acknowledgeAlert('${alert.id}', '${alert.ruleId}');" 
-                                    class="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded whitespace-nowrap">
+                                    class="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white rounded whitespace-nowrap transition-all"
+                                    data-alert-id="${alert.id}">
                                 Acknowledge
                             </button>
                         ` : ''}
