@@ -1038,10 +1038,7 @@ PulseApp.ui.thresholds = (() => {
     }
 
     function _formatBytesThreshold(bytes) {
-        const mb = bytes / (1024 * 1024);
-        if (mb >= 100) return `${Math.round(mb)}MB/s`;
-        if (mb >= 10) return `${Math.round(mb)}MB/s`;
-        return `${Math.round(mb * 10) / 10}MB/s`;
+        return PulseApp.utils.formatSpeed(bytes, 0);
     }
 
     function resetThresholds() {

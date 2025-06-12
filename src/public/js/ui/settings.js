@@ -37,21 +37,16 @@ PulseApp.ui.settings = (() => {
             saveButton.addEventListener('click', saveConfiguration);
         }
 
-        // Close modal when clicking outside
+        // Setup modal with modalManager - handles click outside and escape key automatically
         if (modal) {
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) {
-                    closeModal();
+            PulseApp.modalManager.setupModal(modal, {
+                closeButton: closeButton,
+                onClose: () => {
+                    preserveCurrentFormData();
+                    formDataCache = {};
                 }
             });
         }
-
-        // Handle escape key
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-                closeModal();
-            }
-        });
 
         // Set up tab navigation
         setupTabNavigation();
@@ -105,13 +100,8 @@ PulseApp.ui.settings = (() => {
     }
     
     async function openModalWithTab(tabName) {
-        
-        const modal = document.getElementById('settings-modal');
-        if (!modal) return;
-
-        // Show the modal
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        // Show the modal using modalManager
+        PulseApp.modalManager.openModal('#settings-modal');
 
         // Load current configuration
         await loadConfiguration();
@@ -124,11 +114,8 @@ PulseApp.ui.settings = (() => {
         // Preserve current form data before closing
         preserveCurrentFormData();
         
-        const modal = document.getElementById('settings-modal');
-        if (!modal) return;
-
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
+        // Use modalManager to close
+        PulseApp.modalManager.closeModal('#settings-modal');
         
         // Clear form data cache since modal is being closed
         formDataCache = {};
@@ -136,19 +123,11 @@ PulseApp.ui.settings = (() => {
 
     async function loadConfiguration() {
         try {
-            const response = await fetch('/api/config');
-            const data = await response.json();
-            
-            if (response.ok) {
-                currentConfig = data;
-                renderTabContent();
-            } else {
-                console.error('[Settings] Failed to load configuration:', data.error);
-                showMessage('Failed to load configuration', 'error');
-            }
+            const data = await PulseApp.apiClient.get('/api/config');
+            currentConfig = data;
+            renderTabContent();
         } catch (error) {
-            console.error('[Settings] Error loading configuration:', error);
-            showMessage('Failed to load configuration: ' + error.message, 'error');
+            PulseApp.apiClient.handleError(error, 'Load configuration', showMessage);
         }
     }
 
@@ -1072,21 +1051,15 @@ PulseApp.ui.settings = (() => {
         const config = collectFormData();
         
         try {
-            const response = await fetch('/api/config/test', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
-            });
-
-            const result = await response.json();
+            const result = await PulseApp.apiClient.post('/api/config/test', config);
             
-            if (response.ok && result.success) {
+            if (result.success) {
                 showMessage('All connections tested successfully!', 'success');
             } else {
                 showMessage(result.error || 'Connection test failed', 'error');
             }
         } catch (error) {
-            showMessage('Failed to test connections: ' + error.message, 'error');
+            PulseApp.apiClient.handleError(error, 'Test connections', showMessage);
         }
     }
 
@@ -1094,24 +1067,16 @@ PulseApp.ui.settings = (() => {
         const saveButton = document.getElementById('settings-save-button');
         if (!saveButton) return;
 
-        const originalText = saveButton.textContent;
-        saveButton.disabled = true;
-        saveButton.textContent = 'Saving...';
+        const buttonState = PulseApp.utils.setButtonLoading(saveButton, 'Saving...');
 
         try {
             // Preserve current tab data before collecting all data
             preserveCurrentFormData();
             const config = collectAllTabsData();
             
-            const response = await fetch('/api/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
-            });
-
-            const result = await response.json();
+            const result = await PulseApp.apiClient.post('/api/config', config);
             
-            if (response.ok && result.success) {
+            if (result.success) {
                 showSuccessToast('Configuration Saved', 'Your settings have been applied successfully');
                 setTimeout(() => {
                     closeModal();
@@ -1120,10 +1085,9 @@ PulseApp.ui.settings = (() => {
                 showMessage(result.error || 'Failed to save configuration', 'error');
             }
         } catch (error) {
-            showMessage('Failed to save configuration: ' + error.message, 'error');
+            PulseApp.apiClient.handleError(error, 'Save configuration', showMessage);
         } finally {
-            saveButton.disabled = false;
-            saveButton.textContent = originalText;
+            PulseApp.utils.resetButton(saveButton, buttonState);
         }
     }
 
@@ -1386,13 +1350,7 @@ PulseApp.ui.settings = (() => {
             } else {
                 // Use the server's update check API with optional channel override
                 const url = channelOverride ? `/api/updates/check?channel=${channelOverride}` : '/api/updates/check';
-                const response = await fetch(url);
-                
-                if (!response.ok) {
-                    throw new Error(`Server error: ${response.status} ${response.statusText}`);
-                }
-                
-                data = await response.json();
+                data = await PulseApp.apiClient.get(url);
                 
                 // Cache the result
                 updateCache.set(cacheKey, {
@@ -1585,7 +1543,7 @@ PulseApp.ui.settings = (() => {
         }
         
         if (updatePublishedBadge && releaseData.published_at) {
-            const publishedDate = new Date(releaseData.published_at).toLocaleDateString();
+            const publishedDate = PulseApp.utils.formatDate(releaseData.published_at);
             updatePublishedBadge.textContent = publishedDate;
         }
         
@@ -1763,7 +1721,7 @@ PulseApp.ui.settings = (() => {
             const commitUrl = commit.html_url;
             const message = commit.commit.message.split('\n')[0]; // First line only
             const author = commit.commit.author.name;
-            const date = new Date(commit.commit.author.date).toLocaleDateString();
+            const date = PulseApp.utils.formatDate(commit.commit.author.date);
             
             // Simple commit type detection
             let icon = '📝';
@@ -1909,20 +1867,9 @@ PulseApp.ui.settings = (() => {
             if (updateProgress) updateProgress.classList.remove('hidden');
             
             // Start the update
-            const updateResponse = await fetch('/api/updates/apply', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    downloadUrl: tarballAsset.downloadUrl || tarballAsset.browser_download_url
-                })
+            await PulseApp.apiClient.post('/api/updates/apply', {
+                downloadUrl: tarballAsset.downloadUrl || tarballAsset.browser_download_url
             });
-            
-            if (!updateResponse.ok) {
-                const error = await updateResponse.json();
-                throw new Error(error.error || 'Failed to start update');
-            }
             
             // Listen for progress updates via WebSocket
             if (window.socket) {
@@ -3031,7 +2978,7 @@ PulseApp.ui.settings = (() => {
         
         if (data.state) {
             if (data.state.lastUpdate) {
-                html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">Last Update:</span> <span class="text-gray-900 dark:text-gray-100">${new Date(data.state.lastUpdate).toLocaleString()}</span></p>`;
+                html += `<p class="text-sm"><span class="font-medium text-gray-700 dark:text-gray-300">Last Update:</span> <span class="text-gray-900 dark:text-gray-100">${PulseApp.utils.formatDateTime(data.state.lastUpdate)}</span></p>`;
             }
             
             if (data.state.serverUptime) {
@@ -3449,7 +3396,7 @@ PulseApp.ui.settings = (() => {
     }
 
     function formatDynamicRuleCard(rule) {
-        const createdDate = new Date(rule.createdAt || Date.now()).toLocaleDateString();
+        const createdDate = PulseApp.utils.formatDate(rule.createdAt || Date.now());
         const severityColor = rule.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
         
         const thresholdsList = rule.thresholds?.map(t => 
@@ -3602,7 +3549,7 @@ PulseApp.ui.settings = (() => {
     }
 
     function formatCustomThresholdCard(config) {
-        const createdDate = new Date(config.createdAt || Date.now()).toLocaleDateString();
+        const createdDate = PulseApp.utils.formatDate(config.createdAt || Date.now());
         
         // Build thresholds display
         const thresholds = [];

@@ -392,6 +392,61 @@ PulseApp.utils = (() => {
         return null;
     }
 
+    // Button state management utilities
+    function setButtonLoading(button, loadingText = 'Loading...') {
+        if (!button) return null;
+        
+        const originalState = {
+            text: button.textContent,
+            disabled: button.disabled,
+            classList: button.className
+        };
+        
+        button.textContent = loadingText;
+        button.disabled = true;
+        button.classList.add('opacity-50', 'cursor-not-allowed');
+        
+        return originalState;
+    }
+
+    function resetButton(button, originalState) {
+        if (!button || !originalState) return;
+        
+        button.textContent = originalState.text;
+        button.disabled = originalState.disabled;
+        button.className = originalState.classList;
+    }
+
+    // Date formatting utilities
+    function formatDate(date) {
+        if (!date) return '';
+        const d = date instanceof Date ? date : new Date(date);
+        return d.toLocaleDateString();
+    }
+
+    function formatDateTime(date) {
+        if (!date) return '';
+        const d = date instanceof Date ? date : new Date(date);
+        return d.toLocaleString();
+    }
+
+    function formatRelativeTime(date) {
+        if (!date) return '';
+        const d = date instanceof Date ? date : new Date(date);
+        const now = new Date();
+        const diffMs = now - d;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+
+        if (diffSec < 60) return `${diffSec} seconds ago`;
+        if (diffMin < 60) return `${diffMin} minutes ago`;
+        if (diffHour < 24) return `${diffHour} hours ago`;
+        if (diffDay < 30) return `${diffDay} days ago`;
+        return formatDate(d);
+    }
+
     // Return the public API for this module
     return {
         sanitizeForId: (str) => str.replace(/[^a-zA-Z0-9-]/g, '-'),
@@ -413,6 +468,13 @@ PulseApp.utils = (() => {
         updateProgressBarTextsDebounced,
         preserveScrollPosition,
         getScrollableParent,
-        getHostUrl
+        getHostUrl,
+        // Button state management
+        setButtonLoading,
+        resetButton,
+        // Date formatting
+        formatDate,
+        formatDateTime,
+        formatRelativeTime
     };
 })(); 

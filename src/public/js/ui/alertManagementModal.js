@@ -168,8 +168,6 @@ PulseApp.ui.alertManagementModal = (() => {
             deleteAlertRule,
             // Debug functions
             debugToggles: () => {
-                console.log('Email toggle:', document.getElementById('global-email-toggle'));
-                console.log('Webhook toggle:', document.getElementById('global-webhook-toggle'));
                 setupNotificationToggles();
             }
         };
@@ -197,21 +195,17 @@ PulseApp.ui.alertManagementModal = (() => {
 
 
     function openModal() {
-        const modal = getElement('alert-management-modal');
-        if (modal) {
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            // Default to monitor tab when opening
-            switchTab('monitor');
-            
-            // Restart the refresh interval if it was cleaned up
-            if (!refreshInterval) {
-                refreshInterval = setInterval(() => {
-                    if (isModalOpen()) {
-                        coordinatedRefresh();
-                    }
-                }, TIMEOUTS.MEDIUM);
-            }
+        PulseApp.modalManager.openModal('#alert-management-modal');
+        // Default to monitor tab when opening
+        switchTab('monitor');
+        
+        // Restart the refresh interval if it was cleaned up
+        if (!refreshInterval) {
+            refreshInterval = setInterval(() => {
+                if (isModalOpen()) {
+                    coordinatedRefresh();
+                }
+            }, TIMEOUTS.MEDIUM);
         }
     }
 
@@ -238,11 +232,7 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function closeModal() {
-        const modal = getElement('alert-management-modal');
-        if (modal) {
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-        }
+        PulseApp.modalManager.closeModal('#alert-management-modal');
         
         // Clean up resources to prevent memory leaks
         cleanup();
@@ -258,7 +248,7 @@ PulseApp.ui.alertManagementModal = (() => {
         }
 
         const modalHTML = `
-            <div id="alert-management-modal" class="fixed inset-0 z-50 hidden items-start justify-center bg-black bg-opacity-50 pt-4 sm:pt-8">
+            <div id="alert-management-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50 p-4">
                 <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[95vh] sm:max-h-[90vh] flex flex-col m-2 sm:m-4">
                     <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-4 sm:px-6 py-3 sm:py-4">
                         <h2 class="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">Alert Management</h2>
@@ -742,8 +732,7 @@ PulseApp.ui.alertManagementModal = (() => {
 
         try {
             // Load all alert rules from the API
-            const response = await fetch('/api/alerts/rules');
-            const data = await response.json();
+            const data = await PulseApp.apiClient.get('/api/alerts/rules');
             const rules = data.rules || [];
 
             if (rules.length === 0) {
@@ -940,23 +929,11 @@ PulseApp.ui.alertManagementModal = (() => {
     async function toggleAlertRule(ruleId, enabled) {
         // All rules use the same unified API endpoint now
         try {
-            const response = await fetch(`/api/alerts/rules/${ruleId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ enabled })
-            });
-
-            if (!response.ok) {
-                throw new Error(`Failed to toggle alert rule: ${response.status}`);
-            }
-
+            await PulseApp.apiClient.put(`/api/alerts/rules/${ruleId}`, { enabled });
             PulseApp.ui.toast.success(`Alert rule ${enabled ? 'enabled' : 'disabled'}`);
             return true;
         } catch (error) {
-            console.error('Failed to toggle alert rule:', error);
-            PulseApp.ui.toast.error('Failed to toggle alert rule');
+            handleError('Alert Toggle', error, 'Failed to toggle alert rule');
             return false;
         }
     }
@@ -964,14 +941,7 @@ PulseApp.ui.alertManagementModal = (() => {
     async function deleteAlertRule(ruleId) {
         if (confirm('Are you sure you want to delete this alert rule? This action cannot be undone.')) {
             try {
-                const response = await fetch(`/api/alerts/rules/${ruleId}`, {
-                    method: 'DELETE'
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || `Server error: ${response.status}`);
-                }
+                await PulseApp.apiClient.delete(`/api/alerts/rules/${ruleId}`);
 
                 PulseApp.ui.toast.success('Alert rule deleted successfully');
                 await loadAllAlertRules(); // Refresh the list
@@ -1316,15 +1286,9 @@ PulseApp.ui.alertManagementModal = (() => {
     
     async function handleGlobalEmailToggle(enabled) {
         try {
-            const response = await fetch('/api/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ GLOBAL_EMAIL_ENABLED: enabled ? 'true' : 'false' })
+            await PulseApp.apiClient.post('/api/config', { 
+                GLOBAL_EMAIL_ENABLED: enabled ? 'true' : 'false' 
             });
-            
-            if (!response.ok) {
-                throw new Error('Failed to update email notification setting');
-            }
             
             // Update currentConfig
             if (currentConfig) {
@@ -1356,15 +1320,9 @@ PulseApp.ui.alertManagementModal = (() => {
     
     async function handleGlobalWebhookToggle(enabled) {
         try {
-            const response = await fetch('/api/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ GLOBAL_WEBHOOK_ENABLED: enabled ? 'true' : 'false' })
+            await PulseApp.apiClient.post('/api/config', { 
+                GLOBAL_WEBHOOK_ENABLED: enabled ? 'true' : 'false' 
             });
-            
-            if (!response.ok) {
-                throw new Error('Failed to update webhook notification setting');
-            }
             
             // Update currentConfig
             if (currentConfig) {
@@ -2193,8 +2151,10 @@ PulseApp.ui.alertManagementModal = (() => {
         // Just show a brief success indicator on the save button itself
         const saveBtn = document.getElementById('save-email-config-btn');
         if (saveBtn) {
-            const originalText = saveBtn.textContent;
-            const originalClass = saveBtn.className;
+            const originalState = {
+                text: saveBtn.textContent,
+                classList: saveBtn.className
+            };
             
             saveBtn.className = 'px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md transition-colors';
             saveBtn.innerHTML = `
@@ -2206,8 +2166,7 @@ PulseApp.ui.alertManagementModal = (() => {
             
             // Reset after 2 seconds
             setTimeout(() => {
-                saveBtn.textContent = originalText;
-                saveBtn.className = originalClass;
+                PulseApp.utils.resetButton(saveBtn, originalState);
             }, TIMEOUTS.MEDIUM);
         }
     }
@@ -2556,9 +2515,7 @@ PulseApp.ui.alertManagementModal = (() => {
         const saveBtn = document.getElementById('save-email-config-btn');
         if (!saveBtn) return;
         
-        const originalText = saveBtn.textContent;
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
+        const buttonState = PulseApp.utils.setButtonLoading(saveBtn, 'Saving...');
         
         try {
             // Validate SMTP configuration
@@ -2566,8 +2523,7 @@ PulseApp.ui.alertManagementModal = (() => {
             if (validationErrors.length > 0) {
                 const errorMessage = 'Please fix the following errors:\n\n• ' + validationErrors.join('\n• ');
                 alert(errorMessage);
-                saveBtn.textContent = originalText;
-                saveBtn.disabled = false;
+                PulseApp.utils.resetButton(saveBtn, buttonState);
                 return;
             }
             
@@ -2611,10 +2567,9 @@ PulseApp.ui.alertManagementModal = (() => {
                 saveBtn.classList.add('bg-green-600');
                 
                 setTimeout(() => {
-                    saveBtn.textContent = originalText;
+                    PulseApp.utils.resetButton(saveBtn, buttonState);
                     saveBtn.classList.remove('bg-green-600');
                     saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                    saveBtn.disabled = false;
                 }, TIMEOUTS.MEDIUM);
             } else {
                 throw new Error(result.error || 'Failed to save configuration');
@@ -2622,8 +2577,7 @@ PulseApp.ui.alertManagementModal = (() => {
         } catch (error) {
             console.error('Error saving email configuration:', error);
             PulseApp.ui.toast.error('Failed to save email configuration');
-            saveBtn.textContent = originalText;
-            saveBtn.disabled = false;
+            PulseApp.utils.resetButton(saveBtn, buttonState);
         }
     }
     
@@ -2631,9 +2585,7 @@ PulseApp.ui.alertManagementModal = (() => {
         const saveBtn = document.getElementById('save-webhook-btn');
         if (!saveBtn) return;
         
-        const originalText = saveBtn.textContent;
-        saveBtn.disabled = true;
-        saveBtn.textContent = 'Saving...';
+        const buttonState = PulseApp.utils.setButtonLoading(saveBtn, 'Saving...');
         
         try {
             // Collect webhook configuration
@@ -3956,15 +3908,9 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
     async function loadConfiguration() {
         try {
             // Always load configuration directly from API to ensure fresh data
-            const response = await fetch('/api/config');
-            if (response.ok) {
-                currentConfig = await response.json();
-            } else {
-                console.error('Failed to load configuration - response not ok');
-                currentConfig = {};
-            }
+            currentConfig = await PulseApp.apiClient.get('/api/config');
         } catch (error) {
-            console.error('Error loading configuration:', error);
+            handleError('Configuration', error, 'Failed to load configuration');
             currentConfig = {};
         }
     }
