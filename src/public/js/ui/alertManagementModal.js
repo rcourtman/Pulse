@@ -165,7 +165,13 @@ PulseApp.ui.alertManagementModal = (() => {
             openAlertRuleModal,
             editAlertRule,
             toggleAlertRule,
-            deleteAlertRule
+            deleteAlertRule,
+            // Debug functions
+            debugToggles: () => {
+                console.log('Email toggle:', document.getElementById('global-email-toggle'));
+                console.log('Webhook toggle:', document.getElementById('global-webhook-toggle'));
+                setupNotificationToggles();
+            }
         };
         
         Object.entries(functions).forEach(([name, func]) => {
@@ -574,20 +580,20 @@ PulseApp.ui.alertManagementModal = (() => {
                                 <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Master switches for all alert notifications</p>
                             </div>
                             <div class="flex flex-wrap items-center gap-6">
-                                <label class="flex items-center gap-3">
+                                <div class="flex items-center gap-3">
                                     <span class="text-sm text-gray-700 dark:text-gray-300">Email Notifications</span>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="global-email-toggle" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                    <label for="global-email-toggle" class="relative inline-flex items-center cursor-pointer focus:outline-none">
+                                        <input type="checkbox" id="global-email-toggle" class="sr-only peer focus:outline-none">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 focus:outline-none"></div>
                                     </label>
-                                </label>
-                                <label class="flex items-center gap-3">
+                                </div>
+                                <div class="flex items-center gap-3">
                                     <span class="text-sm text-gray-700 dark:text-gray-300">Webhook Notifications</span>
-                                    <label class="relative inline-flex items-center cursor-pointer">
-                                        <input type="checkbox" id="global-webhook-toggle" class="sr-only peer">
-                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                                    <label for="global-webhook-toggle" class="relative inline-flex items-center cursor-pointer focus:outline-none">
+                                        <input type="checkbox" id="global-webhook-toggle" class="sr-only peer focus:outline-none">
+                                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 focus:outline-none"></div>
                                     </label>
-                                </label>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -721,8 +727,10 @@ PulseApp.ui.alertManagementModal = (() => {
         // Load all alert rules (unified)
         loadAllAlertRules();
         
-        // Set up event listeners for notifications
-        setupNotificationToggles();
+        // Set up event listeners for notifications with a small delay to ensure DOM is ready
+        setTimeout(() => {
+            setupNotificationToggles();
+        }, 10);
         // setupEmailTestButton(); // Redundant - handled in initializeNotificationsTab
         
         // Create rule button now uses onclick attribute directly
@@ -1276,8 +1284,13 @@ PulseApp.ui.alertManagementModal = (() => {
         const emailToggle = document.getElementById('global-email-toggle');
         const webhookToggle = document.getElementById('global-webhook-toggle');
         
+        
         if (emailToggle) {
-            emailToggle.addEventListener('change', async (e) => {
+            // Remove any existing listeners first
+            const newEmailToggle = emailToggle.cloneNode(true);
+            emailToggle.parentNode.replaceChild(newEmailToggle, emailToggle);
+            
+            newEmailToggle.addEventListener('change', async (e) => {
                 try {
                     await handleGlobalEmailToggle(e.target.checked);
                 } catch (error) {
@@ -1287,7 +1300,11 @@ PulseApp.ui.alertManagementModal = (() => {
         }
         
         if (webhookToggle) {
-            webhookToggle.addEventListener('change', async (e) => {
+            // Remove any existing listeners first
+            const newWebhookToggle = webhookToggle.cloneNode(true);
+            webhookToggle.parentNode.replaceChild(newWebhookToggle, webhookToggle);
+            
+            newWebhookToggle.addEventListener('change', async (e) => {
                 try {
                     await handleGlobalWebhookToggle(e.target.checked);
                 } catch (error) {
@@ -1302,7 +1319,7 @@ PulseApp.ui.alertManagementModal = (() => {
             const response = await fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ALERT_EMAIL_ENABLED: enabled ? 'true' : 'false' })
+                body: JSON.stringify({ GLOBAL_EMAIL_ENABLED: enabled ? 'true' : 'false' })
             });
             
             if (!response.ok) {
@@ -1311,17 +1328,20 @@ PulseApp.ui.alertManagementModal = (() => {
             
             // Update currentConfig
             if (currentConfig) {
-                currentConfig.ALERT_EMAIL_ENABLED = enabled ? 'true' : 'false';
+                currentConfig.GLOBAL_EMAIL_ENABLED = enabled ? 'true' : 'false';
             }
             
-            // Show visual feedback
-            const toggleEl = document.getElementById('global-email-toggle');
-            if (toggleEl) {
-                // Briefly flash the toggle to indicate success
-                const parent = toggleEl.parentElement;
-                parent.classList.add('ring-2', 'ring-green-500');
-                setTimeout(() => parent.classList.remove('ring-2', 'ring-green-500'), 1000);
-            }
+            // Update visibility of email configuration section
+            updateEmailConfigVisibility(enabled);
+            
+            // Visual feedback disabled - remove this comment block to re-enable
+            // const toggleEl = document.getElementById('global-email-toggle');
+            // if (toggleEl) {
+            //     // Briefly flash the toggle to indicate success
+            //     const parent = toggleEl.parentElement;
+            //     parent.classList.add('ring-2', 'ring-green-500');
+            //     setTimeout(() => parent.classList.remove('ring-2', 'ring-green-500'), 1000);
+            // }
             
         } catch (error) {
             console.error('Error updating email toggle:', error);
@@ -1339,7 +1359,7 @@ PulseApp.ui.alertManagementModal = (() => {
             const response = await fetch('/api/config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ALERT_WEBHOOK_ENABLED: enabled ? 'true' : 'false' })
+                body: JSON.stringify({ GLOBAL_WEBHOOK_ENABLED: enabled ? 'true' : 'false' })
             });
             
             if (!response.ok) {
@@ -1348,17 +1368,20 @@ PulseApp.ui.alertManagementModal = (() => {
             
             // Update currentConfig
             if (currentConfig) {
-                currentConfig.ALERT_WEBHOOK_ENABLED = enabled ? 'true' : 'false';
+                currentConfig.GLOBAL_WEBHOOK_ENABLED = enabled ? 'true' : 'false';
             }
             
-            // Show visual feedback
-            const toggleEl = document.getElementById('global-webhook-toggle');
-            if (toggleEl) {
-                // Briefly flash the toggle to indicate success
-                const parent = toggleEl.parentElement;
-                parent.classList.add('ring-2', 'ring-green-500');
-                setTimeout(() => parent.classList.remove('ring-2', 'ring-green-500'), 1000);
-            }
+            // Update visibility of webhook configuration section
+            updateWebhookConfigVisibility(enabled);
+            
+            // Visual feedback disabled - remove this comment block to re-enable
+            // const toggleEl = document.getElementById('global-webhook-toggle');
+            // if (toggleEl) {
+            //     // Briefly flash the toggle to indicate success
+            //     const parent = toggleEl.parentElement;
+            //     parent.classList.add('ring-2', 'ring-green-500');
+            //     setTimeout(() => parent.classList.remove('ring-2', 'ring-green-500'), 1000);
+            // }
             
         } catch (error) {
             console.error('Error updating webhook toggle:', error);
@@ -1389,6 +1412,7 @@ PulseApp.ui.alertManagementModal = (() => {
             inputs.forEach(input => {
                 input.disabled = !enabled;
             });
+        } else {
         }
     }
 
@@ -1401,6 +1425,7 @@ PulseApp.ui.alertManagementModal = (() => {
             inputs.forEach(input => {
                 input.disabled = !enabled;
             });
+        } else {
         }
     }
 
@@ -1420,14 +1445,14 @@ PulseApp.ui.alertManagementModal = (() => {
         // });
         
         if (emailToggle && currentConfig) {
-            const emailEnabled = currentConfig.ALERT_EMAIL_ENABLED === 'true';
+            const emailEnabled = currentConfig.GLOBAL_EMAIL_ENABLED === 'true';
             // console.log('[Global Toggles] Setting email toggle to:', emailEnabled);
             emailToggle.checked = emailEnabled;
             updateEmailConfigVisibility(emailEnabled);
         }
         
         if (webhookToggle && currentConfig) {
-            const webhookEnabled = currentConfig.ALERT_WEBHOOK_ENABLED === 'true';
+            const webhookEnabled = currentConfig.GLOBAL_WEBHOOK_ENABLED === 'true';
             // console.log('[Global Toggles] Setting webhook toggle to:', webhookEnabled);
             webhookToggle.checked = webhookEnabled;
             updateWebhookConfigVisibility(webhookEnabled);

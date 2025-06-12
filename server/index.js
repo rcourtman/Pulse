@@ -734,17 +734,37 @@ app.get('/api/version', async (req, res) => {
         const packageJson = require('../package.json');
         const currentVersion = packageJson.version || 'N/A';
         
-        // Use UpdateManager to check for updates respecting user's channel preference
-        const updateInfo = await updateManager.checkForUpdates();
+        let latestVersion = currentVersion;
+        let updateAvailable = false;
+        
+        try {
+            // Try to check for updates, but don't fail if it doesn't work
+            const updateInfo = await updateManager.checkForUpdates();
+            latestVersion = updateInfo.latestVersion || currentVersion;
+            updateAvailable = updateInfo.hasUpdate || false;
+        } catch (updateError) {
+            // Log the error but continue with current version info
+            console.error("[Version API] Error checking for updates:", updateError.message);
+        }
         
         res.json({ 
             version: currentVersion,
-            latestVersion: updateInfo.latestVersion,
-            updateAvailable: updateInfo.hasUpdate
+            latestVersion: latestVersion,
+            updateAvailable: updateAvailable
         });
     } catch (error) {
-         console.error("Error in version endpoint:", error);
-         res.status(500).json({ error: "Could not retrieve version" });
+         console.error("[Version API] Error in version endpoint:", error);
+         // Still try to return current version if possible
+         try {
+             const packageJson = require('../package.json');
+             res.json({ 
+                 version: packageJson.version || 'N/A',
+                 latestVersion: packageJson.version || 'N/A',
+                 updateAvailable: false
+             });
+         } catch (fallbackError) {
+             res.status(500).json({ error: "Could not retrieve version" });
+         }
     }
 });
 
