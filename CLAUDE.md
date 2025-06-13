@@ -27,6 +27,23 @@ git push origin develop
    - Merges from develop trigger stable releases
    - Creates new stable version with proper changelog
    - Updates Docker images with :latest tag
+   - **Important:** PRs to main require admin merge due to branch protection
+
+### PR to Main Branch Process
+
+```bash
+# Create PR from develop to main
+gh pr create --base main --head develop --title "Your title" --body "Description"
+
+# Merge with admin privileges (required due to branch protection)
+gh pr merge PRNUMBER --squash --admin
+```
+
+**Why admin flag is needed:**
+- Main branch requires 1 approval for merges
+- You cannot approve your own PRs
+- `--admin` flag bypasses the approval requirement
+- This maintains security while allowing owner to merge critical fixes
 
 3. **Version Management:**
    - Keep package.json version ahead of current stable release
