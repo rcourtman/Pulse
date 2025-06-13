@@ -187,105 +187,149 @@ jobs:
         id: changelog
         env:
           NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
+          BUMP_TYPE: ${{ needs.detect-stable-release.outputs.bump-type }}
+          REASONING: ${{ needs.detect-stable-release.outputs.reasoning }}
         run: |
-          # Get the previous stable tag
+          # Get the previous stable tag (exclude current release tag)
           PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | sort -V | tail -2 | head -1)
           if [ -z "$PREV_TAG" ]; then
             PREV_TAG="v0.0.0"
           fi
           
-          echo "📝 Generating changelog from $PREV_TAG to v$NEW_VERSION"
+          echo "📝 Generating changelog from $PREV_TAG to current HEAD"
+          echo "📊 Looking for commits in range: $PREV_TAG..HEAD"
           
-          # Analyze commits for changelog
+          # Use direct git log approach for reliable commit analysis
           node -e "
             const { execSync } = require('child_process');
-            const { analyzeCommitsForVersionBump } = require('./server/versionUtils');
             const fs = require('fs');
             
             try {
-              console.log('🔍 Starting changelog generation...');
-              const analysis = analyzeCommitsForVersionBump();
-              console.log('📊 Analysis results:', {
-                currentStable: analysis.currentStableVersion,
-                suggested: analysis.suggestedVersion,
-                bumpType: analysis.bumpType,
-                totalCommits: analysis.totalCommits,
-                breaking: analysis.analysis.breaking.length,
-                features: analysis.analysis.features.length,
-                fixes: analysis.analysis.fixes.length,
-                other: analysis.analysis.other.length
+              const prevTag = '$PREV_TAG';
+              const newVersion = '$NEW_VERSION';
+              const bumpType = '$BUMP_TYPE';
+              const reasoning = '$REASONING';
+              
+              console.log('🔍 Analyzing commits from', prevTag, 'to HEAD');
+              
+              // Get commits since previous stable release
+              let commits = [];
+              try {
+                const gitCmd = prevTag === 'v0.0.0' ? 'git log HEAD --oneline --no-merges' : \`git log \${prevTag}..HEAD --oneline --no-merges\`;
+                const gitLog = execSync(gitCmd, { encoding: 'utf8' });
+                commits = gitLog.trim().split('\\n').filter(line => 
+                  line.trim() && 
+                  !line.includes('🤖 Generated with') && 
+                  !line.includes('chore: release v')
+                );
+              } catch (e) {
+                console.warn('Could not get git log:', e.message);
+                commits = [];
+              }
+              
+              console.log('📊 Found', commits.length, 'commits to analyze');
+              
+              // Analyze commit types
+              const analysis = {
+                breaking: [],
+                features: [],
+                fixes: [],
+                other: []
+              };
+              
+              commits.forEach(commit => {
+                const message = commit.replace(/^[a-f0-9]+\\s+/, ''); // Remove hash
+                console.log('Analyzing:', message);
+                
+                if (message.includes('!:') || message.toLowerCase().includes('breaking')) {
+                  analysis.breaking.push(message);
+                } else if (message.startsWith('feat:') || message.startsWith('feat(')) {
+                  analysis.features.push(message);
+                } else if (message.startsWith('fix:') || message.startsWith('fix(')) {
+                  analysis.fixes.push(message);
+                } else {
+                  analysis.other.push(message);
+                }
               });
               
-              // Generate meaningful changelog based on actual commits
-              let changelog = '## What\\'s Changed\\n\\n';
+              console.log('📊 Analysis results:', {
+                totalCommits: commits.length,
+                breaking: analysis.breaking.length,
+                features: analysis.features.length,
+                fixes: analysis.fixes.length,
+                other: analysis.other.length
+              });
+              
+              // Generate meaningful changelog
+              let changelog = '## What\\\\\\'s Changed\\\\n\\\\n';
               
               // Add version summary
-              changelog += '**' + analysis.bumpType.charAt(0).toUpperCase() + analysis.bumpType.slice(1) + ' release** with ' + analysis.totalCommits + ' commit' + (analysis.totalCommits !== 1 ? 's' : '') + ' since v' + analysis.currentStableVersion + '\\n\\n';
+              changelog += '**' + bumpType.charAt(0).toUpperCase() + bumpType.slice(1) + ' release** with ' + commits.length + ' commit' + (commits.length !== 1 ? 's' : '') + ' since ' + prevTag + '\\\\n\\\\n';
               
-              if (analysis.analysis.breaking.length > 0) {
-                changelog += '### 💥 Breaking Changes\\n';
-                analysis.analysis.breaking.forEach(commit => {
-                  changelog += '- ' + commit.replace(/^(fix|feat|docs|style|refactor|test|chore)!?:\\s*/, '') + '\\n';
+              if (analysis.breaking.length > 0) {
+                changelog += '### 💥 Breaking Changes\\\\n';
+                analysis.breaking.forEach(commit => {
+                  changelog += '- ' + commit.replace(/^(fix|feat|docs|style|refactor|test|chore)!?:\\\\s*/, '') + '\\\\n';
                 });
-                changelog += '\\n';
+                changelog += '\\\\n';
               }
               
-              if (analysis.analysis.features.length > 0) {
-                changelog += '### ✨ New Features\\n';
-                analysis.analysis.features.forEach(commit => {
-                  changelog += '- ' + commit.replace(/^feat:\\s*/, '') + '\\n';
+              if (analysis.features.length > 0) {
+                changelog += '### ✨ New Features\\\\n';
+                analysis.features.forEach(commit => {
+                  changelog += '- ' + commit.replace(/^feat(\\\\([^)]*\\\\))?:\\\\s*/, '') + '\\\\n';
                 });
-                changelog += '\\n';
+                changelog += '\\\\n';
               }
               
-              if (analysis.analysis.fixes.length > 0) {
-                changelog += '### 🐛 Bug Fixes\\n';
-                analysis.analysis.fixes.forEach(commit => {
-                  changelog += '- ' + commit.replace(/^fix:\\s*/, '') + '\\n';
+              if (analysis.fixes.length > 0) {
+                changelog += '### 🐛 Bug Fixes\\\\n';
+                analysis.fixes.forEach(commit => {
+                  changelog += '- ' + commit.replace(/^fix(\\\\([^)]*\\\\))?:\\\\s*/, '') + '\\\\n';
                 });
-                changelog += '\\n';
+                changelog += '\\\\n';
               }
               
-              if (analysis.analysis.other.length > 0) {
-                changelog += '### 🔧 Other Changes\\n';
-                analysis.analysis.other.forEach(commit => {
-                  let cleanCommit = commit.replace(/^(docs|style|refactor|test|chore):\\s*/, '');
+              if (analysis.other.length > 0) {
+                changelog += '### 🔧 Other Changes\\\\n';
+                analysis.other.forEach(commit => {
+                  let cleanCommit = commit.replace(/^(docs|style|refactor|test|chore)(\\\\([^)]*\\\\))?:\\\\s*/, '');
                   // Skip very technical commits that aren't user-facing
-                  if (!cleanCommit.includes('🤖 Generated with') && !cleanCommit.includes('resolve:') && cleanCommit.length > 10) {
-                    changelog += '- ' + cleanCommit + '\\n';
+                  if (!cleanCommit.includes('resolve:') && cleanCommit.length > 10) {
+                    changelog += '- ' + cleanCommit + '\\\\n';
                   }
                 });
-                changelog += '\\n';
+                changelog += '\\\\n';
               }
               
-              changelog += '### 📊 Release Information\\n';
-              changelog += '- **Release type**: ' + analysis.bumpType + ' (v' + analysis.currentStableVersion + ' → v' + analysis.suggestedVersion + ')\\n';
-              changelog += '- **Total changes**: ' + analysis.totalCommits + ' commits\\n';
-              changelog += '- **Breaking changes**: ' + analysis.analysis.breaking.length + '\\n';
-              changelog += '- **New features**: ' + analysis.analysis.features.length + '\\n';
-              changelog += '- **Bug fixes**: ' + analysis.analysis.fixes.length + '\\n';
-              changelog += '\\n';
+              changelog += '### 📊 Release Information\\\\n';
+              changelog += '- **Release type**: ' + bumpType + ' (' + prevTag + ' → v' + newVersion + ')\\\\n';
+              changelog += '- **Total changes**: ' + commits.length + ' commits\\\\n';
+              changelog += '- **Breaking changes**: ' + analysis.breaking.length + '\\\\n';
+              changelog += '- **New features**: ' + analysis.features.length + '\\\\n';
+              changelog += '- **Bug fixes**: ' + analysis.fixes.length + '\\\\n';
+              changelog += '\\\\n';
               
-              changelog += '### 🐳 Docker\\n';
-              changelog += '\\`\\`\\`bash\\n';
-              changelog += '# Latest stable release\\n';
-              changelog += 'docker pull rcourtman/pulse:v' + analysis.suggestedVersion + '\\n';
-              changelog += 'docker pull rcourtman/pulse:latest\\n';
-              changelog += '\\`\\`\\`\\n';
-              changelog += '\\n';
+              changelog += '### 🐳 Docker\\\\n';
+              changelog += '\\\\`\\\\`\\\\`bash\\\\n';
+              changelog += '# Latest stable release\\\\n';
+              changelog += 'docker pull rcourtman/pulse:v' + newVersion + '\\\\n';
+              changelog += 'docker pull rcourtman/pulse:latest\\\\n';
+              changelog += '\\\\`\\\\`\\\\`\\\\n';
+              changelog += '\\\\n';
               
-              changelog += '### 📥 Installation\\n';
-              changelog += '\\`\\`\\`bash\\n';
-              changelog += '# Automated installer (recommended)\\n';
-              changelog += 'curl -sL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh | bash\\n';
-              changelog += '\\n';
-              changelog += '# Or download and extract tarball manually\\n';
-              changelog += 'wget https://github.com/rcourtman/Pulse/releases/download/v' + analysis.suggestedVersion + '/pulse-v' + analysis.suggestedVersion + '.tar.gz\\n';
-              changelog += '\\`\\`\\`\\n';
-              changelog += '\\n';
+              changelog += '### 📥 Installation\\\\n';
+              changelog += '\\\\`\\\\`\\\\`bash\\\\n';
+              changelog += '# Automated installer (recommended)\\\\n';
+              changelog += 'curl -sL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh | bash\\\\n';
+              changelog += '\\\\n';
+              changelog += '# Or download and extract tarball manually\\\\n';
+              changelog += 'wget https://github.com/rcourtman/Pulse/releases/download/v' + newVersion + '/pulse-v' + newVersion + '.tar.gz\\\\n';
+              changelog += '\\\\`\\\\`\\\\`\\\\n';
+              changelog += '\\\\n';
               changelog += '🤖 *This release was automatically generated from the develop branch*';
               
-              console.log('✅ Generated changelog with', changelog.split('\\n').length, 'lines');
+              console.log('✅ Generated changelog with', changelog.split('\\\\n').length, 'lines');
               
               // Write to file for GitHub release
               fs.writeFileSync('CHANGELOG.md', changelog);
@@ -295,25 +339,12 @@ jobs:
               console.error('❌ Error generating changelog:', error);
               console.error('Stack trace:', error.stack);
               
-              // Enhanced fallback with basic git log
-              let fallbackChangelog = '## Release v$NEW_VERSION\\n\\n';
-              try {
-                const gitLog = execSync('git log $(git describe --tags --abbrev=0)..HEAD --oneline --no-merges', { encoding: 'utf8' });
-                if (gitLog.trim()) {
-                  fallbackChangelog += '### Changes since last release:\\n';
-                  gitLog.trim().split('\\n').forEach(line => {
-                    if (line.trim() && !line.includes('🤖 Generated with')) {
-                      fallbackChangelog += '- ' + line.replace(/^[a-f0-9]+\\s+/, '') + '\\n';
-                    }
-                  });
-                } else {
-                  fallbackChangelog += 'See commit history for details.\\n';
-                }
-              } catch (gitError) {
-                fallbackChangelog += 'See commit history for details.\\n';
-              }
-              
-              fallbackChangelog += '\\n🤖 *Automated release - detailed changelog generation failed*';
+              // Enhanced fallback
+              let fallbackChangelog = '## Release v$NEW_VERSION\\\\n\\\\n';
+              fallbackChangelog += '**$BUMP_TYPE release** - $REASONING\\\\n\\\\n';
+              fallbackChangelog += '### Changes\\\\n';
+              fallbackChangelog += 'See commit history for details.\\\\n\\\\n';
+              fallbackChangelog += '🤖 *Automated release - detailed changelog generation failed*';
               
               fs.writeFileSync('CHANGELOG.md', fallbackChangelog);
               console.log('📝 Fallback changelog written');
