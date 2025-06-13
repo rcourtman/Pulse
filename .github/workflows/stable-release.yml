@@ -140,9 +140,9 @@ jobs:
           # Update package.json to stable version
           npm version $NEW_VERSION --no-git-tag-version
           
-          # Run tests to ensure everything works
+          # Run tests to ensure everything works (continue on failure for now)
           echo "🧪 Running tests..."
-          npm test || echo "⚠️ Tests failed but continuing with release"
+          npm test || echo "⚠️ Tests failed but continuing with release (automated release test)"
           
           # Build CSS
           echo "🎨 Building CSS..."
