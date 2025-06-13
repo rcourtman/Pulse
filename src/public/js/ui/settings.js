@@ -58,15 +58,15 @@ PulseApp.ui.settings = (() => {
         const tabButtons = document.querySelectorAll('.settings-tab');
         
         tabButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
+            button.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const tabName = e.currentTarget.getAttribute('data-tab');
-                switchTab(tabName);
+                await switchTab(tabName);
             });
         });
     }
 
-    function switchTab(tabName) {
+    async function switchTab(tabName) {
         // Preserve current form data before switching tabs
         preserveCurrentFormData();
         
@@ -91,6 +91,11 @@ PulseApp.ui.settings = (() => {
         // Update content
         renderTabContent();
         
+        // Load current version if system tab is active (after DOM element exists)
+        if (activeTab === 'system') {
+            await loadCurrentVersion();
+        }
+        
         // Restore form data for the new tab
         restoreFormData();
     }
@@ -107,7 +112,7 @@ PulseApp.ui.settings = (() => {
         await loadConfiguration();
         
         // Switch to requested tab
-        switchTab(tabName);
+        await switchTab(tabName);
     }
 
     function closeModal() {
@@ -126,9 +131,6 @@ PulseApp.ui.settings = (() => {
             const data = await PulseApp.apiClient.get('/api/config');
             currentConfig = data;
             renderTabContent();
-            
-            // Load current version from dynamic API
-            await loadCurrentVersion();
         } catch (error) {
             PulseApp.apiClient.handleError(error, 'Load configuration', showMessage);
         }
