@@ -1908,12 +1908,12 @@ PulseApp.ui.settings = (() => {
         PulseApp.ui.toast.confirm(
             `Update to version ${latestReleaseData.tag_name}? The application will restart automatically after the update is applied.`,
             async () => {
-                await _performUpdate(latestReleaseData);
+                await _performUpdate(latestReleaseData, tarballAsset);
             }
         );
     }
 
-    async function _performUpdate(latestReleaseData) {
+    async function _performUpdate(latestReleaseData, tarballAsset) {
         
         try {
             // Hide update details and show progress

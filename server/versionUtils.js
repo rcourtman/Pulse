@@ -140,7 +140,14 @@ function analyzeCommitsForVersionBump() {
                 suggestedVersion: packageJson.version,
                 bumpType: 'none',
                 reasoning: 'No commits since last stable release',
-                commits: []
+                commits: [],
+                analysis: {
+                    breaking: [],
+                    features: [],
+                    fixes: [],
+                    other: []
+                },
+                totalCommits: 0
             };
         }
         
@@ -215,7 +222,14 @@ function analyzeCommitsForVersionBump() {
             suggestedVersion: packageJson.version,
             bumpType: 'none',
             reasoning: 'Error analyzing commits',
-            commits: []
+            commits: [],
+            analysis: {
+                breaking: [],
+                features: [],
+                fixes: [],
+                other: []
+            },
+            totalCommits: 0
         };
     }
 }
