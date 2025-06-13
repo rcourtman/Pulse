@@ -10,6 +10,15 @@ A comprehensive guide for handling commits, releases, and development workflow.
 
 Always check current branch: `git branch --show-current`
 
+## Versioning System
+
+**Dynamic RC Versioning:**
+- **Develop branch**: Automatically calculates RC versions from git commits (e.g., "3.24.0-rc5")
+- **Main branch**: Uses stable package.json version (e.g., "3.24.0")
+- **Package.json**: Always contains base stable version, never RC versions
+- **Local display**: Shows dynamic RC version when on develop branch
+- **Automatic sync**: RC versions increment with each commit, no manual management needed
+
 ## Pre-flight Checklist
 
 Before starting any release process, verify:
@@ -82,13 +91,23 @@ git push origin develop  # or main
 
 ## Pre-Release Process (Automatic)
 
-**NEW**: RC releases are now automatic when you push to `develop` branch!
+**NEW**: RC releases are now fully automated when you push to `develop` branch!
 
 ### How It Works
 1. Make changes on `develop` branch
 2. Commit and push: `git push origin develop`
-3. GitHub Actions automatically creates RC release
-4. RC versions increment automatically: `v3.24.0-rc1`, `v3.24.0-rc2`, etc.
+3. GitHub Actions automatically:
+   - Calculates new RC version (increments from last RC)
+   - Updates package.json with new RC version
+   - Commits version bump back to develop
+   - Creates RC release with proper versioning
+   - Builds multi-arch Docker images
+
+### Dynamic Local Versioning
+- **Local develop branch**: Shows dynamic RC versions calculated from git commits
+- **Example**: If you have 5 commits since v3.24.0, version shows as "3.24.0-rc5"
+- **Auto-increment**: Each new commit increments the RC number instantly
+- **No manual version management**: Version automatically stays in sync
 
 ### Manual RC Release (if needed)
 Only use if automatic process fails or for special cases:
@@ -104,6 +123,7 @@ The GitHub Action handles Docker builds automatically, including:
 - Multi-arch builds (amd64, arm64)
 - Tagged with RC version
 - Does NOT update `:latest` tag
+- Rolling `:rc` tag always points to latest RC
 
 ## Merge to Main Process
 
@@ -144,10 +164,13 @@ docker buildx ls || echo "WARNING: Docker buildx not available"
 
 ### 2. Analyze Changes
 ```bash
-# Get current version
+# Get current version (should be stable base version like "3.24.0")
 node -p "require('./package.json').version"
 
-# Analyze commits since last tag
+# Get dynamic version from API if running locally
+curl -s http://localhost:7655/api/version | grep -o '"version":"[^"]*"' | cut -d'"' -f4
+
+# Analyze commits since last stable tag
 git log $(git describe --tags --abbrev=0)..HEAD --oneline
 ```
 
@@ -160,8 +183,11 @@ git log $(git describe --tags --abbrev=0)..HEAD --oneline
 Ask user: "Based on changes, I suggest version X.Y.Z. OK?"
 
 ### 4. Update Version & Run Tests
+
+**IMPORTANT**: For stable releases, package.json should contain the base stable version (e.g., "3.24.0"), not RC versions. The dynamic versioning system handles RC display automatically.
+
 ```bash
-# Update package.json and package-lock.json
+# Update package.json and package-lock.json to stable version
 npm version X.Y.Z --no-git-tag-version
 
 # Alternatively, if npm version fails:
