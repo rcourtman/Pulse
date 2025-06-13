@@ -27,6 +27,7 @@ git push origin develop
    - Merges from develop trigger stable releases
    - Creates new stable version with proper changelog
    - Updates Docker images with :latest tag
+<<<<<<< HEAD
    - **Important:** PRs to main require admin merge due to branch protection
 
 ### PR to Main Branch Process
