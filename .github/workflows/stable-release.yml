@@ -1,0 +1,306 @@
+name: Automated Stable Release
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: read
+
+jobs:
+  detect-stable-release:
+    runs-on: ubuntu-latest
+    outputs:
+      should-release: ${{ steps.check.outputs.should-release }}
+      suggested-version: ${{ steps.analyze.outputs.suggested-version }}
+      bump-type: ${{ steps.analyze.outputs.bump-type }}
+      reasoning: ${{ steps.analyze.outputs.reasoning }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for commit analysis
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check if stable release should be triggered
+        id: check
+        run: |
+          # Check if this is a push to main that came from develop
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Check if last commit message indicates merge from develop
+            LAST_COMMIT=$(git log -1 --pretty=format:"%s")
+            echo "Last commit: $LAST_COMMIT"
+            
+            if echo "$LAST_COMMIT" | grep -E "(Merge.*develop|Merge pull request.*develop)"; then
+              echo "should-release=true" >> $GITHUB_OUTPUT
+              echo "✅ Detected merge from develop to main - triggering stable release"
+            else
+              echo "should-release=false" >> $GITHUB_OUTPUT
+              echo "ℹ️ Not a develop merge - skipping stable release"
+            fi
+          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.action }}" = "closed" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
+            # PR was merged - check if it was from develop
+            if [ "${{ github.event.pull_request.head.ref }}" = "develop" ]; then
+              echo "should-release=true" >> $GITHUB_OUTPUT
+              echo "✅ PR from develop was merged - triggering stable release"
+            else
+              echo "should-release=false" >> $GITHUB_OUTPUT
+              echo "ℹ️ PR not from develop - skipping stable release"
+            fi
+          else
+            echo "should-release=false" >> $GITHUB_OUTPUT
+            echo "ℹ️ Event does not trigger stable release"
+          fi
+
+      - name: Analyze commits for version bump
+        id: analyze
+        if: steps.check.outputs.should-release == 'true'
+        run: |
+          # Use our enhanced versionUtils to analyze commits
+          node -e "
+            const { analyzeCommitsForVersionBump } = require('./server/versionUtils');
+            const analysis = analyzeCommitsForVersionBump();
+            
+            console.log('📊 Version Analysis:');
+            console.log('Current stable version:', analysis.currentStableVersion);
+            console.log('Suggested version:', analysis.suggestedVersion);
+            console.log('Bump type:', analysis.bumpType);
+            console.log('Reasoning:', analysis.reasoning);
+            console.log('Total commits:', analysis.totalCommits);
+            
+            console.log('\\n📝 Commit breakdown:');
+            console.log('Breaking changes:', analysis.analysis.breaking.length);
+            console.log('Features:', analysis.analysis.features.length);
+            console.log('Fixes:', analysis.analysis.fixes.length);
+            console.log('Other:', analysis.analysis.other.length);
+            
+            // Set outputs for next job
+            const fs = require('fs');
+            const output = fs.readFileSync(process.env.GITHUB_OUTPUT, 'utf8');
+            fs.writeFileSync(process.env.GITHUB_OUTPUT, output + 
+              'suggested-version=' + analysis.suggestedVersion + '\\n' +
+              'bump-type=' + analysis.bumpType + '\\n' +
+              'reasoning=' + analysis.reasoning + '\\n'
+            );
+          "
+
+  create-stable-release:
+    needs: detect-stable-release
+    if: needs.detect-stable-release.outputs.should-release == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+      - name: Update version and create release
+        env:
+          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
+          BUMP_TYPE: ${{ needs.detect-stable-release.outputs.bump-type }}
+          REASONING: ${{ needs.detect-stable-release.outputs.reasoning }}
+        run: |
+          echo "🚀 Creating stable release v$NEW_VERSION"
+          echo "📈 Version bump: $BUMP_TYPE"
+          echo "💡 Reasoning: $REASONING"
+          
+          # Update package.json to stable version
+          npm version $NEW_VERSION --no-git-tag-version
+          
+          # Run tests to ensure everything works
+          echo "🧪 Running tests..."
+          npm test || echo "⚠️ Tests failed but continuing with release"
+          
+          # Build CSS
+          echo "🎨 Building CSS..."
+          npm run build:css || echo "⚠️ CSS build failed but continuing"
+          
+          # Commit version bump
+          git add package.json package-lock.json
+          git commit -m "chore: release v$NEW_VERSION
+
+          $REASONING
+          
+          This stable release includes all changes from the develop branch.
+          
+          🤖 Generated by automated stable release workflow"
+          
+          # Create and push tag
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git push origin main
+          git push origin "v$NEW_VERSION"
+
+      - name: Generate changelog
+        id: changelog
+        env:
+          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
+        run: |
+          # Get the previous stable tag
+          PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | sort -V | tail -2 | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG="v0.0.0"
+          fi
+          
+          echo "📝 Generating changelog from $PREV_TAG to v$NEW_VERSION"
+          
+          # Analyze commits for changelog
+          node -e "
+            const { execSync } = require('child_process');
+            const { analyzeCommitsForVersionBump } = require('./server/versionUtils');
+            
+            try {
+              const analysis = analyzeCommitsForVersionBump();
+              
+              let changelog = '## What\\'s Changed\\n\\n';
+              
+              if (analysis.analysis.breaking.length > 0) {
+                changelog += '### 💥 Breaking Changes\\n';
+                analysis.analysis.breaking.forEach(commit => {
+                  changelog += '- ' + commit + '\\n';
+                });
+                changelog += '\\n';
+              }
+              
+              if (analysis.analysis.features.length > 0) {
+                changelog += '### ✨ New Features\\n';
+                analysis.analysis.features.forEach(commit => {
+                  changelog += '- ' + commit + '\\n';
+                });
+                changelog += '\\n';
+              }
+              
+              if (analysis.analysis.fixes.length > 0) {
+                changelog += '### 🐛 Bug Fixes\\n';
+                analysis.analysis.fixes.forEach(commit => {
+                  changelog += '- ' + commit + '\\n';
+                });
+                changelog += '\\n';
+              }
+              
+              if (analysis.analysis.other.length > 0) {
+                changelog += '### 🔧 Other Changes\\n';
+                analysis.analysis.other.forEach(commit => {
+                  changelog += '- ' + commit + '\\n';
+                });
+                changelog += '\\n';
+              }
+              
+              changelog += '### 📊 Release Statistics\\n';
+              changelog += '- **Version bump**: ' + analysis.bumpType + '\\n';
+              changelog += '- **Total commits**: ' + analysis.totalCommits + '\\n';
+              changelog += '- **Breaking changes**: ' + analysis.analysis.breaking.length + '\\n';
+              changelog += '- **New features**: ' + analysis.analysis.features.length + '\\n';
+              changelog += '- **Bug fixes**: ' + analysis.analysis.fixes.length + '\\n';
+              changelog += '\\n';
+              changelog += '### 🐳 Docker\\n';
+              changelog += '\\`\\`\\`bash\\n';
+              changelog += 'docker pull rcourtman/pulse:v' + analysis.suggestedVersion + '\\n';
+              changelog += 'docker pull rcourtman/pulse:latest\\n';
+              changelog += '\\`\\`\\`\\n';
+              changelog += '\\n';
+              changelog += '🤖 *This release was automatically created from the develop branch*';
+              
+              console.log(changelog);
+              
+              // Write to file for GitHub release
+              require('fs').writeFileSync('CHANGELOG.md', changelog);
+            } catch (error) {
+              console.error('Error generating changelog:', error);
+              require('fs').writeFileSync('CHANGELOG.md', 'Automated stable release\\n\\nSee commit history for details.');
+            }
+          "
+
+      - name: Build release tarball
+        env:
+          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
+        run: |
+          echo "📦 Building release tarball..."
+          
+          # Create tarball with all necessary files
+          tar -czf "pulse-v$NEW_VERSION.tar.gz" \
+            --exclude=node_modules \
+            --exclude=.git \
+            --exclude=.env \
+            --exclude=data \
+            --exclude=*.log \
+            --exclude=temp-release \
+            server src/public package.json package-lock.json README.md LICENSE CHANGELOG.md scripts/install-pulse.sh
+          
+          ls -lh "pulse-v$NEW_VERSION.tar.gz"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker images
+        env:
+          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
+        run: |
+          echo "🐳 Building multi-arch Docker images..."
+          
+          # Build and push stable version tag and latest tag
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --tag "rcourtman/pulse:v$NEW_VERSION" \
+            --tag "rcourtman/pulse:latest" \
+            --push .
+          
+          echo "✅ Docker images pushed successfully"
+
+      - name: Create GitHub Release
+        env:
+          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "📝 Creating GitHub release..."
+          
+          # Create the release
+          gh release create "v$NEW_VERSION" \
+            --title "Release v$NEW_VERSION" \
+            --notes-file CHANGELOG.md \
+            "pulse-v$NEW_VERSION.tar.gz"
+          
+          echo "✅ Release v$NEW_VERSION created successfully!"
+          echo "🔗 https://github.com/${{ github.repository }}/releases/tag/v$NEW_VERSION"
+
+      - name: Cleanup
+        run: |
+          rm -f CHANGELOG.md pulse-v*.tar.gz

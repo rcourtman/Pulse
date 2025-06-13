@@ -48,11 +48,12 @@ npm install
 
 When user says:
 - **"commit this"** → Check branch first! Then go to [Commit Process](#commit-process)
-- **"create a release"** → Must be on `main` branch → [Release Process](#release-process)
+- **"create a release"** → Use [Automated Stable Release Process](#automated-stable-release-process-new) via PR
 - **"create an RC"** or **"release candidate"** → Automatic from `develop` push (see below)
 - **"what changed?"** → `git status -s` and `git diff --stat`
 - **"run tests"** → `npm test` (also check for lint/typecheck scripts)
-- **"merge to main"** → Go to [Merge to Main Process](#merge-to-main-process)
+- **"merge to main"** → Use [Automated Stable Release Process](#automated-stable-release-process-new)
+- **"manual release"** → Only for hotfixes → [Manual Release Process](#manual-release-process-legacy)
 
 ## Commit Process
 
@@ -125,10 +126,48 @@ The GitHub Action handles Docker builds automatically, including:
 - Does NOT update `:latest` tag
 - Rolling `:rc` tag always points to latest RC
 
-## Merge to Main Process
+## Automated Stable Release Process (NEW!)
 
-When RC testing is complete and ready for stable release:
+**IMPORTANT**: Stable releases are now fully automated when you merge develop to main!
 
+### How It Works
+1. When develop branch is ready for stable release, create a pull request from develop to main
+2. Once the PR is approved and merged, GitHub Actions automatically:
+   - Analyzes all commits since the last stable release using semantic versioning
+   - Determines appropriate version bump (major/minor/patch)
+   - Updates package.json with the new stable version
+   - Creates a git tag and GitHub release
+   - Builds multi-arch Docker images with both version tag and `:latest`
+   - Generates comprehensive changelog from commit analysis
+
+### Semantic Commit Analysis
+The automation analyzes commit messages to determine version bumps:
+- **Major bump**: Commits with `BREAKING CHANGE` or `!:` in message
+- **Minor bump**: Commits starting with `feat:` or `feature:`
+- **Patch bump**: Commits starting with `fix:` or `bugfix:`
+- **Patch bump**: All other commits (chore, docs, refactor, etc.)
+
+### Creating a Stable Release
+```bash
+# 1. Ensure develop is ready for release
+git checkout develop
+git pull
+
+# 2. Create pull request to main (preferred method)
+gh pr create --base main --head develop --title "Release v3.25.0" --body "Ready for stable release
+
+This PR includes:
+- 8 new features
+- 5 bug fixes
+- Various improvements
+
+The automated workflow will analyze commits and create the appropriate version bump."
+
+# 3. Get PR approved and merge it
+# 4. GitHub Actions automatically handles the rest!
+```
+
+### Alternative: Direct Merge (if needed)
 ```bash
 # 1. Ensure develop is up to date
 git checkout develop
@@ -139,15 +178,17 @@ git checkout main
 git pull
 git merge develop
 
-# 3. Push (this prepares for stable release)
+# 3. Push (this triggers automated stable release)
 git push origin main
 
-# 4. Now follow normal Release Process below
+# GitHub Actions will detect the merge and create the stable release automatically
 ```
 
-## Release Process
+## Manual Release Process (Legacy)
 
-**IMPORTANT**: Stable releases must be done from `main` branch only!
+**NOTE**: Manual releases are now rarely needed since the automated stable release process handles most cases. Use this only for hotfixes or special circumstances.
+
+**IMPORTANT**: Manual releases must be done from `main` branch only!
 
 ### 1. Pre-release Verification
 ```bash
