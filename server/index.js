@@ -741,10 +741,13 @@ app.get('/api/version', async (req, res) => {
         let updateAvailable = false;
         
         try {
-            // Try to check for updates, but don't fail if it doesn't work
-            const updateInfo = await updateManager.checkForUpdates();
+            // Check for channel override from query parameter (for preview functionality)
+            const channelOverride = req.query.channel;
+            
+            // Try to check for updates with optional channel override
+            const updateInfo = await updateManager.checkForUpdates(channelOverride);
             latestVersion = updateInfo.latestVersion || currentVersion;
-            updateAvailable = updateInfo.hasUpdate || false;
+            updateAvailable = updateInfo.updateAvailable || false;
         } catch (updateError) {
             // Log the error but continue with current version info
             console.error("[Version API] Error checking for updates:", updateError.message);
