@@ -100,13 +100,26 @@ gh release list --limit=5
 If a stable release wasn't automatically triggered (e.g., due to squash merge), manually trigger one:
 
 ```bash
-# Method 1: Create a new PR with merge commit
-gh pr create --base main --head develop --title "trigger: stable release" --body "Manual trigger"
-gh pr merge PRNUMBER --merge --admin
+# Method 1: Create a new PR with merge commit (recommended)
+PR_NUMBER=$(gh pr create --base main --head develop --title "trigger: stable release" --body "Manual trigger" | grep -o '[0-9]*$')
+echo "Created PR #$PR_NUMBER"
 
-# Method 2: Push a commit to main that looks like a merge (if needed)
+# If merge conflicts occur, resolve them:
+if ! gh pr merge $PR_NUMBER --merge --admin 2>/dev/null; then
+  echo "Merge conflicts detected, resolving..."
+  gh pr checkout $PR_NUMBER
+  git fetch origin main && git merge origin/main
+  # Resolve conflicts manually, then:
+  git add . && git commit -m "resolve: merge conflicts for stable release trigger"
+  git push origin develop
+  gh pr merge $PR_NUMBER --merge --admin
+fi
+
+# Method 2: Direct push with merge commit message (if PR method fails)
 git checkout main
 git pull origin main
 git commit --allow-empty -m "Merge pull request #XXX from rcourtman/develop"
 git push origin main
 ```
+
+**Note:** Method 1 often has merge conflicts due to RC workflow auto-commits. This is normal - just resolve conflicts in package.json (use main branch version) and CLAUDE.md (keep develop version).
