@@ -196,10 +196,21 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'system') {
             // Auto-check for latest version when system tab is opened
             checkLatestVersion();
-            // Initialize update channel warning visibility
+            // Initialize update channel warning visibility and restore channel preference
             setTimeout(() => {
                 const channelSelect = document.querySelector('select[name="UPDATE_CHANNEL"]');
                 if (channelSelect) {
+                    // Check if there's a stored channel preference from a recent update
+                    const storedChannelPreference = localStorage.getItem('pulse_update_channel_preference');
+                    if (storedChannelPreference && storedChannelPreference !== channelSelect.value) {
+                        // Update the select to match the stored preference
+                        channelSelect.value = storedChannelPreference;
+                        showMessage(`Restored ${storedChannelPreference === 'rc' ? 'RC' : 'Stable'} channel preference from update.`, 'info');
+                        // Clear the stored preference since we've applied it
+                        localStorage.removeItem('pulse_update_channel_preference');
+                        // Save the configuration with the restored preference
+                        setTimeout(() => saveConfiguration(), 1000);
+                    }
                     onUpdateChannelChange(channelSelect.value);
                 }
             }, 0);
@@ -2032,6 +2043,25 @@ PulseApp.ui.settings = (() => {
                         progressText.textContent = 'Update complete! Restarting...';
                     }
                     showMessage('Update applied successfully. The application will restart momentarily.', 'success');
+                    
+                    // Store the current channel preference for after restart
+                    const currentChannelSelect = document.querySelector('select[name="UPDATE_CHANNEL"]');
+                    if (currentChannelSelect) {
+                        localStorage.setItem('pulse_update_channel_preference', currentChannelSelect.value);
+                    }
+                    
+                    // Auto-refresh after restart delay
+                    setTimeout(() => {
+                        if (progressText) {
+                            progressText.textContent = 'Reconnecting...';
+                        }
+                        showMessage('Attempting to reconnect...', 'info');
+                        
+                        // Try to reload the page after service restart
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    }, 8000); // Wait 8 seconds for service to restart
                 });
                 
                 window.socket.on('updateError', (data) => {
