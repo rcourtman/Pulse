@@ -261,72 +261,72 @@ jobs:
               });
               
               // Generate meaningful changelog
-              let changelog = '## What\\\\\\'s Changed\\\\n\\\\n';
+              let changelog = '## What\'s Changed\\n\\n';
               
               // Add version summary
-              changelog += '**' + bumpType.charAt(0).toUpperCase() + bumpType.slice(1) + ' release** with ' + commits.length + ' commit' + (commits.length !== 1 ? 's' : '') + ' since ' + prevTag + '\\\\n\\\\n';
+              changelog += '**' + bumpType.charAt(0).toUpperCase() + bumpType.slice(1) + ' release** with ' + commits.length + ' commit' + (commits.length !== 1 ? 's' : '') + ' since ' + prevTag + '\\n\\n';
               
               if (analysis.breaking.length > 0) {
-                changelog += '### 💥 Breaking Changes\\\\n';
+                changelog += '### 💥 Breaking Changes\\n';
                 analysis.breaking.forEach(commit => {
-                  changelog += '- ' + commit.replace(/^(fix|feat|docs|style|refactor|test|chore)!?:\\\\s*/, '') + '\\\\n';
+                  changelog += '- ' + commit.replace(/^(fix|feat|docs|style|refactor|test|chore)!?:\\s*/, '') + '\\n';
                 });
-                changelog += '\\\\n';
+                changelog += '\\n';
               }
               
               if (analysis.features.length > 0) {
-                changelog += '### ✨ New Features\\\\n';
+                changelog += '### ✨ New Features\\n';
                 analysis.features.forEach(commit => {
-                  changelog += '- ' + commit.replace(/^feat(\\\\([^)]*\\\\))?:\\\\s*/, '') + '\\\\n';
+                  changelog += '- ' + commit.replace(/^feat(\\([^)]*\\))?:\\s*/, '') + '\\n';
                 });
-                changelog += '\\\\n';
+                changelog += '\\n';
               }
               
               if (analysis.fixes.length > 0) {
-                changelog += '### 🐛 Bug Fixes\\\\n';
+                changelog += '### 🐛 Bug Fixes\\n';
                 analysis.fixes.forEach(commit => {
-                  changelog += '- ' + commit.replace(/^fix(\\\\([^)]*\\\\))?:\\\\s*/, '') + '\\\\n';
+                  changelog += '- ' + commit.replace(/^fix(\\([^)]*\\))?:\\s*/, '') + '\\n';
                 });
-                changelog += '\\\\n';
+                changelog += '\\n';
               }
               
               if (analysis.other.length > 0) {
-                changelog += '### 🔧 Other Changes\\\\n';
+                changelog += '### 🔧 Other Changes\\n';
                 analysis.other.forEach(commit => {
-                  let cleanCommit = commit.replace(/^(docs|style|refactor|test|chore)(\\\\([^)]*\\\\))?:\\\\s*/, '');
+                  let cleanCommit = commit.replace(/^(docs|style|refactor|test|chore)(\\([^)]*\\))?:\\s*/, '');
                   // Skip very technical commits that aren't user-facing
                   if (!cleanCommit.includes('resolve:') && cleanCommit.length > 10) {
-                    changelog += '- ' + cleanCommit + '\\\\n';
+                    changelog += '- ' + cleanCommit + '\\n';
                   }
                 });
-                changelog += '\\\\n';
+                changelog += '\\n';
               }
               
-              changelog += '### 📊 Release Information\\\\n';
-              changelog += '- **Release type**: ' + bumpType + ' (' + prevTag + ' → v' + newVersion + ')\\\\n';
-              changelog += '- **Total changes**: ' + commits.length + ' commits\\\\n';
-              changelog += '- **Breaking changes**: ' + analysis.breaking.length + '\\\\n';
-              changelog += '- **New features**: ' + analysis.features.length + '\\\\n';
-              changelog += '- **Bug fixes**: ' + analysis.fixes.length + '\\\\n';
-              changelog += '\\\\n';
+              changelog += '### 📊 Release Information\\n';
+              changelog += '- **Release type**: ' + bumpType + ' (' + prevTag + ' → v' + newVersion + ')\\n';
+              changelog += '- **Total changes**: ' + commits.length + ' commits\\n';
+              changelog += '- **Breaking changes**: ' + analysis.breaking.length + '\\n';
+              changelog += '- **New features**: ' + analysis.features.length + '\\n';
+              changelog += '- **Bug fixes**: ' + analysis.fixes.length + '\\n';
+              changelog += '\\n';
               
-              changelog += '### 🐳 Docker\\\\n';
-              changelog += '\\\\`\\\\`\\\\`bash\\\\n';
-              changelog += '# Latest stable release\\\\n';
-              changelog += 'docker pull rcourtman/pulse:v' + newVersion + '\\\\n';
-              changelog += 'docker pull rcourtman/pulse:latest\\\\n';
-              changelog += '\\\\`\\\\`\\\\`\\\\n';
-              changelog += '\\\\n';
+              changelog += '### 🐳 Docker\\n';
+              changelog += '```bash\\n';
+              changelog += '# Latest stable release\\n';
+              changelog += 'docker pull rcourtman/pulse:v' + newVersion + '\\n';
+              changelog += 'docker pull rcourtman/pulse:latest\\n';
+              changelog += '```\\n';
+              changelog += '\\n';
               
-              changelog += '### 📥 Installation\\\\n';
-              changelog += '\\\\`\\\\`\\\\`bash\\\\n';
-              changelog += '# Automated installer (recommended)\\\\n';
-              changelog += 'curl -sL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh | bash\\\\n';
-              changelog += '\\\\n';
-              changelog += '# Or download and extract tarball manually\\\\n';
-              changelog += 'wget https://github.com/rcourtman/Pulse/releases/download/v' + newVersion + '/pulse-v' + newVersion + '.tar.gz\\\\n';
-              changelog += '\\\\`\\\\`\\\\`\\\\n';
-              changelog += '\\\\n';
+              changelog += '### 📥 Installation\\n';
+              changelog += '```bash\\n';
+              changelog += '# Automated installer (recommended)\\n';
+              changelog += 'curl -sL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh | bash\\n';
+              changelog += '\\n';
+              changelog += '# Or download and extract tarball manually\\n';
+              changelog += 'wget https://github.com/rcourtman/Pulse/releases/download/v' + newVersion + '/pulse-v' + newVersion + '.tar.gz\\n';
+              changelog += '```\\n';
+              changelog += '\\n';
               changelog += '🤖 *This release was automatically generated from the develop branch*';
               
               console.log('✅ Generated changelog with', changelog.split('\\\\n').length, 'lines');
