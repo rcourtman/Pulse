@@ -19,11 +19,35 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
+      - name: Analyze version for RC release
+        id: analyze
+        run: |
+          # Use the same version analysis logic as stable releases
+          node -e "
+            const { analyzeCommitsForVersionBump } = require('./server/versionUtils');
+            const analysis = analyzeCommitsForVersionBump();
+            
+            console.log('📊 RC Version Analysis:');
+            console.log('Current stable version:', analysis.currentStableVersion);
+            console.log('Suggested next version:', analysis.suggestedVersion);
+            console.log('Bump type:', analysis.bumpType);
+            console.log('Total commits:', analysis.totalCommits);
+            
+            // Set base version for RC releases
+            const fs = require('fs');
+            const output = fs.readFileSync(process.env.GITHUB_OUTPUT, 'utf8');
+            fs.writeFileSync(process.env.GITHUB_OUTPUT, output + 
+              'base_version=' + analysis.suggestedVersion + '\\n' +
+              'current_stable=' + analysis.currentStableVersion + '\\n' +
+              'reasoning=' + analysis.reasoning + '\\n'
+            );
+          "
+          
       - name: Check if RC release needed
         id: check
         run: |
-          # Get base version (remove any existing RC suffix)
-          BASE_VERSION=$(echo "${{ steps.version.outputs.version }}" | sed 's/-rc[0-9]*$//')
+          # Use analyzed base version instead of package.json
+          BASE_VERSION="${{ steps.analyze.outputs.base_version }}"
           
           # Get the latest RC tag for this base version
           LATEST_RC=$(git tag -l "v${BASE_VERSION}-rc*" | sort -V | tail -n1)
