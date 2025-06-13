@@ -350,9 +350,13 @@ jobs:
           cp CHANGELOG.md "$STAGING_FULL_PATH/"
           
           # Copy scripts and docs
-          if [ -d "scripts" ]; then
-            mkdir -p "$STAGING_FULL_PATH/scripts/"
-            cp scripts/install-pulse.sh "$STAGING_FULL_PATH/scripts/" 2>/dev/null || true
+          echo "Copying scripts directory..."
+          mkdir -p "$STAGING_FULL_PATH/scripts/"
+          if [ -f "scripts/install-pulse.sh" ]; then
+            cp scripts/install-pulse.sh "$STAGING_FULL_PATH/scripts/"
+            echo "✓ Copied install-pulse.sh"
+          else
+            echo "⚠️ Warning: scripts/install-pulse.sh not found"
           fi
           
           if [ -d "docs" ]; then
@@ -364,10 +368,24 @@ jobs:
           (cd "$STAGING_FULL_PATH" && npm install --omit=dev --ignore-scripts)
           
           # Verify essential files
-          if [ ! -f "$STAGING_FULL_PATH/package.json" ] || [ ! -f "$STAGING_FULL_PATH/server/index.js" ] || [ ! -d "$STAGING_FULL_PATH/node_modules" ]; then
-            echo "Error: Missing essential files for release"
+          echo "Verifying essential files..."
+          if [ ! -f "$STAGING_FULL_PATH/package.json" ]; then
+            echo "Error: Missing package.json"
             exit 1
           fi
+          if [ ! -f "$STAGING_FULL_PATH/server/index.js" ]; then
+            echo "Error: Missing server/index.js"
+            exit 1
+          fi
+          if [ ! -d "$STAGING_FULL_PATH/node_modules" ]; then
+            echo "Error: Missing node_modules"
+            exit 1
+          fi
+          if [ ! -f "$STAGING_FULL_PATH/scripts/install-pulse.sh" ]; then
+            echo "Error: Missing scripts/install-pulse.sh"
+            exit 1
+          fi
+          echo "✓ All essential files verified"
           
           # Create tarball
           echo "Creating tarball..."
