@@ -27,6 +27,41 @@ git push origin develop
    - Merges from develop trigger stable releases
    - Creates new stable version with proper changelog
    - Updates Docker images with :latest tag
+<<<<<<< HEAD
+   - **Important:** PRs to main require admin merge due to branch protection
+
+### PR to Main Branch Process
+
+```bash
+# Create PR from develop to main
+gh pr create --base main --head develop --title "Your title" --body "Description"
+
+# Merge with admin privileges (required due to branch protection)
+# IMPORTANT: Use --merge (not --squash) for develop→main to preserve merge commit
+gh pr merge PRNUMBER --merge --admin
+```
+
+**Why admin flag is needed:**
+- Main branch requires 1 approval for merges
+- You cannot approve your own PRs
+- `--admin` flag bypasses the approval requirement
+- This maintains security while allowing owner to merge critical fixes
+
+**Why --merge (not --squash) for develop→main:**
+- Stable release workflow detects merges by commit message patterns
+- Squash merges lose the "Merge pull request #X from develop" message
+- Merge commits preserve branch lineage and PR context
+- This ensures automatic stable release detection works correctly
+
+### PR Merge Strategy by Branch
+
+```bash
+# Feature branch → develop: Use squash (clean history)
+gh pr merge PRNUMBER --squash
+
+# Develop → main: Use merge (preserve merge commit for workflow detection)
+gh pr merge PRNUMBER --merge --admin
+```
 
 3. **Version Management:**
    - Keep package.json version ahead of current stable release
@@ -58,3 +93,20 @@ gh release list --limit=5
 2. **Missing install script in releases** - Fixed in stable-release.yml
 3. **RCs appearing below stable releases** - Fixed by updating package.json version
 4. **Git push conflicts** - Always pull --rebase before pushing to develop
+5. **Stable release not triggered after PR merge** - Usually caused by using --squash instead of --merge
+
+### Manual Stable Release Trigger
+
+If a stable release wasn't automatically triggered (e.g., due to squash merge), manually trigger one:
+
+```bash
+# Method 1: Create a new PR with merge commit
+gh pr create --base main --head develop --title "trigger: stable release" --body "Manual trigger"
+gh pr merge PRNUMBER --merge --admin
+
+# Method 2: Push a commit to main that looks like a merge (if needed)
+git checkout main
+git pull origin main
+git commit --allow-empty -m "Merge pull request #XXX from rcourtman/develop"
+git push origin main
+```
