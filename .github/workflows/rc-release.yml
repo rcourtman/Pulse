@@ -66,10 +66,34 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # Commit the version change
+          # Commit the version change with conflict resolution
           git add package.json
           git commit -m "chore: bump version to $NEW_VERSION for RC release"
-          git push origin develop
+          
+          # Pull and rebase before pushing to handle any concurrent changes
+          echo "🔄 Pulling latest changes before push..."
+          git fetch origin develop
+          if ! git rebase origin/develop; then
+            echo "⚠️ Rebase conflicts detected, attempting resolution..."
+            # For package.json conflicts, prefer our version (the RC version)
+            git checkout --ours package.json 2>/dev/null || true
+            git add package.json 2>/dev/null || true
+            git rebase --continue 2>/dev/null || true
+          fi
+          
+          # Push with retry logic
+          echo "📤 Pushing to develop..."
+          for i in {1..3}; do
+            if git push origin develop; then
+              echo "✅ Successfully pushed to develop"
+              break
+            else
+              echo "⚠️ Push failed (attempt $i/3), retrying..."
+              git fetch origin develop
+              git rebase origin/develop 2>/dev/null || true
+              sleep $((i * 2))
+            fi
+          done
           
       - name: Set up Docker Buildx
         if: steps.check.outputs.create_release == 'true'
