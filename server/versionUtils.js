@@ -32,32 +32,48 @@ function getCurrentVersionInfo() {
             if (gitBranch === 'develop') {
                 isDevelopment = true;
                 try {
-                    // Get the latest stable release tag
-                    const latestStableTag = execSync('git tag -l "v*" | grep -v "rc\\\\|alpha\\\\|beta" | sort -V | tail -1', { 
+                    // Use git describe for accurate development versioning
+                    const gitDescribe = execSync('git describe --tags --dirty', { 
                         cwd: gitDir, 
-                        encoding: 'utf8',
-                        shell: '/bin/bash'
+                        encoding: 'utf8' 
                     }).trim();
                     
-                    if (latestStableTag) {
-                        // Remove 'v' prefix to get base version
-                        const baseVersion = latestStableTag.replace(/^v/, '');
+                    if (gitDescribe) {
+                        // Parse git describe output: v3.23.1-109-g3ee29b2-dirty
+                        const match = gitDescribe.match(/^v([^-]+)(?:-(\d+)-g([a-f0-9]+))?(-dirty)?$/);
                         
-                        // Count commits since the latest stable tag
-                        const commitsSince = execSync(`git rev-list --count ${latestStableTag}..HEAD`, { 
-                            cwd: gitDir, 
-                            encoding: 'utf8' 
-                        }).trim();
-                        
-                        const commitsCount = parseInt(commitsSince, 10);
-                        
-                        if (commitsCount > 0) {
-                            // Calculate RC version: base version + rc + commit count
-                            currentVersion = `${baseVersion}-rc${commitsCount}`;
+                        if (match) {
+                            const [, baseVersion, commitsAhead, shortHash, isDirty] = match;
+                            
+                            if (commitsAhead && parseInt(commitsAhead) > 0) {
+                                // We're ahead of the latest tag - this is development
+                                const commits = parseInt(commitsAhead);
+                                const dirtyFlag = isDirty ? '-dirty' : '';
+                                
+                                // For development builds, show as dev version ahead of the base
+                                // Calculate next logical version based on base
+                                const versionParts = baseVersion.split('.');
+                                const major = parseInt(versionParts[0]) || 0;
+                                const minor = parseInt(versionParts[1]) || 0;
+                                const patch = parseInt(versionParts[2]) || 0;
+                                
+                                // Increment minor version for development
+                                const nextVersion = `${major}.${minor + 1}.0`;
+                                currentVersion = `${nextVersion}-dev.${commits}+${shortHash}${dirtyFlag}`;
+                            } else if (isDirty) {
+                                // On a tag but with uncommitted changes
+                                currentVersion = `${baseVersion}-dirty`;
+                            } else {
+                                // Exactly on a tag
+                                currentVersion = baseVersion;
+                            }
                         } else {
-                            // No commits since stable, use base version
-                            currentVersion = baseVersion;
+                            // Fallback if git describe doesn't match expected pattern
+                            console.warn('[VersionUtils] Could not parse git describe output:', gitDescribe);
+                            currentVersion = gitDescribe.replace(/^v/, '');
                         }
+                    } else {
+                        throw new Error('git describe returned empty');
                     }
                 } catch (versionError) {
                     console.log('[VersionUtils] Could not calculate RC version from git, using package.json');

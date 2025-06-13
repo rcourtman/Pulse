@@ -160,14 +160,28 @@ document.addEventListener('DOMContentLoaded', function() {
         return allFound;
     }
 
-    function fetchVersion() {
+    async function fetchVersion() {
         const versionSpan = document.getElementById('app-version');
         if (!versionSpan) {
             console.error('Version span element not found');
             return;
         }
         
-        fetch('/api/version')
+        // Get user's channel preference from config
+        let userChannel = 'stable'; // default
+        try {
+            const configResponse = await fetch('/api/config');
+            if (configResponse.ok) {
+                const config = await configResponse.json();
+                userChannel = config.advanced?.updateChannel || 'stable';
+            }
+        } catch (error) {
+            console.warn('Could not load user channel preference, using stable');
+        }
+        
+        // Check version with user's preferred channel
+        const versionUrl = userChannel === 'stable' ? '/api/version' : `/api/version?channel=${userChannel}`;
+        fetch(versionUrl)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
@@ -221,16 +235,24 @@ document.addEventListener('DOMContentLoaded', function() {
                             updateIndicator.addEventListener('click', (e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                window.open('https://github.com/rcourtman/Pulse/releases/latest', '_blank');
+                                const releaseUrl = data.releaseUrl || 'https://github.com/rcourtman/Pulse/releases/latest';
+                                window.open(releaseUrl, '_blank');
                             });
                             
-                            // Insert after version link
-                            versionSpan.parentNode.insertBefore(updateIndicator, versionSpan.nextSibling);
+                            // Insert after version link with a space
+                            const spacer = document.createTextNode(' ');
+                            versionSpan.parentNode.insertBefore(spacer, versionSpan.nextSibling);
+                            versionSpan.parentNode.insertBefore(updateIndicator, spacer.nextSibling);
                         }
                     } else {
                         // Remove update indicator if no update available
                         const existingIndicator = document.getElementById('update-indicator');
                         if (existingIndicator) {
+                            // Also remove the spacer that comes before it
+                            const spacer = existingIndicator.previousSibling;
+                            if (spacer && spacer.nodeType === Node.TEXT_NODE && spacer.textContent === ' ') {
+                                spacer.remove();
+                            }
                             existingIndicator.remove();
                         }
                     }
