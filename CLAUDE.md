@@ -95,6 +95,49 @@ gh release list --limit=5
 4. **Git push conflicts** - Always pull --rebase before pushing to develop
 5. **Stable release not triggered after PR merge** - Usually caused by using --squash instead of --merge
 
+### 🚨 CRITICAL: Keep It Simple (Anti-Pattern Warnings)
+
+**❌ DON'T do these common mistakes:**
+- DON'T switch between branches unnecessarily - stay on `develop` unless specifically needed
+- DON'T run complex git operations when simple ones work
+- DON'T try to "fix" things that are already working correctly
+- DON'T use `git pull` without `--rebase` on develop (causes merge commits)
+- DON'T fight with git conflicts when workflows are running fine
+- DON'T check out main branch just to view releases - use `gh release view` from any branch
+
+**✅ DO follow this simple workflow:**
+```bash
+# Standard development cycle:
+# 1. Work on develop branch (stay here!)
+git checkout develop
+
+# 2. Make changes and commit
+git add .
+git commit -m "fix: your change description"
+
+# 3. Always rebase before pushing (RC workflow commits auto-happen)
+git pull --rebase origin develop
+git push origin develop
+
+# 4. Check RC release status (from develop branch - don't switch!)
+gh run list --workflow=rc-release.yml --limit=3
+gh release list --limit=3
+
+# 5. Create PR to main when ready for stable release
+gh pr create --base main --head develop --title "stable: description" --body "Release description"
+
+# 6. Merge PR (triggers stable release)
+gh pr merge PRNUMBER --merge --admin
+
+# 7. Check stable release status (still from develop - don't switch!)
+gh run list --workflow=stable-release.yml --limit=3
+gh release view TAG_NAME
+
+# That's it! Stay on develop and continue working.
+```
+
+**Key principle:** Trust the automation. The workflows handle version bumps, releases, and git operations correctly. Your job is to make code changes and trigger releases with simple commands, not to manage complex git state.
+
 ### Manual Stable Release Trigger
 
 If a stable release wasn't automatically triggered (e.g., due to squash merge), manually trigger one:
