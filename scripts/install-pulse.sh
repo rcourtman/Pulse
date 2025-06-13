@@ -333,7 +333,18 @@ check_release_exists() {
     local tag=$1
     local api_url="https://api.github.com/repos/rcourtman/Pulse/releases/tags/$tag"
     
-    curl -s --fail "$api_url" > /dev/null 2>&1
+    # Try API first, but don't fail if rate limited
+    if curl -s --fail "$api_url" > /dev/null 2>&1; then
+        return 0
+    fi
+    
+    # Fallback: try to download the tarball directly to verify existence
+    local tarball_url="https://github.com/rcourtman/Pulse/releases/download/${tag}/pulse-${tag}.tar.gz"
+    if curl -s --head --fail "$tarball_url" > /dev/null 2>&1; then
+        return 0
+    fi
+    
+    return 1
 }
 
 # Download and extract tarball
