@@ -96,16 +96,41 @@ jobs:
       - name: Create Release Archive
         if: steps.check.outputs.create_release == 'true'
         run: |
-          # Create release tarball
-          tar -czf pulse-v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}.tar.gz \
-            --exclude=node_modules \
-            --exclude=.git \
-            --exclude=.env \
-            --exclude=data \
-            --exclude=*.log \
-            --exclude=temp-release \
-            server src scripts package.json package-lock.json README.md LICENSE CHANGELOG.md \
-            docker-compose.yml Dockerfile
+          echo "📦 Building RC release tarball..."
+          
+          # Create staging directory for proper release structure
+          RC_VERSION="${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}"
+          RELEASE_DIR_NAME="pulse-v$RC_VERSION"
+          STAGING_PARENT_DIR="pulse-rc-staging"
+          STAGING_FULL_PATH="$STAGING_PARENT_DIR/$RELEASE_DIR_NAME"
+          
+          # Cleanup and create staging
+          rm -rf "$STAGING_PARENT_DIR"
+          mkdir -p "$STAGING_FULL_PATH"
+          
+          # Copy essential files (matching stable workflow)
+          cp package.json package-lock.json "$STAGING_FULL_PATH/"
+          [ -f README.md ] && cp README.md "$STAGING_FULL_PATH/"
+          [ -f LICENSE ] && cp LICENSE "$STAGING_FULL_PATH/"
+          [ -f CHANGELOG.md ] && cp CHANGELOG.md "$STAGING_FULL_PATH/"
+          [ -f docker-compose.yml ] && cp docker-compose.yml "$STAGING_FULL_PATH/"
+          [ -f Dockerfile ] && cp Dockerfile "$STAGING_FULL_PATH/"
+          
+          # Copy directories
+          cp -r server "$STAGING_FULL_PATH/"
+          cp -r src "$STAGING_FULL_PATH/"
+          cp -r scripts "$STAGING_FULL_PATH/"
+          
+          # Create tarball with proper directory structure
+          echo "Creating tarball..."
+          (cd "$STAGING_PARENT_DIR" && tar -czf "../pulse-v$RC_VERSION.tar.gz" "$RELEASE_DIR_NAME")
+          
+          # Cleanup staging
+          rm -rf "$STAGING_PARENT_DIR"
+          
+          # Show tarball info
+          ls -lh "pulse-v$RC_VERSION.tar.gz"
+          echo "✅ RC release tarball created with proper directory structure"
           
       - name: Create RC Release
         if: steps.check.outputs.create_release == 'true'
