@@ -93,6 +93,21 @@ jobs:
             rcourtman/pulse:v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
             rcourtman/pulse:rc
           
+      - name: Set up Node.js
+        if: steps.check.outputs.create_release == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          
+      - name: Install dependencies and build CSS
+        if: steps.check.outputs.create_release == 'true'
+        run: |
+          echo "Installing dependencies for CSS build..."
+          npm install
+          echo "Building CSS with Tailwind..."
+          npm run build:css
+          
       - name: Create Release Archive
         if: steps.check.outputs.create_release == 'true'
         run: |
