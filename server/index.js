@@ -729,8 +729,13 @@ app.get('/api/alerts/status', (req, res) => {
 // Version API endpoint
 app.get('/api/version', async (req, res) => {
     try {
-        const packageJson = require('../package.json');
-        const currentVersion = packageJson.version || 'N/A';
+        const { getCurrentVersionInfo } = require('./versionUtils');
+        
+        // Get version info using centralized logic
+        const versionInfo = getCurrentVersionInfo();
+        const currentVersion = versionInfo.version;
+        const gitBranch = versionInfo.gitBranch;
+        const isDevelopment = versionInfo.isDevelopment;
         
         let latestVersion = currentVersion;
         let updateAvailable = false;
@@ -748,7 +753,9 @@ app.get('/api/version', async (req, res) => {
         res.json({ 
             version: currentVersion,
             latestVersion: latestVersion,
-            updateAvailable: updateAvailable
+            updateAvailable: updateAvailable,
+            gitBranch: gitBranch,
+            isDevelopment: isDevelopment
         });
     } catch (error) {
          console.error("[Version API] Error in version endpoint:", error);
@@ -1746,6 +1753,7 @@ async function startServer() {
             path.join(__dirname, '../src/public'),    // Frontend files
             path.join(__dirname, './'),                // Server files
             path.join(__dirname, '../data'),           // Config files
+            path.join(__dirname, '../package.json'),  // Package.json for auto-restart on version updates
           ];
           
           devWatcher = chokidar.watch(watchPaths, { 

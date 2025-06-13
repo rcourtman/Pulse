@@ -415,6 +415,17 @@ download_and_extract_tarball() {
 
 # Get current installed version
 get_current_version() {
+    # Try to get version from the running service API first
+    if systemctl is-active --quiet pulse.service 2>/dev/null; then
+        local api_version
+        api_version=$(curl -s -m 5 "http://localhost:7655/api/version" 2>/dev/null | grep -o '"version":"[^"]*"' | cut -d'"' -f4 2>/dev/null)
+        if [ -n "$api_version" ] && [ "$api_version" != "null" ]; then
+            echo "$api_version"
+            return 0
+        fi
+    fi
+    
+    # Fallback to package.json if API is not available
     if [ -f "$PULSE_DIR/package.json" ]; then
         grep '"version"' "$PULSE_DIR/package.json" | head -1 | sed -E 's/.*"version": "([^"]+)".*/\1/'
     fi

@@ -2,6 +2,14 @@
 
 Thank you for your interest in contributing to Pulse! We appreciate your help. Here are some guidelines to follow:
 
+## Branch Strategy
+
+Pulse uses a two-branch workflow:
+- **`main`** - Stable releases only (protected)
+- **`develop`** - Daily development work (default working branch)
+
+All contributions should target the `develop` branch.
+
 ## Reporting Bugs
 
 - Please ensure the bug was not already reported by searching on GitHub under [Issues](https://github.com/rcourtman/Pulse/issues).
@@ -16,11 +24,45 @@ Thank you for your interest in contributing to Pulse! We appreciate your help. H
 
 ## Pull Requests
 
-- Fork the repository and create your branch from `main`.
-- Ensure your code adheres to the project's existing style.
-- If you've added code that should be tested, add tests.
-- Ensure the test suite passes (if applicable).
-- Make sure your code lints (if linters are set up).
-- Issue that pull request!
+### Getting Started
+1. **Fork the repository** and clone your fork locally
+2. **Create your branch from `develop`**: `git checkout -b feature/your-feature develop`
+3. **Set up development environment**:
+   ```bash
+   npm install
+   npm run build:css
+   npm run dev  # Starts development server with hot reload
+   ```
 
-We will review your pull request and provide feedback. Thank you for your contribution! 
+### Development Workflow
+- **Local testing**: Your changes will show with dynamic RC versions (e.g., "3.24.0-rc5")
+- **Version display**: RC versions increment automatically with each commit
+- **No version management needed**: The system handles versioning automatically
+
+### Before Submitting
+- Ensure your code adheres to the project's existing style
+- If you've added code that should be tested, add tests
+- Ensure the test suite passes: `npm test`
+- Make sure your code lints (if linters are set up)
+- Test your changes thoroughly
+
+### Submitting Your Pull Request
+1. **Push to your fork**: `git push origin feature/your-feature`
+2. **Create a pull request** targeting the `develop` branch
+3. **Provide a clear description** of what your changes do
+4. **Reference any related issues** in your PR description
+
+### After Submission
+- We will review your pull request and provide feedback
+- Your changes will automatically get RC releases for testing when merged to `develop`
+- Once tested and approved, changes will be included in the next stable release
+
+## Release Candidate Testing
+
+When your PR is merged to `develop`:
+- **Automatic RC creation**: A new RC release is created automatically
+- **Docker images**: Multi-arch Docker images are built and published
+- **Version tracking**: RC versions increment automatically (rc1, rc2, rc3...)
+- **Testing opportunity**: Community can test your changes before stable release
+
+Thank you for your contribution! 

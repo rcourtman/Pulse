@@ -1,5 +1,5 @@
 # ---- Builder Stage ----
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /usr/src/app
 
@@ -24,7 +24,7 @@ RUN npm run build:css
 RUN npm prune --production
 
 # ---- Runner Stage ----
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /usr/src/app
 

@@ -58,15 +58,15 @@ PulseApp.ui.settings = (() => {
         const tabButtons = document.querySelectorAll('.settings-tab');
         
         tabButtons.forEach(button => {
-            button.addEventListener('click', (e) => {
+            button.addEventListener('click', async (e) => {
                 e.preventDefault();
                 const tabName = e.currentTarget.getAttribute('data-tab');
-                switchTab(tabName);
+                await switchTab(tabName);
             });
         });
     }
 
-    function switchTab(tabName) {
+    async function switchTab(tabName) {
         // Preserve current form data before switching tabs
         preserveCurrentFormData();
         
@@ -91,6 +91,11 @@ PulseApp.ui.settings = (() => {
         // Update content
         renderTabContent();
         
+        // Load current version if system tab is active (after DOM element exists)
+        if (activeTab === 'system') {
+            await loadCurrentVersion();
+        }
+        
         // Restore form data for the new tab
         restoreFormData();
     }
@@ -107,7 +112,7 @@ PulseApp.ui.settings = (() => {
         await loadConfiguration();
         
         // Switch to requested tab
-        switchTab(tabName);
+        await switchTab(tabName);
     }
 
     function closeModal() {
@@ -128,6 +133,24 @@ PulseApp.ui.settings = (() => {
             renderTabContent();
         } catch (error) {
             PulseApp.apiClient.handleError(error, 'Load configuration', showMessage);
+        }
+    }
+    
+    async function loadCurrentVersion() {
+        try {
+            const versionData = await PulseApp.apiClient.get('/api/version');
+            const currentVersionElement = document.getElementById('current-version');
+            if (currentVersionElement && versionData.version) {
+                currentVersionElement.textContent = versionData.version;
+                // Update currentConfig with the dynamic version for consistency
+                currentConfig.version = versionData.version;
+            }
+        } catch (error) {
+            console.warn('Could not load current version:', error);
+            const currentVersionElement = document.getElementById('current-version');
+            if (currentVersionElement) {
+                currentVersionElement.textContent = currentConfig.version || 'Unknown';
+            }
         }
     }
 
@@ -580,7 +603,7 @@ PulseApp.ui.settings = (() => {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm text-gray-700 dark:text-gray-300">
-                                Current Version: <span id="current-version" class="font-mono font-semibold">${currentConfig.version || 'Unknown'}</span>
+                                Current Version: <span id="current-version" class="font-mono font-semibold">Loading...</span>
                             </p>
                             <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
                                 <span id="latest-version-label">Latest Version</span>: <span id="latest-version" class="font-mono font-semibold text-gray-500 dark:text-gray-400">Checking...</span>

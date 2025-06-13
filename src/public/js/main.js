@@ -181,9 +181,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Check if this is a release candidate
                     const versionBadge = document.getElementById('version-badge');
                     if (versionBadge && data.version) {
-                        const isRC = data.version.includes('-rc') || 
-                                     data.version.includes('-alpha') || 
-                                     data.version.includes('-beta');
+                        const isVersionRC = data.version.includes('-rc') || 
+                                           data.version.includes('-alpha') || 
+                                           data.version.includes('-beta');
+                        const isDevelopBranch = data.isDevelopment || data.gitBranch === 'develop';
+                        const isRC = isVersionRC || isDevelopBranch;
+                        
                         if (isRC) {
                             versionBadge.textContent = 'RC';
                             versionBadge.classList.remove('hidden');
@@ -191,9 +194,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                     
                     // Also update the page title
-                    const isRC = data.version && (data.version.includes('-rc') || 
-                                 data.version.includes('-alpha') || 
-                                 data.version.includes('-beta'));
+                    const isVersionRC = data.version && (data.version.includes('-rc') || 
+                                       data.version.includes('-alpha') || 
+                                       data.version.includes('-beta'));
+                    const isDevelopBranch = data.isDevelopment || data.gitBranch === 'develop';
+                    const isRC = isVersionRC || isDevelopBranch;
                     document.title = isRC ? 'Pulse RC' : 'Pulse';
                     
                     // Check if update is available

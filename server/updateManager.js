@@ -5,6 +5,7 @@ const path = require('path');
 const { exec, spawn } = require('child_process');
 const { promisify } = require('util');
 const { getUpdateChannelPreference } = require('./configLoader');
+const { getCurrentVersion } = require('./versionUtils');
 const execAsync = promisify(exec);
 
 class UpdateManager {
@@ -61,20 +62,23 @@ class UpdateManager {
      * @param {string} channelOverride - Optional channel override ('stable' or 'rc')
      */
     async checkForUpdates(channelOverride = null) {
+        // Get the current version using centralized logic (outside try block for error handling)
+        const dynamicCurrentVersion = getCurrentVersion();
+        
+        // Use override channel if provided and valid, otherwise use config
+        const configChannel = getUpdateChannelPreference();
+        const updateChannel = (channelOverride && ['stable', 'rc'].includes(channelOverride)) 
+            ? channelOverride 
+            : configChannel;
+        let channelDescription = '';
+        
         try {
             console.log('[UpdateManager] Checking for updates...');
-            
-            // Use override channel if provided and valid, otherwise use config
-            const configChannel = getUpdateChannelPreference();
-            const updateChannel = (channelOverride && ['stable', 'rc'].includes(channelOverride)) 
-                ? channelOverride 
-                : configChannel;
             
             if (channelOverride && channelOverride !== configChannel) {
                 console.log(`[UpdateManager] Using channel override: ${channelOverride} (config: ${configChannel})`);
             }
             let response;
-            let channelDescription = '';
             
             if (updateChannel === 'stable') {
                 // Stable channel: only check latest stable release
@@ -113,17 +117,20 @@ class UpdateManager {
                     const releaseVersion = release.tag_name.replace('v', '');
                     const releaseIsRC = this.isReleaseCandidate(releaseVersion);
                     
-                    if (releaseIsRC && semver.gt(releaseVersion, this.currentVersion)) {
-                        latestRelease = release;
-                        break;
+                    if (releaseIsRC) {
+                        // For RC channel, show the latest RC regardless of current version
+                        // This allows showing RC versions even if current is stable
+                        if (!latestRelease || semver.gt(releaseVersion, latestRelease.tag_name.replace('v', ''))) {
+                            latestRelease = release;
+                        }
                     }
                 }
                 
                 if (!latestRelease) {
                     // No newer RC version found
                     const updateInfo = {
-                        currentVersion: this.currentVersion,
-                        latestVersion: this.currentVersion,
+                        currentVersion: dynamicCurrentVersion,
+                        latestVersion: dynamicCurrentVersion,
                         updateAvailable: false,
                         isDocker: this.isDockerEnvironment(),
                         releaseNotes: 'No newer RC version available',
@@ -132,7 +139,7 @@ class UpdateManager {
                         assets: [],
                         updateChannel: channelDescription
                     };
-                    console.log(`[UpdateManager] No RC updates available: ${this.currentVersion}`);
+                    console.log(`[UpdateManager] No RC updates available: ${dynamicCurrentVersion}`);
                     return updateInfo;
                 }
                 
@@ -142,21 +149,24 @@ class UpdateManager {
             const latestVersion = response.data.tag_name.replace('v', '');
             
             // For stable channel, also consider "downgrade" from RC as an update
-            const isCurrentRC = this.isReleaseCandidate();
+            const isCurrentRC = this.isReleaseCandidate(dynamicCurrentVersion);
             const isStableChannel = updateChannel === 'stable';
-            const isDifferentVersion = latestVersion !== this.currentVersion;
+            const isDifferentVersion = latestVersion !== dynamicCurrentVersion;
             
             let updateAvailable;
             if (isStableChannel && isCurrentRC && isDifferentVersion) {
                 // Offer stable version even if it's older than current RC
                 updateAvailable = true;
+            } else if (updateChannel === 'rc') {
+                // For RC channel, show update if versions differ or if latest is newer
+                updateAvailable = isDifferentVersion || semver.gt(latestVersion, dynamicCurrentVersion);
             } else {
                 // Normal case: only newer versions
-                updateAvailable = semver.gt(latestVersion, this.currentVersion);
+                updateAvailable = semver.gt(latestVersion, dynamicCurrentVersion);
             }
 
             const updateInfo = {
-                currentVersion: this.currentVersion,
+                currentVersion: dynamicCurrentVersion,
                 latestVersion,
                 updateAvailable,
                 isDocker: this.isDockerEnvironment(),
@@ -171,11 +181,59 @@ class UpdateManager {
                 }))
             };
 
-            console.log(`[UpdateManager] Current version: ${this.currentVersion}, Latest version: ${latestVersion}, Channel: ${channelDescription}, Docker: ${updateInfo.isDocker}`);
+            console.log(`[UpdateManager] Current version: ${dynamicCurrentVersion}, Latest version: ${latestVersion}, Channel: ${channelDescription}, Docker: ${updateInfo.isDocker}`);
             return updateInfo;
 
         } catch (error) {
             console.error('[UpdateManager] Error checking for updates:', error.message);
+            
+            // Handle different types of errors gracefully
+            if (error.response?.status === 403) {
+                // GitHub API rate limit exceeded
+                console.warn('[UpdateManager] GitHub API rate limit exceeded, returning current version info');
+                return {
+                    currentVersion: dynamicCurrentVersion,
+                    latestVersion: dynamicCurrentVersion,
+                    updateAvailable: false,
+                    isDocker: this.isDockerEnvironment(),
+                    releaseNotes: 'Unable to check for updates: GitHub API rate limit exceeded. Please try again later.',
+                    releaseUrl: null,
+                    publishedAt: null,
+                    assets: [],
+                    updateChannel: channelDescription || 'unknown',
+                    rateLimited: true
+                };
+            } else if (error.response?.status === 404) {
+                // Repository or release not found
+                console.warn('[UpdateManager] Repository or release not found');
+                return {
+                    currentVersion: dynamicCurrentVersion,
+                    latestVersion: dynamicCurrentVersion,
+                    updateAvailable: false,
+                    isDocker: this.isDockerEnvironment(),
+                    releaseNotes: 'Unable to check for updates: Repository or release not found.',
+                    releaseUrl: null,
+                    publishedAt: null,
+                    assets: [],
+                    updateChannel: channelDescription || 'unknown'
+                };
+            } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+                // Network connectivity issues
+                console.warn('[UpdateManager] Network connectivity issues');
+                return {
+                    currentVersion: dynamicCurrentVersion,
+                    latestVersion: dynamicCurrentVersion,
+                    updateAvailable: false,
+                    isDocker: this.isDockerEnvironment(),
+                    releaseNotes: 'Unable to check for updates: Network connectivity issues. Please check your internet connection.',
+                    releaseUrl: null,
+                    publishedAt: null,
+                    assets: [],
+                    updateChannel: channelDescription || 'unknown'
+                };
+            }
+            
+            // For other errors, still throw but with more context
             throw new Error(`Failed to check for updates: ${error.message}`);
         }
     }
