@@ -152,10 +152,15 @@ jobs:
           
           # Run tests to ensure everything works (continue on failure)
           echo "🧪 Running tests..."
-          if npm test; then
+          set +e  # Temporarily disable exit on error
+          npm test
+          TEST_EXIT_CODE=$?
+          set -e  # Re-enable exit on error
+          
+          if [ $TEST_EXIT_CODE -eq 0 ]; then
             echo "✅ All tests passed"
           else
-            echo "⚠️ Some tests failed but continuing with release"
+            echo "⚠️ Some tests failed (exit code: $TEST_EXIT_CODE) but continuing with release"
             echo "Note: Test failures may be due to environment differences in CI"
           fi
           
