@@ -1682,6 +1682,7 @@ PulseApp.ui.settings = (() => {
             if (!response.ok) {
                 if (response.status === 404) {
                     // Version not found - provide a helpful fallback message
+                    console.log(`[Settings] Handled 404 for version comparison: ${compareUrl} - showing fallback message`);
                     changesLoading.classList.add('hidden');
                     changesSummaryText.innerHTML = '<span class="text-amber-600 dark:text-amber-300">⚠️ Version comparison unavailable - this may be a development or pre-release version.</span>';
                     changesSummaryText.classList.remove('hidden');
