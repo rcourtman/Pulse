@@ -126,8 +126,29 @@ PulseApp.ui.settings = (() => {
             const data = await PulseApp.apiClient.get('/api/config');
             currentConfig = data;
             renderTabContent();
+            
+            // Load current version from dynamic API
+            await loadCurrentVersion();
         } catch (error) {
             PulseApp.apiClient.handleError(error, 'Load configuration', showMessage);
+        }
+    }
+    
+    async function loadCurrentVersion() {
+        try {
+            const versionData = await PulseApp.apiClient.get('/api/version');
+            const currentVersionElement = document.getElementById('current-version');
+            if (currentVersionElement && versionData.version) {
+                currentVersionElement.textContent = versionData.version;
+                // Update currentConfig with the dynamic version for consistency
+                currentConfig.version = versionData.version;
+            }
+        } catch (error) {
+            console.warn('Could not load current version:', error);
+            const currentVersionElement = document.getElementById('current-version');
+            if (currentVersionElement) {
+                currentVersionElement.textContent = currentConfig.version || 'Unknown';
+            }
         }
     }
 
@@ -580,7 +601,7 @@ PulseApp.ui.settings = (() => {
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-sm text-gray-700 dark:text-gray-300">
-                                Current Version: <span id="current-version" class="font-mono font-semibold">${currentConfig.version || 'Unknown'}</span>
+                                Current Version: <span id="current-version" class="font-mono font-semibold">Loading...</span>
                             </p>
                             <p class="text-sm text-gray-700 dark:text-gray-300 mt-1">
                                 <span id="latest-version-label">Latest Version</span>: <span id="latest-version" class="font-mono font-semibold text-gray-500 dark:text-gray-400">Checking...</span>
