@@ -62,23 +62,23 @@ class UpdateManager {
      * @param {string} channelOverride - Optional channel override ('stable' or 'rc')
      */
     async checkForUpdates(channelOverride = null) {
+        // Get the current version using centralized logic (outside try block for error handling)
+        const dynamicCurrentVersion = getCurrentVersion();
+        
+        // Use override channel if provided and valid, otherwise use config
+        const configChannel = getUpdateChannelPreference();
+        const updateChannel = (channelOverride && ['stable', 'rc'].includes(channelOverride)) 
+            ? channelOverride 
+            : configChannel;
+        let channelDescription = '';
+        
         try {
             console.log('[UpdateManager] Checking for updates...');
-            
-            // Get the current version using centralized logic
-            const dynamicCurrentVersion = getCurrentVersion();
-            
-            // Use override channel if provided and valid, otherwise use config
-            const configChannel = getUpdateChannelPreference();
-            const updateChannel = (channelOverride && ['stable', 'rc'].includes(channelOverride)) 
-                ? channelOverride 
-                : configChannel;
             
             if (channelOverride && channelOverride !== configChannel) {
                 console.log(`[UpdateManager] Using channel override: ${channelOverride} (config: ${configChannel})`);
             }
             let response;
-            let channelDescription = '';
             
             if (updateChannel === 'stable') {
                 // Stable channel: only check latest stable release
@@ -186,6 +186,54 @@ class UpdateManager {
 
         } catch (error) {
             console.error('[UpdateManager] Error checking for updates:', error.message);
+            
+            // Handle different types of errors gracefully
+            if (error.response?.status === 403) {
+                // GitHub API rate limit exceeded
+                console.warn('[UpdateManager] GitHub API rate limit exceeded, returning current version info');
+                return {
+                    currentVersion: dynamicCurrentVersion,
+                    latestVersion: dynamicCurrentVersion,
+                    updateAvailable: false,
+                    isDocker: this.isDockerEnvironment(),
+                    releaseNotes: 'Unable to check for updates: GitHub API rate limit exceeded. Please try again later.',
+                    releaseUrl: null,
+                    publishedAt: null,
+                    assets: [],
+                    updateChannel: channelDescription || 'unknown',
+                    rateLimited: true
+                };
+            } else if (error.response?.status === 404) {
+                // Repository or release not found
+                console.warn('[UpdateManager] Repository or release not found');
+                return {
+                    currentVersion: dynamicCurrentVersion,
+                    latestVersion: dynamicCurrentVersion,
+                    updateAvailable: false,
+                    isDocker: this.isDockerEnvironment(),
+                    releaseNotes: 'Unable to check for updates: Repository or release not found.',
+                    releaseUrl: null,
+                    publishedAt: null,
+                    assets: [],
+                    updateChannel: channelDescription || 'unknown'
+                };
+            } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+                // Network connectivity issues
+                console.warn('[UpdateManager] Network connectivity issues');
+                return {
+                    currentVersion: dynamicCurrentVersion,
+                    latestVersion: dynamicCurrentVersion,
+                    updateAvailable: false,
+                    isDocker: this.isDockerEnvironment(),
+                    releaseNotes: 'Unable to check for updates: Network connectivity issues. Please check your internet connection.',
+                    releaseUrl: null,
+                    publishedAt: null,
+                    assets: [],
+                    updateChannel: channelDescription || 'unknown'
+                };
+            }
+            
+            // For other errors, still throw but with more context
             throw new Error(`Failed to check for updates: ${error.message}`);
         }
     }
