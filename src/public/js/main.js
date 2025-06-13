@@ -167,21 +167,9 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Get user's channel preference from config
-        let userChannel = 'stable'; // default
-        try {
-            const configResponse = await fetch('/api/config');
-            if (configResponse.ok) {
-                const config = await configResponse.json();
-                userChannel = config.advanced?.updateChannel || 'stable';
-            }
-        } catch (error) {
-            console.warn('Could not load user channel preference, using stable');
-        }
-        
-        // Check version with user's preferred channel
-        const versionUrl = userChannel === 'stable' ? '/api/version' : `/api/version?channel=${userChannel}`;
-        fetch(versionUrl)
+        // Use the user's configured channel from server config
+        // No need to override - let the server use its configured channel
+        fetch('/api/version')
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
