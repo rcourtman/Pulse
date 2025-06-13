@@ -108,18 +108,64 @@ jobs:
           rm -rf "$STAGING_PARENT_DIR"
           mkdir -p "$STAGING_FULL_PATH"
           
-          # Copy essential files (matching stable workflow)
-          cp package.json package-lock.json "$STAGING_FULL_PATH/"
+          echo "Copying application files to $STAGING_FULL_PATH..."
+          
+          # Copy server files (excluding tests) - using rsync for better handling
+          rsync -av --progress server/ "$STAGING_FULL_PATH/server/" --exclude 'tests/' || cp -r server "$STAGING_FULL_PATH/"
+          
+          # Copy source files (including built CSS and public assets)
+          mkdir -p "$STAGING_FULL_PATH/src"
+          rsync -av --progress src/public/ "$STAGING_FULL_PATH/src/public/" || cp -r src/public "$STAGING_FULL_PATH/src/"
+          cp src/index.css "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/index.css not found"
+          cp src/tailwind.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/tailwind.config.js not found"
+          cp src/postcss.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/postcss.config.js not found"
+          
+          # Copy root files
+          cp package.json "$STAGING_FULL_PATH/"
+          cp package-lock.json "$STAGING_FULL_PATH/"
           [ -f README.md ] && cp README.md "$STAGING_FULL_PATH/"
           [ -f LICENSE ] && cp LICENSE "$STAGING_FULL_PATH/"
           [ -f CHANGELOG.md ] && cp CHANGELOG.md "$STAGING_FULL_PATH/"
           [ -f docker-compose.yml ] && cp docker-compose.yml "$STAGING_FULL_PATH/"
           [ -f Dockerfile ] && cp Dockerfile "$STAGING_FULL_PATH/"
           
-          # Copy directories
-          cp -r server "$STAGING_FULL_PATH/"
-          cp -r src "$STAGING_FULL_PATH/"
-          cp -r scripts "$STAGING_FULL_PATH/"
+          # Copy scripts and docs
+          echo "Copying scripts directory..."
+          mkdir -p "$STAGING_FULL_PATH/scripts/"
+          if [ -f "scripts/install-pulse.sh" ]; then
+            cp scripts/install-pulse.sh "$STAGING_FULL_PATH/scripts/"
+            echo "✓ Copied install-pulse.sh"
+          else
+            echo "⚠️ Warning: scripts/install-pulse.sh not found"
+          fi
+          
+          if [ -d "docs" ]; then
+            rsync -av --progress docs/ "$STAGING_FULL_PATH/docs/" || cp -r docs "$STAGING_FULL_PATH/"
+          fi
+          
+          # Install production dependencies in staging
+          echo "Installing production dependencies..."
+          (cd "$STAGING_FULL_PATH" && npm install --omit=dev --ignore-scripts)
+          
+          # Verify essential files
+          echo "Verifying essential files..."
+          if [ ! -f "$STAGING_FULL_PATH/package.json" ]; then
+            echo "Error: Missing package.json"
+            exit 1
+          fi
+          if [ ! -f "$STAGING_FULL_PATH/server/index.js" ]; then
+            echo "Error: Missing server/index.js"
+            exit 1
+          fi
+          if [ ! -d "$STAGING_FULL_PATH/node_modules" ]; then
+            echo "Error: Missing node_modules"
+            exit 1
+          fi
+          if [ ! -f "$STAGING_FULL_PATH/scripts/install-pulse.sh" ]; then
+            echo "Error: Missing scripts/install-pulse.sh"
+            exit 1
+          fi
+          echo "✓ All essential files verified"
           
           # Create tarball with proper directory structure
           echo "Creating tarball..."
@@ -130,7 +176,7 @@ jobs:
           
           # Show tarball info
           ls -lh "pulse-v$RC_VERSION.tar.gz"
-          echo "✅ RC release tarball created with proper directory structure"
+          echo "✅ RC release tarball created with production dependencies"
           
       - name: Create RC Release
         if: steps.check.outputs.create_release == 'true'
