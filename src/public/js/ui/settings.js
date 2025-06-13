@@ -1636,21 +1636,57 @@ PulseApp.ui.settings = (() => {
         changesError.classList.add('hidden');
         
         try {
-            // GitHub API to compare between versions
-            const baseVersion = isCurrentRC && !isTargetRC ? targetVersion : currentVersion;
-            const headVersion = isCurrentRC && !isTargetRC ? currentVersion : targetVersion;
+            // Skip version comparison if versions are the same
+            const cleanCurrentVersion = currentVersion.replace(/^v/, '');
+            const cleanTargetVersion = targetVersion.replace(/^v/, '');
+            
+            if (cleanCurrentVersion === cleanTargetVersion) {
+                changesLoading.classList.add('hidden');
+                changesSummaryText.innerHTML = '<span class="text-gray-600 dark:text-gray-300">You are already on this version.</span>';
+                changesSummaryText.classList.remove('hidden');
+                return;
+            }
+            
+            // For RC versions, check if they exist as real tags before comparing
+            // If current version is a dynamic RC (like 3.24.0-rc30), try to find the closest stable version
+            let baseVersion, headVersion;
+            
+            if (isCurrentRC && !isTargetRC) {
+                // Current is RC, target is stable - compare from target to current
+                baseVersion = targetVersion;
+                headVersion = currentVersion;
+                
+                // If current RC version looks dynamically generated (high RC number), 
+                // try to find the actual base stable version for comparison
+                const rcMatch = cleanCurrentVersion.match(/^(\d+\.\d+\.\d+)-rc(\d+)$/);
+                if (rcMatch && parseInt(rcMatch[2]) > 10) {
+                    // High RC number suggests dynamic versioning, use the base version
+                    const baseStableVersion = rcMatch[1];
+                    console.log(`[Settings] Dynamic RC detected (${cleanCurrentVersion}), using base version ${baseStableVersion} for comparison`);
+                    headVersion = baseStableVersion;
+                }
+            } else {
+                // Normal comparison
+                baseVersion = currentVersion;
+                headVersion = targetVersion;
+            }
             
             // Strip any existing 'v' prefix to avoid double prefixes
             const cleanBaseVersion = baseVersion.replace(/^v/, '');
             const cleanHeadVersion = headVersion.replace(/^v/, '');
             
             const compareUrl = `https://api.github.com/repos/rcourtman/Pulse/compare/v${cleanBaseVersion}...v${cleanHeadVersion}`;
-            
+            console.log(`[Settings] Comparing versions: v${cleanBaseVersion} to v${cleanHeadVersion}`);
             
             const response = await fetch(compareUrl);
             if (!response.ok) {
                 if (response.status === 404) {
-                    throw new Error(`Version comparison not found. One of the versions (${cleanBaseVersion} or ${cleanHeadVersion}) may not exist.`);
+                    // Version not found - provide a helpful fallback message
+                    console.log(`[Settings] Handled 404 for version comparison: ${compareUrl} - showing fallback message`);
+                    changesLoading.classList.add('hidden');
+                    changesSummaryText.innerHTML = '<span class="text-amber-600 dark:text-amber-300">⚠️ Version comparison unavailable - this may be a development or pre-release version.</span>';
+                    changesSummaryText.classList.remove('hidden');
+                    return;
                 } else if (response.status === 403) {
                     throw new Error('GitHub API rate limit exceeded. Please try again later.');
                 } else {

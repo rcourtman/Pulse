@@ -264,17 +264,64 @@ jobs:
         run: |
           echo "📦 Building release tarball..."
           
-          # Create tarball with all necessary files
-          tar -czf "pulse-v$NEW_VERSION.tar.gz" \
-            --exclude=node_modules \
-            --exclude=.git \
-            --exclude=.env \
-            --exclude=data \
-            --exclude=*.log \
-            --exclude=temp-release \
-            server src/public package.json package-lock.json README.md LICENSE CHANGELOG.md scripts/install-pulse.sh
+          # Create staging directory for proper release structure
+          RELEASE_DIR_NAME="pulse-v$NEW_VERSION"
+          STAGING_PARENT_DIR="pulse-release-staging"
+          STAGING_FULL_PATH="$STAGING_PARENT_DIR/$RELEASE_DIR_NAME"
           
+          # Cleanup and create staging
+          rm -rf "$STAGING_PARENT_DIR"
+          mkdir -p "$STAGING_FULL_PATH"
+          
+          echo "Copying application files to $STAGING_FULL_PATH..."
+          
+          # Copy server files (excluding tests)
+          rsync -av --progress server/ "$STAGING_FULL_PATH/server/" --exclude 'tests/'
+          
+          # Copy source files (including built CSS and public assets)
+          mkdir -p "$STAGING_FULL_PATH/src"
+          rsync -av --progress src/public/ "$STAGING_FULL_PATH/src/public/"
+          cp src/index.css "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/index.css not found"
+          cp src/tailwind.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/tailwind.config.js not found"
+          cp src/postcss.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/postcss.config.js not found"
+          
+          # Copy root files
+          cp package.json "$STAGING_FULL_PATH/"
+          cp package-lock.json "$STAGING_FULL_PATH/"
+          cp README.md "$STAGING_FULL_PATH/"
+          cp LICENSE "$STAGING_FULL_PATH/"
+          cp CHANGELOG.md "$STAGING_FULL_PATH/"
+          
+          # Copy scripts and docs
+          if [ -d "scripts" ]; then
+            mkdir -p "$STAGING_FULL_PATH/scripts/"
+            cp scripts/install-pulse.sh "$STAGING_FULL_PATH/scripts/" 2>/dev/null || true
+          fi
+          
+          if [ -d "docs" ]; then
+            rsync -av --progress docs/ "$STAGING_FULL_PATH/docs/"
+          fi
+          
+          # Install production dependencies in staging
+          echo "Installing production dependencies..."
+          (cd "$STAGING_FULL_PATH" && npm install --omit=dev --ignore-scripts)
+          
+          # Verify essential files
+          if [ ! -f "$STAGING_FULL_PATH/package.json" ] || [ ! -f "$STAGING_FULL_PATH/server/index.js" ] || [ ! -d "$STAGING_FULL_PATH/node_modules" ]; then
+            echo "Error: Missing essential files for release"
+            exit 1
+          fi
+          
+          # Create tarball
+          echo "Creating tarball..."
+          (cd "$STAGING_PARENT_DIR" && tar -czf "../pulse-v$NEW_VERSION.tar.gz" "$RELEASE_DIR_NAME")
+          
+          # Cleanup staging
+          rm -rf "$STAGING_PARENT_DIR"
+          
+          # Show tarball info
           ls -lh "pulse-v$NEW_VERSION.tar.gz"
+          echo "✅ Release tarball created with production dependencies"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

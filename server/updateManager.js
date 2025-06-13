@@ -158,8 +158,8 @@ class UpdateManager {
                 // Offer stable version even if it's older than current RC
                 updateAvailable = true;
             } else if (updateChannel === 'rc') {
-                // For RC channel, show update if versions differ or if latest is newer
-                updateAvailable = isDifferentVersion || semver.gt(latestVersion, dynamicCurrentVersion);
+                // For RC channel, only show update if latest version is actually newer
+                updateAvailable = semver.gt(latestVersion, dynamicCurrentVersion);
             } else {
                 // Normal case: only newer versions
                 updateAvailable = semver.gt(latestVersion, dynamicCurrentVersion);
