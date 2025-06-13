@@ -729,65 +729,16 @@ app.get('/api/alerts/status', (req, res) => {
 // Version API endpoint
 app.get('/api/version', async (req, res) => {
     try {
-        const { execSync } = require('child_process');
-        const packageJson = require('../package.json');
+        const { getCurrentVersionInfo } = require('./versionUtils');
         
-        let currentVersion = packageJson.version || 'N/A';
+        // Get version info using centralized logic
+        const versionInfo = getCurrentVersionInfo();
+        const currentVersion = versionInfo.version;
+        const gitBranch = versionInfo.gitBranch;
+        const isDevelopment = versionInfo.isDevelopment;
+        
         let latestVersion = currentVersion;
         let updateAvailable = false;
-        let gitBranch = null;
-        
-        // Try to detect git branch and calculate dynamic version
-        try {
-            const gitDir = path.join(__dirname, '..');
-            
-            // Get current branch
-            gitBranch = execSync('git branch --show-current', { 
-                cwd: gitDir, 
-                encoding: 'utf8' 
-            }).trim();
-            
-            // If on develop branch, calculate RC version from git
-            if (gitBranch === 'develop') {
-                try {
-                    // Get the latest stable release tag
-                    const latestStableTag = execSync('git tag -l "v*" | grep -v "rc\\|alpha\\|beta" | sort -V | tail -1', { 
-                        cwd: gitDir, 
-                        encoding: 'utf8',
-                        shell: '/bin/bash'
-                    }).trim();
-                    
-                    if (latestStableTag) {
-                        // Remove 'v' prefix to get base version
-                        const baseVersion = latestStableTag.replace(/^v/, '');
-                        
-                        // Count commits since the latest stable tag
-                        const commitsSince = execSync(`git rev-list --count ${latestStableTag}..HEAD`, { 
-                            cwd: gitDir, 
-                            encoding: 'utf8' 
-                        }).trim();
-                        
-                        const commitsCount = parseInt(commitsSince, 10);
-                        
-                        if (commitsCount > 0) {
-                            // Calculate RC version: base version + rc + commit count
-                            currentVersion = `${baseVersion}-rc${commitsCount}`;
-                        } else {
-                            // No commits since stable, use base version
-                            currentVersion = baseVersion;
-                        }
-                    }
-                } catch (versionError) {
-                    console.log("[Version API] Could not calculate RC version from git, using package.json");
-                    // Fall back to package.json version
-                    currentVersion = packageJson.version;
-                }
-            }
-        } catch (gitError) {
-            // Git not available or not a git repo
-            gitBranch = null;
-            currentVersion = packageJson.version;
-        }
         
         try {
             // Try to check for updates, but don't fail if it doesn't work
@@ -804,7 +755,7 @@ app.get('/api/version', async (req, res) => {
             latestVersion: latestVersion,
             updateAvailable: updateAvailable,
             gitBranch: gitBranch,
-            isDevelopment: gitBranch === 'develop' || process.env.NODE_ENV === 'development'
+            isDevelopment: isDevelopment
         });
     } catch (error) {
          console.error("[Version API] Error in version endpoint:", error);

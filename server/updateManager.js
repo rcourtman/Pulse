@@ -5,6 +5,7 @@ const path = require('path');
 const { exec, spawn } = require('child_process');
 const { promisify } = require('util');
 const { getUpdateChannelPreference } = require('./configLoader');
+const { getCurrentVersion } = require('./versionUtils');
 const execAsync = promisify(exec);
 
 class UpdateManager {
@@ -63,6 +64,9 @@ class UpdateManager {
     async checkForUpdates(channelOverride = null) {
         try {
             console.log('[UpdateManager] Checking for updates...');
+            
+            // Get the current version using centralized logic
+            const dynamicCurrentVersion = getCurrentVersion();
             
             // Use override channel if provided and valid, otherwise use config
             const configChannel = getUpdateChannelPreference();
@@ -125,8 +129,8 @@ class UpdateManager {
                 if (!latestRelease) {
                     // No newer RC version found
                     const updateInfo = {
-                        currentVersion: this.currentVersion,
-                        latestVersion: this.currentVersion,
+                        currentVersion: dynamicCurrentVersion,
+                        latestVersion: dynamicCurrentVersion,
                         updateAvailable: false,
                         isDocker: this.isDockerEnvironment(),
                         releaseNotes: 'No newer RC version available',
@@ -135,7 +139,7 @@ class UpdateManager {
                         assets: [],
                         updateChannel: channelDescription
                     };
-                    console.log(`[UpdateManager] No RC updates available: ${this.currentVersion}`);
+                    console.log(`[UpdateManager] No RC updates available: ${dynamicCurrentVersion}`);
                     return updateInfo;
                 }
                 
@@ -145,9 +149,9 @@ class UpdateManager {
             const latestVersion = response.data.tag_name.replace('v', '');
             
             // For stable channel, also consider "downgrade" from RC as an update
-            const isCurrentRC = this.isReleaseCandidate();
+            const isCurrentRC = this.isReleaseCandidate(dynamicCurrentVersion);
             const isStableChannel = updateChannel === 'stable';
-            const isDifferentVersion = latestVersion !== this.currentVersion;
+            const isDifferentVersion = latestVersion !== dynamicCurrentVersion;
             
             let updateAvailable;
             if (isStableChannel && isCurrentRC && isDifferentVersion) {
@@ -155,14 +159,14 @@ class UpdateManager {
                 updateAvailable = true;
             } else if (updateChannel === 'rc') {
                 // For RC channel, show update if versions differ or if latest is newer
-                updateAvailable = isDifferentVersion || semver.gt(latestVersion, this.currentVersion);
+                updateAvailable = isDifferentVersion || semver.gt(latestVersion, dynamicCurrentVersion);
             } else {
                 // Normal case: only newer versions
-                updateAvailable = semver.gt(latestVersion, this.currentVersion);
+                updateAvailable = semver.gt(latestVersion, dynamicCurrentVersion);
             }
 
             const updateInfo = {
-                currentVersion: this.currentVersion,
+                currentVersion: dynamicCurrentVersion,
                 latestVersion,
                 updateAvailable,
                 isDocker: this.isDockerEnvironment(),
@@ -177,7 +181,7 @@ class UpdateManager {
                 }))
             };
 
-            console.log(`[UpdateManager] Current version: ${this.currentVersion}, Latest version: ${latestVersion}, Channel: ${channelDescription}, Docker: ${updateInfo.isDocker}`);
+            console.log(`[UpdateManager] Current version: ${dynamicCurrentVersion}, Latest version: ${latestVersion}, Channel: ${channelDescription}, Docker: ${updateInfo.isDocker}`);
             return updateInfo;
 
         } catch (error) {
