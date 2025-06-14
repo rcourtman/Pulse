@@ -207,7 +207,14 @@ jobs:
           done
           
           echo "📤 Pushing tag..."
-          git push origin "v$NEW_VERSION"
+          # Check if tag already exists remotely
+          if git ls-remote --tags origin | grep -q "refs/tags/v$NEW_VERSION$"; then
+            echo "⚠️ Tag v$NEW_VERSION already exists remotely - skipping tag push"
+            echo "ℹ️ This is normal when both PR and push workflows run simultaneously"
+          else
+            git push origin "v$NEW_VERSION"
+            echo "✅ Successfully pushed tag v$NEW_VERSION"
+          fi
 
       - name: Generate changelog
         id: changelog
@@ -491,14 +498,21 @@ jobs:
         run: |
           echo "📝 Creating GitHub release..."
           
-          # Create the release
-          gh release create "v$NEW_VERSION" \
-            --title "Release v$NEW_VERSION" \
-            --notes-file CHANGELOG.md \
-            "pulse-v$NEW_VERSION.tar.gz"
-          
-          echo "✅ Release v$NEW_VERSION created successfully!"
-          echo "🔗 https://github.com/${{ github.repository }}/releases/tag/v$NEW_VERSION"
+          # Check if release already exists
+          if gh release view "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "⚠️ Release v$NEW_VERSION already exists - skipping release creation"
+            echo "ℹ️ This is normal when both PR and push workflows run simultaneously"
+            echo "🔗 https://github.com/${{ github.repository }}/releases/tag/v$NEW_VERSION"
+          else
+            # Create the release
+            gh release create "v$NEW_VERSION" \
+              --title "Release v$NEW_VERSION" \
+              --notes-file CHANGELOG.md \
+              "pulse-v$NEW_VERSION.tar.gz"
+            
+            echo "✅ Release v$NEW_VERSION created successfully!"
+            echo "🔗 https://github.com/${{ github.repository }}/releases/tag/v$NEW_VERSION"
+          fi
 
       - name: Cleanup
         run: |
