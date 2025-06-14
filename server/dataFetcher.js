@@ -3,6 +3,7 @@ const { createApiClientInstance } = require('./apiClients');
 const axios = require('axios');
 const https = require('https');
 const dnsResolver = require('./dnsResolver');
+const { getNamespacesToQuery } = require('./pbsNamespaceDiscovery');
 
 let pLimit;
 let requestLimiter;
@@ -908,17 +909,34 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             const datastores = datastoreResponse.data?.data || [];
             
             for (const datastore of datastores) {
-                const groupsResponse = await client.get(`/admin/datastore/${datastore.name}/groups`);
-                const groups = groupsResponse.data?.data || [];
+                // Get namespaces to query (auto-discovery or configured)
+                const namespacesToQuery = await getNamespacesToQuery(client, datastore.name, config);
+                
+                // Query each namespace
+                for (const namespace of namespacesToQuery) {
+                    try {
+                        const groupsParams = {};
+                        if (namespace) {
+                            groupsParams.ns = namespace;
+                        }
+                        const groupsResponse = await client.get(`/admin/datastore/${datastore.name}/groups`, {
+                            params: groupsParams
+                        });
+                        const groups = groupsResponse.data?.data || [];
                 
                 // For each backup group, get snapshots within history period
                 for (const group of groups) {
                     try {
+                        const snapshotParams = {
+                            'backup-type': group['backup-type'],
+                            'backup-id': group['backup-id']
+                        };
+                        // Add namespace parameter if configured
+                        if (config.namespace) {
+                            snapshotParams.ns = config.namespace;
+                        }
                         const snapshotsResponse = await client.get(`/admin/datastore/${datastore.name}/snapshots`, {
-                            params: {
-                                'backup-type': group['backup-type'],
-                                'backup-id': group['backup-id']
-                            }
+                            params: snapshotParams
                         });
                         const allSnapshots = snapshotsResponse.data?.data || [];
                         
@@ -980,6 +998,12 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                         
                     } catch (snapshotError) {
                         console.warn(`WARN: [DataFetcher] Could not fetch snapshots for group ${group['backup-type']}/${group['backup-id']}: ${snapshotError.message}`);
+                    }
+                }
+                    } catch (namespaceError) {
+                        if (namespaceError.response?.status !== 404) {
+                            console.warn(`WARN: [DataFetcher] Could not fetch groups from namespace '${namespace}' in datastore ${datastore.name}: ${namespaceError.message}`);
+                        }
                     }
                 }
             }
