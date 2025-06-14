@@ -459,7 +459,7 @@ jobs:
 
       - name: Build release tarball
         env:
-          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
+          NEW_VERSION: ${{ needs.validate-and-prepare.outputs.version }}
         run: |
           echo "📦 Building release tarball..."
           
@@ -551,7 +551,7 @@ jobs:
 
       - name: Build and push Docker images
         env:
-          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
+          NEW_VERSION: ${{ needs.validate-and-prepare.outputs.version }}
         run: |
           echo "🐳 Building multi-arch Docker images..."
           
@@ -566,7 +566,7 @@ jobs:
 
       - name: Create GitHub Release
         env:
-          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
+          NEW_VERSION: ${{ needs.validate-and-prepare.outputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "📝 Creating GitHub release..."
