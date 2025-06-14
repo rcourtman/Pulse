@@ -125,9 +125,7 @@ function loadPbsConfig(index = null) {
                 tokenSecret: pbsTokenSecret,
                 nodeName: process.env[nodeNameVar], // Keep nodeName field
                 namespace: process.env[namespaceVar] || '', // Default to root namespace if not specified
-                namespaceAuto: process.env[namespaceAutoVar] !== 'false', // Default to auto-discovery
-                namespaceInclude: process.env[namespaceIncludeVar] || '', // Include patterns (comma-separated)
-                namespaceExclude: process.env[namespaceExcludeVar] || '', // Exclude patterns (comma-separated)
+                namespaces: process.env[namespaceVar] ? process.env[namespaceVar].split(',').map(ns => ns.trim()).filter(ns => ns !== undefined) : null, // Support comma-separated namespaces, null for auto-discovery
                 allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
                 enabled: process.env[enabledVar] !== 'false',
                 useResilientDns: process.env[resilientDnsVar] === 'true'

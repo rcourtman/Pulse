@@ -654,27 +654,35 @@ PulseApp.ui.backups = (() => {
                 const pbsInstances = [...new Set(pbsSnapshots.map(s => s.pbsInstanceName).filter(Boolean))];
                 const datastores = [...new Set(pbsSnapshots.map(s => s.datastoreName).filter(Boolean))];
                 
-                // Group backups by PBS instance for detailed info
+                // Group backups by PBS instance and namespace for detailed info
                 const backupsByPbs = {};
                 pbsSnapshots.forEach(snap => {
                     if (snap.pbsInstanceName) {
                         if (!backupsByPbs[snap.pbsInstanceName]) {
-                            backupsByPbs[snap.pbsInstanceName] = { count: 0, datastores: new Set() };
+                            backupsByPbs[snap.pbsInstanceName] = { count: 0, datastores: new Set(), namespaces: new Set() };
                         }
                         backupsByPbs[snap.pbsInstanceName].count++;
                         if (snap.datastoreName) {
                             backupsByPbs[snap.pbsInstanceName].datastores.add(snap.datastoreName);
                         }
+                        if (snap.namespace) {
+                            backupsByPbs[snap.pbsInstanceName].namespaces.add(snap.namespace);
+                        }
                     }
                 });
                 
                 if (pbsInstances.length === 1) {
-                    pbsBackupInfo = `${pbsInstances[0]} (${datastores.join(', ')})`;
+                    const info = backupsByPbs[pbsInstances[0]];
+                    const nsArray = Array.from(info.namespaces || []);
+                    const nsInfo = nsArray.length > 0 ? ` in ${nsArray.map(ns => ns === 'root' ? 'root' : `'${ns}'`).join(', ')} namespace${nsArray.length > 1 ? 's' : ''}` : '';
+                    pbsBackupInfo = `${pbsInstances[0]} (${datastores.join(', ')})${nsInfo}`;
                 } else if (pbsInstances.length > 1) {
                     const details = pbsInstances.map(pbs => {
                         const info = backupsByPbs[pbs];
                         const dsArray = Array.from(info.datastores);
-                        return `${pbs}: ${info.count} on ${dsArray.join(', ')}`;
+                        const nsArray = Array.from(info.namespaces || []);
+                        const nsInfo = nsArray.length > 0 ? ` [${nsArray.map(ns => ns === 'root' ? 'root' : ns).join(',')}]` : '';
+                        return `${pbs}: ${info.count} on ${dsArray.join(', ')}${nsInfo}`;
                     }).join(' | ');
                     pbsBackupInfo = details;
                 }

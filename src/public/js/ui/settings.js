@@ -408,48 +408,16 @@ PulseApp.ui.settings = (() => {
                                placeholder="Leave blank to keep current"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
-                    <div class="col-span-full">
+                    <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Namespace Configuration
+                            Namespaces
+                            <span class="text-xs text-gray-500 dark:text-gray-400">(Optional)</span>
                         </label>
-                        <div class="space-y-3">
-                            <div class="flex items-center">
-                                <input type="checkbox" name="PBS_NAMESPACE_AUTO" id="pbs-namespace-auto"
-                                       ${namespaceAuto ? 'checked' : ''}
-                                       onchange="PulseApp.ui.settings.toggleNamespaceAuto(this)"
-                                       class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                <label for="pbs-namespace-auto" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                                    Auto-discover namespaces (recommended)
-                                </label>
-                            </div>
-                            <div id="pbs-namespace-manual" style="display: ${namespaceAuto ? 'none' : 'block'}">
-                                <input type="text" name="PBS_NAMESPACE"
-                                       value="${namespace}"
-                                       placeholder="root (default)"
-                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Specify a single namespace when auto-discovery is disabled</p>
-                            </div>
-                            <div id="pbs-namespace-filters" style="display: ${namespaceAuto ? 'block' : 'none'}">
-                                <div class="space-y-2">
-                                    <div>
-                                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Include patterns (optional)</label>
-                                        <input type="text" name="PBS_NAMESPACE_INCLUDE"
-                                               value="${namespaceInclude}"
-                                               placeholder="e.g., prod/*, backup/*"
-                                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated patterns. Use * for wildcards</p>
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-gray-600 dark:text-gray-400">Exclude patterns (optional)</label>
-                                        <input type="text" name="PBS_NAMESPACE_EXCLUDE"
-                                               value="${namespaceExclude}"
-                                               placeholder="e.g., test/*, temp/*"
-                                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Patterns to exclude from auto-discovery</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                        <input type="text" name="PBS_NAMESPACE"
+                               value="${namespace}"
+                               placeholder="Leave empty for root, or enter: namespace1,namespace2"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated list of namespaces to monitor. Leave empty to monitor root namespace only.</p>
                     </div>
                 </div>
             </div>
@@ -976,35 +944,11 @@ PulseApp.ui.settings = (() => {
                         <input type="password" name="PBS_TOKEN_SECRET_${index}" placeholder="Enter token secret"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
-                    <div class="col-span-full">
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Namespace Configuration
-                        </label>
-                        <div class="space-y-3">
-                            <div class="flex items-center">
-                                <input type="checkbox" name="PBS_NAMESPACE_AUTO_${index}" id="pbs-namespace-auto-${index}"
-                                       checked
-                                       onchange="PulseApp.ui.settings.toggleNamespaceAutoAdditional(this, ${index})"
-                                       class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                                <label for="pbs-namespace-auto-${index}" class="ml-2 block text-sm text-gray-700 dark:text-gray-300">
-                                    Auto-discover namespaces
-                                </label>
-                            </div>
-                            <div id="pbs-namespace-manual-${index}" style="display: none">
-                                <input type="text" name="PBS_NAMESPACE_${index}" placeholder="root (default)"
-                                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            </div>
-                            <div id="pbs-namespace-filters-${index}">
-                                <div class="space-y-2">
-                                    <input type="text" name="PBS_NAMESPACE_INCLUDE_${index}"
-                                           placeholder="Include patterns (e.g., prod/*, backup/*)"
-                                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                    <input type="text" name="PBS_NAMESPACE_EXCLUDE_${index}"
-                                           placeholder="Exclude patterns (e.g., test/*, temp/*)"
-                                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-                            </div>
-                        </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Namespaces</label>
+                        <input type="text" name="PBS_NAMESPACE_${index}" placeholder="Leave empty for root, or enter: namespace1,namespace2"
+                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated list of namespaces</p>
                     </div>
                 </div>
             </div>
