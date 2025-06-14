@@ -1685,6 +1685,18 @@ PulseApp.ui.settings = (() => {
                 return;
             }
             
+            // Check if current version is a development version (has -dev or +commit)
+            const isDevVersion = cleanCurrentVersion.includes('-dev') || cleanCurrentVersion.includes('+');
+            
+            if (isDevVersion) {
+                // For development versions, skip API comparison and show simple message
+                console.log(`[Settings] Development version detected (${cleanCurrentVersion}), skipping GitHub API comparison`);
+                changesLoading.classList.add('hidden');
+                changesSummaryText.innerHTML = '<span class="text-blue-600 dark:text-blue-400">📦 Update available from development version to release version</span>';
+                changesSummaryText.classList.remove('hidden');
+                return;
+            }
+            
             // For RC versions, check if they exist as real tags before comparing
             // If current version is a dynamic RC (like 3.24.0-rc30), try to find the closest stable version
             let baseVersion, headVersion;
