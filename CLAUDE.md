@@ -167,6 +167,12 @@ gh run view <run-id> --log
 - Don't manually fix version numbers - fix the workflow logic instead
 - Check versionUtils.js for version determination logic
 
+#### Changelog Generation
+- Stable releases use `scripts/generate-changelog.js` for proper markdown formatting
+- The script generates clean markdown with real newlines and backticks
+- If changelog looks broken (shows `\n` instead of line breaks), the script may be missing
+- The standalone script avoids bash escaping issues that occur with embedded Node.js code
+
 ### Manual Stable Release Process
 
 After your PR is merged to main and RC testing is complete:
