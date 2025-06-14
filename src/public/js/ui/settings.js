@@ -3044,18 +3044,34 @@ PulseApp.ui.settings = (() => {
             html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Nodes</th>';
             html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">VMs</th>';
             html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Containers</th>';
+            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Storage</th>';
+            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Backup Access</th>';
             html += '</tr></thead><tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">';
             
             permissions.proxmox.forEach(perm => {
                 const checkIcon = (canDo) => canDo ? 
                     '<span class="text-green-600 dark:text-green-400">✓</span>' : 
                     '<span class="text-red-600 dark:text-red-400">✗</span>';
+                // Storage backup access info
+                const storageInfo = perm.storageBackupAccess || {};
+                const storageAccessText = storageInfo.totalStoragesTested > 0 ? 
+                    `${storageInfo.accessibleStorages}/${storageInfo.totalStoragesTested}` : 
+                    (perm.canListStorage ? '0' : 'N/A');
+                
+                // Storage backup access icon - show warning if some storages are inaccessible
+                let backupAccessIcon = checkIcon(perm.canAccessStorageBackups);
+                if (storageInfo.totalStoragesTested > 0 && storageInfo.accessibleStorages < storageInfo.totalStoragesTested) {
+                    backupAccessIcon = '<span class="text-amber-600 dark:text-amber-400">⚠</span>';
+                }
+                
                 html += `<tr>
                     <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${perm.name}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canConnect)}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canListNodes)} ${perm.nodeCount ? `(${perm.nodeCount})` : ''}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canListVMs)} ${perm.vmCount !== undefined ? `(${perm.vmCount})` : ''}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canListContainers)} ${perm.containerCount !== undefined ? `(${perm.containerCount})` : ''}</td>
+                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canListStorage)}</td>
+                    <td class="px-4 py-2 text-sm">${backupAccessIcon} ${storageAccessText}</td>
                 </tr>`;
             });
             html += '</tbody></table></div>';
