@@ -134,6 +134,19 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
 
+      - name: Debug outputs
+        run: |
+          echo "📋 Received outputs from validate-and-prepare job:"
+          echo "version=${{ needs.validate-and-prepare.outputs.version }}"
+          echo "bump-type=${{ needs.validate-and-prepare.outputs.bump-type }}"
+          echo "reasoning=${{ needs.validate-and-prepare.outputs.reasoning }}"
+          
+          # Fail if version is empty
+          if [ -z "${{ needs.validate-and-prepare.outputs.version }}" ]; then
+            echo "❌ ERROR: Version output is empty!"
+            exit 1
+          fi
+
       - name: Update version and create release
         env:
           NEW_VERSION: ${{ needs.validate-and-prepare.outputs.version }}
