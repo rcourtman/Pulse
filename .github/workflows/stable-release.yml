@@ -352,9 +352,9 @@ jobs:
               changelog += '**✨ New! One-click updates from your browser:**\\n';
               changelog += '1. Open your Pulse web interface\\n';
               changelog += '2. Go to **Settings** → **System** tab → **Software Updates**\\n';
-              changelog += '3. Select **"Stable"** channel if not already selected\\n';
-              changelog += '4. Click **"Check for Updates"** or wait for automatic checking\\n';
-              changelog += '5. Click **"Apply Update"** to install v' + newVersion + '\\n';
+              changelog += '3. Select **\\\"Stable\\\"** channel if not already selected\\n';
+              changelog += '4. Click **\\\"Check for Updates\\\"** or wait for automatic checking\\n';
+              changelog += '5. Click **\\\"Apply Update\\\"** to install v' + newVersion + '\\n';
               changelog += '6. The interface will automatically refresh after the update completes\\n';
               changelog += '\\n';
               changelog += '> **Note**: Web updates are automatically disabled for Docker deployments\\n';
@@ -387,8 +387,8 @@ jobs:
               changelog += '#### 🏠 **Proxmox LXC (Community Script)**\\n';
               changelog += '```bash\\n';
               changelog += '# Update existing LXC container\\n';
-              changelog += 'bash -c "$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)"\\n';
-              changelog += '# Choose "Update" option when prompted\\n';
+              changelog += 'bash -c \\\"$(wget -qLO - https://github.com/community-scripts/ProxmoxVE/raw/main/ct/pulse.sh)\\\"\\n';
+              changelog += '# Choose \\\"Update\\\" option when prompted\\n';
               changelog += '```\\n';
               changelog += '\\n';
               
@@ -430,10 +430,10 @@ jobs:
               console.error('Stack trace:', error.stack);
               
               // Enhanced fallback
-              let fallbackChangelog = '## Release v$NEW_VERSION\\\\n\\\\n';
-              fallbackChangelog += '**$BUMP_TYPE release** - $REASONING\\\\n\\\\n';
-              fallbackChangelog += '### Changes\\\\n';
-              fallbackChangelog += 'See commit history for details.\\\\n\\\\n';
+              let fallbackChangelog = '## Release v' + newVersion + '\\n\\n';
+              fallbackChangelog += '**' + bumpType + ' release** - ' + reasoning + '\\n\\n';
+              fallbackChangelog += '### Changes\\n';
+              fallbackChangelog += 'See commit history for details.\\n\\n';
               fallbackChangelog += '🤖 *Automated release - detailed changelog generation failed*';
               
               fs.writeFileSync('CHANGELOG.md', fallbackChangelog);
