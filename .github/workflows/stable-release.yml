@@ -448,13 +448,13 @@ jobs:
               changelog += '\\n';
               changelog += '🤖 *This release was automatically generated from the develop branch*';
               
-              console.log('✅ Generated changelog with', changelog.split('\\\\n').length, 'lines');
+              console.log('✅ Generated changelog with', changelog.split('\\n').length, 'lines');
               
               // Write to file for GitHub release
               // Replace escaped newlines and backticks with actual characters
               const processedChangelog = changelog
-                .replace(/\\\\n/g, '\\n')  // Convert \\n to actual newlines
-                .replace(/\\\\\\\`/g, '`'); // Convert \\\` to actual backticks
+                .replace(/\\n/g, '\n')  // Convert \n to actual newlines
+                .replace(/\\`/g, '`'); // Convert \` to actual backticks
               
               fs.writeFileSync('CHANGELOG.md', processedChangelog);
               console.log('📝 Changelog written to CHANGELOG.md');
@@ -471,7 +471,7 @@ jobs:
               fallbackChangelog += '🤖 *Automated release - detailed changelog generation failed*';
               
               // Replace escaped newlines with actual newlines
-              const processedFallback = fallbackChangelog.replace(/\\\\n/g, '\\n');
+              const processedFallback = fallbackChangelog.replace(/\\n/g, '\n');
               
               fs.writeFileSync('CHANGELOG.md', processedFallback);
               console.log('📝 Fallback changelog written');
