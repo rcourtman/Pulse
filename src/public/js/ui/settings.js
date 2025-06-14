@@ -2006,14 +2006,19 @@ PulseApp.ui.settings = (() => {
                 
                 window.socket.on('updateComplete', () => {
                     if (progressText) {
-                        progressText.textContent = 'Update complete! Reloading...';
+                        progressText.textContent = 'Update complete! Waiting for service to restart...';
                     }
-                    showMessage('Update applied successfully. Reloading page...', 'success');
+                    showMessage('Update applied successfully. Waiting for service to restart...', 'success');
                     
-                    // Simple reload after brief delay
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 3000);
+                    // Wait for service to be ready before reloading
+                    waitForServiceReady(() => {
+                        if (progressText) {
+                            progressText.textContent = 'Service ready! Reloading...';
+                        }
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    });
                 });
                 
                 window.socket.on('updateError', (data) => {
@@ -4008,6 +4013,58 @@ PulseApp.ui.settings = (() => {
                 </div>
             </div>
         `;
+    }
+    
+    /**
+     * Wait for the service to be ready after restart by polling the health endpoint
+     */
+    function waitForServiceReady(callback, attempt = 0, maxAttempts = 40) {
+        // Initial delay to allow service to restart
+        if (attempt === 0) {
+            console.log('[Update] Waiting for service to restart...');
+            setTimeout(() => waitForServiceReady(callback, 1, maxAttempts), 5000);
+            return;
+        }
+        
+        // Try to connect to the health endpoint
+        fetch('/api/health', { 
+            method: 'GET',
+            cache: 'no-cache',
+            headers: {
+                'Accept': 'application/json'
+            },
+            timeout: 5000
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            } else {
+                throw new Error(`HTTP ${response.status}`);
+            }
+        })
+        .then(healthData => {
+            // Check if service is fully initialized
+            if (healthData && healthData.system && healthData.system.clientsInitialized) {
+                console.log('[Update] Service is ready and fully initialized');
+                callback();
+            } else {
+                // Service responding but not fully initialized yet
+                throw new Error('Service not fully initialized');
+            }
+        })
+        .catch(error => {
+            // Service not ready yet
+            if (attempt < maxAttempts) {
+                // Progressive backoff: start at 1s, increase by 250ms each attempt, cap at 4s
+                const delay = Math.min(1000 + (attempt * 250), 4000);
+                console.log(`[Update] Service not ready (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms...`);
+                setTimeout(() => waitForServiceReady(callback, attempt + 1, maxAttempts), delay);
+            } else {
+                // Max attempts reached, force reload anyway
+                console.warn('[Update] Service health check failed after maximum attempts, forcing reload');
+                callback();
+            }
+        });
     }
     
     return {
