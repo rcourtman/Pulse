@@ -2,6 +2,20 @@
 
 ## Git Workflow and Automated Releases
 
+### 🤖 Automation-First Philosophy
+
+**Key Principle**: Trust the automated workflows. Your primary job is to:
+1. Make code changes on the `develop` branch
+2. Push to trigger RC releases for testing  
+3. Create PRs to `main` to trigger stable releases
+4. Only intervene manually when automation fails
+
+**When NOT to manually manage releases**:
+- Don't manually bump versions (workflows handle this)
+- Don't manually create tags (workflows handle this)
+- Don't manually resolve "normal" merge conflicts (workflows have retry logic)
+- Don't manually trigger workflows unless they fail completely
+
 ### Important: RC Workflow Commits to Develop
 
 **Issue:** When you push to develop, the RC workflow automatically commits a version bump back to develop. This can cause push conflicts if you try to push again immediately.
@@ -27,8 +41,29 @@ git push origin develop
    - Merges from develop trigger stable releases
    - Creates new stable version with proper changelog
    - Updates Docker images with :latest tag
-<<<<<<< HEAD
    - **Important:** PRs to main require admin merge due to branch protection
+
+### 🌿 Branch Strategy - When to Stay vs. Switch
+
+**Default: Always work on `develop`**
+- Make all code changes on develop
+- Push to develop to trigger RC releases
+- Check release status from develop (don't switch just to view)
+
+**Only switch branches when:**
+1. **Resolving PR merge conflicts**: `gh pr checkout <PR_NUMBER>`
+2. **Fixing critical issues on main**: `git checkout main` (rare)
+3. **User explicitly requests working on a different branch**
+
+**Never switch branches to:**
+- View releases (`gh release list` works from any branch)
+- Check workflow status (`gh run list` works from any branch)  
+- "Clean up" git state (usually unnecessary)
+
+**After switching branches, always return to develop:**
+```bash
+git checkout develop
+```
 
 ### PR to Main Branch Process
 
@@ -68,11 +103,31 @@ gh pr merge PRNUMBER --merge --admin
    - Example: If stable is v3.25.4, set package.json to "3.25.5"
    - This ensures RCs appear at top of releases page
 
-### Update System Components
+### 🔄 Update System Architecture
 
-- **Installer script:** Auto-included in all release tarballs
-- **UI updates:** Available through Settings > Software Updates
-- **Docker:** Automatic builds for both stable and RC channels
+**Components Overview:**
+- **Installer script**: Auto-included in all release tarballs (`scripts/install-pulse.sh`)
+- **UI updates**: Available through Settings > Software Updates  
+- **Docker**: Automatic builds for both stable (`:latest`) and RC (`:rc`) channels
+- **Version checking**: Footer checks for updates using user's configured channel
+
+**Key Update Features:**
+- **Channel persistence**: User's channel preference (stable/RC) persists across updates
+- **Auto-refresh**: UI automatically refreshes 8 seconds after update restart
+- **Channel-specific checking**: Stable users only see stable updates, RC users only see RC updates
+
+**Update Flow:**
+1. User clicks "Apply Update" in Settings
+2. System downloads and installs new version
+3. Service restarts automatically  
+4. Frontend auto-refreshes after 8-second delay
+5. User remains on their selected channel (stable/RC)
+
+**Related Files:**
+- `src/public/js/ui/settings.js` - Update UI and channel persistence
+- `src/public/js/main.js` - Footer version checking
+- `server/routes/api.js` - Version API endpoints
+- `scripts/install-pulse.sh` - Installation and update logic
 
 ### Testing Commands
 
@@ -87,56 +142,40 @@ gh release list --limit=5
 ./install-pulse.sh --version v3.25.5-rc2
 ```
 
-### Common Issues
+### 🔧 Common Issues and Recovery Patterns
 
-1. **"tarballAsset is not defined"** - Fixed in v3.25.5-rc2
-2. **Missing install script in releases** - Fixed in stable-release.yml
-3. **RCs appearing below stable releases** - Fixed by updating package.json version
-4. **Git push conflicts** - Always pull --rebase before pushing to develop
-5. **Stable release not triggered after PR merge** - Usually caused by using --squash instead of --merge
-
-### 🚨 CRITICAL: Keep It Simple (Anti-Pattern Warnings)
-
-**❌ DON'T do these common mistakes:**
-- DON'T switch between branches unnecessarily - stay on `develop` unless specifically needed
-- DON'T run complex git operations when simple ones work
-- DON'T try to "fix" things that are already working correctly
-- DON'T use `git pull` without `--rebase` on develop (causes merge commits)
-- DON'T fight with git conflicts when workflows are running fine
-- DON'T check out main branch just to view releases - use `gh release view` from any branch
-
-**✅ DO follow this simple workflow:**
+#### Merge Conflicts in PRs
 ```bash
-# Standard development cycle:
-# 1. Work on develop branch (stay here!)
-git checkout develop
-
-# 2. Make changes and commit
-git add .
-git commit -m "fix: your change description"
-
-# 3. Always rebase before pushing (RC workflow commits auto-happen)
-git pull --rebase origin develop
+# When PR has merge conflicts:
+gh pr checkout <PR_NUMBER>
+git fetch origin main && git merge origin/main
+# Resolve conflicts (typically keep main version for package.json)
+git add . && git commit -m "resolve: merge conflicts"
 git push origin develop
-
-# 4. Check RC release status (from develop branch - don't switch!)
-gh run list --workflow=rc-release.yml --limit=3
-gh release list --limit=3
-
-# 5. Create PR to main when ready for stable release
-gh pr create --base main --head develop --title "stable: description" --body "Release description"
-
-# 6. Merge PR (triggers stable release)
-gh pr merge PRNUMBER --merge --admin
-
-# 7. Check stable release status (still from develop - don't switch!)
-gh run list --workflow=stable-release.yml --limit=3
-gh release view TAG_NAME
-
-# That's it! Stay on develop and continue working.
+gh pr merge <PR_NUMBER> --merge --admin
 ```
 
-**Key principle:** Trust the automation. The workflows handle version bumps, releases, and git operations correctly. Your job is to make code changes and trigger releases with simple commands, not to manage complex git state.
+#### Workflow Failures
+```bash
+# Check workflow status first:
+gh run list --workflow=<workflow-name> --limit=3
+
+# If workflow failed due to conflicts, it usually retries automatically
+# Wait 5-10 minutes before manual intervention
+
+# For persistent failures, check workflow logs:
+gh run view <run-id> --log
+```
+
+#### Missing Files in Releases
+- RC releases: Check if CSS build step exists in workflow
+- Stable releases: Check if all necessary files are copied to staging directory
+- Both: Verify workflow has proper Node.js setup before building
+
+#### Version Number Issues
+- RC and stable workflows use version analysis logic
+- Don't manually fix version numbers - fix the workflow logic instead
+- Check versionUtils.js for version determination logic
 
 ### Manual Stable Release Trigger
 
@@ -166,3 +205,46 @@ git push origin main
 ```
 
 **Note:** Method 1 often has merge conflicts due to RC workflow auto-commits. This is normal - just resolve conflicts in package.json (use main branch version) and CLAUDE.md (keep develop version).
+
+### 🚨 CRITICAL: Keep It Simple (Anti-Pattern Warnings)
+
+**The Golden Rule**: Trust the automation, make minimal changes, stay on `develop`.
+
+**❌ NEVER do these:**
+- Switch branches unnecessarily (stay on `develop` unless resolving PR conflicts)
+- Manually manage version numbers (workflows handle this automatically)
+- Fight with git when workflows are running fine (they have retry logic)
+- Run complex git operations when simple ones work
+- Check out `main` just to view releases (use `gh release view` from any branch)
+- Try to "fix" things that are already working correctly
+
+**✅ ALWAYS do this simple workflow:**
+```bash
+# 1. Work on develop (stay here!)
+git checkout develop
+
+# 2. Make your changes and test them
+npm run test          # or whatever test command exists
+
+# 3. Commit and push (triggers RC)
+git add .
+git commit -m "description of change"
+git pull --rebase origin develop
+git push origin develop
+
+# 4. For stable release, create PR (triggers stable release when merged)
+gh pr create --base main --head develop --title "Release: description"
+gh pr merge <PR_NUMBER> --merge --admin
+
+# 5. Check status without switching branches
+gh run list --workflow=stable-release.yml --limit=3
+gh release view <tag>
+```
+
+**Remember**: If something seems complex, it's probably wrong. The workflows handle complexity - you handle simplicity.
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

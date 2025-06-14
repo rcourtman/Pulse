@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="en" class="scrollbar">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulse</title>
+  <link rel="icon" href="/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/output.css">
+  <style>
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.7;
+        transform: scale(1.1);
+      }
+    }
+    .pulse-logo-circle {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      transform-origin: center;
+    }
+    .pulse-logo-outer { fill: #2563eb; }
+    .pulse-logo-inner { fill: #ffffff; }
+    .dark .pulse-logo-outer { fill: #3b82f6; }
+    .dark .pulse-logo-inner { fill: #dbeafe; }
+
+    /* Custom Slider Thumb Styles */
+    input[type=range].custom-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; /* Override default look */
+      appearance: none;
+      margin-top: 0; /* Track height and thumb height match */
+      background-color: #2563eb; /* Blue-600 */
+      height: 12px; /* Larger thumb */
+      width: 12px; /* Larger thumb */
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .dark input[type=range].custom-slider::-webkit-slider-thumb {
+        background-color: #3b82f6; /* Blue-500 */
+    }
+    input[type=range].custom-slider::-moz-range-thumb {
+      background-color: #2563eb; /* Blue-600 */
+      height: 12px; /* Larger thumb */
+      width: 12px; /* Larger thumb */
+      border-radius: 50%;
+      border: none; /* Reset border */
+      cursor: pointer;
+    }
+    .dark input[type=range].custom-slider::-moz-range-thumb {
+        background-color: #3b82f6; /* Blue-500 */
+    }
+
+    /* Range slider styles for alert modal */
+    input[type=range].range-slider {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 8px;
+      border-radius: 4px;
+      background: #e5e7eb;
+      outline: none;
+    }
+    .dark input[type=range].range-slider {
+      background: #4b5563;
+    }
+    input[type=range].range-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #2563eb;
+      cursor: pointer;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .dark input[type=range].range-slider::-webkit-slider-thumb {
+      background: #3b82f6;
+    }
+    input[type=range].range-slider::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #2563eb;
+      cursor: pointer;
+      border: none;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .dark input[type=range].range-slider::-moz-range-thumb {
+      background: #3b82f6;
+    }
+
+    /* Style for header when threshold is active */
+    .threshold-active-header {
+        @apply font-semibold;
+    }
+
+    /* Dot animation for logging indicator */
+    @keyframes dot-pulse {
+      0%, 100% { opacity: 0.2; }
+      50% { opacity: 1; }
+    }
+    .dot-animate {
+      animation: dot-pulse 1.4s infinite ease-in-out;
+      display: inline-block; /* Needed for animation */
+      width: 0.25em; /* Adjust spacing slightly */
+    }
+    .dot-animate:nth-child(1) { animation-delay: 0s; }
+    .dot-animate:nth-child(2) { animation-delay: 0.2s; }
+    .dot-animate:nth-child(3) { animation-delay: 0.4s; }
+
+    /* Subtle pattern for empty threshold cells */
+    .threshold-pattern-bg {
+        background-image: linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%, transparent 50%, rgba(0, 0, 0, 0.05) 50%, rgba(0, 0, 0, 0.05) 75%, transparent 75%, transparent);
+        background-size: 10px 10px;
+    }
+    .dark .threshold-pattern-bg {
+        background-image: linear-gradient(45deg, rgba(255, 255, 255, 0.04) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.04) 50%, rgba(255, 255, 255, 0.04) 75%, transparent 75%, transparent);
+    }
+
+    /* Mini Chart Styles */
+    .usage-chart-container {
+        position: relative;
+        overflow: hidden;
+        border-radius: 3px;
+        background: rgba(0, 0, 0, 0.02);
+        height: 20px;
+        width: 100%;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .dark .usage-chart-container {
+        background: rgba(255, 255, 255, 0.02);
+    }
+    
+    .sparkline-container {
+        position: relative;
+        overflow: hidden;
+        border-radius: 2px;
+        background: rgba(0, 0, 0, 0.03);
+        height: 16px;
+        width: 100%;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .dark .sparkline-container {
+        background: rgba(255, 255, 255, 0.03);
+    }
+    
+    .mini-chart {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    
+    .mini-chart path {
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        transition: d 0.3s ease-out, stroke-dasharray 0.3s ease-out;
+    }
+
+    /* Charts mode styling */
+    .charts-mode #main-table .usage-col,
+    .charts-mode #main-table .net-disk-col {
+        /* Removed text-align: center to keep metrics left-aligned */
+    }
+    
+    /* Reduce padding in charts mode to maximize chart space */
+    .charts-mode #main-table .usage-col,
+    .charts-mode #main-table .net-disk-col {
+        padding: 2px 4px;
+    }
+    
+    .charts-mode .metric-text {
+        display: none;
+    }
+    
+    .charts-mode .metric-chart {
+        display: block;
+    }
+    
+    .metric-chart {
+        display: none;
+    }
+
+    /* Charts mode indicator */
+    .charts-mode {
+        /* Chart mode styles handled by checkbox state */
+    }
+
+    /* Enhanced metric cell layouts */
+    .usage-col {
+        min-width: 100px;
+    }
+    
+    .net-disk-col {
+        min-width: 60px;
+    }
+    
+    /* Prevent text wrapping in all table cells */
+    #main-table td,
+    #main-table th {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    
+    /* Special handling for name column to enable ellipsis */
+    #main-table td:first-child {
+        max-width: 250px;
+    }
+    
+    /* Mobile table scroll styling */
+    @media (max-width: 768px) {
+        .table-container {
+            -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x proximity;
+        }
+        .table-container::-webkit-scrollbar {
+            height: 10px;
+        }
+        .table-container::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+        }
+        .table-container::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+        }
+        .dark .table-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .dark .table-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+        }
+    }
+    
+    /* Responsive column widths */
+    #main-table td:nth-child(1) { min-width: var(--name-col-width); }
+    #main-table td:nth-child(4) { min-width: var(--uptime-col-width); }
+    
+    #backups-overview-table td:nth-child(1) { min-width: var(--backup-name-col-width); }
+    #backups-overview-table td:nth-child(4) { min-width: var(--backup-node-col-width); }
+    #backups-overview-table td:nth-child(6) { min-width: var(--backup-pbs-col-width); }
+    #backups-overview-table td:nth-child(7) { min-width: var(--backup-ds-col-width); }
+    
+    .pbs-datastore-table td:nth-child(1) { min-width: var(--pbs-name-col-width); }
+    .pbs-datastore-table td:nth-child(2) { min-width: var(--pbs-path-col-width); }
+    
+    #storage-info-content table td:nth-child(1) { min-width: var(--storage-name-col-width); }
+    #storage-info-content table td:nth-child(3) { min-width: var(--storage-type-col-width); }
+    
+    /* Mobile optimizations for tables */
+    @media (max-width: 768px) {
+        .table-container {
+            position: relative;
+        }
+    }
+
+    /* Mobile-specific PBS styles */
+    .tap-target {
+        min-height: 44px;
+        min-width: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        touch-action: manipulation;
+    }
+
+    .mobile-task-card,
+    .mobile-datastore-card,
+    .mobile-task-detail-card {
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .mobile-task-card:active,
+    .mobile-datastore-card:active {
+        transform: scale(0.98);
+    }
+
+    @media (max-width: 768px) {
+        /* Hide desktop tables on mobile */
+        .mobile-layout .overflow-x-auto table {
+            display: none !important;
+        }
+        
+        /* Show mobile containers */
+        .mobile-layout .mobile-datastore-container,
+        .mobile-layout .mobile-task-container,
+        .mobile-layout .mobile-pbs-accordion {
+            display: block !important;
+        }
+        
+        /* Enhanced mobile scrolling */
+        .mobile-layout .overflow-x-auto {
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+        
+        /* Mobile table scroll indicator */
+        .mobile-layout .table-container::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 20px;
+            background: linear-gradient(to left, rgba(0,0,0,0.1), transparent);
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .dark .mobile-layout .table-container::after {
+            background: linear-gradient(to left, rgba(255,255,255,0.1), transparent);
+        }
+        
+        /* Mobile PBS tab improvements */
+        .mobile-layout .pbs-tab-container {
+            flex-wrap: wrap;
+            gap: 2px;
+        }
+        
+        .mobile-layout .pbs-tab-container button {
+            flex: 1;
+            min-width: 0;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+        }
+        
+        /* Mobile accordion animations */
+        .mobile-pbs-accordion .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+        }
+        
+        .mobile-pbs-accordion .accordion-content.expanded {
+            max-height: 2000px;
+            transition: max-height 0.3s ease-in;
+        }
+        
+        /* Mobile summary card grid */
+        .mobile-pbs-summary {
+            gap: 8px;
+        }
+        
+        .summary-card {
+            min-height: 70px;
+        }
+        
+        /* Mobile task card enhancements */
+        .mobile-task-card .tap-target {
+            border-radius: 6px;
+        }
+        
+        /* Mobile datastore progress bars */
+        .mobile-datastore-card .progress-container {
+            height: 8px;
+        }
+        
+        /* Mobile text sizing adjustments */
+        .mobile-layout .text-xs {
+            font-size: 0.7rem;
+        }
+        
+        .mobile-layout .text-sm {
+            font-size: 0.8rem;
+        }
+        
+        /* Mobile spacing improvements */
+        .mobile-layout .space-y-2 > * + * {
+            margin-top: 0.375rem;
+        }
+        
+        .mobile-layout .space-y-3 > * + * {
+            margin-top: 0.5rem;
+        }
+        
+        .mobile-layout .space-y-4 > * + * {
+            margin-top: 0.75rem;
+        }
+        
+        /* Mobile error message handling */
+        .mobile-task-detail-card .break-all {
+            word-break: break-all;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+        }
+        
+        /* Mobile progress bar animations */
+        .mobile-layout .transition-all {
+            transition-property: all;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 300ms;
+        }
+        
+        /* Mobile focus states */
+        .mobile-layout .tap-target:focus {
+            outline: 2px solid rgba(59, 130, 246, 0.5);
+            outline-offset: 2px;
+        }
+        
+        /* Mobile dark mode adjustments */
+        .dark .mobile-task-card,
+        .dark .mobile-datastore-card {
+            background-color: rgba(31, 41, 55, 0.7);
+        }
+        
+        .dark .mobile-task-detail-card {
+            background-color: rgba(127, 29, 29, 0.1);
+        }
+        
+        /* Mobile accordion header styling */
+        .mobile-pbs-accordion .tap-target {
+            text-align: left;
+            justify-content: flex-start;
+        }
+        
+        /* Mobile chevron rotation */
+        .mobile-pbs-accordion .chevron {
+            transition: transform 0.2s ease;
+        }
+        
+        .mobile-pbs-accordion .chevron.rotated {
+            transform: rotate(180deg);
+        }
+        
+        /* Mobile viewport adjustments */
+        .mobile-layout {
+            padding: 8px;
+        }
+        
+        /* Mobile button improvements */
+        .mobile-layout button {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        
+        /* Mobile scroll performance */
+        .mobile-layout .space-y-2,
+        .mobile-layout .space-y-3,
+        .mobile-layout .space-y-4 {
+            will-change: scroll-position;
+        }
+    }
+
+    /* Tablet-specific adjustments */
+    @media (min-width: 768px) and (max-width: 1024px) {
+        .mobile-pbs-summary {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        
+        .mobile-task-card,
+        .mobile-datastore-card {
+            max-width: none;
+        }
+    }
+
+    /* High DPI display optimizations */
+    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+        .mobile-layout .border {
+            border-width: 0.5px;
+        }
+    }
+  </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
+  <div id="loading-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-gray-100 dark:bg-gray-900 bg-opacity-80 dark:bg-opacity-80">
+    <div class="text-center">
+       <svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="pulse-logo mx-auto mb-2">
+        <title>Pulse Logo</title>
+        <circle class="pulse-logo-outer" cx="50" cy="50" r="45"/>
+        <circle class="pulse-logo-inner pulse-logo-circle" cx="50" cy="50" r="25"/>
+      </svg>
+      <p class="text-lg font-medium text-gray-700 dark:text-gray-300">Loading data...</p>
+    </div>
+  </div>
+  <div class="container w-[95%] max-w-screen-xl mx-auto">
+    <div class="header flex flex-row justify-between items-center mb-2">
+      <div class="hidden md:block md:flex-1"></div>
+      <div class="flex items-center gap-1 flex-none">
+          <svg width="20" height="20" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="pulse-logo">
+            <title>Pulse Logo</title>
+            <circle class="pulse-logo-outer" cx="50" cy="50" r="45"/>
+            <circle class="pulse-logo-inner pulse-logo-circle" cx="50" cy="50" r="25"/>
+          </svg>
+          <span class="text-lg font-medium text-gray-800 dark:text-gray-200">Pulse</span>
+          <span id="version-badge" class="text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-100 dark:bg-orange-900 px-1 py-0.5 rounded ml-1 hidden"></span>
+        </div>
+      <div class="header-controls flex justify-end items-center gap-4 md:flex-1">
+        <button id="settings-button" type="button" class="p-1 h-11 w-11 sm:h-auto sm:w-auto rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 focus:outline-none" title="Settings" aria-label="Open settings">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+        <div id="connection-status" class="status disconnected text-xs px-2 py-1 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300" role="status" aria-live="polite">Disconnected</div>
+      </div>
+    </div>
+    <div class="tabs flex mb-2 border-b border-gray-300 dark:border-gray-700 overflow-x-auto overflow-y-hidden whitespace-nowrap scrollbar" role="tablist" aria-label="Main navigation tabs">
+      <div class="tab active px-3 py-1.5 cursor-pointer bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 border-b-0 rounded-t text-sm -mb-px flex items-center gap-1.5" data-tab="main" role="tab" aria-selected="true" aria-controls="main" tabindex="0">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+          <span class="hidden md:inline">Main</span>
+      </div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="storage" role="tab" aria-selected="false" aria-controls="storage" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          <span class="hidden md:inline">Storage</span>
+      </div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="backups" role="tab" aria-selected="false" aria-controls="backups" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          <span class="hidden md:inline">Backups</span>
+      </div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="pbs" role="tab" aria-selected="false" aria-controls="pbs" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+          <span class="hidden md:inline">PBS</span>
+      </div>
+    </div>
+    <div id="main" class="tab-content block bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
+      <!-- Nested Tab Content START -->
+      <div id="nested-tab-dashboard" class="nested-tab-content p-3">
+
+          <div id="node-summary-cards-container" class="mb-3">
+            <!-- Node summary cards will be injected here -->
+            <p class="text-sm text-gray-500 dark:text-gray-400">Loading node summary...</p>
+          </div>
+
+          <div class="dashboard-filter flex flex-col gap-2 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+            <div class="filter-controls-wrapper flex flex-wrap items-center gap-2">
+              <input type="text" id="dashboard-search" placeholder="Search Name, ID, Node (use ',' for OR)" aria-label="Search virtual machines and containers" class="flex-1 min-w-[150px] max-w-full p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+              <button id="reset-filters-button" title="Reset Filters & Sort (Esc)" class="flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class=""><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+              </button>
+              <div class="flex items-center gap-1 flex-shrink-0 relative">
+                <span class="text-xs text-gray-600 dark:text-gray-400 font-medium hidden sm:inline">View:</span>
+                <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden flex-shrink-0">
+                  <label class="relative">
+                    <input type="checkbox" id="toggle-charts-checkbox" class="hidden peer">
+                    <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                      </svg>
+                      <span class="hidden md:inline">Charts</span>
+                    </span>
+                  </label>
+                  <label>
+                    <input type="checkbox" id="toggle-thresholds-checkbox" class="hidden peer">
+                    <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
+                        <line x1="4" y1="21" x2="4" y2="14"></line>
+                        <line x1="4" y1="10" x2="4" y2="3"></line>
+                        <line x1="12" y1="21" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12" y2="3"></line>
+                        <line x1="20" y1="21" x2="20" y2="16"></line>
+                        <line x1="20" y1="12" x2="20" y2="3"></line>
+                        <line x1="1" y1="14" x2="7" y2="14"></line>
+                        <line x1="9" y1="8" x2="15" y2="8"></line>
+                        <line x1="17" y1="16" x2="23" y2="16"></line>
+                      </svg>
+                      <span class="hidden md:inline">Thresholds</span>
+                    </span>
+                  </label>
+                </div>
+                <span id="threshold-count-badge" class="absolute -top-1 -right-1 z-30 inline-flex items-center justify-center px-1 py-0.5 text-[9px] font-bold leading-none text-white bg-blue-600 rounded-full hidden">0</span>
+              </div>
+              <div class="h-4 w-px bg-gray-300 dark:bg-gray-600 hidden lg:block flex-shrink-0"></div>
+              <div class="flex items-center gap-1 flex-shrink-0">
+                <span class="text-xs text-gray-600 dark:text-gray-400 font-medium hidden lg:inline">Display:</span>
+                <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden flex-shrink-0">
+                  <input type="radio" id="group-grouped" name="group-filter" value="grouped" class="hidden peer/grouped" checked>
+                  <label for="group-grouped" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/grouped:bg-blue-100 dark:peer-checked/grouped:bg-blue-800/50 peer-checked/grouped:text-blue-700 dark:peer-checked/grouped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/></svg>
+                    <span class="hidden md:inline">Grouped</span>
+                  </label>
+                  <input type="radio" id="group-list" name="group-filter" value="list" class="hidden peer/list">
+                  <label for="group-list" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/list:bg-blue-100 dark:peer-checked/list:bg-blue-800/50 peer-checked/list:text-blue-700 dark:peer-checked/list:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                    <span class="hidden md:inline">List</span>
+                  </label>
+                </div>
+                </div>
+              <div class="flex items-center gap-1 flex-shrink-0">
+                <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden flex-shrink-0">
+                  <input type="radio" id="filter-all" name="type-filter" value="all" class="hidden peer/all" checked>
+                  <label for="filter-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-blue-100 dark:peer-checked/all:bg-blue-800/50 peer-checked/all:text-blue-700 dark:peer-checked/all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                    <span class="inline">All</span>
+                  </label>
+                  <input type="radio" id="filter-vm" name="type-filter" value="vm" class="hidden peer/vm">
+                  <label for="filter-vm" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/vm:bg-blue-100 dark:peer-checked/vm:bg-blue-800/50 peer-checked/vm:text-blue-700 dark:peer-checked/vm:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+                    <span class="hidden md:inline">VM</span>
+                  </label>
+                  <input type="radio" id="filter-lxc" name="type-filter" value="lxc" class="hidden peer/lxc">
+                  <label for="filter-lxc" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/lxc:bg-green-100 dark:peer-checked/lxc:bg-green-800/50 peer-checked/lxc:text-green-700 dark:peer-checked/lxc:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22.08" y2="12"/></svg>
+                    <span class="hidden md:inline">LXC</span>
+                  </label>
+                </div>
+              </div>
+              <div class="flex items-center gap-1 flex-shrink-0">
+                <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden flex-shrink-0">
+                  <input type="radio" id="filter-status-all" name="status-filter" value="all" class="hidden peer/status-all" checked>
+                  <label for="filter-status-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/status-all:bg-blue-100 dark:peer-checked/status-all:bg-blue-800/50 peer-checked/status-all:text-blue-700 dark:peer-checked/status-all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                    <span class="inline">All</span>
+                  </label>
+                  <input type="radio" id="filter-status-running" name="status-filter" value="running" class="hidden peer/status-running">
+                  <label for="filter-status-running" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-running:bg-green-100 dark:peer-checked/status-running:bg-green-800/50 peer-checked/status-running:text-green-700 dark:peer-checked/status-running:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <span class="hidden md:inline">Running</span>
+                  </label>
+                  <input type="radio" id="filter-status-stopped" name="status-filter" value="stopped" class="hidden peer/status-stopped">
+                  <label for="filter-status-stopped" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/status-stopped:bg-gray-100 dark:peer-checked/status-stopped:bg-gray-600/50 peer-checked/status-stopped:text-gray-700 dark:peer-checked/status-stopped:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>
+                    <span class="hidden md:inline">Stopped</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
+            <!-- Mobile scroll hint -->
+            <div class="fixed bottom-4 right-4 bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-full md:hidden animate-pulse shadow-lg z-50 pointer-events-none" id="scroll-hint" style="display: none;">
+                ← Swipe for more →
+            </div>
+            <table id="main-table" class="w-full min-w-[800px] table-auto text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
+                <colgroup>
+                  <col class="name-col" style="min-width: 140px; max-width: 250px;">
+                  <col class="type-col" style="width: 50px;">
+                  <col class="id-col" style="width: 50px;">
+                  <col class="uptime-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
+                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
+                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
+                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
+                </colgroup>
+              <thead class="bg-gray-100 dark:bg-gray-800">
+                <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                  <th class="sticky left-0 top-0 bg-gray-100 dark:bg-gray-700 z-20 sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2" style="width: 50px;">Type</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="id" style="width: 50px;">ID</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="cpu" style="width: 120px;">CPU</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="memory" style="width: 120px;">Memory</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="disk" style="width: 120px;">Disk</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
+                </tr>
+                <tr id="threshold-slider-row" class="hidden mt-3 p-3 border rounded-md bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600">
+                  <th class="py-1 px-2 align-middle"></th>
+                  <th class="py-1 px-1 align-middle"></th>
+                  <th class="py-1 px-2 align-middle"></th>
+                  <th class="py-1 px-2 align-middle">
+                      <!-- Empty cell for Uptime column -->
+                  </th>
+                  <th class="py-1 px-2 align-middle">
+                    <div class="flex flex-row items-center gap-1">
+                      <input type="range" id="threshold-slider-cpu" min="0" max="100" step="1" value="0" class="custom-slider w-full h-3 rounded-full bg-gray-300 dark:bg-gray-600 appearance-none cursor-pointer flex-grow">
+                    </div>
+                  </th>
+                  <th class="py-1 px-2 align-middle">
+                    <div class="flex flex-row items-center gap-1">
+                      <input type="range" id="threshold-slider-memory" min="0" max="100" step="1" value="0" class="custom-slider w-full h-3 rounded-full bg-gray-300 dark:bg-gray-600 appearance-none cursor-pointer flex-grow">
+                    </div>
+                  </th>
+                  <th class="py-1 px-2 align-middle">
+                    <div class="flex flex-row items-center gap-1">
+                      <input type="range" id="threshold-slider-disk" min="0" max="100" step="1" value="0" class="custom-slider w-full h-3 rounded-full bg-gray-300 dark:bg-gray-600 appearance-none cursor-pointer flex-grow">
+                    </div>
+                  </th>
+                  <th class="py-1 px-2 align-middle">
+                    <select id="threshold-select-diskread" class="threshold-select px-1 py-0 h-5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-[10px] w-full focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="0" selected>Any</option>
+                        <option value="1048576">&gt; 1 MB/s</option>
+                        <option value="10485760">&gt; 10 MB/s</option>
+                        <option value="52428800">&gt; 50 MB/s</option>
+                        <option value="104857600">&gt; 100 MB/s</option>
+                    </select>
+                  </th>
+                  <th class="py-1 px-2 align-middle">
+                    <select id="threshold-select-diskwrite" class="threshold-select px-1 py-0 h-5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-[10px] w-full focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="0" selected>Any</option>
+                        <option value="1048576">&gt; 1 MB/s</option>
+                        <option value="10485760">&gt; 10 MB/s</option>
+                        <option value="52428800">&gt; 50 MB/s</option>
+                        <option value="104857600">&gt; 100 MB/s</option>
+                    </select>
+                  </th>
+                  <th class="py-1 px-2 align-middle">
+                    <select id="threshold-select-netin" class="threshold-select px-1 py-0 h-5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-[10px] w-full focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="0" selected>Any</option>
+                        <option value="1048576">&gt; 1 MB/s</option>
+                        <option value="10485760">&gt; 10 MB/s</option>
+                        <option value="52428800">&gt; 50 MB/s</option>
+                        <option value="104857600">&gt; 100 MB/s</option>
+                    </select>
+                  </th>
+                  <th class="py-1 px-2 align-middle">
+                    <select id="threshold-select-netout" class="threshold-select px-1 py-0 h-5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-[10px] w-full focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="0" selected>Any</option>
+                        <option value="1048576">&gt; 1 MB/s</option>
+                        <option value="10485760">&gt; 10 MB/s</option>
+                        <option value="52428800">&gt; 50 MB/s</option>
+                        <option value="104857600">&gt; 100 MB/s</option>
+                    </select>
+                  </th>
+                </tr>
+                <!-- Alert Rule Creation Row -->
+                <tr id="alert-rule-row" class="hidden">
+                  <td colspan="11" class="py-2 px-4 bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-700">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2">
+                        <svg class="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zm-2-8V7a1 1 0 00-1-1H5a1 1 0 00-1 1v3a1 1 0 001 1h7a1 1 0 001-1z"></path>
+                        </svg>
+                        <span class="text-sm font-medium text-blue-700 dark:text-blue-300">
+                          Create Alert Rule from Current Thresholds
+                        </span>
+                        <span id="active-thresholds-summary" class="text-xs text-blue-600 dark:text-blue-400"></span>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <button id="create-alert-rule-btn" 
+                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
+                                disabled>
+                          Create Alert Rule
+                        </button>
+                        <button id="view-alert-rules-btn" 
+                                class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs font-medium rounded transition-colors">
+                          View Rules
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                <tr>
+                  <td colspan="11" class="p-4 text-center text-gray-500 dark:text-gray-400">Loading data...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <span id="dashboard-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading dashboard data...</span>
+
+          <!-- Separator -->
+          <hr class="border-gray-200 dark:border-gray-700 my-2">
+
+      </div>
+    </div>
+
+    <div id="storage" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
+      <div class="p-3">
+        <div id="storage-info-content">
+          <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading storage data...</p>
+        </div>
+      </div>
+    </div>
+    <div id="pbs" class="tab-content hidden bg-white dark:bg-gray-800 p-4 border border-t-0 border-gray-300 dark:border-gray-700 rounded-b-lg shadow-sm">
+      <div id="pbs-instances-container" class="space-y-6">
+        <p id="pbs-loading-message" class="text-gray-500 dark:text-gray-400">Loading PBS data...</p>
+      </div>
+    </div>
+    <div id="backups" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow p-3 mb-2">
+      <p id="backups-loading-message" class="text-gray-500 dark:text-gray-400 p-4 text-center mb-2">Loading backup status overview...</p>
+      
+      <!-- Removed: Consolidated backup summary now integrated into filtered summary -->
+      
+      <!-- Hidden: Node backup cards (replaced by consolidated summary) -->
+      <div id="node-backup-cards" class="hidden mb-3">
+        <!-- No longer used - replaced by consolidated summary -->
+      </div>
+      
+      <!-- Backup History Visualization -->
+      <div id="backup-visualization-section" class="hidden mb-6 space-y-4">
+        <!-- Hidden: Summary cards (replaced by consolidated summary) -->
+        <div id="backup-summary-cards-container" class="hidden">
+          <!-- No longer used - replaced by consolidated summary -->
+        </div>
+        <div id="backup-calendar-container" class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-700 dark:text-gray-300">Backup History</h3>
+          </div>
+          <div class="flex flex-col lg:flex-row gap-4 items-stretch">
+            <!-- Calendar heatmap -->
+            <div class="w-full lg:w-auto lg:max-w-2xl">
+              <div id="backup-calendar-heatmap">
+                <!-- Calendar heatmap will be inserted here -->
+              </div>
+            </div>
+            <!-- Detail card -->
+            <div class="flex-1 min-w-0 lg:max-h-[400px]">
+              <div id="backup-detail-card" class="h-full">
+                <!-- Detail card will be inserted here -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="backups-filter flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+          <div class="dashboard-filter-controls flex-grow flex items-center gap-2">
+            <input type="text" id="backups-search" placeholder="Search Name, ID, Node (use ',' for OR)" class="flex-grow min-w-[200px] max-w-full p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+            <button id="reset-backups-filters-button" title="Reset Filters & Sort (Esc)" class="flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+            </button>
+          </div>
+          <div class="filter-toggles-wrapper flex items-center gap-3 sm:gap-4 flex-wrap">
+              <div class="flex items-center gap-2">
+                  <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                      <input type="radio" id="backups-filter-type-all" name="backups-type-filter" value="all" class="hidden peer/btype-all" checked>
+                      <label for="backups-filter-type-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/btype-all:bg-blue-100 dark:peer-checked/btype-all:bg-blue-800/50 peer-checked/btype-all:text-blue-700 dark:peer-checked/btype-all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <span class="hidden md:inline">All</span>
+                          <span class="inline md:hidden">All</span>
+                      </label>
+                      <input type="radio" id="backups-filter-type-vm" name="backups-type-filter" value="vm" class="hidden peer/btype-vm">
+                      <label for="backups-filter-type-vm" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/btype-vm:bg-blue-100 dark:peer-checked/btype-vm:bg-blue-800/50 peer-checked/btype-vm:text-blue-700 dark:peer-checked/btype-vm:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+                          <span class="hidden md:inline">VM</span>
+                      </label>
+                      <input type="radio" id="backups-filter-type-ct" name="backups-type-filter" value="lxc" class="hidden peer/btype-ct">
+                      <label for="backups-filter-type-ct" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/btype-ct:bg-green-100 dark:peer-checked/btype-ct:bg-green-800/50 peer-checked/btype-ct:text-green-700 dark:peer-checked/btype-ct:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" x2="12" y1="22.08" y2="12"/></svg>
+                          <span class="hidden md:inline">LXC</span>
+                      </label>
+                  </div>
+              </div>
+              <div class="flex items-center gap-2">
+                  <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                      <input type="radio" id="backups-filter-backup-all" name="backups-backup-filter" value="all" class="hidden peer/backup-all" checked>
+                      <label for="backups-filter-backup-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/backup-all:bg-blue-100 dark:peer-checked/backup-all:bg-blue-800/50 peer-checked/backup-all:text-blue-700 dark:peer-checked/backup-all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <span class="hidden md:inline">All</span>
+                          <span class="inline md:hidden">All</span>
+                      </label>
+                      <input type="radio" id="backups-filter-backup-pbs" name="backups-backup-filter" value="pbs" class="hidden peer/backup-pbs">
+                      <label for="backups-filter-backup-pbs" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/backup-pbs:bg-purple-100 dark:peer-checked/backup-pbs:bg-purple-800/50 peer-checked/backup-pbs:text-purple-700 dark:peer-checked/backup-pbs:text-purple-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <span class="inline-block w-2 h-2 bg-purple-500 rounded-full mr-1 md:hidden"></span>
+                          <span class="hidden md:inline">PBS</span>
+                      </label>
+                      <input type="radio" id="backups-filter-backup-pve" name="backups-backup-filter" value="pve" class="hidden peer/backup-pve">
+                      <label for="backups-filter-backup-pve" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/backup-pve:bg-orange-100 dark:peer-checked/backup-pve:bg-orange-800/50 peer-checked/backup-pve:text-orange-700 dark:peer-checked/backup-pve:text-orange-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <span class="inline-block w-2 h-2 bg-orange-500 rounded-full mr-1 md:hidden"></span>
+                          <span class="hidden md:inline">PVE</span>
+                      </label>
+                      <input type="radio" id="backups-filter-backup-snapshots" name="backups-backup-filter" value="snapshots" class="hidden peer/backup-snapshots">
+                      <label for="backups-filter-backup-snapshots" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/backup-snapshots:bg-yellow-100 dark:peer-checked/backup-snapshots:bg-yellow-800/50 peer-checked/backup-snapshots:text-yellow-700 dark:peer-checked/backup-snapshots:text-yellow-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <span class="inline-block w-2 h-2 bg-yellow-500 rounded-full mr-1 md:hidden"></span>
+                          <span class="hidden md:inline">Snapshots</span>
+                      </label>
+                  </div>
+              </div>
+              <div class="flex items-center gap-2">
+                  <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                      <input type="radio" id="backups-filter-status-all" name="backups-status-filter" value="all" class="hidden peer/bhealth-all" checked>
+                      <label for="backups-filter-status-all" class="flex items-center justify-center px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/bhealth-all:bg-blue-100 dark:peer-checked/bhealth-all:bg-blue-800/50 peer-checked/bhealth-all:text-blue-700 dark:peer-checked/bhealth-all:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <span class="hidden md:inline">All</span>
+                          <span class="inline md:hidden">All</span>
+                      </label>
+                      <input type="radio" id="backups-filter-status-ok" name="backups-status-filter" value="ok" class="hidden peer/bhealth-ok">
+                      <label for="backups-filter-status-ok" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/bhealth-ok:bg-green-100 dark:peer-checked/bhealth-ok:bg-green-800/50 peer-checked/bhealth-ok:text-green-700 dark:peer-checked/bhealth-ok:text-green-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden text-green-600 dark:text-green-400"><path d="M20 6 9 17l-5-5"/></svg>
+                          <span class="hidden md:inline">OK</span>
+                      </label>
+                      <input type="radio" id="backups-filter-status-stale" name="backups-status-filter" value="stale" class="hidden peer/bhealth-stale">
+                      <label for="backups-filter-status-stale" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/bhealth-stale:bg-yellow-100 dark:peer-checked/bhealth-stale:bg-yellow-800/50 peer-checked/bhealth-stale:text-yellow-700 dark:peer-checked/bhealth-stale:text-yellow-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden text-yellow-600 dark:text-yellow-400"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                          <span class="hidden md:inline">Stale</span>
+                      </label>
+                      <input type="radio" id="backups-filter-status-warning" name="backups-status-filter" value="warning" class="hidden peer/bhealth-warning">
+                      <label for="backups-filter-status-warning" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/bhealth-warning:bg-yellow-100 dark:peer-checked/bhealth-warning:bg-yellow-800/50 peer-checked/bhealth-warning:text-yellow-700 dark:peer-checked/bhealth-warning:text-yellow-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden text-yellow-600 dark:text-yellow-400"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="m12 17 .01 0"/></svg>
+                          <span class="hidden md:inline">Warning</span>
+                      </label>
+                      <input type="radio" id="backups-filter-status-none" name="backups-status-filter" value="none" class="hidden peer/bhealth-none">
+                      <label for="backups-filter-status-none" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/bhealth-none:bg-gray-100 dark:peer-checked/bhealth-none:bg-gray-600/50 peer-checked/bhealth-none:text-gray-700 dark:peer-checked/bhealth-none:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden text-gray-400 dark:text-gray-500"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg>
+                          <span class="hidden md:inline">None</span>
+                      </label>
+                  </div>
+              </div>
+          </div>
+      </div>
+      <div id="backups-table-container" class="hidden space-y-2 mb-2">
+        <div id="pbs-instances-summary" class="text-xs text-gray-600 dark:text-gray-400 mb-2 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+          <!-- PBS instances summary will be inserted here dynamically -->
+        </div>
+        <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded scrollbar">
+          <table id="backups-overview-table" class="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+            <thead class="bg-gray-100 dark:bg-gray-800">
+              <tr class="text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                <th scope="col" class="sticky left-0 top-0 bg-gray-100 dark:bg-gray-700 z-20 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestName">Guest Name</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestId">ID</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestType">Type</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="node">Node</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="latestBackupTime">Latest Backup</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2 text-center select-none whitespace-nowrap">Snapshots</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap text-center" data-sort="pveBackups">PVE Backups</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap text-center" data-sort="pbsBackups">PBS Backups</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap text-center" data-sort="recentFailures">Recent Failures</th>
+              </tr>
+            </thead>
+            <tbody id="backups-overview-tbody" class="divide-y divide-gray-200 dark:divide-gray-700"></tbody>
+          </table>
+        </div>
+        <p id="backups-no-data-message" class="text-gray-500 dark:text-gray-400 p-4 text-center hidden">No backup data found matching filters.</p>
+      </div>
+      <span id="backups-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading backup status...</span>
+    </div>
+  </div>
+  <div id="custom-tooltip" class="custom-tooltip absolute hidden z-50 px-2 py-1 text-xs text-white bg-gray-900/90 rounded shadow-lg pointer-events-none transition-opacity duration-100"></div>
+  <div id="slider-value-tooltip" class="absolute hidden z-[60] px-1.5 py-0.5 text-xs text-white bg-blue-600/90 dark:bg-blue-500/90 rounded shadow-lg pointer-events-none"></div>
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black bg-opacity-50 p-4">
+    <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col m-4">
+      <div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 px-6 py-4">
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Configuration Settings</h2>
+        <button id="settings-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Tab Navigation -->
+      <div class="border-b border-gray-200 dark:border-gray-700">
+        <nav class="flex space-x-8 px-6" id="settings-tabs">
+          <button class="settings-tab active py-3 px-1 border-b-2 border-blue-500 text-blue-600 dark:text-blue-400 font-medium text-sm" data-tab="proxmox">
+            Proxmox VE
+          </button>
+          <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="pbs">
+            Backup Server
+          </button>
+          <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="system">
+            System
+          </button>
+          <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="diagnostics">
+            Diagnostics
+          </button>
+        </nav>
+      </div>
+      
+      <div id="settings-modal-body" class="overflow-y-auto flex-grow p-6 scrollbar">
+        <p class="text-gray-500 dark:text-gray-400">Loading configuration...</p>
+      </div>
+      <div class="modal-footer border-t border-gray-300 dark:border-gray-700 px-6 py-4">
+        <div class="flex gap-3 justify-end">
+          <button type="button" id="settings-cancel-button" class="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white text-sm font-medium rounded-md transition-colors">
+            Cancel
+          </button>
+          <button type="button" id="settings-save-button" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors">
+            Save Configuration
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="snapshot-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black bg-opacity-50"><div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-3xl max-h-[80vh] flex flex-col"><div class="modal-header flex justify-between items-center border-b border-gray-300 dark:border-gray-700 pb-3 mb-4"><h3 id="snapshot-modal-title" class="text-lg font-semibold text-gray-900 dark:text-gray-100">Snapshot Details</h3>
+        <button id="snapshot-modal-close" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"><svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg></button>
+      </div>
+      <div id="snapshot-modal-body" class="overflow-y-auto flex-grow scrollbar"><p>Loading snapshots...</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>window.PulseApp = {};</script>
+  <!-- <script src="/app.js" defer></script> -->
+  <script src="/js/config.js" defer></script>
+  <script>
+  </script>
+  <script src="/js/state.js" defer></script>
+  <script src="/js/virtual-scroll.js" defer></script>
+  <script src="/js/utils.js" defer></script>
+  <script src="/js/modalManager.js" defer></script>
+  <script src="/js/apiClient.js" defer></script>
+  <script src="/js/theme.js" defer></script>
+  <script src="/js/tooltips.js" defer></script>
+  <script src="/js/socketHandler.js" defer></script>
+  <script src="/js/tabs.js" defer></script>
+  <script src="/js/charts.js" defer></script>
+  <script src="/js/ui/toastNotifications.js" defer></script>
+  <script src="/js/ui/thresholds.js" defer></script>
+  <script src="/js/ui/empty-states.js" defer></script>
+  <script src="/js/ui/config-banner.js" defer></script>
+  <script src="/js/ui/status-icons.js" defer></script>
+  <script src="/js/ui/loading-skeletons.js" defer></script>
+  <script src="/js/ui/common.js" defer></script>
+  <script src="/js/ui/nodes.js" defer></script>
+  <script src="/js/ui/dashboard.js" defer></script>
+  <script src="/js/ui/storage.js" defer></script>
+  <script src="/js/ui/pbs.js" defer></script>
+  <script src="/js/ui/backup-summary-cards.js" defer></script>
+  <script src="/js/ui/calendar-heatmap.js" defer></script>
+  <script src="/js/ui/backup-detail-card.js" defer></script>
+  <script src="/js/ui/backups.js" defer></script>
+  <script src="/js/ui/settings.js" defer></script>
+  <script src="/js/ui/alertManagementModal.js" defer></script>
+  <script src="/js/alertsHandler.js" defer></script>
+  <script src="/js/hotReload.js" defer></script>
+  <script src="/js/main.js" defer></script>
+
+  <footer class="text-center text-xs text-gray-500 py-4">
+    Pulse for Proxmox | Version: <a href="https://github.com/rcourtman/Pulse/releases" target="_blank" rel="noopener noreferrer" id="app-version" class="text-blue-600 dark:text-blue-400 hover:underline">loading...</a>
+  </footer>
+</body>
+</html> 
