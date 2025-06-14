@@ -1450,35 +1450,18 @@ PulseApp.ui.settings = (() => {
                     }
                 }
                 
-                // Check for channel mismatch and show recommendations
-                const currentVersionLower = currentVersion.toLowerCase();
-                const isCurrentRC = currentVersionLower.includes('-rc') || currentVersionLower.includes('-alpha') || currentVersionLower.includes('-beta');
-                const shouldShowRecommendation = (!isCurrentRC && updateChannel === 'rc');
-                
-                
-                if (shouldShowRecommendation && channelMismatchWarning) {
-                    const messageElement = document.getElementById('channel-mismatch-message');
-                    if (messageElement) {
-                        messageElement.textContent = `You're running a stable version (${currentVersion}) but checking for RC releases. Consider switching to the stable channel for production use.`;
-                    }
-                    channelMismatchWarning.classList.remove('hidden');
+                // Hide channel mismatch warning since channels are separate
+                if (channelMismatchWarning) {
+                    channelMismatchWarning.classList.add('hidden');
                 }
                 
-                // Check if this is a "downgrade" scenario (RC to stable)
-                const isDowngradeToStable = isCurrentRC && updateChannel === 'stable' && 
-                    currentVersion !== latestVersion;
-                
-                if (data.updateAvailable || isDowngradeToStable) {
-                    // Update available (or downgrade to stable)
+                // Channels are separate - no cross-channel comparisons
+                // Simply show if an update is available in the selected channel
+                if (data.updateAvailable) {
+                    // Update available in the selected channel
                     latestVersionElement.className = 'font-mono font-semibold text-green-600 dark:text-green-400';
                     
-                    let updateText;
-                    if (isDowngradeToStable) {
-                        updateText = '📦 Switch to stable release available';
-                    } else {
-                        updateText = updateChannel === 'rc' ? '📦 RC Update available!' : '📦 Update available!';
-                    }
-                    
+                    const updateText = updateChannel === 'rc' ? '📦 RC Update available!' : '📦 Update available!';
                     versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${updateText}</span>`;
                     
                     // Convert server response to match GitHub API format for showUpdateDetails
@@ -1499,24 +1482,13 @@ PulseApp.ui.settings = (() => {
                         versionStatusElement.innerHTML += '<br><span class="text-amber-600 dark:text-amber-400 text-xs">Note: Docker deployments require manual update</span>';
                     }
                 } else {
-                    // Up to date - hide any update details
+                    // No update available in the selected channel
                     hideUpdateDetails();
                     
                     latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
                     
-                    // Check if we should show "up to date" or "no updates" for RC on stable
-                    if (isCurrentRC && updateChannel === 'stable' && currentVersion === latestVersion) {
-                        // Same version on both channels
-                        const upToDateText = '✅ Up to date (same as stable)';
-                        versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
-                    } else if (isCurrentRC && updateChannel === 'stable') {
-                        // RC version is different from stable - should have been caught above as "downgrade"
-                        const upToDateText = '⚠️ No newer stable (running RC)';
-                        versionStatusElement.innerHTML = `<span class="text-amber-600 dark:text-amber-400">${upToDateText}</span>`;
-                    } else {
-                        const upToDateText = updateChannel === 'rc' ? '✅ Up to date (RC channel)' : '✅ Up to date';
-                        versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
-                    }
+                    const upToDateText = updateChannel === 'rc' ? '✅ Up to date (RC channel)' : '✅ Up to date';
+                    versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
                 }
             } else {
                 throw new Error('Invalid response data - missing version information');
