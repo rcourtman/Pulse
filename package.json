@@ -9,7 +9,6 @@
     "dev:css": "tailwindcss -c ./src/tailwind.config.js -i ./src/index.css -o ./src/public/output.css --watch",
     "build:css": "NODE_ENV=production tailwindcss -c ./src/tailwind.config.js -i ./src/index.css -o ./src/public/output.css",
     "dev": "concurrently --kill-others --kill-others-on-fail \"npm:dev:server\" \"npm:dev:css\"",
-    "test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "screenshot": "node scripts/take-screenshots.js"
   },
   "keywords": [
@@ -40,18 +39,9 @@
     "autoprefixer": "^10.4.21",
     "chokidar": "^4.0.3",
     "concurrently": "^9.1.2",
-    "cross-env": "^7.0.3",
-    "jest": "^30.0.0",
     "playwright": "^1.53.0",
     "postcss": "^8.5.5",
     "tailwindcss": "^3.4.4"
-  },
-  "jest": {
-    "testEnvironment": "node",
-    "coverageProvider": "v8",
-    "transformIgnorePatterns": [
-      "/node_modules/(?!p-limit|yocto-queue)/"
-    ]
   },
   "overrides": {
     "glob": "^10.4.5"
