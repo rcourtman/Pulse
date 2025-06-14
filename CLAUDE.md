@@ -67,14 +67,40 @@ git checkout develop
 
 ### PR to Main Branch Process
 
+**⚠️ IMPORTANT: Develop→Main PRs ALWAYS have merge conflicts due to RC version bumps**
+
 ```bash
 # Create PR from develop to main
-gh pr create --base main --head develop --title "Your title" --body "Description"
+gh pr create --base main --head develop --title "Release: Your title" --body "Description"
 
-# Merge with admin privileges (required due to branch protection)
-# IMPORTANT: Use --merge (not --squash) for develop→main to preserve merge commit
-gh pr merge PRNUMBER --merge --admin
+# PRs will ALWAYS fail to merge due to package.json version conflicts
+# This is expected! Follow this resolution process:
+
+# 1. Checkout the PR and resolve conflicts
+gh pr checkout <PR_NUMBER>
+git fetch origin main && git merge origin/main
+
+# 2. Resolve package.json conflict (ALWAYS keep main branch version)
+# Edit package.json to remove conflict markers and keep main's version
+# Example: If main=3.27.0 and develop=3.27.1-rc5, keep 3.27.0
+
+# 3. Commit and push the resolution
+git add package.json && git commit -m "resolve: merge conflicts - keep main branch version"
+git push origin develop
+
+# 4. Merge the PR
+gh pr merge <PR_NUMBER> --merge --admin
 ```
+
+**Why conflicts always happen:**
+- RC workflow auto-commits version bumps to develop (3.27.0 → 3.27.1-rc1, etc.)
+- Main branch stays at base version (3.27.0)
+- package.json conflicts are guaranteed on every develop→main PR
+
+**Why keep main's version:**
+- Stable release workflow increments from main's current version
+- If main=3.27.0, workflow creates 3.27.1 stable release
+- If we kept develop's RC version, workflow would be confused
 
 **Why admin flag is needed:**
 - Main branch requires 1 approval for merges
@@ -232,11 +258,20 @@ git commit -m "description of change"
 git pull --rebase origin develop
 git push origin develop
 
-# 4. For stable release, create PR (triggers stable release when merged)
+# 4. For stable release, create PR (EXPECT merge conflicts!)
 gh pr create --base main --head develop --title "Release: description"
+
+# 5. Resolve the guaranteed package.json conflict
+gh pr checkout <PR_NUMBER>
+git fetch origin main && git merge origin/main
+# Edit package.json: keep main's version, remove conflict markers
+git add package.json && git commit -m "resolve: merge conflicts - keep main branch version"
+git push origin develop
+
+# 6. Merge the PR (triggers stable release)
 gh pr merge <PR_NUMBER> --merge --admin
 
-# 5. Check status without switching branches
+# 7. Check status without switching branches
 gh run list --workflow=stable-release.yml --limit=3
 gh release view <tag>
 ```
