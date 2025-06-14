@@ -2,48 +2,48 @@
 
 ## Git Workflow and Automated Releases
 
-### 🤖 New Simplified Release Philosophy
+### 🤖 Ultra-Simple Release Philosophy
 
-**Key Principle**: Controlled releases with clear separation between RC and stable. Your workflow:
-1. Make code changes on the `develop` branch (push freely, no automatic releases)
-2. Create PR to `main` when ready to test (triggers ONE RC release)
-3. Manually trigger stable release when RC is tested and ready
+**Key Principle**: Linear flow with auto-merging. Your workflow:
+1. Work on `develop` branch (push freely, no releases)
+2. Create PR to `main` when ready to test with users → RC created + auto-merged
+3. Manually trigger stable release when happy with main
 
 **What happens automatically**:
-- Creating PR from develop→main creates an RC release
-- RC versions are auto-incremented (rc1, rc2, etc.)
-- Version numbers are managed by workflows
-- Docker images are built and tagged
+- PR from develop→main creates RC and merges immediately
+- No lingering PRs, no conflicts
+- `main` always has your latest tested code
+- Version numbers handled by workflows
 
 **What requires manual action**:
-- Creating PR to trigger RC
-- Triggering stable release (via GitHub Actions UI)
-- Merging PRs to main
+- Creating PR (when you want an RC)
+- Triggering stable release (when RC is tested)
 
 ### Release Workflow Overview
 
 1. **Development Phase (develop branch):**
-   - Push commits freely throughout the day
-   - NO automatic releases on push
-   - Work normally without release noise
+   - Push commits freely all day
+   - NO automatic releases
+   - Work normally without noise
 
-2. **Release Candidate Phase (PR to main):**
-   - Create PR from develop→main when ready to test
-   - RC release created automatically (e.g., v3.29.0-rc1)
-   - Test the RC thoroughly
-   - If issues found: close PR, fix, create new PR → new RC
+2. **RC Testing Phase (PR to main):**
+   - `gh pr create --base main --head develop --title "Release: feature X"`
+   - RC automatically created (e.g., v3.29.0-rc1)
+   - PR automatically merged to main
+   - Test RC with users
+   - Need changes? Push to develop, create new PR → new RC
 
-3. **Stable Release Phase (manual trigger):**
-   - After RC testing passes and PR is merged
-   - Go to Actions → "Manual Stable Release" → Run workflow
-   - Validates conditions and creates stable release
+3. **Stable Release Phase (manual):**
+   - When happy with testing
+   - Actions → "Manual Stable Release" → Run
+   - Creates stable from current main
    - Updates Docker :latest tag
 
 ### 🌿 Branch Strategy - When to Stay vs. Switch
 
 **Default: Always work on `develop`**
 - Make all code changes on develop
-- Push to develop to trigger RC releases
+- Push to develop (no automatic releases)
 - Check release status from develop (don't switch just to view)
 
 **Only switch branches when:**
@@ -61,67 +61,39 @@
 git checkout develop
 ```
 
-### PR to Main Branch Process
+### Release Process (Dead Simple!)
 
-**Creating PR (triggers RC release):**
+**Creating RC Release:**
 ```bash
-# Create PR from develop to main
-gh pr create --base main --head develop --title "Release: Your title" --body "Description"
+# When ready to test with users:
+gh pr create --base main --head develop --title "Release: Your feature"
 
-# This automatically triggers RC release creation
-# Check the Actions tab to see RC build progress
+# That's it! The workflow will:
+# 1. Create RC release (e.g., v3.29.0-rc1)
+# 2. Auto-merge PR to main
+# 3. No manual merge needed!
 ```
 
-**Handling merge conflicts (if any):**
+**Creating Stable Release:**
 ```bash
-# If conflicts exist (usually in package.json):
-gh pr checkout <PR_NUMBER>
-git fetch origin main && git merge origin/main
+# After RC testing is complete:
 
-# Resolve conflicts (typically keep main's version for package.json)
-git add .
-git commit -m "resolve: merge conflicts"
-git push origin develop
-
-# Merge the PR
-gh pr merge <PR_NUMBER> --merge --admin
-```
-
-**Creating Stable Release (after PR is merged):**
-```bash
 # Option 1: Via GitHub UI
-# Go to Actions → "Manual Stable Release" → Run workflow → Run
+# Actions → "Manual Stable Release" → Run workflow → Run
 
-# Option 2: Via CLI (coming soon)
-# gh workflow run stable-release.yml
+# Option 2: Via CLI
+gh workflow run stable-release.yml --ref main
 ```
 
-**Why admin flag is needed:**
-- Main branch requires 1 approval for merges
-- You cannot approve your own PRs
-- `--admin` flag bypasses the approval requirement
-- This maintains security while allowing owner to merge critical fixes
+**That's the entire process!** No complex merge strategies, no lingering PRs, no conflicts.
 
-**Why --merge (not --squash) for develop→main:**
-- Stable release workflow detects merges by commit message patterns
-- Squash merges lose the "Merge pull request #X from develop" message
-- Merge commits preserve branch lineage and PR context
-- This ensures automatic stable release detection works correctly
+### Version Management
 
-### PR Merge Strategy by Branch
-
-```bash
-# Feature branch → develop: Use squash (clean history)
-gh pr merge PRNUMBER --squash
-
-# Develop → main: Use merge (preserve merge commit for workflow detection)
-gh pr merge PRNUMBER --merge --admin
-```
-
-3. **Version Management:**
-   - Keep package.json version ahead of current stable release
-   - Example: If stable is v3.25.4, set package.json to "3.25.5"
-   - This ensures RCs appear at top of releases page
+**Automatic Version Handling:**
+- RC workflow analyzes commits and determines next version
+- Stable workflow increments from current stable version
+- No manual version management needed
+- Workflows handle all version bumps automatically
 
 ### 🔄 Update System Architecture
 
@@ -164,15 +136,13 @@ gh release list --limit=5
 
 ### 🔧 Common Issues and Recovery Patterns
 
-#### Merge Conflicts in PRs
+#### RC Workflow Issues
 ```bash
-# When PR has merge conflicts:
-gh pr checkout <PR_NUMBER>
-git fetch origin main && git merge origin/main
-# Resolve conflicts (typically keep main version for package.json)
-git add . && git commit -m "resolve: merge conflicts"
-git push origin develop
-gh pr merge <PR_NUMBER> --merge --admin
+# If RC creation fails, check:
+gh run list --workflow=rc-release.yml --limit=3
+
+# RC should auto-merge, but if stuck:
+# Just create a new PR - it will handle everything
 ```
 
 #### Workflow Failures
@@ -219,8 +189,7 @@ After your PR is merged to main and RC testing is complete:
    ```
 
 The workflow will:
-- Validate that no open PRs exist from develop→main
-- Ensure main includes all RC changes
+- Use current main branch state (already has your RC changes)
 - Create the stable release with proper changelog
 - Build and push Docker images with :latest tag
 
@@ -244,34 +213,43 @@ git checkout develop
 # 2. Make your changes and test them
 npm run test          # or whatever test command exists
 
-# 3. Commit and push (NO automatic releases!)
+# 3. Commit and push (NO releases)
 git add .
 git commit -m "description of change"
 git push origin develop
 
-# 4. When ready to release, create PR (triggers RC)
-gh pr create --base main --head develop --title "Release: description"
-# Check Actions tab for RC build
+# 4. When ready to test with users, create PR
+gh pr create --base main --head develop --title "Release: feature X"
+# RC created and PR auto-merged!
 
-# 5. If merge conflicts exist, resolve them
-gh pr checkout <PR_NUMBER>
-git fetch origin main && git merge origin/main
-# Resolve conflicts (usually keep main's version for package.json)
-git add . && git commit -m "resolve: merge conflicts"
-git push origin develop
+# 5. Test the RC with users
+# If issues: fix in develop, create new PR for new RC
 
-# 6. Test the RC release thoroughly
-# Download and test RC from releases page
-
-# 7. Merge PR when RC passes testing
-gh pr merge <PR_NUMBER> --merge --admin
-
-# 8. Trigger stable release manually
-# Go to Actions → "Manual Stable Release" → Run workflow
-# Or: gh workflow run stable-release.yml --ref main
+# 6. When happy, trigger stable release
+gh workflow run stable-release.yml --ref main
+# Or use GitHub UI: Actions → Manual Stable Release → Run
 ```
 
 **Remember**: If something seems complex, it's probably wrong. The workflows handle complexity - you handle simplicity.
+
+## Summary of Ultra-Simple Workflow
+
+**Three simple steps:**
+1. 🔨 **Develop**: Push to develop freely (no releases)
+2. 🧪 **Test**: Create PR → RC + auto-merge
+3. 🚀 **Release**: Manual trigger → stable release
+
+**No more:**
+- ❌ Multiple open PRs
+- ❌ Merge conflicts
+- ❌ Manual PR merging
+- ❌ Complex version management
+- ❌ Excessive RC releases
+
+**Just:**
+- ✅ Linear progression
+- ✅ Auto-merging PRs
+- ✅ Clean release flow
 
 # important-instruction-reminders
 Do what has been asked; nothing more, nothing less.
