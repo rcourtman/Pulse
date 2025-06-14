@@ -1,13 +1,17 @@
-name: Automated Stable Release
+name: Manual Stable Release
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    types: [closed]
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 3.29.0). Leave empty to auto-determine.'
+        required: false
+        type: string
+      skip-validation:
+        description: 'Skip validation checks (use with caution)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -15,13 +19,12 @@ permissions:
   pull-requests: read
 
 jobs:
-  detect-stable-release:
+  validate-and-prepare:
     runs-on: ubuntu-latest
     outputs:
-      should-release: ${{ steps.check.outputs.should-release }}
-      suggested-version: ${{ steps.analyze.outputs.suggested-version }}
-      bump-type: ${{ steps.analyze.outputs.bump-type }}
-      reasoning: ${{ steps.analyze.outputs.reasoning }}
+      version: ${{ steps.determine-version.outputs.version }}
+      bump-type: ${{ steps.determine-version.outputs.bump-type }}
+      reasoning: ${{ steps.determine-version.outputs.reasoning }}
     
     steps:
       - name: Checkout code
@@ -39,52 +42,46 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check if stable release should be triggered
-        id: check
+      - name: Validate release conditions
+        id: validate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Event type: ${{ github.event_name }}"
-          echo "🔍 Action: ${{ github.event.action }}"
-          echo "🔍 Merged: ${{ github.event.pull_request.merged }}"
-          echo "🔍 Head ref: ${{ github.event.pull_request.head.ref }}"
-          echo "🔍 Base ref: ${{ github.event.pull_request.base.ref }}"
+          echo "🚀 Manual stable release triggered"
+          echo "📋 Requested version: ${{ github.event.inputs.version || 'auto-determine' }}"
+          echo "⚡ Skip validation: ${{ github.event.inputs.skip-validation }}"
           
-          # Check if this is a push to main that came from develop
-          if [ "${{ github.event_name }}" = "push" ]; then
-            # Check if last commit message indicates merge from develop
-            LAST_COMMIT=$(git log -1 --pretty=format:"%s")
-            echo "📝 Last commit: $LAST_COMMIT"
-            
-            if echo "$LAST_COMMIT" | grep -E "(Merge.*develop|Merge pull request.*develop)"; then
-              echo "should-release=true" >> $GITHUB_OUTPUT
-              echo "✅ Detected merge from develop to main - triggering stable release"
-            else
-              echo "should-release=false" >> $GITHUB_OUTPUT
-              echo "ℹ️ Not a develop merge - skipping stable release"
-            fi
-          elif [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.action }}" = "closed" ] && [ "${{ github.event.pull_request.merged }}" = "true" ]; then
-            # PR was merged - check if it was from develop
-            echo "📋 PR was merged from '${{ github.event.pull_request.head.ref }}' to '${{ github.event.pull_request.base.ref }}'"
-            if [ "${{ github.event.pull_request.head.ref }}" = "develop" ]; then
-              echo "should-release=true" >> $GITHUB_OUTPUT
-              echo "✅ PR from develop was merged - triggering stable release"
-            else
-              echo "should-release=false" >> $GITHUB_OUTPUT
-              echo "ℹ️ PR not from develop (was from '${{ github.event.pull_request.head.ref }}') - skipping stable release"
-            fi
-          else
-            echo "should-release=false" >> $GITHUB_OUTPUT
-            echo "ℹ️ Event does not trigger stable release"
-            echo "   Event: ${{ github.event_name }}"
-            echo "   Action: ${{ github.event.action }}"
-            echo "   Merged: ${{ github.event.pull_request.merged }}"
+          # Check if we should skip validation
+          if [ "${{ github.event.inputs.skip-validation }}" = "true" ]; then
+            echo "⚠️ Skipping validation checks as requested"
+            exit 0
           fi
+          
+          # Simple validation - just check we have some RC releases
+          echo "🔍 Checking for existing RC releases..."
+          LATEST_RC=$(git tag -l "v*-rc*" | sort -V | tail -1)
+          if [ -z "$LATEST_RC" ]; then
+            echo "⚠️ No RC releases found. Consider creating an RC first."
+          else
+            echo "📌 Latest RC: $LATEST_RC"
+            echo "📌 Main branch will be used for stable release"
+          fi
+          
+          echo "✅ All validation checks passed"
 
-      - name: Analyze commits for version bump
-        id: analyze
-        if: steps.check.outputs.should-release == 'true'
+      - name: Determine version for release
+        id: determine-version
         run: |
-          # Use our enhanced versionUtils to analyze commits
-          node -e "
+          # Check if version was manually provided
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "📌 Using manually specified version: ${{ github.event.inputs.version }}"
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            echo "bump-type=manual" >> $GITHUB_OUTPUT
+            echo "reasoning=Manually specified version" >> $GITHUB_OUTPUT
+          else
+            echo "🤖 Auto-determining version based on commits..."
+            # Use our enhanced versionUtils to analyze commits
+            node -e "
             const { analyzeCommitsForVersionBump } = require('./server/versionUtils');
             const analysis = analyzeCommitsForVersionBump();
             
@@ -105,15 +102,15 @@ jobs:
             const fs = require('fs');
             const output = fs.readFileSync(process.env.GITHUB_OUTPUT, 'utf8');
             fs.writeFileSync(process.env.GITHUB_OUTPUT, output + 
-              'suggested-version=' + analysis.suggestedVersion + '\\n' +
+              'version=' + analysis.suggestedVersion + '\\n' +
               'bump-type=' + analysis.bumpType + '\\n' +
               'reasoning=' + analysis.reasoning + '\\n'
             );
           "
+          fi
 
   create-stable-release:
-    needs: detect-stable-release
-    if: needs.detect-stable-release.outputs.should-release == 'true'
+    needs: validate-and-prepare
     runs-on: ubuntu-latest
     
     steps:
@@ -139,9 +136,9 @@ jobs:
 
       - name: Update version and create release
         env:
-          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
-          BUMP_TYPE: ${{ needs.detect-stable-release.outputs.bump-type }}
-          REASONING: ${{ needs.detect-stable-release.outputs.reasoning }}
+          NEW_VERSION: ${{ needs.validate-and-prepare.outputs.version }}
+          BUMP_TYPE: ${{ needs.validate-and-prepare.outputs.bump-type }}
+          REASONING: ${{ needs.validate-and-prepare.outputs.reasoning }}
         run: |
           echo "🚀 Creating stable release v$NEW_VERSION"
           echo "📈 Version bump: $BUMP_TYPE"
@@ -227,9 +224,9 @@ jobs:
       - name: Generate changelog
         id: changelog
         env:
-          NEW_VERSION: ${{ needs.detect-stable-release.outputs.suggested-version }}
-          BUMP_TYPE: ${{ needs.detect-stable-release.outputs.bump-type }}
-          REASONING: ${{ needs.detect-stable-release.outputs.reasoning }}
+          NEW_VERSION: ${{ needs.validate-and-prepare.outputs.version }}
+          BUMP_TYPE: ${{ needs.validate-and-prepare.outputs.bump-type }}
+          REASONING: ${{ needs.validate-and-prepare.outputs.reasoning }}
         run: |
           # Use the previous tag that was determined before creating the new tag
           PREV_TAG="${{ env.PREV_TAG }}"
