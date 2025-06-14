@@ -454,7 +454,7 @@ jobs:
               // Replace escaped newlines and backticks with actual characters
               const processedChangelog = changelog
                 .replace(/\\n/g, '\n')  // Convert \n to actual newlines
-                .replace(/\\`/g, '`'); // Convert \` to actual backticks
+                .replace(/\\`/g, '\`'); // Convert \` to actual backticks
               
               fs.writeFileSync('CHANGELOG.md', processedChangelog);
               console.log('📝 Changelog written to CHANGELOG.md');
