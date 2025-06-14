@@ -256,9 +256,11 @@ Pulse features a comprehensive web-based configuration system accessible through
 - Configure alert thresholds and service intervals
 - All changes are applied immediately
 
-### Environment Variables (Advanced/Development)
+### Environment Variables (Development/Advanced)
 
-For advanced users or development setups, Pulse can also be configured using environment variables in a `.env` file.
+**Note:** Most users should use the web-based configuration interface. Environment variables are primarily for development and advanced deployment scenarios.
+
+For development setups or infrastructure-as-code deployments, Pulse can also be configured using environment variables in a `.env` file.
 
 #### Proxmox VE (Primary Environment)
 
@@ -394,6 +396,31 @@ To monitor separate Proxmox environments (e.g., different clusters, sites) in on
 -   ...and so on.
 
 Optional numbered variables also exist (e.g., `PROXMOX_ALLOW_SELF_SIGNED_CERTS_2`, `PROXMOX_NODE_NAME_2`).
+
+#### Advanced Configuration Options
+
+For performance tuning and specialized deployments:
+
+```env
+# Performance & Retention
+BACKUP_HISTORY_DAYS=365          # Backup history retention (default: 365 days)
+
+# Update System Configuration
+UPDATE_CHANNEL_PREFERENCE=stable  # Force specific update channel (stable/rc)
+UPDATE_TEST_MODE=false            # Enable test mode for update system
+
+# Development Variables
+NODE_ENV=development              # Enable development mode features
+DEBUG=pulse:*                     # Enable debug logging for specific modules
+
+# Docker Detection (automatically set)
+DOCKER_DEPLOYMENT=true            # Automatically detected in Docker environments
+```
+
+**Performance Notes:**
+- `BACKUP_HISTORY_DAYS` affects calendar heatmap visualization and memory usage
+- Lower values improve performance for environments with extensive backup histories
+- Debug logging should only be enabled for troubleshooting as it increases log verbosity
 
 #### Proxmox Backup Server (PBS) (Optional)
 
@@ -588,6 +615,19 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Real-time Progress Tracking** with detailed commit information and GitHub links
 - **Automatic Backup & Restore** of configuration during updates
 - **Context-Aware Updates** showing exactly what changes with each version switch
+- **Dual Update Channels** with persistent preference management
+
+#### Update Channels
+- **Stable Channel**: Production-ready releases (e.g., v3.27.1)
+  - Thoroughly tested releases for production environments
+  - Automatic updates only to stable versions
+  - Recommended for critical infrastructure monitoring
+- **RC Channel**: Release candidates with latest features (e.g., v3.28.0-rc1)
+  - Early access to new features and improvements
+  - Automated releases with each development commit
+  - Perfect for testing and non-critical environments
+- **Channel Persistence**: Your update preference is maintained across all updates
+- **Smart Switching**: See exact commit differences when switching between channels
 
 ### Backup Monitoring
 - **Comprehensive backup monitoring:**
@@ -619,6 +659,37 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - Proxmox Community Scripts integration
 - systemd service management
 - Automatic update capability via cron
+
+## 🏗️ Architecture
+
+### Technology Stack
+- **Frontend**: Vue.js 3 with vanilla JavaScript modules
+- **Backend**: Node.js 20+ with Express 5
+- **Styling**: Tailwind CSS v3.4.4 with custom scrollbar plugin
+- **Build System**: npm scripts with PostCSS and Tailwind compilation
+- **Real-time Communication**: WebSocket integration with Socket.IO
+
+### Project Structure
+```
+pulse/
+├── src/public/          # Frontend application
+│   ├── js/ui/          # Modular UI components (Vue.js)
+│   ├── css/            # Styling and themes
+│   └── output.css      # Compiled Tailwind styles
+├── server/             # Backend API and services
+│   ├── routes/         # Express route handlers
+│   ├── services/       # Business logic modules
+│   └── *.js           # Core server components
+├── scripts/           # Installation and utility scripts
+└── config/           # Configuration management
+```
+
+### Key Design Principles
+- **Modular Architecture**: Clean separation between UI components and server modules
+- **Performance Optimized**: Virtual scrolling, circular buffers, and efficient polling
+- **Real-time Updates**: WebSocket-based live data streaming
+- **Multi-platform Support**: Docker, LXC, and native deployment options
+- **Configuration-driven**: Web-based configuration with automatic validation
 
 ## 💻 System Requirements
 
@@ -762,6 +833,36 @@ Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTIN
 *   **No Data Collection:** Pulse does not collect or transmit any telemetry or user data externally.
 *   **Local Communication:** Operates entirely between your environment and your Proxmox/PBS APIs.
 *   **Credential Handling:** Credentials are used only for API authentication and are not logged or sent elsewhere.
+
+## 🛡️ Security Best Practices
+
+### API Token Security
+- **Use dedicated service accounts** for API tokens instead of root accounts
+- **Enable privilege separation** for all tokens to limit access scope
+- **Regularly rotate API credentials** (quarterly or after personnel changes)
+- **Audit token permissions** periodically to ensure least-privilege access
+- **Monitor API access logs** for unusual activity patterns
+
+### Network Security
+- **Configure firewall rules** to restrict API access (ports 8006/8007) to necessary hosts only
+- **Use SSL/TLS** for all API connections (avoid self-signed certificates in production)
+- **Consider VPN access** for external monitoring setups
+- **Implement network segmentation** to isolate monitoring traffic from production networks
+- **Enable fail2ban** or similar tools on Proxmox hosts to prevent brute force attacks
+
+### Deployment Security
+- **Run Pulse with non-root user** when possible (LXC and manual installations)
+- **Keep container/system updated** with latest security patches
+- **Use configuration management** instead of hardcoded credentials
+- **Secure webhook URLs** and email credentials with proper access controls
+- **Monitor Pulse logs** for authentication failures or connection issues
+
+### Proxmox Configuration
+- **Disable unused APIs** and services on Proxmox hosts
+- **Enable two-factor authentication** for Proxmox web interface access
+- **Use strong passwords** for all Proxmox user accounts
+- **Regularly update** Proxmox VE and PBS to latest stable versions
+- **Configure proper backup encryption** for sensitive VM/CT data
 
 ## 📜 License
 
