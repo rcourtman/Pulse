@@ -739,15 +739,25 @@ app.get('/api/version', async (req, res) => {
         
         let latestVersion = currentVersion;
         let updateAvailable = false;
+        let releaseUrl = null;
         
-        try {
-            // Try to check for updates, but don't fail if it doesn't work
-            const updateInfo = await updateManager.checkForUpdates();
-            latestVersion = updateInfo.latestVersion || currentVersion;
-            updateAvailable = updateInfo.hasUpdate || false;
-        } catch (updateError) {
-            // Log the error but continue with current version info
-            console.error("[Version API] Error checking for updates:", updateError.message);
+        // Check if this is a development build (ahead of all releases)
+        const isDevelopmentBuild = currentVersion.includes('-dev.') || currentVersion.includes('-dirty');
+        
+        if (!isDevelopmentBuild) {
+            try {
+                // Check for channel override from query parameter (for preview functionality)
+                const channelOverride = req.query.channel;
+                
+                // Try to check for updates with optional channel override
+                const updateInfo = await updateManager.checkForUpdates(channelOverride);
+                latestVersion = updateInfo.latestVersion || currentVersion;
+                updateAvailable = updateInfo.updateAvailable || false;
+                releaseUrl = updateInfo.releaseUrl;
+            } catch (updateError) {
+                // Log the error but continue with current version info
+                console.error("[Version API] Error checking for updates:", updateError.message);
+            }
         }
         
         res.json({ 
@@ -755,7 +765,8 @@ app.get('/api/version', async (req, res) => {
             latestVersion: latestVersion,
             updateAvailable: updateAvailable,
             gitBranch: gitBranch,
-            isDevelopment: isDevelopment
+            isDevelopment: isDevelopment,
+            releaseUrl: releaseUrl
         });
     } catch (error) {
          console.error("[Version API] Error in version endpoint:", error);
