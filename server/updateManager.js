@@ -610,20 +610,20 @@ class UpdateManager {
         console.log('[UpdateManager] All restart methods failed. Using graceful shutdown...');
         console.log('[UpdateManager] systemd will automatically restart the service');
         
-        // Close server gracefully then exit
+        // Close server gracefully then exit with non-zero status to trigger systemd restart
         if (global.server) {
             global.server.close(() => {
                 console.log('[UpdateManager] Server closed gracefully');
-                process.exit(0);
+                process.exit(1);
             });
             
             // Force exit after 5 seconds if graceful close doesn't work
             setTimeout(() => {
                 console.log('[UpdateManager] Forcing process exit');
-                process.exit(0);
+                process.exit(1);
             }, 5000);
         } else {
-            process.exit(0);
+            process.exit(1);
         }
     }
 
