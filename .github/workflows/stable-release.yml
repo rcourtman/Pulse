@@ -451,7 +451,12 @@ jobs:
               console.log('✅ Generated changelog with', changelog.split('\\\\n').length, 'lines');
               
               // Write to file for GitHub release
-              fs.writeFileSync('CHANGELOG.md', changelog);
+              // Replace escaped newlines and backticks with actual characters
+              const processedChangelog = changelog
+                .replace(/\\\\n/g, '\\n')  // Convert \\n to actual newlines
+                .replace(/\\\\`/g, '`'); // Convert \\` to actual backticks
+              
+              fs.writeFileSync('CHANGELOG.md', processedChangelog);
               console.log('📝 Changelog written to CHANGELOG.md');
               
             } catch (error) {
@@ -465,7 +470,10 @@ jobs:
               fallbackChangelog += 'See commit history for details.\\n\\n';
               fallbackChangelog += '🤖 *Automated release - detailed changelog generation failed*';
               
-              fs.writeFileSync('CHANGELOG.md', fallbackChangelog);
+              // Replace escaped newlines with actual newlines
+              const processedFallback = fallbackChangelog.replace(/\\\\n/g, '\\n');
+              
+              fs.writeFileSync('CHANGELOG.md', processedFallback);
               console.log('📝 Fallback changelog written');
             }
           "
