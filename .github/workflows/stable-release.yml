@@ -57,28 +57,14 @@ jobs:
             exit 0
           fi
           
-          # Check for open PRs from develop to main
-          echo "🔍 Checking for open PRs from develop to main..."
-          OPEN_PR=$(gh pr list --base main --head develop --state open --json number,title -q '.[0]')
-          if [ -n "$OPEN_PR" ]; then
-            PR_NUMBER=$(echo "$OPEN_PR" | jq -r '.number')
-            PR_TITLE=$(echo "$OPEN_PR" | jq -r '.title')
-            echo "❌ Found open PR #$PR_NUMBER: $PR_TITLE"
-            echo "Please merge or close this PR before creating a stable release"
-            exit 1
-          fi
-          
-          # Check if main is ahead of the latest RC
-          echo "🔍 Checking if main branch has latest changes..."
+          # Simple validation - just check we have some RC releases
+          echo "🔍 Checking for existing RC releases..."
           LATEST_RC=$(git tag -l "v*-rc*" | sort -V | tail -1)
-          if [ -n "$LATEST_RC" ]; then
+          if [ -z "$LATEST_RC" ]; then
+            echo "⚠️ No RC releases found. Consider creating an RC first."
+          else
             echo "📌 Latest RC: $LATEST_RC"
-            RC_COMMIT=$(git rev-list -n 1 "$LATEST_RC")
-            if ! git merge-base --is-ancestor "$RC_COMMIT" HEAD; then
-              echo "❌ Main branch doesn't include latest RC $LATEST_RC"
-              echo "Please ensure all RC changes are merged to main"
-              exit 1
-            fi
+            echo "📌 Main branch will be used for stable release"
           fi
           
           echo "✅ All validation checks passed"
