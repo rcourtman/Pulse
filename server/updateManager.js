@@ -13,6 +13,9 @@ class UpdateManager {
         this.githubRepo = 'rcourtman/Pulse';
         this.currentVersion = require('../package.json').version;
         this.updateInProgress = false;
+        // Cache to prevent excessive GitHub API calls
+        this.cache = new Map();
+        this.cacheExpiry = 30 * 60 * 1000; // 30 minutes
     }
 
     /**
@@ -71,6 +74,14 @@ class UpdateManager {
             ? channelOverride 
             : configChannel;
         let channelDescription = '';
+        
+        // Check cache first to prevent excessive API calls
+        const cacheKey = `${updateChannel}-${dynamicCurrentVersion}`;
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
+            console.log(`[UpdateManager] Using cached result for ${updateChannel} channel`);
+            return cached.data;
+        }
         
         try {
             console.log('[UpdateManager] Checking for updates...');
@@ -182,6 +193,13 @@ class UpdateManager {
             };
 
             console.log(`[UpdateManager] Current version: ${dynamicCurrentVersion}, Latest version: ${latestVersion}, Channel: ${channelDescription}, Docker: ${updateInfo.isDocker}`);
+            
+            // Cache the successful result
+            this.cache.set(cacheKey, {
+                data: updateInfo,
+                timestamp: Date.now()
+            });
+            
             return updateInfo;
 
         } catch (error) {
