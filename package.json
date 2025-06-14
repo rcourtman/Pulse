@@ -1,6 +1,6 @@
 {
   "name": "pulse",
-  "version": "3.28.2-rc3",
+  "version": "3.28.2-rc4",
   "description": "A lightweight monitoring application for Proxmox VE.",
   "main": "server/index.js",
   "scripts": {
