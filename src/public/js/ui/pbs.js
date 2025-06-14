@@ -5,6 +5,7 @@ PulseApp.ui.pbs = (() => {
     // Global state tracker for expanded PBS tasks
     let expandedTaskState = new Set();
     let expandedShowMoreState = new Set();
+    let expandedMobileShowMoreState = new Set(); // Track mobile show more state
     let selectedPbsTabIndex = 0; // Track selected PBS tab index globally
 
     const CSS_CLASSES = {
@@ -1698,7 +1699,9 @@ PulseApp.ui.pbs = (() => {
                 heading.textContent = statusText;
                 taskSection.appendChild(heading);
                 
-                const taskContainer = _createMobileTaskContainer(recentTasks);
+                // Create unique key for this task section
+                const sectionKey = `${instanceId}-${taskType.type}`;
+                const taskContainer = _createMobileTaskContainer(recentTasks, sectionKey);
                 taskSection.appendChild(taskContainer);
                 
                 section.appendChild(taskSection);
@@ -1708,7 +1711,7 @@ PulseApp.ui.pbs = (() => {
         return section;
     };
 
-    const _createMobileTaskContainer = (tasks) => {
+    const _createMobileTaskContainer = (tasks, sectionKey) => {
         const container = document.createElement('div');
         container.className = 'mobile-task-container space-y-2';
         
@@ -1717,26 +1720,58 @@ PulseApp.ui.pbs = (() => {
         const otherTasks = tasks.filter(task => !task.status || task.status === 'OK' || task.status.toLowerCase().includes('running'));
         const prioritizedTasks = [...failedTasks, ...otherTasks];
         
-        // Limit to 5 tasks on mobile for better performance
-        const displayTasks = prioritizedTasks.slice(0, 5);
+        // Check if this section has been expanded
+        const isExpanded = expandedMobileShowMoreState.has(sectionKey);
+        
+        // Show all tasks if expanded, otherwise limit to 5
+        const displayTasks = isExpanded ? prioritizedTasks : prioritizedTasks.slice(0, 5);
         
         displayTasks.forEach(task => {
             const taskCard = _createMobileTaskCard(task);
             container.appendChild(taskCard);
         });
         
-        if (prioritizedTasks.length > 5) {
+        // Show button if there are more than 5 tasks and not expanded
+        if (prioritizedTasks.length > 5 && !isExpanded) {
             const moreButton = document.createElement('button');
             moreButton.className = 'w-full py-2 px-3 text-xs text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-600 rounded bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors';
             moreButton.textContent = `Show ${prioritizedTasks.length - 5} More Tasks`;
             
-            moreButton.addEventListener('click', () => {
+            moreButton.addEventListener('click', (event) => {
+                // Prevent any event bubbling that might cause issues
+                event.stopPropagation();
+                event.preventDefault();
+                
+                // Mark this section as expanded
+                expandedMobileShowMoreState.add(sectionKey);
+                
+                // Add remaining tasks
                 const remainingTasks = prioritizedTasks.slice(5);
                 remainingTasks.forEach(task => {
                     const taskCard = _createMobileTaskCard(task);
                     container.insertBefore(taskCard, moreButton);
                 });
-                moreButton.remove();
+                
+                // Replace button with "Show Less" button
+                const showLessButton = document.createElement('button');
+                showLessButton.className = 'w-full py-2 px-3 text-xs text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/30 transition-colors';
+                showLessButton.textContent = 'Show Less Tasks';
+                
+                showLessButton.addEventListener('click', (event) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    
+                    // Remove expanded state
+                    expandedMobileShowMoreState.delete(sectionKey);
+                    
+                    // Trigger a refresh to show collapsed state
+                    // This will cause the function to be called again with the collapsed state
+                    if (typeof updatePbsInfo === 'function') {
+                        updatePbsInfo();
+                    }
+                });
+                
+                moreButton.replaceWith(showLessButton);
             });
             
             container.appendChild(moreButton);

@@ -255,22 +255,63 @@ jobs:
             
             This is a release candidate for testing. Please report any issues you find.
             
-            ### 📦 Installation Options
+            ### 🔄 **Existing Users - Update to RC**
             
-            #### Script Install (Recommended)
+            #### 🖥️ **Web Interface Update (Available from v3.27.2+)**
+            **✨ Switch to RC channel for testing:**
+            1. Open your Pulse web interface
+            2. Go to **Settings** → **System** tab → **Software Updates**
+            3. Select **"RC"** channel to receive release candidates
+            4. Click **"Check for Updates"** 
+            5. Click **"Apply Update"** to install this RC version
+            6. The interface will automatically refresh after update
+            
+            > **Note**: You can switch back to "Stable" channel anytime
+            
+            #### 🛠️ **Script-Based Update**
+            **For LXC, VMs, and regular installations:**
             ```bash
-            wget -qO- https://github.com/rcourtman/Pulse/releases/download/v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}/install-pulse.sh | bash
+            # Update to this specific RC version
+            cd /opt/pulse/scripts
+            ./install-pulse.sh --update --version v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
             ```
             
-            #### Docker
+            #### 🐳 **Docker Update**
             ```bash
+            # Pull this specific RC version
             docker pull rcourtman/pulse:v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
-            # or use the rolling RC tag
+            
+            # Or use the rolling RC tag (always latest RC)
             docker pull rcourtman/pulse:rc
+            
+            # Update with docker-compose
+            docker compose down && docker compose pull && docker compose up -d
+            
+            # Or update manually
+            docker stop pulse && docker rm pulse
+            docker run -d --name pulse -p 7655:7655 -v pulse-config:/app/config rcourtman/pulse:rc
             ```
             
-            ### ⚠️ Testing Notes
-            - This is a pre-release for testing only
-            - Not recommended for production use
-            - Please report issues on GitHub
-            - The `:rc` Docker tag always points to the latest RC
+            ### 📥 **New Users - Fresh RC Installation**
+            
+            #### **Automated Installer**
+            ```bash
+            # Install this specific RC version
+            curl -sL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh | bash -s -- --version v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
+            ```
+            
+            #### **Manual Download**
+            ```bash
+            wget https://github.com/rcourtman/Pulse/releases/download/v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}/pulse-v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}.tar.gz
+            tar -xzf pulse-v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}.tar.gz
+            cd pulse-v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
+            npm install --production
+            npm start
+            ```
+            
+            ### ⚠️ **Testing Notes**
+            - **This is a pre-release for testing only**
+            - **Not recommended for production environments**
+            - Please report any issues on [GitHub Issues](https://github.com/rcourtman/Pulse/issues)
+            - The `:rc` Docker tag always points to the latest RC version
+            - You can easily switch between Stable and RC channels in the web interface

@@ -144,6 +144,7 @@ PulseApp.ui.backupDetailCard = (() => {
                 pbsCount: guest.pbsBackups || 0,
                 pveCount: guest.pveBackups || 0,
                 snapCount: guest.snapshotCount || 0,
+                mostRecentBackupType: guest.mostRecentBackupType,
                 failures: guest.recentFailures || 0,
                 lastBackup: mostRecentBackup
             };
@@ -224,9 +225,9 @@ PulseApp.ui.backupDetailCard = (() => {
                                         </div>
                                         <div class="flex items-center gap-2 ml-2">
                                             <div class="flex items-center gap-1 text-[9px]">
-                                                ${guest.pbsCount > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
-                                                ${guest.pveCount > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
-                                                ${guest.snapCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
+                                                ${guest.mostRecentBackupType === 'pbs' ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
+                                                ${guest.mostRecentBackupType === 'pve' ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
+                                                ${guest.mostRecentBackupType === 'snapshot' ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
                                             </div>
                                             ${guest.failures > 0 ? `<span class="text-red-600 dark:text-red-400">⚠ ${guest.failures}</span>` : ''}
                                             <span class="${guest.lastBackup ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'} font-medium">
@@ -253,9 +254,9 @@ PulseApp.ui.backupDetailCard = (() => {
                                         </div>
                                         <div class="flex items-center gap-2 ml-2">
                                             <div class="flex items-center gap-1 text-[9px]">
-                                                ${guest.pbsCount > 0 ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
-                                                ${guest.pveCount > 0 ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
-                                                ${guest.snapCount > 0 ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
+                                                ${guest.mostRecentBackupType === 'pbs' ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
+                                                ${guest.mostRecentBackupType === 'pve' ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
+                                                ${guest.mostRecentBackupType === 'snapshot' ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
                                             </div>
                                             <span class="text-green-600 dark:text-green-400 font-medium">${formatAge(guest.ageInDays)}</span>
                                         </div>

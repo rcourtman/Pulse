@@ -74,10 +74,22 @@ PROXMOX_RESILIENT_DNS_1=true  # Required for non-.lan domains
 
 ### Testing DNS Resolution
 
-You can test DNS resolution for your hostname using the included test script:
+You can test DNS resolution manually using standard tools:
 
 ```bash
-node scripts/test-dns-resolver.js proxmox.lan
+# Test DNS resolution with nslookup
+nslookup proxmox.lan
+
+# Test with dig for more details
+dig proxmox.lan
+
+# Test connectivity to resolved IPs
+ping $(nslookup proxmox.lan | grep Address | tail -1 | cut -d' ' -f2)
+```
+
+For detailed DNS behavior testing, you can enable debug logging:
+```bash
+DEBUG=pulse:dns npm run dev
 ```
 
 This will show:
