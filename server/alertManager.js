@@ -314,7 +314,9 @@ class AlertManager extends EventEmitter {
                         // Trigger alert
                         existingAlert.state = 'active';
                         existingAlert.triggeredAt = timestamp;
-                        this.triggerAlert(existingAlert);
+                        this.triggerAlert(existingAlert).catch(error => {
+                            console.error(`[AlertManager] Error triggering alert ${existingAlert.id}:`, error);
+                        });
                         newlyTriggeredAlert = existingAlert;
                     }
                     existingAlert.lastUpdate = timestamp;
@@ -487,7 +489,7 @@ class AlertManager extends EventEmitter {
 
 
 
-    sendNotifications(alert) {
+    async sendNotifications(alert) {
         // Check if we've already sent notifications for this alert
         const existingStatus = this.notificationStatus.get(alert.id);
         if (existingStatus && (existingStatus.emailSent || existingStatus.webhookSent)) {
@@ -523,37 +525,50 @@ class AlertManager extends EventEmitter {
             sendWebhook = ruleWebhookEnabled && process.env.WEBHOOK_URL;
         }
         
-        if (sendEmail) {
-            console.log(`[AlertManager] Sending email notification for alert ${alert.id}`);
-            this.sendDirectEmailNotification(alert).catch(error => {
-                console.error(`[EMAIL ERROR] Failed to send email:`, error);
-                this.emit('notificationError', { type: 'email', alert, error });
-            });
-        } else {
-            console.log(`[AlertManager] NOT sending email notification for alert ${alert.id} - sendEmail: ${sendEmail}`);
-        }
-        
-        if (sendWebhook) {
-            this.sendDirectWebhookNotification(alert).catch(error => {
-                console.error(`[WEBHOOK ERROR] Failed to send webhook:`, error);
-                this.emit('notificationError', { type: 'webhook', alert, error });
-            });
-        }
-        
-        // Store notification status separately to avoid any circular references
-        // Don't attach anything to the alert object itself
+        // Initialize notification status tracking for this alert
         const alertId = alert.id;
         if (!this.notificationStatus) {
             this.notificationStatus = new Map();
         }
-        this.notificationStatus.set(alertId, {
-            emailSent: sendEmail,
-            webhookSent: sendWebhook,
-            channels: sendEmail || sendWebhook ? [
-                ...(sendEmail ? ['email'] : []),
-                ...(sendWebhook ? ['webhook'] : [])
-            ] : []
-        });
+        
+        // Track what we're attempting to send (not yet successful)
+        const statusUpdate = {
+            emailSent: false,
+            webhookSent: false,
+            channels: []
+        };
+        
+        // Send email notification
+        if (sendEmail) {
+            console.log(`[AlertManager] Sending email notification for alert ${alert.id}`);
+            try {
+                await this.sendDirectEmailNotification(alert);
+                console.log(`[AlertManager] Email notification sent successfully for alert ${alert.id}`);
+                statusUpdate.emailSent = true;
+                statusUpdate.channels.push('email');
+            } catch (error) {
+                console.error(`[EMAIL ERROR] Failed to send email for alert ${alert.id}:`, error);
+                this.emit('notificationError', { type: 'email', alert, error });
+            }
+        } else {
+            console.log(`[AlertManager] NOT sending email notification for alert ${alert.id} - sendEmail: ${sendEmail}`);
+        }
+        
+        // Send webhook notification
+        if (sendWebhook) {
+            try {
+                await this.sendDirectWebhookNotification(alert);
+                console.log(`[AlertManager] Webhook notification sent successfully for alert ${alert.id}`);
+                statusUpdate.webhookSent = true;
+                statusUpdate.channels.push('webhook');
+            } catch (error) {
+                console.error(`[WEBHOOK ERROR] Failed to send webhook for alert ${alert.id}:`, error);
+                this.emit('notificationError', { type: 'webhook', alert, error });
+            }
+        }
+        
+        // Only update notification status after actual delivery attempts
+        this.notificationStatus.set(alertId, statusUpdate);
         
         // Emit event for external handlers (use safe subset of alert data)
         this.emit('notification', { 
@@ -932,7 +947,7 @@ class AlertManager extends EventEmitter {
         }
     }
 
-    triggerAlert(alert) {
+    async triggerAlert(alert) {
         try {
             const alertInfo = this.formatAlertForAPI(alert);
             
@@ -940,7 +955,7 @@ class AlertManager extends EventEmitter {
             this.addToHistory(alertInfo);
             
             // Send notifications
-            this.sendNotifications(alert);
+            await this.sendNotifications(alert);
             
             // Save active alerts and notification history to disk
             this.saveActiveAlerts();
@@ -1362,7 +1377,9 @@ class AlertManager extends EventEmitter {
                             };
                             
                             this.activeAlerts.set(alertKey, newAlert);
-                            this.triggerAlert(newAlert);
+                            this.triggerAlert(newAlert).catch(error => {
+                                console.error(`[AlertManager] Error triggering alert ${newAlert.id}:`, error);
+                            });
                         }
                     } else if (rule.type === 'compound_threshold' && rule.thresholds) {
                         // Handle compound threshold rules
@@ -1449,7 +1466,9 @@ class AlertManager extends EventEmitter {
             };
             
             this.activeAlerts.set(alertKey, newAlert);
-            this.triggerAlert(newAlert);
+            this.triggerAlert(newAlert).catch(error => {
+                console.error(`[AlertManager] Error triggering alert ${newAlert.id}:`, error);
+            });
         }
     }
 
@@ -1497,7 +1516,9 @@ class AlertManager extends EventEmitter {
                     // Trigger alert
                     existingAlert.state = 'active';
                     existingAlert.triggeredAt = timestamp;
-                    this.triggerAlert(existingAlert);
+                    this.triggerAlert(existingAlert).catch(error => {
+                        console.error(`[AlertManager] Error triggering alert ${existingAlert.id}:`, error);
+                    });
                 }
                 existingAlert.lastUpdate = timestamp;
                 existingAlert.currentValue = this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest);
