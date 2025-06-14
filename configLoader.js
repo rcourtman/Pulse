@@ -37,24 +37,15 @@ function getUpdateChannelPreference() {
     const fs = require('fs');
     const path = require('path');
     
-    // Check for persistent config directory (Docker) or use project root
+    // Try to read from config/.env file first, then fallback to default
     const configDir = path.join(__dirname, '../config');
     const configEnvPath = path.join(configDir, '.env');
-    const projectEnvPath = path.join(__dirname, '../.env');
     
     let updateChannel = 'stable'; // Default value
-    let envFilePath = null;
     
-    // Check config/.env first (Docker persistent config), then fallback to .env
     if (fs.existsSync(configEnvPath)) {
-        envFilePath = configEnvPath;
-    } else if (fs.existsSync(projectEnvPath)) {
-        envFilePath = projectEnvPath;
-    }
-    
-    if (envFilePath) {
         try {
-            const configContent = fs.readFileSync(envFilePath, 'utf8');
+            const configContent = fs.readFileSync(configEnvPath, 'utf8');
             const updateChannelMatch = configContent.match(/^UPDATE_CHANNEL=(.+)$/m);
             if (updateChannelMatch) {
                 updateChannel = updateChannelMatch[1].trim();
