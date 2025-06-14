@@ -923,6 +923,10 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                             params: groupsParams
                         });
                         const groups = groupsResponse.data?.data || [];
+                        
+                        if (groups.length > 0) {
+                            console.log(`[DataFetcher] Found ${groups.length} backup groups in namespace '${namespace}' for datastore ${datastore.name}`);
+                        }
                 
                 // For each backup group, get snapshots within history period
                 for (const group of groups) {
@@ -964,8 +968,8 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                 return current['backup-time'] > latest['backup-time'] ? current : latest;
                             });
                             
-                            // Create a comprehensive unique key using snapshot data (not group data)
-                            const uniqueKey = `${dayKey}:${datastore.name}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}`;
+                            // Create a comprehensive unique key including namespace to avoid collisions
+                            const uniqueKey = `${dayKey}:${datastore.name}:${namespace}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}`;
                             
                             // Only create one backup run per unique key
                             if (!backupRunsByUniqueKey.has(uniqueKey)) {
@@ -989,7 +993,8 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                     pbsBackupRun: true,
                                     backupDate: dayKey,
                                     snapshotCount: daySnapshots.length,
-                                    protected: latestSnapshot.protected || false
+                                    protected: latestSnapshot.protected || false,
+                                    namespace: namespace || 'root'
                                 };
                                 
                                 backupRunsByUniqueKey.set(uniqueKey, backupRun);
@@ -1008,7 +1013,7 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                 }
             }
             
-            // console.log(`[DataFetcher] Created ${backupRunsByUniqueKey.size} unique backup runs from snapshots for ${config.name}`); // Removed verbose log
+            console.log(`[DataFetcher] Created ${backupRunsByUniqueKey.size} unique backup runs from PBS snapshots for ${config.name}`);
             
         } catch (datastoreError) {
             console.error(`ERROR: [DataFetcher] Could not fetch datastore backup history: ${datastoreError.message}`);
