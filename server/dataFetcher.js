@@ -935,14 +935,18 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                             'backup-type': group['backup-type'],
                             'backup-id': group['backup-id']
                         };
-                        // Add namespace parameter if configured
-                        if (config.namespace) {
-                            snapshotParams.ns = config.namespace;
+                        // Add namespace parameter if we're querying a specific namespace
+                        if (namespace) {
+                            snapshotParams.ns = namespace;
                         }
                         const snapshotsResponse = await client.get(`/admin/datastore/${datastore.name}/snapshots`, {
                             params: snapshotParams
                         });
                         const allSnapshots = snapshotsResponse.data?.data || [];
+                        
+                        if (namespace && allSnapshots.length > 0) {
+                            console.log(`[DataFetcher] Found ${allSnapshots.length} snapshots for ${group['backup-type']}/${group['backup-id']} in namespace '${namespace}'`);
+                        }
                         
                         // Filter snapshots to configured history period
                         const recentSnapshots = allSnapshots.filter(snapshot => {
