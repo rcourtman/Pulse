@@ -196,7 +196,7 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'system') {
             // Auto-check for latest version when system tab is opened
             checkLatestVersion();
-            // Initialize update channel warning visibility and restore channel preference
+            // Initialize update channel warning visibility
             setTimeout(() => {
                 const channelSelect = document.querySelector('select[name="UPDATE_CHANNEL"]');
                 if (channelSelect) {
@@ -1348,8 +1348,6 @@ PulseApp.ui.settings = (() => {
         const updateChannelInfoElement = document.getElementById('update-channel-info');
         const channelMismatchWarning = document.getElementById('channel-mismatch-warning');
         
-        try {
-        
         if (!latestVersionElement) return;
         
         try {
@@ -1375,38 +1373,13 @@ PulseApp.ui.settings = (() => {
             } else {
                 // Use the server's update check API with optional channel override
                 const url = channelOverride ? `/api/updates/check?channel=${channelOverride}` : '/api/updates/check';
+                data = await PulseApp.apiClient.get(url);
                 
-                try {
-                    data = await PulseApp.apiClient.get(url);
-                    
-                    // Cache the result
-                    updateCache.set(cacheKey, {
-                        data: data,
-                        timestamp: Date.now()
-                    });
-                } catch (error) {
-                    if (error.message && (error.message.includes('rate limit') || error.message.includes('rateLimited'))) {
-                        // Show user-friendly rate limit message
-                        console.warn('[Settings] GitHub API rate limited, showing cached data if available');
-                        showMessage('Update check temporarily unavailable due to GitHub rate limits. Please try again later.', 'warning');
-                        
-                        // Use cached data if available, even if expired
-                        if (cachedResult) {
-                            console.log('[Settings] Using expired cache due to rate limiting');
-                            data = cachedResult.data;
-                        } else {
-                            // No cached data available
-                            const versionStatusElement = document.getElementById('version-status');
-                            if (versionStatusElement) {
-                                versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Update check unavailable - rate limited</span>';
-                            }
-                            return;
-                        }
-                    } else {
-                        // Re-throw other errors
-                        throw error;
-                    }
-                }
+                // Cache the result
+                updateCache.set(cacheKey, {
+                    data: data,
+                    timestamp: Date.now()
+                });
             }
             
             // Add preview indicator if using channel override
@@ -1555,17 +1528,6 @@ PulseApp.ui.settings = (() => {
                         latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
                         versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Cached data (rate limited)</span>';
                     }, 100);
-                }
-            }
-        }
-        
-        } catch (error) {
-            console.error('[Settings] checkLatestVersion failed:', error);
-            if (versionStatusElement) {
-                if (error.message && (error.message.includes('rate limit') || error.message.includes('rateLimited'))) {
-                    versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Update check unavailable - rate limited</span>';
-                } else {
-                    versionStatusElement.innerHTML = '<span class="text-red-500 dark:text-red-400">Update check failed</span>';
                 }
             }
         }
@@ -1918,8 +1880,6 @@ PulseApp.ui.settings = (() => {
             return;
         }
         
-        // Channel is already saved immediately when changed, so no need to save again
-        
         // Find the tarball asset
         const tarballAsset = latestReleaseData.assets.find(asset => 
             asset.name.endsWith('.tar.gz') && asset.name.includes('pulse')
@@ -1944,13 +1904,9 @@ PulseApp.ui.settings = (() => {
             return;
         }
         
-        // Show channel information in confirmation
-        const isRCVersion = latestReleaseData.tag_name.toLowerCase().includes('-rc');
-        const channelInfo = isRCVersion ? ' (RC Channel)' : ' (Stable Channel)';
-        
         // Confirm update
         PulseApp.ui.toast.confirm(
-            `Update to version ${latestReleaseData.tag_name}${channelInfo}? The application will restart automatically after the update is applied.`,
+            `Update to version ${latestReleaseData.tag_name}? The application will restart automatically after the update is applied.`,
             async () => {
                 await _performUpdate(latestReleaseData, tarballAsset);
             }
@@ -1994,14 +1950,9 @@ PulseApp.ui.settings = (() => {
                 
                 window.socket.on('updateComplete', () => {
                     if (progressText) {
-                        progressText.textContent = 'Update complete! Reloading...';
+                        progressText.textContent = 'Update complete! Restarting...';
                     }
-                    showMessage('Update applied successfully. Reloading page...', 'success');
-                    
-                    // Simple reload after brief delay
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 3000);
+                    showMessage('Update applied successfully. The application will restart momentarily.', 'success');
                 });
                 
                 window.socket.on('updateError', (data) => {
@@ -3276,28 +3227,9 @@ PulseApp.ui.settings = (() => {
         URL.revokeObjectURL(url);
     }
 
-    // Message display helper function
-    function showMessage(message, type = 'info') {
-        switch (type) {
-            case 'success':
-                PulseApp.ui.toast.success(message);
-                break;
-            case 'error':
-                PulseApp.ui.toast.error(message);
-                break;
-            case 'warning':
-                PulseApp.ui.toast.warning(message);
-                break;
-            case 'info':
-            default:
-                PulseApp.ui.toast.info(message);
-                break;
-        }
-    }
-
     // Public API
     // Handle update channel selection change
-    async function onUpdateChannelChange(value) {
+    function onUpdateChannelChange(value) {
         const rcWarning = document.getElementById('rc-warning');
         if (rcWarning) {
             if (value === 'rc') {
@@ -3307,32 +3239,14 @@ PulseApp.ui.settings = (() => {
             }
         }
         
-        // Show loading state during channel switch
-        const versionStatusElement = document.getElementById('version-status');
-        if (versionStatusElement) {
-            versionStatusElement.innerHTML = '<span class="text-gray-500 dark:text-gray-400">Switching channel and checking for updates...</span>';
+        // Re-check for updates with the selected channel (preview mode)
+        // Debounce rapid changes to prevent API spam
+        if (updateCheckTimeout) {
+            clearTimeout(updateCheckTimeout);
         }
-        
-        try {
-            // Save the channel setting immediately
-            await saveConfiguration();
-            
-            // Clear cache and check for updates
-            updateCache.clear();
-            await checkLatestVersion(value);
-            
-            showMessage(`Switched to ${value === 'rc' ? 'RC' : 'Stable'} channel`, 'success');
-        } catch (error) {
-            console.error('[Settings] Channel switch failed:', error);
-            showMessage('Failed to switch channel. Please try again.', 'error');
-            if (versionStatusElement) {
-                if (error.message && (error.message.includes('rate limit') || error.message.includes('rateLimited'))) {
-                    versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Update check unavailable - rate limited</span>';
-                } else {
-                    versionStatusElement.innerHTML = '<span class="text-red-500 dark:text-red-400">Update check failed - please try again later</span>';
-                }
-            }
-        }
+        updateCheckTimeout = setTimeout(() => {
+            checkLatestVersion(value);
+        }, 300);
     }
     
     // Switch to a specific update channel
@@ -3362,13 +3276,8 @@ PulseApp.ui.settings = (() => {
                     }
                 }, 2000);
             }
-            
-            // Show reminder to save settings
-            showMessage(`Switched to ${targetChannel === 'rc' ? 'RC' : 'Stable'} channel. Remember to save settings to apply the change.`, 'info');
         }
     }
-    
-    // Quick switch to channel and apply update if available
     
     // Proceed with switching to stable release (downgrade)
     function proceedWithStableSwitch() {
@@ -3858,25 +3767,6 @@ PulseApp.ui.settings = (() => {
         setTimeout(() => {
             notification.remove();
         }, 3000);
-    }
-
-    function showMessage(message, type = 'info') {
-        // Use the proper toast system based on message type
-        switch (type) {
-            case 'success':
-                PulseApp.ui.toast.success(message);
-                break;
-            case 'error':
-                PulseApp.ui.toast.error(message);
-                break;
-            case 'warning':
-                PulseApp.ui.toast.warning(message);
-                break;
-            case 'info':
-            default:
-                PulseApp.ui.toast.info(message);
-                break;
-        }
     }
 
     function renderAlertManagementTab() {
