@@ -26,7 +26,8 @@ Before starting any release process, verify:
 - [ ] Docker logged in: `docker login` (check with `docker info | grep Username`)
 - [ ] GitHub CLI authenticated: `gh auth status`
 - [ ] Docker buildx available: `docker buildx ls || docker buildx create --name mybuilder --use`
-- [ ] All tests passing: `npm test`
+- [ ] CSS builds correctly: `npm run build:css`
+- [ ] Application starts successfully: `npm run dev` (test locally)
 
 ## Prerequisites Check
 

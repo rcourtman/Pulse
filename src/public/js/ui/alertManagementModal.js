@@ -309,7 +309,7 @@ PulseApp.ui.alertManagementModal = (() => {
         }
 
         if (cancelButton) {
-            addTrackedEventListener(cancelButton, 'click', closeModal);
+            cancelButton.addEventListener('click', closeModal);
         }
 
         // Close modal when clicking outside

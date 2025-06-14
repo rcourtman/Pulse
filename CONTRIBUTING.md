@@ -41,10 +41,10 @@ All contributions should target the `develop` branch.
 
 ### Before Submitting
 - Ensure your code adheres to the project's existing style
-- If you've added code that should be tested, add tests
-- Ensure the test suite passes: `npm test`
-- Make sure your code lints (if linters are set up)
-- Test your changes thoroughly
+- Follow existing patterns and conventions in the codebase
+- Test your changes thoroughly in a development environment
+- Verify your changes work with both Docker and non-Docker deployments
+- Check that CSS builds correctly: `npm run build:css`
 
 ### Submitting Your Pull Request
 1. **Push to your fork**: `git push origin feature/your-feature`

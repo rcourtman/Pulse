@@ -2006,14 +2006,19 @@ PulseApp.ui.settings = (() => {
                 
                 window.socket.on('updateComplete', () => {
                     if (progressText) {
-                        progressText.textContent = 'Update complete! Reloading...';
+                        progressText.textContent = 'Update complete! Waiting for service to restart...';
                     }
-                    showMessage('Update applied successfully. Reloading page...', 'success');
+                    showMessage('Update applied successfully. Waiting for service to restart...', 'success');
                     
-                    // Simple reload after brief delay
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 3000);
+                    // Wait for service to be ready before reloading
+                    waitForServiceReady(() => {
+                        if (progressText) {
+                            progressText.textContent = 'Service ready! Reloading...';
+                        }
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    });
                 });
                 
                 window.socket.on('updateError', (data) => {
@@ -3044,18 +3049,34 @@ PulseApp.ui.settings = (() => {
             html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Nodes</th>';
             html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">VMs</th>';
             html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Containers</th>';
+            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Storage</th>';
+            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Backup Access</th>';
             html += '</tr></thead><tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">';
             
             permissions.proxmox.forEach(perm => {
                 const checkIcon = (canDo) => canDo ? 
                     '<span class="text-green-600 dark:text-green-400">✓</span>' : 
                     '<span class="text-red-600 dark:text-red-400">✗</span>';
+                // Storage backup access info
+                const storageInfo = perm.storageBackupAccess || {};
+                const storageAccessText = storageInfo.totalStoragesTested > 0 ? 
+                    `${storageInfo.accessibleStorages}/${storageInfo.totalStoragesTested}` : 
+                    (perm.canListStorage ? '0' : 'N/A');
+                
+                // Storage backup access icon - show warning if some storages are inaccessible
+                let backupAccessIcon = checkIcon(perm.canAccessStorageBackups);
+                if (storageInfo.totalStoragesTested > 0 && storageInfo.accessibleStorages < storageInfo.totalStoragesTested) {
+                    backupAccessIcon = '<span class="text-amber-600 dark:text-amber-400">⚠</span>';
+                }
+                
                 html += `<tr>
                     <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${perm.name}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canConnect)}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canListNodes)} ${perm.nodeCount ? `(${perm.nodeCount})` : ''}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canListVMs)} ${perm.vmCount !== undefined ? `(${perm.vmCount})` : ''}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canListContainers)} ${perm.containerCount !== undefined ? `(${perm.containerCount})` : ''}</td>
+                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canListStorage)}</td>
+                    <td class="px-4 py-2 text-sm">${backupAccessIcon} ${storageAccessText}</td>
                 </tr>`;
             });
             html += '</tbody></table></div>';
@@ -3992,6 +4013,58 @@ PulseApp.ui.settings = (() => {
                 </div>
             </div>
         `;
+    }
+    
+    /**
+     * Wait for the service to be ready after restart by polling the health endpoint
+     */
+    function waitForServiceReady(callback, attempt = 0, maxAttempts = 40) {
+        // Initial delay to allow service to restart
+        if (attempt === 0) {
+            console.log('[Update] Waiting for service to restart...');
+            setTimeout(() => waitForServiceReady(callback, 1, maxAttempts), 5000);
+            return;
+        }
+        
+        // Try to connect to the health endpoint
+        fetch('/api/health', { 
+            method: 'GET',
+            cache: 'no-cache',
+            headers: {
+                'Accept': 'application/json'
+            },
+            timeout: 5000
+        })
+        .then(response => {
+            if (response.ok) {
+                return response.json();
+            } else {
+                throw new Error(`HTTP ${response.status}`);
+            }
+        })
+        .then(healthData => {
+            // Check if service is fully initialized
+            if (healthData && healthData.system && healthData.system.clientsInitialized) {
+                console.log('[Update] Service is ready and fully initialized');
+                callback();
+            } else {
+                // Service responding but not fully initialized yet
+                throw new Error('Service not fully initialized');
+            }
+        })
+        .catch(error => {
+            // Service not ready yet
+            if (attempt < maxAttempts) {
+                // Progressive backoff: start at 1s, increase by 250ms each attempt, cap at 4s
+                const delay = Math.min(1000 + (attempt * 250), 4000);
+                console.log(`[Update] Service not ready (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms...`);
+                setTimeout(() => waitForServiceReady(callback, attempt + 1, maxAttempts), delay);
+            } else {
+                // Max attempts reached, force reload anyway
+                console.warn('[Update] Service health check failed after maximum attempts, forcing reload');
+                callback();
+            }
+        });
     }
     
     return {

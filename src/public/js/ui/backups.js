@@ -759,6 +759,23 @@ PulseApp.ui.backups = (() => {
             }
         }
         
+        // Determine the most recent backup type based on latest times
+        let mostRecentBackupType = null;
+        let mostRecentTime = 0;
+        
+        if (latestTimes.pbs && latestTimes.pbs > mostRecentTime) {
+            mostRecentTime = latestTimes.pbs;
+            mostRecentBackupType = 'pbs';
+        }
+        if (latestTimes.pve && latestTimes.pve > mostRecentTime) {
+            mostRecentTime = latestTimes.pve;
+            mostRecentBackupType = 'pve';
+        }
+        if (latestTimes.snapshots && latestTimes.snapshots > mostRecentTime) {
+            mostRecentTime = latestTimes.snapshots;
+            mostRecentBackupType = 'snapshot';
+        }
+        
         return {
             guestName: guest.name || `Guest ${guest.vmid}`,
             guestId: guest.vmid,
@@ -767,6 +784,7 @@ PulseApp.ui.backups = (() => {
             guestPveStatus: guest.status,
             latestBackupTime: displayTimestamp,
             latestTimes: latestTimes, // NEW: Type-specific latest times
+            mostRecentBackupType: mostRecentBackupType, // NEW: Most recent backup type
             pbsBackups: pbsBackupCount,
             pbsBackupInfo: pbsBackupInfo,
             pveBackups: pveBackupCount,

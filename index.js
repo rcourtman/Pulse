@@ -5,7 +5,7 @@ const path = require('path');
 
 const configDir = path.join(__dirname, '../config');
 const configEnvPath = path.join(configDir, '.env');
-const projectEnvPath = path.join(__dirname, '../.env');
+const projectEnvPath = path.join(__dirname, '.env');
 
 if (fs.existsSync(configEnvPath)) {
     require('dotenv').config({ path: configEnvPath });

@@ -251,6 +251,13 @@ class DiagnosticTool {
                     canListVMs: false,
                     canListContainers: false,
                     canGetNodeStats: false,
+                    canListStorage: false,
+                    canAccessStorageBackups: false,
+                    storageBackupAccess: {
+                        totalStoragesTested: 0,
+                        accessibleStorages: 0,
+                        storageDetails: []
+                    },
                     errors: []
                 };
 
@@ -356,6 +363,92 @@ class DiagnosticTool {
                             }
                         } catch (error) {
                             permCheck.errors.push(`Cannot get node stats: ${error.message}`);
+                        }
+                    }
+
+                    // Test storage permissions (critical for backup discovery)
+                    if (permCheck.canListNodes && permCheck.nodeCount > 0) {
+                        try {
+                            const nodesData = await clientObj.client.get('/nodes');
+                            
+                            // Test storage listing on each node
+                            let storageTestSuccessful = false;
+                            let totalStoragesTested = 0;
+                            let accessibleStorages = 0;
+                            const storageDetails = [];
+                            
+                            for (const node of nodesData.data.data) {
+                                if (node && node.node) {
+                                    try {
+                                        // Test storage listing endpoint
+                                        const storageData = await clientObj.client.get(`/nodes/${node.node}/storage`);
+                                        if (storageData && storageData.data && Array.isArray(storageData.data.data)) {
+                                            storageTestSuccessful = true;
+                                            
+                                            // Test backup content access on each storage that supports backups
+                                            for (const storage of storageData.data.data) {
+                                                if (storage && storage.storage && storage.content && 
+                                                    storage.content.includes('backup')) {
+                                                    totalStoragesTested++;
+                                                    
+                                                    try {
+                                                        // This is the critical test - accessing backup content requires PVEDatastoreAdmin
+                                                        const backupData = await clientObj.client.get(
+                                                            `/nodes/${node.node}/storage/${storage.storage}/content`,
+                                                            { params: { content: 'backup' } }
+                                                        );
+                                                        
+                                                        if (backupData && backupData.data) {
+                                                            accessibleStorages++;
+                                                            storageDetails.push({
+                                                                node: node.node,
+                                                                storage: storage.storage,
+                                                                type: storage.type,
+                                                                accessible: true,
+                                                                backupCount: backupData.data.data ? backupData.data.data.length : 0
+                                                            });
+                                                        }
+                                                    } catch (storageError) {
+                                                        // 403 errors are common here - this is what we want to detect
+                                                        const is403 = storageError.response?.status === 403;
+                                                        storageDetails.push({
+                                                            node: node.node,
+                                                            storage: storage.storage,
+                                                            type: storage.type,
+                                                            accessible: false,
+                                                            error: is403 ? 'Permission denied (403) - needs PVEDatastoreAdmin role' : storageError.message
+                                                        });
+                                                        
+                                                        if (is403) {
+                                                            permCheck.errors.push(`Storage ${storage.storage} on ${node.node}: Permission denied accessing backup content. Token needs 'PVEDatastoreAdmin' role on '/storage'.`);
+                                                        } else {
+                                                            permCheck.errors.push(`Storage ${storage.storage} on ${node.node}: ${storageError.message}`);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } catch (nodeStorageError) {
+                                        permCheck.errors.push(`Cannot list storage on node ${node.node}: ${nodeStorageError.message}`);
+                                    }
+                                }
+                            }
+                            
+                            if (storageTestSuccessful) {
+                                permCheck.canListStorage = true;
+                            }
+                            
+                            permCheck.storageBackupAccess = {
+                                totalStoragesTested,
+                                accessibleStorages,
+                                storageDetails: storageDetails.slice(0, 10) // Limit details for report size
+                            };
+                            
+                            // Set overall storage backup access status
+                            permCheck.canAccessStorageBackups = totalStoragesTested > 0 && accessibleStorages > 0;
+                            
+                        } catch (error) {
+                            permCheck.errors.push(`Cannot test storage permissions: ${error.message}`);
                         }
                     }
                 }
@@ -616,6 +709,46 @@ class DiagnosticTool {
                                 category: 'Proxmox Permissions',
                                 message: `Proxmox "${perm.name}": Token cannot get node statistics. This may affect metrics collection. Ensure your API token has the 'Sys.Audit' permission on '/'.`
                             });
+                        }
+                        if (!perm.canListStorage) {
+                            report.recommendations.push({
+                                severity: 'warning',
+                                category: 'Proxmox Permissions',
+                                message: `Proxmox "${perm.name}": Token cannot list storage. This may affect backup discovery. Ensure your API token has the 'Sys.Audit' permission on '/'.`
+                            });
+                        }
+                        if (perm.canListStorage && !perm.canAccessStorageBackups) {
+                            const storageAccess = perm.storageBackupAccess;
+                            if (storageAccess && storageAccess.totalStoragesTested > 0) {
+                                const inaccessibleStorages = storageAccess.totalStoragesTested - storageAccess.accessibleStorages;
+                                if (inaccessibleStorages > 0) {
+                                    report.recommendations.push({
+                                        severity: 'critical',
+                                        category: 'Proxmox Storage Permissions',
+                                        message: `Proxmox "${perm.name}": Token cannot access backup content in ${inaccessibleStorages} of ${storageAccess.totalStoragesTested} backup-enabled storages. This prevents PVE backup discovery. Grant 'PVEDatastoreAdmin' role on '/storage' using: pveum acl modify /storage --tokens ${perm.id} --roles PVEDatastoreAdmin`
+                                    });
+                                }
+                            } else {
+                                report.recommendations.push({
+                                    severity: 'info',
+                                    category: 'Proxmox Storage',
+                                    message: `Proxmox "${perm.name}": No backup-enabled storage found to test. If you have backup storage configured, ensure it has 'backup' in its content types.`
+                                });
+                            }
+                        }
+                        if (perm.canAccessStorageBackups && perm.storageBackupAccess) {
+                            const storageAccess = perm.storageBackupAccess;
+                            if (storageAccess.accessibleStorages > 0) {
+                                const backupCount = storageAccess.storageDetails
+                                    .filter(s => s.accessible)
+                                    .reduce((sum, s) => sum + (s.backupCount || 0), 0);
+                                
+                                report.recommendations.push({
+                                    severity: 'info',
+                                    category: 'Backup Status',
+                                    message: `Proxmox "${perm.name}": Successfully accessing ${storageAccess.accessibleStorages} backup storage(s) with ${backupCount} backup files. Storage permissions are correctly configured.`
+                                });
+                            }
                         }
                     }
                 });
