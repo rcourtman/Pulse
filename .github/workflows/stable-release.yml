@@ -147,6 +147,14 @@ jobs:
           echo "📈 Version bump: $BUMP_TYPE"
           echo "💡 Reasoning: $REASONING"
           
+          # Get the previous stable tag BEFORE creating new tag
+          PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | sort -V | tail -1)
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG="v0.0.0"
+          fi
+          echo "PREV_TAG=$PREV_TAG" >> $GITHUB_ENV
+          echo "📊 Previous stable tag: $PREV_TAG"
+          
           # Update package.json to stable version
           npm version $NEW_VERSION --no-git-tag-version
           
@@ -223,10 +231,14 @@ jobs:
           BUMP_TYPE: ${{ needs.detect-stable-release.outputs.bump-type }}
           REASONING: ${{ needs.detect-stable-release.outputs.reasoning }}
         run: |
-          # Get the previous stable tag (exclude current release tag)
-          PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | sort -V | tail -2 | head -1)
+          # Use the previous tag that was determined before creating the new tag
+          PREV_TAG="${{ env.PREV_TAG }}"
           if [ -z "$PREV_TAG" ]; then
-            PREV_TAG="v0.0.0"
+            echo "⚠️ PREV_TAG not set, determining now..."
+            PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | grep -v "v$NEW_VERSION" | sort -V | tail -1)
+            if [ -z "$PREV_TAG" ]; then
+              PREV_TAG="v0.0.0"
+            fi
           fi
           
           echo "📝 Generating changelog from $PREV_TAG to current HEAD"
@@ -250,11 +262,18 @@ jobs:
               try {
                 const gitCmd = prevTag === 'v0.0.0' ? 'git log HEAD --oneline --no-merges' : \`git log \${prevTag}..HEAD --oneline --no-merges\`;
                 const gitLog = execSync(gitCmd, { encoding: 'utf8' });
-                commits = gitLog.trim().split('\\n').filter(line => 
-                  line.trim() && 
-                  !line.includes('🤖 Generated with') && 
-                  !line.includes('chore: release v')
-                );
+                commits = gitLog.trim().split('\\n').filter(line => {
+                  if (!line.trim()) return false;
+                  const lowerLine = line.toLowerCase();
+                  // Exclude version bumps and automated commits
+                  return !line.includes('🤖 Generated with') && 
+                         !line.includes('chore: release v') &&
+                         !line.includes('chore: bump version') &&
+                         !line.includes('bump version to') &&
+                         !lowerLine.includes('merge pull request') &&
+                         !lowerLine.includes('merge branch') &&
+                         !line.includes('resolve: merge conflicts');
+                });
               } catch (e) {
                 console.warn('Could not get git log:', e.message);
                 commits = [];
