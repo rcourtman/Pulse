@@ -159,22 +159,9 @@ class UpdateManager {
 
             const latestVersion = response.data.tag_name.replace('v', '');
             
-            // For stable channel, also consider "downgrade" from RC as an update
-            const isCurrentRC = this.isReleaseCandidate(dynamicCurrentVersion);
-            const isStableChannel = updateChannel === 'stable';
-            const isDifferentVersion = latestVersion !== dynamicCurrentVersion;
-            
-            let updateAvailable;
-            if (isStableChannel && isCurrentRC && isDifferentVersion) {
-                // Offer stable version even if it's older than current RC
-                updateAvailable = true;
-            } else if (updateChannel === 'rc') {
-                // For RC channel, only show update if latest version is actually newer
-                updateAvailable = semver.gt(latestVersion, dynamicCurrentVersion);
-            } else {
-                // Normal case: only newer versions
-                updateAvailable = semver.gt(latestVersion, dynamicCurrentVersion);
-            }
+            // Channels are completely separate - no cross-channel comparisons
+            // Simply check if the latest version in the selected channel differs from current
+            const updateAvailable = latestVersion !== dynamicCurrentVersion;
 
             const updateInfo = {
                 currentVersion: dynamicCurrentVersion,

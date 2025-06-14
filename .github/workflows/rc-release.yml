@@ -1,17 +1,22 @@
 name: Release Candidate
 
 on:
-  push:
+  pull_request:
+    types: [opened, reopened, synchronize]
     branches:
-      - develop
+      - main
 
 jobs:
   create-rc:
     runs-on: ubuntu-latest
+    # Only run if PR is from develop branch
+    if: github.event.pull_request.head.ref == 'develop'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Check out the PR branch (develop)
+          ref: ${{ github.event.pull_request.head.ref }}
           
       - name: Get version from package.json
         id: version
@@ -315,3 +320,20 @@ jobs:
             - Please report any issues on [GitHub Issues](https://github.com/rcourtman/Pulse/issues)
             - The `:rc` Docker tag always points to the latest RC version
             - You can easily switch between Stable and RC channels in the web interface
+            
+      - name: Auto-merge PR to main
+        if: steps.check.outputs.create_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "🔄 Auto-merging PR #${{ github.event.pull_request.number }} to main..."
+          
+          # Add a small delay to ensure release is fully created
+          sleep 5
+          
+          # Merge the PR
+          gh pr merge ${{ github.event.pull_request.number }} --merge --admin \
+            --subject "Auto-merge: RC v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }} ready" \
+            --body "Automatically merged after successful RC release creation"
+          
+          echo "✅ PR successfully merged to main"
