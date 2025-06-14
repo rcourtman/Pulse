@@ -3288,24 +3288,6 @@ PulseApp.ui.settings = (() => {
         URL.revokeObjectURL(url);
     }
 
-    // Message display helper function
-    function showMessage(message, type = 'info') {
-        switch (type) {
-            case 'success':
-                PulseApp.ui.toast.success(message);
-                break;
-            case 'error':
-                PulseApp.ui.toast.error(message);
-                break;
-            case 'warning':
-                PulseApp.ui.toast.warning(message);
-                break;
-            case 'info':
-            default:
-                PulseApp.ui.toast.info(message);
-                break;
-        }
-    }
 
     // Public API
     // Handle update channel selection change
@@ -3333,7 +3315,8 @@ PulseApp.ui.settings = (() => {
             updateCache.clear();
             await checkLatestVersion(value);
             
-            showMessage(`Switched to ${value === 'rc' ? 'RC' : 'Stable'} channel`, 'success');
+            // Don't show success message to avoid potential modal closing issues
+            console.log(`[Settings] Successfully switched to ${value === 'rc' ? 'RC' : 'Stable'} channel`);
         } catch (error) {
             console.error('[Settings] Channel switch failed:', error);
             showMessage('Failed to switch channel. Please try again.', 'error');
