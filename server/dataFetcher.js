@@ -939,12 +939,14 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                 const namespacesToQuery = await getNamespacesToQuery(client, datastore.name, config);
                 
                 
+                
                 // Query each namespace
                 for (const namespace of namespacesToQuery) {
                     try {
                         // Get groups for this namespace - the API test confirms this works correctly!
+                        // Always pass ns parameter to ensure proper filtering
                         const groupsParams = {
-                            ns: namespace
+                            ns: namespace || ''
                         };
                         console.log(`[DataFetcher] Fetching groups from namespace '${namespace}'`);
                         
@@ -955,11 +957,7 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                         console.log(`[DataFetcher] Found ${groups.length} groups in namespace '${namespace}'`);
                         
                         if (groups.length > 0) {
-                            console.log(`[DataFetcher] Found ${groups.length} unique backup groups in namespace '${namespace}' for datastore ${datastore.name}`);
-                            
-                            // Show the actual groups found
-                            const uniqueBackupIds = groups.map(g => `${g['backup-type']}/${g['backup-id']}`).sort();
-                            console.log(`[DataFetcher] Groups in namespace '${namespace}': ${uniqueBackupIds.slice(0, 10).join(', ')}${uniqueBackupIds.length > 10 ? '...' : ''}`);
+                            console.log(`[DataFetcher] Found ${groups.length} backup groups in namespace '${namespace}' for datastore ${datastore.name}`);
                         }
                 
                         // Process each group in this namespace
@@ -982,9 +980,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                     snapshot.namespace = namespace || 'root';
                                 });
                                 
-                                if (allSnapshots.length > 0) {
-                                    console.log(`[DataFetcher] Found ${allSnapshots.length} snapshots for ${group['backup-type']}/${group['backup-id']} in namespace '${namespace}'`);
-                                }
                                 
                                 // Filter snapshots to configured history period
                                 const recentSnapshots = allSnapshots.filter(snapshot => {
