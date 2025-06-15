@@ -60,6 +60,9 @@
             modal.classList.remove('hidden');
             document.body.style.overflow = 'hidden';
             
+            // Track that we set overflow hidden
+            document.body.dataset.modalOpen = 'true';
+            
             // Focus management
             const focusable = modal.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
             if (focusable) {
@@ -78,12 +81,27 @@
             
             if (!modal) return;
 
+            // First hide the modal
             modal.classList.add('hidden');
             
-            // Check if any other modals are open
-            const openModals = document.querySelectorAll('.fixed.z-50:not(.hidden)');
-            if (openModals.length === 0) {
+            // Force a reflow to ensure the hidden class is applied
+            modal.offsetHeight;
+            
+            // Then check if any other modals are still open
+            // Use a more specific selector that excludes loading overlay and other non-modal elements
+            const openModals = document.querySelectorAll('.fixed.inset-0.z-50:not(.hidden):not(#loading-overlay)');
+            const actualModals = Array.from(openModals).filter(el => {
+                // Filter out elements that aren't actually modals
+                return el.id.includes('modal') || el.classList.toString().includes('modal');
+            });
+            
+            // Only reset overflow if no other actual modals are open
+            if (actualModals.length === 0) {
                 document.body.style.overflow = '';
+                document.body.style.overflowY = '';
+                document.body.style.position = '';
+                document.documentElement.style.overflow = '';
+                delete document.body.dataset.modalOpen;
             }
 
             // Execute onClose callback if exists
@@ -164,6 +182,7 @@
                     }
                 }
             });
+            
         }
     };
 

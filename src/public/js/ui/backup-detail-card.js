@@ -85,6 +85,9 @@ PulseApp.ui.backupDetailCard = (() => {
             none: []       // no backups
         };
         
+        // Track namespace distribution
+        const namespaceStats = new Map();
+        const pbsBackupsByNamespace = new Map();
         
         // Analyze each guest
         backups.forEach(guest => {
@@ -137,6 +140,29 @@ PulseApp.ui.backupDetailCard = (() => {
                 }
             }
             
+            // Extract namespace information from pbsBackupInfo if available
+            let namespaces = [];
+            if (guest.pbsBackupInfo && guest.pbsBackups > 0) {
+                // Parse namespace info from pbsBackupInfo string
+                const nsMatch = guest.pbsBackupInfo.match(/\[(.*?)\]/g);
+                if (nsMatch) {
+                    nsMatch.forEach(match => {
+                        const nsContent = match.slice(1, -1); // Remove brackets
+                        const nsList = nsContent.split(',').map(ns => ns.trim());
+                        namespaces.push(...nsList);
+                    });
+                }
+                
+                // Track namespace statistics
+                namespaces.forEach(ns => {
+                    namespaceStats.set(ns, (namespaceStats.get(ns) || 0) + 1);
+                    if (!pbsBackupsByNamespace.has(ns)) {
+                        pbsBackupsByNamespace.set(ns, 0);
+                    }
+                    pbsBackupsByNamespace.set(ns, pbsBackupsByNamespace.get(ns) + guest.pbsBackups);
+                });
+            }
+            
             const guestData = {
                 id: guest.guestId,
                 name: guest.guestName,
@@ -146,7 +172,8 @@ PulseApp.ui.backupDetailCard = (() => {
                 snapCount: guest.snapshotCount || 0,
                 mostRecentBackupType: guest.mostRecentBackupType,
                 failures: guest.recentFailures || 0,
-                lastBackup: mostRecentBackup
+                lastBackup: mostRecentBackup,
+                namespaces: namespaces
             };
             
             if (!mostRecentBackup) {
@@ -222,6 +249,10 @@ PulseApp.ui.backupDetailCard = (() => {
                                             <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
                                             <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
                                             <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
+                                            ${guest.namespaces && guest.namespaces.length > 0 ? 
+                                                `<span class="text-[8px] text-purple-600 dark:text-purple-400">[${guest.namespaces.join(', ')}]</span>` : 
+                                                ''
+                                            }
                                         </div>
                                         <div class="flex items-center gap-2 ml-2">
                                             <div class="flex items-center gap-1 text-[9px]">
@@ -251,6 +282,10 @@ PulseApp.ui.backupDetailCard = (() => {
                                             <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
                                             <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
                                             <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
+                                            ${guest.namespaces && guest.namespaces.length > 0 ? 
+                                                `<span class="text-[8px] text-purple-600 dark:text-purple-400">[${guest.namespaces.join(', ')}]</span>` : 
+                                                ''
+                                            }
                                         </div>
                                         <div class="flex items-center gap-2 ml-2">
                                             <div class="flex items-center gap-1 text-[9px]">
@@ -300,6 +335,30 @@ PulseApp.ui.backupDetailCard = (() => {
                                     <span>${stats.totalGuests - guestsByAge.none.length}/${stats.totalGuests} guests protected</span>
                                 </div>
                             </div>
+                            
+                            <!-- Namespace Distribution -->
+                            ${namespaceStats.size > 0 ? `
+                                <div class="text-[9px] text-gray-600 dark:text-gray-400">
+                                    <div class="mb-1">
+                                        <span class="font-medium">PBS Namespaces:</span>
+                                    </div>
+                                    <div class="space-y-0.5">
+                                        ${Array.from(namespaceStats.entries())
+                                            .sort((a, b) => b[1] - a[1])
+                                            .slice(0, 5)
+                                            .map(([ns, count]) => `
+                                                <div class="flex justify-between items-center">
+                                                    <span class="text-purple-600 dark:text-purple-400">${ns}</span>
+                                                    <span>${count} guests, ${pbsBackupsByNamespace.get(ns) || 0} backups</span>
+                                                </div>
+                                            `).join('')}
+                                        ${namespaceStats.size > 5 ? 
+                                            `<div class="text-center text-gray-500 dark:text-gray-400">...and ${namespaceStats.size - 5} more</div>` : 
+                                            ''
+                                        }
+                                    </div>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                 </div>
