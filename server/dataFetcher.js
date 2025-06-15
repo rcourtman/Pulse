@@ -942,53 +942,48 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                 // Query each namespace
                 for (const namespace of namespacesToQuery) {
                     try {
-                        // ALWAYS specify ns parameter, even for root namespace
-                        // If ns is not specified, PBS returns ALL groups from ALL namespaces!
-                        const groupsParams = {
+                        // Skip the groups endpoint as it doesn't filter by namespace properly
+                        // Instead, get snapshots directly and derive groups from them
+                        console.log(`[DataFetcher] Fetching snapshots directly for namespace '${namespace}' to determine groups`);
+                        
+                        const snapshotParams = {
                             ns: namespace || ''
                         };
-                        console.log(`[DataFetcher] Fetching groups from /admin/datastore/${datastore.name}/groups with params:`, groupsParams);
-                        const groupsResponse = await client.get(`/admin/datastore/${datastore.name}/groups`, {
-                            params: groupsParams
-                        });
-                        const groups = groupsResponse.data?.data || [];
                         
-                        if (groups.length > 0) {
-                            console.log(`[DataFetcher] Found ${groups.length} backup groups in namespace '${namespace}' for datastore ${datastore.name}`);
-                            // Check if groups have namespace field
-                            const groupsWithNs = groups.filter(g => g.ns);
-                            const uniqueNamespaces = [...new Set(groups.map(g => g.ns).filter(Boolean))];
-                            console.log(`[DataFetcher] Groups with ns field: ${groupsWithNs.length}, unique namespaces in response: ${uniqueNamespaces.join(', ') || 'none'}`);
-                            
-                            // Show all unique backup IDs to understand what we're getting
-                            const uniqueBackupIds = [...new Set(groups.map(g => `${g['backup-type']}/${g['backup-id']}`))].sort();
-                            console.log(`[DataFetcher] Unique backup IDs in namespace '${namespace}': ${uniqueBackupIds.slice(0, 5).join(', ')}${uniqueBackupIds.length > 5 ? '...' : ''}`);
-                        }
-                
-                // For each backup group, get snapshots within history period
-                for (const group of groups) {
-                    try {
-                        // ALWAYS specify ns parameter to ensure we get snapshots from the correct namespace
-                        const snapshotParams = {
-                            'backup-type': group['backup-type'],
-                            'backup-id': group['backup-id'],
-                            'ns': namespace || ''
-                        };
                         const snapshotsResponse = await client.get(`/admin/datastore/${datastore.name}/snapshots`, {
                             params: snapshotParams
                         });
                         const allSnapshots = snapshotsResponse.data?.data || [];
                         
-                        // Add namespace field to each snapshot
+                        // Derive unique groups from snapshots
+                        const groupsMap = new Map();
+                        allSnapshots.forEach(snapshot => {
+                            const key = `${snapshot['backup-type']}/${snapshot['backup-id']}`;
+                            if (!groupsMap.has(key)) {
+                                groupsMap.set(key, {
+                                    'backup-type': snapshot['backup-type'],
+                                    'backup-id': snapshot['backup-id']
+                                });
+                            }
+                        });
+                        
+                        const groups = Array.from(groupsMap.values());
+                        console.log(`[DataFetcher] Derived ${groups.length} unique groups from ${allSnapshots.length} snapshots in namespace '${namespace}'`);
+                        
+                        if (groups.length > 0) {
+                            console.log(`[DataFetcher] Found ${groups.length} unique backup groups in namespace '${namespace}' for datastore ${datastore.name}`);
+                            
+                            // Show the actual groups found
+                            const uniqueBackupIds = groups.map(g => `${g['backup-type']}/${g['backup-id']}`).sort();
+                            console.log(`[DataFetcher] Groups in namespace '${namespace}': ${uniqueBackupIds.slice(0, 10).join(', ')}${uniqueBackupIds.length > 10 ? '...' : ''}`);
+                        }
+                
+                        // Add namespace field to all snapshots
                         allSnapshots.forEach(snapshot => {
                             snapshot.namespace = namespace || 'root';
                         });
                         
-                        if (namespace && allSnapshots.length > 0) {
-                            console.log(`[DataFetcher] Found ${allSnapshots.length} snapshots for ${group['backup-type']}/${group['backup-id']} in namespace '${namespace}'`);
-                        }
-                        
-                        // Filter snapshots to configured history period
+                        // Process all snapshots for this namespace at once
                         const recentSnapshots = allSnapshots.filter(snapshot => {
                             return snapshot['backup-time'] >= thirtyDaysAgo;
                         });
@@ -1044,11 +1039,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                 backupRunsByUniqueKey.set(uniqueKey, backupRun);
                             }
                         });
-                        
-                    } catch (snapshotError) {
-                        console.warn(`WARN: [DataFetcher] Could not fetch snapshots for group ${group['backup-type']}/${group['backup-id']}: ${snapshotError.message}`);
-                    }
-                }
                     } catch (namespaceError) {
                         if (namespaceError.response?.status !== 404) {
                             console.warn(`WARN: [DataFetcher] Could not fetch groups from namespace '${namespace}' in datastore ${datastore.name}: ${namespaceError.message}`);

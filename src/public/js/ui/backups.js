@@ -929,29 +929,22 @@ PulseApp.ui.backups = (() => {
         const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guestStatus.guestType}</span>`;
 
 
-        // Create PBS backup cell with visual indicator and namespace info
+        // Create PBS backup cell with visual indicator
         let pbsBackupCell = '';
         if (guestStatus.pbsBackups > 0) {
             const pbsIcon = '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full mr-1" title="PBS Backup"></span>';
             let pbsText = `${pbsIcon}${guestStatus.pbsBackups}`;
             
-            // Add namespace information if available
+            // Add namespace indicator if backups span multiple namespaces
             if (guestStatus.pbsBackupInfo) {
-                // Extract namespace counts from parentheses (e.g., "(root:17, pimox:1)")
                 const nsCountMatch = guestStatus.pbsBackupInfo.match(/\(([^)]+:[0-9]+(?:,\s*[^)]+:[0-9]+)*)\)/);
-                if (nsCountMatch) {
-                    const namespaceInfo = nsCountMatch[1];
-                    pbsText += `<br><span class="text-xs text-gray-600 dark:text-gray-400">${namespaceInfo}</span>`;
-                } else if (guestStatus.pbsBackupInfo.includes('(') && guestStatus.pbsBackupInfo.includes(')')) {
-                    // Extract single namespace from parentheses
-                    const singleNsMatch = guestStatus.pbsBackupInfo.match(/\(([^)]+)\)/);
-                    if (singleNsMatch && !singleNsMatch[1].includes('main')) {
-                        pbsText += `<br><span class="text-xs text-gray-600 dark:text-gray-400">${singleNsMatch[1]}</span>`;
-                    }
+                if (nsCountMatch && nsCountMatch[1].includes(',')) {
+                    // Multiple namespaces - add a small indicator
+                    pbsText += '<span class="text-xs align-super text-purple-600 dark:text-purple-400 ml-0.5">*</span>';
                 }
             }
             
-            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300">${pbsText}</span>`;
+            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${guestStatus.pbsBackupInfo ? `title="${guestStatus.pbsBackupInfo}"` : ''}>${pbsText}</span>`;
         } else {
             pbsBackupCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }
