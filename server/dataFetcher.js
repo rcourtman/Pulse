@@ -979,6 +979,11 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                         });
                         const allSnapshots = snapshotsResponse.data?.data || [];
                         
+                        // Add namespace field to each snapshot
+                        allSnapshots.forEach(snapshot => {
+                            snapshot.namespace = namespace || 'root';
+                        });
+                        
                         if (namespace && allSnapshots.length > 0) {
                             console.log(`[DataFetcher] Found ${allSnapshots.length} snapshots for ${group['backup-type']}/${group['backup-id']} in namespace '${namespace}'`);
                         }

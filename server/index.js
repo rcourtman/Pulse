@@ -1443,6 +1443,22 @@ async function runDiscoveryCycle() {
         try {
             const pveBackups = updatedState.pveBackups || {};
             console.log(`[Discovery Broadcast] Broadcasting state with PVE backups: ${(pveBackups.backupTasks || []).length} tasks, ${(pveBackups.storageBackups || []).length} storage, ${(pveBackups.guestSnapshots || []).length} snapshots`);
+            
+            // Debug PBS data
+            if (updatedState.pbs && updatedState.pbs.length > 0) {
+                const pbsInfo = updatedState.pbs.map(pbs => {
+                    const datastoreInfo = (pbs.datastores || []).map(ds => ({
+                        name: ds.name,
+                        snapshots: (ds.snapshots || []).length,
+                        hasNamespace: (ds.snapshots || []).some(s => s.namespace)
+                    }));
+                    return {
+                        name: pbs.pbsInstanceName,
+                        datastores: datastoreInfo
+                    };
+                });
+                console.log(`[Discovery Broadcast] PBS instances: ${JSON.stringify(pbsInfo)}`);
+            }
             // Test serialization first to catch circular reference errors
             JSON.stringify(updatedState);
             io.emit('rawData', updatedState);
