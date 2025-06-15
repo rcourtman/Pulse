@@ -912,13 +912,16 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                 // Get namespaces to query (auto-discovery or configured)
                 const namespacesToQuery = await getNamespacesToQuery(client, datastore.name, config);
                 
+                
                 // Query each namespace
                 for (const namespace of namespacesToQuery) {
                     try {
-                        const groupsParams = {};
-                        if (namespace) {
-                            groupsParams.ns = namespace;
-                        }
+                        // ALWAYS specify ns parameter, even for root namespace
+                        // If ns is not specified, PBS returns ALL groups from ALL namespaces!
+                        const groupsParams = {
+                            ns: namespace || ''
+                        };
+                        console.log(`[DataFetcher] Fetching groups from /admin/datastore/${datastore.name}/groups with params:`, groupsParams);
                         const groupsResponse = await client.get(`/admin/datastore/${datastore.name}/groups`, {
                             params: groupsParams
                         });
@@ -926,19 +929,25 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                         
                         if (groups.length > 0) {
                             console.log(`[DataFetcher] Found ${groups.length} backup groups in namespace '${namespace}' for datastore ${datastore.name}`);
+                            // Check if groups have namespace field
+                            const groupsWithNs = groups.filter(g => g.ns);
+                            const uniqueNamespaces = [...new Set(groups.map(g => g.ns).filter(Boolean))];
+                            console.log(`[DataFetcher] Groups with ns field: ${groupsWithNs.length}, unique namespaces in response: ${uniqueNamespaces.join(', ') || 'none'}`);
+                            
+                            // Show all unique backup IDs to understand what we're getting
+                            const uniqueBackupIds = [...new Set(groups.map(g => `${g['backup-type']}/${g['backup-id']}`))].sort();
+                            console.log(`[DataFetcher] Unique backup IDs in namespace '${namespace}': ${uniqueBackupIds.slice(0, 5).join(', ')}${uniqueBackupIds.length > 5 ? '...' : ''}`);
                         }
                 
                 // For each backup group, get snapshots within history period
                 for (const group of groups) {
                     try {
+                        // ALWAYS specify ns parameter to ensure we get snapshots from the correct namespace
                         const snapshotParams = {
                             'backup-type': group['backup-type'],
-                            'backup-id': group['backup-id']
+                            'backup-id': group['backup-id'],
+                            'ns': namespace || ''
                         };
-                        // Add namespace parameter if we're querying a specific namespace
-                        if (namespace) {
-                            snapshotParams.ns = namespace;
-                        }
                         const snapshotsResponse = await client.get(`/admin/datastore/${datastore.name}/snapshots`, {
                             params: snapshotParams
                         });
@@ -1140,7 +1149,8 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                     // Failure details
                                     failureTask: true,
                                     exitcode: task.exitcode,
-                                    user: task.user
+                                    user: task.user,
+                                    namespace: 'root' // Failed tasks from admin endpoint are in root namespace
                                 };
                                 
                                 enhancedBackupRuns.push(failedBackupRun);

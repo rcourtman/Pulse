@@ -345,6 +345,7 @@ PulseApp.ui.backups = (() => {
                     datastoreName: ds.name,
                     backupType: snap['backup-type'],
                     backupVMID: snap['backup-id'],
+                    namespace: snap.namespace || 'root', // Preserve namespace information
                     source: 'pbs'
                 }))
             )
