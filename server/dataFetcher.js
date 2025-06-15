@@ -955,6 +955,15 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                         });
                         const allSnapshots = snapshotsResponse.data?.data || [];
                         
+                        // Debug: Check if snapshots have namespace field from PBS
+                        if (allSnapshots.length > 0) {
+                            const firstSnap = allSnapshots[0];
+                            console.log(`[DataFetcher] First snapshot in namespace '${namespace}' has fields:`, Object.keys(firstSnap).join(', '));
+                            if (firstSnap.ns !== undefined) {
+                                console.log(`[DataFetcher] Snapshot has 'ns' field with value: '${firstSnap.ns}'`);
+                            }
+                        }
+                        
                         // Derive unique groups from snapshots
                         const groupsMap = new Map();
                         allSnapshots.forEach(snapshot => {
