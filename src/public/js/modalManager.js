@@ -78,11 +78,14 @@
             
             if (!modal) return;
 
+            // Check if any other modals are open (excluding the one being closed)
+            const openModals = document.querySelectorAll('.fixed.z-50:not(.hidden)');
+            const otherOpenModals = Array.from(openModals).filter(m => m !== modal);
+            
             modal.classList.add('hidden');
             
-            // Check if any other modals are open
-            const openModals = document.querySelectorAll('.fixed.z-50:not(.hidden)');
-            if (openModals.length === 0) {
+            // Only reset overflow if no other modals are open
+            if (otherOpenModals.length === 0) {
                 document.body.style.overflow = '';
             }
 
