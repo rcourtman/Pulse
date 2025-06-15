@@ -239,6 +239,21 @@ PulseApp.ui.alertManagementModal = (() => {
         
         // Clear DOM cache when modal closes
         clearDomCache();
+        
+        // Ensure body overflow is reset (fallback in case modalManager fails)
+        setTimeout(() => {
+            const openModals = document.querySelectorAll('.fixed.inset-0.z-50:not(.hidden):not(#loading-overlay)');
+            const actualModals = Array.from(openModals).filter(el => {
+                return el.id.includes('modal') || el.classList.toString().includes('modal');
+            });
+            
+            if (actualModals.length === 0) {
+                document.body.style.overflow = '';
+                document.body.style.overflowY = '';
+                document.body.style.position = '';
+                document.documentElement.style.overflow = '';
+            }
+        }, 100);
     }
 
     function createModalHTML() {

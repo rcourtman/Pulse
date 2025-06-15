@@ -861,6 +861,7 @@ async function fetchPbsDatastoreData({ client, config }) {
  */
 async function fetchPbsDatastoreSnapshots({ client, config }, storeName) {
     try {
+        console.log(`[DataFetcher] Starting snapshot fetch for datastore ${storeName} on ${config.name}`);
         // Get namespaces to query
         const namespacesToQuery = await getNamespacesToQuery(client, storeName, config);
         console.log(`[DataFetcher] Fetching snapshots for datastore ${storeName} from namespaces: ${namespacesToQuery.join(', ') || '(root only)'}`);
