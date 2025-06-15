@@ -65,6 +65,9 @@ git checkout develop
 
 **Creating RC Release:**
 ```bash
+# IMPORTANT: First check ALL commits that will be included in the PR
+git log --oneline main..develop
+
 # When ready to test with users:
 gh pr create --base main --head develop --title "Release: Your feature"
 
@@ -73,6 +76,17 @@ gh pr create --base main --head develop --title "Release: Your feature"
 # 2. Auto-merge PR to main
 # 3. No manual merge needed!
 ```
+
+**CRITICAL: Creating Comprehensive PR Descriptions**
+When creating a PR, you MUST:
+1. **Always run `git log --oneline main..develop`** to see ALL commits that will be included
+2. **Include ALL features and fixes** in the PR title and description, not just the latest change
+3. **Group changes by category**: Major Features, Bug Fixes, Technical Changes, etc.
+4. **Reference relevant issue numbers** (e.g., #125) for each fix or feature
+
+Example of a good PR title:
+- ✅ "Release: PBS namespace support, port handling fix, and UI improvements"
+- ❌ "Release: Fix port handling" (when there are actually multiple changes)
 
 **Creating Stable Release:**
 ```bash
@@ -218,7 +232,8 @@ git add .
 git commit -m "description of change"
 git push origin develop
 
-# 4. When ready to test with users, create PR
+# 4. When ready to test with users, check commits and create PR
+git log --oneline main..develop  # CHECK ALL COMMITS FIRST!
 gh pr create --base main --head develop --title "Release: feature X"
 # RC created and PR auto-merged!
 
