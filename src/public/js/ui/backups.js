@@ -675,7 +675,25 @@ PulseApp.ui.backups = (() => {
                 if (pbsInstances.length === 1) {
                     const info = backupsByPbs[pbsInstances[0]];
                     const nsArray = Array.from(info.namespaces || []);
-                    const nsInfo = nsArray.length > 0 ? ` in ${nsArray.map(ns => ns === 'root' ? 'root' : `'${ns}'`).join(', ')} namespace${nsArray.length > 1 ? 's' : ''}` : '';
+                    
+                    // Create namespace breakdown for display
+                    const namespaceBreakdown = {};
+                    pbsSnapshots.forEach(snap => {
+                        const ns = snap.namespace || 'root';
+                        namespaceBreakdown[ns] = (namespaceBreakdown[ns] || 0) + 1;
+                    });
+                    
+                    // Format namespace info with counts
+                    let nsInfo = '';
+                    if (Object.keys(namespaceBreakdown).length > 1) {
+                        const nsDetails = Object.entries(namespaceBreakdown)
+                            .map(([ns, count]) => `${ns === 'root' ? 'root' : ns}:${count}`)
+                            .join(', ');
+                        nsInfo = ` (${nsDetails})`;
+                    } else if (nsArray.length === 1 && nsArray[0] !== 'root') {
+                        nsInfo = ` (${nsArray[0]})`;
+                    }
+                    
                     pbsBackupInfo = `${pbsInstances[0]} (${datastores.join(', ')})${nsInfo}`;
                 } else if (pbsInstances.length > 1) {
                     const details = pbsInstances.map(pbs => {
@@ -911,11 +929,29 @@ PulseApp.ui.backups = (() => {
         const typeIcon = `<span class="type-icon inline-block rounded text-xs align-middle ${typeIconClass}">${guestStatus.guestType}</span>`;
 
 
-        // Create PBS backup cell with visual indicator
+        // Create PBS backup cell with visual indicator and namespace info
         let pbsBackupCell = '';
         if (guestStatus.pbsBackups > 0) {
             const pbsIcon = '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full mr-1" title="PBS Backup"></span>';
-            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${guestStatus.pbsBackupInfo ? `title="${guestStatus.pbsBackupInfo}"` : ''}>${pbsIcon}${guestStatus.pbsBackups}</span>`;
+            let pbsText = `${pbsIcon}${guestStatus.pbsBackups}`;
+            
+            // Add namespace information if available
+            if (guestStatus.pbsBackupInfo) {
+                // Extract namespace counts from parentheses (e.g., "(root:17, pimox:1)")
+                const nsCountMatch = guestStatus.pbsBackupInfo.match(/\(([^)]+:[0-9]+(?:,\s*[^)]+:[0-9]+)*)\)/);
+                if (nsCountMatch) {
+                    const namespaceInfo = nsCountMatch[1];
+                    pbsText += `<br><span class="text-xs text-gray-600 dark:text-gray-400">${namespaceInfo}</span>`;
+                } else if (guestStatus.pbsBackupInfo.includes('(') && guestStatus.pbsBackupInfo.includes(')')) {
+                    // Extract single namespace from parentheses
+                    const singleNsMatch = guestStatus.pbsBackupInfo.match(/\(([^)]+)\)/);
+                    if (singleNsMatch && !singleNsMatch[1].includes('main')) {
+                        pbsText += `<br><span class="text-xs text-gray-600 dark:text-gray-400">${singleNsMatch[1]}</span>`;
+                    }
+                }
+            }
+            
+            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300">${pbsText}</span>`;
         } else {
             pbsBackupCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }
