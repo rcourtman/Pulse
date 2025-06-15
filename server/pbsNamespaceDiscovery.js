@@ -17,9 +17,7 @@ const CACHE_TTL = 300000; // 5 minutes cache TTL
  */
 async function listNamespaces(client, datastoreName, parentNamespace = '', maxDepth = null) {
     try {
-        const params = {
-            store: datastoreName
-        };
+        const params = {};
         
         if (parentNamespace) {
             params.ns = parentNamespace;

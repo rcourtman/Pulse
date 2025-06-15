@@ -195,6 +195,16 @@ async function initializePbsClients(pbsConfigs) {
               
               const pbsAxiosInstance = createApiClientInstance(pbsBaseURL, config.allowSelfSignedCerts, authInterceptor, retryConfig, useResilientDns);
               
+              // IMPORTANT: Remove Content-Type header for PBS GET requests
+              // PBS has a bug where it ignores namespace parameter when Content-Type is set on GET requests
+              pbsAxiosInstance.interceptors.request.use(request => {
+                  if (request.method?.toLowerCase() === 'get') {
+                      console.log(`[PBS] Removing Content-Type header for GET request to ${request.url}`);
+                      delete request.headers['Content-Type'];
+                  }
+                  return request;
+              });
+              
               clientData = { client: pbsAxiosInstance, config: config };
               console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)${useResilientDns ? ' with resilient DNS' : ''}`);
           } else {
