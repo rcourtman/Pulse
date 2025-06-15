@@ -345,6 +345,7 @@ PulseApp.ui.backups = (() => {
                     datastoreName: ds.name,
                     backupType: snap['backup-type'],
                     backupVMID: snap['backup-id'],
+                    namespace: snap.namespace || 'root', // Preserve namespace information
                     source: 'pbs'
                 }))
             )
@@ -654,27 +655,53 @@ PulseApp.ui.backups = (() => {
                 const pbsInstances = [...new Set(pbsSnapshots.map(s => s.pbsInstanceName).filter(Boolean))];
                 const datastores = [...new Set(pbsSnapshots.map(s => s.datastoreName).filter(Boolean))];
                 
-                // Group backups by PBS instance for detailed info
+                // Group backups by PBS instance and namespace for detailed info
                 const backupsByPbs = {};
                 pbsSnapshots.forEach(snap => {
                     if (snap.pbsInstanceName) {
                         if (!backupsByPbs[snap.pbsInstanceName]) {
-                            backupsByPbs[snap.pbsInstanceName] = { count: 0, datastores: new Set() };
+                            backupsByPbs[snap.pbsInstanceName] = { count: 0, datastores: new Set(), namespaces: new Set() };
                         }
                         backupsByPbs[snap.pbsInstanceName].count++;
                         if (snap.datastoreName) {
                             backupsByPbs[snap.pbsInstanceName].datastores.add(snap.datastoreName);
                         }
+                        if (snap.namespace) {
+                            backupsByPbs[snap.pbsInstanceName].namespaces.add(snap.namespace);
+                        }
                     }
                 });
                 
                 if (pbsInstances.length === 1) {
-                    pbsBackupInfo = `${pbsInstances[0]} (${datastores.join(', ')})`;
+                    const info = backupsByPbs[pbsInstances[0]];
+                    const nsArray = Array.from(info.namespaces || []);
+                    
+                    // Create namespace breakdown for display
+                    const namespaceBreakdown = {};
+                    pbsSnapshots.forEach(snap => {
+                        const ns = snap.namespace || 'root';
+                        namespaceBreakdown[ns] = (namespaceBreakdown[ns] || 0) + 1;
+                    });
+                    
+                    // Format namespace info with counts
+                    let nsInfo = '';
+                    if (Object.keys(namespaceBreakdown).length > 1) {
+                        const nsDetails = Object.entries(namespaceBreakdown)
+                            .map(([ns, count]) => `${ns === 'root' ? 'root' : ns}:${count}`)
+                            .join(', ');
+                        nsInfo = ` (${nsDetails})`;
+                    } else if (nsArray.length === 1 && nsArray[0] !== 'root') {
+                        nsInfo = ` (${nsArray[0]})`;
+                    }
+                    
+                    pbsBackupInfo = `${pbsInstances[0]} (${datastores.join(', ')})${nsInfo}`;
                 } else if (pbsInstances.length > 1) {
                     const details = pbsInstances.map(pbs => {
                         const info = backupsByPbs[pbs];
                         const dsArray = Array.from(info.datastores);
-                        return `${pbs}: ${info.count} on ${dsArray.join(', ')}`;
+                        const nsArray = Array.from(info.namespaces || []);
+                        const nsInfo = nsArray.length > 0 ? ` [${nsArray.map(ns => ns === 'root' ? 'root' : ns).join(',')}]` : '';
+                        return `${pbs}: ${info.count} on ${dsArray.join(', ')}${nsInfo}`;
                     }).join(' | ');
                     pbsBackupInfo = details;
                 }
@@ -906,7 +933,18 @@ PulseApp.ui.backups = (() => {
         let pbsBackupCell = '';
         if (guestStatus.pbsBackups > 0) {
             const pbsIcon = '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full mr-1" title="PBS Backup"></span>';
-            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${guestStatus.pbsBackupInfo ? `title="${guestStatus.pbsBackupInfo}"` : ''}>${pbsIcon}${guestStatus.pbsBackups}</span>`;
+            let pbsText = `${pbsIcon}${guestStatus.pbsBackups}`;
+            
+            // Add namespace indicator if backups span multiple namespaces
+            if (guestStatus.pbsBackupInfo) {
+                const nsCountMatch = guestStatus.pbsBackupInfo.match(/\(([^)]+:[0-9]+(?:,\s*[^)]+:[0-9]+)*)\)/);
+                if (nsCountMatch && nsCountMatch[1].includes(',')) {
+                    // Multiple namespaces - add a small indicator
+                    pbsText += '<span class="text-xs align-super text-purple-600 dark:text-purple-400 ml-0.5">*</span>';
+                }
+            }
+            
+            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${guestStatus.pbsBackupInfo ? `title="${guestStatus.pbsBackupInfo}"` : ''}>${pbsText}</span>`;
         } else {
             pbsBackupCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }

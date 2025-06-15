@@ -494,7 +494,14 @@ class DiagnosticTool {
                             const firstDatastore = datastoreData.data.data[0];
                             if (firstDatastore && firstDatastore.store) {
                                 try {
-                                    const backupData = await clientObj.client.get(`/admin/datastore/${firstDatastore.store}/groups`);
+                                    // Add namespace parameter if configured
+                                    const groupsParams = {};
+                                    if (clientObj.config.namespace) {
+                                        groupsParams.ns = clientObj.config.namespace;
+                                    }
+                                    const backupData = await clientObj.client.get(`/admin/datastore/${firstDatastore.store}/groups`, {
+                                        params: groupsParams
+                                    });
                                     if (backupData && backupData.data) {
                                         permCheck.canListBackups = true;
                                         permCheck.backupCount = backupData.data.data ? backupData.data.data.length : 0;
