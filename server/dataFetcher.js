@@ -854,15 +854,41 @@ async function fetchPbsDatastoreData({ client, config }) {
 }
 
 /**
- * Fetches snapshots for a specific datastore.
+ * Fetches snapshots for a specific datastore across all namespaces.
  * @param {Object} pbsClient - { client, config } object for the PBS instance.
  * @param {string} storeName - The name of the datastore.
- * @returns {Promise<Array>} - Array of snapshot objects.
+ * @returns {Promise<Array>} - Array of snapshot objects with namespace information.
  */
 async function fetchPbsDatastoreSnapshots({ client, config }, storeName) {
     try {
-        const snapshotResponse = await client.get(`/admin/datastore/${storeName}/snapshots`);
-        return snapshotResponse.data?.data ?? [];
+        // Get namespaces to query
+        const namespacesToQuery = await getNamespacesToQuery(client, storeName, config);
+        console.log(`[DataFetcher] Fetching snapshots for datastore ${storeName} from namespaces: ${namespacesToQuery.join(', ') || '(root only)'}`);
+        
+        const allSnapshots = [];
+        
+        // Fetch snapshots from each namespace
+        for (const namespace of namespacesToQuery) {
+            try {
+                const params = namespace ? { ns: namespace } : { ns: '' };
+                const snapshotResponse = await client.get(`/admin/datastore/${storeName}/snapshots`, { params });
+                const snapshots = snapshotResponse.data?.data ?? [];
+                
+                // Add namespace field to each snapshot
+                snapshots.forEach(snap => {
+                    snap.namespace = namespace || 'root';
+                });
+                
+                allSnapshots.push(...snapshots);
+                console.log(`[DataFetcher] Found ${snapshots.length} snapshots in namespace '${namespace || 'root'}' for datastore ${storeName}`);
+            } catch (nsError) {
+                if (nsError.response?.status !== 404) {
+                    console.warn(`WARN: [DataFetcher] Failed to fetch snapshots from namespace '${namespace}' in datastore ${storeName}: ${nsError.message}`);
+                }
+            }
+        }
+        
+        return allSnapshots;
     } catch (snapshotError) {
         const status = snapshotError.response?.status ? ` (Status: ${snapshotError.response.status})` : '';
         console.error(`ERROR: [DataFetcher] Failed to fetch snapshots for datastore ${storeName} on ${config.name}${status}: ${snapshotError.message}`);
@@ -1189,6 +1215,17 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
         }
         
         // console.log(`[DataFetcher] Final task count for ${config.name}: ${allBackupTasks.length} -> ${deduplicatedTasks.length} (removed ${allBackupTasks.length - deduplicatedTasks.length} duplicates)`); // Removed verbose log
+        
+        // Debug: Log namespace information in backup runs
+        const namespaceCounts = {};
+        deduplicatedTasks.forEach(task => {
+            if (task.pbsBackupRun && task.namespace !== undefined) {
+                namespaceCounts[task.namespace] = (namespaceCounts[task.namespace] || 0) + 1;
+            }
+        });
+        if (Object.keys(namespaceCounts).length > 0) {
+            console.log(`[DataFetcher] PBS backup runs by namespace: ${JSON.stringify(namespaceCounts)}`);
+        }
         
         return { 
             tasks: deduplicatedTasks, 
