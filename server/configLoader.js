@@ -120,7 +120,7 @@ function loadPbsConfig(index = null) {
                 authMethod: 'token',
                 name: process.env[nodeNameVar] || pbsHostname,
                 host: pbsHostUrl,
-                port: process.env[portVar] || '8007',
+                port: process.env[portVar] || (pbsHostUrl && pbsHostUrl.includes('://') ? '' : '8007'),
                 tokenId: pbsTokenId,
                 tokenSecret: pbsTokenSecret,
                 nodeName: process.env[nodeNameVar], // Keep nodeName field
@@ -235,7 +235,7 @@ function loadConfiguration() {
             id: index ? `${idPrefix}_${index}` : idPrefix,
             name: nodeName || null, // Only use explicitly configured names
             host: host,
-            port: process.env[portEnv] || '8006',
+            port: process.env[portEnv] || (host && host.includes('://') ? '' : '8006'),
             tokenId: tokenId,
             tokenSecret: tokenSecret,
             enabled: process.env[enabledEnv] !== 'false',
