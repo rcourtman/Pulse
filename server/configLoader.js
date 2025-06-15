@@ -84,6 +84,10 @@ function loadPbsConfig(index = null) {
     const selfSignedVar = `PBS_ALLOW_SELF_SIGNED_CERTS${suffix}`;
     const enabledVar = `PBS_ENABLED${suffix}`;
     const resilientDnsVar = `PBS_RESILIENT_DNS${suffix}`;
+    const namespaceVar = `PBS_NAMESPACE${suffix}`;
+    const namespaceAutoVar = `PBS_NAMESPACE_AUTO${suffix}`;
+    const namespaceIncludeVar = `PBS_NAMESPACE_INCLUDE${suffix}`;
+    const namespaceExcludeVar = `PBS_NAMESPACE_EXCLUDE${suffix}`;
 
     const pbsHostUrl = process.env[hostVar];
     if (!pbsHostUrl) {
@@ -116,10 +120,12 @@ function loadPbsConfig(index = null) {
                 authMethod: 'token',
                 name: process.env[nodeNameVar] || pbsHostname,
                 host: pbsHostUrl,
-                port: process.env[portVar] || '8007',
+                port: process.env[portVar] || (pbsHostUrl && pbsHostUrl.includes('://') ? '' : '8007'),
                 tokenId: pbsTokenId,
                 tokenSecret: pbsTokenSecret,
                 nodeName: process.env[nodeNameVar], // Keep nodeName field
+                namespace: process.env[namespaceVar] || '', // Default to root namespace if not specified
+                namespaces: process.env[namespaceVar] ? process.env[namespaceVar].split(',').map(ns => ns.trim()).filter(ns => ns !== undefined) : null, // Support comma-separated namespaces, null for auto-discovery
                 allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
                 enabled: process.env[enabledVar] !== 'false',
                 useResilientDns: process.env[resilientDnsVar] === 'true'
@@ -229,7 +235,7 @@ function loadConfiguration() {
             id: index ? `${idPrefix}_${index}` : idPrefix,
             name: nodeName || null, // Only use explicitly configured names
             host: host,
-            port: process.env[portEnv] || '8006',
+            port: process.env[portEnv] || (host && host.includes('://') ? '' : '8006'),
             tokenId: tokenId,
             tokenSecret: tokenSecret,
             enabled: process.env[enabledEnv] !== 'false',

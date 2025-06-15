@@ -61,9 +61,20 @@ function initializePveClients(endpoints) {
       return; // Skip disabled endpoints
     }
 
-    const baseURL = endpoint.host.includes('://')
-      ? `${endpoint.host}/api2/json`
-      : `https://${endpoint.host}:${endpoint.port}/api2/json`;
+    // Build base URL - only add port if it's explicitly configured and not empty
+    let baseURL;
+    if (endpoint.host.includes('://')) {
+      // Host already has protocol, use as-is
+      baseURL = `${endpoint.host}/api2/json`;
+    } else {
+      // Add https:// protocol
+      baseURL = `https://${endpoint.host}`;
+      // Only add port if it's explicitly set and not empty
+      if (endpoint.port && endpoint.port !== '') {
+        baseURL += `:${endpoint.port}`;
+      }
+      baseURL += '/api2/json';
+    }
 
     const authInterceptor = createPveAuthInterceptor(endpoint);
     const retryConfig = {
@@ -180,9 +191,20 @@ async function initializePbsClients(pbsConfigs) {
       let clientData = null;
       try {
           if (config.authMethod === 'token') {
-              const pbsBaseURL = config.host.includes('://')
-                  ? `${config.host}/api2/json`
-                  : `https://${config.host}:${config.port}/api2/json`;
+              // Build base URL - only add port if it's explicitly configured and not empty
+              let pbsBaseURL;
+              if (config.host.includes('://')) {
+                  // Host already has protocol, use as-is
+                  pbsBaseURL = `${config.host}/api2/json`;
+              } else {
+                  // Add https:// protocol
+                  pbsBaseURL = `https://${config.host}`;
+                  // Only add port if it's explicitly set and not empty
+                  if (config.port && config.port !== '') {
+                      pbsBaseURL += `:${config.port}`;
+                  }
+                  pbsBaseURL += '/api2/json';
+              }
               
               const authInterceptor = createPbsAuthInterceptor(config);
               const retryConfig = {
@@ -194,6 +216,16 @@ async function initializePbsClients(pbsConfigs) {
               const useResilientDns = config.useResilientDns || config.host.includes('.lan');
               
               const pbsAxiosInstance = createApiClientInstance(pbsBaseURL, config.allowSelfSignedCerts, authInterceptor, retryConfig, useResilientDns);
+              
+              // IMPORTANT: Remove Content-Type header for PBS GET requests
+              // PBS has a bug where it ignores namespace parameter when Content-Type is set on GET requests
+              pbsAxiosInstance.interceptors.request.use(request => {
+                  if (request.method?.toLowerCase() === 'get') {
+                      console.log(`[PBS] Removing Content-Type header for GET request to ${request.url}`);
+                      delete request.headers['Content-Type'];
+                  }
+                  return request;
+              });
               
               clientData = { client: pbsAxiosInstance, config: config };
               console.log(`INFO: [PBS Init] Successfully initialized client for instance '${config.name}' (Token Auth)${useResilientDns ? ' with resilient DNS' : ''}`);

@@ -3,6 +3,7 @@ const { createApiClientInstance } = require('./apiClients');
 const axios = require('axios');
 const https = require('https');
 const dnsResolver = require('./dnsResolver');
+const { getNamespacesToQuery } = require('./pbsNamespaceDiscovery');
 
 let pLimit;
 let requestLimiter;
@@ -853,15 +854,41 @@ async function fetchPbsDatastoreData({ client, config }) {
 }
 
 /**
- * Fetches snapshots for a specific datastore.
+ * Fetches snapshots for a specific datastore across all namespaces.
  * @param {Object} pbsClient - { client, config } object for the PBS instance.
  * @param {string} storeName - The name of the datastore.
- * @returns {Promise<Array>} - Array of snapshot objects.
+ * @returns {Promise<Array>} - Array of snapshot objects with namespace information.
  */
 async function fetchPbsDatastoreSnapshots({ client, config }, storeName) {
     try {
-        const snapshotResponse = await client.get(`/admin/datastore/${storeName}/snapshots`);
-        return snapshotResponse.data?.data ?? [];
+        // Get namespaces to query
+        const namespacesToQuery = await getNamespacesToQuery(client, storeName, config);
+        console.log(`[DataFetcher] Fetching snapshots for datastore ${storeName} from namespaces: ${namespacesToQuery.join(', ') || '(root only)'}`);
+        
+        const allSnapshots = [];
+        
+        // Fetch snapshots from each namespace
+        for (const namespace of namespacesToQuery) {
+            try {
+                const params = namespace ? { ns: namespace } : { ns: '' };
+                const snapshotResponse = await client.get(`/admin/datastore/${storeName}/snapshots`, { params });
+                const snapshots = snapshotResponse.data?.data ?? [];
+                
+                // Add namespace field to each snapshot
+                snapshots.forEach(snap => {
+                    snap.namespace = namespace || 'root';
+                });
+                
+                allSnapshots.push(...snapshots);
+                console.log(`[DataFetcher] Found ${snapshots.length} snapshots in namespace '${namespace || 'root'}' for datastore ${storeName}`);
+            } catch (nsError) {
+                if (nsError.response?.status !== 404) {
+                    console.warn(`WARN: [DataFetcher] Failed to fetch snapshots from namespace '${namespace}' in datastore ${storeName}: ${nsError.message}`);
+                }
+            }
+        }
+        
+        return allSnapshots;
     } catch (snapshotError) {
         const status = snapshotError.response?.status ? ` (Status: ${snapshotError.response.status})` : '';
         console.error(`ERROR: [DataFetcher] Failed to fetch snapshots for datastore ${storeName} on ${config.name}${status}: ${snapshotError.message}`);
@@ -908,24 +935,56 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             const datastores = datastoreResponse.data?.data || [];
             
             for (const datastore of datastores) {
-                const groupsResponse = await client.get(`/admin/datastore/${datastore.name}/groups`);
-                const groups = groupsResponse.data?.data || [];
+                // Get namespaces to query (auto-discovery or configured)
+                const namespacesToQuery = await getNamespacesToQuery(client, datastore.name, config);
                 
-                // For each backup group, get snapshots within history period
-                for (const group of groups) {
+                
+                
+                // Query each namespace
+                for (const namespace of namespacesToQuery) {
                     try {
-                        const snapshotsResponse = await client.get(`/admin/datastore/${datastore.name}/snapshots`, {
-                            params: {
-                                'backup-type': group['backup-type'],
-                                'backup-id': group['backup-id']
-                            }
-                        });
-                        const allSnapshots = snapshotsResponse.data?.data || [];
+                        // Get groups for this namespace - the API test confirms this works correctly!
+                        // Always pass ns parameter to ensure proper filtering
+                        const groupsParams = {
+                            ns: namespace || ''
+                        };
+                        console.log(`[DataFetcher] Fetching groups from namespace '${namespace}'`);
                         
-                        // Filter snapshots to configured history period
-                        const recentSnapshots = allSnapshots.filter(snapshot => {
-                            return snapshot['backup-time'] >= thirtyDaysAgo;
+                        const groupsResponse = await client.get(`/admin/datastore/${datastore.name}/groups`, {
+                            params: groupsParams
                         });
+                        const groups = groupsResponse.data?.data || [];
+                        console.log(`[DataFetcher] Found ${groups.length} groups in namespace '${namespace}'`);
+                        
+                        if (groups.length > 0) {
+                            console.log(`[DataFetcher] Found ${groups.length} backup groups in namespace '${namespace}' for datastore ${datastore.name}`);
+                        }
+                
+                        // Process each group in this namespace
+                        for (const group of groups) {
+                            try {
+                                // Get snapshots for this specific group in this namespace
+                                const snapshotParams = {
+                                    'backup-type': group['backup-type'],
+                                    'backup-id': group['backup-id'],
+                                    ns: namespace
+                                };
+                                
+                                const snapshotsResponse = await client.get(`/admin/datastore/${datastore.name}/snapshots`, {
+                                    params: snapshotParams
+                                });
+                                const allSnapshots = snapshotsResponse.data?.data || [];
+                                
+                                // Add namespace field to each snapshot
+                                allSnapshots.forEach(snapshot => {
+                                    snapshot.namespace = namespace || 'root';
+                                });
+                                
+                                
+                                // Filter snapshots to configured history period
+                                const recentSnapshots = allSnapshots.filter(snapshot => {
+                                    return snapshot['backup-time'] >= thirtyDaysAgo;
+                                });
                         
                         // Group snapshots by day to represent daily backup job runs
                         const snapshotsByDay = new Map();
@@ -946,8 +1005,8 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                 return current['backup-time'] > latest['backup-time'] ? current : latest;
                             });
                             
-                            // Create a comprehensive unique key using snapshot data (not group data)
-                            const uniqueKey = `${dayKey}:${datastore.name}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}`;
+                            // Create a comprehensive unique key including namespace to avoid collisions
+                            const uniqueKey = `${dayKey}:${datastore.name}:${namespace}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}`;
                             
                             // Only create one backup run per unique key
                             if (!backupRunsByUniqueKey.has(uniqueKey)) {
@@ -971,20 +1030,27 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                     pbsBackupRun: true,
                                     backupDate: dayKey,
                                     snapshotCount: daySnapshots.length,
-                                    protected: latestSnapshot.protected || false
+                                    protected: latestSnapshot.protected || false,
+                                    namespace: namespace || 'root'
                                 };
                                 
                                 backupRunsByUniqueKey.set(uniqueKey, backupRun);
                             }
                         });
-                        
-                    } catch (snapshotError) {
-                        console.warn(`WARN: [DataFetcher] Could not fetch snapshots for group ${group['backup-type']}/${group['backup-id']}: ${snapshotError.message}`);
+                                
+                            } catch (snapshotError) {
+                                console.warn(`WARN: [DataFetcher] Could not fetch snapshots for group ${group['backup-type']}/${group['backup-id']} in namespace '${namespace}': ${snapshotError.message}`);
+                            }
+                        }
+                    } catch (namespaceError) {
+                        if (namespaceError.response?.status !== 404) {
+                            console.warn(`WARN: [DataFetcher] Could not fetch groups from namespace '${namespace}' in datastore ${datastore.name}: ${namespaceError.message}`);
+                        }
                     }
                 }
             }
             
-            // console.log(`[DataFetcher] Created ${backupRunsByUniqueKey.size} unique backup runs from snapshots for ${config.name}`); // Removed verbose log
+            console.log(`[DataFetcher] Created ${backupRunsByUniqueKey.size} unique backup runs from PBS snapshots for ${config.name}`);
             
         } catch (datastoreError) {
             console.error(`ERROR: [DataFetcher] Could not fetch datastore backup history: ${datastoreError.message}`);
@@ -1107,7 +1173,8 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                     // Failure details
                                     failureTask: true,
                                     exitcode: task.exitcode,
-                                    user: task.user
+                                    user: task.user,
+                                    namespace: 'root' // Failed tasks from admin endpoint are in root namespace
                                 };
                                 
                                 enhancedBackupRuns.push(failedBackupRun);
@@ -1146,6 +1213,17 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
         }
         
         // console.log(`[DataFetcher] Final task count for ${config.name}: ${allBackupTasks.length} -> ${deduplicatedTasks.length} (removed ${allBackupTasks.length - deduplicatedTasks.length} duplicates)`); // Removed verbose log
+        
+        // Debug: Log namespace information in backup runs
+        const namespaceCounts = {};
+        deduplicatedTasks.forEach(task => {
+            if (task.pbsBackupRun && task.namespace !== undefined) {
+                namespaceCounts[task.namespace] = (namespaceCounts[task.namespace] || 0) + 1;
+            }
+        });
+        if (Object.keys(namespaceCounts).length > 0) {
+            console.log(`[DataFetcher] PBS backup runs by namespace: ${JSON.stringify(namespaceCounts)}`);
+        }
         
         return { 
             tasks: deduplicatedTasks, 
