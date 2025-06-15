@@ -87,7 +87,7 @@ const { fetchDiscoveryData, fetchMetricsData } = require('./dataFetcher');
 // --- END Data Fetching ---
 
 // Server configuration
-const PORT = 7655; // Using a different port from the main server
+const PORT = process.env.PORT || 7655; // Use PORT env var or default to 7655
 
 // --- Define Update Intervals (Configurable via Env Vars) ---
 const METRIC_UPDATE_INTERVAL = parseInt(process.env.PULSE_METRIC_INTERVAL_MS, 10) || 2000; // Default: 2 seconds
@@ -1762,7 +1762,7 @@ async function startServer() {
     } 
 
     server.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server listening on port ${PORT}`);
+        console.log(`Server listening on port ${PORT} (${process.env.PORT ? 'from PORT env var' : 'default'})`);
         console.log(`Enhanced monitoring with alerts enabled`);
         console.log(`Health endpoint: http://localhost:${PORT}/api/health`);
         console.log(`Performance metrics: http://localhost:${PORT}/api/performance`);
