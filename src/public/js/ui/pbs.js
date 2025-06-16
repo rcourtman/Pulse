@@ -195,9 +195,44 @@ PulseApp.ui.pbs = (() => {
       return `<span class="${CSS_CLASSES.TEXT_XS} ${colorClass}">${gcStatus}</span>`;
     };
 
+    // Helper function to find guest name from VM/container data
+    const findGuestName = (guestType, guestId) => {
+        try {
+            const appState = PulseApp.state.get();
+            if (!appState) {
+                console.debug('[PBS] No app state available for guest name lookup');
+                return null;
+            }
+            
+            // Handle both "ct" and "qemu"/"vm" guest types
+            const guestArray = (guestType === 'ct' || guestType === 'lxc') 
+                ? appState.containers 
+                : appState.vms;
+            if (!guestArray || !Array.isArray(guestArray)) {
+                console.debug(`[PBS] No ${guestType === 'ct' ? 'containers' : 'vms'} array available`);
+                return null;
+            }
+            
+            const guest = guestArray.find(g => g.vmid === parseInt(guestId));
+            console.debug(`[PBS] Looking for ${guestType}/${guestId}, found:`, guest?.name || 'not found');
+            return guest ? guest.name : null;
+        } catch (error) {
+            console.debug('[PBS] Error finding guest name:', error);
+            return null;
+        }
+    };
+
     const parsePbsTaskTarget = (task) => {
-      // For synthetic backup run tasks, use the guest field directly
+      // For synthetic backup run tasks, enhance with guest name if available
       if (task.guest && task.pbsBackupRun) {
+          // Check if guest field is in format "ct/103" or "qemu/102"
+          const guestParts = task.guest.split('/');
+          if (guestParts.length === 2) {
+              const guestType = guestParts[0];
+              const guestId = guestParts[1];
+              const guestName = findGuestName(guestType, guestId);
+              return guestName ? `${task.guest} (${guestName})` : task.guest;
+          }
           return task.guest;
       }
       
@@ -214,7 +249,11 @@ PulseApp.ui.pbs = (() => {
           if (targetSubParts.length >= 2) {
               const guestType = targetSubParts[0];
               const guestId = targetSubParts[1];
-              displayTarget = `${guestType}/${guestId}`;
+              const baseTarget = `${guestType}/${guestId}`;
+              
+              // Try to find guest name and append it if found
+              const guestName = findGuestName(guestType, guestId);
+              displayTarget = guestName ? `${baseTarget} (${guestName})` : baseTarget;
           }
         }
       } else if (taskType === 'prune' || taskType === 'garbage_collection') {
