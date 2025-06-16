@@ -1,4 +1,32 @@
 /**
+ * Detects if a verification failure is stale (for missing/deleted snapshots)
+ * @param {Object} task - PBS task object
+ * @returns {boolean} - True if this is a stale verification failure
+ */
+function isStaleVerificationFailure(task) {
+    const taskType = task.worker_type || task.type;
+    const status = task.status || '';
+    const endTime = task.endtime || 0;
+    
+    // Only apply to verification tasks that have failed
+    if (taskType !== 'verificationjob' || status === 'OK' || !status.includes('ERROR')) {
+        return false;
+    }
+    
+    // Consider verification failures older than 14 days as potentially stale
+    const fourteenDaysAgo = (Date.now() / 1000) - (14 * 24 * 60 * 60);
+    const isOldFailure = endTime && endTime < fourteenDaysAgo;
+    
+    // Check if the error message indicates missing/deleted snapshots
+    const hasStaleErrorSignature = status.includes('verification failed') || 
+                                   status.includes('backup not found') ||
+                                   status.includes('group not found') ||
+                                   status.includes('missing chunks');
+    
+    return isOldFailure && hasStaleErrorSignature;
+}
+
+/**
  * Processes a list of raw PBS tasks into structured summaries and recent task lists.
  * @param {Array} allTasks - Array of raw task objects from the PBS API.
  * @returns {Object} - Object containing structured task data (backupTasks, verificationTasks, etc.).
@@ -113,6 +141,11 @@ function processPbsTasks(allTasks) {
         const thirtyDays = 30 * 24 * 60 * 60;
         
         const recent = taskList.filter(task => {
+            // Exclude stale verification failures from UI display
+            if (isStaleVerificationFailure(task)) {
+                return false;
+            }
+            
             // Include tasks without a starttime and tasks within last 30 days
             if (task.starttime == null) return true;
             return (nowSec - task.starttime) <= thirtyDays;
@@ -187,10 +220,17 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
                     category.ok++;
                     if (task.endtime && task.endtime > category.lastOk) category.lastOk = task.endtime;
                 } else {
-                    // Everything that's not OK or running is considered failed
-                    // This includes: WARNING, WARNINGS:..., errors, connection errors, etc.
-                    category.failed++;
-                    if (task.endtime && task.endtime > category.lastFailed) category.lastFailed = task.endtime;
+                    // Check if this is a stale verification failure (normal lifecycle event)
+                    if (isStaleVerificationFailure(task)) {
+                        // Don't count stale verification failures as actual failures
+                        // These are expected when snapshots get pruned by retention policies
+                        console.log(`[PBS Utils] Ignoring stale verification failure: ${task.upid || task.id}`);
+                    } else {
+                        // Everything else that's not OK or running is considered failed
+                        // This includes: WARNING, WARNINGS:..., errors, connection errors, etc.
+                        category.failed++;
+                        if (task.endtime && task.endtime > category.lastFailed) category.lastFailed = task.endtime;
+                    }
                 }
             }
         }
@@ -199,4 +239,4 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
     return results;
 }
 
-module.exports = { processPbsTasks, categorizeAndCountTasks };
+module.exports = { processPbsTasks, categorizeAndCountTasks, isStaleVerificationFailure };
