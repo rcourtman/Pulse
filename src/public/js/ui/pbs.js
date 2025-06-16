@@ -200,7 +200,7 @@ PulseApp.ui.pbs = (() => {
         try {
             const appState = PulseApp.state.get();
             if (!appState) {
-                console.debug('[PBS] No app state available for guest name lookup');
+                console.log('[PBS] No app state available for guest name lookup');
                 return null;
             }
             
@@ -209,25 +209,25 @@ PulseApp.ui.pbs = (() => {
                 ? appState.containers 
                 : appState.vms;
             if (!guestArray || !Array.isArray(guestArray)) {
-                console.debug(`[PBS] No ${guestType === 'ct' ? 'containers' : 'vms'} array available`);
+                console.log(`[PBS] No ${guestType === 'ct' ? 'containers' : 'vms'} array available`);
                 return null;
             }
             
             const guest = guestArray.find(g => g.vmid === parseInt(guestId));
-            console.debug(`[PBS] Looking for ${guestType}/${guestId}, found:`, guest?.name || 'not found');
+            console.log(`[PBS] Looking for ${guestType}/${guestId}, found:`, guest?.name || 'not found');
             return guest ? guest.name : null;
         } catch (error) {
-            console.debug('[PBS] Error finding guest name:', error);
+            console.log('[PBS] Error finding guest name:', error);
             return null;
         }
     };
 
     const parsePbsTaskTarget = (task) => {
-      console.debug('[PBS] parsePbsTaskTarget called with task:', task);
+      console.log('[PBS] parsePbsTaskTarget called with task:', task);
       
       // For synthetic backup run tasks, enhance with guest name if available
       if (task.guest && task.pbsBackupRun) {
-          console.debug('[PBS] Processing synthetic backup run for guest:', task.guest);
+          console.log('[PBS] Processing synthetic backup run for guest:', task.guest);
           // Check if guest field is in format "ct/103" or "qemu/102"
           const guestParts = task.guest.split('/');
           if (guestParts.length === 2) {
@@ -235,7 +235,7 @@ PulseApp.ui.pbs = (() => {
               const guestId = guestParts[1];
               const guestName = findGuestName(guestType, guestId);
               const result = guestName ? `${task.guest} (${guestName})` : task.guest;
-              console.debug('[PBS] Synthetic backup result:', result);
+              console.log('[PBS] Synthetic backup result:', result);
               return result;
           }
           return task.guest;
@@ -259,7 +259,7 @@ PulseApp.ui.pbs = (() => {
               // Try to find guest name and append it if found
               const guestName = findGuestName(guestType, guestId);
               displayTarget = guestName ? `${baseTarget} (${guestName})` : baseTarget;
-              console.debug('[PBS] Regular backup/verify result:', displayTarget);
+              console.log('[PBS] Regular backup/verify result:', displayTarget);
           }
         }
       } else if (taskType === 'prune' || taskType === 'garbage_collection') {
