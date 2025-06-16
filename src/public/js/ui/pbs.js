@@ -2090,11 +2090,8 @@ PulseApp.ui.pbs = (() => {
         const currentlyMobile = window.innerWidth <= 768;
         const viewportChanged = lastKnownMobileState !== null && lastKnownMobileState !== currentlyMobile;
         
-        console.log(`[PBS-VIEWPORT] currentlyMobile: ${currentlyMobile}, lastKnown: ${lastKnownMobileState}, viewportChanged: ${viewportChanged}, expandedDetails: ${persistentExpandedDetails.size}`);
-        
         // Clear persistent state on viewport change to allow layout rebuild
         if (viewportChanged) {
-            console.log(`[PBS-VIEWPORT] Viewport changed - forcing immediate rebuild`);
             persistentExpandedDetails.clear();
             // Force immediate container clear to rebuild layout for new viewport
             container.innerHTML = '';
