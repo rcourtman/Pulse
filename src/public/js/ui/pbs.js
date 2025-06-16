@@ -5,10 +5,12 @@ PulseApp.ui.pbs = (() => {
     // Global state tracker for expanded PBS tasks
     let expandedTaskState = new Set();
     let expandedShowMoreState = new Set();
+    let taskStatusInfo = new Map(); // Track status info for each table
     
     // Simple persistent state for expanded detail cards
     let persistentExpandedDetails = new Set();
     let lastKnownMobileState = null; // Track viewport state
+    let selectedNamespaceTab = 'root'; // Track selected namespace tab
     
     // Helper function to find task data by UPID
     function findTaskByUpid(pbsArray, upid) {
@@ -24,9 +26,6 @@ PulseApp.ui.pbs = (() => {
         return null;
     }
     let selectedPbsTabIndex = 0; // Track selected PBS tab index globally
-    
-    // Namespace filtering
-    let pbsNamespaceFilter = null;
     
 
 
@@ -630,50 +629,42 @@ PulseApp.ui.pbs = (() => {
 
       const tasks = fullTasksArray || [];
       
-      // Separate failed and successful tasks
+      // Count failed tasks for status display
       const failedTasks = tasks.filter(task => task.status && task.status !== 'OK' && !task.status.toLowerCase().includes('running'));
-      const successfulTasks = tasks.filter(task => !task.status || task.status === 'OK' || task.status.toLowerCase().includes('running'));
-      
-      // Always show failed tasks first, then successful tasks up to limit
-      const prioritizedTasks = [...failedTasks, ...successfulTasks];
       
       // Determine which tasks to display based on "Show More" state
       let displayedTasks;
       if (isShowMoreExpanded) {
           // If "Show More" was previously expanded, show all tasks
-          displayedTasks = prioritizedTasks;
+          displayedTasks = tasks;
       } else {
           // Otherwise, show limited tasks
-          displayedTasks = prioritizedTasks.slice(0, initialLimit);
+          displayedTasks = tasks.slice(0, initialLimit);
       }
 
       // Update status indicator in header
       if (tableId) {
+          const runningTasks = tasks.filter(task => task.status && task.status.toLowerCase().includes('running')).length;
+          
+          let statusText = `(${tasks.length} total`;
+          if (failedTasks.length > 0) {
+              statusText += `, <span class="text-red-600 dark:text-red-400 font-semibold">${failedTasks.length} failed</span>`;
+          }
+          if (runningTasks > 0) {
+              statusText += `, <span class="text-blue-600 dark:text-blue-400">${runningTasks} running</span>`;
+          }
+          statusText += ')';
+          
+          // Store the status info globally
+          taskStatusInfo.set(tableId, {
+              statusText: statusText
+          });
+          
+          // Apply to DOM if elements exist
           const statusSpan = document.getElementById(`${tableId}-status`);
-          const prioritySpan = document.getElementById(`${tableId}-priority`);
           
           if (statusSpan) {
-              const runningTasks = tasks.filter(task => task.status && task.status.toLowerCase().includes('running')).length;
-              
-              let statusText = `(${tasks.length} total`;
-              if (failedTasks.length > 0) {
-                  statusText += `, <span class="text-red-600 dark:text-red-400 font-semibold">${failedTasks.length} failed</span>`;
-              }
-              if (runningTasks > 0) {
-                  statusText += `, <span class="text-blue-600 dark:text-blue-400">${runningTasks} running</span>`;
-              }
-              statusText += ')';
-              
               statusSpan.innerHTML = statusText;
-          }
-          
-          // Show priority indicator if failed tasks exist and are being prioritized
-          if (prioritySpan) {
-              if (failedTasks.length > 0) {
-                  prioritySpan.classList.remove('hidden');
-              } else {
-                  prioritySpan.classList.add('hidden');
-              }
           }
       }
 
@@ -698,14 +689,14 @@ PulseApp.ui.pbs = (() => {
           });
 
           if (showMoreButton) {
-              if (prioritizedTasks.length > initialLimit) {
+              if (tasks.length > initialLimit) {
                   showMoreButton.classList.remove(CSS_CLASSES.HIDDEN);
                   
                   // Update button text and state based on current expansion
                   if (isShowMoreExpanded) {
                       showMoreButton.textContent = 'Show Less';
                   } else {
-                      const remainingCount = prioritizedTasks.length - initialLimit;
+                      const remainingCount = tasks.length - initialLimit;
                       showMoreButton.textContent = `Show More (${remainingCount} older)`;
                   }
                   
@@ -1009,8 +1000,7 @@ PulseApp.ui.pbs = (() => {
 
         if (showDetails) {
             taskTypes.forEach(taskInfo => {
-                const section = detailsContainer.querySelector(`.${CSS_CLASSES.PBS_TASK_SECTION}[${DATA_ATTRIBUTES.TASK_TYPE}="${taskInfo.type}"]`);
-                console.log(`[PBS Debug] Populating ${taskInfo.type} tasks:`, taskInfo.data?.recentTasks?.length || 0, 'tasks');
+                const section = detailsContainer.querySelector(`.pbs-task-section[${DATA_ATTRIBUTES.TASK_TYPE}="${taskInfo.type}"]`);
                 if (section) populatePbsTaskTable(section, taskInfo.data?.recentTasks);
             });
         } else {
@@ -1192,12 +1182,39 @@ PulseApp.ui.pbs = (() => {
         return sectionDiv;
     };
 
-    const _createTaskTableElement = (tableId, title, idColumnHeader) => {
+    const _createTaskTableElement = (tableId, title, idColumnHeader, taskData) => {
         const fragment = document.createDocumentFragment();
 
         const heading = document.createElement('h4');
         heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
-        heading.innerHTML = `Recent ${title} Tasks <span id="${tableId}-status" class="text-xs font-normal text-gray-500"></span><span id="${tableId}-priority" class="text-xs text-red-600 dark:text-red-400 ml-2 hidden">Failed tasks shown first</span>`;
+        
+        // Calculate status immediately if we have task data
+        let statusContent = '';
+        if (taskData && taskData.recentTasks) {
+            const tasks = taskData.recentTasks;
+            const failedTasks = tasks.filter(task => task.status && task.status !== 'OK' && !task.status.toLowerCase().includes('running'));
+            const runningTasks = tasks.filter(task => task.status && task.status.toLowerCase().includes('running')).length;
+            
+            statusContent = `(${tasks.length} total`;
+            if (failedTasks.length > 0) {
+                statusContent += `, <span class="text-red-600 dark:text-red-400 font-semibold">${failedTasks.length} failed</span>`;
+            }
+            if (runningTasks > 0) {
+                statusContent += `, <span class="text-blue-600 dark:text-blue-400">${runningTasks} running</span>`;
+            }
+            statusContent += ')';
+            
+            // Store it for later updates
+            taskStatusInfo.set(tableId, {
+                statusText: statusContent
+            });
+        } else {
+            // Check if we have stored status info for this table
+            const storedStatus = taskStatusInfo.get(tableId);
+            statusContent = storedStatus ? storedStatus.statusText : '';
+        }
+        
+        heading.innerHTML = `Recent ${title} Tasks <span id="${tableId}-status" class="text-xs font-normal text-gray-500">${statusContent}</span>`;
         fragment.appendChild(heading);
 
         const tableContainer = document.createElement('div');
@@ -1232,10 +1249,10 @@ PulseApp.ui.pbs = (() => {
 
         const toggleButtonContainer = document.createElement('div');
         toggleButtonContainer.id = tableId.replace('-table', '-toggle-container');
-        toggleButtonContainer.className = `${CSS_CLASSES.PT1} ${CSS_CLASSES.TEXT_RIGHT}`;
+        toggleButtonContainer.className = `pt-3 ${CSS_CLASSES.TEXT_RIGHT}`;
 
         const showMoreButton = document.createElement('button');
-        showMoreButton.className = `${CSS_CLASSES.PBS_SHOW_MORE} ${CSS_CLASSES.TEXT_BLUE_600_HOVER_BLUE_800_DARK_BLUE_400_DARK_HOVER_BLUE_300} ${CSS_CLASSES.HIDDEN}`;
+        showMoreButton.className = `${CSS_CLASSES.PBS_SHOW_MORE} px-3 py-1 text-xs text-blue-600 dark:text-blue-400 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150 ${CSS_CLASSES.HIDDEN}`;
         showMoreButton.textContent = 'Show More';
         toggleButtonContainer.appendChild(showMoreButton);
 
@@ -1252,22 +1269,22 @@ PulseApp.ui.pbs = (() => {
         return _createPbsTaskHealthTable(instanceId, pbsInstanceData);
     };
 
-    const _createAllTaskSectionsContainer = (instanceId) => {
+    const _createAllTaskSectionsContainer = (instanceId, pbsInstanceData) => {
         const container = document.createElement('div');
         container.className = CSS_CLASSES.SPACE_Y_4;
 
         const taskDefinitions = [
-            { type: 'backup', title: 'Backup', idCol: 'Guest', tableIdPrefix: ID_PREFIXES.PBS_RECENT_BACKUP_TASKS_TABLE },
-            { type: 'verify', title: 'Verification', idCol: 'Guest/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_VERIFY_TASKS_TABLE },
-            { type: 'sync', title: 'Sync', idCol: 'Job ID', tableIdPrefix: ID_PREFIXES.PBS_RECENT_SYNC_TASKS_TABLE },
-            { type: 'prunegc', title: 'Prune/GC', idCol: 'Datastore/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_PRUNEGC_TASKS_TABLE }
+            { type: 'backup', title: 'Backup', idCol: 'Guest', tableIdPrefix: ID_PREFIXES.PBS_RECENT_BACKUP_TASKS_TABLE, data: pbsInstanceData?.backupTasks },
+            { type: 'verify', title: 'Verification', idCol: 'Guest/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_VERIFY_TASKS_TABLE, data: pbsInstanceData?.verificationTasks },
+            { type: 'sync', title: 'Sync', idCol: 'Job ID', tableIdPrefix: ID_PREFIXES.PBS_RECENT_SYNC_TASKS_TABLE, data: pbsInstanceData?.syncTasks },
+            { type: 'prunegc', title: 'Prune/GC', idCol: 'Datastore/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_PRUNEGC_TASKS_TABLE, data: pbsInstanceData?.pruneTasks }
         ];
 
         taskDefinitions.forEach(def => {
             const taskSection = document.createElement('div');
             taskSection.className = CSS_CLASSES.PBS_TASK_SECTION;
             taskSection.dataset.taskType = def.type;
-            taskSection.appendChild(_createTaskTableElement(def.tableIdPrefix + instanceId, def.title, def.idCol));
+            taskSection.appendChild(_createTaskTableElement(def.tableIdPrefix + instanceId, def.title, def.idCol, def.data));
             container.appendChild(taskSection);
         });
         return container;
@@ -1399,7 +1416,7 @@ PulseApp.ui.pbs = (() => {
             detailsContainer.appendChild(_createPbsNodeStatusSection(instanceId, pbsInstanceData));
             detailsContainer.appendChild(_createDatastoreSectionElement(instanceId));
             detailsContainer.appendChild(_createSummariesSectionElement(instanceId, pbsInstanceData));
-            detailsContainer.appendChild(_createAllTaskSectionsContainer(instanceId));
+            detailsContainer.appendChild(_createAllTaskSectionsContainer(instanceId, pbsInstanceData));
             
             // Populate the created sections
             const dsTableBodyElement = detailsContainer.querySelector(`#${ID_PREFIXES.PBS_DS_TBODY}${instanceId}`);
@@ -1971,37 +1988,12 @@ PulseApp.ui.pbs = (() => {
         }
     }
 
-    // Initialize PBS namespace filter
-    function _initPbsNamespaceFilter() {
-        pbsNamespaceFilter = document.getElementById('pbs-namespace-filter');
-        const filterContainer = document.getElementById('pbs-filter-container');
-        
-        if (!pbsNamespaceFilter || !filterContainer) return;
-        
-        // Add change listener
-        pbsNamespaceFilter.addEventListener('change', () => {
-            PulseApp.state.set('pbsFilterNamespace', pbsNamespaceFilter.value);
-            // Re-render PBS info with current data
-            const pbsData = PulseApp.state.get('pbsDataArray');
-            if (pbsData) {
-                updatePbsInfo(pbsData);
-            }
-        });
-        
-        // Initial update
-        _updatePbsNamespaceOptions();
-    }
-
-    // Update PBS namespace dropdown options
-    function _updatePbsNamespaceOptions() {
-        if (!pbsNamespaceFilter) return;
-        
-        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+    // Collect all namespaces from PBS data
+    function _collectNamespaces(pbsDataArray) {
         const namespaces = new Set(['root']); // Always include root
         
-        // Collect all namespaces from PBS data
         pbsDataArray.forEach(pbsInstance => {
-            // Check datastore snapshots (like Backups tab does)
+            // Check datastore snapshots
             if (pbsInstance.datastores) {
                 pbsInstance.datastores.forEach(ds => {
                     if (ds.snapshots) {
@@ -2012,72 +2004,70 @@ PulseApp.ui.pbs = (() => {
                 });
             }
             
-            // Check backup tasks
-            if (pbsInstance.backupTasks && pbsInstance.backupTasks.recentTasks) {
-                pbsInstance.backupTasks.recentTasks.forEach(task => {
-                    if (task.namespace) {
-                        namespaces.add(task.namespace);
-                    }
-                });
-            }
-            
-            // Check verification tasks
-            if (pbsInstance.verificationTasks && pbsInstance.verificationTasks.recentTasks) {
-                pbsInstance.verificationTasks.recentTasks.forEach(task => {
-                    if (task.namespace) {
-                        namespaces.add(task.namespace);
-                    }
-                });
-            }
-            
-            // Check sync tasks
-            if (pbsInstance.syncTasks && pbsInstance.syncTasks.recentTasks) {
-                pbsInstance.syncTasks.recentTasks.forEach(task => {
-                    if (task.namespace) {
-                        namespaces.add(task.namespace);
-                    }
-                });
-            }
-            
-            // Check prune tasks
-            if (pbsInstance.pruneTasks && pbsInstance.pruneTasks.recentTasks) {
-                pbsInstance.pruneTasks.recentTasks.forEach(task => {
-                    if (task.namespace) {
-                        namespaces.add(task.namespace);
-                    }
-                });
-            }
+            // Check all task types
+            const taskTypes = ['backupTasks', 'verificationTasks', 'syncTasks', 'pruneTasks'];
+            taskTypes.forEach(taskType => {
+                if (pbsInstance[taskType] && pbsInstance[taskType].recentTasks) {
+                    pbsInstance[taskType].recentTasks.forEach(task => {
+                        namespaces.add(task.namespace || 'root');
+                    });
+                }
+            });
         });
         
-        // Update options
-        const currentValue = pbsNamespaceFilter.value || 'all';
-        pbsNamespaceFilter.innerHTML = '<option value="all">All Namespaces</option>';
-        
-        Array.from(namespaces).sort().forEach(ns => {
-            const option = document.createElement('option');
-            option.value = ns;
-            option.textContent = ns === 'root' ? 'Root Namespace' : `${ns} Namespace`;
-            pbsNamespaceFilter.appendChild(option);
+        return Array.from(namespaces).sort((a, b) => {
+            // Root namespace first, then alphabetical
+            if (a === 'root') return -1;
+            if (b === 'root') return 1;
+            return a.localeCompare(b);
         });
-        
-        // Restore selection
-        pbsNamespaceFilter.value = currentValue;
-        
-        // Show/hide filter based on having PBS data
-        const filterContainer = document.getElementById('pbs-filter-container');
-        if (filterContainer) {
-            const hasPBS = pbsDataArray.length > 0;
-            filterContainer.style.display = hasPBS ? '' : 'none';
-        }
     }
+    
+    // Create namespace tabs
+    function _createNamespaceTabs(namespaces, container) {
+        const tabsContainer = document.createElement('div');
+        tabsContainer.className = 'mb-4 border-b border-gray-200 dark:border-gray-700';
+        
+        const tabsList = document.createElement('nav');
+        tabsList.className = '-mb-px flex space-x-8';
+        tabsList.setAttribute('aria-label', 'Namespace tabs');
+        
+        namespaces.forEach(namespace => {
+            const tab = document.createElement('button');
+            tab.className = namespace === selectedNamespaceTab 
+                ? 'border-b-2 border-blue-500 py-2 px-1 text-sm font-medium text-blue-600 dark:text-blue-400'
+                : 'border-b-2 border-transparent py-2 px-1 text-sm font-medium text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300';
+            tab.textContent = namespace === 'root' ? 'Root Namespace' : `${namespace} Namespace`;
+            tab.dataset.namespace = namespace;
+            
+            tab.addEventListener('click', () => {
+                // Clear cached status info when namespace changes
+                taskStatusInfo.clear();
+                selectedNamespaceTab = namespace;
+                
+                // Re-render PBS info with current data
+                const pbsData = PulseApp.state.get('pbsDataArray');
+                if (pbsData) {
+                    updatePbsInfo(pbsData);
+                }
+            });
+            
+            tabsList.appendChild(tab);
+        });
+        
+        tabsContainer.appendChild(tabsList);
+        return tabsContainer;
+    }
+
 
     // Filter PBS tasks by namespace
     function _filterPbsTasksByNamespace(tasks, selectedNamespace) {
-        if (!selectedNamespace || selectedNamespace === 'all') {
+        if (!selectedNamespace) {
+            // No filtering needed (only root namespace exists)
             return tasks;
         }
         
-        return tasks.filter(task => task.namespace === selectedNamespace);
+        return tasks.filter(task => (task.namespace || 'root') === selectedNamespace);
     }
 
     function _recalculateTaskSummary(tasks) {
@@ -2121,6 +2111,7 @@ PulseApp.ui.pbs = (() => {
         // Clear persistent state on viewport change to allow layout rebuild
         if (viewportChanged) {
             persistentExpandedDetails.clear();
+            taskStatusInfo.clear(); // Clear task status info on viewport change
             // Force immediate container clear to rebuild layout for new viewport
             container.innerHTML = '';
         } else if (persistentExpandedDetails.size > 0 && currentlyMobile) {
@@ -2141,11 +2132,6 @@ PulseApp.ui.pbs = (() => {
             loadingMessage.remove();
         }
 
-        // Initialize namespace filter if not already done
-        if (!pbsNamespaceFilter) {
-            _initPbsNamespaceFilter();
-        }
-
         if (!pbsArray || pbsArray.length === 0) {
             const placeholder = document.createElement('p');
             placeholder.className = CSS_CLASSES.TEXT_GRAY_P4_CENTER;
@@ -2154,8 +2140,18 @@ PulseApp.ui.pbs = (() => {
             return;
         }
 
+        // Collect all namespaces
+        const allNamespaces = _collectNamespaces(pbsArray);
+        const hasMultipleNamespaces = allNamespaces.length > 1;
+        
+        // Add namespace tabs if multiple namespaces exist
+        if (hasMultipleNamespaces) {
+            const tabsContainer = _createNamespaceTabs(allNamespaces, container);
+            container.appendChild(tabsContainer);
+        }
+        
         // Get current namespace filter selection
-        const selectedNamespace = PulseApp.state.get('pbsFilterNamespace') || 'all';
+        const selectedNamespace = hasMultipleNamespaces ? selectedNamespaceTab : null;
         
         // Apply namespace filtering to all PBS instances
         const filteredPbsArray = pbsArray.map(pbsInstance => {
@@ -2164,7 +2160,6 @@ PulseApp.ui.pbs = (() => {
             // Filter backup tasks
             if (filteredInstance.backupTasks && filteredInstance.backupTasks.recentTasks) {
                 const filteredTasks = _filterPbsTasksByNamespace(filteredInstance.backupTasks.recentTasks, selectedNamespace);
-                console.log('[PBS Debug] Filtered backup tasks:', filteredTasks.length);
                 filteredInstance.backupTasks = {
                     ...filteredInstance.backupTasks,
                     recentTasks: filteredTasks,
@@ -2203,7 +2198,7 @@ PulseApp.ui.pbs = (() => {
             }
             
             // Filter datastores by namespace
-            if (filteredInstance.datastores && selectedNamespace !== 'all') {
+            if (filteredInstance.datastores && selectedNamespace) {
                 filteredInstance.datastores = filteredInstance.datastores.map(ds => ({
                     ...ds,
                     snapshots: ds.snapshots ? ds.snapshots.filter(snap => 
@@ -2214,9 +2209,6 @@ PulseApp.ui.pbs = (() => {
             
             return filteredInstance;
         });
-
-        // Update namespace options with current data
-        _updatePbsNamespaceOptions();
 
         // Determine layout based on viewport and number of instances
         const isMobile = isMobileView();
