@@ -4,6 +4,12 @@ const axios = require('axios');
 const https = require('https');
 const dnsResolver = require('./dnsResolver');
 const { getNamespacesToQuery } = require('./pbsNamespaceDiscovery');
+const { 
+    analyzeVerificationHealth, 
+    checkVerificationJobStatus, 
+    getVerificationJobs, 
+    getVerificationRecommendations 
+} = require('./pbsVerificationUtils');
 
 let pLimit;
 let requestLimiter;
@@ -1595,6 +1601,19 @@ async function fetchPbsData(currentPbsApiClients) {
                     instanceData.versionInfo = await fetchPbsVersionInfo(pbsClient);
                 }
                 
+                // Add verification job health diagnostics
+                try {
+                    instanceData.verificationDiagnostics = await fetchVerificationDiagnostics(pbsClient, instanceData.datastores);
+                } catch (verifyError) {
+                    console.warn(`[DataFetcher - ${instanceName}] Verification diagnostics failed: ${verifyError.message}`);
+                    instanceData.verificationDiagnostics = {
+                        error: verifyError.message,
+                        healthScore: 'error',
+                        jobsStatus: 'unknown',
+                        datastores: {}
+                    };
+                }
+                
                 instanceData.status = 'ok';
                 instanceData.nodeName = nodeName; // Ensure nodeName is set
             } else {
@@ -2051,6 +2070,463 @@ function clearCaches() {
     nodeConnectionCache.clear();
     nodeStateCache.clear();
     clusterMembershipCache.clear();
+}
+
+/**
+ * Comprehensive PBS verification job diagnostics
+ * Provides detailed analysis of verification job health, configuration, and failure reasons
+ * @param {Object} pbsClient - PBS API client instance
+ * @param {Array} datastores - Array of datastore objects
+ * @returns {Promise<Object>} - Comprehensive verification diagnostics
+ */
+async function fetchVerificationDiagnostics(pbsClient, datastores = []) {
+    const diagnostics = {
+        timestamp: Date.now(),
+        healthScore: 'unknown',
+        jobsStatus: 'unknown',
+        globalRecommendations: {
+            priority: 'low',
+            actions: [],
+            insights: []
+        },
+        datastores: {},
+        overallJobHealth: {
+            totalJobs: 0,
+            activeJobs: 0,
+            disabledJobs: 0,
+            failingJobs: []
+        },
+        specificJobDiagnostics: {},
+        verificationFailureAnalysis: {
+            recentFailures: 0,
+            staleDueToRetention: 0,
+            configurationIssues: 0,
+            commonFailureReasons: []
+        }
+    };
+
+    try {
+        // Step 1: Get all verification jobs configuration
+        const verificationJobs = await getVerificationJobs(pbsClient);
+        diagnostics.overallJobHealth.totalJobs = verificationJobs.length;
+        diagnostics.overallJobHealth.activeJobs = verificationJobs.filter(job => job.enabled).length;
+        diagnostics.overallJobHealth.disabledJobs = verificationJobs.filter(job => !job.enabled).length;
+
+        // Step 2: Analyze each datastore individually
+        const datastoreAnalysisPromises = datastores.map(async (datastore) => {
+            try {
+                const datastoreName = datastore.name;
+                
+                // Get verification health for this datastore
+                const healthAnalysis = await analyzeVerificationHealth(pbsClient, datastoreName);
+                const recommendations = await getVerificationRecommendations(pbsClient, datastoreName);
+                
+                // Find verification jobs for this datastore
+                const datastoreJobs = verificationJobs.filter(job => job.datastore === datastoreName);
+                
+                // Check specific verification job status (focusing on the failing job mentioned)
+                const jobStatusChecks = await Promise.allSettled(
+                    datastoreJobs.map(async (job) => {
+                        const jobStatus = await checkVerificationJobStatus(pbsClient, job.id);
+                        return { jobId: job.id, ...jobStatus };
+                    })
+                );
+
+                const jobStatuses = jobStatusChecks.map(result => 
+                    result.status === 'fulfilled' ? result.value : { error: result.reason?.message }
+                );
+
+                // Analyze verification failures specifically
+                const verificationFailures = await analyzeVerificationFailures(pbsClient, datastoreName, healthAnalysis);
+
+                return {
+                    datastoreName,
+                    healthAnalysis,
+                    recommendations,
+                    jobs: datastoreJobs,
+                    jobStatuses,
+                    verificationFailures,
+                    diagnosticChecks: await performSpecificDiagnosticChecks(pbsClient, datastoreName, datastoreJobs)
+                };
+            } catch (error) {
+                console.error(`[Verification Diagnostics] Error analyzing datastore ${datastore.name}: ${error.message}`);
+                return {
+                    datastoreName: datastore.name,
+                    error: error.message,
+                    healthAnalysis: { healthScore: 'error', error: error.message },
+                    recommendations: { priority: 'high', actions: ['Unable to analyze - check PBS connectivity'], insights: [] }
+                };
+            }
+        });
+
+        const datastoreAnalyses = await Promise.allSettled(datastoreAnalysisPromises);
+        
+        // Process datastore analyses
+        datastoreAnalyses.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                const analysis = result.value;
+                diagnostics.datastores[analysis.datastoreName] = analysis;
+                
+                // Aggregate failure statistics
+                if (analysis.verificationFailures) {
+                    diagnostics.verificationFailureAnalysis.recentFailures += analysis.verificationFailures.recentFailures || 0;
+                    diagnostics.verificationFailureAnalysis.staleDueToRetention += analysis.verificationFailures.staleDueToRetention || 0;
+                    diagnostics.verificationFailureAnalysis.configurationIssues += analysis.verificationFailures.configurationIssues || 0;
+                    
+                    if (analysis.verificationFailures.commonReasons) {
+                        diagnostics.verificationFailureAnalysis.commonFailureReasons.push(
+                            ...analysis.verificationFailures.commonReasons
+                        );
+                    }
+                }
+                
+                // Track failing jobs
+                if (analysis.jobStatuses) {
+                    analysis.jobStatuses.forEach(jobStatus => {
+                        if (jobStatus.error || !jobStatus.exists) {
+                            diagnostics.overallJobHealth.failingJobs.push({
+                                jobId: jobStatus.jobId,
+                                datastore: analysis.datastoreName,
+                                error: jobStatus.error,
+                                exists: jobStatus.exists
+                            });
+                        }
+                    });
+                }
+            } else {
+                console.error(`[Verification Diagnostics] Failed to analyze datastore: ${result.reason?.message}`);
+            }
+        });
+
+        // Step 3: Check for the specific failing verification job mentioned in the task
+        // Note: The job ID is just 'v-3fb332a6-ba43', not 'main:v-3fb332a6-ba43'
+        // 'main' is the datastore name, not part of the job ID
+        await checkSpecificFailingJob(pbsClient, diagnostics, 'v-3fb332a6-ba43');
+
+        // Step 4: Calculate overall health score
+        diagnostics.healthScore = calculateOverallHealthScore(diagnostics);
+        diagnostics.jobsStatus = determineJobsStatus(diagnostics);
+
+        // Step 5: Generate global recommendations
+        diagnostics.globalRecommendations = generateGlobalRecommendations(diagnostics);
+
+        return diagnostics;
+
+    } catch (error) {
+        console.error(`[Verification Diagnostics] Critical error during diagnostics: ${error.message}`);
+        diagnostics.error = error.message;
+        diagnostics.healthScore = 'error';
+        diagnostics.jobsStatus = 'error';
+        return diagnostics;
+    }
+}
+
+/**
+ * Analyzes verification failures in detail to identify root causes
+ */
+async function analyzeVerificationFailures(pbsClient, datastoreName, healthAnalysis) {
+    const analysis = {
+        recentFailures: 0,
+        staleDueToRetention: 0,
+        configurationIssues: 0,
+        commonReasons: [],
+        detailedFailures: []
+    };
+
+    try {
+        // Analyze recent failures from health analysis
+        if (healthAnalysis.recentFailures) {
+            analysis.recentFailures = healthAnalysis.recentFailures.length;
+            
+            // Categorize failure reasons
+            const failureReasons = new Map();
+            
+            healthAnalysis.recentFailures.forEach(failure => {
+                const reason = categorizeVerificationFailure(failure);
+                failureReasons.set(reason, (failureReasons.get(reason) || 0) + 1);
+                
+                analysis.detailedFailures.push({
+                    backupType: failure.backupType,
+                    backupId: failure.backupId,
+                    backupTime: failure.backupTime,
+                    verificationState: failure.verificationState,
+                    namespace: failure.namespace,
+                    categorizedReason: reason,
+                    timestamp: failure.backupTime
+                });
+            });
+            
+            // Convert to common reasons array
+            analysis.commonReasons = Array.from(failureReasons.entries())
+                .sort((a, b) => b[1] - a[1])
+                .map(([reason, count]) => ({ reason, count }));
+        }
+        
+        // Check for stale verification references (due to retention policy)
+        const { client } = pbsClient;
+        try {
+            // Get tasks to identify stale verification failures
+            const tasksResponse = await client.get('/nodes/localhost/tasks', {
+                params: { typefilter: 'verificationjob' }
+            });
+            const verificationTasks = tasksResponse.data?.data || [];
+            
+            // Count stale failures (older than 14 days with specific error patterns)
+            const fourteenDaysAgo = (Date.now() / 1000) - (14 * 24 * 60 * 60);
+            analysis.staleDueToRetention = verificationTasks.filter(task => {
+                const endTime = task.endtime || 0;
+                const status = task.status || '';
+                const isOld = endTime && endTime < fourteenDaysAgo;
+                const hasStaleError = status.includes('backup not found') || 
+                                    status.includes('group not found') ||
+                                    status.includes('missing chunks');
+                return isOld && hasStaleError;
+            }).length;
+            
+        } catch (tasksError) {
+            console.warn(`[Verification Diagnostics] Could not analyze stale verification tasks: ${tasksError.message}`);
+        }
+
+        return analysis;
+        
+    } catch (error) {
+        console.error(`[Verification Diagnostics] Error analyzing verification failures: ${error.message}`);
+        return analysis;
+    }
+}
+
+/**
+ * Categorizes verification failure reasons for better diagnostics
+ */
+function categorizeVerificationFailure(failure) {
+    const state = failure.verificationState?.toLowerCase() || '';
+    
+    if (state.includes('missing') || state.includes('not found')) {
+        return 'Missing backup data';
+    } else if (state.includes('corrupt') || state.includes('checksum')) {
+        return 'Data corruption detected';
+    } else if (state.includes('timeout') || state.includes('connection')) {
+        return 'Network/connectivity issues';
+    } else if (state.includes('permission') || state.includes('access')) {
+        return 'Permission/access denied';
+    } else if (state.includes('space') || state.includes('disk')) {
+        return 'Storage space issues';
+    } else {
+        return 'Unknown verification error';
+    }
+}
+
+/**
+ * Performs specific diagnostic checks for verification jobs
+ */
+async function performSpecificDiagnosticChecks(pbsClient, datastoreName, jobs) {
+    const checks = {
+        datastoreHealthy: false,
+        hasActiveJobs: false,
+        jobsConfigurationValid: true,
+        commonIssues: []
+    };
+
+    try {
+        const { client } = pbsClient;
+        
+        // Check datastore health
+        try {
+            const datastoreResponse = await client.get(`/admin/datastore/${datastoreName}/status`);
+            checks.datastoreHealthy = datastoreResponse.data?.data?.total !== undefined;
+        } catch (dsError) {
+            checks.commonIssues.push(`Datastore ${datastoreName} appears unhealthy: ${dsError.message}`);
+        }
+
+        // Check if we have active jobs for this datastore
+        checks.hasActiveJobs = jobs.some(job => job.enabled);
+        if (!checks.hasActiveJobs && jobs.length > 0) {
+            checks.commonIssues.push('All verification jobs for this datastore are disabled');
+        } else if (jobs.length === 0) {
+            checks.commonIssues.push('No verification jobs configured for this datastore');
+        }
+
+        // Check job configurations
+        for (const job of jobs) {
+            if (!job.schedule || job.schedule === 'manual') {
+                checks.commonIssues.push(`Job ${job.id} is set to manual - verification only runs when triggered manually`);
+            }
+        }
+
+        return checks;
+
+    } catch (error) {
+        checks.commonIssues.push(`Diagnostic check failed: ${error.message}`);
+        return checks;
+    }
+}
+
+/**
+ * Checks the specific failing verification job mentioned in the task
+ */
+async function checkSpecificFailingJob(pbsClient, diagnostics, jobId) {
+    try {
+        const jobStatus = await checkVerificationJobStatus(pbsClient, jobId);
+        diagnostics.specificJobDiagnostics[jobId] = {
+            ...jobStatus,
+            investigationReasons: [],
+            suggestedActions: []
+        };
+
+        const jobDiag = diagnostics.specificJobDiagnostics[jobId];
+        
+        if (!jobStatus.exists) {
+            jobDiag.investigationReasons.push('Verification job configuration does not exist');
+            jobDiag.suggestedActions.push('Check if the job was deleted or renamed');
+            jobDiag.suggestedActions.push('Verify the job ID is correct: v-3fb332a6-ba43');
+        } else if (!jobStatus.enabled) {
+            jobDiag.investigationReasons.push('Verification job is disabled');
+            jobDiag.suggestedActions.push('Enable the verification job in PBS configuration');
+        } else {
+            // Job exists and is enabled - check for recent task failures
+            jobDiag.investigationReasons.push('Job exists and is enabled - checking for recent failures');
+            jobDiag.suggestedActions.push('Check PBS task logs for specific failure reasons');
+            jobDiag.suggestedActions.push('Verify target datastore is accessible and has sufficient space');
+        }
+
+        // Add time-specific investigation for June 7-8 failures
+        const june7 = new Date('2024-06-07').getTime() / 1000;
+        const june8 = new Date('2024-06-08').getTime() / 1000;
+        jobDiag.timeSpecificAnalysis = {
+            targetFailurePeriod: 'June 7-8, 2024',
+            targetTimestamps: { start: june7, end: june8 },
+            suggestedLogChecks: [
+                'Check PBS task logs for verification jobs during June 7-8, 2024',
+                'Look for network connectivity issues during this period',
+                'Verify if any snapshots were pruned or became unavailable',
+                'Check for PBS server or storage maintenance during this timeframe'
+            ]
+        };
+
+    } catch (error) {
+        diagnostics.specificJobDiagnostics[jobId] = {
+            error: error.message,
+            investigationReasons: ['Failed to check job status'],
+            suggestedActions: ['Verify PBS API connectivity', 'Check PBS server logs']
+        };
+    }
+}
+
+/**
+ * Calculates overall health score based on all diagnostic data
+ */
+function calculateOverallHealthScore(diagnostics) {
+    let score = 100;
+    
+    // Deduct points for various issues
+    if (diagnostics.overallJobHealth.totalJobs === 0) {
+        score -= 30; // No verification jobs
+    }
+    
+    if (diagnostics.overallJobHealth.failingJobs.length > 0) {
+        score -= (diagnostics.overallJobHealth.failingJobs.length * 20); // 20 points per failing job
+    }
+    
+    if (diagnostics.verificationFailureAnalysis.recentFailures > 0) {
+        score -= (diagnostics.verificationFailureAnalysis.recentFailures * 10); // 10 points per recent failure
+    }
+    
+    if (diagnostics.verificationFailureAnalysis.configurationIssues > 0) {
+        score -= (diagnostics.verificationFailureAnalysis.configurationIssues * 15); // 15 points per config issue
+    }
+    
+    // Ensure score doesn't go below 0
+    score = Math.max(0, score);
+    
+    if (score >= 90) return 'excellent';
+    if (score >= 75) return 'good';
+    if (score >= 50) return 'fair';
+    if (score >= 25) return 'poor';
+    return 'critical';
+}
+
+/**
+ * Determines overall jobs status
+ */
+function determineJobsStatus(diagnostics) {
+    if (diagnostics.overallJobHealth.totalJobs === 0) {
+        return 'no_jobs_configured';
+    }
+    
+    if (diagnostics.overallJobHealth.failingJobs.length > 0) {
+        return 'some_jobs_failing';
+    }
+    
+    if (diagnostics.overallJobHealth.activeJobs === 0) {
+        return 'all_jobs_disabled';
+    }
+    
+    if (diagnostics.verificationFailureAnalysis.recentFailures > 0) {
+        return 'recent_failures_detected';
+    }
+    
+    return 'healthy';
+}
+
+/**
+ * Generates global recommendations based on all diagnostic data
+ */
+function generateGlobalRecommendations(diagnostics) {
+    const recommendations = {
+        priority: 'low',
+        actions: [],
+        insights: []
+    };
+    
+    // High priority recommendations
+    if (diagnostics.overallJobHealth.failingJobs.length > 0) {
+        recommendations.priority = 'high';
+        recommendations.actions.push('Investigate and fix failing verification jobs immediately');
+        diagnostics.overallJobHealth.failingJobs.forEach(job => {
+            recommendations.actions.push(`Fix verification job ${job.jobId} on datastore ${job.datastore}: ${job.error}`);
+        });
+    }
+    
+    if (diagnostics.verificationFailureAnalysis.recentFailures > 5) {
+        recommendations.priority = 'high';
+        recommendations.actions.push(`Address ${diagnostics.verificationFailureAnalysis.recentFailures} recent verification failures`);
+    }
+    
+    // Medium priority recommendations
+    if (diagnostics.overallJobHealth.disabledJobs > 0) {
+        if (recommendations.priority === 'low') recommendations.priority = 'medium';
+        recommendations.insights.push(`${diagnostics.overallJobHealth.disabledJobs} verification jobs are disabled`);
+    }
+    
+    if (diagnostics.overallJobHealth.totalJobs === 0) {
+        if (recommendations.priority === 'low') recommendations.priority = 'medium';
+        recommendations.actions.push('Configure verification jobs to ensure backup integrity');
+    }
+    
+    // Insights about common failure patterns
+    if (diagnostics.verificationFailureAnalysis.commonFailureReasons.length > 0) {
+        const topReason = diagnostics.verificationFailureAnalysis.commonFailureReasons[0];
+        recommendations.insights.push(`Most common verification failure: ${topReason.reason} (${topReason.count} occurrences)`);
+    }
+    
+    if (diagnostics.verificationFailureAnalysis.staleDueToRetention > 0) {
+        recommendations.insights.push(`${diagnostics.verificationFailureAnalysis.staleDueToRetention} verification failures are stale (normal due to backup retention policies)`);
+    }
+    
+    // Specific recommendations for the mentioned failing job
+    if (diagnostics.specificJobDiagnostics['main:v-3fb332a6-ba43']) {
+        const specificJob = diagnostics.specificJobDiagnostics['main:v-3fb332a6-ba43'];
+        if (specificJob.suggestedActions && specificJob.suggestedActions.length > 0) {
+            recommendations.actions.push('For the specific failing job main:v-3fb332a6-ba43:');
+            recommendations.actions.push(...specificJob.suggestedActions);
+        }
+    }
+    
+    if (recommendations.actions.length === 0 && recommendations.priority === 'low') {
+        recommendations.insights.push('Verification system appears to be operating normally');
+    }
+    
+    return recommendations;
 }
 
 module.exports = {
