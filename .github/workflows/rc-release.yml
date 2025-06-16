@@ -310,23 +310,7 @@ jobs:
             echo "---" >> release_body.md
           fi
           
-          # Extract and add PR summary if available
-          echo "$PR_BODY" > pr_body_temp.md
-          
-          # Check if PR has structured sections and add them after changelog
-          if grep -q "## Summary" pr_body_temp.md && grep -q "## Test plan" pr_body_temp.md; then
-            echo "" >> release_body.md
-            echo "## PR Summary" >> release_body.md
-            # Extract everything from Summary to Test plan (exclusive)
-            sed -n '/## Summary/,/## Test plan/{/## Test plan/!p;}' pr_body_temp.md | tail -n +2 >> release_body.md
-            echo "" >> release_body.md
-          elif grep -q "## Summary" pr_body_temp.md; then
-            echo "" >> release_body.md
-            echo "## PR Summary" >> release_body.md
-            # Just get the summary section
-            sed -n '/## Summary/,/^##[^#]/{/^##[^#]/!p;}' pr_body_temp.md | tail -n +2 >> release_body.md
-            echo "" >> release_body.md
-          fi
+          # Skip PR summary extraction since changelog covers all changes
           
           # Add the standard update instructions
           cat >> release_body.md << 'FOOTER'
@@ -392,9 +376,6 @@ jobs:
           - The `:rc` Docker tag always points to the latest RC version
           - You can easily switch between Stable and RC channels in the web interface
           FOOTER
-          
-          # Clean up
-          rm -f pr_body_temp.md
           
           echo "Release body generated successfully!"
         env:
