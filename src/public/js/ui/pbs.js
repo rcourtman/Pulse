@@ -208,6 +208,11 @@ PulseApp.ui.pbs = (() => {
             const containers = PulseApp.state.get('containers') || [];
             const vms = PulseApp.state.get('vms') || [];
             
+            // Debug: Show what's available in state
+            console.log('[PBS] State keys available:', Object.keys(PulseApp.state.getFullState()));
+            console.log('[PBS] containers length:', containers.length);
+            console.log('[PBS] vms length:', vms.length);
+            
             // Handle both "ct" and "qemu"/"vm" guest types
             const guestArray = (guestType === 'ct' || guestType === 'lxc') 
                 ? containers 
