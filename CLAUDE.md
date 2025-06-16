@@ -77,16 +77,10 @@ gh pr create --base main --head develop --title "Release: Your feature"
 # 3. No manual merge needed!
 ```
 
-**CRITICAL: Creating Comprehensive PR Descriptions**
-When creating a PR, you MUST:
-1. **Always run `git log --oneline main..develop`** to see ALL commits that will be included
-2. **Include ALL features and fixes** in the PR title and description, not just the latest change
-3. **Group changes by category**: Major Features, Bug Fixes, Technical Changes, etc.
-4. **Reference relevant issue numbers** (e.g., #125) for each fix or feature
-
-Example of a good PR title:
-- ✅ "Release: PBS namespace support, port handling fix, and UI improvements"
-- ❌ "Release: Fix port handling" (when there are actually multiple changes)
+**PR Preferences:**
+- Run `git log --oneline main..develop` first
+- Include ALL features/fixes in title, not just latest
+- Reference issue numbers for each change
 
 **Creating Stable Release:**
 ```bash
@@ -213,17 +207,9 @@ The workflow will:
 - Create the stable release with proper changelog
 - Build and push Docker images with :latest tag
 
-### 🚨 CRITICAL: Keep It Simple (Anti-Pattern Warnings)
+### 🚨 Behavior Preferences
 
-**The Golden Rule**: Trust the automation, make minimal changes, stay on `develop`.
-
-**❌ NEVER do these:**
-- Switch branches unnecessarily (stay on `develop` unless resolving PR conflicts)
-- Manually manage version numbers (workflows handle this automatically)
-- Fight with git when workflows are running fine (they have retry logic)
-- Run complex git operations when simple ones work
-- Check out `main` just to view releases (use `gh release view` from any branch)
-- Try to "fix" things that are already working correctly
+**Keep it simple:** Trust automation, stay on `develop`, minimal changes only
 
 **✅ ALWAYS do this simple workflow:**
 ```bash
@@ -235,7 +221,7 @@ npm run test          # or whatever test command exists
 
 # 3. Commit and push (NO releases)
 git add .
-git commit -m "description of change"
+git commit -m "type: descriptive message addressing #123"
 git push origin develop
 
 # 4. When ready to test with users, check commits and create PR
@@ -252,6 +238,12 @@ gh workflow run stable-release.yml --ref main
 ```
 
 **Remember**: If something seems complex, it's probably wrong. The workflows handle complexity - you handle simplicity.
+
+### 📝 Commit & Issue Preferences
+
+- Always reference GitHub issues: `addressing #123`  
+- Avoid `fixes/closes` - let users test first
+- Run tests before committing when available
 
 ## Summary of Ultra-Simple Workflow
 
@@ -272,8 +264,11 @@ gh workflow run stable-release.yml --ref main
 - ✅ Auto-merging PRs
 - ✅ Clean release flow
 
-# important-instruction-reminders
-Do what has been asked; nothing more, nothing less.
-NEVER create files unless they're absolutely necessary for achieving your goal.
-ALWAYS prefer editing an existing file to creating a new one.
-NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
+# Development Behavior Preferences
+
+- Do exactly what's asked - no more, no less
+- Edit existing files over creating new ones
+- No proactive documentation creation
+- Use TodoWrite for complex tasks - helps user track progress
+- Be concise in responses unless detail requested
+- When fixing bugs, test the fix before committing
