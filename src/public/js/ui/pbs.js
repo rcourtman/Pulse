@@ -5,10 +5,29 @@ PulseApp.ui.pbs = (() => {
     // Global state tracker for expanded PBS tasks
     let expandedTaskState = new Set();
     let expandedShowMoreState = new Set();
+    
+    // Simple persistent state for expanded detail cards
+    let persistentExpandedDetails = new Set();
+    
+    // Helper function to find task data by UPID
+    function findTaskByUpid(pbsArray, upid) {
+        for (const pbsInstance of pbsArray) {
+            const taskTypes = ['backupTasks', 'verificationTasks', 'syncTasks', 'pruneTasks'];
+            for (const taskType of taskTypes) {
+                if (pbsInstance[taskType] && pbsInstance[taskType].recentTasks) {
+                    const found = pbsInstance[taskType].recentTasks.find(task => task.upid === upid);
+                    if (found) return found;
+                }
+            }
+        }
+        return null;
+    }
     let selectedPbsTabIndex = 0; // Track selected PBS tab index globally
     
     // Namespace filtering
     let pbsNamespaceFilter = null;
+    
+
 
     const CSS_CLASSES = {
         TEXT_GREEN_500_DARK_GREEN_400: 'text-green-500 dark:text-green-400',
@@ -336,28 +355,36 @@ PulseApp.ui.pbs = (() => {
             expandButton.className = 'mt-3 w-full py-2 px-3 text-xs text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-600 rounded bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors tap-target';
             expandButton.textContent = 'Show Error Details';
             
+            // Simple persistent click handler
             expandButton.addEventListener('click', (event) => {
-                event.stopPropagation();
                 event.preventDefault();
+                event.stopPropagation();
                 
                 const upid = task.upid;
-                const existingDetailCard = card.nextElementSibling;
                 
-                if (existingDetailCard && existingDetailCard.classList.contains('mobile-task-detail-card')) {
-                    // Toggle existing detail card - collapse
-                    existingDetailCard.remove();
+                if (persistentExpandedDetails.has(upid)) {
+                    // Collapse - remove from persistent state
+                    persistentExpandedDetails.delete(upid);
                     expandButton.textContent = 'Show Error Details';
-                    targetElement.innerHTML = `${target}`;
-                    expandedTaskState.delete(upid);
+                    // Remove detail card if it exists
+                    const existingDetailCard = card.nextElementSibling;
+                    if (existingDetailCard && existingDetailCard.classList.contains('mobile-task-detail-card')) {
+                        existingDetailCard.remove();
+                    }
                 } else {
-                    // Create and show detail card - expand
+                    // Expand - add to persistent state
+                    persistentExpandedDetails.add(upid);
+                    expandButton.textContent = 'Hide Error Details';
+                    // Create detail card
                     const detailCard = _createMobileTaskDetailCard(task);
                     card.insertAdjacentElement('afterend', detailCard);
-                    expandButton.textContent = 'Hide Error Details';
-                    targetElement.innerHTML = `${target}`;
-                    expandedTaskState.add(upid);
                 }
             });
+            
+            // Set button text based on persistent state
+            if (persistentExpandedDetails.has(task.upid)) {
+                expandButton.textContent = 'Hide Error Details';
+            }
             
             card.appendChild(expandButton);
         }
@@ -489,7 +516,6 @@ PulseApp.ui.pbs = (() => {
         if (isFailed && !row.dataset.clickHandlerAttached) {
             row.addEventListener('click', (event) => {
                 event.stopPropagation(); // Prevent event bubbling
-                event.preventDefault();  // Prevent any default behavior
                 
                 const upid = task.upid;
                 const existingDetailRow = row.nextElementSibling;
@@ -683,23 +709,23 @@ PulseApp.ui.pbs = (() => {
                       showMoreButton.textContent = `Show More (${remainingCount} older)`;
                   }
                   
-                  // Clear existing handlers and attach new one
-                  showMoreButton.replaceWith(showMoreButton.cloneNode(true));
-                  const newShowMoreButton = parentSectionElement.querySelector(`.${CSS_CLASSES.PBS_SHOW_MORE}`);
-                  
-                  newShowMoreButton.addEventListener('click', () => {
-                      if (tableId) {
-                          if (expandedShowMoreState.has(tableId)) {
-                              // Currently expanded, collapse it
-                              expandedShowMoreState.delete(tableId);
-                          } else {
-                              // Currently collapsed, expand it
-                              expandedShowMoreState.add(tableId);
+                  // Use proper event cleanup instead of DOM replacement
+                  if (!showMoreButton.dataset.handlerAttached) {
+                      showMoreButton.dataset.handlerAttached = 'true';
+                      addMobileClickHandler(showMoreButton, () => {
+                          if (tableId) {
+                              if (expandedShowMoreState.has(tableId)) {
+                                  // Currently expanded, collapse it
+                                  expandedShowMoreState.delete(tableId);
+                              } else {
+                                  // Currently collapsed, expand it
+                                  expandedShowMoreState.add(tableId);
+                              }
+                              // Re-populate with new state
+                              populatePbsTaskTable(parentSectionElement, fullTasksArray);
                           }
-                          // Re-populate with new state
-                          populatePbsTaskTable(parentSectionElement, fullTasksArray);
-                      }
-                  });
+                      });
+                  }
               } else {
                   showMoreButton.classList.add(CSS_CLASSES.HIDDEN);
                   // Remove from state if there are no more tasks to show
@@ -1971,8 +1997,19 @@ PulseApp.ui.pbs = (() => {
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
         const namespaces = new Set(['root']); // Always include root
         
-        // Collect all namespaces from PBS task data
+        // Collect all namespaces from PBS data
         pbsDataArray.forEach(pbsInstance => {
+            // Check datastore snapshots (like Backups tab does)
+            if (pbsInstance.datastores) {
+                pbsInstance.datastores.forEach(ds => {
+                    if (ds.snapshots) {
+                        ds.snapshots.forEach(snap => {
+                            namespaces.add(snap.namespace || 'root');
+                        });
+                    }
+                });
+            }
+            
             // Check backup tasks
             if (pbsInstance.backupTasks && pbsInstance.backupTasks.recentTasks) {
                 pbsInstance.backupTasks.recentTasks.forEach(task => {
@@ -2047,6 +2084,12 @@ PulseApp.ui.pbs = (() => {
             console.error(`PBS container element #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found!`);
             return;
         }
+        
+        // Skip DOM rebuild if detail cards are expanded to prevent flicker
+        if (persistentExpandedDetails.size > 0) {
+            return;
+        }
+        
         container.innerHTML = '';
 
         const loadingMessage = document.getElementById('pbs-loading-message');
@@ -2181,6 +2224,31 @@ PulseApp.ui.pbs = (() => {
                 updatePbsLayoutForViewport();
             }, 100);
         }
+        
+        // Auto-expand detail cards after DOM rebuild is complete
+        setTimeout(() => {
+            persistentExpandedDetails.forEach(upid => {
+                const taskCard = document.querySelector(`[data-upid="${CSS.escape(upid)}"]`);
+                if (taskCard) {
+                    const expandButton = taskCard.querySelector('button');
+                    const existingDetailCard = taskCard.nextElementSibling;
+                    
+                    if (!existingDetailCard || !existingDetailCard.classList.contains('mobile-task-detail-card')) {
+                        // Find the task data from the PBS array
+                        const taskData = findTaskByUpid(pbsArray, upid);
+                        if (taskData) {
+                            const detailCard = _createMobileTaskDetailCard(taskData);
+                            taskCard.insertAdjacentElement('afterend', detailCard);
+                        }
+                    }
+                    
+                    // Update button text
+                    if (expandButton) {
+                        expandButton.textContent = 'Hide Error Details';
+                    }
+                }
+            });
+        }, 200); // Wait longer than mobile features to ensure DOM is stable
     }
 
     function initPbsEventListeners() {
