@@ -447,6 +447,133 @@ PulseApp.utils = (() => {
         return formatDate(d);
     }
 
+    // Format time ago for backup age display
+    function formatTimeAgo(daysAgo) {
+        if (daysAgo === 0) return 'Today';
+        if (daysAgo === 1) return 'Yesterday';
+        if (daysAgo < 7) return `${Math.floor(daysAgo)} days ago`;
+        if (daysAgo < 30) return `${Math.floor(daysAgo / 7)} weeks ago`;
+        if (daysAgo < 365) return `${Math.floor(daysAgo / 30)} months ago`;
+        return `${Math.floor(daysAgo / 365)} years ago`;
+    }
+
+    // Initialize mobile scroll indicators for tables
+    function initMobileScrollIndicators(containerSelector) {
+        const containers = containerSelector instanceof HTMLElement 
+            ? [containerSelector] 
+            : document.querySelectorAll(containerSelector);
+        
+        containers.forEach(container => {
+            if (!container) return;
+            
+            // Add touch indicator on mobile
+            const scrollHint = document.createElement('div');
+            scrollHint.className = 'scroll-hint';
+            scrollHint.innerHTML = '← Scroll for more →';
+            scrollHint.style.cssText = `
+                position: absolute;
+                bottom: 10px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 4px 12px;
+                border-radius: 4px;
+                font-size: 12px;
+                pointer-events: none;
+                transition: opacity 0.3s;
+                z-index: 10;
+            `;
+            container.style.position = 'relative';
+            container.appendChild(scrollHint);
+
+            // Hide on scroll or touch
+            let hideTimeout;
+            const hideHint = () => {
+                scrollHint.style.opacity = '0';
+                clearTimeout(hideTimeout);
+            };
+
+            container.addEventListener('scroll', hideHint);
+            container.addEventListener('touchstart', hideHint);
+
+            // Auto-hide after 5 seconds
+            hideTimeout = setTimeout(hideHint, 5000);
+        });
+    }
+
+    // Get color for backup status
+    function getBackupStatusColor(status) {
+        const statusColorMap = {
+            'ok': 'text-green-600 dark:text-green-500',
+            'stale': 'text-yellow-600 dark:text-yellow-500',
+            'old': 'text-orange-600 dark:text-orange-500',
+            'failed': 'text-red-600 dark:text-red-500',
+            'none': 'text-gray-400 dark:text-gray-500'
+        };
+        return statusColorMap[status] || 'text-gray-400 dark:text-gray-500';
+    }
+
+    // Create health badge HTML
+    function createHealthBadgeHTML(status, tooltip = null) {
+        const colorClass = getBackupStatusColor(status);
+        const tooltipAttr = tooltip ? `title="${tooltip}"` : '';
+        const statusDisplay = {
+            'ok': 'OK',
+            'stale': 'Stale',
+            'old': 'Old',
+            'failed': 'Failed',
+            'none': 'None'
+        }[status] || status.toUpperCase();
+        
+        return `<span class="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-700 ${colorClass}" ${tooltipAttr}>${statusDisplay}</span>`;
+    }
+    
+    // Common CSS class constants for consistency
+    const CSS_CLASSES = {
+        // Text colors with dark mode variants
+        TEXT_GRAY_500_DARK_400: 'text-gray-500 dark:text-gray-400',
+        TEXT_GRAY_600_DARK_400: 'text-gray-600 dark:text-gray-400',
+        TEXT_GRAY_700_DARK_300: 'text-gray-700 dark:text-gray-300',
+        TEXT_RED_600_DARK_400: 'text-red-600 dark:text-red-400',
+        TEXT_GREEN_500_DARK_400: 'text-green-500 dark:text-green-400',
+        TEXT_GREEN_600_DARK_500: 'text-green-600 dark:text-green-500',
+        TEXT_BLUE_600_DARK_400: 'text-blue-600 dark:text-blue-400',
+        TEXT_YELLOW_600_DARK_400: 'text-yellow-600 dark:text-yellow-400',
+        TEXT_YELLOW_600_DARK_500: 'text-yellow-600 dark:text-yellow-500',
+        TEXT_ORANGE_600_DARK_500: 'text-orange-600 dark:text-orange-500',
+        
+        // Background colors
+        BG_GRAY_50_DARK_700_50: 'bg-gray-50 dark:bg-gray-700/50',
+        BG_GRAY_100_DARK_700: 'bg-gray-100 dark:bg-gray-700',
+        
+        // Component presets
+        TABLE_HEADER: 'px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider',
+        SECTION_HEADER: 'font-medium text-gray-700 dark:text-gray-300 mb-1',
+        SUMMARY_CARD: 'p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-center border border-gray-200 dark:border-gray-600',
+        
+        // Status indicators
+        STATUS_DOT_YELLOW: 'w-2 h-2 bg-yellow-500 rounded-sm',
+        STATUS_DOT_ORANGE: 'w-2 h-2 bg-orange-500 rounded-sm',
+        STATUS_DOT_PURPLE: 'w-2 h-2 bg-purple-500 rounded-sm',
+        STATUS_DOT_GREEN: 'w-2 h-2 bg-green-500 rounded-sm',
+        STATUS_DOT_RED: 'w-2 h-2 bg-red-500 rounded-sm',
+        
+        // Common utilities
+        LOADING_SPINNER: 'inline-block animate-spin rounded-full h-3 w-3 border-t-2 border-b-2 border-blue-500',
+        TRUNCATE: 'truncate',
+        FLEX_CENTER_GAP_1: 'flex items-center gap-1',
+        
+        // Text sizes
+        TEXT_XS: 'text-xs',
+        TEXT_SM: 'text-sm',
+        TEXT_BASE: 'text-base',
+        
+        // Font weights
+        FONT_MEDIUM: 'font-medium',
+        FONT_SEMIBOLD: 'font-semibold'
+    };
+
     // Return the public API for this module
     return {
         sanitizeForId: (str) => str.replace(/[^a-zA-Z0-9-]/g, '-'),
@@ -475,6 +602,13 @@ PulseApp.utils = (() => {
         // Date formatting
         formatDate,
         formatDateTime,
-        formatRelativeTime
+        formatRelativeTime,
+        formatTimeAgo,
+        // UI utilities
+        initMobileScrollIndicators,
+        getBackupStatusColor,
+        createHealthBadgeHTML,
+        // CSS class constants
+        CSS_CLASSES
     };
 })(); 
