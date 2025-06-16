@@ -1953,6 +1953,11 @@ PulseApp.ui.settings = (() => {
                         progressText.textContent = 'Update complete! Restarting...';
                     }
                     showMessage('Update applied successfully. The application will restart momentarily.', 'success');
+                    
+                    // Auto-refresh after 8 seconds to allow service restart
+                    setTimeout(() => {
+                        location.reload();
+                    }, 8000);
                 });
                 
                 window.socket.on('updateError', (data) => {
