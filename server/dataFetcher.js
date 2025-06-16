@@ -1021,6 +1021,7 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                     guest: `${latestSnapshot['backup-type']}/${latestSnapshot['backup-id']}`,
                                     guestType: latestSnapshot['backup-type'],
                                     guestId: latestSnapshot['backup-id'],
+                                    id: `BACKUP-RUN:${datastore.name}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}:${dayKey}`,
                                     upid: `BACKUP-RUN:${datastore.name}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}:${dayKey}`,
                                     comment: latestSnapshot.comment || '',
                                     size: latestSnapshot.size || 0,
@@ -1052,6 +1053,19 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             }
             
             console.log(`[DataFetcher] Created ${backupRunsByUniqueKey.size} unique backup runs from PBS snapshots for ${config.name}`);
+            
+            // Debug: Log backup runs with their namespaces
+            const backupRuns = Array.from(backupRunsByUniqueKey.values());
+            console.log(`[DataFetcher] DEBUG: Backup runs by namespace:`);
+            const runsByNamespace = {};
+            backupRuns.forEach(run => {
+                const ns = run.namespace || 'undefined';
+                if (!runsByNamespace[ns]) runsByNamespace[ns] = 0;
+                runsByNamespace[ns]++;
+            });
+            Object.entries(runsByNamespace).forEach(([ns, count]) => {
+                console.log(`[DataFetcher] DEBUG:   ${ns}: ${count} backup runs`);
+            });
             
         } catch (datastoreError) {
             console.error(`ERROR: [DataFetcher] Could not fetch datastore backup history: ${datastoreError.message}`);
@@ -1105,6 +1119,8 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             // Enhance synthetic backup runs with real task details when available
             const backupRuns = Array.from(backupRunsByUniqueKey.values());
             
+            console.log(`[DataFetcher] DEBUG: Found ${realBackupTasksMap.size} real backup tasks to potentially enhance synthetic runs`);
+            
             // Track used UPIDs to prevent enhancement duplicates
             const usedUPIDs = new Set();
             
@@ -1127,6 +1143,8 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                         upid: realTask.upid, // Use real UPID for enhanced runs
                         user: realTask.user,
                         exitcode: realTask.exitcode,
+                        // Explicitly preserve namespace from synthetic run
+                        namespace: run.namespace,
                         // Mark as enhanced
                         enhancedWithRealTask: true
                     };
@@ -1134,6 +1152,18 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                     // Keep synthetic run as-is for historical data or if UPID already used
                     return run;
                 }
+            });
+            
+            // Debug: Log final enhanced backup runs with their namespaces
+            console.log(`[DataFetcher] DEBUG: Enhanced backup runs by namespace:`);
+            const enhancedRunsByNamespace = {};
+            enhancedBackupRuns.forEach(run => {
+                const ns = run.namespace || 'undefined';
+                if (!enhancedRunsByNamespace[ns]) enhancedRunsByNamespace[ns] = 0;
+                enhancedRunsByNamespace[ns]++;
+            });
+            Object.entries(enhancedRunsByNamespace).forEach(([ns, count]) => {
+                console.log(`[DataFetcher] DEBUG:   ${ns}: ${count} enhanced backup runs`);
             });
             
             // Add individual guest failure tasks from real backup tasks that didn't match synthetic runs
@@ -1161,6 +1191,7 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                     guest: `${guestType}/${guestId}`,
                                     guestType: guestType,
                                     guestId: guestId,
+                                    id: task.upid,
                                     upid: task.upid,
                                     comment: task.comment || '',
                                     size: 0, // No snapshot created
@@ -1225,6 +1256,7 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
         if (Object.keys(namespaceCounts).length > 0) {
             console.log(`[DataFetcher] PBS backup runs by namespace: ${JSON.stringify(namespaceCounts)}`);
         }
+        
         
         return { 
             tasks: deduplicatedTasks, 
@@ -1547,7 +1579,8 @@ async function fetchPbsData(currentPbsApiClients) {
                 // Fetch tasks early to align with test stub order
                 const allTasksResult = await fetchAllPbsTasksForProcessing(pbsClient, nodeName);
                 if (allTasksResult.tasks && !allTasksResult.error) {
-                    const processedTasks = processPbsTasks(allTasksResult.tasks); // Assumes processPbsTasks is imported
+                    const processedTasks = processPbsTasks(allTasksResult.tasks);
+                    
                     instanceData = { ...instanceData, ...processedTasks }; // Merge task summaries
                 } else {
                     console.warn(`No tasks to process or task fetching failed. Error flag: ${allTasksResult.error}, Tasks array: ${allTasksResult.tasks}`);
@@ -1736,12 +1769,40 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
       console.error("[DataFetcher] Error fetching PVE backup data:", backupResults[1].reason);
   }
 
+  // Aggregate PBS task data from all instances for global access
+  const allPbsTasks = [];
+  const aggregatedPbsTaskSummary = { total: 0, ok: 0, failed: 0 };
+  
+  (pbsResult || []).forEach(pbsInstance => {
+      if (pbsInstance.backupTasks?.recentTasks) {
+          allPbsTasks.push(...pbsInstance.backupTasks.recentTasks);
+      }
+      if (pbsInstance.verificationTasks?.recentTasks) {
+          allPbsTasks.push(...pbsInstance.verificationTasks.recentTasks);
+      }
+      if (pbsInstance.syncTasks?.recentTasks) {
+          allPbsTasks.push(...pbsInstance.syncTasks.recentTasks);
+      }
+      if (pbsInstance.pruneTasks?.recentTasks) {
+          allPbsTasks.push(...pbsInstance.pruneTasks.recentTasks);
+      }
+      
+      // Aggregate summary data
+      if (pbsInstance.aggregatedPbsTaskSummary) {
+          aggregatedPbsTaskSummary.total += pbsInstance.aggregatedPbsTaskSummary.total || 0;
+          aggregatedPbsTaskSummary.ok += pbsInstance.aggregatedPbsTaskSummary.ok || 0;
+          aggregatedPbsTaskSummary.failed += pbsInstance.aggregatedPbsTaskSummary.failed || 0;
+      }
+  });
+
   const aggregatedResult = {
       nodes: pveResult.nodes || [],
       vms: pveResult.vms || [],
       containers: pveResult.containers || [],
       pbs: pbsResult || [], // pbsResult is already the array we need
-      pveBackups: pveBackups // Add PVE backup data
+      pveBackups: pveBackups, // Add PVE backup data
+      allPbsTasks: allPbsTasks, // Global PBS task array for frontend
+      aggregatedPbsTaskSummary: aggregatedPbsTaskSummary // Global PBS task summary
   };
 
   console.log(`[DataFetcher] Discovery cycle completed. Found: ${aggregatedResult.nodes.length} PVE nodes, ${aggregatedResult.vms.length} VMs, ${aggregatedResult.containers.length} CTs, ${aggregatedResult.pbs.length} PBS instances, ${pveBackups.backupTasks.length} PVE backup tasks, ${pveBackups.storageBackups.length} PVE storage backups, ${pveBackups.guestSnapshots.length} guest snapshots.`);
