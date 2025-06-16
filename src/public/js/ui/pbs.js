@@ -198,16 +198,21 @@ PulseApp.ui.pbs = (() => {
     // Helper function to find guest name from VM/container data
     const findGuestName = (guestType, guestId) => {
         try {
-            const appState = PulseApp.state.get();
-            if (!appState) {
-                console.log('[PBS] No app state available for guest name lookup');
+            // Check if we have initial data loaded
+            if (!PulseApp.state || !PulseApp.state.get('initialDataReceived')) {
+                console.log('[PBS] Initial data not yet received, skipping guest name lookup');
                 return null;
             }
             
+            // Get guest arrays directly from state
+            const containers = PulseApp.state.get('containers') || [];
+            const vms = PulseApp.state.get('vms') || [];
+            
             // Handle both "ct" and "qemu"/"vm" guest types
             const guestArray = (guestType === 'ct' || guestType === 'lxc') 
-                ? appState.containers 
-                : appState.vms;
+                ? containers 
+                : vms;
+            
             if (!guestArray || !Array.isArray(guestArray)) {
                 console.log(`[PBS] No ${guestType === 'ct' ? 'containers' : 'vms'} array available`);
                 return null;
