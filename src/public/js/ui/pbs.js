@@ -204,12 +204,11 @@ PulseApp.ui.pbs = (() => {
                 return null;
             }
             
-            // Get guest arrays directly from state
-            const containers = PulseApp.state.get('containers') || [];
-            const vms = PulseApp.state.get('vms') || [];
+            // Get guest arrays directly from state using correct keys
+            const containers = PulseApp.state.get('containersData') || [];
+            const vms = PulseApp.state.get('vmsData') || [];
             
             // Debug: Show what's available in state
-            console.log('[PBS] State keys available:', Object.keys(PulseApp.state.getFullState()));
             console.log('[PBS] containers length:', containers.length);
             console.log('[PBS] vms length:', vms.length);
             
