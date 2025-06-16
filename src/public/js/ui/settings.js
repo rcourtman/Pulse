@@ -196,7 +196,7 @@ PulseApp.ui.settings = (() => {
         } else if (activeTab === 'system') {
             // Auto-check for latest version when system tab is opened
             checkLatestVersion();
-            // Initialize update channel warning visibility and restore channel preference
+            // Initialize update channel warning visibility
             setTimeout(() => {
                 const channelSelect = document.querySelector('select[name="UPDATE_CHANNEL"]');
                 if (channelSelect) {
@@ -335,10 +335,6 @@ PulseApp.ui.settings = (() => {
         let port = pbs?.port || config.PBS_PORT || '';
         const tokenId = pbs?.tokenId || config.PBS_TOKEN_ID || '';
         const nodeName = pbs?.nodeName || config.PBS_NODE_NAME || '';
-        const namespace = pbs?.namespace || config.PBS_NAMESPACE || '';
-        const namespaceAuto = pbs?.namespaceAuto !== false && config.PBS_NAMESPACE_AUTO !== 'false';
-        const namespaceInclude = pbs?.namespaceInclude || config.PBS_NAMESPACE_INCLUDE || '';
-        const namespaceExclude = pbs?.namespaceExclude || config.PBS_NAMESPACE_EXCLUDE || '';
         
         // Clean the host value if it contains protocol or port, and extract port if needed
         if (host) {
@@ -407,17 +403,6 @@ PulseApp.ui.settings = (() => {
                         <input type="password" name="PBS_TOKEN_SECRET"
                                placeholder="Leave blank to keep current"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Namespaces
-                            <span class="text-xs text-gray-500 dark:text-gray-400">(Optional)</span>
-                        </label>
-                        <input type="text" name="PBS_NAMESPACE"
-                               value="${namespace}"
-                               placeholder="Leave empty for root, or enter: namespace1,namespace2"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated list of namespaces to monitor. Leave empty to monitor root namespace only.</p>
                     </div>
                 </div>
             </div>
@@ -546,7 +531,7 @@ PulseApp.ui.settings = (() => {
                         <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">
                             Choose which types of updates to receive
                         </p>
-                        <select name="UPDATE_CHANNEL" onchange="PulseApp.ui.settings.onUpdateChannelChange(this.value, true)"
+                        <select name="UPDATE_CHANNEL" onchange="PulseApp.ui.settings.onUpdateChannelChange(this.value)"
                                 class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <option value="stable" ${(advanced.updateChannel || 'stable') === 'stable' ? 'selected' : ''}>
                                 Stable - Production releases (recommended)
@@ -943,12 +928,6 @@ PulseApp.ui.settings = (() => {
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token Secret</label>
                         <input type="password" name="PBS_TOKEN_SECRET_${index}" placeholder="Enter token secret"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Namespaces</label>
-                        <input type="text" name="PBS_NAMESPACE_${index}" placeholder="Leave empty for root, or enter: namespace1,namespace2"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Comma-separated list of namespaces</p>
                     </div>
                 </div>
             </div>
@@ -1369,8 +1348,6 @@ PulseApp.ui.settings = (() => {
         const updateChannelInfoElement = document.getElementById('update-channel-info');
         const channelMismatchWarning = document.getElementById('channel-mismatch-warning');
         
-        try {
-        
         if (!latestVersionElement) return;
         
         try {
@@ -1396,38 +1373,13 @@ PulseApp.ui.settings = (() => {
             } else {
                 // Use the server's update check API with optional channel override
                 const url = channelOverride ? `/api/updates/check?channel=${channelOverride}` : '/api/updates/check';
+                data = await PulseApp.apiClient.get(url);
                 
-                try {
-                    data = await PulseApp.apiClient.get(url);
-                    
-                    // Cache the result
-                    updateCache.set(cacheKey, {
-                        data: data,
-                        timestamp: Date.now()
-                    });
-                } catch (error) {
-                    if (error.message && (error.message.includes('rate limit') || error.message.includes('rateLimited'))) {
-                        // Show user-friendly rate limit message
-                        console.warn('[Settings] GitHub API rate limited, showing cached data if available');
-                        showMessage('Update check temporarily unavailable due to GitHub rate limits. Please try again later.', 'warning');
-                        
-                        // Use cached data if available, even if expired
-                        if (cachedResult) {
-                            console.log('[Settings] Using expired cache due to rate limiting');
-                            data = cachedResult.data;
-                        } else {
-                            // No cached data available
-                            const versionStatusElement = document.getElementById('version-status');
-                            if (versionStatusElement) {
-                                versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Update check unavailable - rate limited</span>';
-                            }
-                            return;
-                        }
-                    } else {
-                        // Re-throw other errors
-                        throw error;
-                    }
-                }
+                // Cache the result
+                updateCache.set(cacheKey, {
+                    data: data,
+                    timestamp: Date.now()
+                });
             }
             
             // Add preview indicator if using channel override
@@ -1471,18 +1423,35 @@ PulseApp.ui.settings = (() => {
                     }
                 }
                 
-                // Hide channel mismatch warning since channels are separate
-                if (channelMismatchWarning) {
-                    channelMismatchWarning.classList.add('hidden');
+                // Check for channel mismatch and show recommendations
+                const currentVersionLower = currentVersion.toLowerCase();
+                const isCurrentRC = currentVersionLower.includes('-rc') || currentVersionLower.includes('-alpha') || currentVersionLower.includes('-beta');
+                const shouldShowRecommendation = (!isCurrentRC && updateChannel === 'rc');
+                
+                
+                if (shouldShowRecommendation && channelMismatchWarning) {
+                    const messageElement = document.getElementById('channel-mismatch-message');
+                    if (messageElement) {
+                        messageElement.textContent = `You're running a stable version (${currentVersion}) but checking for RC releases. Consider switching to the stable channel for production use.`;
+                    }
+                    channelMismatchWarning.classList.remove('hidden');
                 }
                 
-                // Channels are separate - no cross-channel comparisons
-                // Simply show if an update is available in the selected channel
-                if (data.updateAvailable) {
-                    // Update available in the selected channel
+                // Check if this is a "downgrade" scenario (RC to stable)
+                const isDowngradeToStable = isCurrentRC && updateChannel === 'stable' && 
+                    currentVersion !== latestVersion;
+                
+                if (data.updateAvailable || isDowngradeToStable) {
+                    // Update available (or downgrade to stable)
                     latestVersionElement.className = 'font-mono font-semibold text-green-600 dark:text-green-400';
                     
-                    const updateText = updateChannel === 'rc' ? '📦 RC Update available!' : '📦 Update available!';
+                    let updateText;
+                    if (isDowngradeToStable) {
+                        updateText = '📦 Switch to stable release available';
+                    } else {
+                        updateText = updateChannel === 'rc' ? '📦 RC Update available!' : '📦 Update available!';
+                    }
+                    
                     versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${updateText}</span>`;
                     
                     // Convert server response to match GitHub API format for showUpdateDetails
@@ -1503,13 +1472,24 @@ PulseApp.ui.settings = (() => {
                         versionStatusElement.innerHTML += '<br><span class="text-amber-600 dark:text-amber-400 text-xs">Note: Docker deployments require manual update</span>';
                     }
                 } else {
-                    // No update available in the selected channel
+                    // Up to date - hide any update details
                     hideUpdateDetails();
                     
                     latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
                     
-                    const upToDateText = updateChannel === 'rc' ? '✅ Up to date (RC channel)' : '✅ Up to date';
-                    versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
+                    // Check if we should show "up to date" or "no updates" for RC on stable
+                    if (isCurrentRC && updateChannel === 'stable' && currentVersion === latestVersion) {
+                        // Same version on both channels
+                        const upToDateText = '✅ Up to date (same as stable)';
+                        versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
+                    } else if (isCurrentRC && updateChannel === 'stable') {
+                        // RC version is different from stable - should have been caught above as "downgrade"
+                        const upToDateText = '⚠️ No newer stable (running RC)';
+                        versionStatusElement.innerHTML = `<span class="text-amber-600 dark:text-amber-400">${upToDateText}</span>`;
+                    } else {
+                        const upToDateText = updateChannel === 'rc' ? '✅ Up to date (RC channel)' : '✅ Up to date';
+                        versionStatusElement.innerHTML = `<span class="text-green-600 dark:text-green-400">${upToDateText}</span>`;
+                    }
                 }
             } else {
                 throw new Error('Invalid response data - missing version information');
@@ -1548,17 +1528,6 @@ PulseApp.ui.settings = (() => {
                         latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
                         versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Cached data (rate limited)</span>';
                     }, 100);
-                }
-            }
-        }
-        
-        } catch (error) {
-            console.error('[Settings] checkLatestVersion failed:', error);
-            if (versionStatusElement) {
-                if (error.message && (error.message.includes('rate limit') || error.message.includes('rateLimited'))) {
-                    versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Update check unavailable - rate limited</span>';
-                } else {
-                    versionStatusElement.innerHTML = '<span class="text-red-500 dark:text-red-400">Update check failed</span>';
                 }
             }
         }
@@ -1674,18 +1643,6 @@ PulseApp.ui.settings = (() => {
             if (cleanCurrentVersion === cleanTargetVersion) {
                 changesLoading.classList.add('hidden');
                 changesSummaryText.innerHTML = '<span class="text-gray-600 dark:text-gray-300">You are already on this version.</span>';
-                changesSummaryText.classList.remove('hidden');
-                return;
-            }
-            
-            // Check if current version is a development version (has -dev or +commit)
-            const isDevVersion = cleanCurrentVersion.includes('-dev') || cleanCurrentVersion.includes('+');
-            
-            if (isDevVersion) {
-                // For development versions, skip API comparison and show simple message
-                console.log(`[Settings] Development version detected (${cleanCurrentVersion}), skipping GitHub API comparison`);
-                changesLoading.classList.add('hidden');
-                changesSummaryText.innerHTML = '<span class="text-blue-600 dark:text-blue-400">📦 Update available from development version to release version</span>';
                 changesSummaryText.classList.remove('hidden');
                 return;
             }
@@ -1923,8 +1880,6 @@ PulseApp.ui.settings = (() => {
             return;
         }
         
-        // Channel is already saved immediately when changed, so no need to save again
-        
         // Find the tarball asset
         const tarballAsset = latestReleaseData.assets.find(asset => 
             asset.name.endsWith('.tar.gz') && asset.name.includes('pulse')
@@ -1949,13 +1904,9 @@ PulseApp.ui.settings = (() => {
             return;
         }
         
-        // Show channel information in confirmation
-        const isRCVersion = latestReleaseData.tag_name.toLowerCase().includes('-rc');
-        const channelInfo = isRCVersion ? ' (RC Channel)' : ' (Stable Channel)';
-        
         // Confirm update
         PulseApp.ui.toast.confirm(
-            `Update to version ${latestReleaseData.tag_name}${channelInfo}? The application will restart automatically after the update is applied.`,
+            `Update to version ${latestReleaseData.tag_name}? The application will restart automatically after the update is applied.`,
             async () => {
                 await _performUpdate(latestReleaseData, tarballAsset);
             }
@@ -1999,19 +1950,9 @@ PulseApp.ui.settings = (() => {
                 
                 window.socket.on('updateComplete', () => {
                     if (progressText) {
-                        progressText.textContent = 'Update complete! Waiting for service to restart...';
+                        progressText.textContent = 'Update complete! Restarting...';
                     }
-                    showMessage('Update applied successfully. Waiting for service to restart...', 'success');
-                    
-                    // Wait for service to be ready before reloading
-                    waitForServiceReady(() => {
-                        if (progressText) {
-                            progressText.textContent = 'Service ready! Reloading...';
-                        }
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
-                    });
+                    showMessage('Update applied successfully. The application will restart momentarily.', 'success');
                 });
                 
                 window.socket.on('updateError', (data) => {
@@ -2066,32 +2007,6 @@ PulseApp.ui.settings = (() => {
         } else {
             htmlElement.classList.remove('dark');
             localStorage.setItem('theme', 'light');
-        }
-    }
-    
-    function toggleNamespaceAuto(checkbox) {
-        const manualDiv = document.getElementById('pbs-namespace-manual');
-        const filtersDiv = document.getElementById('pbs-namespace-filters');
-        
-        if (checkbox.checked) {
-            manualDiv.style.display = 'none';
-            filtersDiv.style.display = 'block';
-        } else {
-            manualDiv.style.display = 'block';
-            filtersDiv.style.display = 'none';
-        }
-    }
-    
-    function toggleNamespaceAutoAdditional(checkbox, index) {
-        const manualDiv = document.getElementById(`pbs-namespace-manual-${index}`);
-        const filtersDiv = document.getElementById(`pbs-namespace-filters-${index}`);
-        
-        if (checkbox.checked) {
-            manualDiv.style.display = 'none';
-            filtersDiv.style.display = 'block';
-        } else {
-            manualDiv.style.display = 'block';
-            filtersDiv.style.display = 'none';
         }
     }
 
@@ -3068,34 +2983,18 @@ PulseApp.ui.settings = (() => {
             html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Nodes</th>';
             html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">VMs</th>';
             html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Containers</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Storage</th>';
-            html += '<th class="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase">Backup Access</th>';
             html += '</tr></thead><tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">';
             
             permissions.proxmox.forEach(perm => {
                 const checkIcon = (canDo) => canDo ? 
                     '<span class="text-green-600 dark:text-green-400">✓</span>' : 
                     '<span class="text-red-600 dark:text-red-400">✗</span>';
-                // Storage backup access info
-                const storageInfo = perm.storageBackupAccess || {};
-                const storageAccessText = storageInfo.totalStoragesTested > 0 ? 
-                    `${storageInfo.accessibleStorages}/${storageInfo.totalStoragesTested}` : 
-                    (perm.canListStorage ? '0' : 'N/A');
-                
-                // Storage backup access icon - show warning if some storages are inaccessible
-                let backupAccessIcon = checkIcon(perm.canAccessStorageBackups);
-                if (storageInfo.totalStoragesTested > 0 && storageInfo.accessibleStorages < storageInfo.totalStoragesTested) {
-                    backupAccessIcon = '<span class="text-amber-600 dark:text-amber-400">⚠</span>';
-                }
-                
                 html += `<tr>
                     <td class="px-4 py-2 text-sm text-gray-900 dark:text-gray-100">${perm.name}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canConnect)}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canListNodes)} ${perm.nodeCount ? `(${perm.nodeCount})` : ''}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canListVMs)} ${perm.vmCount !== undefined ? `(${perm.vmCount})` : ''}</td>
                     <td class="px-4 py-2 text-sm">${checkIcon(perm.canListContainers)} ${perm.containerCount !== undefined ? `(${perm.containerCount})` : ''}</td>
-                    <td class="px-4 py-2 text-sm">${checkIcon(perm.canListStorage)}</td>
-                    <td class="px-4 py-2 text-sm">${backupAccessIcon} ${storageAccessText}</td>
                 </tr>`;
             });
             html += '</tbody></table></div>';
@@ -3328,10 +3227,9 @@ PulseApp.ui.settings = (() => {
         URL.revokeObjectURL(url);
     }
 
-
     // Public API
     // Handle update channel selection change
-    async function onUpdateChannelChange(value, autoSave = false) {
+    function onUpdateChannelChange(value) {
         const rcWarning = document.getElementById('rc-warning');
         if (rcWarning) {
             if (value === 'rc') {
@@ -3341,46 +3239,14 @@ PulseApp.ui.settings = (() => {
             }
         }
         
-        // Show loading state during channel switch
-        const versionStatusElement = document.getElementById('version-status');
-        if (versionStatusElement) {
-            versionStatusElement.innerHTML = '<span class="text-gray-500 dark:text-gray-400">Checking for updates...</span>';
+        // Re-check for updates with the selected channel (preview mode)
+        // Debounce rapid changes to prevent API spam
+        if (updateCheckTimeout) {
+            clearTimeout(updateCheckTimeout);
         }
-        
-        try {
-            // Only save immediately if autoSave is true (user-initiated change)
-            if (autoSave) {
-                await saveChannelSetting(value);
-            }
-            
-            // Clear cache and check for updates
-            updateCache.clear();
-            await checkLatestVersion(value);
-            
-            if (autoSave) {
-                console.log(`[Settings] Successfully switched to ${value === 'rc' ? 'RC' : 'Stable'} channel`);
-            }
-        } catch (error) {
-            console.error('[Settings] Channel switch failed:', error);
-            showMessage('Failed to switch channel. Please try again.', 'error');
-            if (versionStatusElement) {
-                if (error.message && (error.message.includes('rate limit') || error.message.includes('rateLimited'))) {
-                    versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Update check unavailable - rate limited</span>';
-                } else {
-                    versionStatusElement.innerHTML = '<span class="text-red-500 dark:text-red-400">Update check failed - please try again later</span>';
-                }
-            }
-        }
-    }
-    
-    async function saveChannelSetting(value) {
-        // Save only the channel setting without triggering modal close
-        try {
-            const config = { UPDATE_CHANNEL: value };
-            await PulseApp.apiClient.post('/api/config', config);
-        } catch (error) {
-            throw error;
-        }
+        updateCheckTimeout = setTimeout(() => {
+            checkLatestVersion(value);
+        }, 300);
     }
     
     // Switch to a specific update channel
@@ -3410,13 +3276,8 @@ PulseApp.ui.settings = (() => {
                     }
                 }, 2000);
             }
-            
-            // Show reminder to save settings
-            showMessage(`Switched to ${targetChannel === 'rc' ? 'RC' : 'Stable'} channel. Remember to save settings to apply the change.`, 'info');
         }
     }
-    
-    // Quick switch to channel and apply update if available
     
     // Proceed with switching to stable release (downgrade)
     function proceedWithStableSwitch() {
@@ -3908,25 +3769,6 @@ PulseApp.ui.settings = (() => {
         }, 3000);
     }
 
-    function showMessage(message, type = 'info') {
-        // Use the proper toast system based on message type
-        switch (type) {
-            case 'success':
-                PulseApp.ui.toast.success(message);
-                break;
-            case 'error':
-                PulseApp.ui.toast.error(message);
-                break;
-            case 'warning':
-                PulseApp.ui.toast.warning(message);
-                break;
-            case 'info':
-            default:
-                PulseApp.ui.toast.info(message);
-                break;
-        }
-    }
-
     function renderAlertManagementTab() {
         return `
             <div class="space-y-6">
@@ -4034,58 +3876,6 @@ PulseApp.ui.settings = (() => {
         `;
     }
     
-    /**
-     * Wait for the service to be ready after restart by polling the health endpoint
-     */
-    function waitForServiceReady(callback, attempt = 0, maxAttempts = 40) {
-        // Initial delay to allow service to restart
-        if (attempt === 0) {
-            console.log('[Update] Waiting for service to restart...');
-            setTimeout(() => waitForServiceReady(callback, 1, maxAttempts), 5000);
-            return;
-        }
-        
-        // Try to connect to the health endpoint
-        fetch('/api/health', { 
-            method: 'GET',
-            cache: 'no-cache',
-            headers: {
-                'Accept': 'application/json'
-            },
-            timeout: 5000
-        })
-        .then(response => {
-            if (response.ok) {
-                return response.json();
-            } else {
-                throw new Error(`HTTP ${response.status}`);
-            }
-        })
-        .then(healthData => {
-            // Check if service is fully initialized
-            if (healthData && healthData.system && healthData.system.clientsInitialized) {
-                console.log('[Update] Service is ready and fully initialized');
-                callback();
-            } else {
-                // Service responding but not fully initialized yet
-                throw new Error('Service not fully initialized');
-            }
-        })
-        .catch(error => {
-            // Service not ready yet
-            if (attempt < maxAttempts) {
-                // Progressive backoff: start at 1s, increase by 250ms each attempt, cap at 4s
-                const delay = Math.min(1000 + (attempt * 250), 4000);
-                console.log(`[Update] Service not ready (attempt ${attempt}/${maxAttempts}), retrying in ${delay}ms...`);
-                setTimeout(() => waitForServiceReady(callback, attempt + 1, maxAttempts), delay);
-            } else {
-                // Max attempts reached, force reload anyway
-                console.warn('[Update] Service health check failed after maximum attempts, forcing reload');
-                callback();
-            }
-        });
-    }
-    
     return {
         init,
         openModal,
@@ -4098,8 +3888,6 @@ PulseApp.ui.settings = (() => {
         checkForUpdates,
         applyUpdate,
         changeTheme,
-        toggleNamespaceAuto,
-        toggleNamespaceAutoAdditional,
         runDiagnostics,
         copyDiagnosticReport,
         downloadDiagnosticReport,

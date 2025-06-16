@@ -160,15 +160,13 @@ document.addEventListener('DOMContentLoaded', function() {
         return allFound;
     }
 
-    async function fetchVersion() {
+    function fetchVersion() {
         const versionSpan = document.getElementById('app-version');
         if (!versionSpan) {
             console.error('Version span element not found');
             return;
         }
         
-        // Use the user's configured channel from server config
-        // No need to override - let the server use its configured channel
         fetch('/api/version')
             .then(response => {
                 if (!response.ok) {
@@ -223,24 +221,16 @@ document.addEventListener('DOMContentLoaded', function() {
                             updateIndicator.addEventListener('click', (e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                const releaseUrl = data.releaseUrl || 'https://github.com/rcourtman/Pulse/releases/latest';
-                                window.open(releaseUrl, '_blank');
+                                window.open('https://github.com/rcourtman/Pulse/releases/latest', '_blank');
                             });
                             
-                            // Insert after version link with a space
-                            const spacer = document.createTextNode(' ');
-                            versionSpan.parentNode.insertBefore(spacer, versionSpan.nextSibling);
-                            versionSpan.parentNode.insertBefore(updateIndicator, spacer.nextSibling);
+                            // Insert after version link
+                            versionSpan.parentNode.insertBefore(updateIndicator, versionSpan.nextSibling);
                         }
                     } else {
                         // Remove update indicator if no update available
                         const existingIndicator = document.getElementById('update-indicator');
                         if (existingIndicator) {
-                            // Also remove the spacer that comes before it
-                            const spacer = existingIndicator.previousSibling;
-                            if (spacer && spacer.nodeType === Node.TEXT_NODE && spacer.textContent === ' ') {
-                                spacer.remove();
-                            }
                             existingIndicator.remove();
                         }
                     }
