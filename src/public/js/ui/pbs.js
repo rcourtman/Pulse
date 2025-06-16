@@ -2076,10 +2076,39 @@ PulseApp.ui.pbs = (() => {
             return tasks;
         }
         
+        
         return tasks.filter(task => task.namespace === selectedNamespace);
     }
 
+    function _recalculateTaskSummary(tasks) {
+        if (!tasks || tasks.length === 0) {
+            return { ok: 0, failed: 0, lastOk: null, lastFailed: null };
+        }
+        
+        let ok = 0;
+        let failed = 0;
+        let lastOk = null;
+        let lastFailed = null;
+        
+        tasks.forEach(task => {
+            if (task.status === 'OK') {
+                ok++;
+                if (!lastOk || (task.startTime && task.startTime > lastOk)) {
+                    lastOk = task.startTime;
+                }
+            } else if (task.status === 'ERROR' || task.status === 'FAILED') {
+                failed++;
+                if (!lastFailed || (task.startTime && task.startTime > lastFailed)) {
+                    lastFailed = task.startTime;
+                }
+            }
+        });
+        
+        return { ok, failed, lastOk, lastFailed };
+    }
+
     function updatePbsInfo(pbsArray) {
+        
         const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
         if (!container) {
             console.error(`PBS container element #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found!`);
@@ -2135,34 +2164,52 @@ PulseApp.ui.pbs = (() => {
             
             // Filter backup tasks
             if (filteredInstance.backupTasks && filteredInstance.backupTasks.recentTasks) {
+                const filteredTasks = _filterPbsTasksByNamespace(filteredInstance.backupTasks.recentTasks, selectedNamespace);
                 filteredInstance.backupTasks = {
                     ...filteredInstance.backupTasks,
-                    recentTasks: _filterPbsTasksByNamespace(filteredInstance.backupTasks.recentTasks, selectedNamespace)
+                    recentTasks: filteredTasks,
+                    summary: _recalculateTaskSummary(filteredTasks)
                 };
             }
             
             // Filter verification tasks
             if (filteredInstance.verificationTasks && filteredInstance.verificationTasks.recentTasks) {
+                const filteredTasks = _filterPbsTasksByNamespace(filteredInstance.verificationTasks.recentTasks, selectedNamespace);
                 filteredInstance.verificationTasks = {
                     ...filteredInstance.verificationTasks,
-                    recentTasks: _filterPbsTasksByNamespace(filteredInstance.verificationTasks.recentTasks, selectedNamespace)
+                    recentTasks: filteredTasks,
+                    summary: _recalculateTaskSummary(filteredTasks)
                 };
             }
             
             // Filter sync tasks
             if (filteredInstance.syncTasks && filteredInstance.syncTasks.recentTasks) {
+                const filteredTasks = _filterPbsTasksByNamespace(filteredInstance.syncTasks.recentTasks, selectedNamespace);
                 filteredInstance.syncTasks = {
                     ...filteredInstance.syncTasks,
-                    recentTasks: _filterPbsTasksByNamespace(filteredInstance.syncTasks.recentTasks, selectedNamespace)
+                    recentTasks: filteredTasks,
+                    summary: _recalculateTaskSummary(filteredTasks)
                 };
             }
             
             // Filter prune tasks
             if (filteredInstance.pruneTasks && filteredInstance.pruneTasks.recentTasks) {
+                const filteredTasks = _filterPbsTasksByNamespace(filteredInstance.pruneTasks.recentTasks, selectedNamespace);
                 filteredInstance.pruneTasks = {
                     ...filteredInstance.pruneTasks,
-                    recentTasks: _filterPbsTasksByNamespace(filteredInstance.pruneTasks.recentTasks, selectedNamespace)
+                    recentTasks: filteredTasks,
+                    summary: _recalculateTaskSummary(filteredTasks)
                 };
+            }
+            
+            // Filter datastores by namespace
+            if (filteredInstance.datastores && selectedNamespace !== 'all') {
+                filteredInstance.datastores = filteredInstance.datastores.map(ds => ({
+                    ...ds,
+                    snapshots: ds.snapshots ? ds.snapshots.filter(snap => 
+                        (snap.namespace || 'root') === selectedNamespace
+                    ) : []
+                }));
             }
             
             return filteredInstance;
@@ -2250,8 +2297,8 @@ PulseApp.ui.pbs = (() => {
                     const existingDetailCard = taskCard.nextElementSibling;
                     
                     if (!existingDetailCard || !existingDetailCard.classList.contains('mobile-task-detail-card')) {
-                        // Find the task data from the PBS array
-                        const taskData = findTaskByUpid(pbsArray, upid);
+                        // Find the task data from the filtered PBS array
+                        const taskData = findTaskByUpid(filteredPbsArray, upid);
                         if (taskData) {
                             const detailCard = _createMobileTaskDetailCard(taskData);
                             taskCard.insertAdjacentElement('afterend', detailCard);
