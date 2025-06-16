@@ -7,55 +7,112 @@ PulseApp.ui.backups = (() => {
     let namespaceFilter = null;
     let pbsInstanceFilter = null;
     
-    // Cache for expensive data transformations
+    // Enhanced cache for expensive data transformations
     let dataCache = {
         lastStateHash: null,
         processedBackupData: null,
-        guestBackupStatus: null
+        guestBackupStatus: null,
+        // Fine-grained caching
+        guestCache: new Map(), // Maps guestId to cached data with TTL
+        tasksByGuestCache: new Map(),
+        snapshotsByGuestCache: new Map(),
+        lastCleanup: Date.now(),
+        cacheStats: { hits: 0, misses: 0 }
     };
     
+    // Cache TTL in milliseconds
+    const CACHE_TTL = 30000; // 30 seconds for guest data
+    const CACHE_CLEANUP_INTERVAL = 300000; // 5 minutes
+    
+    // DOM element cache to avoid repeated queries
+    const domCache = {
+        tableBody: null,
+        noDataMsg: null,
+        tableContainer: null,
+        scrollableContainer: null,
+        visualizationSection: null,
+        calendarContainer: null,
+        statusTextElement: null,
+        pbsSummaryElement: null,
+        detailCardContainer: null,
+        loadingIndicator: null
+    };
+    
+    // Row tracking for incremental updates
+    const rowTracker = new Map(); // Maps guestId to row element
+    
+    // Initialize DOM cache
+    function _initDomCache() {
+        domCache.tableBody = document.getElementById('backups-overview-tbody');
+        domCache.noDataMsg = document.getElementById('backups-no-data-message');
+        domCache.tableContainer = document.getElementById('backups-table-container');
+        domCache.scrollableContainer = document.querySelector('#backups .overflow-x-auto');
+        domCache.visualizationSection = document.getElementById('backup-visualization-section');
+        domCache.calendarContainer = document.getElementById('backup-calendar-heatmap');
+        domCache.statusTextElement = document.getElementById('backups-status-text');
+        domCache.pbsSummaryElement = document.getElementById('pbs-instances-summary');
+        domCache.detailCardContainer = document.getElementById('backup-detail-card');
+        domCache.loadingIndicator = document.getElementById('backups-loading-message');
+    }
+    
     function _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups, namespaceFilter, pbsInstanceFilter) {
-        // Simple hash based on data lengths and timestamps + namespace filter + PBS instance filter
+        // Enhanced hash generation with data sampling
         const vmCount = vmsData.length;
         const ctCount = containersData.length;
         const pbsCount = pbsDataArray.length;
         const pveTaskCount = pveBackups?.backupTasks?.length || 0;
         const pveStorageCount = pveBackups?.storageBackups?.length || 0;
         
-        return `${vmCount}-${ctCount}-${pbsCount}-${pveTaskCount}-${pveStorageCount}-${namespaceFilter || 'all'}-${pbsInstanceFilter || 'all'}`;
+        // Sample data for better change detection
+        const vmSample = vmsData.length > 0 ? `${vmsData[0]?.id}-${vmsData[vmsData.length-1]?.id}` : '';
+        const ctSample = containersData.length > 0 ? `${containersData[0]?.id}-${containersData[containersData.length-1]?.id}` : '';
+        
+        // Include timestamps for better cache invalidation
+        const latestBackupTime = Math.max(
+            ...pbsDataArray.flatMap(pbs => 
+                (pbs.datastores || []).flatMap(ds => 
+                    (ds.snapshots || []).map(s => s.timestamp || 0)
+                )
+            ),
+            0
+        );
+        
+        return `${vmCount}-${ctCount}-${pbsCount}-${pveTaskCount}-${pveStorageCount}-${namespaceFilter || 'all'}-${pbsInstanceFilter || 'all'}-${vmSample}-${ctSample}-${latestBackupTime}`;
+    }
+    
+    // Clean up expired cache entries
+    function _cleanupCache() {
+        const now = Date.now();
+        if (now - dataCache.lastCleanup < CACHE_CLEANUP_INTERVAL) return;
+        
+        // Clean up guest cache
+        for (const [guestId, data] of dataCache.guestCache) {
+            if (now - data.timestamp > CACHE_TTL) {
+                dataCache.guestCache.delete(guestId);
+            }
+        }
+        
+        // Clean up component caches
+        for (const [key, data] of dataCache.tasksByGuestCache) {
+            if (now - data.timestamp > CACHE_TTL) {
+                dataCache.tasksByGuestCache.delete(key);
+            }
+        }
+        
+        for (const [key, data] of dataCache.snapshotsByGuestCache) {
+            if (now - data.timestamp > CACHE_TTL) {
+                dataCache.snapshotsByGuestCache.delete(key);
+            }
+        }
+        
+        dataCache.lastCleanup = now;
     }
 
-    function _initMobileScrollIndicators() {
-        const tableContainer = document.querySelector('#backups .table-container');
-        const scrollHint = document.querySelector('#backups .scroll-hint');
-        
-        if (!tableContainer || !scrollHint) return;
-        
-        let scrollHintTimer;
-        
-        // Hide scroll hint after 5 seconds or on first scroll
-        const hideScrollHint = () => {
-            if (scrollHint) {
-                scrollHint.style.display = 'none';
-            }
-        };
-        
-        scrollHintTimer = setTimeout(hideScrollHint, 5000);
-        
-        // Handle scroll events
-        tableContainer.addEventListener('scroll', () => {
-            hideScrollHint();
-            clearTimeout(scrollHintTimer);
-        }, { passive: true });
-        
-        // Also hide on table container click/touch
-        tableContainer.addEventListener('touchstart', () => {
-            hideScrollHint();
-            clearTimeout(scrollHintTimer);
-        }, { passive: true });
-    }
 
     function init() {
+        // Initialize DOM cache first
+        _initDomCache();
+        
         backupsSearchInput = document.getElementById('backups-search');
         resetBackupsButton = document.getElementById('reset-backups-filters-button');
         backupsTabContent = document.getElementById('backups');
@@ -127,7 +184,7 @@ PulseApp.ui.backups = (() => {
         
         // Initialize mobile scroll indicators
         if (window.innerWidth < 768) {
-            _initMobileScrollIndicators();
+            PulseApp.utils.initMobileScrollIndicators('#backups');
         }
         
         // Initialize snapshot modal handlers
@@ -187,18 +244,6 @@ PulseApp.ui.backups = (() => {
         };
     }
 
-    
-    function formatTimeAgo(milliseconds) {
-        const seconds = Math.floor(milliseconds / 1000);
-        const minutes = Math.floor(seconds / 60);
-        const hours = Math.floor(minutes / 60);
-        const days = Math.floor(hours / 24);
-
-        if (days > 0) return `${days}d ago`;
-        if (hours > 0) return `${hours}h ago`;
-        if (minutes > 0) return `${minutes}m ago`;
-        return 'Just now';
-    }
 
     function createNodeBackupSummaryCard(nodeName, guestStatuses) {
         const card = document.createElement('div');
@@ -262,13 +307,7 @@ PulseApp.ui.backups = (() => {
                 </div>
             </div>
             ${sortedGuests.map(guest => {
-                const statusColor = {
-                    'ok': 'text-green-600 dark:text-green-400',
-                    'stale': 'text-green-600 dark:text-green-400', 
-                    'old': 'text-yellow-600 dark:text-yellow-400',
-                    'failed': 'text-red-600 dark:text-red-400',
-                    'none': 'text-gray-600 dark:text-gray-400'
-                }[guest.backupHealthStatus] || 'text-gray-600 dark:text-gray-400';
+                const statusColor = PulseApp.utils.getBackupStatusColor(guest.backupHealthStatus);
                 
                 const statusIcon = {
                     'ok': '●',
@@ -1015,6 +1054,7 @@ PulseApp.ui.backups = (() => {
         const row = document.createElement('tr');
         row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
         row.dataset.guestId = guestStatus.guestId;
+        row.id = `backup-row-${guestStatus.guestId}`; // Add ID for row tracking
 
         // Check if guest has custom thresholds
         const thresholdIndicator = createThresholdIndicator(guestStatus);
@@ -1670,22 +1710,19 @@ PulseApp.ui.backups = (() => {
     }
 
     function updateBackupsTab(isUserAction = false) {
-        const tableContainer = document.getElementById('backups-table-container');
-        const tableBody = document.getElementById('backups-overview-tbody');
-        const loadingMsg = document.getElementById('backups-loading-message');
-        const noDataMsg = document.getElementById('backups-no-data-message');
-        const statusTextElement = document.getElementById('backups-status-text');
-        const pbsSummaryElement = document.getElementById('pbs-instances-summary');
+        // Ensure DOM cache is initialized
+        if (!domCache.tableBody) {
+            _initDomCache();
+        }
+        
+        // Use cached DOM elements
+        const { tableContainer, tableBody, noDataMsg, statusTextElement, pbsSummaryElement, scrollableContainer } = domCache;
+        const loadingMsg = document.getElementById('backups-loading-message'); // Not in cache yet
 
         if (!tableContainer || !tableBody || !loadingMsg || !noDataMsg || !statusTextElement) {
             console.error("UI elements for Backups tab not found!");
             return;
         }
-        
-        // Find the scrollable container
-        const scrollableContainer = PulseApp.utils.getScrollableParent(tableBody) || 
-                                   tableContainer.closest('.overflow-x-auto') ||
-                                   tableContainer;
 
         // Store current scroll position for both axes
         const currentScrollLeft = scrollableContainer.scrollLeft || 0;
@@ -2308,12 +2345,27 @@ PulseApp.ui.backups = (() => {
         }
 
         PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
-            tableBody.innerHTML = '';
+            // Use DocumentFragment for batch DOM insertion
             if (sortedBackupStatus.length > 0) {
+                const fragment = document.createDocumentFragment();
+                
+                // Clear existing rows and row tracker
+                while (tableBody.firstChild) {
+                    tableBody.removeChild(tableBody.firstChild);
+                }
+                rowTracker.clear();
+                
+                // Build all rows in fragment
                 sortedBackupStatus.forEach(guestStatus => {
                     const row = _renderBackupTableRow(guestStatus);
-                    tableBody.appendChild(row);
+                    // Track row for future updates
+                    const guestId = `${guestStatus.guestType}-${guestStatus.guestId}`;
+                    rowTracker.set(guestId, row);
+                    fragment.appendChild(row);
                 });
+                
+                // Single DOM insertion
+                tableBody.appendChild(fragment);
                 noDataMsg.classList.add('hidden');
                 tableContainer.classList.remove('hidden');
             } else {

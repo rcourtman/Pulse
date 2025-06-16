@@ -110,54 +110,6 @@ PulseApp.ui.pbs = (() => {
         HANDLER_ATTACHED: 'data-handler-attached',
     };
 
-
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
-    function _initMobileScrollIndicators() {
-        const tableContainers = document.querySelectorAll('.pbs-table-container');
-        const scrollHints = document.querySelectorAll('.pbs-scroll-hint');
-        
-        if (!tableContainers.length || !scrollHints.length) return;
-        
-        tableContainers.forEach((container, index) => {
-            const scrollHint = scrollHints[index];
-            if (!scrollHint) return;
-            
-            let scrollHintTimer;
-            
-            // Hide scroll hint after 5 seconds or on first scroll
-            const hideScrollHint = () => {
-                if (scrollHint) {
-                    scrollHint.style.display = 'none';
-                }
-            };
-            
-            scrollHintTimer = setTimeout(hideScrollHint, 5000);
-            
-            // Handle scroll events
-            container.addEventListener('scroll', () => {
-                hideScrollHint();
-                clearTimeout(scrollHintTimer);
-            }, { passive: true });
-            
-            // Also hide on table container click/touch
-            container.addEventListener('touchstart', () => {
-                hideScrollHint();
-                clearTimeout(scrollHintTimer);
-            }, { passive: true });
-        });
-    }
-
     const getPbsStatusIcon = (status) => {
         if (status === 'OK') {
             return `<span class="text-green-500 dark:text-green-400" title="OK">OK</span>`;
@@ -1055,16 +1007,6 @@ PulseApp.ui.pbs = (() => {
         }
     };
 
-    const _createHealthBadgeHTML = (health, title) => {
-        let colorClass = 'bg-gray-400 dark:bg-gray-500';
-        if (health === 'ok') colorClass = 'bg-green-500';
-        else if (health === 'warning') colorClass = 'bg-yellow-500';
-        else if (health === 'error') colorClass = 'bg-red-500';
-        const span = document.createElement('span');
-        span.title = title;
-        span.className = `inline-block w-3 h-3 ${colorClass} rounded-full mr-2 flex-shrink-0`;
-        return span;
-    };
 
     const _createInstanceHeaderDiv = (instanceName, overallHealth, healthTitle) => {
         const headerDiv = document.createElement('div');
