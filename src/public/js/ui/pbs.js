@@ -2086,16 +2086,16 @@ PulseApp.ui.pbs = (() => {
         }
         
         // Check if viewport has changed (mobile to desktop or vice versa)
-        const isMobile = window.innerWidth <= 768;
+        const currentlyMobile = window.innerWidth <= 768;
         const wasMobile = container.classList.contains('mobile-layout');
         
         // Clear persistent state on viewport change to allow layout rebuild
-        if (isMobile !== wasMobile && persistentExpandedDetails.size > 0) {
+        if (currentlyMobile !== wasMobile && persistentExpandedDetails.size > 0) {
             persistentExpandedDetails.clear();
         }
         
         // Skip DOM rebuild if detail cards are expanded to prevent flicker (mobile only)
-        if (persistentExpandedDetails.size > 0 && isMobile) {
+        if (persistentExpandedDetails.size > 0 && currentlyMobile) {
             return;
         }
         
