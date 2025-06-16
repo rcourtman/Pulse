@@ -1010,6 +1010,7 @@ PulseApp.ui.pbs = (() => {
         if (showDetails) {
             taskTypes.forEach(taskInfo => {
                 const section = detailsContainer.querySelector(`.${CSS_CLASSES.PBS_TASK_SECTION}[${DATA_ATTRIBUTES.TASK_TYPE}="${taskInfo.type}"]`);
+                console.log(`[PBS Debug] Populating ${taskInfo.type} tasks:`, taskInfo.data?.recentTasks?.length || 0, 'tasks');
                 if (section) populatePbsTaskTable(section, taskInfo.data?.recentTasks);
             });
         } else {
@@ -2163,6 +2164,7 @@ PulseApp.ui.pbs = (() => {
             // Filter backup tasks
             if (filteredInstance.backupTasks && filteredInstance.backupTasks.recentTasks) {
                 const filteredTasks = _filterPbsTasksByNamespace(filteredInstance.backupTasks.recentTasks, selectedNamespace);
+                console.log('[PBS Debug] Filtered backup tasks:', filteredTasks.length);
                 filteredInstance.backupTasks = {
                     ...filteredInstance.backupTasks,
                     recentTasks: filteredTasks,
