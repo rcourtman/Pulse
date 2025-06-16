@@ -229,10 +229,6 @@ PulseApp.ui.toast = (() => {
         return showToast(message, 'warning', 5000);
     }
 
-    function info(message) {
-        return showToast(message, 'info', 4000);
-    }
-
     function confirm(message, onConfirm, onCancel = null) {
         return showConfirmToast(message, onConfirm, onCancel);
     }
@@ -246,7 +242,6 @@ PulseApp.ui.toast = (() => {
         success,
         error,
         warning,
-        info,
         confirm
     };
 })();
