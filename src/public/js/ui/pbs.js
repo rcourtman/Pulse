@@ -712,7 +712,7 @@ PulseApp.ui.pbs = (() => {
                   // Use proper event cleanup instead of DOM replacement
                   if (!showMoreButton.dataset.handlerAttached) {
                       showMoreButton.dataset.handlerAttached = 'true';
-                      addMobileClickHandler(showMoreButton, () => {
+                      showMoreButton.addEventListener('click', () => {
                           if (tableId) {
                               if (expandedShowMoreState.has(tableId)) {
                                   // Currently expanded, collapse it
