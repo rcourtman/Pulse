@@ -758,9 +758,9 @@ PulseApp.ui.pbs = (() => {
         
         let nameContent = ds.name || 'N/A';
         if (usagePercent >= 95) {
-            nameElement.innerHTML = `<span class="text-red-700 dark:text-red-300">${nameContent}</span><div class="text-xs text-red-600 dark:text-red-400 font-normal mt-1">CRITICAL: ${usagePercent}% full</div>`;
+            nameElement.innerHTML = `<span class="text-red-700 dark:text-red-300">${nameContent}</span><div class="text-xs text-red-600 dark:text-red-400 font-normal mt-1">CRITICAL: ${usagePercent.toFixed(1)}% full</div>`;
         } else if (usagePercent >= 85) {
-            nameElement.innerHTML = `<span class="text-yellow-700 dark:text-yellow-300">${nameContent}</span><div class="text-xs text-yellow-600 dark:text-yellow-400 font-normal mt-1">WARNING: ${usagePercent}% full</div>`;
+            nameElement.innerHTML = `<span class="text-yellow-700 dark:text-yellow-300">${nameContent}</span><div class="text-xs text-yellow-600 dark:text-yellow-400 font-normal mt-1">WARNING: ${usagePercent.toFixed(1)}% full</div>`;
         } else {
             nameElement.textContent = nameContent;
         }
@@ -768,7 +768,7 @@ PulseApp.ui.pbs = (() => {
         const usageElement = document.createElement('div');
         usageElement.className = 'text-right flex-shrink-0';
         usageElement.innerHTML = `
-            <div class="text-lg font-semibold ${usageColor.replace('bg-', 'text-').replace('-500', '-600').replace('-400', '-500')}">${usagePercent}%</div>
+            <div class="text-lg font-semibold ${usageColor.replace('bg-', 'text-').replace('-500', '-600').replace('-400', '-500')}">${usagePercent.toFixed(1)}%</div>
             <div class="text-xs text-gray-500 dark:text-gray-400">${PulseApp.utils.formatBytes(usedBytes)}</div>
         `;
         
@@ -932,10 +932,10 @@ PulseApp.ui.pbs = (() => {
                     // Add usage alert to name if critical
                     let nameContent = ds.name || 'N/A';
                     if (usagePercent >= 95) {
-                        nameContent = `${nameContent} [CRITICAL: ${usagePercent}% full]`;
+                        nameContent = `${nameContent} [CRITICAL: ${usagePercent.toFixed(1)}% full]`;
                         createCell(nameContent, ['text-red-700', 'dark:text-red-300', 'font-semibold']);
                     } else if (usagePercent >= 85) {
-                        nameContent = `${nameContent} [WARNING: ${usagePercent}% full]`;
+                        nameContent = `${nameContent} [WARNING: ${usagePercent.toFixed(1)}% full]`;
                         createCell(nameContent, ['text-yellow-700', 'dark:text-yellow-300', 'font-semibold']);
                     } else {
                         createCell(nameContent);
@@ -953,7 +953,7 @@ PulseApp.ui.pbs = (() => {
                     usageCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP}`;
                     usageCell.style.minWidth = '150px';
                     if (totalBytes > 0) {
-                        usageCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor, `${usagePercent}%`);
+                        usageCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor, `${usagePercent.toFixed(1)}%`);
                     } else {
                         usageCell.textContent = 'N/A';
                     }
@@ -1659,7 +1659,7 @@ PulseApp.ui.pbs = (() => {
                     <span class="text-gray-600 dark:text-gray-400">${cpuPercent.toFixed(1)}%</span>
                 </div>
                 <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div class="h-2 rounded-full transition-all duration-300 ${cpuColorClass}" style="width: ${cpuPercent}%"></div>
+                    <div class="h-2 rounded-full transition-all duration-300 ${cpuColorClass}" style="width: ${cpuPercent.toFixed(1)}%"></div>
                 </div>
             `;
             section.appendChild(cpuDiv);
@@ -1684,7 +1684,7 @@ PulseApp.ui.pbs = (() => {
                     <span class="text-gray-600 dark:text-gray-400">${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)}</span>
                 </div>
                 <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div class="h-2 rounded-full transition-all duration-300 ${memColorClass}" style="width: ${memPercent}%"></div>
+                    <div class="h-2 rounded-full transition-all duration-300 ${memColorClass}" style="width: ${memPercent.toFixed(1)}%"></div>
                 </div>
             `;
             section.appendChild(memDiv);
