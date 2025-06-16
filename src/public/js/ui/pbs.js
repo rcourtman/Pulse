@@ -2072,6 +2072,7 @@ PulseApp.ui.pbs = (() => {
         const currentDataHash = JSON.stringify({
             length: pbsArray?.length || 0,
             namespaces: pbsArray ? _collectNamespaces(pbsArray).join(',') : '',
+            selectedNamespace: selectedNamespaceTab, // Include selected namespace in hash
             taskCounts: pbsArray?.map(pbs => ({
                 backup: pbs.backupTasks?.recentTasks?.length || 0,
                 verify: pbs.verificationTasks?.recentTasks?.length || 0,
