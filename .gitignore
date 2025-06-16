@@ -113,6 +113,37 @@ zen-mcp-server/
 # Temporary files
 CHANGELOG_TEMP.md
 commits.txt
+RELEASE_TRIGGER_*.md
+STABLE_RELEASE_TRIGGER.md
+
+# Server logs
+server.log
+*.log
+
+# Obsolete root-level files that should be in proper directories
+alertManager.js
+apiClients.js
+configApi.js
+configLoader.js
+customThresholds.js
+dataFetcher.js
+diagnostics.js
+diagnostics.sh
+dnsResolver.js
+index.css
+index.js
+metricsHistory.js
+resilientApiClient.js
+state.js
+thresholdRoutes.js
+updateManager.js
+versionUtils.js
+pbsUtils.js
+create-release.sh
+setup-polkit.sh
+take-screenshots.js
+postcss.config.js
+tailwind.config.js
 
 # Runtime data files (ensure all JSON files in data/ are ignored except templates)
 data/*.json

@@ -5,7 +5,7 @@ const path = require('path');
 
 const configDir = path.join(__dirname, '../config');
 const configEnvPath = path.join(configDir, '.env');
-const projectEnvPath = path.join(__dirname, '../.env');
+const projectEnvPath = path.join(__dirname, '.env');
 
 if (fs.existsSync(configEnvPath)) {
     require('dotenv').config({ path: configEnvPath });
@@ -87,7 +87,7 @@ const { fetchDiscoveryData, fetchMetricsData } = require('./dataFetcher');
 // --- END Data Fetching ---
 
 // Server configuration
-const PORT = process.env.PORT || 7655; // Use PORT env var or default to 7655
+const PORT = 7655; // Using a different port from the main server
 
 // --- Define Update Intervals (Configurable via Env Vars) ---
 const METRIC_UPDATE_INTERVAL = parseInt(process.env.PULSE_METRIC_INTERVAL_MS, 10) || 2000; // Default: 2 seconds
@@ -1443,22 +1443,6 @@ async function runDiscoveryCycle() {
         try {
             const pveBackups = updatedState.pveBackups || {};
             console.log(`[Discovery Broadcast] Broadcasting state with PVE backups: ${(pveBackups.backupTasks || []).length} tasks, ${(pveBackups.storageBackups || []).length} storage, ${(pveBackups.guestSnapshots || []).length} snapshots`);
-            
-            // Debug PBS data
-            if (updatedState.pbs && updatedState.pbs.length > 0) {
-                const pbsInfo = updatedState.pbs.map(pbs => {
-                    const datastoreInfo = (pbs.datastores || []).map(ds => ({
-                        name: ds.name,
-                        snapshots: (ds.snapshots || []).length,
-                        hasNamespace: (ds.snapshots || []).some(s => s.namespace)
-                    }));
-                    return {
-                        name: pbs.pbsInstanceName,
-                        datastores: datastoreInfo
-                    };
-                });
-                console.log(`[Discovery Broadcast] PBS instances: ${JSON.stringify(pbsInfo)}`);
-            }
             // Test serialization first to catch circular reference errors
             JSON.stringify(updatedState);
             io.emit('rawData', updatedState);
@@ -1762,7 +1746,7 @@ async function startServer() {
     } 
 
     server.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server listening on port ${PORT} (${process.env.PORT ? 'from PORT env var' : 'default'})`);
+        console.log(`Server listening on port ${PORT}`);
         console.log(`Enhanced monitoring with alerts enabled`);
         console.log(`Health endpoint: http://localhost:${PORT}/api/health`);
         console.log(`Performance metrics: http://localhost:${PORT}/api/performance`);
