@@ -5,8 +5,10 @@ PulseApp.ui.pbs = (() => {
     // Global state tracker for expanded PBS tasks
     let expandedTaskState = new Set();
     let expandedShowMoreState = new Set();
-    let expandedMobileShowMoreState = new Set(); // Track mobile show more state
     let selectedPbsTabIndex = 0; // Track selected PBS tab index globally
+    
+    // Namespace filtering
+    let pbsNamespaceFilter = null;
 
     const CSS_CLASSES = {
         TEXT_GREEN_500_DARK_GREEN_400: 'text-green-500 dark:text-green-400',
@@ -461,6 +463,12 @@ PulseApp.ui.pbs = (() => {
         statusCell.innerHTML = statusDisplayHTML;
         row.appendChild(statusCell);
 
+        const namespaceCell = document.createElement('td');
+        namespaceCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}`;
+        const namespaceText = task.namespace === 'root' ? 'Root' : (task.namespace || 'Root');
+        namespaceCell.textContent = namespaceText;
+        row.appendChild(namespaceCell);
+
         const startTimeCell = document.createElement('td');
         startTimeCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}`;
         startTimeCell.textContent = startTime;
@@ -512,7 +520,7 @@ PulseApp.ui.pbs = (() => {
         detailRow.className = 'task-detail-row bg-red-25 dark:bg-red-950/10 border-b border-gray-200 dark:border-gray-700';
         
         const detailCell = document.createElement('td');
-        detailCell.colSpan = 5;
+        detailCell.colSpan = 6;
         detailCell.className = 'px-6 py-4 bg-red-25 dark:bg-red-950/10';
         
         const detailContent = document.createElement('div');
@@ -1176,7 +1184,7 @@ PulseApp.ui.pbs = (() => {
         const headerRow = document.createElement('tr');
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TRACKING_WIDER} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
 
-        const headers = [idColumnHeader, 'Status', 'Start Time', 'Duration', 'UPID'];
+        const headers = [idColumnHeader, 'Status', 'Namespace', 'Start Time', 'Duration', 'UPID'];
         headers.forEach(text => {
             const th = document.createElement('th');
             th.scope = 'col';
@@ -1699,9 +1707,7 @@ PulseApp.ui.pbs = (() => {
                 heading.textContent = statusText;
                 taskSection.appendChild(heading);
                 
-                // Create unique key for this task section
-                const sectionKey = `${instanceId}-${taskType.type}`;
-                const taskContainer = _createMobileTaskContainer(recentTasks, sectionKey);
+                const taskContainer = _createMobileTaskContainer(recentTasks);
                 taskSection.appendChild(taskContainer);
                 
                 section.appendChild(taskSection);
@@ -1711,7 +1717,7 @@ PulseApp.ui.pbs = (() => {
         return section;
     };
 
-    const _createMobileTaskContainer = (tasks, sectionKey) => {
+    const _createMobileTaskContainer = (tasks) => {
         const container = document.createElement('div');
         container.className = 'mobile-task-container space-y-2';
         
@@ -1720,58 +1726,26 @@ PulseApp.ui.pbs = (() => {
         const otherTasks = tasks.filter(task => !task.status || task.status === 'OK' || task.status.toLowerCase().includes('running'));
         const prioritizedTasks = [...failedTasks, ...otherTasks];
         
-        // Check if this section has been expanded
-        const isExpanded = expandedMobileShowMoreState.has(sectionKey);
-        
-        // Show all tasks if expanded, otherwise limit to 5
-        const displayTasks = isExpanded ? prioritizedTasks : prioritizedTasks.slice(0, 5);
+        // Limit to 5 tasks on mobile for better performance
+        const displayTasks = prioritizedTasks.slice(0, 5);
         
         displayTasks.forEach(task => {
             const taskCard = _createMobileTaskCard(task);
             container.appendChild(taskCard);
         });
         
-        // Show button if there are more than 5 tasks and not expanded
-        if (prioritizedTasks.length > 5 && !isExpanded) {
+        if (prioritizedTasks.length > 5) {
             const moreButton = document.createElement('button');
             moreButton.className = 'w-full py-2 px-3 text-xs text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-600 rounded bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors';
             moreButton.textContent = `Show ${prioritizedTasks.length - 5} More Tasks`;
             
-            moreButton.addEventListener('click', (event) => {
-                // Prevent any event bubbling that might cause issues
-                event.stopPropagation();
-                event.preventDefault();
-                
-                // Mark this section as expanded
-                expandedMobileShowMoreState.add(sectionKey);
-                
-                // Add remaining tasks
+            moreButton.addEventListener('click', () => {
                 const remainingTasks = prioritizedTasks.slice(5);
                 remainingTasks.forEach(task => {
                     const taskCard = _createMobileTaskCard(task);
                     container.insertBefore(taskCard, moreButton);
                 });
-                
-                // Replace button with "Show Less" button
-                const showLessButton = document.createElement('button');
-                showLessButton.className = 'w-full py-2 px-3 text-xs text-gray-600 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded bg-gray-50 dark:bg-gray-900/20 hover:bg-gray-100 dark:hover:bg-gray-900/30 transition-colors';
-                showLessButton.textContent = 'Show Less Tasks';
-                
-                showLessButton.addEventListener('click', (event) => {
-                    event.stopPropagation();
-                    event.preventDefault();
-                    
-                    // Remove expanded state
-                    expandedMobileShowMoreState.delete(sectionKey);
-                    
-                    // Trigger a refresh to show collapsed state
-                    // This will cause the function to be called again with the collapsed state
-                    if (typeof updatePbsInfo === 'function') {
-                        updatePbsInfo();
-                    }
-                });
-                
-                moreButton.replaceWith(showLessButton);
+                moreButton.remove();
             });
             
             container.appendChild(moreButton);
@@ -1969,6 +1943,104 @@ PulseApp.ui.pbs = (() => {
         }
     }
 
+    // Initialize PBS namespace filter
+    function _initPbsNamespaceFilter() {
+        pbsNamespaceFilter = document.getElementById('pbs-namespace-filter');
+        const filterContainer = document.getElementById('pbs-filter-container');
+        
+        if (!pbsNamespaceFilter || !filterContainer) return;
+        
+        // Add change listener
+        pbsNamespaceFilter.addEventListener('change', () => {
+            PulseApp.state.set('pbsFilterNamespace', pbsNamespaceFilter.value);
+            // Re-render PBS info with current data
+            const pbsData = PulseApp.state.get('pbsDataArray');
+            if (pbsData) {
+                updatePbsInfo(pbsData);
+            }
+        });
+        
+        // Initial update
+        _updatePbsNamespaceOptions();
+    }
+
+    // Update PBS namespace dropdown options
+    function _updatePbsNamespaceOptions() {
+        if (!pbsNamespaceFilter) return;
+        
+        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+        const namespaces = new Set(['root']); // Always include root
+        
+        // Collect all namespaces from PBS task data
+        pbsDataArray.forEach(pbsInstance => {
+            // Check backup tasks
+            if (pbsInstance.backupTasks && pbsInstance.backupTasks.recentTasks) {
+                pbsInstance.backupTasks.recentTasks.forEach(task => {
+                    if (task.namespace) {
+                        namespaces.add(task.namespace);
+                    }
+                });
+            }
+            
+            // Check verification tasks
+            if (pbsInstance.verificationTasks && pbsInstance.verificationTasks.recentTasks) {
+                pbsInstance.verificationTasks.recentTasks.forEach(task => {
+                    if (task.namespace) {
+                        namespaces.add(task.namespace);
+                    }
+                });
+            }
+            
+            // Check sync tasks
+            if (pbsInstance.syncTasks && pbsInstance.syncTasks.recentTasks) {
+                pbsInstance.syncTasks.recentTasks.forEach(task => {
+                    if (task.namespace) {
+                        namespaces.add(task.namespace);
+                    }
+                });
+            }
+            
+            // Check prune tasks
+            if (pbsInstance.pruneTasks && pbsInstance.pruneTasks.recentTasks) {
+                pbsInstance.pruneTasks.recentTasks.forEach(task => {
+                    if (task.namespace) {
+                        namespaces.add(task.namespace);
+                    }
+                });
+            }
+        });
+        
+        // Update options
+        const currentValue = pbsNamespaceFilter.value || 'all';
+        pbsNamespaceFilter.innerHTML = '<option value="all">All Namespaces</option>';
+        
+        Array.from(namespaces).sort().forEach(ns => {
+            const option = document.createElement('option');
+            option.value = ns;
+            option.textContent = ns === 'root' ? 'Root Namespace' : `${ns} Namespace`;
+            pbsNamespaceFilter.appendChild(option);
+        });
+        
+        // Restore selection
+        pbsNamespaceFilter.value = currentValue;
+        
+        // Show/hide filter based on having PBS data
+        const filterContainer = document.getElementById('pbs-filter-container');
+        if (filterContainer) {
+            const hasPBS = pbsDataArray.length > 0;
+            filterContainer.style.display = hasPBS ? '' : 'none';
+        }
+    }
+
+    // Filter PBS tasks by namespace
+    function _filterPbsTasksByNamespace(tasks, selectedNamespace) {
+        if (!selectedNamespace || selectedNamespace === 'all') {
+            return tasks;
+        }
+        
+        return tasks.filter(task => task.namespace === selectedNamespace);
+    }
+
     function updatePbsInfo(pbsArray) {
         const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
         if (!container) {
@@ -1982,6 +2054,11 @@ PulseApp.ui.pbs = (() => {
             loadingMessage.remove();
         }
 
+        // Initialize namespace filter if not already done
+        if (!pbsNamespaceFilter) {
+            _initPbsNamespaceFilter();
+        }
+
         if (!pbsArray || pbsArray.length === 0) {
             const placeholder = document.createElement('p');
             placeholder.className = CSS_CLASSES.TEXT_GRAY_500_DARK_TEXT_GRAY_400_P4_TEXT_CENTER_TEXT_SM;
@@ -1990,11 +2067,56 @@ PulseApp.ui.pbs = (() => {
             return;
         }
 
+        // Get current namespace filter selection
+        const selectedNamespace = PulseApp.state.get('pbsFilterNamespace') || 'all';
+        
+        // Apply namespace filtering to all PBS instances
+        const filteredPbsArray = pbsArray.map(pbsInstance => {
+            const filteredInstance = { ...pbsInstance };
+            
+            // Filter backup tasks
+            if (filteredInstance.backupTasks && filteredInstance.backupTasks.recentTasks) {
+                filteredInstance.backupTasks = {
+                    ...filteredInstance.backupTasks,
+                    recentTasks: _filterPbsTasksByNamespace(filteredInstance.backupTasks.recentTasks, selectedNamespace)
+                };
+            }
+            
+            // Filter verification tasks
+            if (filteredInstance.verificationTasks && filteredInstance.verificationTasks.recentTasks) {
+                filteredInstance.verificationTasks = {
+                    ...filteredInstance.verificationTasks,
+                    recentTasks: _filterPbsTasksByNamespace(filteredInstance.verificationTasks.recentTasks, selectedNamespace)
+                };
+            }
+            
+            // Filter sync tasks
+            if (filteredInstance.syncTasks && filteredInstance.syncTasks.recentTasks) {
+                filteredInstance.syncTasks = {
+                    ...filteredInstance.syncTasks,
+                    recentTasks: _filterPbsTasksByNamespace(filteredInstance.syncTasks.recentTasks, selectedNamespace)
+                };
+            }
+            
+            // Filter prune tasks
+            if (filteredInstance.pruneTasks && filteredInstance.pruneTasks.recentTasks) {
+                filteredInstance.pruneTasks = {
+                    ...filteredInstance.pruneTasks,
+                    recentTasks: _filterPbsTasksByNamespace(filteredInstance.pruneTasks.recentTasks, selectedNamespace)
+                };
+            }
+            
+            return filteredInstance;
+        });
+
+        // Update namespace options with current data
+        _updatePbsNamespaceOptions();
+
         // Determine layout based on viewport and number of instances
         const isMobile = isMobileView();
         
-        if (pbsArray.length === 1) {
-            const pbsInstance = pbsArray[0];
+        if (filteredPbsArray.length === 1) {
+            const pbsInstance = filteredPbsArray[0];
             let baseId;
             if (pbsInstance.pbsInstanceName) {
                 baseId = PulseApp.utils.sanitizeForId(pbsInstance.pbsInstanceName);
@@ -2046,9 +2168,9 @@ PulseApp.ui.pbs = (() => {
             // Multiple instances
             if (isMobile) {
                 container.classList.add('mobile-layout');
-                _createMobileInstanceAccordion(pbsArray, container);
+                _createMobileInstanceAccordion(filteredPbsArray, container);
             } else {
-                _createPbsInstanceTabs(pbsArray, container);
+                _createPbsInstanceTabs(filteredPbsArray, container);
             }
         }
         

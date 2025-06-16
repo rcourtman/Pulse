@@ -106,10 +106,20 @@ PulseApp.ui.calendarHeatmap = (() => {
         // Check if this unique key is in the filtered list
         if (filteredGuestIds.includes(uniqueKey)) return true;
         
-        // Also check for simple vmid match (backward compatibility)
+        // Also check for simple vmid match (backward compatibility for non-clustered environments)
         if (filteredGuestIds.includes(vmid.toString())) return true;
         
-        // For cluster environments: check if any guest with the same VMID (but different node) is in the filtered list
+        // For cluster environments with namespace filtering: 
+        // Only allow cross-node matching if ALL filtered guest IDs are simple VMIDs (no node info)
+        // This preserves namespace boundaries when namespace filtering is active
+        const hasNodeBasedFiltering = filteredGuestIds.some(id => id.includes('-'));
+        if (hasNodeBasedFiltering) {
+            // When node-based filtering is active (like namespace filtering), 
+            // only exact matches are allowed to respect namespace boundaries
+            return false;
+        }
+        
+        // Fallback for non-namespace scenarios: check if any guest with the same VMID is in the filtered list
         // This handles cases where backups were made when the guest was on a different node
         const vmidMatch = filteredGuestIds.find(guestId => {
             // Extract VMID from guest ID (format: "vmid-node")

@@ -49,6 +49,34 @@ function processPbsTasks(allTasks) {
         // console.warn('WARN: [pbsUtils] Unmapped PBS task types found:', Array.from(unmappedTypes));
     }
 
+    // Helper function to extract namespace from task data
+    const extractNamespaceFromTask = (task) => {
+        // For synthetic backup runs, namespace should already be provided
+        if (task.pbsBackupRun && task.namespace !== undefined) {
+            return task.namespace;
+        }
+        
+        // For regular PBS tasks, namespace is already provided if available
+        if (task.namespace !== undefined) {
+            return task.namespace;
+        }
+        
+        const workerId = task.worker_id || task.id || '';
+        
+        // Try to extract namespace from worker_id patterns for regular PBS tasks
+        // Common PBS patterns: 
+        // - backup:ns=namespace:vm/101
+        // - backup:vm/101 (default namespace = 'root')
+        // - verify:ns=namespace:vm/101
+        const nsMatch = workerId.match(/ns=([^:]+)/);
+        if (nsMatch && nsMatch[1]) {
+            return nsMatch[1];
+        }
+        
+        // Default to 'root' namespace if no explicit namespace found
+        return 'root';
+    };
+
     const createDetailedTask = (task) => ({
         upid: task.upid,
         node: task.node,
@@ -66,7 +94,9 @@ function processPbsTasks(allTasks) {
         pbsBackupRun: task.pbsBackupRun,
         // Add guest identification fields
         guestId: task.guestId,
-        guestType: task.guestType
+        guestType: task.guestType,
+        // Add namespace information
+        namespace: extractNamespaceFromTask(task)
     });
 
     const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
