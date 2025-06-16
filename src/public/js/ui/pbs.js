@@ -213,6 +213,8 @@ PulseApp.ui.pbs = (() => {
                 return null;
             }
             
+            console.log(`[PBS] Available ${guestType === 'ct' ? 'containers' : 'VMs'}:`, guestArray.map(g => `${g.vmid}:${g.name}`));
+            
             const guest = guestArray.find(g => g.vmid === parseInt(guestId));
             console.log(`[PBS] Looking for ${guestType}/${guestId}, found:`, guest?.name || 'not found');
             return guest ? guest.name : null;
