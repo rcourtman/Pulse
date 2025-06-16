@@ -8,6 +8,7 @@ PulseApp.ui.pbs = (() => {
     
     // Simple persistent state for expanded detail cards
     let persistentExpandedDetails = new Set();
+    let lastKnownMobileState = null; // Track viewport state
     
     // Helper function to find task data by UPID
     function findTaskByUpid(pbsArray, upid) {
@@ -2087,19 +2088,28 @@ PulseApp.ui.pbs = (() => {
         
         // Check if viewport has changed (mobile to desktop or vice versa)
         const currentlyMobile = window.innerWidth <= 768;
-        const wasMobile = container.classList.contains('mobile-layout');
+        const viewportChanged = lastKnownMobileState !== null && lastKnownMobileState !== currentlyMobile;
+        
+        console.log(`[PBS-VIEWPORT] currentlyMobile: ${currentlyMobile}, lastKnown: ${lastKnownMobileState}, viewportChanged: ${viewportChanged}, expandedDetails: ${persistentExpandedDetails.size}`);
         
         // Clear persistent state on viewport change to allow layout rebuild
-        if (currentlyMobile !== wasMobile && persistentExpandedDetails.size > 0) {
+        if (viewportChanged) {
+            console.log(`[PBS-VIEWPORT] Viewport changed - forcing immediate rebuild`);
             persistentExpandedDetails.clear();
-        }
-        
-        // Skip DOM rebuild if detail cards are expanded to prevent flicker (mobile only)
-        if (persistentExpandedDetails.size > 0 && currentlyMobile) {
+            // Force immediate container clear to rebuild layout for new viewport
+            container.innerHTML = '';
+        } else if (persistentExpandedDetails.size > 0 && currentlyMobile) {
+            // Skip DOM rebuild if detail cards are expanded to prevent flicker (mobile only)
             return;
         }
         
-        container.innerHTML = '';
+        // Update the last known state
+        lastKnownMobileState = currentlyMobile;
+        
+        // Clear container if not already cleared above
+        if (!viewportChanged) {
+            container.innerHTML = '';
+        }
 
         const loadingMessage = document.getElementById('pbs-loading-message');
         if (loadingMessage) {
