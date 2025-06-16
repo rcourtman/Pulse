@@ -87,7 +87,7 @@ const { fetchDiscoveryData, fetchMetricsData } = require('./dataFetcher');
 // --- END Data Fetching ---
 
 // Server configuration
-const PORT = 7655; // Using a different port from the main server
+const PORT = parseInt(process.env.PORT, 10) || 7655;
 
 // --- Define Update Intervals (Configurable via Env Vars) ---
 const METRIC_UPDATE_INTERVAL = parseInt(process.env.PULSE_METRIC_INTERVAL_MS, 10) || 2000; // Default: 2 seconds

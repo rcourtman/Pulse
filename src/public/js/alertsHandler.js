@@ -174,12 +174,17 @@ PulseApp.alerts = (() => {
             setTimeout(() => clearInterval(checkSocket), 10000);
         }
 
-        // Fixed click handler logic
+        // Fixed click handler logic - only handle alerts-specific clicks
         document.addEventListener('click', (e) => {
             const indicator = document.getElementById('alerts-indicator');
             const dropdown = document.getElementById('alerts-dropdown');
             
             if (!indicator || !dropdown) return;
+            
+            // Only handle clicks related to alerts - ignore PBS tab interactions
+            if (e.target.closest('.pbs-tab, .pbs-content, .pbs-section')) {
+                return;
+            }
             
             // Debug logging
             const clickedIndicator = indicator.contains(e.target);

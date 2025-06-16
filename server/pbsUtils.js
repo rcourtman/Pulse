@@ -51,16 +51,17 @@ function processPbsTasks(allTasks) {
 
     // Helper function to extract namespace from task data
     const extractNamespaceFromTask = (task) => {
-        // For synthetic backup runs, namespace should already be provided
+        // PRIORITY 1: If namespace is already set (from dataFetcher enhancement), use it
+        if (task.namespace !== undefined && task.namespace !== null) {
+            return task.namespace;
+        }
+        
+        // PRIORITY 2: For synthetic backup runs, check if provided
         if (task.pbsBackupRun && task.namespace !== undefined) {
             return task.namespace;
         }
         
-        // For regular PBS tasks, namespace is already provided if available
-        if (task.namespace !== undefined) {
-            return task.namespace;
-        }
-        
+        // PRIORITY 3: Extract from worker_id for raw PBS tasks
         const workerId = task.worker_id || task.id || '';
         
         // Try to extract namespace from worker_id patterns for regular PBS tasks
@@ -77,39 +78,46 @@ function processPbsTasks(allTasks) {
         return 'root';
     };
 
-    const createDetailedTask = (task) => ({
-        upid: task.upid,
-        node: task.node,
-        type: task.worker_type || task.type,
-        id: task.worker_id || task.id || task.guest, // Include guest as fallback for ID
-        status: task.status,
-        startTime: task.starttime,
-        endTime: task.endtime,
-        duration: task.endtime && task.starttime ? task.endtime - task.starttime : null,
-        user: task.user,
-        exitCode: task.exitcode,
-        exitStatus: task.exitstatus,
-        saved: task.saved || false,
-        guest: task.guest || task.worker_id,
-        pbsBackupRun: task.pbsBackupRun,
-        // Add guest identification fields
-        guestId: task.guestId,
-        guestType: task.guestType,
-        // Add namespace information
-        namespace: extractNamespaceFromTask(task)
-    });
+    const createDetailedTask = (task) => {
+        const detailedTask = {
+            upid: task.upid,
+            node: task.node,
+            type: task.worker_type || task.type,
+            id: task.worker_id || task.id || task.guest, // Include guest as fallback for ID
+            status: task.status,
+            startTime: task.starttime,
+            endTime: task.endtime,
+            duration: task.endtime && task.starttime ? task.endtime - task.starttime : null,
+            user: task.user,
+            exitCode: task.exitcode,
+            exitStatus: task.exitstatus,
+            saved: task.saved || false,
+            guest: task.guest || task.worker_id,
+            pbsBackupRun: task.pbsBackupRun,
+            // Add guest identification fields
+            guestId: task.guestId,
+            guestType: task.guestType,
+            // Add namespace information
+            namespace: extractNamespaceFromTask(task)
+        };
+        
+        
+        return detailedTask;
+    };
 
     const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
     
-    const getRecentTasksList = (taskList, detailedTaskFn, sortFn, count = 20) => {
+    const getRecentTasksList = (taskList, detailedTaskFn, sortFn, count = 50) => {
         if (!taskList) return [];
         const nowSec = Date.now() / 1000;
         const thirtyDays = 30 * 24 * 60 * 60;
+        
         const recent = taskList.filter(task => {
             // Include tasks without a starttime and tasks within last 30 days
             if (task.starttime == null) return true;
             return (nowSec - task.starttime) <= thirtyDays;
         });
+        
         return recent.map(detailedTaskFn).sort(sortFn).slice(0, count);
     };
 
@@ -163,6 +171,7 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
     allTasks.forEach(task => {
         const taskType = task.worker_type || task.type;
         const categoryKey = taskTypeMap[taskType];
+
 
         if (categoryKey) {
             const category = results[categoryKey];

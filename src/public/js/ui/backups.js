@@ -5,6 +5,7 @@ PulseApp.ui.backups = (() => {
     let resetBackupsButton = null;
     let backupsTabContent = null;
     let namespaceFilter = null;
+    let pbsInstanceFilter = null;
     
     // Cache for expensive data transformations
     let dataCache = {
@@ -13,15 +14,15 @@ PulseApp.ui.backups = (() => {
         guestBackupStatus: null
     };
     
-    function _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups, namespaceFilter) {
-        // Simple hash based on data lengths and timestamps + namespace filter
+    function _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups, namespaceFilter, pbsInstanceFilter) {
+        // Simple hash based on data lengths and timestamps + namespace filter + PBS instance filter
         const vmCount = vmsData.length;
         const ctCount = containersData.length;
         const pbsCount = pbsDataArray.length;
         const pveTaskCount = pveBackups?.backupTasks?.length || 0;
         const pveStorageCount = pveBackups?.storageBackups?.length || 0;
         
-        return `${vmCount}-${ctCount}-${pbsCount}-${pveTaskCount}-${pveStorageCount}-${namespaceFilter || 'all'}`;
+        return `${vmCount}-${ctCount}-${pbsCount}-${pveTaskCount}-${pveStorageCount}-${namespaceFilter || 'all'}-${pbsInstanceFilter || 'all'}`;
     }
 
     function _initMobileScrollIndicators() {
@@ -134,6 +135,9 @@ PulseApp.ui.backups = (() => {
         
         // Initialize namespace filter
         _initNamespaceFilter();
+        
+        // Initialize PBS instance filter
+        _initPbsInstanceFilter();
     }
 
     function calculateBackupSummary(backupStatusByGuest) {
@@ -306,7 +310,8 @@ PulseApp.ui.backups = (() => {
         const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
         
         // Check if we can use cached data (now includes namespace filter in hash)
-        const currentHash = _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups, namespaceFilter);
+        const pbsInstanceFilterValue = PulseApp.state.get('backupsFilterPbsInstance') || 'all';
+        const currentHash = _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups, namespaceFilter, pbsInstanceFilterValue);
         if (dataCache.lastStateHash === currentHash && dataCache.processedBackupData) {
             return dataCache.processedBackupData;
         }
@@ -316,8 +321,15 @@ PulseApp.ui.backups = (() => {
             console.log(`Namespace filtering: '${namespaceFilter}' selected`);
         }
 
+        // PBS instance filter already retrieved above for cache hash
+        
+        // Filter PBS instances based on selection
+        const filteredPbsDataArray = pbsInstanceFilterValue === 'all'
+            ? pbsDataArray
+            : pbsDataArray.filter((_, index) => index.toString() === pbsInstanceFilterValue);
+        
         // Filter PBS backup tasks by namespace if possible
-        let pbsBackupTasks = pbsDataArray.flatMap(pbs => {
+        let pbsBackupTasks = filteredPbsDataArray.flatMap(pbs => {
             return (pbs.backupTasks?.recentTasks || []).map(task => ({
                 ...task,
                 guestId: task.id?.split('/')[1] || task.guestId || null,
@@ -331,7 +343,7 @@ PulseApp.ui.backups = (() => {
         if (namespaceFilter !== 'all') {
             // Get guest+node combinations that have backups in the selected namespace
             const guestNodeCombosInNamespace = new Set();
-            pbsDataArray.forEach(pbsInstance => {
+            filteredPbsDataArray.forEach(pbsInstance => {
                 (pbsInstance.datastores || []).forEach(ds => {
                     (ds.snapshots || []).forEach(snap => {
                         const snapNamespace = snap.namespace || 'root';
@@ -361,7 +373,7 @@ PulseApp.ui.backups = (() => {
         if (namespaceFilter !== 'all') {
             // Get guest+node combinations that have backups in the selected namespace
             const guestNodeCombosInNamespace = new Set();
-            pbsDataArray.forEach(pbsInstance => {
+            filteredPbsDataArray.forEach(pbsInstance => {
                 (pbsInstance.datastores || []).forEach(ds => {
                     (ds.snapshots || []).forEach(snap => {
                         const snapNamespace = snap.namespace || 'root';
@@ -411,7 +423,7 @@ PulseApp.ui.backups = (() => {
         const failedTasks = allRecentBackupTasks.filter(task => task.status !== 'OK');
         
         // Combine PBS snapshots and PVE storage backups
-        let pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
+        let pbsSnapshots = filteredPbsDataArray.flatMap(pbsInstance =>
             (pbsInstance.datastores || []).flatMap(ds =>
                 (ds.snapshots || []).map(snap => ({
                     ...snap,
@@ -1164,8 +1176,14 @@ PulseApp.ui.backups = (() => {
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         
+        // Apply PBS instance filter
+        const pbsInstanceFilterValue = PulseApp.state.get('backupsFilterPbsInstance') || 'all';
+        const filteredPbsDataArray = pbsInstanceFilterValue === 'all'
+            ? pbsDataArray
+            : pbsDataArray.filter((_, index) => index.toString() === pbsInstanceFilterValue);
+        
         // Get PBS snapshots
-        const pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
+        const pbsSnapshots = filteredPbsDataArray.flatMap(pbsInstance =>
             (pbsInstance.datastores || []).flatMap(ds =>
                 (ds.snapshots || []).map(snap => ({
                     ...snap,
@@ -1205,7 +1223,7 @@ PulseApp.ui.backups = (() => {
         
         // Get backup tasks
         const pbsBackupTasks = [];
-        pbsDataArray.forEach(pbs => {
+        filteredPbsDataArray.forEach(pbs => {
             if (pbs.backupTasks?.recentTasks && Array.isArray(pbs.backupTasks.recentTasks)) {
                 pbs.backupTasks.recentTasks.forEach(task => {
                     pbsBackupTasks.push({
@@ -1271,6 +1289,13 @@ PulseApp.ui.backups = (() => {
         const vmsData = PulseApp.state.get('vmsData') || [];
         const containersData = PulseApp.state.get('containersData') || [];
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+        
+        // Apply PBS instance filter
+        const pbsInstanceFilterValue = PulseApp.state.get('backupsFilterPbsInstance') || 'all';
+        const filteredPbsDataArray = pbsInstanceFilterValue === 'all'
+            ? pbsDataArray
+            : pbsDataArray.filter((_, index) => index.toString() === pbsInstanceFilterValue);
+        
         const allGuests = [...vmsData, ...containersData];
         const { tasksByGuest, snapshotsByGuest, dayBoundaries, threeDaysAgo, sevenDaysAgo } = _getInitialBackupData();
         const backupStatusByGuest = allGuests.map(guest => {
@@ -1286,7 +1311,7 @@ PulseApp.ui.backups = (() => {
             // NOTE: PBS backups are identified only by VMID, not by source node, so guests with
             // the same VMID on different nodes will show the same PBS backup count
             const pbsSnapshots = [];
-            pbsDataArray.forEach(pbsInstance => {
+            filteredPbsDataArray.forEach(pbsInstance => {
                 // Get all possible namespaces from the PBS instance
                 const namespaces = new Set(['root']); // Always include root
                 if (pbsInstance.datastores) {
@@ -1337,7 +1362,7 @@ PulseApp.ui.backups = (() => {
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         
         // Prepare backup data same as in updateBackupsTab
-        const pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
+        const pbsSnapshots = filteredPbsDataArray.flatMap(pbsInstance =>
             (pbsInstance.datastores || []).flatMap(ds =>
                 (ds.snapshots || []).map(snap => ({
                     ...snap,
@@ -1374,7 +1399,7 @@ PulseApp.ui.backups = (() => {
         }));
         
         const pbsBackupTasks = [];
-        pbsDataArray.forEach(pbs => {
+        filteredPbsDataArray.forEach(pbs => {
             if (pbs.backupTasks?.recentTasks && Array.isArray(pbs.backupTasks.recentTasks)) {
                 pbs.backupTasks.recentTasks.forEach(task => {
                     pbsBackupTasks.push({
@@ -1690,6 +1715,14 @@ PulseApp.ui.backups = (() => {
         // Get PBS data array early as it's needed for guest backup status calculation
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
         
+        // Get PBS instance filter
+        const pbsInstanceFilterValue = PulseApp.state.get('backupsFilterPbsInstance') || 'all';
+        
+        // Filter PBS instances based on selection
+        const filteredPbsDataArray = pbsInstanceFilterValue === 'all'
+            ? pbsDataArray
+            : pbsDataArray.filter((_, index) => index.toString() === pbsInstanceFilterValue);
+        
         // Get the current namespace filter
         const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
         
@@ -1710,7 +1743,7 @@ PulseApp.ui.backups = (() => {
             if (namespaceFilter !== 'all') {
                 // Guest is already filtered to be from this specific namespace
                 guestNamespace = namespaceFilter;
-                pbsDataArray.forEach(pbsInstance => {
+                filteredPbsDataArray.forEach(pbsInstance => {
                     const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}-${namespaceFilter}`;
                     const snapshots = snapshotsByGuest.get(pbsKey) || [];
                     pbsSnapshots.push(...snapshots);
@@ -1722,7 +1755,7 @@ PulseApp.ui.backups = (() => {
                 let bestNamespace = null;
                 let mostRecentTime = 0;
                 
-                pbsDataArray.forEach(pbsInstance => {
+                filteredPbsDataArray.forEach(pbsInstance => {
                     // Look through all available namespace keys for this guest
                     snapshotsByGuest.forEach((snapshots, key) => {
                         if (key.startsWith(`${baseKey}-${pbsInstance.pbsInstanceName}-`)) {
@@ -1927,12 +1960,11 @@ PulseApp.ui.backups = (() => {
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         
         // Get PBS snapshots for backup health card
-        // When showing all namespaces, use unfiltered PBS data for comprehensive summary
+        // When showing all namespaces, still respect PBS instance filter
         let pbsSnapshots;
         if (namespaceFilter === 'all') {
-            // Use original unfiltered PBS data for health card
-            const originalPbsDataArray = PulseApp.state.get('pbsDataArray') || [];
-            pbsSnapshots = originalPbsDataArray.flatMap(pbsInstance =>
+            // Use PBS data filtered by instance but not by namespace
+            pbsSnapshots = filteredPbsDataArray.flatMap(pbsInstance =>
                 (pbsInstance.datastores || []).flatMap(ds =>
                     (ds.snapshots || []).map(snap => ({
                         ...snap,
@@ -1945,7 +1977,7 @@ PulseApp.ui.backups = (() => {
             );
         } else {
             // When filtering by specific namespace, use filtered data
-            pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
+            pbsSnapshots = filteredPbsDataArray.flatMap(pbsInstance =>
                 (pbsInstance.datastores || []).flatMap(ds =>
                     (ds.snapshots || []).map(snap => ({
                         ...snap,
@@ -2011,7 +2043,7 @@ PulseApp.ui.backups = (() => {
             
             // Get backup tasks for calendar
             const pbsBackupTasks = [];
-            pbsDataArray.forEach(pbs => {
+            filteredPbsDataArray.forEach(pbs => {
                 if (pbs.backupTasks?.recentTasks && Array.isArray(pbs.backupTasks.recentTasks)) {
                     pbs.backupTasks.recentTasks.forEach(task => {
                         pbsBackupTasks.push({
@@ -2349,6 +2381,10 @@ PulseApp.ui.backups = (() => {
         const failuresFilter = document.getElementById('backups-filter-failures');
         if(failuresFilter) failuresFilter.checked = false;
         PulseApp.state.set('backupsFilterFailures', false);
+        
+        // Reset PBS instance filter
+        if (pbsInstanceFilter) pbsInstanceFilter.value = 'all';
+        PulseApp.state.set('backupsFilterPbsInstance', 'all');
         
         // Reset namespace filter
         if (namespaceFilter) namespaceFilter.value = 'all';
@@ -2750,10 +2786,15 @@ PulseApp.ui.backups = (() => {
         if (!namespaceFilter) return;
         
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+        const selectedPbsInstance = pbsInstanceFilter ? pbsInstanceFilter.value : 'all';
         const namespaces = new Set(['root']); // Always include root
         
-        // Collect all namespaces from PBS data
-        pbsDataArray.forEach(pbsInstance => {
+        // Collect namespaces from PBS data based on selected instance
+        const instancesToCheck = selectedPbsInstance === 'all' 
+            ? pbsDataArray 
+            : pbsDataArray.filter((_, index) => index.toString() === selectedPbsInstance);
+            
+        instancesToCheck.forEach(pbsInstance => {
             if (pbsInstance.datastores) {
                 pbsInstance.datastores.forEach(ds => {
                     if (ds.snapshots) {
@@ -2776,15 +2817,81 @@ PulseApp.ui.backups = (() => {
             namespaceFilter.appendChild(option);
         });
         
-        // Restore selection
-        namespaceFilter.value = currentValue;
+        // Restore selection if it still exists
+        if (Array.from(namespaceFilter.options).some(opt => opt.value === currentValue)) {
+            namespaceFilter.value = currentValue;
+        } else {
+            namespaceFilter.value = 'all';
+        }
         
         // Show/hide filter based on PBS being available and having multiple namespaces
         const filterGroup = document.getElementById('pbs-namespace-filter-group');
         if (filterGroup) {
             const hasMultipleNamespaces = namespaces.size > 1;
-            const hasPBS = pbsDataArray.length > 0;
+            const hasPBS = instancesToCheck.length > 0;
             filterGroup.style.display = hasPBS && hasMultipleNamespaces ? '' : 'none';
+        }
+    }
+    
+    function _initPbsInstanceFilter() {
+        pbsInstanceFilter = document.getElementById('backups-filter-pbs-instance');
+        const filterGroup = document.getElementById('pbs-instance-filter-group');
+        
+        if (!pbsInstanceFilter || !filterGroup) return;
+        
+        // Add change listener
+        pbsInstanceFilter.addEventListener('change', () => {
+            PulseApp.state.set('backupsFilterPbsInstance', pbsInstanceFilter.value);
+            // Update namespace options based on selected instance
+            _updateNamespaceOptions();
+            updateBackupsTab(true);
+        });
+        
+        // Update PBS instance options when PBS data changes
+        const originalPbsData = PulseApp.state.get('pbsDataArray');
+        let lastPbsDataLength = originalPbsData ? originalPbsData.length : 0;
+        
+        // Check for PBS data changes periodically
+        const checkPbsDataChanges = () => {
+            const currentPbsData = PulseApp.state.get('pbsDataArray');
+            const currentLength = currentPbsData ? currentPbsData.length : 0;
+            if (currentLength !== lastPbsDataLength) {
+                lastPbsDataLength = currentLength;
+                _updatePbsInstanceOptions();
+            }
+        };
+        
+        // Check for changes every 2 seconds
+        setInterval(checkPbsDataChanges, 2000);
+        
+        // Initial update
+        _updatePbsInstanceOptions();
+    }
+    
+    function _updatePbsInstanceOptions() {
+        if (!pbsInstanceFilter) return;
+        
+        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+        
+        // Update options
+        const currentValue = pbsInstanceFilter.value || 'all';
+        pbsInstanceFilter.innerHTML = '<option value="all">All PBS Instances</option>';
+        
+        pbsDataArray.forEach((pbsInstance, index) => {
+            const option = document.createElement('option');
+            option.value = index.toString();
+            option.textContent = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
+            pbsInstanceFilter.appendChild(option);
+        });
+        
+        // Restore selection
+        pbsInstanceFilter.value = currentValue;
+        
+        // Show/hide filter based on multiple PBS instances
+        const filterGroup = document.getElementById('pbs-instance-filter-group');
+        if (filterGroup) {
+            const hasMultiplePBS = pbsDataArray.length > 1;
+            filterGroup.style.display = hasMultiplePBS ? '' : 'none';
         }
     }
 

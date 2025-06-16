@@ -250,7 +250,7 @@ jobs:
         if: steps.check.outputs.create_release == 'true'
         id: release_body
         run: |
-          echo "Generating release body with changelog..."
+          echo "Generating release body with detailed changelog..."
           
           # Get the PR body
           PR_BODY=$(gh pr view ${{ github.event.pull_request.number }} --json body -q .body)
@@ -263,25 +263,69 @@ jobs:
           
           HEADER
           
-          # Extract and add the changelog section from PR body
+          # Generate detailed changelog using the same logic as stable releases
+          echo "📝 Generating detailed changelog from commits..."
+          
+          # Get the latest stable release tag to compare against
+          PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | sort -V | tail -1)
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG="v0.0.0"
+          fi
+          
+          echo "📊 Analyzing commits from $PREV_TAG to HEAD"
+          
+          # Export variables for the changelog script
+          export PREV_TAG="$PREV_TAG"
+          export NEW_VERSION="${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}"
+          export BUMP_TYPE="rc"
+          export REASONING="Release candidate for testing"
+          
+          # Generate detailed changelog using the same script as stable releases
+          if [ -f scripts/generate-changelog.js ]; then
+            echo "🔧 Using changelog script for detailed RC changelog"
+            node scripts/generate-changelog.js
+            
+            # Extract just the "What's Changed" section for the release body
+            if [ -f CHANGELOG.md ]; then
+              echo "---" >> release_body.md
+              echo "" >> release_body.md
+              # Add the changelog content (skip installation instructions for RC)
+              sed -n '/## What'\''s Changed/,/## 🚀 Installation & Update Instructions/{/## 🚀 Installation & Update Instructions/!p;}' CHANGELOG.md >> release_body.md
+              echo "---" >> release_body.md
+            fi
+          else
+            echo "⚠️ Changelog script not found, using basic commit analysis"
+            
+            # Fallback: Basic commit analysis
+            echo "---" >> release_body.md
+            echo "" >> release_body.md
+            echo "## What's Changed" >> release_body.md
+            echo "" >> release_body.md
+            
+            # Get commits since last stable release
+            git log $PREV_TAG..HEAD --oneline --no-merges | grep -v "chore: bump version\|🤖 Generated with\|merge pull request" | head -20 | while read commit; do
+              echo "- $commit" >> release_body.md
+            done
+            echo "" >> release_body.md
+            echo "---" >> release_body.md
+          fi
+          
+          # Extract and add PR summary if available
           echo "$PR_BODY" > pr_body_temp.md
           
-          # Check if PR has structured sections
+          # Check if PR has structured sections and add them after changelog
           if grep -q "## Summary" pr_body_temp.md && grep -q "## Test plan" pr_body_temp.md; then
-            echo "---" >> release_body.md
             echo "" >> release_body.md
+            echo "## PR Summary" >> release_body.md
             # Extract everything from Summary to Test plan (exclusive)
-            sed -n '/## Summary/,/## Test plan/{/## Test plan/!p;}' pr_body_temp.md >> release_body.md
+            sed -n '/## Summary/,/## Test plan/{/## Test plan/!p;}' pr_body_temp.md | tail -n +2 >> release_body.md
             echo "" >> release_body.md
-            echo "---" >> release_body.md
           elif grep -q "## Summary" pr_body_temp.md; then
-            echo "---" >> release_body.md
             echo "" >> release_body.md
+            echo "## PR Summary" >> release_body.md
             # Just get the summary section
-            echo "## Summary" >> release_body.md
             sed -n '/## Summary/,/^##[^#]/{/^##[^#]/!p;}' pr_body_temp.md | tail -n +2 >> release_body.md
             echo "" >> release_body.md
-            echo "---" >> release_body.md
           fi
           
           # Add the standard update instructions
