@@ -4,6 +4,7 @@ PulseApp.ui.backups = (() => {
     let backupsSearchInput = null;
     let resetBackupsButton = null;
     let backupsTabContent = null;
+    let namespaceFilter = null;
     
     // Cache for expensive data transformations
     let dataCache = {
@@ -12,15 +13,15 @@ PulseApp.ui.backups = (() => {
         guestBackupStatus: null
     };
     
-    function _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups) {
-        // Simple hash based on data lengths and timestamps
+    function _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups, namespaceFilter) {
+        // Simple hash based on data lengths and timestamps + namespace filter
         const vmCount = vmsData.length;
         const ctCount = containersData.length;
         const pbsCount = pbsDataArray.length;
         const pveTaskCount = pveBackups?.backupTasks?.length || 0;
         const pveStorageCount = pveBackups?.storageBackups?.length || 0;
         
-        return `${vmCount}-${ctCount}-${pbsCount}-${pveTaskCount}-${pveStorageCount}`;
+        return `${vmCount}-${ctCount}-${pbsCount}-${pveTaskCount}-${pveStorageCount}-${namespaceFilter || 'all'}`;
     }
 
     function _initMobileScrollIndicators() {
@@ -130,6 +131,9 @@ PulseApp.ui.backups = (() => {
         
         // Initialize snapshot modal handlers
         _initSnapshotModal();
+        
+        // Initialize namespace filter
+        _initNamespaceFilter();
     }
 
     function calculateBackupSummary(backupStatusByGuest) {
@@ -296,17 +300,24 @@ PulseApp.ui.backups = (() => {
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         const initialDataReceived = PulseApp.state.get('initialDataReceived');
         
-        // Check if we can use cached data
-        const currentHash = _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups);
+        const allGuestsUnfiltered = [...vmsData, ...containersData];
+        
+        // Get namespace filter early to filter guests and tasks
+        const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
+        
+        // Check if we can use cached data (now includes namespace filter in hash)
+        const currentHash = _generateStateHash(vmsData, containersData, pbsDataArray, pveBackups, namespaceFilter);
         if (dataCache.lastStateHash === currentHash && dataCache.processedBackupData) {
             return dataCache.processedBackupData;
         }
         
-        const allGuests = [...vmsData, ...containersData];
-        
+        // DEBUG: Log namespace filtering summary
+        if (namespaceFilter !== 'all') {
+            console.log(`Namespace filtering: '${namespaceFilter}' selected`);
+        }
 
-        // Combine PBS and PVE backup tasks
-        const pbsBackupTasks = pbsDataArray.flatMap(pbs => {
+        // Filter PBS backup tasks by namespace if possible
+        let pbsBackupTasks = pbsDataArray.flatMap(pbs => {
             return (pbs.backupTasks?.recentTasks || []).map(task => ({
                 ...task,
                 guestId: task.id?.split('/')[1] || task.guestId || null,
@@ -315,6 +326,69 @@ PulseApp.ui.backups = (() => {
                 source: 'pbs'
             }));
         });
+        
+        // If a specific namespace is selected, filter backup tasks using guest+node matching
+        if (namespaceFilter !== 'all') {
+            // Get guest+node combinations that have backups in the selected namespace
+            const guestNodeCombosInNamespace = new Set();
+            pbsDataArray.forEach(pbsInstance => {
+                (pbsInstance.datastores || []).forEach(ds => {
+                    (ds.snapshots || []).forEach(snap => {
+                        const snapNamespace = snap.namespace || 'root';
+                        if (snapNamespace === namespaceFilter) {
+                            const guestId = snap['backup-id'];
+                            const comment = snap.comment || '';
+                            // Parse comment format: "guestname, node, vmid"
+                            const commentParts = comment.split(', ');
+                            if (commentParts.length >= 3 && guestId) {
+                                const sourceNode = commentParts[1];
+                                guestNodeCombosInNamespace.add(`${guestId}-${sourceNode}`);
+                            }
+                        }
+                    });
+                });
+            });
+            
+            // Filter backup tasks to only include those for the correct guest+node combinations
+            pbsBackupTasks = pbsBackupTasks.filter(task => {
+                const taskKey = `${task.guestId}-${task.node || 'unknown'}`;
+                return guestNodeCombosInNamespace.has(taskKey);
+            });
+        }
+        
+        // Filter guests by namespace using guest+node matching from PBS comment fields
+        let allGuests;
+        if (namespaceFilter !== 'all') {
+            // Get guest+node combinations that have backups in the selected namespace
+            const guestNodeCombosInNamespace = new Set();
+            pbsDataArray.forEach(pbsInstance => {
+                (pbsInstance.datastores || []).forEach(ds => {
+                    (ds.snapshots || []).forEach(snap => {
+                        const snapNamespace = snap.namespace || 'root';
+                        if (snapNamespace === namespaceFilter) {
+                            const guestId = snap['backup-id'];
+                            const comment = snap.comment || '';
+                            // Parse comment format: "guestname, node, vmid"
+                            const commentParts = comment.split(', ');
+                            if (commentParts.length >= 3 && guestId) {
+                                const sourceNode = commentParts[1];
+                                guestNodeCombosInNamespace.add(`${guestId}-${sourceNode}`);
+                            }
+                        }
+                    });
+                });
+            });
+            
+            // Filter guests to only include those with backups in the selected namespace
+            allGuests = allGuestsUnfiltered.filter(guest => {
+                const guestKey = `${guest.vmid}-${guest.node}`;
+                return guestNodeCombosInNamespace.has(guestKey);
+            });
+            
+            console.log(`Showing ${allGuests.length} guests with PBS backups in '${namespaceFilter}' namespace`);
+        } else {
+            allGuests = allGuestsUnfiltered;
+        }
 
         // PVE backup tasks are job-level and don't map to individual guests well
         // Focus on actual backup files instead of job tasks for PVE backup counting
@@ -335,9 +409,9 @@ PulseApp.ui.backups = (() => {
         
         // Debug failed tasks
         const failedTasks = allRecentBackupTasks.filter(task => task.status !== 'OK');
-
+        
         // Combine PBS snapshots and PVE storage backups
-        const pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
+        let pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
             (pbsInstance.datastores || []).flatMap(ds =>
                 (ds.snapshots || []).map(snap => ({
                     ...snap,
@@ -350,6 +424,11 @@ PulseApp.ui.backups = (() => {
                 }))
             )
         );
+        
+        // Filter PBS snapshots by namespace if a specific namespace is selected
+        if (namespaceFilter !== 'all') {
+            pbsSnapshots = pbsSnapshots.filter(snap => snap.namespace === namespaceFilter);
+        }
 
         const pveStorageBackups = (pveBackups.storageBackups || []).map(backup => ({
             'backup-time': backup.ctime,
@@ -387,9 +466,10 @@ PulseApp.ui.backups = (() => {
             // PBS: Include PBS instance name to prevent cross-PBS contamination
             // PVE: create both node-specific AND generic keys for cross-node matching
             if (snap.source === 'pbs') {
-                // Include PBS instance in the key to prevent guests from different clusters
-                // seeing each other's backups when they have the same VMID
-                const key = `${snap.backupVMID}-${snap.backupType}-${snap.pbsInstanceName}`;
+                // Include PBS instance AND namespace in the key to prevent guests from different clusters
+                // or namespaces seeing each other's backups when they have the same VMID
+                const namespace = snap.namespace || 'root';
+                const key = `${snap.backupVMID}-${snap.backupType}-${snap.pbsInstanceName}-${namespace}`;
                 if (!snapshotsByGuest.has(key)) snapshotsByGuest.set(key, []);
                 snapshotsByGuest.get(key).push(snap);
             } else {
@@ -427,6 +507,11 @@ PulseApp.ui.backups = (() => {
 
         const threeDaysAgo = Math.floor(Date.now() / 1000) - (3 * 24 * 60 * 60);
         const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
+
+        // Debug summary
+        if (namespaceFilter !== 'all') {
+            console.log(`Namespace filtering complete: ${allGuests.length} guests, ${snapshotsByGuest.size} snapshot keys`);
+        }
 
         const result = { 
             allGuests, 
@@ -685,13 +770,16 @@ PulseApp.ui.backups = (() => {
                     
                     // Format namespace info with counts
                     let nsInfo = '';
-                    if (Object.keys(namespaceBreakdown).length > 1) {
+                    const actualNamespaces = Object.keys(namespaceBreakdown);
+                    if (actualNamespaces.length > 1) {
+                        // This guest actually has backups in multiple namespaces
                         const nsDetails = Object.entries(namespaceBreakdown)
                             .map(([ns, count]) => `${ns === 'root' ? 'root' : ns}:${count}`)
                             .join(', ');
                         nsInfo = ` (${nsDetails})`;
-                    } else if (nsArray.length === 1 && nsArray[0] !== 'root') {
-                        nsInfo = ` (${nsArray[0]})`;
+                    } else if (actualNamespaces.length === 1 && actualNamespaces[0] !== 'root') {
+                        // Single non-root namespace
+                        nsInfo = ` (${actualNamespaces[0]})`;
                     }
                     
                     pbsBackupInfo = `${pbsInstances[0]} (${datastores.join(', ')})${nsInfo}`;
@@ -933,18 +1021,9 @@ PulseApp.ui.backups = (() => {
         let pbsBackupCell = '';
         if (guestStatus.pbsBackups > 0) {
             const pbsIcon = '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full mr-1" title="PBS Backup"></span>';
-            let pbsText = `${pbsIcon}${guestStatus.pbsBackups}`;
-            
-            // Add namespace indicator if backups span multiple namespaces
-            if (guestStatus.pbsBackupInfo) {
-                const nsCountMatch = guestStatus.pbsBackupInfo.match(/\(([^)]+:[0-9]+(?:,\s*[^)]+:[0-9]+)*)\)/);
-                if (nsCountMatch && nsCountMatch[1].includes(',')) {
-                    // Multiple namespaces - add a small indicator
-                    pbsText += '<span class="text-xs align-super text-purple-600 dark:text-purple-400 ml-0.5">*</span>';
-                }
-            }
-            
-            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${guestStatus.pbsBackupInfo ? `title="${guestStatus.pbsBackupInfo}"` : ''}>${pbsText}</span>`;
+            const pbsText = `${pbsIcon}${guestStatus.pbsBackups}`;
+            const tooltip = guestStatus.pbsBackupInfo || '';
+            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${tooltip ? `title="${tooltip}"` : ''}>${pbsText}</span>`;
         } else {
             pbsBackupCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }
@@ -982,6 +1061,9 @@ PulseApp.ui.backups = (() => {
             failuresCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }
 
+        // Create namespace cell
+        const namespaceCell = guestStatus.pbsNamespaceText || '-';
+
         row.innerHTML = `
             <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100 border-r border-gray-300 dark:border-gray-600" title="${guestStatus.guestName}">
                 <div class="flex items-center gap-1">
@@ -992,6 +1074,7 @@ PulseApp.ui.backups = (() => {
             <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
             <td class="p-1 px-2">${typeIcon}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${namespaceCell}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${latestBackupFormatted}</td>
             <td class="p-1 px-2 text-center">${snapshotCell}</td>
             <td class="p-1 px-2 text-center">${pveBackupCell}</td>
@@ -1199,12 +1282,31 @@ PulseApp.ui.backups = (() => {
             const fullSpecificKey = `${baseKey}${endpointKey}${nodeKey}`;
             
             // Get snapshots from all keys and combine them
-            // For PBS, we need to check all PBS instances to find the right one for this guest
+            // For PBS, we need to check all PBS instances AND namespaces to find backups for this guest
+            // NOTE: PBS backups are identified only by VMID, not by source node, so guests with
+            // the same VMID on different nodes will show the same PBS backup count
             const pbsSnapshots = [];
             pbsDataArray.forEach(pbsInstance => {
-                const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}`;
-                const snapshots = snapshotsByGuest.get(pbsKey) || [];
-                pbsSnapshots.push(...snapshots);
+                // Get all possible namespaces from the PBS instance
+                const namespaces = new Set(['root']); // Always include root
+                if (pbsInstance.datastores) {
+                    pbsInstance.datastores.forEach(ds => {
+                        if (ds.snapshots) {
+                            ds.snapshots.forEach(snap => {
+                                if (snap.namespace) {
+                                    namespaces.add(snap.namespace);
+                                }
+                            });
+                        }
+                    });
+                }
+                
+                // Check all namespace keys for this guest
+                namespaces.forEach(namespace => {
+                    const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}-${namespace}`;
+                    const snapshots = snapshotsByGuest.get(pbsKey) || [];
+                    pbsSnapshots.push(...snapshots);
+                });
             });
             
             const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
@@ -1588,6 +1690,9 @@ PulseApp.ui.backups = (() => {
         // Get PBS data array early as it's needed for guest backup status calculation
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
         
+        // Get the current namespace filter
+        const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
+        
         const backupStatusByGuest = allGuests.map(guest => {
             // Try PBS (generic), PVE (endpoint-generic), and PVE (fully-specific) keys
             const baseKey = `${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`;
@@ -1596,14 +1701,61 @@ PulseApp.ui.backups = (() => {
             const endpointGenericKey = `${baseKey}${endpointKey}`;
             const fullSpecificKey = `${baseKey}${endpointKey}${nodeKey}`;
             
-            // Get snapshots from all keys and combine them
-            // For PBS, we need to check all PBS instances to find the right one for this guest
+            // Get PBS snapshots and determine the specific namespace for this guest
             const pbsSnapshots = [];
-            pbsDataArray.forEach(pbsInstance => {
-                const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}`;
-                const snapshots = snapshotsByGuest.get(pbsKey) || [];
-                pbsSnapshots.push(...snapshots);
-            });
+            let guestNamespace = null;
+            
+            // When namespace filtering is active, we only show guests that match the filter
+            // So this guest should only have backups from one specific namespace
+            if (namespaceFilter !== 'all') {
+                // Guest is already filtered to be from this specific namespace
+                guestNamespace = namespaceFilter;
+                pbsDataArray.forEach(pbsInstance => {
+                    const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}-${namespaceFilter}`;
+                    const snapshots = snapshotsByGuest.get(pbsKey) || [];
+                    pbsSnapshots.push(...snapshots);
+                });
+            } else {
+                // When showing all namespaces, determine which namespace this specific guest belongs to
+                // by checking if there's a PBS backup matching the guest+node combination
+                // If guest has backups in multiple namespaces, use the one with the most recent backup
+                let bestNamespace = null;
+                let mostRecentTime = 0;
+                
+                pbsDataArray.forEach(pbsInstance => {
+                    // Look through all available namespace keys for this guest
+                    snapshotsByGuest.forEach((snapshots, key) => {
+                        if (key.startsWith(`${baseKey}-${pbsInstance.pbsInstanceName}-`)) {
+                            const namespace = key.split('-').pop();
+                            
+                            // Check if these snapshots are from this specific guest by matching comment field
+                            const relevantSnapshots = snapshots.filter(snap => {
+                                const comment = snap.comment || '';
+                                const commentParts = comment.split(', ');
+                                if (commentParts.length >= 3) {
+                                    const sourceNode = commentParts[1];
+                                    return sourceNode === guest.node;
+                                }
+                                return false;
+                            });
+                            
+                            if (relevantSnapshots.length > 0) {
+                                // Find the most recent backup time in this namespace
+                                // PBS snapshots use 'backup-time' instead of 'backup_time'
+                                const maxTime = Math.max(...relevantSnapshots.map(snap => 
+                                    snap['backup-time'] || snap.backup_time || 0));
+                                if (maxTime > mostRecentTime) {
+                                    mostRecentTime = maxTime;
+                                    bestNamespace = namespace;
+                                }
+                                pbsSnapshots.push(...relevantSnapshots);
+                            }
+                        }
+                    });
+                });
+                
+                guestNamespace = bestNamespace;
+            }
             
             const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
             const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
@@ -1625,7 +1777,13 @@ PulseApp.ui.backups = (() => {
             const pveSpecificTasks = tasksByGuest.get(fullSpecificKey) || [];
             const allGuestTasks = [...pbsTasks, ...pveEndpointTasks, ...pveSpecificTasks];
             
-            return _determineGuestBackupStatus(guest, allGuestSnapshots, allGuestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo);
+            const guestStatus = _determineGuestBackupStatus(guest, allGuestSnapshots, allGuestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo);
+            
+            // Add namespace information to the guest status
+            guestStatus.pbsNamespace = guestNamespace;
+            guestStatus.pbsNamespaceText = guestNamespace || '-';
+            
+            return guestStatus;
         });
         
         // Debug: Log backup status results
@@ -1651,21 +1809,154 @@ PulseApp.ui.backups = (() => {
         });
         
         const filteredBackupStatus = _filterBackupData(backupStatusByGuest, backupsSearchInput);
+        
+        // Create unfiltered backup status for health card when showing all namespaces
+        let unfilteredBackupStatusByGuest = backupStatusByGuest;
+        if (namespaceFilter === 'all') {
+            // When showing all namespaces, create separate backup status entries for each guest in each namespace
+            const vmsData = PulseApp.state.get('vmsData') || [];
+            const containersData = PulseApp.state.get('containersData') || [];
+            const allGuestsUnfiltered = [...vmsData, ...containersData];
+            
+            // Get all available namespaces from PBS data
+            const originalPbsDataArray = pbsDataArray; // Use the same PBS data that was used for the main backup status
+            const availableNamespaces = new Set(['root']); // Always include root
+            originalPbsDataArray.forEach(pbsInstance => {
+                (pbsInstance.datastores || []).forEach(ds => {
+                    (ds.snapshots || []).forEach(snap => {
+                        availableNamespaces.add(snap.namespace || 'root');
+                    });
+                });
+            });
+            
+            // Create backup status entries for each guest in each namespace where they have backups
+            unfilteredBackupStatusByGuest = [];
+            allGuestsUnfiltered.forEach(guest => {
+                // Use the same logic as the filtered version but for all guests
+                const baseKey = `${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`;
+                const endpointKey = guest.endpointId ? `-${guest.endpointId}` : '';
+                const nodeKey = guest.node ? `-${guest.node}` : '';
+                
+                // Check each namespace to see if this guest has backups there
+                availableNamespaces.forEach(namespace => {
+                    // Get PBS snapshots for this guest in this specific namespace
+                    const pbsSnapshots = [];
+                    let hasBackupsInNamespace = false;
+                    
+                    originalPbsDataArray.forEach(pbsInstance => {
+                        (pbsInstance.datastores || []).forEach(ds => {
+                            (ds.snapshots || []).forEach(snap => {
+                                const snapNamespace = snap.namespace || 'root';
+                                if (snapNamespace === namespace && snap['backup-id'] == guest.vmid) {
+                                    // Check if this snapshot is from the same node as the guest
+                                    const comment = snap.comment || '';
+                                    const commentParts = comment.split(', ');
+                                    let isCorrectGuest = false;
+                                    if (commentParts.length >= 3) {
+                                        const sourceNode = commentParts[1];
+                                        if (sourceNode === guest.node) {
+                                            isCorrectGuest = true;
+                                        }
+                                    } else {
+                                        // Fallback: if no comment info, assume it's correct
+                                        isCorrectGuest = true;
+                                    }
+                                    
+                                    if (isCorrectGuest) {
+                                        pbsSnapshots.push({
+                                            ...snap,
+                                            pbsInstanceName: pbsInstance.pbsInstanceName,
+                                            datastoreName: ds.name,
+                                            namespace: namespace,
+                                            source: 'pbs'
+                                        });
+                                        hasBackupsInNamespace = true;
+                                    }
+                                }
+                            });
+                        });
+                    });
+                    
+                    // Only create an entry for this guest-namespace combination if there are backups
+                    if (hasBackupsInNamespace) {
+                        // Get all snapshots for this guest (including PVE and VM snapshots)
+                        const endpointGenericKey = `${baseKey}${endpointKey}`;
+                        const fullSpecificKey = `${baseKey}${endpointKey}${nodeKey}`;
+                        
+                        const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
+                        const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
+                        
+                        // Deduplicate PVE snapshots by volid to avoid counting the same backup multiple times
+                        const pveSnapshotsMap = new Map();
+                        [...pveEndpointSnapshots, ...pveSpecificSnapshots].forEach(snap => {
+                            if (snap.volid) {
+                                pveSnapshotsMap.set(snap.volid, snap);
+                            }
+                        });
+                        const uniquePveSnapshots = Array.from(pveSnapshotsMap.values());
+                        
+                        const allGuestSnapshots = [...pbsSnapshots, ...uniquePveSnapshots];
+                        
+                        // Get tasks for this guest
+                        const pbsTasks = tasksByGuest.get(baseKey) || [];
+                        const pveEndpointTasks = tasksByGuest.get(endpointGenericKey) || [];
+                        const pveSpecificTasks = tasksByGuest.get(fullSpecificKey) || [];
+                        const allGuestTasks = [...pbsTasks, ...pveEndpointTasks, ...pveSpecificTasks];
+                        
+                        // Create backup status for this guest in this specific namespace
+                        const guestStatus = _determineGuestBackupStatus(
+                            guest, 
+                            allGuestSnapshots,
+                            allGuestTasks,
+                            dayBoundaries,
+                            threeDaysAgo,
+                            sevenDaysAgo
+                        );
+                        
+                        // Add namespace information to the guest status
+                        guestStatus.pbsNamespaceText = namespace;
+                        
+                        
+                        unfilteredBackupStatusByGuest.push(guestStatus);
+                    }
+                });
+            });
+        }
 
         // Prepare backup data for consolidated summary
         const pveBackups = PulseApp.state.get('pveBackups') || {};
         
-        // Get PBS snapshots
-        const pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
-            (pbsInstance.datastores || []).flatMap(ds =>
-                (ds.snapshots || []).map(snap => ({
-                    ...snap,
-                    pbsInstanceName: pbsInstance.pbsInstanceName,
-                    datastoreName: ds.name,
-                    source: 'pbs'
-                }))
-            )
-        );
+        // Get PBS snapshots for backup health card
+        // When showing all namespaces, use unfiltered PBS data for comprehensive summary
+        let pbsSnapshots;
+        if (namespaceFilter === 'all') {
+            // Use original unfiltered PBS data for health card
+            const originalPbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+            pbsSnapshots = originalPbsDataArray.flatMap(pbsInstance =>
+                (pbsInstance.datastores || []).flatMap(ds =>
+                    (ds.snapshots || []).map(snap => ({
+                        ...snap,
+                        pbsInstanceName: pbsInstance.pbsInstanceName,
+                        datastoreName: ds.name,
+                        namespace: snap.namespace || 'root',
+                        source: 'pbs'
+                    }))
+                )
+            );
+        } else {
+            // When filtering by specific namespace, use filtered data
+            pbsSnapshots = pbsDataArray.flatMap(pbsInstance =>
+                (pbsInstance.datastores || []).flatMap(ds =>
+                    (ds.snapshots || []).map(snap => ({
+                        ...snap,
+                        pbsInstanceName: pbsInstance.pbsInstanceName,
+                        datastoreName: ds.name,
+                        namespace: snap.namespace || 'root',
+                        source: 'pbs'
+                    }))
+                )
+            );
+        }
         
         // Get PVE storage backups
         const pveStorageBackups = [];
@@ -1784,7 +2075,10 @@ PulseApp.ui.backups = (() => {
                     );
                     
                     // Use unfiltered data for overview when no filters are active
-                    const dataToUse = hasActiveFilters ? filteredBackupStatus : backupStatusByGuest;
+                    // When showing all namespaces, use the unfiltered version that includes all guests
+                    const dataToUse = hasActiveFilters ? filteredBackupStatus : 
+                        (namespaceFilter === 'all' ? unfilteredBackupStatusByGuest : backupStatusByGuest);
+                    
                     
                     if (dataToUse.length > 0) {
                         const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);
@@ -1866,7 +2160,9 @@ PulseApp.ui.backups = (() => {
                             );
                             
                             // Use unfiltered data for overview when no filters are active
-                            const dataToUse = hasActiveFilters ? filteredBackupStatus : backupStatusByGuest;
+                            // When showing all namespaces, use the unfiltered version that includes all guests
+                            const dataToUse = hasActiveFilters ? filteredBackupStatus : 
+                                (namespaceFilter === 'all' ? unfilteredBackupStatusByGuest : backupStatusByGuest);
                             
                             if (dataToUse.length > 0) {
                                 const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);
@@ -2053,6 +2349,10 @@ PulseApp.ui.backups = (() => {
         const failuresFilter = document.getElementById('backups-filter-failures');
         if(failuresFilter) failuresFilter.checked = false;
         PulseApp.state.set('backupsFilterFailures', false);
+        
+        // Reset namespace filter
+        if (namespaceFilter) namespaceFilter.value = 'all';
+        PulseApp.state.set('backupsFilterNamespace', 'all');
 
         PulseApp.state.setSortState('backups', 'latestBackupTime', 'desc');
 
@@ -2208,22 +2508,44 @@ PulseApp.ui.backups = (() => {
                 const pbsDates = {};
                 backupData.pbsSnapshots.forEach(snap => {
                     const snapId = snap['backup-id'] || snap.backupVMID;
+                    
+                    // Match by VMID AND node to prevent cross-endpoint contamination
                     if (parseInt(snapId, 10) === parseInt(guestId, 10)) {
-                        const timestamp = snap['backup-time'];
-                        if (timestamp) {
-                            const date = new Date(timestamp * 1000);
-                            const dateKey = date.toISOString().split('T')[0];
-                            if (!pbsDates[dateKey]) {
-                                pbsDates[dateKey] = { types: new Set(), count: 0 };
+                        // Check if this snapshot is from the same node as the guest
+                        const comment = snap.comment || '';
+                        const commentParts = comment.split(', ');
+                        let isCorrectGuest = false;
+                        
+                        if (commentParts.length >= 3) {
+                            const sourceNode = commentParts[1];
+                            isCorrectGuest = (sourceNode === guestStatus.node);
+                        } else {
+                            // Fallback: if no comment info, assume it matches (for backward compatibility)
+                            isCorrectGuest = true;
+                        }
+                        
+                        if (isCorrectGuest) {
+                            const timestamp = snap['backup-time'];
+                            if (timestamp) {
+                                const date = new Date(timestamp * 1000);
+                                const dateKey = date.toISOString().split('T')[0];
+                                if (!pbsDates[dateKey]) {
+                                    pbsDates[dateKey] = { types: new Set(), count: 0, latestTimestamp: timestamp };
+                                } else {
+                                    // Keep the latest timestamp for this date
+                                    if (timestamp > pbsDates[dateKey].latestTimestamp) {
+                                        pbsDates[dateKey].latestTimestamp = timestamp;
+                                    }
+                                }
+                                pbsDates[dateKey].types.add('pbsSnapshots');
+                                pbsDates[dateKey].count++;
+                                stats.totalBackups++;
                             }
-                            pbsDates[dateKey].types.add('pbsSnapshots');
-                            pbsDates[dateKey].count++;
-                            stats.totalBackups++;
                         }
                     }
                 });
                 Object.entries(pbsDates).forEach(([date, info]) => {
-                    backupDates.push({ date, types: Array.from(info.types), count: info.count });
+                    backupDates.push({ date, types: Array.from(info.types), count: info.count, latestTimestamp: info.latestTimestamp });
                 });
             }
             
@@ -2237,7 +2559,12 @@ PulseApp.ui.backups = (() => {
                             const date = new Date(timestamp * 1000);
                             const dateKey = date.toISOString().split('T')[0];
                             if (!pveDates[dateKey]) {
-                                pveDates[dateKey] = { types: new Set(), count: 0 };
+                                pveDates[dateKey] = { types: new Set(), count: 0, latestTimestamp: timestamp };
+                            } else {
+                                // Keep the latest timestamp for this date
+                                if (timestamp > pveDates[dateKey].latestTimestamp) {
+                                    pveDates[dateKey].latestTimestamp = timestamp;
+                                }
                             }
                             pveDates[dateKey].types.add('pveBackups');
                             pveDates[dateKey].count++;
@@ -2250,8 +2577,12 @@ PulseApp.ui.backups = (() => {
                     if (existing) {
                         existing.types = [...new Set([...existing.types, ...Array.from(info.types)])];
                         existing.count += info.count;
+                        // Keep the latest timestamp across all backup types for this date
+                        if (info.latestTimestamp > existing.latestTimestamp) {
+                            existing.latestTimestamp = info.latestTimestamp;
+                        }
                     } else {
-                        backupDates.push({ date, types: Array.from(info.types), count: info.count });
+                        backupDates.push({ date, types: Array.from(info.types), count: info.count, latestTimestamp: info.latestTimestamp });
                     }
                 });
             }
@@ -2266,7 +2597,12 @@ PulseApp.ui.backups = (() => {
                             const date = new Date(timestamp * 1000);
                             const dateKey = date.toISOString().split('T')[0];
                             if (!snapDates[dateKey]) {
-                                snapDates[dateKey] = { types: new Set(), count: 0 };
+                                snapDates[dateKey] = { types: new Set(), count: 0, latestTimestamp: timestamp };
+                            } else {
+                                // Keep the latest timestamp for this date
+                                if (timestamp > snapDates[dateKey].latestTimestamp) {
+                                    snapDates[dateKey].latestTimestamp = timestamp;
+                                }
                             }
                             snapDates[dateKey].types.add('vmSnapshots');
                             snapDates[dateKey].count++;
@@ -2279,8 +2615,12 @@ PulseApp.ui.backups = (() => {
                     if (existing) {
                         existing.types = [...new Set([...existing.types, ...Array.from(info.types)])];
                         existing.count += info.count;
+                        // Keep the latest timestamp across all backup types for this date
+                        if (info.latestTimestamp > existing.latestTimestamp) {
+                            existing.latestTimestamp = info.latestTimestamp;
+                        }
                     } else {
-                        backupDates.push({ date, types: Array.from(info.types), count: info.count });
+                        backupDates.push({ date, types: Array.from(info.types), count: info.count, latestTimestamp: info.latestTimestamp });
                     }
                 });
             }
@@ -2294,11 +2634,20 @@ PulseApp.ui.backups = (() => {
             if (backupDates.length > 0) {
                 multiDateBackups.push({
                     ...guestStatus,
-                    backupDates: backupDates.sort((a, b) => b.date.localeCompare(a.date))
+                    backupDates: backupDates.sort((a, b) => b.latestTimestamp - a.latestTimestamp)
                 });
             }
         });
         
+        // Sort by most recent backup to see which ones will appear in "Recent"
+        const sortedByRecent = multiDateBackups
+            .filter(g => g.backupDates && g.backupDates.length > 0)
+            .sort((a, b) => {
+                const latestTimestampA = a.backupDates[0].latestTimestamp;
+                const latestTimestampB = b.backupDates[0].latestTimestamp;
+                return latestTimestampB - latestTimestampA;
+            });
+
         // Get current filter info
         const filterInfo = {
             search: backupsSearchInput ? backupsSearchInput.value : '',
@@ -2361,6 +2710,82 @@ PulseApp.ui.backups = (() => {
             stats: stats,
             filterInfo: filterInfo
         };
+    }
+
+    function _initNamespaceFilter() {
+        namespaceFilter = document.getElementById('backups-filter-namespace');
+        const filterGroup = document.getElementById('pbs-namespace-filter-group');
+        
+        if (!namespaceFilter || !filterGroup) return;
+        
+        // Add change listener
+        namespaceFilter.addEventListener('change', () => {
+            PulseApp.state.set('backupsFilterNamespace', namespaceFilter.value);
+            updateBackupsTab(true);
+        });
+        
+        // Update namespace options when PBS data changes
+        // Note: Using state change tracking instead of eventBus
+        const originalPbsData = PulseApp.state.get('pbsDataArray');
+        let lastPbsDataLength = originalPbsData ? originalPbsData.length : 0;
+        
+        // Check for PBS data changes periodically
+        const checkPbsDataChanges = () => {
+            const currentPbsData = PulseApp.state.get('pbsDataArray');
+            const currentLength = currentPbsData ? currentPbsData.length : 0;
+            if (currentLength !== lastPbsDataLength) {
+                lastPbsDataLength = currentLength;
+                _updateNamespaceOptions();
+            }
+        };
+        
+        // Check for changes every 2 seconds
+        setInterval(checkPbsDataChanges, 2000);
+        
+        // Initial update
+        _updateNamespaceOptions();
+    }
+    
+    function _updateNamespaceOptions() {
+        if (!namespaceFilter) return;
+        
+        const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+        const namespaces = new Set(['root']); // Always include root
+        
+        // Collect all namespaces from PBS data
+        pbsDataArray.forEach(pbsInstance => {
+            if (pbsInstance.datastores) {
+                pbsInstance.datastores.forEach(ds => {
+                    if (ds.snapshots) {
+                        ds.snapshots.forEach(snap => {
+                            namespaces.add(snap.namespace || 'root');
+                        });
+                    }
+                });
+            }
+        });
+        
+        // Update options
+        const currentValue = namespaceFilter.value || 'all';
+        namespaceFilter.innerHTML = '<option value="all">All Namespaces</option>';
+        
+        Array.from(namespaces).sort().forEach(ns => {
+            const option = document.createElement('option');
+            option.value = ns;
+            option.textContent = ns === 'root' ? 'Root Namespace' : `${ns} Namespace`;
+            namespaceFilter.appendChild(option);
+        });
+        
+        // Restore selection
+        namespaceFilter.value = currentValue;
+        
+        // Show/hide filter based on PBS being available and having multiple namespaces
+        const filterGroup = document.getElementById('pbs-namespace-filter-group');
+        if (filterGroup) {
+            const hasMultipleNamespaces = namespaces.size > 1;
+            const hasPBS = pbsDataArray.length > 0;
+            filterGroup.style.display = hasPBS && hasMultipleNamespaces ? '' : 'none';
+        }
     }
 
     return {

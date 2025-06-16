@@ -768,6 +768,16 @@
       </div>
     </div>
     <div id="pbs" class="tab-content hidden bg-white dark:bg-gray-800 p-4 border border-t-0 border-gray-300 dark:border-gray-700 rounded-b-lg shadow-sm">
+      <!-- PBS Namespace Filter -->
+      <div class="pbs-filter flex flex-col gap-2 mb-4 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded" id="pbs-filter-container" style="display: none;">
+        <div class="flex items-center gap-2">
+          <label for="pbs-namespace-filter" class="text-sm font-medium text-gray-700 dark:text-gray-300">Filter by Namespace:</label>
+          <select id="pbs-namespace-filter" class="text-sm px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
+            <option value="all">All Namespaces</option>
+          </select>
+        </div>
+      </div>
+      
       <div id="pbs-instances-container" class="space-y-6">
         <p id="pbs-loading-message" class="text-gray-500 dark:text-gray-400">Loading PBS data...</p>
       </div>
@@ -836,6 +846,13 @@
                       </label>
                   </div>
               </div>
+              <!-- PBS Namespace Filter -->
+              <div class="flex items-center gap-2" id="pbs-namespace-filter-group" style="display: none;">
+                  <label class="text-xs text-gray-600 dark:text-gray-400">Namespace:</label>
+                  <select id="backups-filter-namespace" class="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                      <option value="all">All Namespaces</option>
+                  </select>
+              </div>
               <div class="flex items-center gap-2">
                   <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                       <input type="radio" id="backups-filter-backup-all" name="backups-backup-filter" value="all" class="hidden peer/backup-all" checked>
@@ -903,6 +920,7 @@
                 <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestId">ID</th>
                 <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="guestType">Type</th>
                 <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="node">Node</th>
+                <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="pbsNamespace">PBS Namespace</th>
                 <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap" data-sort="latestBackupTime">Latest Backup</th>
                 <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2 text-center select-none whitespace-nowrap">Snapshots</th>
                 <th scope="col" class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2 cursor-pointer select-none whitespace-nowrap text-center" data-sort="pveBackups">PVE Backups</th>
