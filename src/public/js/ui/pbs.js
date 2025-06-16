@@ -7,9 +7,6 @@ PulseApp.ui.pbs = (() => {
     let expandedShowMoreState = new Set();
     let taskStatusInfo = new Map(); // Track status info for each table
     
-    // Simple persistent state for expanded detail cards
-    let persistentExpandedDetails = new Set();
-    let lastKnownMobileState = null; // Track viewport state
     let selectedNamespaceTab = 'root'; // Track selected namespace tab
     
     // Helper function to find task data by UPID
@@ -111,14 +108,6 @@ PulseApp.ui.pbs = (() => {
         HANDLER_ATTACHED: 'data-handler-attached',
     };
 
-    // Mobile detection and responsive utilities
-    function isMobileView() {
-        return window.innerWidth < 768;
-    }
-
-    function isTabletView() {
-        return window.innerWidth >= 768 && window.innerWidth < 1024;
-    }
 
     function debounce(func, wait) {
         let timeout;
@@ -450,7 +439,7 @@ PulseApp.ui.pbs = (() => {
         return detailCard;
     };
 
-    const _createTaskTableRow = (task) => {
+    const _createTaskTableRow = (task, isBackupTable = false) => {
         const target = parsePbsTaskTarget(task);
         const statusDisplayHTML = getPbsStatusDisplay(task.status);
         const { startTime, duration } = formatTaskTiming(task);
@@ -481,14 +470,19 @@ PulseApp.ui.pbs = (() => {
         row.className = rowClasses;
 
         const targetCell = document.createElement('td');
-        // Determine sticky cell background based on task status
-        let stickyBg = 'bg-white dark:bg-gray-800';
-        if (isFailed) {
-            stickyBg = 'bg-red-50 dark:bg-red-900/20';
-        } else if (task.status && task.status.toLowerCase().includes('running')) {
-            stickyBg = 'bg-blue-50 dark:bg-blue-900/20';
+        
+        if (isBackupTable) {
+            // Only apply sticky to backup tasks table
+            let stickyBg = 'bg-white dark:bg-gray-800';
+            if (isFailed) {
+                stickyBg = 'bg-red-50 dark:bg-red-900/20';
+            } else if (task.status && task.status.toLowerCase().includes('running')) {
+                stickyBg = 'bg-blue-50 dark:bg-blue-900/20';
+            }
+            targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 ${stickyBg} z-10 border-r border-gray-300 dark:border-gray-600`;
+        } else {
+            targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
         }
-        targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 ${stickyBg} z-10 border-b border-gray-200 dark:border-gray-700`;
         
         // Add expand indicator for failed tasks
         if (isFailed) {
@@ -675,7 +669,8 @@ PulseApp.ui.pbs = (() => {
           if (noTasksMessage) noTasksMessage.classList.add(CSS_CLASSES.HIDDEN);
 
           displayedTasks.forEach(task => {
-              const taskRow = _createTaskTableRow(task);
+              const isBackupTable = tableId && tableId.includes('backup');
+              const taskRow = _createTaskTableRow(task, isBackupTable);
               tableBody.appendChild(taskRow);
               
               // Restore expanded state if this task was previously expanded
@@ -729,10 +724,13 @@ PulseApp.ui.pbs = (() => {
       }); // End of preserveScrollPosition
       
       // Additional scroll position restoration for horizontal scrolling
+      // Use double requestAnimationFrame to ensure DOM is fully rendered
       if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
           requestAnimationFrame(() => {
-              scrollableContainer.scrollLeft = currentScrollLeft;
-              scrollableContainer.scrollTop = currentScrollTop;
+              requestAnimationFrame(() => {
+                  scrollableContainer.scrollLeft = currentScrollLeft;
+                  scrollableContainer.scrollTop = currentScrollTop;
+              });
           });
       }
   }
@@ -940,12 +938,12 @@ PulseApp.ui.pbs = (() => {
                     let nameContent = ds.name || 'N/A';
                     if (usagePercent >= 95) {
                         nameContent = `${nameContent} [CRITICAL: ${usagePercent}% full]`;
-                        createCell(nameContent, ['text-red-700', 'dark:text-red-300', 'font-semibold', 'sticky', 'left-0', 'bg-white', 'dark:bg-gray-800', 'z-10']);
+                        createCell(nameContent, ['text-red-700', 'dark:text-red-300', 'font-semibold']);
                     } else if (usagePercent >= 85) {
                         nameContent = `${nameContent} [WARNING: ${usagePercent}% full]`;
-                        createCell(nameContent, ['text-yellow-700', 'dark:text-yellow-300', 'font-semibold', 'sticky', 'left-0', 'bg-white', 'dark:bg-gray-800', 'z-10']);
+                        createCell(nameContent, ['text-yellow-700', 'dark:text-yellow-300', 'font-semibold']);
                     } else {
-                        createCell(nameContent, ['sticky', 'left-0', 'bg-white', 'dark:bg-gray-800', 'z-10']);
+                        createCell(nameContent);
                     }
 
                     createCell(ds.path || 'N/A', [CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400, 'max-w-0', 'overflow-hidden', 'text-ellipsis']);
@@ -982,10 +980,13 @@ PulseApp.ui.pbs = (() => {
         }); // End of preserveScrollPosition
         
         // Additional scroll position restoration for horizontal scrolling
+        // Use double requestAnimationFrame to ensure DOM is fully rendered
         if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
             requestAnimationFrame(() => {
-                scrollableContainer.scrollLeft = currentScrollLeft;
-                scrollableContainer.scrollTop = currentScrollTop;
+                requestAnimationFrame(() => {
+                    scrollableContainer.scrollLeft = currentScrollLeft;
+                    scrollableContainer.scrollTop = currentScrollTop;
+                });
             });
         }
     };
@@ -1230,10 +1231,19 @@ PulseApp.ui.pbs = (() => {
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
 
         const headers = [idColumnHeader, 'Status', 'Namespace', 'Start Time', 'Duration', 'UPID'];
-        headers.forEach(text => {
+        const isBackupTable = tableId && tableId.includes('backup');
+        
+        headers.forEach((text, index) => {
             const th = document.createElement('th');
             th.scope = 'col';
-            th.className = CSS_CLASSES.P1_PX2;
+            
+            if (index === 0 && isBackupTable) {
+                // Make first header sticky for backup tables
+                th.className = `${CSS_CLASSES.P1_PX2} sticky left-0 bg-gray-100 dark:bg-gray-800 z-20 border-r border-gray-300 dark:border-gray-600`;
+            } else {
+                th.className = CSS_CLASSES.P1_PX2;
+            }
+            
             th.textContent = text;
             headerRow.appendChild(th);
         });
@@ -1938,55 +1948,6 @@ PulseApp.ui.pbs = (() => {
     };
 
     // Layout update function for responsive design
-    function updatePbsLayoutForViewport() {
-        const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
-        if (!container) return;
-        
-        const isMobile = isMobileView();
-        
-        if (isMobile) {
-            container.classList.add('mobile-layout');
-            
-            // Hide desktop tables and show mobile containers
-            const tables = container.querySelectorAll('table');
-            tables.forEach(table => {
-                table.style.display = 'none';
-                
-                // Find or create mobile alternative
-                const tableContainer = table.closest('.table-container') || table.parentElement;
-                if (tableContainer) {
-                    let mobileContainer = tableContainer.querySelector('.mobile-datastore-container, .mobile-task-container');
-                    
-                    // If no mobile container exists, we'll need to recreate the data
-                    if (!mobileContainer && table.id && table.id.includes('ds-table')) {
-                        // This is a datastore table, create mobile version
-                        const dsTableBody = table.querySelector('tbody');
-                        if (dsTableBody && dsTableBody.children.length > 0) {
-                            // Extract data from existing table and create mobile cards
-                            const instanceId = table.id.replace(ID_PREFIXES.PBS_DS_TABLE, '');
-                            mobileContainer = document.createElement('div');
-                            mobileContainer.className = 'mobile-datastore-container space-y-3';
-                            tableContainer.appendChild(mobileContainer);
-                        }
-                    }
-                }
-            });
-            
-        } else {
-            container.classList.remove('mobile-layout');
-            
-            // Show desktop tables and hide mobile containers
-            const tables = container.querySelectorAll('table');
-            tables.forEach(table => {
-                table.style.display = '';
-            });
-            
-            const mobileContainers = container.querySelectorAll('.mobile-datastore-container, .mobile-task-container');
-            mobileContainers.forEach(mobileContainer => {
-                mobileContainer.style.display = 'none';
-            });
-        }
-    }
 
     // Collect all namespaces from PBS data
     function _collectNamespaces(pbsDataArray) {
@@ -2097,6 +2058,9 @@ PulseApp.ui.pbs = (() => {
         return { ok, failed, lastOk, lastFailed };
     }
 
+    // Track last data hash to avoid unnecessary rebuilds
+    let lastPbsDataHash = null;
+    
     function updatePbsInfo(pbsArray) {
         const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
         if (!container) {
@@ -2104,28 +2068,54 @@ PulseApp.ui.pbs = (() => {
             return;
         }
         
-        // Check if viewport has changed (mobile to desktop or vice versa)
-        const currentlyMobile = window.innerWidth <= 768;
-        const viewportChanged = lastKnownMobileState !== null && lastKnownMobileState !== currentlyMobile;
+        // Generate a simple hash of the data to detect changes
+        const currentDataHash = JSON.stringify({
+            length: pbsArray?.length || 0,
+            namespaces: pbsArray ? _collectNamespaces(pbsArray).join(',') : '',
+            taskCounts: pbsArray?.map(pbs => ({
+                backup: pbs.backupTasks?.recentTasks?.length || 0,
+                verify: pbs.verificationTasks?.recentTasks?.length || 0,
+                sync: pbs.syncTasks?.recentTasks?.length || 0,
+                prune: pbs.pruneTasks?.recentTasks?.length || 0
+            }))
+        });
         
-        // Clear persistent state on viewport change to allow layout rebuild
-        if (viewportChanged) {
-            persistentExpandedDetails.clear();
-            taskStatusInfo.clear(); // Clear task status info on viewport change
-            // Force immediate container clear to rebuild layout for new viewport
-            container.innerHTML = '';
-        } else if (persistentExpandedDetails.size > 0 && currentlyMobile) {
-            // Skip DOM rebuild if detail cards are expanded to prevent flicker (mobile only)
+        // If data hasn't changed, don't rebuild the DOM
+        if (lastPbsDataHash === currentDataHash) {
             return;
         }
+        lastPbsDataHash = currentDataHash;
         
-        // Update the last known state
-        lastKnownMobileState = currentlyMobile;
+        // Store scroll positions of all scrollable elements before clearing
+        const scrollPositions = new Map();
+        const scrollableElements = container.querySelectorAll('.overflow-x-auto, .overflow-auto, .overflow-y-auto, .overflow-scroll');
+        scrollableElements.forEach(el => {
+            if (el.scrollLeft > 0 || el.scrollTop > 0) {
+                // Try to get a unique identifier for this element
+                let identifier = el.id;
+                if (!identifier) {
+                    // Try to find the closest table's ID
+                    const table = el.querySelector('table[id]') || el.closest('table[id]');
+                    if (table) {
+                        identifier = table.id;
+                    } else {
+                        // Use the closest parent with an ID
+                        const parent = el.closest('[id]');
+                        identifier = parent ? parent.id : el.className;
+                    }
+                }
+                
+                scrollPositions.set(identifier, {
+                    left: el.scrollLeft,
+                    top: el.scrollTop,
+                    width: el.scrollWidth,
+                    height: el.scrollHeight
+                });
+            }
+        });
         
-        // Clear container if not already cleared above
-        if (!viewportChanged) {
-            container.innerHTML = '';
-        }
+        // Clear container
+        container.innerHTML = '';
 
         const loadingMessage = document.getElementById('pbs-loading-message');
         if (loadingMessage) {
@@ -2210,9 +2200,7 @@ PulseApp.ui.pbs = (() => {
             return filteredInstance;
         });
 
-        // Determine layout based on viewport and number of instances
-        const isMobile = isMobileView();
-        
+        // Use same layout for all viewports
         if (filteredPbsArray.length === 1) {
             const pbsInstance = filteredPbsArray[0];
             let baseId;
@@ -2229,81 +2217,61 @@ PulseApp.ui.pbs = (() => {
             const overallHealthAndTitle = _calculateOverallHealth(pbsInstance);
             const statusInfo = _getInstanceStatusInfo(pbsInstance);
 
-            if (isMobile) {
-                // Use mobile single instance layout
-                container.classList.add('mobile-layout');
-                const mobileWrapper = document.createElement('div');
-                mobileWrapper.className = 'mobile-single-instance space-y-4';
-                
-                // Add mobile summary at top
-                if (statusInfo.showDetails) {
-                    mobileWrapper.appendChild(_createMobilePbsSummary(pbsInstance));
-                    mobileWrapper.appendChild(_createMobileNodeStatusSection(instanceId, pbsInstance));
-                    mobileWrapper.appendChild(_createMobileDatastoreSection(instanceId, pbsInstance, statusInfo));
-                    mobileWrapper.appendChild(_createMobileTaskSections(instanceId, pbsInstance, statusInfo));
-                } else {
-                    const statusCard = document.createElement('div');
-                    statusCard.className = 'p-4 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-700';
-                    statusCard.textContent = statusInfo.statusText;
-                    mobileWrapper.appendChild(statusCard);
-                }
-                
-                container.appendChild(mobileWrapper);
-            } else {
-                // Use desktop single instance layout
-                const instanceElement = _createPbsInstanceElement(
-                    pbsInstance,
-                    instanceId,
-                    instanceName,
-                    overallHealthAndTitle.overallHealth,
-                    overallHealthAndTitle.healthTitle,
-                    statusInfo.showDetails,
-                    statusInfo.statusText
-                );
-                container.appendChild(instanceElement);
-            }
+            // Use same layout for all viewports
+            const instanceElement = _createPbsInstanceElement(
+                pbsInstance,
+                instanceId,
+                instanceName,
+                overallHealthAndTitle.overallHealth,
+                overallHealthAndTitle.healthTitle,
+                statusInfo.showDetails,
+                statusInfo.statusText
+            );
+            container.appendChild(instanceElement);
         } else {
-            // Multiple instances
-            if (isMobile) {
-                container.classList.add('mobile-layout');
-                _createMobileInstanceAccordion(filteredPbsArray, container);
-            } else {
-                _createPbsInstanceTabs(filteredPbsArray, container);
-            }
+            // Multiple instances - use tabs for all viewports
+            _createPbsInstanceTabs(filteredPbsArray, container);
         }
         
-        // Initialize mobile features
-        if (isMobile) {
-            setTimeout(() => {
-                _initMobileScrollIndicators();
-                updatePbsLayoutForViewport();
-            }, 100);
-        }
-        
-        // Auto-expand detail cards after DOM rebuild is complete
-        setTimeout(() => {
-            persistentExpandedDetails.forEach(upid => {
-                const taskCard = document.querySelector(`[data-upid="${CSS.escape(upid)}"]`);
-                if (taskCard) {
-                    const expandButton = taskCard.querySelector('button');
-                    const existingDetailCard = taskCard.nextElementSibling;
-                    
-                    if (!existingDetailCard || !existingDetailCard.classList.contains('mobile-task-detail-card')) {
-                        // Find the task data from the filtered PBS array
-                        const taskData = findTaskByUpid(filteredPbsArray, upid);
-                        if (taskData) {
-                            const detailCard = _createMobileTaskDetailCard(taskData);
-                            taskCard.insertAdjacentElement('afterend', detailCard);
+        // Restore scroll positions after DOM is rebuilt
+        if (scrollPositions.size > 0) {
+            // Wait for next frame to ensure DOM is ready
+            requestAnimationFrame(() => {
+                // Wait one more frame to ensure layout is complete
+                requestAnimationFrame(() => {
+                    scrollPositions.forEach((position, identifier) => {
+                        let element = null;
+                        
+                        // Try to find the scrollable container by table ID
+                        const table = container.querySelector(`#${identifier}`);
+                        if (table) {
+                            element = table.closest('.overflow-x-auto, .overflow-auto') || table.parentElement;
                         }
-                    }
-                    
-                    // Update button text
-                    if (expandButton) {
-                        expandButton.textContent = 'Hide Error Details';
-                    }
-                }
+                        
+                        // If not found, try element by ID directly
+                        if (!element) {
+                            element = container.querySelector(`#${identifier}`);
+                        }
+                        
+                        // If still not found, try to find a parent with the ID that contains a scrollable element
+                        if (!element) {
+                            const parent = container.querySelector(`#${identifier}`);
+                            if (parent) {
+                                element = parent.querySelector('.overflow-x-auto, .overflow-auto');
+                            }
+                        }
+                        
+                        if (element && element.scrollWidth > element.clientWidth) {
+                            // Only restore if the element is actually scrollable
+                            element.scrollLeft = position.left;
+                            if (element.scrollHeight > element.clientHeight) {
+                                element.scrollTop = position.top;
+                            }
+                        }
+                    });
+                });
             });
-        }, 200); // Wait longer than mobile features to ensure DOM is stable
+        }
     }
 
     function initPbsEventListeners() {
@@ -2312,24 +2280,10 @@ PulseApp.ui.pbs = (() => {
             console.warn(`PBS instances container #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found. Some UI interactions might not work.`);
             return;
         }
-        
-        // Listen for viewport changes to switch layouts
-        const debouncedLayoutUpdate = debounce(updatePbsLayoutForViewport, 250);
-        window.addEventListener('resize', debouncedLayoutUpdate);
-        window.addEventListener('orientationchange', () => {
-            // Orientation change needs a slight delay to get correct dimensions
-            setTimeout(debouncedLayoutUpdate, 100);
-        });
-        
-        // Initial layout setup
-        updatePbsLayoutForViewport();
     }
 
     return {
         updatePbsInfo,
-        initPbsEventListeners,
-        updatePbsLayoutForViewport,
-        isMobileView,
-        isTabletView
+        initPbsEventListeners
     };
 })();
