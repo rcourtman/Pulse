@@ -750,33 +750,10 @@ class DiagnosticTool {
                                     .filter(s => s.accessible)
                                     .reduce((sum, s) => sum + (s.backupCount || 0), 0);
                                 
-                                // Group storages by type
-                                const storageByType = {};
-                                storageAccess.storageDetails
-                                    .filter(s => s.accessible)
-                                    .forEach(storage => {
-                                        const type = storage.type || 'unknown';
-                                        if (!storageByType[type]) {
-                                            storageByType[type] = { count: 0, backups: 0, names: [] };
-                                        }
-                                        storageByType[type].count++;
-                                        storageByType[type].backups += storage.backupCount || 0;
-                                        storageByType[type].names.push(storage.storage);
-                                    });
-                                
-                                // Create detailed storage type breakdown
-                                const typeBreakdown = Object.entries(storageByType)
-                                    .map(([type, info]) => {
-                                        const storageList = info.names.slice(0, 3).join(', ');
-                                        const moreText = info.names.length > 3 ? ` and ${info.names.length - 3} more` : '';
-                                        return `${type.toUpperCase()}: ${info.count} storage(s) [${storageList}${moreText}] with ${info.backups} backups`;
-                                    })
-                                    .join('; ');
-                                
                                 report.recommendations.push({
                                     severity: 'info',
                                     category: 'Backup Status',
-                                    message: `Proxmox "${perm.name}": Successfully accessing ${storageAccess.accessibleStorages} backup storage(s) with ${backupCount} backup files. Storage types: ${typeBreakdown}`
+                                    message: `Proxmox "${perm.name}": Successfully accessing ${storageAccess.accessibleStorages} backup storage(s) with ${backupCount} backup files. Storage permissions are correctly configured.`
                                 });
                             }
                         }
