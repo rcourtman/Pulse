@@ -89,22 +89,26 @@ When creating RC PRs, Claude Code should:
 3. **Consolidate related commits**: Instead of listing every individual commit, group related changes:
    - ❌ "Prevent X flash, Prevent Y flash, Prevent Z flash" 
    - ✅ "Prevent UI flashing issues across multiple components"
-4. **Use this description in PR body**: The summarized description becomes the RC changelog
+4. **Include attribution**: Reference commits and issues/users when available:
+   - Format: "Feature description (abc1234, addressing #123 by @username)"
+   - For grouped commits: "Fix description (abc1234, def5678, addressing #123)"
+   - If no issue: "Fix description (abc1234)"
+5. **Use this description in PR body**: The summarized description becomes the RC changelog
 
 **Example RC PR Description:**
 ```
 ## ✨ New Features
-- Add backup source visibility improvements
-- Implement PBS namespace filtering
+- Add backup source visibility improvements (77f0ad2, addressing #156)
+- Implement PBS namespace filtering (fd612c2, 8590a91)
 
 ## 🐛 Bug Fixes  
-- Prevent UI flashing and double refresh issues across components
-- Fix storage type categorization in diagnostics
-- Resolve version parsing issues with git describe format
+- Prevent UI flashing and double refresh issues across components (c665cfa, 353af56, bc53ade, fb8f1c1, 0a08e23)
+- Fix storage type categorization in diagnostics (bc256d1, 308a00f, addressing #145)
+- Resolve version parsing issues with git describe format (1ff7552, 6c3dd41)
 
 ## 🔧 Improvements
-- Enhanced PBS UI with relative timestamps
-- Optimize backup tab performance
+- Enhanced PBS UI with relative timestamps (aa40829, f855aad)
+- Optimize backup tab performance (3bbcaa0)
 ```
 
 **Creating Stable Release:**
@@ -128,7 +132,8 @@ When creating stable releases, Claude Code should:
    - Deduplicate bug fixes that were refined across RCs  
    - Group improvements by component/area
    - Create a comprehensive "What's Changed" summary
-4. **Focus on user impact**: Emphasize features and fixes users will notice
+4. **Preserve attribution**: Maintain commit references and issue attribution from RC changelogs
+5. **Focus on user impact**: Emphasize features and fixes users will notice
 
 **Example Process:**
 ```bash
