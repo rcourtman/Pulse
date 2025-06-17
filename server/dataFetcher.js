@@ -1445,9 +1445,9 @@ async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
 async function fetchStorageBackups(apiClient, endpointId, nodeName, storage, isShared, node, config) {
     try {
         // Skip PBS storage based on the storage name (PBS storages usually have 'pbs' in the name)
-        // We can't check the global storage config due to permission issues
+        // This is a safety check - PBS storages should already be filtered out at the node level
         if (storage.toLowerCase().includes('pbs')) {
-            console.log(`[DataFetcher - ${endpointId}-${nodeName}] Skipping PBS storage '${storage}' for PVE backup collection`);
+            console.log(`[DataFetcher - ${endpointId}-${nodeName}] Skipping PBS storage '${storage}' for PVE backup collection (safety check)`);
             return [];
         }
         
@@ -1682,9 +1682,16 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
         
         // Fetch backups from each storage on this node
         if (node.storage && Array.isArray(node.storage)) {
-            const backupStorages = node.storage.filter(storage => 
+            // Filter out PBS storages to prevent double-counting PBS backups
+            const allBackupStorages = node.storage.filter(storage => 
                 storage.content && storage.content.includes('backup')
             );
+            const pbsStorages = allBackupStorages.filter(storage => storage.type === 'pbs');
+            const backupStorages = allBackupStorages.filter(storage => storage.type !== 'pbs');
+            
+            if (pbsStorages.length > 0) {
+                console.log(`[DataFetcher - ${endpointId}-${nodeName}] Excluding ${pbsStorages.length} PBS storage(s) from PVE backup collection: ${pbsStorages.map(s => s.storage).join(', ')}`);
+            }
             
             if (backupStorages.length > 0) {
                 // Get or create direct connection once per node for efficiency
