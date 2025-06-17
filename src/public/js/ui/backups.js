@@ -1116,7 +1116,7 @@ PulseApp.ui.backups = (() => {
         // Create namespace cell
         const namespaceCell = guestStatus.pbsNamespaceText || '-';
 
-        // Create storage type cell
+        // Create storage type cell with colored indicators
         let storageTypeCell = '';
         const storageTypes = [];
         if (guestStatus.pbsBackups > 0) storageTypes.push('PBS');
@@ -1140,20 +1140,21 @@ PulseApp.ui.backups = (() => {
         if (guestStatus.snapshotCount > 0) storageTypes.push('Snapshot');
         
         if (storageTypes.length > 0) {
-            const typeColors = {
-                'PBS': 'text-purple-600 dark:text-purple-400',
-                'NFS': 'text-green-600 dark:text-green-400',
-                'Local': 'text-blue-600 dark:text-blue-400',
-                'CIFS': 'text-orange-600 dark:text-orange-400',
-                'PVE': 'text-gray-600 dark:text-gray-400',
-                'Snapshot': 'text-yellow-600 dark:text-yellow-400'
+            const typeIndicators = {
+                'PBS': { color: 'bg-purple-500', title: 'Proxmox Backup Server' },
+                'NFS': { color: 'bg-green-500', title: 'NFS Storage' },
+                'Local': { color: 'bg-blue-500', title: 'Local Storage' },
+                'CIFS': { color: 'bg-orange-500', title: 'CIFS/SMB Storage' },
+                'PVE': { color: 'bg-gray-500', title: 'PVE Storage' },
+                'Snapshot': { color: 'bg-yellow-500', title: 'VM/CT Snapshots' }
             };
             
-            const typeElements = storageTypes.map(type => 
-                `<span class="${typeColors[type] || 'text-gray-600 dark:text-gray-400'} text-xs">${type}</span>`
-            ).join(' ');
+            const indicators = storageTypes.map(type => {
+                const indicator = typeIndicators[type] || { color: 'bg-gray-500', title: type };
+                return `<span class="inline-block w-3 h-3 ${indicator.color} rounded-full" title="${indicator.title}"></span>`;
+            }).join(' ');
             
-            storageTypeCell = `<div class="flex flex-wrap gap-1 justify-center">${typeElements}</div>`;
+            storageTypeCell = `<div class="flex gap-1 justify-center items-center">${indicators}</div>`;
         } else {
             storageTypeCell = '<span class="text-gray-400 dark:text-gray-500 text-xs">-</span>';
         }
