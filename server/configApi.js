@@ -94,7 +94,8 @@ class ConfigApi {
                     key.startsWith('WEBHOOK_') ||
                     key.startsWith('SMTP_') ||
                     key.startsWith('ALERT_') ||
-                    key === 'GLOBAL_EMAIL_ENABLED') {
+                    key === 'GLOBAL_EMAIL_ENABLED' ||
+                    key === 'GLOBAL_WEBHOOK_ENABLED') {
                     response[key] = config[key];
                 }
             });
@@ -744,7 +745,7 @@ class ConfigApi {
             
             // Clear all environment variables that might be cached
             Object.keys(process.env).forEach(key => {
-                if (key.startsWith('PROXMOX_') || key.startsWith('PBS_') || key.startsWith('PULSE_') || key.startsWith('ALERT_')) {
+                if (key.startsWith('PROXMOX_') || key.startsWith('PBS_') || key.startsWith('PULSE_') || key.startsWith('ALERT_') || key.startsWith('GLOBAL_')) {
                     delete process.env[key];
                 }
             });
@@ -781,17 +782,23 @@ class ConfigApi {
                 global.lastReloadTime = Date.now();
             }
             
-            // Refresh AlertManager rules based on new environment variables
+            // Refresh AlertManager rules and email configuration based on new environment variables
             try {
                 const alertManager = stateManager.getAlertManager();
-                if (alertManager && typeof alertManager.refreshRules === 'function') {
-                    await alertManager.refreshRules();
-                    console.log('Alert rules refreshed after configuration reload');
+                if (alertManager) {
+                    if (typeof alertManager.refreshRules === 'function') {
+                        await alertManager.refreshRules();
+                        console.log('Alert rules refreshed after configuration reload');
+                    }
+                    if (typeof alertManager.reloadEmailConfiguration === 'function') {
+                        await alertManager.reloadEmailConfiguration();
+                        console.log('Email configuration reloaded after configuration reload');
+                    }
                 } else {
-                    console.warn('AlertManager not available or refreshRules method not found');
+                    console.warn('AlertManager not available');
                 }
             } catch (alertError) {
-                console.error('Error refreshing alert rules:', alertError);
+                console.error('Error refreshing AlertManager configuration:', alertError);
                 // Don't fail the entire reload if alert refresh fails
             }
             

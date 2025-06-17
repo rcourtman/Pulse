@@ -20,14 +20,25 @@ try {
   commits = gitLog.trim().split('\n').filter(line => {
     if (!line.trim()) return false;
     const lowerLine = line.toLowerCase();
-    // Exclude version bumps and automated commits
+    // Exclude version bumps, automated commits, debug commits, and internal changes
     return !line.includes('🤖 Generated with') && 
            !line.includes('chore: release v') &&
            !line.includes('chore: bump version') &&
            !line.includes('bump version to') &&
            !lowerLine.includes('merge pull request') &&
            !lowerLine.includes('merge branch') &&
-           !line.includes('resolve: merge conflicts');
+           !line.includes('resolve: merge conflicts') &&
+           !lowerLine.startsWith('debug:') &&
+           !lowerLine.startsWith('cleanup:') &&
+           !lowerLine.includes('debug logging') &&
+           !lowerLine.includes('add logging') &&
+           !lowerLine.includes('remove logging') &&
+           !lowerLine.includes('console.log') &&
+           !lowerLine.includes('add console') &&
+           !lowerLine.includes('streamline claude.md') &&
+           !lowerLine.includes('consolidate codebase') &&
+           !lowerLine.includes('add instructions') &&
+           !lowerLine.includes('add changelog generation notes');
   });
 } catch (e) {
   console.warn('Could not get git log:', e.message);
@@ -84,7 +95,12 @@ if (analysis.breaking.length > 0) {
 if (analysis.features.length > 0) {
   changelog += '### ✨ New Features\n';
   analysis.features.forEach(commit => {
-    changelog += '- ' + commit.replace(/^feat(\([^)]*\))?:\s*/, '') + '\n';
+    let cleanCommit = commit.replace(/^feat(\([^)]*\))?:\s*/, '');
+    // Make commit messages more user-friendly
+    cleanCommit = cleanCommit.replace('implement ', '');
+    cleanCommit = cleanCommit.replace('add ', '');
+    cleanCommit = cleanCommit.charAt(0).toUpperCase() + cleanCommit.slice(1);
+    changelog += '- ' + cleanCommit + '\n';
   });
   changelog += '\n';
 }
@@ -92,30 +108,40 @@ if (analysis.features.length > 0) {
 if (analysis.fixes.length > 0) {
   changelog += '### 🐛 Bug Fixes\n';
   analysis.fixes.forEach(commit => {
-    changelog += '- ' + commit.replace(/^fix(\([^)]*\))?:\s*/, '') + '\n';
+    let cleanCommit = commit.replace(/^fix(\([^)]*\))?:\s*/, '');
+    // Make commit messages more user-friendly
+    cleanCommit = cleanCommit.replace('resolve ', '');
+    cleanCommit = cleanCommit.replace('fix ', '');
+    cleanCommit = cleanCommit.charAt(0).toUpperCase() + cleanCommit.slice(1);
+    changelog += '- ' + cleanCommit + '\n';
   });
   changelog += '\n';
 }
 
 if (analysis.other.length > 0) {
-  changelog += '### 🔧 Other Changes\n';
+  changelog += '### 🔧 Improvements\n';
   analysis.other.forEach(commit => {
     let cleanCommit = commit.replace(/^(docs|style|refactor|test|chore)(\([^)]*\))?:\s*/, '');
     // Skip very technical commits that aren't user-facing
-    if (!cleanCommit.includes('resolve:') && cleanCommit.length > 10) {
+    const lowerCommit = cleanCommit.toLowerCase();
+    if (!cleanCommit.includes('resolve:') && 
+        !lowerCommit.includes('variable name conflict') &&
+        !lowerCommit.includes('tracking-wider css') &&
+        !lowerCommit.includes('addmobileclick') &&
+        !lowerCommit.includes('expanded state') &&
+        !lowerCommit.includes('scrollbar') &&
+        !lowerCommit.includes('viewport transition') &&
+        cleanCommit.length > 15) {
       changelog += '- ' + cleanCommit + '\n';
     }
   });
   changelog += '\n';
 }
 
-changelog += '### 📊 Release Information\n';
-changelog += '- **Release type**: ' + bumpType + ' (' + prevTag + ' → v' + newVersion + ')\n';
-changelog += '- **Total changes**: ' + commits.length + ' commits\n';
-changelog += '- **Breaking changes**: ' + analysis.breaking.length + '\n';
-changelog += '- **New features**: ' + analysis.features.length + '\n';
-changelog += '- **Bug fixes**: ' + analysis.fixes.length + '\n';
-changelog += '\n';
+if (analysis.features.length > 0 || analysis.fixes.length > 0) {
+  changelog += '---\n\n';
+  changelog += `**${analysis.features.length} new features** • **${analysis.fixes.length} bug fixes** • ${commits.length} total changes\n\n`;
+}
 
 changelog += '## 🚀 Installation & Update Instructions\n';
 changelog += '\n';
