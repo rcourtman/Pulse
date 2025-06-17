@@ -1651,23 +1651,31 @@ PulseApp.ui.settings = (() => {
             // If current version is a dynamic RC (like 3.24.0-rc30), try to find the closest stable version
             let baseVersion, headVersion;
             
+            // Handle git describe format (e.g., v3.30.0-rc2-60-gb63f582)
+            const gitDescribeMatch = cleanCurrentVersion.match(/^(\d+\.\d+\.\d+(?:-rc\d+)?)-\d+-g[a-f0-9]+$/);
+            let actualCurrentVersion = cleanCurrentVersion;
+            if (gitDescribeMatch) {
+                actualCurrentVersion = gitDescribeMatch[1];
+                console.log(`[Settings] Git describe format detected, using base tag: ${actualCurrentVersion}`);
+            }
+            
             if (isCurrentRC && !isTargetRC) {
                 // Current is RC, target is stable - compare from target to current
                 baseVersion = targetVersion;
-                headVersion = currentVersion;
+                headVersion = actualCurrentVersion;
                 
                 // If current RC version looks dynamically generated (high RC number), 
                 // try to find the actual base stable version for comparison
-                const rcMatch = cleanCurrentVersion.match(/^(\d+\.\d+\.\d+)-rc(\d+)$/);
+                const rcMatch = actualCurrentVersion.match(/^(\d+\.\d+\.\d+)-rc(\d+)$/);
                 if (rcMatch && parseInt(rcMatch[2]) > 10) {
                     // High RC number suggests dynamic versioning, use the base version
                     const baseStableVersion = rcMatch[1];
-                    console.log(`[Settings] Dynamic RC detected (${cleanCurrentVersion}), using base version ${baseStableVersion} for comparison`);
+                    console.log(`[Settings] Dynamic RC detected (${actualCurrentVersion}), using base version ${baseStableVersion} for comparison`);
                     headVersion = baseStableVersion;
                 }
             } else {
                 // Normal comparison
-                baseVersion = currentVersion;
+                baseVersion = actualCurrentVersion;
                 headVersion = targetVersion;
             }
             
