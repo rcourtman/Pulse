@@ -15,6 +15,7 @@ class AlertManager extends EventEmitter {
         this.suppressedAlerts = new Map();
         this.notificationStatus = new Map();
         this.alertGroups = new Map();
+        this.guestStates = new Map(); // Track previous guest states for transition detection
         this.alertMetrics = {
             totalFired: 0,
             totalResolved: 0,
@@ -150,6 +151,16 @@ class AlertManager extends EventEmitter {
         });
     }
 
+    // Initialize guest states for transition detection
+    initializeGuestStates(guests) {
+        guests.forEach(guest => {
+            const guestStateKey = `${guest.endpointId}_${guest.node}_${guest.vmid}`;
+            if (!this.guestStates.has(guestStateKey)) {
+                this.guestStates.set(guestStateKey, guest.status);
+            }
+        });
+    }
+
     // Enhanced alert checking with custom conditions
     async checkMetrics(guests, metrics) {
         // Check if alerts are globally disabled
@@ -230,6 +241,9 @@ class AlertManager extends EventEmitter {
             status: 'running' // Assume running if we have metrics
         }));
         
+        // Initialize guest states on first run
+        this.initializeGuestStates(guests);
+        
         // Process the metrics
         this.checkMetrics(guests, metricsData);
         
@@ -292,8 +306,27 @@ class AlertManager extends EventEmitter {
 
             const existingAlert = this.activeAlerts.get(alertKey);
 
+            // Track guest state for transition detection
+            const guestStateKey = `${guest.endpointId}_${guest.node}_${guest.vmid}`;
+            const previousState = this.guestStates.get(guestStateKey);
+            const currentState = guest.status;
+            this.guestStates.set(guestStateKey, currentState);
+
+            // For status alerts, check for state transitions to create new alert instances
+            const isStatusAlert = rule.metric === 'status';
+            const hasStateChanged = previousState && previousState !== currentState;
+            const shouldCreateNewIncident = isStatusAlert && hasStateChanged && isTriggered;
+
             if (isTriggered) {
-                if (!existingAlert) {
+                if (!existingAlert || shouldCreateNewIncident) {
+                    // Resolve any existing acknowledged alert when creating new incident
+                    if (existingAlert && existingAlert.acknowledged && shouldCreateNewIncident) {
+                        existingAlert.state = 'resolved';
+                        existingAlert.resolvedAt = timestamp;
+                        existingAlert.resolveReason = 'New incident detected';
+                        this.resolveAlert(existingAlert);
+                    }
+                    
                     // Create new alert with permanent ID and safe copies of rule/guest objects
                     const newAlert = {
                         id: this.generateAlertId(), // Generate ID once when alert is created
@@ -304,7 +337,9 @@ class AlertManager extends EventEmitter {
                         currentValue,
                         effectiveThreshold: effectiveThreshold,
                         state: 'pending',
-                        acknowledged: false
+                        acknowledged: false,
+                        previousState: previousState, // Track what state it came from
+                        incidentType: shouldCreateNewIncident ? 'state_transition' : 'initial'
                     };
                     this.activeAlerts.set(alertKey, newAlert);
                 } else if (existingAlert.state === 'pending') {
@@ -327,16 +362,14 @@ class AlertManager extends EventEmitter {
                     existingAlert.currentValue = currentValue;
                 }
             } else {
-                if (existingAlert && existingAlert.state === 'active' && !existingAlert.acknowledged) {
-                    // Resolve alert (only if not acknowledged)
+                if (existingAlert && (existingAlert.state === 'active' || existingAlert.state === 'pending')) {
+                    // Resolve alert regardless of acknowledgment status when condition clears
                     existingAlert.state = 'resolved';
                     existingAlert.resolvedAt = timestamp;
+                    existingAlert.resolveReason = 'Condition cleared';
                     if (existingAlert.rule.autoResolve) {
                         this.resolveAlert(existingAlert);
                     }
-                } else if (existingAlert && existingAlert.state === 'pending') {
-                    // Remove pending alert that didn't trigger
-                    this.activeAlerts.delete(alertKey);
                 }
             }
         } catch (error) {
