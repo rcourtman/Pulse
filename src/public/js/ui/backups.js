@@ -1116,6 +1116,48 @@ PulseApp.ui.backups = (() => {
         // Create namespace cell
         const namespaceCell = guestStatus.pbsNamespaceText || '-';
 
+        // Create storage type cell
+        let storageTypeCell = '';
+        const storageTypes = [];
+        if (guestStatus.pbsBackups > 0) storageTypes.push('PBS');
+        if (guestStatus.pveBackups > 0) {
+            // Try to determine storage type from pveBackupInfo
+            if (guestStatus.pveBackupInfo && !guestStatus.pveBackupInfo.includes('Recent activity')) {
+                const storageInfo = guestStatus.pveBackupInfo.toLowerCase();
+                if (storageInfo.includes('nfs')) {
+                    storageTypes.push('NFS');
+                } else if (storageInfo.includes('local')) {
+                    storageTypes.push('Local');
+                } else if (storageInfo.includes('cifs') || storageInfo.includes('smb')) {
+                    storageTypes.push('CIFS');
+                } else {
+                    storageTypes.push('PVE');
+                }
+            } else {
+                storageTypes.push('PVE');
+            }
+        }
+        if (guestStatus.snapshotCount > 0) storageTypes.push('Snapshot');
+        
+        if (storageTypes.length > 0) {
+            const typeColors = {
+                'PBS': 'text-purple-600 dark:text-purple-400',
+                'NFS': 'text-green-600 dark:text-green-400',
+                'Local': 'text-blue-600 dark:text-blue-400',
+                'CIFS': 'text-orange-600 dark:text-orange-400',
+                'PVE': 'text-gray-600 dark:text-gray-400',
+                'Snapshot': 'text-yellow-600 dark:text-yellow-400'
+            };
+            
+            const typeElements = storageTypes.map(type => 
+                `<span class="${typeColors[type] || 'text-gray-600 dark:text-gray-400'} text-xs">${type}</span>`
+            ).join(' ');
+            
+            storageTypeCell = `<div class="flex flex-wrap gap-1 justify-center">${typeElements}</div>`;
+        } else {
+            storageTypeCell = '<span class="text-gray-400 dark:text-gray-500 text-xs">-</span>';
+        }
+
         row.innerHTML = `
             <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100 border-r border-gray-300 dark:border-gray-600" title="${guestStatus.guestName}">
                 <div class="flex items-center gap-1">
@@ -1128,6 +1170,7 @@ PulseApp.ui.backups = (() => {
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${namespaceCell}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${latestBackupFormatted}</td>
+            <td class="p-1 px-2 text-center">${storageTypeCell}</td>
             <td class="p-1 px-2 text-center">${snapshotCell}</td>
             <td class="p-1 px-2 text-center">${pveBackupCell}</td>
             <td class="p-1 px-2 text-center">${pbsBackupCell}</td>
