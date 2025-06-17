@@ -110,54 +110,6 @@ PulseApp.ui.pbs = (() => {
         HANDLER_ATTACHED: 'data-handler-attached',
     };
 
-
-    function debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
-    }
-
-    function _initMobileScrollIndicators() {
-        const tableContainers = document.querySelectorAll('.pbs-table-container');
-        const scrollHints = document.querySelectorAll('.pbs-scroll-hint');
-        
-        if (!tableContainers.length || !scrollHints.length) return;
-        
-        tableContainers.forEach((container, index) => {
-            const scrollHint = scrollHints[index];
-            if (!scrollHint) return;
-            
-            let scrollHintTimer;
-            
-            // Hide scroll hint after 5 seconds or on first scroll
-            const hideScrollHint = () => {
-                if (scrollHint) {
-                    scrollHint.style.display = 'none';
-                }
-            };
-            
-            scrollHintTimer = setTimeout(hideScrollHint, 5000);
-            
-            // Handle scroll events
-            container.addEventListener('scroll', () => {
-                hideScrollHint();
-                clearTimeout(scrollHintTimer);
-            }, { passive: true });
-            
-            // Also hide on table container click/touch
-            container.addEventListener('touchstart', () => {
-                hideScrollHint();
-                clearTimeout(scrollHintTimer);
-            }, { passive: true });
-        });
-    }
-
     const getPbsStatusIcon = (status) => {
         if (status === 'OK') {
             return `<span class="text-green-500 dark:text-green-400" title="OK">OK</span>`;
@@ -295,7 +247,7 @@ PulseApp.ui.pbs = (() => {
     };
 
     const formatTaskTiming = (task) => {
-        const startTime = task.startTime ? PulseApp.utils.formatPbsTimestamp(task.startTime) : 'N/A';
+        const startTime = task.startTime ? PulseApp.utils.formatPbsTimestampRelative(task.startTime) : 'N/A';
         const duration = task.duration !== null ? PulseApp.utils.formatDuration(task.duration) : 'N/A';
         return { startTime, duration };
     };
@@ -386,15 +338,6 @@ PulseApp.ui.pbs = (() => {
         
         card.appendChild(detailsGrid);
 
-        // Add UPID info if space allows
-        if (upid !== 'N/A') {
-            const upidElement = document.createElement('div');
-            upidElement.className = 'mt-2 text-xs text-gray-500 dark:text-gray-500';
-            upidElement.innerHTML = `<span class="font-medium">UPID:</span> <span class="font-mono break-all">${shortUpid}</span>`;
-            upidElement.title = upid;
-            card.appendChild(upidElement);
-        }
-
         // Add expand button for failed tasks
         if (isFailed) {
             const expandButton = document.createElement('button');
@@ -460,7 +403,7 @@ PulseApp.ui.pbs = (() => {
         const infoSection = document.createElement('div');
         infoSection.className = 'space-y-2 text-xs text-gray-600 dark:text-gray-400';
         
-        const endTime = task.endTime ? PulseApp.utils.formatPbsTimestamp(task.endTime) : 'N/A';
+        const endTime = task.endTime ? PulseApp.utils.formatPbsTimestampRelative(task.endTime) : 'N/A';
         const exitCodeDisplay = task.exitCode !== undefined ? task.exitCode : 'N/A';
         const exitCodeClass = task.exitCode !== undefined && task.exitCode !== 0 ? 'text-red-600 dark:text-red-400 font-semibold' : '';
         
@@ -469,7 +412,7 @@ PulseApp.ui.pbs = (() => {
                 <div><strong>Task Type:</strong> ${task.type || 'N/A'}</div>
                 <div><strong>Node:</strong> ${task.node || 'N/A'}</div>
                 <div><strong>User:</strong> ${task.user || 'N/A'}</div>
-                <div><strong>Start Time:</strong> ${task.startTime ? PulseApp.utils.formatPbsTimestamp(task.startTime) : 'N/A'}</div>
+                <div><strong>Start Time:</strong> ${task.startTime ? PulseApp.utils.formatPbsTimestampRelative(task.startTime) : 'N/A'}</div>
                 <div><strong>End Time:</strong> ${endTime}</div>
                 <div><strong>Exit Code:</strong> <span class="${exitCodeClass}">${exitCodeDisplay}</span></div>
                 <div><strong>Full UPID:</strong> <span class="font-mono break-all">${task.upid || 'N/A'}</span></div>
@@ -543,10 +486,6 @@ PulseApp.ui.pbs = (() => {
         row.appendChild(createTableCell(startTime, `${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}`));
         
         row.appendChild(createTableCell(duration, `${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}`));
-        
-        const upidCell = createTableCell(shortUpid, `${CSS_CLASSES.TEXT_XS} font-mono text-gray-400 dark:text-gray-500 truncate`);
-        upidCell.title = upid;
-        row.appendChild(upidCell);
 
         // Add click handler for failed tasks to show details
         if (isFailed && !row.dataset.clickHandlerAttached) {
@@ -611,12 +550,12 @@ PulseApp.ui.pbs = (() => {
         `;
         
         const rightInfo = document.createElement('div');
-        const endTime = task.endTime ? PulseApp.utils.formatPbsTimestamp(task.endTime) : 'N/A';
+        const endTime = task.endTime ? PulseApp.utils.formatPbsTimestampRelative(task.endTime) : 'N/A';
         const exitCodeDisplay = task.exitCode !== undefined ? task.exitCode : 'N/A';
         const exitCodeClass = task.exitCode !== undefined && task.exitCode !== 0 ? 'text-red-600 dark:text-red-400 font-semibold' : '';
         
         rightInfo.innerHTML = `
-            <div><strong>Start Time:</strong> ${task.startTime ? PulseApp.utils.formatPbsTimestamp(task.startTime) : 'N/A'}</div>
+            <div><strong>Start Time:</strong> ${task.startTime ? PulseApp.utils.formatPbsTimestampRelative(task.startTime) : 'N/A'}</div>
             <div><strong>End Time:</strong> ${endTime}</div>
             <div><strong>Exit Code:</strong> <span class="${exitCodeClass}">${exitCodeDisplay}</span></div>
             <div><strong>Full UPID:</strong> <span class="font-mono break-all">${task.upid || 'N/A'}</span></div>
@@ -806,9 +745,9 @@ PulseApp.ui.pbs = (() => {
         
         let nameContent = ds.name || 'N/A';
         if (usagePercent >= 95) {
-            nameElement.innerHTML = `<span class="text-red-700 dark:text-red-300">${nameContent}</span><div class="text-xs text-red-600 dark:text-red-400 font-normal mt-1">CRITICAL: ${usagePercent}% full</div>`;
+            nameElement.innerHTML = `<span class="text-red-700 dark:text-red-300">${nameContent}</span><div class="text-xs text-red-600 dark:text-red-400 font-normal mt-1">CRITICAL: ${usagePercent.toFixed(1)}% full</div>`;
         } else if (usagePercent >= 85) {
-            nameElement.innerHTML = `<span class="text-yellow-700 dark:text-yellow-300">${nameContent}</span><div class="text-xs text-yellow-600 dark:text-yellow-400 font-normal mt-1">WARNING: ${usagePercent}% full</div>`;
+            nameElement.innerHTML = `<span class="text-yellow-700 dark:text-yellow-300">${nameContent}</span><div class="text-xs text-yellow-600 dark:text-yellow-400 font-normal mt-1">WARNING: ${usagePercent.toFixed(1)}% full</div>`;
         } else {
             nameElement.textContent = nameContent;
         }
@@ -816,7 +755,7 @@ PulseApp.ui.pbs = (() => {
         const usageElement = document.createElement('div');
         usageElement.className = 'text-right flex-shrink-0';
         usageElement.innerHTML = `
-            <div class="text-lg font-semibold ${usageColor.replace('bg-', 'text-').replace('-500', '-600').replace('-400', '-500')}">${usagePercent}%</div>
+            <div class="text-lg font-semibold ${usageColor.replace('bg-', 'text-').replace('-500', '-600').replace('-400', '-500')}">${usagePercent.toFixed(1)}%</div>
             <div class="text-xs text-gray-500 dark:text-gray-400">${PulseApp.utils.formatBytes(usedBytes)}</div>
         `;
         
@@ -980,10 +919,10 @@ PulseApp.ui.pbs = (() => {
                     // Add usage alert to name if critical
                     let nameContent = ds.name || 'N/A';
                     if (usagePercent >= 95) {
-                        nameContent = `${nameContent} [CRITICAL: ${usagePercent}% full]`;
+                        nameContent = `${nameContent} [CRITICAL: ${usagePercent.toFixed(1)}% full]`;
                         createCell(nameContent, ['text-red-700', 'dark:text-red-300', 'font-semibold']);
                     } else if (usagePercent >= 85) {
-                        nameContent = `${nameContent} [WARNING: ${usagePercent}% full]`;
+                        nameContent = `${nameContent} [WARNING: ${usagePercent.toFixed(1)}% full]`;
                         createCell(nameContent, ['text-yellow-700', 'dark:text-yellow-300', 'font-semibold']);
                     } else {
                         createCell(nameContent);
@@ -1001,7 +940,7 @@ PulseApp.ui.pbs = (() => {
                     usageCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.WHITESPACE_NOWRAP}`;
                     usageCell.style.minWidth = '150px';
                     if (totalBytes > 0) {
-                        usageCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor, `${usagePercent}%`);
+                        usageCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor, `${usagePercent.toFixed(1)}%`);
                     } else {
                         usageCell.textContent = 'N/A';
                     }
@@ -1050,21 +989,11 @@ PulseApp.ui.pbs = (() => {
         } else {
             taskTypes.forEach(taskInfo => {
                 const tbody = document.getElementById(taskInfo.elementSuffix);
-                if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-4 ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_400} text-center">${statusText}</td></tr>`;
+                if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-4 ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_400} text-center">${statusText}</td></tr>`;
             });
         }
     };
 
-    const _createHealthBadgeHTML = (health, title) => {
-        let colorClass = 'bg-gray-400 dark:bg-gray-500';
-        if (health === 'ok') colorClass = 'bg-green-500';
-        else if (health === 'warning') colorClass = 'bg-yellow-500';
-        else if (health === 'error') colorClass = 'bg-red-500';
-        const span = document.createElement('span');
-        span.title = title;
-        span.className = `inline-block w-3 h-3 ${colorClass} rounded-full mr-2 flex-shrink-0`;
-        return span;
-    };
 
     const _createInstanceHeaderDiv = (instanceName, overallHealth, healthTitle) => {
         const headerDiv = document.createElement('div');
@@ -1173,8 +1102,8 @@ PulseApp.ui.pbs = (() => {
             const summary = taskItem.data?.summary || {};
             const ok = summary.ok ?? '-';
             const failed = summary.failed ?? 0;
-            const lastOk = PulseApp.utils.formatPbsTimestamp(summary.lastOk);
-            const lastFailed = PulseApp.utils.formatPbsTimestamp(summary.lastFailed);
+            const lastOk = PulseApp.utils.formatPbsTimestampRelative(summary.lastOk);
+            const lastFailed = PulseApp.utils.formatPbsTimestampRelative(summary.lastFailed);
 
             const row = tbody.insertRow();
             
@@ -1273,7 +1202,7 @@ PulseApp.ui.pbs = (() => {
         const headerRow = document.createElement('tr');
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
 
-        const headers = [idColumnHeader, 'Status', 'Namespace', 'Start Time', 'Duration', 'UPID'];
+        const headers = [idColumnHeader, 'Status', 'Namespace', 'Start Time', 'Duration'];
         const isBackupTable = tableId && tableId.includes('backup');
         
         headers.forEach((text, index) => {
@@ -1405,9 +1334,9 @@ PulseApp.ui.pbs = (() => {
         const cpuCell = document.createElement('td');
         cpuCell.className = `${CSS_CLASSES.P1_PX2} min-w-[180px]`;
         if (nodeStatus.cpu !== null && nodeStatus.cpu !== undefined) {
-            const cpuPercent = nodeStatus.cpu * 100;
+            const cpuPercent = parseFloat((nodeStatus.cpu * 100).toFixed(1));
             const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
-            const cpuTooltipText = `${cpuPercent.toFixed(1)}%`;
+            const cpuTooltipText = `${cpuPercent}%`;
             cpuCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
         } else {
             cpuCell.textContent = '-';
@@ -1420,9 +1349,9 @@ PulseApp.ui.pbs = (() => {
         if (nodeStatus.memory && nodeStatus.memory.total && nodeStatus.memory.used !== null) {
             const memUsed = nodeStatus.memory.used;
             const memTotal = nodeStatus.memory.total;
-            const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
+            const memPercent = parseFloat(((memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0).toFixed(1));
             const memColorClass = PulseApp.utils.getUsageColor(memPercent, 'memory');
-            const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
+            const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent}%)`;
             memCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
         } else {
             memCell.textContent = '-';
@@ -1717,7 +1646,7 @@ PulseApp.ui.pbs = (() => {
                     <span class="text-gray-600 dark:text-gray-400">${cpuPercent.toFixed(1)}%</span>
                 </div>
                 <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div class="h-2 rounded-full transition-all duration-300 ${cpuColorClass}" style="width: ${cpuPercent}%"></div>
+                    <div class="h-2 rounded-full transition-all duration-300 ${cpuColorClass}" style="width: ${cpuPercent.toFixed(1)}%"></div>
                 </div>
             `;
             section.appendChild(cpuDiv);
@@ -1742,7 +1671,7 @@ PulseApp.ui.pbs = (() => {
                     <span class="text-gray-600 dark:text-gray-400">${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)}</span>
                 </div>
                 <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div class="h-2 rounded-full transition-all duration-300 ${memColorClass}" style="width: ${memPercent}%"></div>
+                    <div class="h-2 rounded-full transition-all duration-300 ${memColorClass}" style="width: ${memPercent.toFixed(1)}%"></div>
                 </div>
             `;
             section.appendChild(memDiv);

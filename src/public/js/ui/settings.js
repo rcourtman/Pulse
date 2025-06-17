@@ -1953,6 +1953,9 @@ PulseApp.ui.settings = (() => {
                         progressText.textContent = 'Update complete! Restarting...';
                     }
                     showMessage('Update applied successfully. The application will restart momentarily.', 'success');
+                    
+                    // Poll health endpoint until service is back up, then refresh
+                    pollHealthAndRefresh();
                 });
                 
                 window.socket.on('updateError', (data) => {
@@ -3874,6 +3877,66 @@ PulseApp.ui.settings = (() => {
                 </div>
             </div>
         `;
+    }
+    
+    function pollHealthAndRefresh() {
+        const maxAttempts = 30; // Maximum 30 attempts (2 minutes at 4-second intervals)
+        let attempts = 0;
+        const progressText = document.getElementById('update-progress-text');
+        
+        function updateProgressText(message) {
+            if (progressText) {
+                progressText.textContent = message;
+            }
+        }
+        
+        function checkHealth() {
+            attempts++;
+            
+            // Update visual feedback
+            const dots = '.'.repeat((attempts - 1) % 4);
+            updateProgressText(`Waiting for service to restart${dots} (${attempts}/${maxAttempts})`);
+            
+            fetch('/healthz', {
+                method: 'GET',
+                cache: 'no-cache',
+                timeout: 2000
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Server is back up, show success and refresh
+                    updateProgressText('Service is ready! Refreshing page...');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    // Still not ready, try again
+                    scheduleNextCheck();
+                }
+            })
+            .catch(error => {
+                // Connection failed, service still restarting
+                scheduleNextCheck();
+            });
+        }
+        
+        function scheduleNextCheck() {
+            if (attempts >= maxAttempts) {
+                // Fallback: force refresh after max attempts
+                updateProgressText('Health check timed out, refreshing page...');
+                console.warn('Health check timed out, forcing refresh...');
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+                return;
+            }
+            
+            // Wait 4 seconds before next check
+            setTimeout(checkHealth, 4000);
+        }
+        
+        // Start health checking immediately
+        checkHealth();
     }
     
     return {
