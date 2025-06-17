@@ -192,6 +192,7 @@ PulseApp.ui.dashboard = (() => {
             m.endpointId === guest.endpointId
         );
         const guestUniqueId = guest.id;
+        
 
         const isDragging = PulseApp.ui.thresholds && PulseApp.ui.thresholds.isThresholdDragInProgress && PulseApp.ui.thresholds.isThresholdDragInProgress();
         const snapshot = guestMetricDragSnapshot[guestUniqueId];
@@ -277,7 +278,7 @@ PulseApp.ui.dashboard = (() => {
             rawHostReportedMem = metrics.current.mem;
         }
 
-        return {
+        const returnObj = {
             id: guest.vmid,
             uniqueId: guestUniqueId,
             vmid: guest.vmid,
@@ -301,6 +302,8 @@ PulseApp.ui.dashboard = (() => {
             netin: avgNetInRate,
             netout: avgNetOutRate
         };
+        
+        return returnObj;
     }
 
     function _setDashboardColumnWidths(dashboardData) {

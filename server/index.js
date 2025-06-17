@@ -1502,6 +1502,7 @@ async function runMetricCycle() {
                if (metricData && metricData.current) {
                    const guestId = `${metricData.endpointId}-${metricData.node}-${metricData.id}`;
                    metricsHistory.addMetricData(guestId, metricData.current);
+                   
                }
            });
            

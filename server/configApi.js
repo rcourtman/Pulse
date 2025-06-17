@@ -13,11 +13,13 @@ class ConfigApi {
         const projectRootEnv = path.join(__dirname, '../.env');
         
         // Check if we're in a Docker environment with persistent config volume
-        // Use config/.env if it exists, otherwise fall back to project root .env
-        if (fsSync.existsSync(configEnvPath)) {
+        // Use config/.env if the config directory exists (Docker persistent volume), otherwise use project root .env
+        if (fsSync.existsSync(configDir)) {
             this.envPath = configEnvPath;
+            this.configDir = configDir;
         } else {
             this.envPath = projectRootEnv;
+            this.configDir = path.dirname(projectRootEnv);
         }
     }
 
@@ -701,6 +703,8 @@ class ConfigApi {
         });
         
         try {
+            // Ensure the config directory exists before writing
+            await fs.mkdir(this.configDir, { recursive: true });
             await fs.writeFile(this.envPath, lines.join('\n'), 'utf8');
         } catch (writeError) {
             console.error('[ConfigApi.writeEnvFile] Error writing file:', writeError);
