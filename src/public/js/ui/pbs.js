@@ -1334,9 +1334,9 @@ PulseApp.ui.pbs = (() => {
         const cpuCell = document.createElement('td');
         cpuCell.className = `${CSS_CLASSES.P1_PX2} min-w-[180px]`;
         if (nodeStatus.cpu !== null && nodeStatus.cpu !== undefined) {
-            const cpuPercent = nodeStatus.cpu * 100;
+            const cpuPercent = parseFloat((nodeStatus.cpu * 100).toFixed(1));
             const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
-            const cpuTooltipText = `${cpuPercent.toFixed(1)}%`;
+            const cpuTooltipText = `${cpuPercent}%`;
             cpuCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
         } else {
             cpuCell.textContent = '-';
@@ -1349,9 +1349,9 @@ PulseApp.ui.pbs = (() => {
         if (nodeStatus.memory && nodeStatus.memory.total && nodeStatus.memory.used !== null) {
             const memUsed = nodeStatus.memory.used;
             const memTotal = nodeStatus.memory.total;
-            const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
+            const memPercent = parseFloat(((memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0).toFixed(1));
             const memColorClass = PulseApp.utils.getUsageColor(memPercent, 'memory');
-            const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
+            const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent}%)`;
             memCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
         } else {
             memCell.textContent = '-';
