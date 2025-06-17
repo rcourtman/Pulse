@@ -946,9 +946,8 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 ### Common Issues
 
 *   **Proxmox Log File Growth / log2ram Issues:** 
-    - **Issue:** Pulse's responsive 2-second polling can cause `/var/log/pveproxy/access.log` to grow rapidly, which can fill up log2ram
-    - **Update:** As of v3.30.0, Pulse uses the bulk `/cluster/resources` endpoint to dramatically reduce API calls and log growth
-    - **Recommended Solutions - Configure Proxmox Logging:** 
+    - **Update (v3.30.0+):** Pulse now uses the bulk `/cluster/resources` endpoint, reducing API calls by up to 95% while maintaining 2-second polling
+    - **If you still experience log growth**, you can configure Proxmox logging: 
       
       **Option 1: Use tmpfs for pveproxy logs (Best for log2ram users)**
       ```bash
