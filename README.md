@@ -638,6 +638,28 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Recent coverage metrics** showing protection status
 - **Backup type filtering** with styled badges
 
+<details>
+<summary><strong>Understanding Backup Types in Pulse</strong></summary>
+
+Pulse monitors three distinct types of backups:
+
+1. **PBS Backups** (Purple indicator ●)
+   - Backups stored in Proxmox Backup Server
+   - Accessed via PBS API with deduplication and verification features
+   - Requires separate PBS API token configuration
+   
+2. **PVE Backups** (Orange indicator ●)
+   - Backups stored on any Proxmox VE storage (NFS, CIFS, local, etc.)
+   - All non-PBS backup storage is considered "PVE storage"
+   - Accessed via Proxmox VE API
+   
+3. **Snapshots** (Yellow indicator ●)
+   - VM/CT point-in-time snapshots (not full backups)
+   - Stored locally on the Proxmox node
+
+**Important:** If you have PBS configured as storage in Proxmox VE, those backups are accessed via the PBS API directly, not through PVE storage. This prevents double-counting of PBS backups.
+</details>
+
 ### Performance & UI
 - **Virtual scrolling** for handling large VM/container lists efficiently
 - **Metrics history** with 1-hour retention using circular buffers
