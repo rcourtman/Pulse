@@ -184,6 +184,9 @@ class AlertManager extends EventEmitter {
                 return;
             }
             
+            // Initialize guest states for transition detection
+            this.initializeGuestStates(guests);
+            
             guests.forEach(guest => {
                 try {
                     // Evaluate all alert rules (both single-metric and compound threshold rules)

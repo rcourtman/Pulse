@@ -6,6 +6,7 @@ PulseApp.ui.backups = (() => {
     let backupsTabContent = null;
     let namespaceFilter = null;
     let pbsInstanceFilter = null;
+    let lastUserUpdateTime = 0; // Track when user last triggered an update
     
     // Enhanced cache for expensive data transformations
     let dataCache = {
@@ -1710,6 +1711,16 @@ PulseApp.ui.backups = (() => {
     }
 
     function updateBackupsTab(isUserAction = false) {
+        // Prevent socket updates too close to user actions
+        if (!isUserAction && (Date.now() - lastUserUpdateTime < 1000)) {
+            // Skip this update if it's within 1 second of a user action
+            return;
+        }
+        
+        if (isUserAction) {
+            lastUserUpdateTime = Date.now();
+        }
+        
         // Ensure DOM cache is initialized
         if (!domCache.tableBody) {
             _initDomCache();
