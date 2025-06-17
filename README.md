@@ -945,6 +945,19 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 
 ### Common Issues
 
+*   **Proxmox Log File Growth (Important):** 
+    - **Issue:** Pulse polls Proxmox every 2 seconds by default, which can cause `/var/log/pveproxy/access.log` to grow rapidly (40MB+ in 8 hours)
+    - **Solution:** Increase polling intervals by setting environment variables:
+      ```bash
+      # In your .env file or docker-compose.yml
+      PULSE_METRIC_INTERVAL_MS=10000      # 10 seconds instead of 2
+      PULSE_DISCOVERY_INTERVAL_MS=60000   # 60 seconds instead of 30
+      ```
+    - **Recommended intervals by deployment size:**
+      - Small (1-2 nodes, <20 VMs): 10-15 second metrics, 60 second discovery
+      - Medium (3-5 nodes, 20-100 VMs): 15-30 second metrics, 120 second discovery  
+      - Large (5+ nodes, 100+ VMs): 30-60 second metrics, 300 second discovery
+    - **Alternative:** Configure logrotate for more aggressive rotation of `/var/log/pveproxy/access.log`
 *   **Empty Backups Tab:** 
     - **PBS backups not showing:** Usually caused by missing `PBS Node Name` in the settings configuration. SSH to your PBS server and run `hostname` to find the correct value.
     - **PVE backups not showing:** Ensure your API token has `PVEDatastoreAdmin` role on `/storage` to view backup files. See the permissions section above.
