@@ -122,6 +122,12 @@ When creating RC PRs, Claude Code should:
 gh workflow run stable-release.yml --ref main
 ```
 
+**IMPORTANT: All releases are created as drafts**
+- Releases require manual publishing after review
+- **RC Releases**: Created with `draft: true` and `prerelease: true`
+- **Stable Releases**: Created with `--draft` flag
+- **Publishing**: Manual step required in GitHub UI after review
+
 **Stable Release Changelog Instructions for Claude Code:**
 When creating stable releases, Claude Code should:
 
@@ -308,11 +314,18 @@ gh workflow run stable-release.yml --ref main
 - Use descriptive commit bodies for multi-component changes
 - Run tests before committing when available
 
+**GitHub References:**
+- **Commit references in comments**: Use just the short hash `abc1234` (GitHub auto-links)
+- **Issue references in commits**: Use `addressing #123` (creates reference without auto-closing)
+- **Auto-closing keywords**: `fixes #123`, `closes #123`, `resolves #123` (avoid - let users test first)
+
 **Examples:**
 ✅ Good: `fix: prevent UI flashing and double refresh issues addressing #123`
 ✅ Good: `feat: add backup source visibility improvements addressing #156`
+✅ Good: In issue comments: "Fixed in commit abc1234"
 ❌ Bad: 5 separate commits for each component's flash fix
 ❌ Bad: Missing issue reference in commit message
+❌ Bad: In comments: "Fixed in commit abc1234f" (extra characters break linking)
 
 ## Summary of Ultra-Simple Workflow
 
