@@ -40,7 +40,7 @@
     "chokidar": "^4.0.3",
     "concurrently": "^9.1.2",
     "playwright": "^1.53.0",
-    "postcss": "^8.5.5",
+    "postcss": "^8.5.6",
     "tailwindcss": "^3.4.4"
   },
   "overrides": {
