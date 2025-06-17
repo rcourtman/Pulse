@@ -402,6 +402,7 @@ jobs:
             gh release create "v$NEW_VERSION" \
               --title "Release v$NEW_VERSION" \
               --notes-file CHANGELOG.md \
+              --draft \
               "pulse-v$NEW_VERSION.tar.gz"
             
             echo "✅ Release v$NEW_VERSION created successfully!"
