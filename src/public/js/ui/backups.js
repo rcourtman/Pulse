@@ -1145,7 +1145,7 @@ PulseApp.ui.backups = (() => {
                 'NFS': { color: 'bg-green-500', title: 'NFS Storage' },
                 'Local': { color: 'bg-blue-500', title: 'Local Storage' },
                 'CIFS': { color: 'bg-orange-500', title: 'CIFS/SMB Storage' },
-                'PVE': { color: 'bg-gray-500', title: 'PVE Storage' },
+                'PVE': { color: 'bg-orange-500', title: 'PVE Storage' },
                 'Snapshot': { color: 'bg-yellow-500', title: 'VM/CT Snapshots' }
             };
             
