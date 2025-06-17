@@ -3195,19 +3195,73 @@ PulseApp.ui.settings = (() => {
         const sanitizedData = sanitizeReport(diagnosticData);
         const text = JSON.stringify(sanitizedData, null, 2);
         
-        navigator.clipboard.writeText(text).then(() => {
-            const button = document.getElementById('copyReport');
-            const originalText = button.innerHTML;
-            button.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Copied!';
-            button.classList.remove('bg-gray-600', 'hover:bg-gray-700');
-            button.classList.add('bg-green-600', 'hover:bg-green-700');
+        const button = document.getElementById('copyReport');
+        const originalText = button.innerHTML;
+        
+        // Try modern clipboard API first
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                showCopySuccess(button, originalText);
+            }).catch(err => {
+                console.warn('Clipboard API failed, trying fallback:', err);
+                fallbackCopyText(text, button, originalText);
+            });
+        } else {
+            // Fallback for older browsers
+            fallbackCopyText(text, button, originalText);
+        }
+    }
+    
+    function showCopySuccess(button, originalText) {
+        button.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg> Copied!';
+        button.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+        button.classList.add('bg-green-600', 'hover:bg-green-700');
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('bg-green-600', 'hover:bg-green-700');
+            button.classList.add('bg-gray-600', 'hover:bg-gray-700');
+        }, 3000);
+    }
+    
+    function fallbackCopyText(text, button, originalText) {
+        try {
+            // Create a temporary textarea element
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            textarea.style.top = '0';
+            textarea.style.left = '0';
+            document.body.appendChild(textarea);
             
-            setTimeout(() => {
-                button.innerHTML = originalText;
-                button.classList.remove('bg-green-600', 'hover:bg-green-700');
-                button.classList.add('bg-gray-600', 'hover:bg-gray-700');
-            }, 3000);
-        });
+            // Select and copy the text
+            textarea.focus();
+            textarea.select();
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textarea);
+            
+            if (successful) {
+                showCopySuccess(button, originalText);
+            } else {
+                showCopyError(button, originalText);
+            }
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            showCopyError(button, originalText);
+        }
+    }
+    
+    function showCopyError(button, originalText) {
+        button.innerHTML = '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg> Copy Failed';
+        button.classList.remove('bg-gray-600', 'hover:bg-gray-700');
+        button.classList.add('bg-red-600', 'hover:bg-red-700');
+        
+        setTimeout(() => {
+            button.innerHTML = originalText;
+            button.classList.remove('bg-red-600', 'hover:bg-red-700');
+            button.classList.add('bg-gray-600', 'hover:bg-gray-700');
+        }, 3000);
     }
     
     function downloadDiagnosticReport() {

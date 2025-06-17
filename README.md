@@ -945,19 +945,56 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 
 ### Common Issues
 
-*   **Proxmox Log File Growth (Important):** 
-    - **Issue:** Pulse polls Proxmox every 2 seconds by default, which can cause `/var/log/pveproxy/access.log` to grow rapidly (40MB+ in 8 hours)
-    - **Solution:** Increase polling intervals by setting environment variables:
+*   **Proxmox Log File Growth / log2ram Issues:** 
+    - **Issue:** Pulse's responsive 2-second polling can cause `/var/log/pveproxy/access.log` to grow rapidly (40MB+ in 8 hours), which can fill up log2ram
+    - **Recommended Solutions - Configure Proxmox Logging:** 
+      
+      **Option 1: Use tmpfs for pveproxy logs (Best for log2ram users)**
       ```bash
-      # In your .env file or docker-compose.yml
-      PULSE_METRIC_INTERVAL_MS=10000      # 10 seconds instead of 2
-      PULSE_DISCOVERY_INTERVAL_MS=60000   # 60 seconds instead of 30
+      # Add to /etc/fstab on your Proxmox host:
+      tmpfs /var/log/pveproxy/ tmpfs defaults,uid=33,gid=33,size=1024m 0 0
+      
+      # Then mount it:
+      mount /var/log/pveproxy/
+      systemctl restart pveproxy
       ```
-    - **Recommended intervals by deployment size:**
-      - Small (1-2 nodes, <20 VMs): 10-15 second metrics, 60 second discovery
-      - Medium (3-5 nodes, 20-100 VMs): 15-30 second metrics, 120 second discovery  
-      - Large (5+ nodes, 100+ VMs): 30-60 second metrics, 300 second discovery
-    - **Alternative:** Configure logrotate for more aggressive rotation of `/var/log/pveproxy/access.log`
+      
+      **Option 2: Disable pveproxy access logging entirely**
+      ```bash
+      # On your Proxmox host, symlink to /dev/null:
+      systemctl stop pveproxy
+      rm -f /var/log/pveproxy/access.log
+      ln -s /dev/null /var/log/pveproxy/access.log
+      systemctl start pveproxy
+      ```
+      
+      **Option 3: Aggressive logrotate configuration**
+      ```bash
+      # Edit /etc/logrotate.d/pve on your Proxmox host:
+      /var/log/pveproxy/access.log {
+          hourly          # Rotate every hour
+          rotate 4        # Keep only 4 files
+          maxsize 10M     # Force rotate at 10MB
+          compress
+          delaycompress
+          notifempty
+          missingok
+          create 640 www-data www-data
+      }
+      
+      # Force immediate rotation:
+      logrotate -f /etc/logrotate.d/pve
+      ```
+      
+      **Option 4: Exclude from log2ram**
+      ```bash
+      # Edit /etc/log2ram.conf and add to exclusion:
+      LOG2RAM_PATH_EXCLUDE="/var/log/pveproxy"
+      
+      # Then restart log2ram:
+      systemctl restart log2ram
+      ```
+    - **Note:** The pveproxy log path is hard-coded in Proxmox and cannot be changed. Pulse's 2-second polling provides real-time responsiveness - adjusting Proxmox logging is preferable to reducing polling frequency.
 *   **Empty Backups Tab:** 
     - **PBS backups not showing:** Usually caused by missing `PBS Node Name` in the settings configuration. SSH to your PBS server and run `hostname` to find the correct value.
     - **PVE backups not showing:** Ensure your API token has `PVEDatastoreAdmin` role on `/storage` to view backup files. See the permissions section above.
