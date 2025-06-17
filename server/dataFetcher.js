@@ -1904,8 +1904,9 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                 const bulkKey = `${nodeName}-${vmid}`;
                                 const bulkVmData = bulkDataMap.get(bulkKey);
                                 
-                                // Skip if VM not found or not running
-                                if (!bulkVmData || bulkVmData.status !== 'running') {
+                                // Skip if VM not found in bulk data
+                                if (!bulkVmData) {
+                                    console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} not found in bulk data`);
                                     return null;
                                 }
                                 
@@ -1914,7 +1915,19 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                     params: { timeframe: 'hour', cf: 'AVERAGE' } 
                                 });
                                 
+                                // Also fetch current status for accurate I/O counters
+                                // The bulk endpoint seems to cache these values
+                                let currentStatusResponse;
+                                try {
+                                    currentStatusResponse = await apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/status/current`);
+                                } catch (statusError) {
+                                    // If individual status fetch fails, continue with bulk data
+                                    console.warn(`[DataFetcher - ${endpointName}] Failed to fetch current status for ${vmid}: ${statusError.message}`);
+                                }
+                                
                                 // Convert bulk data to match existing currentMetrics structure
+                                // Use individual status data for I/O counters if available (more accurate)
+                                const statusData = currentStatusResponse?.data?.data || {};
                                 let currentMetrics = {
                                     cpu: bulkVmData.cpu || 0,
                                     cpus: bulkVmData.maxcpu || 1,
@@ -1922,14 +1935,17 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                     maxmem: bulkVmData.maxmem || 0,
                                     disk: bulkVmData.disk || 0,
                                     maxdisk: bulkVmData.maxdisk || 0,
-                                    netin: bulkVmData.netin || 0,
-                                    netout: bulkVmData.netout || 0,
-                                    diskread: bulkVmData.diskread || 0,
-                                    diskwrite: bulkVmData.diskwrite || 0,
+                                    // Prefer fresh I/O counters from individual status endpoint
+                                    netin: statusData.netin !== undefined ? statusData.netin : (bulkVmData.netin || 0),
+                                    netout: statusData.netout !== undefined ? statusData.netout : (bulkVmData.netout || 0),
+                                    diskread: statusData.diskread !== undefined ? statusData.diskread : (bulkVmData.diskread || 0),
+                                    diskwrite: statusData.diskwrite !== undefined ? statusData.diskwrite : (bulkVmData.diskwrite || 0),
                                     uptime: bulkVmData.uptime || 0,
                                     status: bulkVmData.status || 'unknown',
+                                    qmpstatus: bulkVmData.qmpstatus || bulkVmData.status || 'unknown',
                                     agent: type === 'qemu' ? (bulkVmData.agent || 0) : 0
                                 };
+                                
 
                             // --- QEMU Guest Agent Memory Fetch ---
                             if (type === 'qemu' && currentMetrics && currentMetrics.agent === 1 && guestAgentConfig && (typeof guestAgentConfig === 'string' && (guestAgentConfig.startsWith('1') || guestAgentConfig.includes('enabled=1')))) {
