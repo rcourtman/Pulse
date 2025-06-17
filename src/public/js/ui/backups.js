@@ -1060,7 +1060,7 @@ PulseApp.ui.backups = (() => {
         const thresholdIndicator = createThresholdIndicator(guestStatus);
 
         const latestBackupFormatted = guestStatus.latestBackupTime
-            ? PulseApp.utils.formatPbsTimestamp(guestStatus.latestBackupTime)
+            ? PulseApp.utils.formatPbsTimestampRelative(guestStatus.latestBackupTime)
             : '<span class="text-gray-400">No backups found</span>';
 
         const typeIconClass = guestStatus.guestType === 'VM'
