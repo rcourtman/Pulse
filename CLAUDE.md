@@ -309,8 +309,10 @@ gh workflow run stable-release.yml --ref main
 - Run tests before committing when available
 
 **Examples:**
-✅ Good: `fix: prevent UI flashing and double refresh issues`
+✅ Good: `fix: prevent UI flashing and double refresh issues addressing #123`
+✅ Good: `feat: add backup source visibility improvements addressing #156`
 ❌ Bad: 5 separate commits for each component's flash fix
+❌ Bad: Missing issue reference in commit message
 
 ## Summary of Ultra-Simple Workflow
 
@@ -339,6 +341,22 @@ gh workflow run stable-release.yml --ref main
 - Use TodoWrite for complex tasks - helps user track progress
 - Be concise in responses unless detail requested
 - When fixing bugs, test the fix before committing
+
+## Service Management
+
+**IMPORTANT**: This development environment runs Pulse as a systemd service.
+
+**Always use systemctl commands:**
+- Restart service: `systemctl restart pulse`
+- Check status: `systemctl status pulse`
+- View logs: `journalctl -u pulse -f`
+
+**Never use:**
+- `npm start` or `npm run start` (service handles this)
+- Direct Node.js execution
+- Manual server startup commands
+
+The service automatically handles development mode with hot reloading via the configured npm scripts.
 
 ## Commit Consolidation for Claude Code
 
