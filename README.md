@@ -638,6 +638,28 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Recent coverage metrics** showing protection status
 - **Backup type filtering** with styled badges
 
+<details>
+<summary><strong>Understanding Backup Types in Pulse</strong></summary>
+
+Pulse monitors three distinct types of backups:
+
+1. **PBS Backups** (Purple indicator ●)
+   - Backups stored in Proxmox Backup Server
+   - Accessed via PBS API with deduplication and verification features
+   - Requires separate PBS API token configuration
+   
+2. **PVE Backups** (Orange indicator ●)
+   - Backups stored on any Proxmox VE storage (NFS, CIFS, local, etc.)
+   - All non-PBS backup storage is considered "PVE storage"
+   - Accessed via Proxmox VE API
+   
+3. **Snapshots** (Yellow indicator ●)
+   - VM/CT point-in-time snapshots (not full backups)
+   - Stored locally on the Proxmox node
+
+**Important:** If you have PBS configured as storage in Proxmox VE, those backups are accessed via the PBS API directly, not through PVE storage. This prevents double-counting of PBS backups.
+</details>
+
 ### Performance & UI
 - **Virtual scrolling** for handling large VM/container lists efficiently
 - **Metrics history** with 1-hour retention using circular buffers
@@ -945,6 +967,56 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 
 ### Common Issues
 
+*   **Proxmox Log File Growth / log2ram Issues:** 
+    - **Update (v3.30.0+):** Pulse now uses the bulk `/cluster/resources` endpoint, reducing API calls by up to 95% while maintaining 2-second polling
+    - **If you still experience log growth**, you can configure Proxmox logging: 
+      
+      **Option 1: Use tmpfs for pveproxy logs (Best for log2ram users)**
+      ```bash
+      # Add to /etc/fstab on your Proxmox host:
+      tmpfs /var/log/pveproxy/ tmpfs defaults,uid=33,gid=33,size=1024m 0 0
+      
+      # Then mount it:
+      mount /var/log/pveproxy/
+      systemctl restart pveproxy
+      ```
+      
+      **Option 2: Disable pveproxy access logging entirely**
+      ```bash
+      # On your Proxmox host, symlink to /dev/null:
+      systemctl stop pveproxy
+      rm -f /var/log/pveproxy/access.log
+      ln -s /dev/null /var/log/pveproxy/access.log
+      systemctl start pveproxy
+      ```
+      
+      **Option 3: Aggressive logrotate configuration**
+      ```bash
+      # Edit /etc/logrotate.d/pve on your Proxmox host:
+      /var/log/pveproxy/access.log {
+          hourly          # Rotate every hour
+          rotate 4        # Keep only 4 files
+          maxsize 10M     # Force rotate at 10MB
+          compress
+          delaycompress
+          notifempty
+          missingok
+          create 640 www-data www-data
+      }
+      
+      # Force immediate rotation:
+      logrotate -f /etc/logrotate.d/pve
+      ```
+      
+      **Option 4: Exclude from log2ram**
+      ```bash
+      # Edit /etc/log2ram.conf and add to exclusion:
+      LOG2RAM_PATH_EXCLUDE="/var/log/pveproxy"
+      
+      # Then restart log2ram:
+      systemctl restart log2ram
+      ```
+    - **Note:** The pveproxy log path is hard-coded in Proxmox and cannot be changed. Pulse's 2-second polling provides real-time responsiveness - adjusting Proxmox logging is preferable to reducing polling frequency.
 *   **Empty Backups Tab:** 
     - **PBS backups not showing:** Usually caused by missing `PBS Node Name` in the settings configuration. SSH to your PBS server and run `hostname` to find the correct value.
     - **PVE backups not showing:** Ensure your API token has `PVEDatastoreAdmin` role on `/storage` to view backup files. See the permissions section above.

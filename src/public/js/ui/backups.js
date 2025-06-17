@@ -6,6 +6,7 @@ PulseApp.ui.backups = (() => {
     let backupsTabContent = null;
     let namespaceFilter = null;
     let pbsInstanceFilter = null;
+    let lastUserUpdateTime = 0; // Track when user last triggered an update
     
     // Enhanced cache for expensive data transformations
     let dataCache = {
@@ -1060,7 +1061,7 @@ PulseApp.ui.backups = (() => {
         const thresholdIndicator = createThresholdIndicator(guestStatus);
 
         const latestBackupFormatted = guestStatus.latestBackupTime
-            ? PulseApp.utils.formatPbsTimestamp(guestStatus.latestBackupTime)
+            ? PulseApp.utils.formatPbsTimestampRelative(guestStatus.latestBackupTime)
             : '<span class="text-gray-400">No backups found</span>';
 
         const typeIconClass = guestStatus.guestType === 'VM'
@@ -1710,6 +1711,16 @@ PulseApp.ui.backups = (() => {
     }
 
     function updateBackupsTab(isUserAction = false) {
+        // Prevent socket updates too close to user actions
+        if (!isUserAction && (Date.now() - lastUserUpdateTime < 1000)) {
+            // Skip this update if it's within 1 second of a user action
+            return;
+        }
+        
+        if (isUserAction) {
+            lastUserUpdateTime = Date.now();
+        }
+        
         // Ensure DOM cache is initialized
         if (!domCache.tableBody) {
             _initDomCache();
@@ -1731,9 +1742,12 @@ PulseApp.ui.backups = (() => {
         const { allGuests, initialDataReceived, tasksByGuest, snapshotsByGuest, dayBoundaries, threeDaysAgo, sevenDaysAgo } = _getInitialBackupData();
 
         if (!initialDataReceived) {
-            loadingMsg.classList.remove('hidden');
-            tableContainer.classList.add('hidden');
-            noDataMsg.classList.add('hidden');
+            // Only show loading message if the table is not already visible with data
+            if (tableContainer.classList.contains('hidden') || tableBody.children.length === 0) {
+                loadingMsg.classList.remove('hidden');
+                tableContainer.classList.add('hidden');
+                noDataMsg.classList.add('hidden');
+            }
             return;
         }
 
@@ -2126,7 +2140,10 @@ PulseApp.ui.backups = (() => {
                 
                 // Create detail card only if it doesn't exist
                 if (detailCardContainer && !detailCard) {
-                    detailCard = PulseApp.ui.backupDetailCard.createBackupDetailCard(null);
+                    // Don't show empty state if we already have data to display
+                    const initialData = filteredBackupStatus.length > 0 ? 
+                        _prepareMultiDateDetailData(filteredBackupStatus, extendedBackupData) : null;
+                    detailCard = PulseApp.ui.backupDetailCard.createBackupDetailCard(initialData);
                     detailCardContainer.innerHTML = '';
                     detailCardContainer.appendChild(detailCard);
                 }
@@ -2264,7 +2281,16 @@ PulseApp.ui.backups = (() => {
                 }
             }
             
-            visualizationSection.classList.remove('hidden');
+            // Only show visualization section after all content is ready
+            // Use requestAnimationFrame to ensure DOM updates are complete
+            if (isUserAction || !visualizationSection.classList.contains('hidden')) {
+                visualizationSection.classList.remove('hidden');
+            } else {
+                // First time showing - wait for next frame to avoid flash
+                requestAnimationFrame(() => {
+                    visualizationSection.classList.remove('hidden');
+                });
+            }
         } else if (visualizationSection) {
             visualizationSection.classList.add('hidden');
         }
