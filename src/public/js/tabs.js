@@ -71,7 +71,8 @@ PulseApp.ui.tabs = (() => {
             activeContent.setAttribute('aria-hidden', 'false');
 
             // Lazy load tab content
-            if (!loadedTabs.has(tabId)) {
+            const isFirstLoad = !loadedTabs.has(tabId);
+            if (isFirstLoad) {
                 loadTabContent(tabId);
                 loadedTabs.add(tabId);
             }
@@ -86,10 +87,13 @@ PulseApp.ui.tabs = (() => {
             }
 
             if (tabId === 'backups') {
-                if (PulseApp.ui && PulseApp.ui.backups) {
-                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action since they switched tabs
-                } else {
-                    console.warn('[Tabs] PulseApp.ui.backups not available for updateBackupsTab')
+                // Only update if this is the first time loading the tab
+                if (isFirstLoad) {
+                    if (PulseApp.ui && PulseApp.ui.backups) {
+                        PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action since they switched tabs
+                    } else {
+                        console.warn('[Tabs] PulseApp.ui.backups not available for updateBackupsTab')
+                    }
                 }
             }
 
