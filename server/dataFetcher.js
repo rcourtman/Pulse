@@ -1858,7 +1858,7 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
         guestsByEndpointNode[endpointId][node].push({ vmid, type, name: name || 'unknown', agent }); // Pass agent info
     });
 
-    // Iterate through endpoints and nodes (existing logic)
+    // Iterate through endpoints and use bulk fetch for better performance
     for (const endpointId in guestsByEndpointNode) {
         if (!currentApiClients[endpointId]) {
             console.warn(`WARN: [DataFetcher] No API client found for endpoint: ${endpointId}`);
@@ -1867,22 +1867,62 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
         const { client: apiClientInstance, config: endpointConfig } = currentApiClients[endpointId];
         const endpointName = endpointConfig.name || endpointId;
 
-        for (const nodeName in guestsByEndpointNode[endpointId]) {
-            const guestsOnNode = guestsByEndpointNode[endpointId][nodeName];
+        try {
+            // Fetch all VM/Container metrics in a single bulk request to reduce API calls
+            console.log(`[DataFetcher - ${endpointName}] Using bulk endpoint /cluster/resources to reduce log growth`);
+            const bulkResponse = await apiClientInstance.get('/cluster/resources', { 
+                params: { type: 'vm' } 
+            });
+            const bulkData = bulkResponse?.data?.data || [];
             
-            guestsOnNode.forEach(guestInfo => {
-                const { vmid, type, name: guestName, agent: guestAgentConfig } = guestInfo; // Destructure agent
-                metricPromises.push(
-                    (async () => {
-                        try {
-                            const pathPrefix = type === 'qemu' ? 'qemu' : 'lxc';
-                            // Fetch RRD and Current Status data
-                            const [rrdDataResponse, currentDataResponse] = await Promise.all([
-                                apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { params: { timeframe: 'hour', cf: 'AVERAGE' } }),
-                                apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/status/current`)
-                            ]);
+            // Create a map for quick lookup
+            const bulkDataMap = new Map();
+            bulkData.forEach(vm => {
+                const key = `${vm.node}-${vm.vmid}`;
+                bulkDataMap.set(key, vm);
+            });
 
-                            let currentMetrics = currentDataResponse?.data?.data || null;
+            // Process nodes
+            for (const nodeName in guestsByEndpointNode[endpointId]) {
+                const guestsOnNode = guestsByEndpointNode[endpointId][nodeName];
+                
+                guestsOnNode.forEach(guestInfo => {
+                    const { vmid, type, name: guestName, agent: guestAgentConfig } = guestInfo;
+                    metricPromises.push(
+                        (async () => {
+                            try {
+                                const pathPrefix = type === 'qemu' ? 'qemu' : 'lxc';
+                                
+                                // Get bulk data for this VM
+                                const bulkKey = `${nodeName}-${vmid}`;
+                                const bulkVmData = bulkDataMap.get(bulkKey);
+                                
+                                // Skip if VM not found or not running
+                                if (!bulkVmData || bulkVmData.status !== 'running') {
+                                    return null;
+                                }
+                                
+                                // Fetch RRD data (still needed for historical graphs)
+                                const rrdDataResponse = await apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { 
+                                    params: { timeframe: 'hour', cf: 'AVERAGE' } 
+                                });
+                                
+                                // Convert bulk data to match existing currentMetrics structure
+                                let currentMetrics = {
+                                    cpu: bulkVmData.cpu || 0,
+                                    cpus: bulkVmData.maxcpu || 1,
+                                    mem: bulkVmData.mem || 0,
+                                    maxmem: bulkVmData.maxmem || 0,
+                                    disk: bulkVmData.disk || 0,
+                                    maxdisk: bulkVmData.maxdisk || 0,
+                                    netin: bulkVmData.netin || 0,
+                                    netout: bulkVmData.netout || 0,
+                                    diskread: bulkVmData.diskread || 0,
+                                    diskwrite: bulkVmData.diskwrite || 0,
+                                    uptime: bulkVmData.uptime || 0,
+                                    status: bulkVmData.status || 'unknown',
+                                    agent: type === 'qemu' ? (bulkVmData.agent || 0) : 0
+                                };
 
                             // --- QEMU Guest Agent Memory Fetch ---
                             if (type === 'qemu' && currentMetrics && currentMetrics.agent === 1 && guestAgentConfig && (typeof guestAgentConfig === 'string' && (guestAgentConfig.startsWith('1') || guestAgentConfig.includes('enabled=1')))) {
@@ -1967,8 +2007,88 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                     })()
                 );
             }); // End forEach guestInfo
-            // --- END ADDED ---
         } // End for nodeName
+        } catch (bulkError) {
+            // If bulk fetch fails, fall back to individual requests
+            console.error(`[DataFetcher - ${endpointName}] Bulk fetch failed: ${bulkError.message}. Falling back to individual requests.`);
+            
+            for (const nodeName in guestsByEndpointNode[endpointId]) {
+                const guestsOnNode = guestsByEndpointNode[endpointId][nodeName];
+                
+                guestsOnNode.forEach(guestInfo => {
+                    const { vmid, type, name: guestName, agent: guestAgentConfig } = guestInfo;
+                    metricPromises.push(
+                        (async () => {
+                            try {
+                                const pathPrefix = type === 'qemu' ? 'qemu' : 'lxc';
+                                // Fallback to original individual API calls
+                                const [rrdDataResponse, currentDataResponse] = await Promise.all([
+                                    apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { params: { timeframe: 'hour', cf: 'AVERAGE' } }),
+                                    apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/status/current`)
+                                ]);
+
+                                let currentMetrics = currentDataResponse?.data?.data || null;
+
+                                // QEMU Guest Agent Memory Fetch (same as above)
+                                if (type === 'qemu' && currentMetrics && currentMetrics.agent === 1 && guestAgentConfig && (typeof guestAgentConfig === 'string' && (guestAgentConfig.startsWith('1') || guestAgentConfig.includes('enabled=1')))) {
+                                    try {
+                                        const agentMemInfoResponse = await apiClientInstance.post(`/nodes/${nodeName}/qemu/${vmid}/agent/get-memory-block-info`, {});
+                                        
+                                        if (agentMemInfoResponse?.data?.data?.result) {
+                                            const agentMem = agentMemInfoResponse.data.data.result;
+                                            let guestMemoryDetails = null;
+                                            if (Array.isArray(agentMem) && agentMem.length > 0 && agentMem[0].hasOwnProperty('total') && agentMem[0].hasOwnProperty('free')) {
+                                                guestMemoryDetails = agentMem[0];
+                                            } else if (typeof agentMem === 'object' && agentMem !== null && agentMem.hasOwnProperty('total') && agentMem.hasOwnProperty('free')) {
+                                                guestMemoryDetails = agentMem;
+                                            }
+
+                                            if (guestMemoryDetails) {
+                                                currentMetrics.guest_mem_total_bytes = guestMemoryDetails.total;
+                                                currentMetrics.guest_mem_free_bytes = guestMemoryDetails.free;
+                                                currentMetrics.guest_mem_available_bytes = guestMemoryDetails.available;
+                                                currentMetrics.guest_mem_cached_bytes = guestMemoryDetails.cached;
+                                                currentMetrics.guest_mem_buffers_bytes = guestMemoryDetails.buffers;
+
+                                                if (guestMemoryDetails.available !== undefined) {
+                                                    currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.available;
+                                                } else if (guestMemoryDetails.cached !== undefined && guestMemoryDetails.buffers !== undefined) {
+                                                    currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free - guestMemoryDetails.cached - guestMemoryDetails.buffers;
+                                                } else {
+                                                    currentMetrics.guest_mem_actual_used_bytes = guestMemoryDetails.total - guestMemoryDetails.free;
+                                                }
+                                            }
+                                        }
+                                    } catch (agentError) {
+                                        // Silently ignore guest agent errors
+                                    }
+                                }
+
+                                const metricData = {
+                                    id: vmid,
+                                    guestName: guestName, 
+                                    node: nodeName,
+                                    type: type,
+                                    endpointId: endpointId, 
+                                    endpointName: endpointName, 
+                                    data: rrdDataResponse?.data?.data?.length > 0 ? rrdDataResponse.data.data : [],
+                                    current: currentMetrics
+                                };
+                                return metricData;
+                            } catch (err) {
+                                const status = err.response?.status ? ` (Status: ${err.response.status})` : '';
+                                if (err.response && err.response.status === 400) {
+                                    console.warn(`[Metrics Cycle - ${endpointName}] Guest ${type} ${vmid} (${guestName}) on node ${nodeName} might be stopped or inaccessible (Status: 400). Skipping metrics.`);
+                                } else {
+                                    console.error(`[Metrics Cycle - ${endpointName}] Failed to get metrics for ${type} ${vmid} (${guestName}) on node ${nodeName}${status}: ${err.message}`);
+                                }
+                                return null;
+                            }
+                        })()
+                    );
+                });
+            }
+        }
     } // End for endpointId
 
     // Wait for all metric fetch promises to settle
@@ -1981,7 +2101,10 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
         }
     });
 
+    const totalGuests = runningVms.length + runningContainers.length;
+    const endpointCount = Object.keys(guestsByEndpointNode).length;
     console.log(`[DataFetcher] Completed metrics fetch. Got data for ${allMetrics.length} guests.`);
+    console.log(`[DataFetcher] API call optimization: Using bulk endpoint reduced calls from ${totalGuests} to ${endpointCount} per cycle`);
     return allMetrics;
 }
 
