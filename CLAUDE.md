@@ -395,3 +395,18 @@ git push origin develop
 - Related bug fixes discovered during testing
 
 **Result**: Clean git history with meaningful commit messages instead of commit spam
+
+## Technical Notes
+
+### Proxmox API Bulk Endpoint Limitation
+
+The `/cluster/resources?type=vm` bulk endpoint has a limitation with I/O counter updates:
+
+- **Issue**: Network and disk I/O counters update only every ~10 seconds (not real-time)
+- **Impact**: Using bulk endpoint alone causes I/O rates to show 0 B/s for several polling cycles
+- **Solution**: Hybrid approach implemented in `dataFetcher.js`:
+  - Use bulk endpoint for CPU, memory, disk usage (efficient)
+  - Fetch fresh I/O counters from individual `/nodes/{node}/{type}/{vmid}/status/current` endpoints
+  - This adds one extra API call per VM but ensures accurate 2-second I/O rate updates
+
+This trade-off prioritizes Pulse's real-time monitoring accuracy over minimal API calls.
