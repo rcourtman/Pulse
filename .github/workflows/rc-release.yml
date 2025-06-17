@@ -266,8 +266,16 @@ jobs:
           # Generate detailed changelog using the same logic as stable releases
           echo "📝 Generating detailed changelog from commits..."
           
-          # Get the latest stable release tag to compare against
-          PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | sort -V | tail -1)
+          # For RC releases, compare against the previous RC or last stable
+          LATEST_RC=$(git tag -l "v*-rc*" | sort -V | tail -1)
+          if [ -n "$LATEST_RC" ]; then
+            PREV_TAG="$LATEST_RC"  # Use last RC for incremental changelog
+            echo "📊 Using previous RC tag: $PREV_TAG"
+          else
+            PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | sort -V | tail -1)  # Use last stable
+            echo "📊 No previous RC found, using last stable: $PREV_TAG"
+          fi
+          
           if [ -z "$PREV_TAG" ]; then
             PREV_TAG="v0.0.0"
           fi
