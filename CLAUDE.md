@@ -77,10 +77,35 @@ gh pr create --base main --head develop --title "Release: Your feature"
 # 3. No manual merge needed!
 ```
 
-**PR Preferences:**
-- Run `git log --oneline main..develop` first
-- Include ALL features/fixes in title, not just latest
-- Reference issue numbers for each change
+**RC PR Creation Instructions for Claude Code:**
+When creating RC PRs, Claude Code should:
+
+1. **Analyze commits since last RC**: Run `git log --oneline <last-rc-tag>..develop`
+2. **Create summarized PR description**: Look at all the commits and create a clean, user-friendly summary grouped by:
+   - ✨ New Features
+   - 🐛 Bug Fixes  
+   - 🔧 Improvements
+   - 📚 Documentation
+3. **Consolidate related commits**: Instead of listing every individual commit, group related changes:
+   - ❌ "Prevent X flash, Prevent Y flash, Prevent Z flash" 
+   - ✅ "Prevent UI flashing issues across multiple components"
+4. **Use this description in PR body**: The summarized description becomes the RC changelog
+
+**Example RC PR Description:**
+```
+## ✨ New Features
+- Add backup source visibility improvements
+- Implement PBS namespace filtering
+
+## 🐛 Bug Fixes  
+- Prevent UI flashing and double refresh issues across components
+- Fix storage type categorization in diagnostics
+- Resolve version parsing issues with git describe format
+
+## 🔧 Improvements
+- Enhanced PBS UI with relative timestamps
+- Optimize backup tab performance
+```
 
 **Creating Stable Release:**
 ```bash
@@ -91,6 +116,31 @@ gh pr create --base main --head develop --title "Release: Your feature"
 
 # Option 2: Via CLI
 gh workflow run stable-release.yml --ref main
+```
+
+**Stable Release Changelog Instructions for Claude Code:**
+When creating stable releases, Claude Code should:
+
+1. **Find all RC releases since last stable**: Use `gh release list` to find RC releases since last stable
+2. **Analyze RC changelogs**: Read the description/changelog from each RC release
+3. **Create consolidated stable changelog**: Summarize all RC changes into one cohesive changelog:
+   - Combine similar features across RCs
+   - Deduplicate bug fixes that were refined across RCs  
+   - Group improvements by component/area
+   - Create a comprehensive "What's Changed" summary
+4. **Focus on user impact**: Emphasize features and fixes users will notice
+
+**Example Process:**
+```bash
+# Find RC releases since last stable
+gh release list --limit 10 | grep "rc"
+
+# View each RC release changelog  
+gh release view v3.30.0-rc1
+gh release view v3.30.0-rc2
+# ... etc
+
+# Create consolidated stable changelog combining all RC improvements
 ```
 
 **That's the entire process!** No complex merge strategies, no lingering PRs, no conflicts.
