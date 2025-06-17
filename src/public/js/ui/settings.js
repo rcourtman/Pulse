@@ -1651,8 +1651,8 @@ PulseApp.ui.settings = (() => {
             // If current version is a dynamic RC (like 3.24.0-rc30), try to find the closest stable version
             let baseVersion, headVersion;
             
-            // Handle git describe format (e.g., v3.30.0-rc2-60-gb63f582)
-            const gitDescribeMatch = cleanCurrentVersion.match(/^(\d+\.\d+\.\d+(?:-rc\d+)?)-\d+-g[a-f0-9]+$/);
+            // Handle git describe format (e.g., v3.30.0-rc2-60-gb63f582, v3.30.0-rc2-60-gb63f582-dirty)
+            const gitDescribeMatch = cleanCurrentVersion.match(/^(\d+\.\d+\.\d+(?:-rc\d+)?)-\d+-g[a-f0-9]+(?:-dirty)?$/);
             let actualCurrentVersion = cleanCurrentVersion;
             if (gitDescribeMatch) {
                 actualCurrentVersion = gitDescribeMatch[1];
