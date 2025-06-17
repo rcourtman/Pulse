@@ -334,7 +334,24 @@ PulseApp.ui.backups = (() => {
     function _extractBackupTypeFromVolid(volid, vmid) {
         // Extract type from volid format: vzdump-{type}-{vmid}-{timestamp}
         const volidMatch = volid.match(/vzdump-(qemu|lxc)-(\d+)-/);
-        return volidMatch ? (volidMatch[1] === 'qemu' ? 'vm' : 'ct') : (vmid ? 'ct' : 'vm');
+        if (volidMatch) {
+            return volidMatch[1] === 'qemu' ? 'vm' : 'ct';
+        }
+        
+        // Fallback: try to determine from guest data if available
+        // Look up the guest in current data to determine actual type
+        const vmsData = PulseApp.state.get('vmsData') || [];
+        const containersData = PulseApp.state.get('containersData') || [];
+        const allGuests = [...vmsData, ...containersData];
+        
+        const guest = allGuests.find(g => parseInt(g.vmid, 10) === parseInt(vmid, 10));
+        if (guest) {
+            return guest.type === 'qemu' ? 'vm' : 'ct';
+        }
+        
+        // Final fallback: assume VM if no match found
+        console.warn('[Backups] Could not determine backup type from volid:', volid, 'vmid:', vmid);
+        return 'vm';
     }
 
     function _getInitialBackupData() {
@@ -482,19 +499,30 @@ PulseApp.ui.backups = (() => {
             pbsSnapshots = pbsSnapshots.filter(snap => snap.namespace === namespaceFilter);
         }
 
-        const pveStorageBackups = (pveBackups.storageBackups || []).map(backup => ({
-            'backup-time': backup.ctime,
-            backupType: _extractBackupTypeFromVolid(backup.volid, backup.vmid),
-            backupVMID: backup.vmid,
-            vmid: backup.vmid, // Ensure vmid is preserved for filtering
-            size: backup.size,
-            protected: backup.protected,
-            storage: backup.storage,
-            volid: backup.volid,
-            node: backup.node,
-            endpointId: backup.endpointId,
-            source: 'pve'
-        }));
+        const pveStorageBackups = (pveBackups.storageBackups || []).map(backup => {
+            // Defensive programming: ensure required fields exist
+            if (!backup.ctime || !backup.vmid || !backup.volid) {
+                console.warn('[Backups] Skipping PVE backup with missing required fields:', backup);
+                return null;
+            }
+            
+            // Ensure vmid is a string for consistent key generation
+            const vmidStr = String(backup.vmid);
+            
+            return {
+                'backup-time': backup.ctime,
+                backupType: _extractBackupTypeFromVolid(backup.volid, vmidStr),
+                backupVMID: vmidStr,
+                vmid: vmidStr, // Ensure vmid is preserved for filtering
+                size: backup.size,
+                protected: backup.protected,
+                storage: backup.storage,
+                volid: backup.volid,
+                node: backup.node,
+                endpointId: backup.endpointId,
+                source: 'pve'
+            };
+        }).filter(Boolean); // Remove null entries
         
         // PVE guest snapshots are NOT backups - they should be handled separately
         // Only include actual PVE backup files in the backup processing
@@ -1375,8 +1403,27 @@ PulseApp.ui.backups = (() => {
                 });
             });
             
-            const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
-            const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
+            // Try multiple key variations for PVE backup matching to handle edge cases
+            let pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
+            let pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
+            
+            // Fallback: if no PVE backups found with standard keys, try alternative key formats
+            if (pveEndpointSnapshots.length === 0 && pveSpecificSnapshots.length === 0) {
+                // Try alternative guest type mappings in case of inconsistencies
+                const altGuestType = guest.type === 'qemu' ? 'ct' : 'vm';
+                const altBaseKey = `${guest.vmid}-${altGuestType}`;
+                const altEndpointGenericKey = `${altBaseKey}${endpointKey}`;
+                const altFullSpecificKey = `${altBaseKey}${endpointKey}${nodeKey}`;
+                
+                const altPveEndpointSnapshots = snapshotsByGuest.get(altEndpointGenericKey) || [];
+                const altPveSpecificSnapshots = snapshotsByGuest.get(altFullSpecificKey) || [];
+                
+                // Use alternative keys if they have results
+                if (altPveEndpointSnapshots.length > 0 || altPveSpecificSnapshots.length > 0) {
+                    pveEndpointSnapshots = altPveEndpointSnapshots;
+                    pveSpecificSnapshots = altPveSpecificSnapshots;
+                }
+            }
             
             // Deduplicate PVE snapshots by volid to avoid counting the same backup multiple times
             const pveSnapshotsMap = new Map();
