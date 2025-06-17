@@ -1,29 +1,61 @@
 /**
- * Detects if a verification failure is stale (for missing/deleted snapshots)
+ * Detects if a task failure is stale and should be hidden from the UI
  * @param {Object} task - PBS task object
- * @returns {boolean} - True if this is a stale verification failure
+ * @returns {boolean} - True if this is a stale task that should be filtered
  */
-function isStaleVerificationFailure(task) {
+function isStaleTaskFailure(task) {
     const taskType = task.worker_type || task.type;
     const status = task.status || '';
-    const endTime = task.endtime || 0;
+    const endTime = task.endtime || task.endTime || 0;
+    const taskId = task.id || '';
+    const upid = task.upid || '';
+    const guest = task.guest || '';
     
-    // Only apply to verification tasks that have failed
-    if (taskType !== 'verificationjob' || status === 'OK' || !status.includes('ERROR')) {
-        return false;
+    // Handle verification tasks
+    if (taskType === 'verificationjob' && status !== 'OK' && (status.includes('ERROR') || status.includes('verification failed'))) {
+        // Special handling for the known orphaned verification job
+        // Check in multiple fields where the job ID might appear
+        if (taskId.includes('v-3fb332a6-ba43') || 
+            upid.includes('v-3fb332a6-ba43') || 
+            upid.includes('v\\x2d3fb332a6\\x2dba43') ||
+            guest.includes('v-3fb332a6-ba43')) {
+            return true;
+        }
+        
+        // Consider verification failures older than 14 days as potentially stale
+        const fourteenDaysAgo = (Date.now() / 1000) - (14 * 24 * 60 * 60);
+        const isOldFailure = endTime && endTime < fourteenDaysAgo;
+        
+        // Check if the error message indicates missing/deleted snapshots
+        const hasStaleErrorSignature = status.includes('verification failed') || 
+                                       status.includes('backup not found') ||
+                                       status.includes('group not found') ||
+                                       status.includes('missing chunks');
+        
+        return isOldFailure && hasStaleErrorSignature;
     }
     
-    // Consider verification failures older than 14 days as potentially stale
-    const fourteenDaysAgo = (Date.now() / 1000) - (14 * 24 * 60 * 60);
-    const isOldFailure = endTime && endTime < fourteenDaysAgo;
+    // Handle old GC warnings - check multiple fields
+    const isGCTask = taskType === 'garbage_collection' || 
+                     (taskId && taskId.includes('GC main')) ||
+                     (guest && guest.includes('GC main'));
+                     
+    if (isGCTask && (status.includes('WARNINGS') || status.includes('ERROR WARNINGS'))) {
+        // Hide May 2025 GC warnings (known stale warnings)
+        const mayStart = new Date('2025-05-01').getTime() / 1000;
+        const mayEnd = new Date('2025-05-31').getTime() / 1000;
+        const isFromMay2025 = endTime >= mayStart && endTime <= mayEnd;
+        
+        if (isFromMay2025) {
+            return true; // Filter out May 2025 GC warnings
+        }
+        
+        // Also hide GC warnings older than 30 days
+        const thirtyDaysAgo = (Date.now() / 1000) - (30 * 24 * 60 * 60);
+        return endTime && endTime < thirtyDaysAgo;
+    }
     
-    // Check if the error message indicates missing/deleted snapshots
-    const hasStaleErrorSignature = status.includes('verification failed') || 
-                                   status.includes('backup not found') ||
-                                   status.includes('group not found') ||
-                                   status.includes('missing chunks');
-    
-    return isOldFailure && hasStaleErrorSignature;
+    return false;
 }
 
 /**
@@ -141,8 +173,8 @@ function processPbsTasks(allTasks) {
         const thirtyDays = 30 * 24 * 60 * 60;
         
         const recent = taskList.filter(task => {
-            // Exclude stale verification failures from UI display
-            if (isStaleVerificationFailure(task)) {
+            // Exclude stale tasks from UI display
+            if (isStaleTaskFailure(task)) {
                 return false;
             }
             
@@ -210,6 +242,11 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
             const category = results[categoryKey];
             category.list.push(task);
 
+            // Skip counting stale tasks
+            if (isStaleTaskFailure(task)) {
+                return; // Skip counting this task in summary
+            }
+
             // Fixed status handling - be more specific about what counts as failed
             const status = task.status || 'NO_STATUS';
             const isRunning = status.includes('running') || status.includes('queued');
@@ -220,17 +257,10 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
                     category.ok++;
                     if (task.endtime && task.endtime > category.lastOk) category.lastOk = task.endtime;
                 } else {
-                    // Check if this is a stale verification failure (normal lifecycle event)
-                    if (isStaleVerificationFailure(task)) {
-                        // Don't count stale verification failures as actual failures
-                        // These are expected when snapshots get pruned by retention policies
-                        console.log(`[PBS Utils] Ignoring stale verification failure: ${task.upid || task.id}`);
-                    } else {
-                        // Everything else that's not OK or running is considered failed
-                        // This includes: WARNING, WARNINGS:..., errors, connection errors, etc.
-                        category.failed++;
-                        if (task.endtime && task.endtime > category.lastFailed) category.lastFailed = task.endtime;
-                    }
+                    // Everything else that's not OK or running is considered failed
+                    // This includes: WARNING, WARNINGS:..., errors, connection errors, etc.
+                    category.failed++;
+                    if (task.endtime && task.endtime > category.lastFailed) category.lastFailed = task.endtime;
                 }
             }
         }
@@ -239,4 +269,4 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
     return results;
 }
 
-module.exports = { processPbsTasks, categorizeAndCountTasks, isStaleVerificationFailure };
+module.exports = { processPbsTasks, categorizeAndCountTasks, isStaleTaskFailure };
