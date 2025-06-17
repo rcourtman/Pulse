@@ -946,7 +946,7 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 ### Common Issues
 
 *   **Proxmox Log File Growth / log2ram Issues:** 
-    - **Issue:** Pulse's responsive 2-second polling can cause `/var/log/pveproxy/access.log` to grow rapidly (40MB+ in 8 hours), which can fill up log2ram
+    - **Issue:** Pulse's responsive 2-second polling can cause `/var/log/pveproxy/access.log` to grow rapidly, which can fill up log2ram
     - **Recommended Solutions - Configure Proxmox Logging:** 
       
       **Option 1: Use tmpfs for pveproxy logs (Best for log2ram users)**
