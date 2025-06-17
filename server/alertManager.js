@@ -192,9 +192,16 @@ class AlertManager extends EventEmitter {
                     // Evaluate all alert rules (both single-metric and compound threshold rules)
                     this.alertRules.forEach(rule => {
                         try {
-                            if (!rule.enabled || this.isRuleSuppressed(rule.id, guest)) return;
+                            if (!rule.enabled) return;
                             
+                            // Check suppression, but allow status alerts for state transitions
                             const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
+                            const guestStateKey = `${guest.endpointId}_${guest.node}_${guest.vmid}`;
+                            const previousState = this.guestStates.get(guestStateKey);
+                            const hasStateChanged = previousState && previousState !== guest.status;
+                            const isStatusTransition = rule.metric === 'status' && hasStateChanged;
+                            
+                            if (!isStatusTransition && this.isRuleSuppressed(rule.id, guest)) return;
                             
                             if (rule.type === 'compound_threshold' && rule.thresholds) {
                                 // Handle compound threshold rules
@@ -272,6 +279,7 @@ class AlertManager extends EventEmitter {
             return false;
         }
         
+        console.log(`[AlertManager] Rule ${ruleId} suppressed for ${guest.name} (${guest.vmid}) until ${new Date(suppression.expiresAt).toISOString()}`);
         return true;
     }
 

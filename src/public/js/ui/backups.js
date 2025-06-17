@@ -2140,7 +2140,10 @@ PulseApp.ui.backups = (() => {
                 
                 // Create detail card only if it doesn't exist
                 if (detailCardContainer && !detailCard) {
-                    detailCard = PulseApp.ui.backupDetailCard.createBackupDetailCard(null);
+                    // Don't show empty state if we already have data to display
+                    const initialData = filteredBackupStatus.length > 0 ? 
+                        _prepareMultiDateDetailData(filteredBackupStatus, extendedBackupData) : null;
+                    detailCard = PulseApp.ui.backupDetailCard.createBackupDetailCard(initialData);
                     detailCardContainer.innerHTML = '';
                     detailCardContainer.appendChild(detailCard);
                 }
