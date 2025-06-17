@@ -241,9 +241,21 @@ gh workflow run stable-release.yml --ref main
 
 ### 📝 Commit & Issue Preferences
 
+**Commit Consolidation:**
+- Group related changes into single commits (avoid commit spam)
+- Theme-based commits: Group changes by the problem they solve
+- Example: Instead of 5 commits for "prevent X flash", "prevent Y flash", etc.
+  Use: `fix: prevent UI flashing and double refresh issues` with detailed body
+
+**Commit Messages:**
 - Always reference GitHub issues: `addressing #123`  
 - Avoid `fixes/closes` - let users test first
+- Use descriptive commit bodies for multi-component changes
 - Run tests before committing when available
+
+**Examples:**
+✅ Good: `fix: prevent UI flashing and double refresh issues`
+❌ Bad: 5 separate commits for each component's flash fix
 
 ## Summary of Ultra-Simple Workflow
 
