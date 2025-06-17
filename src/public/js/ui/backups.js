@@ -1742,9 +1742,12 @@ PulseApp.ui.backups = (() => {
         const { allGuests, initialDataReceived, tasksByGuest, snapshotsByGuest, dayBoundaries, threeDaysAgo, sevenDaysAgo } = _getInitialBackupData();
 
         if (!initialDataReceived) {
-            loadingMsg.classList.remove('hidden');
-            tableContainer.classList.add('hidden');
-            noDataMsg.classList.add('hidden');
+            // Only show loading message if the table is not already visible with data
+            if (tableContainer.classList.contains('hidden') || tableBody.children.length === 0) {
+                loadingMsg.classList.remove('hidden');
+                tableContainer.classList.add('hidden');
+                noDataMsg.classList.add('hidden');
+            }
             return;
         }
 
