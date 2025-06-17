@@ -1120,31 +1120,12 @@ PulseApp.ui.backups = (() => {
         let storageTypeCell = '';
         const storageTypes = [];
         if (guestStatus.pbsBackups > 0) storageTypes.push('PBS');
-        if (guestStatus.pveBackups > 0) {
-            // Try to determine storage type from pveBackupInfo
-            if (guestStatus.pveBackupInfo && !guestStatus.pveBackupInfo.includes('Recent activity')) {
-                const storageInfo = guestStatus.pveBackupInfo.toLowerCase();
-                if (storageInfo.includes('nfs')) {
-                    storageTypes.push('NFS');
-                } else if (storageInfo.includes('local')) {
-                    storageTypes.push('Local');
-                } else if (storageInfo.includes('cifs') || storageInfo.includes('smb')) {
-                    storageTypes.push('CIFS');
-                } else {
-                    storageTypes.push('PVE');
-                }
-            } else {
-                storageTypes.push('PVE');
-            }
-        }
+        if (guestStatus.pveBackups > 0) storageTypes.push('PVE');
         if (guestStatus.snapshotCount > 0) storageTypes.push('Snapshot');
         
         if (storageTypes.length > 0) {
             const typeIndicators = {
                 'PBS': { color: 'bg-purple-500', title: 'Proxmox Backup Server' },
-                'NFS': { color: 'bg-green-500', title: 'NFS Storage' },
-                'Local': { color: 'bg-blue-500', title: 'Local Storage' },
-                'CIFS': { color: 'bg-orange-500', title: 'CIFS/SMB Storage' },
                 'PVE': { color: 'bg-orange-500', title: 'PVE Storage' },
                 'Snapshot': { color: 'bg-yellow-500', title: 'VM/CT Snapshots' }
             };
