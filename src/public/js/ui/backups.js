@@ -2281,7 +2281,16 @@ PulseApp.ui.backups = (() => {
                 }
             }
             
-            visualizationSection.classList.remove('hidden');
+            // Only show visualization section after all content is ready
+            // Use requestAnimationFrame to ensure DOM updates are complete
+            if (isUserAction || !visualizationSection.classList.contains('hidden')) {
+                visualizationSection.classList.remove('hidden');
+            } else {
+                // First time showing - wait for next frame to avoid flash
+                requestAnimationFrame(() => {
+                    visualizationSection.classList.remove('hidden');
+                });
+            }
         } else if (visualizationSection) {
             visualizationSection.classList.add('hidden');
         }
