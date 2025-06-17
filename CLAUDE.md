@@ -284,3 +284,28 @@ gh workflow run stable-release.yml --ref main
 - Use TodoWrite for complex tasks - helps user track progress
 - Be concise in responses unless detail requested
 - When fixing bugs, test the fix before committing
+
+## Commit Consolidation for Claude Code
+
+**IMPORTANT**: When working iteratively and making multiple related fixes, consolidate them before final commit:
+
+1. **During development**: Make incremental commits as needed while debugging/fixing
+2. **Before pushing**: Use `git reset --soft HEAD~N` to uncommit recent related changes
+3. **Consolidate**: Make one meaningful commit with all related changes
+4. **Push**: Single clean commit to develop
+
+**Example workflow**:
+```bash
+# After making 5 commits fixing UI flashing in different components:
+git reset --soft HEAD~5  # Uncommit last 5 commits (keeps changes staged)
+git commit -m "fix: prevent UI flashing and double refresh issues across components"
+git push origin develop
+```
+
+**When to consolidate**:
+- Multiple commits addressing the same root cause
+- Iterative debugging commits (fix A, fix B, fix C for same issue)
+- UI improvements across multiple components
+- Related bug fixes discovered during testing
+
+**Result**: Clean git history with meaningful commit messages instead of commit spam
