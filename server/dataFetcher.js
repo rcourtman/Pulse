@@ -10,6 +10,7 @@ const {
     getVerificationJobs, 
     getVerificationRecommendations 
 } = require('./pbsVerificationUtils');
+const { runVerificationDiagnostics } = require('./pbsVerificationDiagnostics');
 
 let pLimit;
 let requestLimiter;
@@ -1081,7 +1082,7 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
         // 3. Get administrative tasks (prune/GC/verify) from node endpoint
         try {
             const response = await client.get(`/nodes/${encodeURIComponent(nodeName.trim())}/tasks`, {
-                params: { errors: 1, limit: 1000 }
+                params: { limit: 1000 }
             });
             const allAdminTasks = response.data?.data || [];
             
@@ -1594,6 +1595,9 @@ async function fetchPbsData(currentPbsApiClients) {
                     const processedTasks = processPbsTasks(null);
                     instanceData = { ...instanceData, ...processedTasks };
                 }
+                
+                // Diagnostics have confirmed v-3fb332a6-ba43 is an orphaned job
+                // The filtering in pbsUtils.js now handles hiding these tasks
                 
                 // Fetch PBS node status and version info only in non-test environments
                 if (process.env.NODE_ENV !== 'test') {
