@@ -1116,30 +1116,6 @@ PulseApp.ui.backups = (() => {
         // Create namespace cell
         const namespaceCell = guestStatus.pbsNamespaceText || '-';
 
-        // Create storage type cell with colored indicators
-        let storageTypeCell = '';
-        const storageTypes = [];
-        if (guestStatus.pbsBackups > 0) storageTypes.push('PBS');
-        if (guestStatus.pveBackups > 0) storageTypes.push('PVE');
-        if (guestStatus.snapshotCount > 0) storageTypes.push('Snapshot');
-        
-        if (storageTypes.length > 0) {
-            const typeIndicators = {
-                'PBS': { color: 'bg-purple-500', title: 'Proxmox Backup Server' },
-                'PVE': { color: 'bg-orange-500', title: 'PVE Storage' },
-                'Snapshot': { color: 'bg-yellow-500', title: 'VM/CT Snapshots' }
-            };
-            
-            const indicators = storageTypes.map(type => {
-                const indicator = typeIndicators[type] || { color: 'bg-gray-500', title: type };
-                return `<span class="inline-block w-3 h-3 ${indicator.color} rounded-full" title="${indicator.title}"></span>`;
-            }).join(' ');
-            
-            storageTypeCell = `<div class="flex gap-1 justify-center items-center">${indicators}</div>`;
-        } else {
-            storageTypeCell = '<span class="text-gray-400 dark:text-gray-500 text-xs">-</span>';
-        }
-
         row.innerHTML = `
             <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100 border-r border-gray-300 dark:border-gray-600" title="${guestStatus.guestName}">
                 <div class="flex items-center gap-1">
@@ -1152,7 +1128,6 @@ PulseApp.ui.backups = (() => {
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${namespaceCell}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${latestBackupFormatted}</td>
-            <td class="p-1 px-2 text-center">${storageTypeCell}</td>
             <td class="p-1 px-2 text-center">${snapshotCell}</td>
             <td class="p-1 px-2 text-center">${pveBackupCell}</td>
             <td class="p-1 px-2 text-center">${pbsBackupCell}</td>
