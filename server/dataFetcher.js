@@ -1904,9 +1904,8 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                 const bulkKey = `${nodeName}-${vmid}`;
                                 const bulkVmData = bulkDataMap.get(bulkKey);
                                 
-                                // Skip if VM not found in bulk data
-                                if (!bulkVmData) {
-                                    console.warn(`[Metrics Cycle - ${endpointName}] VM ${vmid} not found in bulk data`);
+                                // Skip if VM not found or not running
+                                if (!bulkVmData || bulkVmData.status !== 'running') {
                                     return null;
                                 }
                                 
