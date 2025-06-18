@@ -2044,6 +2044,17 @@ PulseApp.ui.backups = (() => {
                             sevenDaysAgo
                         );
                         
+                        // Override the latest backup time with the most recent PBS backup from this specific namespace
+                        // This ensures the displayed time matches the namespace being shown
+                        if (pbsSnapshots.length > 0) {
+                            const latestPbsInNamespace = pbsSnapshots.reduce((latest, snap) => {
+                                return (!latest || (snap['backup-time'] && snap['backup-time'] > latest['backup-time'])) ? snap : latest;
+                            }, null);
+                            if (latestPbsInNamespace) {
+                                guestStatus.latestBackupTime = latestPbsInNamespace['backup-time'];
+                            }
+                        }
+                        
                         // Add namespace information to the guest status
                         guestStatus.pbsNamespaceText = namespace;
                         

@@ -735,8 +735,8 @@ PulseApp.ui.alertManagementModal = (() => {
         // Set up event listeners for notifications with a small delay to ensure DOM is ready
         setTimeout(() => {
             setupNotificationToggles();
+            initializeNotificationsTab(); // Initialize notification tab handlers including test buttons
         }, 10);
-        // setupEmailTestButton(); // Redundant - handled in initializeNotificationsTab
         
         // Create rule button now uses onclick attribute directly
     }
@@ -2504,7 +2504,7 @@ PulseApp.ui.alertManagementModal = (() => {
         
         // Send test email via API
         try {
-            const response = await fetch('/api/test-email', {
+            const response = await fetch('/api/alerts/test-email', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -2630,10 +2630,7 @@ PulseApp.ui.alertManagementModal = (() => {
                 saveBtn.classList.add('bg-green-600');
                 
                 setTimeout(() => {
-                    saveBtn.textContent = originalText;
-                    saveBtn.classList.remove('bg-green-600');
-                    saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                    saveBtn.disabled = false;
+                    PulseApp.utils.resetButton(saveBtn, buttonState);
                 }, TIMEOUTS.MEDIUM);
             } else {
                 throw new Error(result.error || 'Failed to save configuration');
@@ -2641,8 +2638,7 @@ PulseApp.ui.alertManagementModal = (() => {
         } catch (error) {
             console.error('Error saving webhook configuration:', error);
             PulseApp.ui.toast.error('Failed to save webhook configuration');
-            saveBtn.textContent = originalText;
-            saveBtn.disabled = false;
+            PulseApp.utils.resetButton(saveBtn, buttonState);
         }
     }
 
@@ -2650,19 +2646,63 @@ PulseApp.ui.alertManagementModal = (() => {
     
     // Old system alert status and display functions removed - now using unified approach
 
-    function testWebhookConnection() {
+    async function testWebhookConnection() {
         const webhookUrl = document.querySelector('input[name="WEBHOOK_URL"]')?.value;
         if (!webhookUrl) {
             PulseApp.ui.toast.warning('Please enter a webhook URL first');
             return;
         }
         
-        // Use existing webhook test functionality from settings if available
-        if (PulseApp.ui.settings && PulseApp.ui.settings.setupWebhookTestButton) {
-            PulseApp.ui.settings.setupWebhookTestButton();
-        } else {
-            // Fallback test
-            PulseApp.ui.toast.info('Webhook test functionality will be implemented');
+        const testBtn = document.getElementById('test-webhook-btn');
+        if (!testBtn) return;
+        
+        const originalText = testBtn.textContent;
+        testBtn.disabled = true;
+        testBtn.textContent = 'Testing...';
+        
+        try {
+            const webhookConfig = {
+                url: webhookUrl,
+                enabled: true
+            };
+            
+            const response = await fetch('/api/test-webhook', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(webhookConfig)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                testBtn.textContent = '✓ Sent!';
+                testBtn.className = 'px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors';
+                PulseApp.ui.toast.success('Test webhook sent successfully!');
+                setTimeout(() => {
+                    testBtn.textContent = originalText;
+                    testBtn.className = 'px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors';
+                }, 3000);
+            } else {
+                testBtn.textContent = '✗ Failed';
+                testBtn.className = 'px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md transition-colors';
+                PulseApp.ui.toast.error('Test webhook failed: ' + (result.error || 'Unknown error'));
+                setTimeout(() => {
+                    testBtn.textContent = originalText;
+                    testBtn.className = 'px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors';
+                }, 3000);
+            }
+        } catch (error) {
+            testBtn.textContent = '✗ Error';
+            testBtn.className = 'px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md transition-colors';
+            PulseApp.ui.toast.error('Error sending test webhook: ' + error.message);
+            setTimeout(() => {
+                testBtn.textContent = originalText;
+                testBtn.className = 'px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors';
+            }, 3000);
+        } finally {
+            testBtn.disabled = false;
         }
     }
 
