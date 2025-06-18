@@ -348,6 +348,16 @@ PulseApp.state = (() => {
             Object.keys(internalState.changeTracking).forEach(key => {
                 internalState.changeTracking[key] = false;
             });
+        },
+
+        // Reset threshold values to 0
+        resetThresholds: () => {
+            Object.keys(internalState.thresholdState).forEach(type => {
+                if (internalState.thresholdState[type].hasOwnProperty('value')) {
+                    internalState.thresholdState[type].value = 0;
+                }
+            });
+            saveFilterState();
         }
     };
 })();

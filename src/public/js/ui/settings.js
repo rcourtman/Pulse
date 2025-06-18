@@ -173,6 +173,9 @@ PulseApp.ui.settings = (() => {
             case 'pbs':
                 content = renderPBSTab(pbs, safeConfig);
                 break;
+            case 'notifications':
+                content = renderNotificationsTab(safeConfig);
+                break;
             case 'system':
                 content = renderSystemTab(advanced, safeConfig);
                 break;
@@ -440,6 +443,158 @@ PulseApp.ui.settings = (() => {
         `;
     }
 
+    function renderNotificationsTab(config) {
+        const emailEnabled = config.ALERT_EMAIL_ENABLED !== false && config.GLOBAL_EMAIL_ENABLED !== false;
+        const webhookEnabled = config.ALERT_WEBHOOK_ENABLED !== false && config.GLOBAL_WEBHOOK_ENABLED !== false;
+        
+        return `
+            <!-- Global Notification Controls -->
+            <div class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-blue-50 dark:bg-blue-900/20 mb-6">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Global Notification Controls</h4>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Master switches for all alert notifications</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-6">
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Email Notifications</span>
+                            <label for="global-email-toggle" class="relative inline-flex items-center cursor-pointer focus:outline-none">
+                                <input type="checkbox" id="global-email-toggle" name="ALERTS_EMAIL_ENABLED" value="true"
+                                       ${emailEnabled ? 'checked' : ''}
+                                       class="sr-only peer focus:outline-none"
+                                       onchange="PulseApp.ui.settings.handleGlobalEmailToggle(this.checked)">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 focus:outline-none"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm text-gray-700 dark:text-gray-300">Webhook Notifications</span>
+                            <label for="global-webhook-toggle" class="relative inline-flex items-center cursor-pointer focus:outline-none">
+                                <input type="checkbox" id="global-webhook-toggle" name="ALERTS_WEBHOOK_ENABLED" value="true"
+                                       ${webhookEnabled ? 'checked' : ''}
+                                       class="sr-only peer focus:outline-none"
+                                       onchange="PulseApp.ui.settings.handleGlobalWebhookToggle(this.checked)">
+                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 focus:outline-none"></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Email Configuration -->
+            <div id="email-config-section" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4 mb-6 ${!emailEnabled ? 'opacity-50 pointer-events-none' : ''}">
+                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Email Configuration</h4>
+                
+                <div class="grid grid-cols-1 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
+                        <input type="email" name="ALERT_FROM_EMAIL" 
+                               value="${config.ALERT_FROM_EMAIL || ''}"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                               placeholder="alerts@yourdomain.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Email</label>
+                        <input type="email" name="ALERT_TO_EMAIL" 
+                               value="${config.ALERT_TO_EMAIL || ''}"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                               placeholder="admin@yourdomain.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Server</label>
+                        <input type="text" name="SMTP_HOST" 
+                               value="${config.SMTP_HOST || ''}"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                               placeholder="smtp.gmail.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Port</label>
+                        <input type="number" name="SMTP_PORT" 
+                               value="${config.SMTP_PORT || 587}"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                               placeholder="587">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Username</label>
+                        <input type="text" name="SMTP_USER" 
+                               value="${config.SMTP_USER || ''}"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                               placeholder="your.email@gmail.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
+                        <input type="password" name="SMTP_PASS" 
+                               value="${config.SMTP_PASS || ''}"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                               placeholder="Enter password">
+                    </div>
+                </div>
+                
+                <!-- Email Provider Setup Guides -->
+                <div class="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <div class="flex items-start">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-blue-600 dark:text-blue-400 mr-3 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div class="w-full">
+                            <h4 class="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Email Provider Setup Guides</h4>
+                            <p class="text-sm text-blue-700 dark:text-blue-300 mb-3">Most email providers require app-specific passwords for security. Follow these guides to set up your email:</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <a href="https://support.google.com/accounts/answer/185833" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline">
+                                    Gmail App Password →
+                                </a>
+                                <a href="https://support.microsoft.com/en-us/account-billing/using-app-passwords-with-apps-that-don-t-support-two-step-verification-5896ed9b-4263-e681-128a-a6f2979a7944" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline">
+                                    Outlook App Password →
+                                </a>
+                                <a href="https://help.yahoo.com/kb/generate-third-party-passwords-sln15241.html" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline">
+                                    Yahoo App Password →
+                                </a>
+                                <a href="https://support.apple.com/en-us/102654" target="_blank" class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 underline">
+                                    iCloud App Password →
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <label class="flex items-center">
+                        <input type="checkbox" name="SMTP_SECURE" 
+                               ${config.SMTP_SECURE !== false ? 'checked' : ''}
+                               class="h-4 w-4 text-blue-600 border-gray-300 rounded">
+                        <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS encryption</span>
+                    </label>
+                    <div class="flex gap-3">
+                        <button type="button" id="test-email-btn" 
+                                onclick="PulseApp.ui.settings.testEmailConfiguration()"
+                                class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
+                            Test Email
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Webhook Configuration -->
+            <div id="webhook-config-section" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 ${!webhookEnabled ? 'opacity-50 pointer-events-none' : ''}">
+                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Webhook Configuration</h4>
+                <div class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
+                        <input type="url" name="WEBHOOK_URL" 
+                               value="${config.WEBHOOK_URL || ''}"
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                               placeholder="https://hooks.slack.com/services/...">
+                    </div>
+                    <div class="flex justify-end pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <button type="button" id="test-webhook-btn" 
+                                onclick="PulseApp.ui.settings.testWebhookConfiguration()"
+                                class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
+                            Test Webhook
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
 
     function renderSystemTab(advanced, config) {
         const currentTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
@@ -514,8 +669,8 @@ PulseApp.ui.settings = (() => {
                 </div>
                 <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                     <p class="text-sm text-gray-600 dark:text-gray-400">
-                        When disabled, no alerts will be triggered or sent regardless of individual alert rule settings.
-                        Use the <a href="#" onclick="PulseApp.ui.alertManagementModal.openModal(); return false;" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200">Alert Management</a> modal to configure specific alert rules and notification channels.
+                        When disabled, no alerts will be triggered or sent regardless of threshold settings.
+                        Configure alert thresholds using the Alerts toggle in the dashboard table, and notification settings in the <a href="#" onclick="PulseApp.ui.settings.openModalWithTab('notifications'); return false;" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200">Notifications</a> tab.
                     </p>
                 </div>
             </div>
@@ -1643,6 +1798,18 @@ PulseApp.ui.settings = (() => {
             if (cleanCurrentVersion === cleanTargetVersion) {
                 changesLoading.classList.add('hidden');
                 changesSummaryText.innerHTML = '<span class="text-gray-600 dark:text-gray-300">You are already on this version.</span>';
+                changesSummaryText.classList.remove('hidden');
+                return;
+            }
+            
+            // Check if current version is a development version (has -dev or +commit)
+            const isDevVersion = cleanCurrentVersion.includes('-dev') || cleanCurrentVersion.includes('+');
+            
+            if (isDevVersion) {
+                // For development versions, skip API comparison and show simple message
+                console.log(`[Settings] Development version detected (${cleanCurrentVersion}), skipping GitHub API comparison`);
+                changesLoading.classList.add('hidden');
+                changesSummaryText.innerHTML = '<span class="text-blue-600 dark:text-blue-400">📦 Update available from development version to release version</span>';
                 changesSummaryText.classList.remove('hidden');
                 return;
             }
@@ -3834,112 +4001,6 @@ PulseApp.ui.settings = (() => {
         }, 3000);
     }
 
-    function renderAlertManagementTab() {
-        return `
-            <div class="space-y-6">
-                <!-- Header Section -->
-                <div class="text-center">
-                    <h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Alert Management</h2>
-                    <p class="mt-2 text-gray-600 dark:text-gray-400">
-                        Manage all your alert configurations in one place
-                    </p>
-                </div>
-
-                <!-- Dynamic Threshold Alert Rules Section -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Dynamic Threshold Rules</h3>
-                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                    Global alert rules that apply to all VMs/containers meeting threshold criteria
-                                </p>
-                            </div>
-                            <button id="refresh-dynamic-rules" class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                </svg>
-                                Refresh
-                            </button>
-                        </div>
-                    </div>
-                    <div id="dynamic-rules-container" class="p-6">
-                        <div class="flex items-center justify-center py-8">
-                            <div class="text-center">
-                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4"></path>
-                                </svg>
-                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading dynamic threshold rules...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Custom Per-VM/LXC Thresholds Section -->
-                <div class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Per-VM/LXC Custom Thresholds</h3>
-                                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                                    Individual threshold overrides for specific virtual machines and containers
-                                </p>
-                            </div>
-                            <div class="flex space-x-2">
-                                <button id="refresh-custom-thresholds" class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                                    </svg>
-                                    Refresh
-                                </button>
-                                <button id="add-custom-threshold" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
-                                    </svg>
-                                    Add Custom Threshold
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="custom-thresholds-container" class="p-6">
-                        <div class="flex items-center justify-center py-8">
-                            <div class="text-center">
-                                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
-                                </svg>
-                                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading custom thresholds...</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions Section -->
-                <div class="bg-gray-50 dark:bg-gray-900 rounded-lg p-4">
-                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Quick Actions</h4>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <button id="create-threshold-rule" class="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                            </svg>
-                            Create Threshold Rule
-                        </button>
-                        <button id="test-notifications" class="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zm-5-5l3 3m0 0l3-3m-3 3V8"></path>
-                            </svg>
-                            Test Notifications
-                        </button>
-                        <button id="export-alerts" class="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            Export Configuration
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
     
     function pollHealthAndRefresh() {
         const maxAttempts = 30; // Maximum 30 attempts (2 minutes at 4-second intervals)
@@ -4000,6 +4061,91 @@ PulseApp.ui.settings = (() => {
         // Start health checking immediately
         checkHealth();
     }
+
+    // Notification settings functions
+    function handleGlobalEmailToggle(enabled) {
+        const emailSection = document.getElementById('email-config-section');
+        if (emailSection) {
+            if (enabled) {
+                emailSection.classList.remove('opacity-50', 'pointer-events-none');
+            } else {
+                emailSection.classList.add('opacity-50', 'pointer-events-none');
+            }
+        }
+    }
+
+    function handleGlobalWebhookToggle(enabled) {
+        const webhookSection = document.getElementById('webhook-config-section');
+        if (webhookSection) {
+            if (enabled) {
+                webhookSection.classList.remove('opacity-50', 'pointer-events-none');
+            } else {
+                webhookSection.classList.add('opacity-50', 'pointer-events-none');
+            }
+        }
+    }
+
+    async function testEmailConfiguration() {
+        const formData = collectFormData();
+        const testButton = document.getElementById('test-email-btn');
+        
+        if (!testButton) return;
+        
+        const originalText = testButton.textContent;
+        testButton.disabled = true;
+        testButton.textContent = 'Testing...';
+        
+        try {
+            const response = await PulseApp.apiClient.post('/api/test-email', {
+                from: formData.ALERT_FROM_EMAIL,
+                to: formData.ALERT_TO_EMAIL,
+                host: formData.SMTP_HOST,
+                port: parseInt(formData.SMTP_PORT) || 587,
+                user: formData.SMTP_USER,
+                pass: formData.SMTP_PASS,
+                secure: formData.SMTP_SECURE === 'on'
+            });
+            
+            if (response.success) {
+                showMessage('Test email sent successfully!', 'success');
+            } else {
+                showMessage(`Email test failed: ${response.error}`, 'error');
+            }
+        } catch (error) {
+            PulseApp.apiClient.handleError(error, 'Test email', showMessage);
+        } finally {
+            testButton.disabled = false;
+            testButton.textContent = originalText;
+        }
+    }
+
+    async function testWebhookConfiguration() {
+        const formData = collectFormData();
+        const testButton = document.getElementById('test-webhook-btn');
+        
+        if (!testButton) return;
+        
+        const originalText = testButton.textContent;
+        testButton.disabled = true;
+        testButton.textContent = 'Testing...';
+        
+        try {
+            const response = await PulseApp.apiClient.post('/api/test-webhook', {
+                url: formData.WEBHOOK_URL
+            });
+            
+            if (response.success) {
+                showMessage('Webhook test sent successfully!', 'success');
+            } else {
+                showMessage(`Webhook test failed: ${response.error}`, 'error');
+            }
+        } catch (error) {
+            PulseApp.apiClient.handleError(error, 'Test webhook', showMessage);
+        } finally {
+            testButton.disabled = false;
+            testButton.textContent = originalText;
+        }
+    }
     
     return {
         init,
@@ -4022,7 +4168,11 @@ PulseApp.ui.settings = (() => {
         acknowledgeStableChoice,
         proceedWithStableSwitch,
         clearUpdateCache,
-        getCurrentConfig: () => currentConfig
+        getCurrentConfig: () => currentConfig,
+        handleGlobalEmailToggle,
+        handleGlobalWebhookToggle,
+        testEmailConfiguration,
+        testWebhookConfiguration
     };
 })();
 
