@@ -787,9 +787,18 @@ PulseApp.ui.dashboard = (() => {
         if (cells.length >= 10) {
             // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
             
-            // Update name (cell 0) content only (styling handled above)
-            if (cells[0].textContent !== guest.name) {
-                cells[0].textContent = guest.name;
+            // Update name (cell 0) with full HTML structure including indicators
+            const thresholdIndicator = createThresholdIndicator(guest);
+            const alertIndicator = createAlertIndicator(guest);
+            const nameHTML = `
+                <div class="flex items-center gap-1">
+                    <span>${guest.name}</span>
+                    ${alertIndicator}
+                    ${thresholdIndicator}
+                </div>
+            `;
+            if (cells[0].innerHTML !== nameHTML) {
+                cells[0].innerHTML = nameHTML;
                 cells[0].title = guest.name;
             }
             
@@ -1343,6 +1352,46 @@ PulseApp.ui.dashboard = (() => {
         return '';
     }
 
+    function createAlertIndicator(guest) {
+        // Get active alerts for this guest
+        const activeAlerts = PulseApp.alerts?.getActiveAlertsForGuest?.(guest.endpointId, guest.node, guest.id) || [];
+        
+        if (activeAlerts.length === 0) {
+            return '';
+        }
+        
+        // Determine highest severity
+        const criticalAlerts = activeAlerts.filter(alert => alert.severity === 'critical');
+        const warningAlerts = activeAlerts.filter(alert => alert.severity === 'warning');
+        
+        let iconColor, severityText, alertDetails;
+        
+        if (criticalAlerts.length > 0) {
+            iconColor = 'bg-red-500';
+            severityText = 'Critical';
+            alertDetails = `${criticalAlerts.length} critical alert${criticalAlerts.length > 1 ? 's' : ''}`;
+        } else if (warningAlerts.length > 0) {
+            iconColor = 'bg-yellow-500';
+            severityText = 'Warning';
+            alertDetails = `${warningAlerts.length} warning alert${warningAlerts.length > 1 ? 's' : ''}`;
+        } else {
+            iconColor = 'bg-blue-500';
+            severityText = 'Info';
+            alertDetails = `${activeAlerts.length} alert${activeAlerts.length > 1 ? 's' : ''}`;
+        }
+        
+        const totalText = activeAlerts.length > 1 ? ` (${activeAlerts.length} total)` : '';
+        
+        return `
+            <span class="inline-flex items-center justify-center w-3 h-3 text-xs font-bold text-white ${iconColor} rounded-full cursor-pointer alert-indicator" 
+                  title="${severityText}: ${alertDetails}${totalText} - Click to view details"
+                  data-guest-id="${guest.endpointId}-${guest.node}-${guest.id}"
+                  onclick="PulseApp.ui.dashboard.toggleGuestAlertDetails('${guest.endpointId}', '${guest.node}', '${guest.id}')">
+                !
+            </span>
+        `;
+    }
+
     function createGuestRow(guest) {
         const row = document.createElement('tr');
         
@@ -1390,8 +1439,9 @@ PulseApp.ui.dashboard = (() => {
         row.setAttribute('data-node', guest.node.toLowerCase());
         row.setAttribute('data-id', guest.id);
 
-        // Check if guest has custom thresholds
+        // Check if guest has custom thresholds and alerts
         const thresholdIndicator = createThresholdIndicator(guest);
+        const alertIndicator = createAlertIndicator(guest);
 
         const cpuBarHTML = _createCpuBarHtml(guest);
         const memoryBarHTML = _createMemoryBarHtml(guest);
@@ -1479,6 +1529,7 @@ PulseApp.ui.dashboard = (() => {
             <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">
                 <div class="flex items-center gap-1">
                     <span>${guest.name}</span>
+                    ${alertIndicator}
                     ${thresholdIndicator}
                 </div>
             </td>
@@ -1583,6 +1634,163 @@ PulseApp.ui.dashboard = (() => {
         }
     }
 
+    // Alert details expansion functionality
+    function toggleGuestAlertDetails(endpointId, node, vmid) {
+        const guestId = `${endpointId}-${node}-${vmid}`;
+        const existingRow = document.querySelector(`tr[data-id="${vmid}"] + tr.alert-details-row`);
+        
+        if (existingRow) {
+            // Collapse existing alert details
+            existingRow.remove();
+            return;
+        }
+        
+        // Find the guest row
+        const guestRow = document.querySelector(`tr[data-id="${vmid}"]`);
+        if (!guestRow) return;
+        
+        // Get alerts for this guest
+        const activeAlerts = PulseApp.alerts?.getActiveAlertsForGuest?.(endpointId, node, vmid) || [];
+        
+        if (activeAlerts.length === 0) {
+            return;
+        }
+        
+        // Create expanded alert details row
+        const alertDetailsRow = document.createElement('tr');
+        alertDetailsRow.className = 'alert-details-row bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-700';
+        
+        const alertsHTML = activeAlerts.map(alert => {
+            const severity = alert.severity || 'info';
+            const severityColor = severity === 'critical' ? 'text-red-600 dark:text-red-400' : 
+                                 severity === 'warning' ? 'text-yellow-600 dark:text-yellow-400' : 
+                                 'text-blue-600 dark:text-blue-400';
+            
+            const startTime = new Date(alert.startTime).toLocaleString();
+            const duration = alert.startTime ? formatAlertDuration(Date.now() - alert.startTime) : 'Unknown';
+            
+            return `
+                <div class="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1">
+                            <h4 class="font-semibold text-gray-900 dark:text-gray-100 ${severityColor}">
+                                ${alert.name || 'Unknown Alert'}
+                            </h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                ${alert.description || 'No description available'}
+                            </p>
+                        </div>
+                        <div class="flex gap-2 ml-4">
+                            ${!alert.acknowledged ? `
+                                <button onclick="PulseApp.ui.dashboard.acknowledgeAlert('${alert.id}')" 
+                                        class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors">
+                                    Acknowledge
+                                </button>
+                            ` : `
+                                <span class="px-3 py-1 bg-gray-500 text-white text-xs rounded">
+                                    Acknowledged
+                                </span>
+                            `}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Metric:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${alert.metricType || alert.metric || 'Unknown'}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Current Value:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${formatAlertValue(alert.currentValue, alert.metricType)}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Threshold:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${formatAlertValue(alert.effectiveThreshold || alert.threshold, alert.metricType)}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Started:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${startTime}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${duration}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Severity:</span>
+                            <span class="${severityColor} capitalize">${severity}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        alertDetailsRow.innerHTML = `
+            <td colspan="11" class="p-4">
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                            Alert Details for ${guestRow.querySelector('span').textContent}
+                        </h3>
+                        <button onclick="PulseApp.ui.dashboard.toggleGuestAlertDetails('${endpointId}', '${node}', '${vmid}')" 
+                                class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded transition-colors">
+                            Collapse
+                        </button>
+                    </div>
+                    ${alertsHTML}
+                </div>
+            </td>
+        `;
+        
+        // Insert after the guest row
+        guestRow.parentNode.insertBefore(alertDetailsRow, guestRow.nextSibling);
+    }
+    
+    function acknowledgeAlert(alertId) {
+        if (!alertId) return;
+        
+        // Call the alert management system to acknowledge
+        if (PulseApp.alerts?.acknowledgeAlert) {
+            PulseApp.alerts.acknowledgeAlert(alertId).then(() => {
+                // Refresh the table to update alert indicators
+                refreshDashboardData();
+            }).catch(error => {
+                console.error('Failed to acknowledge alert:', error);
+                if (PulseApp.ui.toast) {
+                    PulseApp.ui.toast.error('Failed to acknowledge alert');
+                }
+            });
+        }
+    }
+    
+    function formatAlertDuration(milliseconds) {
+        const seconds = Math.floor(milliseconds / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+        
+        if (days > 0) return `${days}d ${hours % 24}h`;
+        if (hours > 0) return `${hours}h ${minutes % 60}m`;
+        if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+        return `${seconds}s`;
+    }
+    
+    function formatAlertValue(value, metricType) {
+        if (value === null || value === undefined) return 'N/A';
+        
+        switch (metricType) {
+            case 'cpu':
+            case 'memory':
+            case 'disk':
+                return `${Math.round(value)}%`;
+            case 'diskread':
+            case 'diskwrite':
+            case 'netin':
+            case 'netout':
+                return PulseApp.utils?.formatBytes ? PulseApp.utils.formatBytes(value) + '/s' : `${value} B/s`;
+            default:
+                return String(value);
+        }
+    }
+
     return {
         init,
         refreshDashboardData,
@@ -1590,6 +1798,8 @@ PulseApp.ui.dashboard = (() => {
         createGuestRow,
         snapshotGuestMetricsForDrag, // Export snapshot function
         clearGuestMetricSnapshots,    // Export clear function
-        toggleChartsMode
+        toggleChartsMode,
+        toggleGuestAlertDetails,
+        acknowledgeAlert
     };
 })();
