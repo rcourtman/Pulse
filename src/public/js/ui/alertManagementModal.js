@@ -3710,7 +3710,7 @@ ${isEditing ? 'Update Alert' : 'Create Alert'}
                     </p>
                     ${isCompoundAlert && alert.thresholds ? `
                         <p class="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                            Rule: ${alert.thresholds.map(t => `${t.metric.toUpperCase()} ≥ ${t.threshold}${['cpu', 'memory', 'disk'].includes(t.metric) ? '%' : ''}`).join(' AND ')}
+                            Rule: ${alert.thresholds.map(t => `${(t.metric || 'unknown').toUpperCase()} ≥ ${t.threshold}${['cpu', 'memory', 'disk'].includes(t.metric) ? '%' : ''}`).join(' AND ')}
                         </p>
                     ` : ''}
                     ${thresholdInfo ? `

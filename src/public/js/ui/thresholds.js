@@ -12,13 +12,14 @@ PulseApp.ui.thresholds = (() => {
     let thresholdSelects = {};
     let isDraggingSlider = false;
     let updateThrottleTimer = null;
+    let alertNameManuallyEdited = false;
 
     function init() {
         thresholdRow = document.getElementById('threshold-slider-row');
         alertRuleRow = document.getElementById('alert-rule-row');
         toggleThresholdsButton = document.getElementById('toggle-thresholds-checkbox');
         thresholdBadge = document.getElementById('threshold-count-badge');
-        createAlertRuleBtn = document.getElementById('create-alert-rule-btn');
+        createAlertRuleBtn = document.getElementById('expand-alert-builder-btn'); // Updated to new ID
         viewAlertRulesBtn = document.getElementById('view-alert-rules-btn');
         activeThresholdsSummary = document.getElementById('active-thresholds-summary');
 
@@ -122,13 +123,12 @@ PulseApp.ui.thresholds = (() => {
     }
 
     function _setupAlertRuleListeners() {
-        if (createAlertRuleBtn) {
-            createAlertRuleBtn.addEventListener('click', _handleCreateAlertRule);
-        }
-
         if (viewAlertRulesBtn) {
             viewAlertRulesBtn.addEventListener('click', _handleViewAlertRules);
         }
+
+        // New integrated alert builder listeners (replaces legacy modal approach)
+        _setupIntegratedAlertBuilder();
     }
 
 
@@ -141,13 +141,8 @@ PulseApp.ui.thresholds = (() => {
             return;
         }
 
-        // Open the custom alert creation modal with pre-populated threshold values
-        if (PulseApp.ui && PulseApp.ui.alertManagementModal && PulseApp.ui.alertManagementModal.openCustomAlertModal) {
-            PulseApp.ui.alertManagementModal.openCustomAlertModal(activeThresholds);
-        } else {
-            // Fallback - show legacy modal if alert management isn't available
-            _showCreateAlertRuleModal(activeThresholds);
-        }
+        // Use the new integrated alert builder instead of modal
+        _expandAlertBuilder();
     }
 
     function _handleViewAlertRules() {
@@ -1069,13 +1064,24 @@ PulseApp.ui.thresholds = (() => {
     }
 
     function _updateAlertRuleUI(activeThresholds, activeCount) {
-        // Update button state
+        // Update legacy button state (for fallback)
         if (createAlertRuleBtn) {
             createAlertRuleBtn.disabled = activeCount === 0;
             if (activeCount === 0) {
                 createAlertRuleBtn.classList.add('opacity-50', 'cursor-not-allowed');
             } else {
                 createAlertRuleBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        // Update integrated alert builder button state
+        const expandBtn = document.getElementById('expand-alert-builder-btn');
+        if (expandBtn) {
+            expandBtn.disabled = activeCount === 0;
+            if (activeCount === 0) {
+                expandBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                expandBtn.classList.remove('opacity-50', 'cursor-not-allowed');
             }
         }
 
@@ -1088,6 +1094,15 @@ PulseApp.ui.thresholds = (() => {
                 activeThresholdsSummary.textContent = '(Set thresholds above to enable)';
             }
         }
+
+        // Update active thresholds display in builder
+        _updateActiveThresholdsDisplay(activeThresholds);
+        
+        // Update real-time preview
+        _updateAlertPreview(activeThresholds);
+        
+        // Update alert name if builder is expanded and name hasn't been manually edited
+        _updateAlertNameIfNeeded(activeThresholds);
     }
 
     function _formatThresholdSummary(activeThresholds) {
@@ -1149,6 +1164,663 @@ PulseApp.ui.thresholds = (() => {
     // Getter for dashboard.js to check drag state
     function isThresholdDragInProgress() {
         return isDraggingSlider;
+    }
+
+    // ========================================
+    // INTEGRATED ALERT BUILDER FUNCTIONS
+    // ========================================
+
+    function _setupIntegratedAlertBuilder() {
+        const expandBtn = document.getElementById('expand-alert-builder-btn');
+        const collapseBtn = document.getElementById('collapse-alert-builder-btn');
+        const cancelBtn = document.getElementById('integrated-cancel-btn');
+        const form = document.getElementById('integrated-alert-form');
+
+        if (expandBtn) {
+            expandBtn.addEventListener('click', _expandAlertBuilder);
+        }
+
+        if (collapseBtn) {
+            collapseBtn.addEventListener('click', _collapseAlertBuilder);
+        }
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', _collapseAlertBuilder);
+        }
+
+        if (form) {
+            form.addEventListener('submit', _handleIntegratedAlertSubmit);
+        }
+
+        // Setup simplified target selection
+        _setupSimpleTargetSelection();
+
+        // Add listener for condition logic changes to update preview
+        const conditionLogicSelect = document.getElementById('integrated-condition-logic');
+        if (conditionLogicSelect) {
+            conditionLogicSelect.addEventListener('change', () => {
+                const thresholdState = PulseApp.state.getThresholdState();
+                const activeThresholds = _getActiveThresholds(thresholdState);
+                _updateAlertPreview(activeThresholds);
+            });
+        }
+
+        // Setup test button
+        const testBtn = document.getElementById('integrated-test-alert-btn');
+
+        if (testBtn) {
+            testBtn.addEventListener('click', _testAlert);
+        }
+
+        // Track manual edits to alert name
+        const alertNameInput = document.getElementById('integrated-alert-name');
+        if (alertNameInput) {
+            alertNameInput.addEventListener('input', () => {
+                alertNameManuallyEdited = true;
+            });
+        }
+    }
+
+    function _expandAlertBuilder() {
+        const collapsed = document.getElementById('alert-builder-collapsed');
+        const expanded = document.getElementById('alert-builder-expanded');
+        const alertNameInput = document.getElementById('integrated-alert-name');
+
+        if (collapsed && expanded) {
+            collapsed.classList.add('hidden');
+            expanded.classList.remove('hidden');
+
+            // Auto-generate alert name based on active thresholds
+            const thresholdState = PulseApp.state.getThresholdState();
+            const activeThresholds = _getActiveThresholds(thresholdState);
+            _generateAlertName(activeThresholds);
+
+            // Focus on name input
+            if (alertNameInput) {
+                setTimeout(() => alertNameInput.focus(), 100);
+            }
+
+            // Load VM/Node lists for target selection
+            _loadTargetOptions();
+        }
+    }
+
+    function _collapseAlertBuilder() {
+        const collapsed = document.getElementById('alert-builder-collapsed');
+        const expanded = document.getElementById('alert-builder-expanded');
+        const form = document.getElementById('integrated-alert-form');
+
+        if (collapsed && expanded) {
+            expanded.classList.add('hidden');
+            collapsed.classList.remove('hidden');
+
+            // Reset form
+            if (form) {
+                form.reset();
+                // Re-select default values
+                const conditionLogicSelect = document.getElementById('integrated-condition-logic');
+                const localNotification = form.querySelector('input[name="notifications"][value="local"]');
+                const allRadio = form.querySelector('input[name="targetScope"][value="all"]');
+
+                if (conditionLogicSelect) conditionLogicSelect.value = 'any';
+                if (localNotification) localNotification.checked = true;
+                if (allRadio) allRadio.checked = true;
+            }
+
+            // Reset manual edit tracking
+            alertNameManuallyEdited = false;
+        }
+    }
+
+    function _generateAlertName(activeThresholds) {
+        const alertNameInput = document.getElementById('integrated-alert-name');
+        if (!alertNameInput || activeThresholds.length === 0) return;
+
+        let suggestedName = '';
+        
+        if (activeThresholds.length === 1) {
+            const threshold = activeThresholds[0];
+            const metricName = _getThresholdDisplayName(threshold.type);
+            const value = _formatThresholdValue(threshold);
+            suggestedName = `High ${metricName} Alert (>${value})`;
+        } else {
+            const metrics = activeThresholds.map(t => _getThresholdDisplayName(t.type)).join(' & ');
+            suggestedName = `High Resource Usage Alert (${metrics})`;
+        }
+
+        alertNameInput.value = suggestedName;
+    }
+
+    function _updateAlertNameIfNeeded(activeThresholds) {
+        // Only update if builder is expanded and name hasn't been manually edited
+        const expanded = document.getElementById('alert-builder-expanded');
+        const alertNameInput = document.getElementById('integrated-alert-name');
+        
+        if (!expanded || expanded.classList.contains('hidden') || alertNameManuallyEdited || !alertNameInput) {
+            return;
+        }
+
+        // Generate new name based on current thresholds
+        if (activeThresholds.length === 0) {
+            alertNameInput.value = '';
+            return;
+        }
+
+        let suggestedName = '';
+        
+        if (activeThresholds.length === 1) {
+            const threshold = activeThresholds[0];
+            const metricName = _getThresholdDisplayName(threshold.type);
+            const value = _formatThresholdValue(threshold);
+            suggestedName = `High ${metricName} Alert (>${value})`;
+        } else {
+            const metrics = activeThresholds.map(t => _getThresholdDisplayName(t.type)).join(' & ');
+            suggestedName = `High Resource Usage Alert (${metrics})`;
+        }
+
+        alertNameInput.value = suggestedName;
+    }
+
+    function _updateActiveThresholdsDisplay(activeThresholds) {
+        const display = document.getElementById('active-thresholds-display');
+        if (!display) return;
+
+        if (activeThresholds.length === 0) {
+            display.innerHTML = '<p class="text-blue-700 dark:text-blue-300">Set thresholds above to configure alert conditions</p>';
+            return;
+        }
+
+        const thresholdsList = activeThresholds.map(threshold => `
+            <div class="flex items-center justify-between py-1">
+                <span class="text-blue-800 dark:text-blue-200 font-medium">${_getThresholdDisplayName(threshold.type)}</span>
+                <span class="text-blue-600 dark:text-blue-400">≥ ${_formatThresholdValue(threshold)}</span>
+            </div>
+        `).join('');
+
+        display.innerHTML = thresholdsList;
+    }
+
+    function _updateAlertPreview(activeThresholds) {
+        const previewCount = document.getElementById('preview-trigger-count');
+        const previewList = document.getElementById('preview-vm-list');
+        const alertPreviewCount = document.getElementById('alert-preview-count');
+        const matchingVmsCount = document.getElementById('matching-vms-count');
+
+        if (!previewCount || !previewList) return;
+
+        if (activeThresholds.length === 0) {
+            previewCount.textContent = '0';
+            previewList.innerHTML = '<p>Set thresholds to see preview</p>';
+            if (alertPreviewCount) alertPreviewCount.classList.add('hidden');
+            return;
+        }
+
+        // Get current dashboard data
+        const dashboardData = PulseApp.state.get('dashboardData') || [];
+        const conditionLogic = document.getElementById('integrated-condition-logic')?.value || 'any';
+        
+        // Filter VMs that would trigger the alert
+        const triggeringVMs = dashboardData.filter(vm => {
+            if (!vm || typeof vm !== 'object') return false;
+
+            const meetsConditions = activeThresholds.map(threshold => {
+                let vmValue;
+                switch (threshold.type) {
+                    case 'cpu': vmValue = vm.cpu; break;
+                    case 'memory': vmValue = vm.memory; break;
+                    case 'disk': vmValue = vm.disk; break;
+                    case 'diskread': vmValue = vm.diskread; break;
+                    case 'diskwrite': vmValue = vm.diskwrite; break;
+                    case 'netin': vmValue = vm.netin; break;
+                    case 'netout': vmValue = vm.netout; break;
+                    default: return false;
+                }
+
+                if (vmValue === undefined || vmValue === null || vmValue === 'N/A' || isNaN(vmValue)) {
+                    return false;
+                }
+
+                return vmValue >= threshold.value;
+            });
+
+            // Apply condition logic (any vs all)
+            return conditionLogic === 'any' ? 
+                meetsConditions.some(condition => condition) : 
+                meetsConditions.every(condition => condition);
+        });
+
+        const count = triggeringVMs.length;
+        previewCount.textContent = count;
+
+        if (matchingVmsCount) {
+            matchingVmsCount.textContent = count;
+        }
+
+        if (alertPreviewCount) {
+            if (count > 0) {
+                alertPreviewCount.classList.remove('hidden');
+            } else {
+                alertPreviewCount.classList.add('hidden');
+            }
+        }
+
+        // Update high usage count in target selection
+        _updateHighUsageCount();
+
+        if (count === 0) {
+            previewList.innerHTML = '<p class="text-gray-500">No VMs currently meet these conditions</p>';
+        } else {
+            const vmNames = triggeringVMs.slice(0, 5).map(vm => 
+                `<span class="inline-block bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-900 px-2 py-0.5 rounded text-xs mr-1 mb-1 font-medium">${vm.name || vm.id}</span>`
+            ).join('');
+            
+            const extraCount = triggeringVMs.length - 5;
+            const extra = extraCount > 0 ? `<span class="text-xs text-gray-500 dark:text-gray-400">+${extraCount} more</span>` : '';
+            
+            previewList.innerHTML = vmNames + extra;
+        }
+    }
+
+    // ========================================
+    // SIMPLIFIED TARGET SELECTION
+    // ========================================
+
+    function _setupSimpleTargetSelection() {
+        const radioButtons = document.querySelectorAll('input[name="targetScope"]');
+        const specificSelection = document.getElementById('specific-vm-selection');
+
+        // Listen for radio button changes
+        radioButtons.forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (radio.value === 'specific' && radio.checked) {
+                    specificSelection.classList.remove('hidden');
+                    _loadVMCheckboxes();
+                } else {
+                    specificSelection.classList.add('hidden');
+                }
+                _updateTargetTypeInput();
+            });
+        });
+
+        // Setup quick select buttons
+        const quickSelectHighUsage = document.getElementById('quick-select-high-usage');
+        const quickSelectAll = document.getElementById('quick-select-all');
+        const quickSelectNone = document.getElementById('quick-select-none');
+
+        if (quickSelectHighUsage) {
+            quickSelectHighUsage.addEventListener('click', _selectHighUsageVMs);
+        }
+
+        if (quickSelectAll) {
+            quickSelectAll.addEventListener('click', () => _toggleAllVMCheckboxes(true));
+        }
+
+        if (quickSelectNone) {
+            quickSelectNone.addEventListener('click', () => _toggleAllVMCheckboxes(false));
+        }
+    }
+
+    function _loadVMCheckboxes() {
+        const grid = document.getElementById('vm-checkbox-grid');
+        if (!grid) return;
+
+        const dashboardData = PulseApp.state.get('dashboardData') || [];
+        grid.innerHTML = '';
+
+        dashboardData.forEach(vm => {
+            if (!vm || !(vm.name || vm.id)) return;
+
+            const vmId = vm.id || vm.vmid;
+            const vmName = vm.name || vmId;
+            const vmType = vm.type?.toUpperCase() || 'VM';
+
+            // Determine if this VM is currently high usage
+            const isHighUsage = _isVMHighUsage(vm);
+            const statusClass = isHighUsage ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' : 
+                                            'bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600';
+
+            const checkboxDiv = document.createElement('div');
+            checkboxDiv.className = `flex items-center gap-2 p-2 rounded border hover:bg-gray-50 dark:hover:bg-gray-600 ${statusClass}`;
+            
+            checkboxDiv.innerHTML = `
+                <input type="checkbox" id="vm-${vmId}" value="${vmId}" class="vm-target-checkbox w-3 h-3 text-blue-600 border-gray-300 rounded focus:ring-blue-500">
+                <label for="vm-${vmId}" class="flex-1 cursor-pointer text-xs">
+                    <span class="font-medium text-gray-900 dark:text-gray-100">${vmName}</span>
+                    <span class="text-gray-500 dark:text-gray-400 ml-1">(${vmType})</span>
+                    ${isHighUsage ? '<span class="ml-1 text-xs text-yellow-600 dark:text-yellow-400">⚠ Threshold Met</span>' : ''}
+                </label>
+            `;
+
+            grid.appendChild(checkboxDiv);
+
+            // Add change listener
+            const checkbox = checkboxDiv.querySelector('.vm-target-checkbox');
+            checkbox.addEventListener('change', _updateVMSelection);
+        });
+
+        _updateHighUsageCount();
+        _updateVMSelection();
+    }
+
+    function _isVMHighUsage(vm) {
+        const thresholdState = PulseApp.state.getThresholdState();
+        const activeThresholds = _getActiveThresholds(thresholdState);
+        
+        if (activeThresholds.length === 0) {
+            // Fallback: consider high usage if any metric is > 80%
+            return vm.cpu > 80 || vm.memory > 80 || vm.disk > 80;
+        }
+
+        // Check if VM meets current threshold conditions
+        const conditionLogic = document.getElementById('integrated-condition-logic')?.value || 'any';
+        const meetsConditions = activeThresholds.map(threshold => {
+            let vmValue;
+            switch (threshold.type) {
+                case 'cpu': vmValue = vm.cpu; break;
+                case 'memory': vmValue = vm.memory; break;
+                case 'disk': vmValue = vm.disk; break;
+                case 'diskread': vmValue = vm.diskread; break;
+                case 'diskwrite': vmValue = vm.diskwrite; break;
+                case 'netin': vmValue = vm.netin; break;
+                case 'netout': vmValue = vm.netout; break;
+                default: return false;
+            }
+
+            if (vmValue === undefined || vmValue === null || vmValue === 'N/A' || isNaN(vmValue)) {
+                return false;
+            }
+
+            return vmValue >= threshold.value;
+        });
+
+        return conditionLogic === 'any' ? 
+            meetsConditions.some(condition => condition) : 
+            meetsConditions.every(condition => condition);
+    }
+
+    function _selectHighUsageVMs() {
+        const checkboxes = document.querySelectorAll('.vm-target-checkbox');
+        checkboxes.forEach(checkbox => {
+            const vmId = checkbox.value;
+            const dashboardData = PulseApp.state.get('dashboardData') || [];
+            const vm = dashboardData.find(v => (v.id || v.vmid) == vmId);
+            
+            if (vm && _isVMHighUsage(vm)) {
+                checkbox.checked = true;
+            }
+        });
+        _updateVMSelection();
+    }
+
+    function _toggleAllVMCheckboxes(select) {
+        const checkboxes = document.querySelectorAll('.vm-target-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = select;
+        });
+        _updateVMSelection();
+    }
+
+    function _updateVMSelection() {
+        const selectedVMs = Array.from(document.querySelectorAll('.vm-target-checkbox:checked')).map(cb => cb.value);
+        const summary = document.getElementById('selection-summary');
+        const selectedVMsInput = document.getElementById('selected-vms-input');
+
+        // Update hidden input
+        if (selectedVMsInput) {
+            selectedVMsInput.value = JSON.stringify(selectedVMs);
+        }
+
+        // Update summary
+        if (summary) {
+            if (selectedVMs.length === 0) {
+                summary.textContent = 'No VMs selected';
+                summary.className = summary.className.replace('text-blue-700 dark:text-blue-300', 'text-gray-500 dark:text-gray-400');
+            } else {
+                summary.textContent = `${selectedVMs.length} VM${selectedVMs.length > 1 ? 's' : ''} selected for monitoring`;
+                summary.className = summary.className.replace('text-gray-500 dark:text-gray-400', 'text-blue-700 dark:text-blue-300');
+            }
+        }
+    }
+
+    function _updateHighUsageCount() {
+        const countSpan = document.getElementById('high-usage-count');
+        if (!countSpan) return;
+
+        const dashboardData = PulseApp.state.get('dashboardData') || [];
+        const highUsageCount = dashboardData.filter(vm => vm && _isVMHighUsage(vm)).length;
+        countSpan.textContent = highUsageCount;
+    }
+
+    function _updateTargetTypeInput() {
+        const allRadio = document.querySelector('input[name="targetScope"][value="all"]');
+        const targetTypeInput = document.getElementById('target-type-input');
+        
+        if (targetTypeInput) {
+            targetTypeInput.value = allRadio?.checked ? 'all' : 'specific';
+        }
+    }
+
+    async function _loadTargetOptions() {
+        const specificTargetSelect = document.getElementById('integrated-specific-target');
+        if (!specificTargetSelect) return;
+
+        try {
+            // Get current dashboard data for VMs and nodes
+            const dashboardData = PulseApp.state.get('dashboardData') || [];
+            const nodes = [...new Set(dashboardData.map(vm => vm.node).filter(Boolean))];
+
+            // Clear and populate options
+            specificTargetSelect.innerHTML = '<option value="">Select...</option>';
+
+            // Add node options
+            nodes.forEach(node => {
+                const option = document.createElement('option');
+                option.value = `node:${node}`;
+                option.textContent = `Node: ${node}`;
+                specificTargetSelect.appendChild(option);
+            });
+
+            // Add VM/LXC options
+            dashboardData.forEach(vm => {
+                if (vm.name || vm.id) {
+                    const option = document.createElement('option');
+                    option.value = `vm:${vm.id || vm.name}`;
+                    option.textContent = `${vm.type?.toUpperCase() || 'VM'}: ${vm.name || vm.id}`;
+                    specificTargetSelect.appendChild(option);
+                }
+            });
+        } catch (error) {
+            console.error('Error loading target options:', error);
+        }
+    }
+
+
+    async function _handleIntegratedAlertSubmit(event) {
+        event.preventDefault();
+        
+        const form = event.target;
+        const formData = new FormData(form);
+        const saveBtn = document.getElementById('integrated-save-alert-btn');
+
+        // Get active thresholds
+        const thresholdState = PulseApp.state.getThresholdState();
+        const activeThresholds = _getActiveThresholds(thresholdState);
+
+        if (activeThresholds.length === 0) {
+            PulseApp.ui.toast.warning('Please set at least one threshold to create an alert rule.');
+            return;
+        }
+
+        // Collect notification channels
+        const notificationChannels = [];
+        const notificationInputs = form.querySelectorAll('input[name="notifications"]:checked');
+        notificationInputs.forEach(input => {
+            notificationChannels.push(input.value);
+        });
+
+        if (notificationChannels.length === 0) {
+            PulseApp.ui.toast.warning('Please select at least one notification method.');
+            return;
+        }
+
+        // Transform thresholds to match AlertManager format
+        const transformedThresholds = activeThresholds.map(threshold => ({
+            metric: threshold.type,
+            condition: 'greater_than_or_equal',
+            threshold: threshold.value
+        }));
+
+        // Build alert rule object
+        const alertRule = {
+            name: formData.get('alertName'),
+            description: formData.get('alertDescription') || '',
+            thresholds: transformedThresholds,
+            targetType: formData.get('targetType'),
+            selectedVMs: formData.get('selectedVMs') || '[]',
+            conditionLogic: formData.get('conditionLogic'),
+            notificationChannels: notificationChannels,
+            enabled: true
+        };
+
+        // Show loading state
+        const originalText = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+            const response = await fetch('/api/alerts/rules', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(alertRule)
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                // Success feedback
+                saveBtn.textContent = 'Saved!';
+                saveBtn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                saveBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+
+                // Show success message
+                const notificationMethods = notificationChannels.map(channel => {
+                    switch (channel) {
+                        case 'local': return 'dashboard alerts';
+                        case 'email': return 'email notifications';
+                        case 'webhook': return 'webhook notifications';
+                        default: return channel;
+                    }
+                }).join(', ');
+
+                PulseApp.ui.toast.success(
+                    `Alert rule "${alertRule.name}" created successfully! Monitoring ${activeThresholds.length} threshold${activeThresholds.length > 1 ? 's' : ''} with ${notificationMethods}.`
+                );
+
+                // Collapse builder after short delay
+                setTimeout(() => {
+                    _collapseAlertBuilder();
+                    
+                    // Reset button state
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = originalText;
+                    saveBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                    saveBtn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                }, 1500);
+
+            } else {
+                throw new Error(result.error || 'Failed to create alert rule');
+            }
+        } catch (error) {
+            console.error('Error creating alert rule:', error);
+            PulseApp.ui.toast.error(`Failed to create alert rule: ${error.message}`);
+            
+            // Reset button state
+            saveBtn.disabled = false;
+            saveBtn.textContent = originalText;
+        }
+    }
+
+
+    async function _testAlert() {
+        const alertNameInput = document.getElementById('integrated-alert-name');
+        const alertDescriptionInput = document.getElementById('integrated-alert-description');
+        const alertName = alertNameInput?.value || 'Test Alert';
+        const alertDescription = alertDescriptionInput?.value || 'Brief description of what this alert monitors...';
+        
+        // Collect selected notification channels
+        const form = document.getElementById('integrated-alert-form');
+        const notificationChannels = [];
+        const notificationInputs = form.querySelectorAll('input[name="notifications"]:checked');
+        notificationInputs.forEach(input => {
+            notificationChannels.push(input.value);
+        });
+
+        if (notificationChannels.length === 0) {
+            PulseApp.ui.toast.warning('Please select at least one notification method to test.');
+            return;
+        }
+
+        // Get current active thresholds for the test
+        const thresholdState = PulseApp.state.getThresholdState();
+        const activeThresholds = _getActiveThresholds(thresholdState);
+        
+        // Get target selection info
+        const targetTypeInput = document.getElementById('target-type-input');
+        const selectedVMsInput = document.getElementById('selected-vms-input');
+        const targetType = targetTypeInput?.value || 'all';
+        const selectedVMs = selectedVMsInput?.value || '[]';
+
+        try {
+            PulseApp.ui.toast.warning(`Testing alert "${alertName}"...`);
+            
+            const response = await fetch('/api/alerts/test', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    alertName: alertName,
+                    alertDescription: alertDescription,
+                    activeThresholds: activeThresholds,
+                    notificationChannels: notificationChannels,
+                    targetType: targetType,
+                    selectedVMs: selectedVMs
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                // Show detailed success message
+                const successChannels = Object.entries(result.results)
+                    .filter(([channel, res]) => res.success)
+                    .map(([channel]) => {
+                        switch (channel) {
+                            case 'local': return 'dashboard alerts';
+                            case 'email': return 'email';
+                            case 'webhook': return 'webhook';
+                            default: return channel;
+                        }
+                    });
+                
+                const failedChannels = Object.entries(result.results)
+                    .filter(([channel, res]) => !res.success)
+                    .map(([channel, res]) => `${channel}: ${res.error}`);
+
+                if (failedChannels.length === 0) {
+                    PulseApp.ui.toast.success(`Test alert sent successfully via ${successChannels.join(', ')}!`);
+                } else {
+                    PulseApp.ui.toast.warning(`Test partially successful. Working: ${successChannels.join(', ')}. Failed: ${failedChannels.join('; ')}`);
+                }
+            } else {
+                throw new Error(result.error || result.message || 'Failed to send test alert');
+            }
+        } catch (error) {
+            console.error('Error testing alert:', error);
+            PulseApp.ui.toast.error(`Failed to test alert: ${error.message}`);
+        }
     }
 
     return {

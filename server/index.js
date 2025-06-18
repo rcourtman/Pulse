@@ -498,6 +498,163 @@ app.post('/api/alerts/test-email', async (req, res) => {
     }
 });
 
+// Test alert notifications
+app.post('/api/alerts/test', async (req, res) => {
+    try {
+        const { alertName, alertDescription, activeThresholds, notificationChannels, targetType, selectedVMs } = req.body;
+        
+        if (!alertName) {
+            return res.status(400).json({ success: false, error: 'Alert name is required' });
+        }
+        
+        if (!notificationChannels || notificationChannels.length === 0) {
+            return res.status(400).json({ success: false, error: 'At least one notification channel is required' });
+        }
+        
+        console.log('[Test Alert] Creating test alert notification...', { alertName, notificationChannels });
+        
+        // Transform thresholds to match AlertManager format
+        const transformedThresholds = (activeThresholds || []).map(threshold => ({
+            metric: threshold.type,
+            condition: 'greater_than_or_equal',
+            threshold: threshold.value
+        }));
+
+        // Create a test alert object with realistic data
+        const testAlert = {
+            id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            rule: {
+                id: 'test-rule',
+                name: alertName || 'Test Alert',
+                description: alertDescription || 'This is a test alert to verify notification configuration',
+                type: 'compound_threshold',
+                thresholds: transformedThresholds,
+                targetType: targetType || 'all',
+                selectedVMs: selectedVMs || '[]'
+            },
+            guest: {
+                name: 'pihole',
+                vmid: '103',
+                node: 'pimox',
+                type: 'lxc',
+                endpointId: 'primary'
+            },
+            severity: 'warning',
+            message: `Test notification for alert rule "${alertName}"`,
+            triggeredAt: Date.now(),
+            details: {
+                reason: 'Manual test triggered from dashboard',
+                timestamp: new Date().toISOString(),
+                notificationChannels: notificationChannels,
+                activeThresholds: transformedThresholds,
+                targetInfo: {
+                    type: targetType || 'all',
+                    selectedVMs: selectedVMs || '[]'
+                }
+            }
+        };
+        
+        const results = {};
+        
+        // Test each requested notification channel
+        for (const channel of notificationChannels) {
+            try {
+                switch (channel) {
+                        
+                    case 'email':
+                        if (!process.env.ALERT_TO_EMAIL || !process.env.SMTP_HOST) {
+                            results.email = { success: false, error: 'Email not configured' };
+                        } else {
+                            const emailResult = await stateManager.alertManager.sendTestAlertEmail({
+                                alertName: alertName,
+                                testAlert: testAlert,
+                                config: {
+                                    ALERT_TO_EMAIL: process.env.ALERT_TO_EMAIL,
+                                    ALERT_FROM_EMAIL: process.env.ALERT_FROM_EMAIL,
+                                    SMTP_HOST: process.env.SMTP_HOST,
+                                    SMTP_PORT: process.env.SMTP_PORT,
+                                    SMTP_USER: process.env.SMTP_USER,
+                                    SMTP_SECURE: process.env.SMTP_SECURE
+                                }
+                            });
+                            results.email = emailResult;
+                            
+                            // Update the test alert to show email was sent
+                            if (emailResult.success) {
+                                testAlert.emailSent = true;
+                            }
+                        }
+                        break;
+                        
+                    case 'webhook':
+                        if (!process.env.WEBHOOK_URL) {
+                            results.webhook = { success: false, error: 'Webhook URL not configured' };
+                        } else {
+                            // Use the existing test webhook functionality
+                            const axios = require('axios');
+                            const webhookPayload = {
+                                alert: testAlert,
+                                type: 'test',
+                                message: `Test notification: ${testAlert.message}`
+                            };
+                            
+                            try {
+                                await axios.post(process.env.WEBHOOK_URL, webhookPayload, {
+                                    timeout: 10000,
+                                    headers: { 'Content-Type': 'application/json' }
+                                });
+                                results.webhook = { success: true, message: 'Test webhook sent successfully' };
+                                testAlert.webhookSent = true;
+                            } catch (webhookError) {
+                                results.webhook = { success: false, error: webhookError.message };
+                            }
+                        }
+                        break;
+                        
+                    default:
+                        results[channel] = { success: false, error: `Unknown notification channel: ${channel}` };
+                }
+            } catch (channelError) {
+                results[channel] = { success: false, error: channelError.message };
+            }
+        }
+        
+        // Create dashboard alert if requested (after all other notifications are processed)
+        if (notificationChannels.includes('local')) {
+            try {
+                const alertManager = stateManager.alertManager;
+                alertManager.addTestAlert(testAlert);
+                
+                // Force save the alert with updated notification flags
+                alertManager.saveActiveAlerts();
+                
+                results.local = { success: true, message: 'Test alert added to dashboard' };
+            } catch (localError) {
+                results.local = { success: false, error: `Failed to add dashboard alert: ${localError.message}` };
+            }
+        }
+        
+        // Determine overall success
+        const hasSuccess = Object.values(results).some(r => r.success);
+        const hasFailure = Object.values(results).some(r => !r.success);
+        
+        const response = {
+            success: hasSuccess,
+            results: results,
+            message: hasSuccess ? 
+                (hasFailure ? 'Test completed with mixed results' : 'All test notifications sent successfully') :
+                'All test notifications failed'
+        };
+        
+        console.log('[Test Alert] Test completed successfully');
+        res.json(response);
+        
+    } catch (error) {
+        console.error('[Test Alert] Error sending test alert:', error);
+        res.status(500).json({ success: false, error: 'Internal server error while testing alert' });
+    }
+});
+
 // Alert rules management with filtering
 app.get('/api/alerts/rules', (req, res) => {
     try {
