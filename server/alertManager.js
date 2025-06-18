@@ -207,6 +207,14 @@ class AlertManager extends EventEmitter {
                                 // Handle compound threshold rules
                                 const triggered = this.evaluateCompoundThresholdRule(rule, guest, metrics, alertKey, timestamp);
                                 if (triggered) newlyTriggeredAlerts.push(triggered);
+                            } else if (rule.type === 'per_guest_thresholds' && (rule.guestThresholds || rule.globalThresholds)) {
+                                // Handle per-guest threshold rules
+                                console.log(`[AlertManager] Processing per-guest threshold rule ${rule.id} for guest ${guest.name} (${guest.vmid})`);
+                                const triggeredAlerts = this.evaluatePerGuestThresholdRule(rule, guest, metrics, timestamp);
+                                if (triggeredAlerts.length > 0) {
+                                    console.log(`[AlertManager] Per-guest rule ${rule.id} triggered ${triggeredAlerts.length} alerts for guest ${guest.name}`);
+                                }
+                                triggeredAlerts.forEach(triggered => newlyTriggeredAlerts.push(triggered));
                             } else {
                                 // Handle single-metric rules
                                 const triggered = this.evaluateRule(rule, guest, metrics, alertKey, timestamp);
@@ -977,13 +985,16 @@ class AlertManager extends EventEmitter {
                 // If value is <= 1.0, assume it's in decimal format and convert to percentage
                 return cpuValue > 1.0 ? cpuValue : cpuValue * 100;
             case 'memory':
-                if (guest.maxmem && metrics.mem) {
-                    return (metrics.mem / guest.maxmem) * 100;
+                if (metrics.maxmem && metrics.mem) {
+                    const memoryPercent = (metrics.mem / metrics.maxmem) * 100;
+                    console.log(`[AlertManager] Memory calculation: ${metrics.mem}/${metrics.maxmem} = ${memoryPercent}%`);
+                    return memoryPercent;
                 }
+                console.log(`[AlertManager] Memory calculation failed: maxmem=${metrics.maxmem}, mem=${metrics.mem}`);
                 return null;
             case 'disk':
-                if (guest.maxdisk && metrics.disk) {
-                    return (metrics.disk / guest.maxdisk) * 100;
+                if (metrics.maxdisk && metrics.disk) {
+                    return (metrics.disk / metrics.maxdisk) * 100;
                 }
                 return null;
             default:
@@ -1212,8 +1223,9 @@ class AlertManager extends EventEmitter {
     }
 
     addRule(rule) {
-        // Support both single-metric rules and compound threshold rules
+        // Support single-metric rules, compound threshold rules, and per-guest threshold rules
         const isCompoundRule = rule.thresholds && Array.isArray(rule.thresholds) && rule.thresholds.length > 0;
+        const isPerGuestRule = rule.type === 'per_guest_thresholds' && rule.guestThresholds;
         
         
         // Enhanced validation
@@ -1221,8 +1233,8 @@ class AlertManager extends EventEmitter {
             throw new Error('Rule must have a valid name (non-empty string)');
         }
         
-        if (!isCompoundRule && !rule.metric) {
-            throw new Error('Single-metric rule must have a metric. For compound threshold rules, provide thresholds array.');
+        if (!isCompoundRule && !isPerGuestRule && !rule.metric) {
+            throw new Error('Single-metric rule must have a metric. For compound threshold rules, provide thresholds array. For per-guest rules, provide guestThresholds object.');
         }
         
         if (isCompoundRule) {
@@ -1249,6 +1261,30 @@ class AlertManager extends EventEmitter {
                     throw new Error(`Invalid threshold value '${threshold.threshold}' for metric '${threshold.metric}'. Expected number or 'stopped' for status checks.`);
                 }
             }
+        } else if (isPerGuestRule) {
+            // Validate per-guest threshold rule
+            if (!rule.guestThresholds || typeof rule.guestThresholds !== 'object') {
+                throw new Error('Per-guest rule must have a guestThresholds object');
+            }
+            
+            // Validate each guest's thresholds
+            for (const [guestId, guestThresholds] of Object.entries(rule.guestThresholds)) {
+                if (typeof guestThresholds !== 'object') {
+                    throw new Error(`Guest ${guestId} thresholds must be an object`);
+                }
+                
+                // Validate each metric threshold for this guest
+                for (const [metric, threshold] of Object.entries(guestThresholds)) {
+                    const validMetrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+                    if (!validMetrics.includes(metric)) {
+                        throw new Error(`Invalid metric '${metric}' for guest ${guestId}. Valid metrics: ${validMetrics.join(', ')}`);
+                    }
+                    
+                    if (typeof threshold !== 'string' && typeof threshold !== 'number') {
+                        throw new Error(`Invalid threshold value '${threshold}' for metric '${metric}' of guest ${guestId}. Expected string or number.`);
+                    }
+                }
+            }
         } else {
             // Validate single-metric rule
             if (rule.threshold !== undefined && (typeof rule.threshold !== 'number' || rule.threshold < 0)) {
@@ -1263,6 +1299,8 @@ class AlertManager extends EventEmitter {
         
         const ruleId = rule.id || (isCompoundRule ? 
             `compound_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : 
+            isPerGuestRule ?
+            `per_guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` :
             `rule_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
         
         // Set defaults for new rules
@@ -1272,15 +1310,15 @@ class AlertManager extends EventEmitter {
             duration: 300000,
             enabled: false,
             tags: [],
-            group: isCompoundRule ? 'compound_threshold' : 'custom',
+            group: isCompoundRule ? 'compound_threshold' : isPerGuestRule ? 'per_guest' : 'custom',
             autoResolve: true,
             suppressionTime: 300000,
-            type: isCompoundRule ? 'compound_threshold' : 'single_metric',
+            type: isCompoundRule ? 'compound_threshold' : isPerGuestRule ? 'per_guest_thresholds' : 'single_metric',
             ...rule
         };
         
         this.alertRules.set(ruleId, fullRule);
-        console.log(`[AlertManager] Added ${isCompoundRule ? 'compound threshold' : 'single-metric'} rule: ${fullRule.name} (${ruleId})`);
+        console.log(`[AlertManager] Added ${isCompoundRule ? 'compound threshold' : isPerGuestRule ? 'per-guest threshold' : 'single-metric'} rule: ${fullRule.name} (${ruleId})`);
         
         // Save all rules to disk
         this.saveAlertRules().catch(error => {
@@ -1706,6 +1744,127 @@ class AlertManager extends EventEmitter {
             'netout': 'Network Out'
         };
         return names[type] || type;
+    }
+
+    /**
+     * Evaluate per-guest threshold rules - handles individual guest thresholds and global fallbacks
+     */
+    evaluatePerGuestThresholdRule(rule, guest, metrics, timestamp) {
+        const triggeredAlerts = [];
+        
+        // Find metrics for this guest
+        const guestMetrics = metrics.find(m => 
+            m.endpointId === guest.endpointId &&
+            m.node === guest.node &&
+            m.id === guest.vmid
+        );
+        
+        if (!guestMetrics || !guestMetrics.current) {
+            console.log(`[AlertManager] No metrics found for guest ${guest.name} (${guest.endpointId}-${guest.node}-${guest.vmid})`);
+            return triggeredAlerts;
+        }
+        
+        console.log(`[AlertManager] Found metrics for guest ${guest.name}: CPU=${guestMetrics.current.cpu}%, Memory=${guestMetrics.current.mem}/${guestMetrics.current.maxmem}`);
+        console.log(`[AlertManager] Guest ${guest.name} properties:`, Object.keys(guest));
+        console.log(`[AlertManager] Metrics properties:`, Object.keys(guestMetrics.current));
+        
+        // Create a guest identifier for threshold lookup
+        const guestId = `${guest.endpointId}-${guest.node}-${guest.vmid}`;
+        
+        // Get the thresholds to check (guest-specific or global)
+        const guestThresholds = rule.guestThresholds || {};
+        const globalThresholds = rule.globalThresholds || {};
+        const thresholdConfigForGuest = guestThresholds[guestId] || {};
+        
+        // Metrics to check for alerts
+        const metricsToCheck = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+        
+        metricsToCheck.forEach(metricType => {
+            // Determine the effective threshold for this metric and guest
+            let effectiveThreshold = null;
+            
+            // First priority: guest-specific threshold
+            if (thresholdConfigForGuest[metricType] !== undefined && thresholdConfigForGuest[metricType] !== '') {
+                effectiveThreshold = parseFloat(thresholdConfigForGuest[metricType]);
+            } 
+            // Second priority: global threshold
+            else if (globalThresholds[metricType] !== undefined && globalThresholds[metricType] !== '') {
+                effectiveThreshold = parseFloat(globalThresholds[metricType]);
+            }
+            
+            // Skip if no threshold is set for this metric
+            if (effectiveThreshold === null || isNaN(effectiveThreshold) || effectiveThreshold <= 0) {
+                return;
+            }
+            
+            // Get current metric value
+            const currentValue = this.getMetricValue(guestMetrics.current, metricType, guest);
+            if (currentValue === null) {
+                return;
+            }
+            
+            // Evaluate threshold condition (default to greater_than)
+            const condition = rule.condition || 'greater_than';
+            const isTriggered = this.evaluateCondition(currentValue, condition, effectiveThreshold);
+            
+            // Create alert key for this specific metric
+            const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}_${metricType}`;
+            const existingAlert = this.activeAlerts.get(alertKey);
+            
+            if (isTriggered) {
+                if (!existingAlert) {
+                    // Create new alert
+                    const newAlert = {
+                        id: this.generateAlertId(),
+                        rule: this.createSafeRuleCopy({
+                            ...rule,
+                            metric: metricType,
+                            threshold: effectiveThreshold,
+                            name: `${rule.name} (${this.getThresholdDisplayName(metricType)})`
+                        }),
+                        guest: this.createSafeGuestCopy(guest),
+                        startTime: timestamp,
+                        lastUpdate: timestamp,
+                        currentValue: currentValue,
+                        effectiveThreshold: effectiveThreshold,
+                        state: 'pending',
+                        acknowledged: false,
+                        metricType: metricType // Add this to track which metric triggered
+                    };
+                    this.activeAlerts.set(alertKey, newAlert);
+                } else if (existingAlert.state === 'pending') {
+                    // Check if duration threshold is met
+                    const duration = timestamp - existingAlert.startTime;
+                    if (duration >= (rule.duration || 300000)) {
+                        // Trigger alert
+                        existingAlert.state = 'active';
+                        existingAlert.triggeredAt = timestamp;
+                        this.triggerAlert(existingAlert).catch(error => {
+                            console.error(`[AlertManager] Error triggering per-guest alert ${existingAlert.id}:`, error);
+                        });
+                        triggeredAlerts.push(existingAlert);
+                    }
+                    existingAlert.lastUpdate = timestamp;
+                    existingAlert.currentValue = currentValue;
+                } else if (existingAlert.state === 'active' && !existingAlert.acknowledged) {
+                    // Update existing active alert
+                    existingAlert.lastUpdate = timestamp;
+                    existingAlert.currentValue = currentValue;
+                }
+            } else {
+                if (existingAlert && (existingAlert.state === 'active' || existingAlert.state === 'pending')) {
+                    // Resolve alert when condition clears
+                    existingAlert.state = 'resolved';
+                    existingAlert.resolvedAt = timestamp;
+                    existingAlert.resolveReason = 'Condition cleared';
+                    if (existingAlert.rule.autoResolve !== false) {
+                        this.resolveAlert(existingAlert);
+                    }
+                }
+            }
+        });
+        
+        return triggeredAlerts;
     }
 
     /**
