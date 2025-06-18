@@ -42,9 +42,14 @@
 ### 🌿 Branch Strategy - When to Stay vs. Switch
 
 **Default: Always work on `develop`**
+- Always pull before starting work: `git pull origin develop`
 - Make all code changes on develop
 - Push to develop (no automatic releases)
 - Check release status from develop (don't switch just to view)
+
+**Git Config (already set up):**
+- `pull.rebase = true` - Automatically rebases on pull to avoid merge commits
+- This prevents the "divergent branches" error when remote has new commits
 
 **Only switch branches when:**
 1. **Resolving PR merge conflicts**: `gh pr checkout <PR_NUMBER>`

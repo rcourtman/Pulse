@@ -356,21 +356,30 @@ PulseApp.ui.dashboard = (() => {
                 (guest.uniqueId && guest.uniqueId.toString().includes(term))
             );
 
+            // Check if any thresholds are active
+            const hasActiveThresholds = Object.values(thresholdState).some(state => state && state.value > 0);
+            
+            // For threshold filtering, we'll add a property to track if thresholds are met
+            // but don't filter out - we'll use this for styling instead
             let thresholdsMet = true;
-            for (const type in thresholdState) {
-                const state = thresholdState[type];
-                let guestValue;
+            
+            if (hasActiveThresholds) {
+                for (const type in thresholdState) {
+                    const state = thresholdState[type];
+                    if (!state || state.value <= 0) continue;
+                    
+                    let guestValue;
 
-                if (type === METRIC_CPU) guestValue = guest.cpu;
-                else if (type === METRIC_MEMORY) guestValue = guest.memory;
-                else if (type === METRIC_DISK) guestValue = guest.disk;
-                else if (type === METRIC_DISK_READ) guestValue = guest.diskread;
-                else if (type === METRIC_DISK_WRITE) guestValue = guest.diskwrite;
-                else if (type === METRIC_NET_IN) guestValue = guest.netin;
-                else if (type === METRIC_NET_OUT) guestValue = guest.netout;
-                else continue;
+                    if (type === METRIC_CPU) guestValue = guest.cpu;
+                    else if (type === METRIC_MEMORY) guestValue = guest.memory;
+                    else if (type === METRIC_DISK) guestValue = guest.disk;
+                    else if (type === METRIC_DISK_READ) guestValue = guest.diskread;
+                    else if (type === METRIC_DISK_WRITE) guestValue = guest.diskwrite;
+                    else if (type === METRIC_NET_IN) guestValue = guest.netin;
+                    else if (type === METRIC_NET_OUT) guestValue = guest.netout;
+                    else continue;
 
-                if (state.value > 0) {
+
                     if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) {
                         thresholdsMet = false;
                         break;
@@ -381,7 +390,13 @@ PulseApp.ui.dashboard = (() => {
                     }
                 }
             }
-            return typeMatch && statusMatch && searchMatch && thresholdsMet;
+            
+            // Add threshold status to guest data for styling
+            // Only set to false if we have active thresholds and guest doesn't meet them
+            guest.meetsThresholds = hasActiveThresholds ? thresholdsMet : true;
+            
+            // Only filter out based on type, status and search - not thresholds
+            return typeMatch && statusMatch && searchMatch;
         });
     }
 
@@ -544,8 +559,20 @@ PulseApp.ui.dashboard = (() => {
         row.setAttribute('data-type', guest.type.toLowerCase());
         row.setAttribute('data-node', guest.node.toLowerCase());
         
-        // Update class - same styling for both stopped and running
-        row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        // Update class - apply dimming if guest doesn't meet thresholds
+        const baseClasses = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        
+        if (guest.meetsThresholds === false) {
+            row.className = baseClasses;
+            row.style.opacity = '0.4';
+            row.style.transition = 'opacity 0.2s ease-in-out';
+            row.setAttribute('data-dimmed', 'true');
+        } else {
+            row.className = baseClasses;
+            row.style.opacity = '';
+            row.style.transition = '';
+            row.removeAttribute('data-dimmed');
+        }
         
         // Update specific cells that might have changed
         const cells = row.querySelectorAll('td');
@@ -977,7 +1004,22 @@ PulseApp.ui.dashboard = (() => {
 
     function createGuestRow(guest) {
         const row = document.createElement('tr');
-        row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        
+        // Apply dimming if guest doesn't meet thresholds
+        const baseClasses = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        
+        if (guest.meetsThresholds === false) {
+            row.className = baseClasses;
+            row.style.opacity = '0.4';
+            row.style.transition = 'opacity 0.2s ease-in-out';
+            row.setAttribute('data-dimmed', 'true');
+        } else {
+            row.className = baseClasses;
+            row.style.opacity = '';
+            row.style.transition = '';
+            row.removeAttribute('data-dimmed');
+        }
+        
         row.setAttribute('data-name', guest.name.toLowerCase());
         row.setAttribute('data-type', guest.type.toLowerCase());
         row.setAttribute('data-node', guest.node.toLowerCase());
