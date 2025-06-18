@@ -1934,12 +1934,12 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                     maxmem: bulkVmData.maxmem || 0,
                                     disk: bulkVmData.disk || 0,
                                     maxdisk: bulkVmData.maxdisk || 0,
-                                    // Prefer fresh I/O counters from individual status endpoint
+                                    // Prefer fresh I/O counters and uptime from individual status endpoint
                                     netin: statusData.netin !== undefined ? statusData.netin : (bulkVmData.netin || 0),
                                     netout: statusData.netout !== undefined ? statusData.netout : (bulkVmData.netout || 0),
                                     diskread: statusData.diskread !== undefined ? statusData.diskread : (bulkVmData.diskread || 0),
                                     diskwrite: statusData.diskwrite !== undefined ? statusData.diskwrite : (bulkVmData.diskwrite || 0),
-                                    uptime: bulkVmData.uptime || 0,
+                                    uptime: statusData.uptime !== undefined ? statusData.uptime : (bulkVmData.uptime || 0),
                                     status: bulkVmData.status || 'unknown',
                                     qmpstatus: bulkVmData.qmpstatus || bulkVmData.status || 'unknown',
                                     agent: type === 'qemu' ? (bulkVmData.agent || 0) : 0
