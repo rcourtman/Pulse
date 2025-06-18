@@ -93,11 +93,26 @@ PulseApp.tooltips = (() => {
     function updateSliderTooltip(sliderElement) {
         if (!sliderValueTooltip || !sliderElement) return;
 
-        const type = sliderElement.id.replace('threshold-slider-', '');
-        if (!PulseApp.state.getThresholdState()[type]) return; // Only process actual threshold sliders
-
-        const numericValue = parseInt(sliderElement.value);
-        let displayText = `${numericValue}%`;
+        // Check if this is a threshold slider or alert slider
+        let displayText;
+        let isThresholdSlider = false;
+        let isAlertSlider = false;
+        
+        if (sliderElement.id.startsWith('threshold-slider-')) {
+            const type = sliderElement.id.replace('threshold-slider-', '');
+            if (PulseApp.state.getThresholdState()[type]) {
+                isThresholdSlider = true;
+                const numericValue = parseInt(sliderElement.value);
+                displayText = `${numericValue}%`;
+            }
+        } else if (sliderElement.id.startsWith('alert-slider-') || sliderElement.id.startsWith('global-alert-')) {
+            isAlertSlider = true;
+            const numericValue = parseInt(sliderElement.value);
+            displayText = `${numericValue}%`;
+        }
+        
+        // If neither threshold nor alert slider, don't show tooltip
+        if (!isThresholdSlider && !isAlertSlider) return;
 
         const rect = sliderElement.getBoundingClientRect();
         const min = parseFloat(sliderElement.min);
@@ -114,7 +129,7 @@ PulseApp.tooltips = (() => {
         const tooltipRect = sliderValueTooltip.getBoundingClientRect();
 
         const posX = thumbX - (tooltipRect.width / 2);
-        const posY = rect.top - tooltipRect.height - 5;
+        const posY = rect.top + window.pageYOffset - tooltipRect.height - 5;
 
         sliderValueTooltip.style.left = `${posX}px`;
         sliderValueTooltip.style.top = `${posY}px`;

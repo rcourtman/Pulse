@@ -161,11 +161,6 @@ PulseApp.ui.alertManagementModal = (() => {
             removeWebhookEndpoint,
             handleEmailProviderSelection,
             switchTab,
-            // Unified alert rule functions
-            openAlertRuleModal,
-            editAlertRule,
-            toggleAlertRule,
-            deleteAlertRule,
             // Debug functions
             debugToggles: () => {
                 setupNotificationToggles();
@@ -544,30 +539,6 @@ PulseApp.ui.alertManagementModal = (() => {
     function renderConfigureTab() {
         return `
             <div class="space-y-6">
-                <!-- Unified Alert Rules Section -->
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center space-x-3">
-                            <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
-                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">Alert Rules</h3>
-                        </div>
-                        <button onclick="openAlertRuleModal()" class="px-3 sm:px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-medium rounded-md transition-colors">
-                            <svg class="w-3 h-3 sm:w-4 sm:h-4 inline mr-1 sm:mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                            </svg>
-                            <span class="hidden sm:inline">Create Rule</span>
-                            <span class="sm:hidden">Create</span>
-                        </button>
-                    </div>
-                    
-                    <!-- Unified Alert Rules List -->
-                    <div id="alert-rules-list" class="space-y-3">
-                        <p class="text-gray-500 dark:text-gray-400">Loading alert rules...</p>
-                    </div>
-                </div>
-
                 <!-- Notification Settings Section -->
                 <div>
                     <div class="flex items-center space-x-3 mb-4">
@@ -729,170 +700,14 @@ PulseApp.ui.alertManagementModal = (() => {
     }
 
     function initializeConfigureTab() {
-        // Load all alert rules (unified)
-        loadAllAlertRules();
-        
         // Set up event listeners for notifications with a small delay to ensure DOM is ready
         setTimeout(() => {
             setupNotificationToggles();
             initializeNotificationsTab(); // Initialize notification tab handlers including test buttons
         }, 10);
-        
-        // Create rule button now uses onclick attribute directly
     }
 
-    async function loadAllAlertRules() {
-        const alertRulesList = document.getElementById('alert-rules-list');
-        if (!alertRulesList) return;
 
-        try {
-            // Load all alert rules from the API
-            const data = await PulseApp.apiClient.get('/api/alerts/rules');
-            const rules = data.rules || [];
-
-            if (rules.length === 0) {
-                alertRulesList.innerHTML = `
-                    <div class="text-center py-8">
-                        <svg class="w-12 h-12 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        <p class="text-gray-500 dark:text-gray-400 mb-4">No alert rules configured</p>
-                        <button onclick="openAlertRuleModal()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md">
-                            Create First Rule
-                        </button>
-                    </div>
-                `;
-                return;
-            }
-
-            // Sort rules by group then by name
-            rules.sort((a, b) => {
-                const groupA = a.group || 'zz_custom';
-                const groupB = b.group || 'zz_custom';
-                if (groupA !== groupB) {
-                    return groupA.localeCompare(groupB);
-                }
-                return (a.name || '').localeCompare(b.name || '');
-            });
-
-            alertRulesList.innerHTML = rules.map(rule => renderUnifiedAlertRule(rule)).join('');
-
-        } catch (error) {
-            console.error('Error loading alert rules:', error);
-            alertRulesList.innerHTML = `
-                <div class="text-center py-8 text-red-500">
-                    <p>Error loading alert rules</p>
-                </div>
-            `;
-        }
-    }
-
-    function renderUnifiedAlertRule(rule) {
-        const isCompoundRule = rule.thresholds && Array.isArray(rule.thresholds) && rule.thresholds.length > 0;
-        
-        // Generate threshold display
-        const thresholdDisplay = (() => {
-            if (rule.thresholds && Array.isArray(rule.thresholds)) {
-                // Custom compound rule
-                const thresholds = rule.thresholds.map(t => {
-                    const unit = ['cpu', 'memory', 'disk'].includes(t.metric) ? '%' : '';
-                    return `${t.metric.toUpperCase()} ${t.condition === 'greater_than' ? '>' : t.condition === 'less_than' ? '<' : '≥'} ${t.threshold}${unit}`;
-                });
-                return thresholds.join(' AND ');
-            } else if (rule.threshold !== undefined) {
-                // Simple rule with single threshold
-                const unit = ['cpu', 'memory', 'disk'].includes(rule.metric) ? '%' : '';
-                const condition = rule.condition === 'greater_than' ? '>' : rule.condition === 'less_than' ? '<' : '≥';
-                return `${rule.metric ? rule.metric.toUpperCase() : 'VALUE'} ${condition} ${rule.threshold}${unit}`;
-            }
-            return '';
-        })();
-        
-        // Generate duration display
-        const durationDisplay = (() => {
-            if (rule.duration) {
-                const minutes = Math.round(rule.duration / 60000);
-                return minutes === 1 ? '1 min' : `${minutes} mins`;
-            }
-            return '';
-        })();
-        
-        return `
-            <div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                <div class="flex flex-col gap-3">
-                    <!-- Header with title and toggle -->
-                    <div class="flex items-start justify-between gap-3">
-                        <h5 class="text-sm font-medium text-gray-900 dark:text-gray-100 flex-1">${rule.name || rule.id}</h5>
-                        <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                            <input type="checkbox" ${rule.enabled !== false ? 'checked' : ''} class="sr-only peer" onchange="toggleAlertRule('${rule.id}', this.checked)">
-                            <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                        </label>
-                    </div>
-                    
-                    <!-- Condition section -->
-                    ${thresholdDisplay ? `
-                        <div class="bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 p-2">
-                            <div class="flex flex-col gap-1">
-                                <span class="text-xs font-medium text-gray-600 dark:text-gray-400">Condition:</span>
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <code class="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded font-mono">${thresholdDisplay}</code>
-                                    ${durationDisplay ? `<span class="text-xs text-gray-500 dark:text-gray-400">for ${durationDisplay}</span>` : ''}
-                                </div>
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    <!-- Description -->
-                    <p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">${rule.description || getAlertRuleDescription(rule)}</p>
-                    
-                    <!-- Action buttons -->
-                    <div class="flex items-center gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
-                        <button onclick="editAlertRule('${rule.id}')" class="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded transition-colors flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                            </svg>
-                            Edit
-                        </button>
-                        <button onclick="deleteAlertRule('${rule.id}')" class="px-3 py-1.5 text-xs bg-red-50 hover:bg-red-100 dark:bg-red-900/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded transition-colors flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                            </svg>
-                            Delete
-                        </button>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    function getAlertRuleDescription(rule) {
-        if (rule.description) return rule.description;
-        
-        // Generate description for system rules
-        switch (rule.id) {
-            case 'cpu':
-                return 'Monitors CPU usage across all VMs and containers';
-            case 'memory':
-                return 'Monitors memory usage across all VMs and containers';
-            case 'disk':
-                return 'Monitors disk space usage across all VMs and containers';
-            case 'down':
-                return 'Monitors VM/container availability and uptime';
-            default:
-                if (rule.thresholds && rule.thresholds.length > 0) {
-                    return `Custom rule with ${rule.thresholds.length} threshold${rule.thresholds.length > 1 ? 's' : ''}`;
-                }
-                return 'Custom alert rule';
-        }
-    }
-
-    // Unified alert rule functions
-    function openAlertRuleModal(existingRule = null) {
-        // For now, redirect to the existing custom alert modal
-        // TODO: Create a unified modal that handles all rules
-        openCustomAlertModal([], existingRule);
-    }
 
     async function editAlertRule(ruleId) {
         try {

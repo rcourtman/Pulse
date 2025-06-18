@@ -882,6 +882,134 @@ app.get('/api/alerts/status', (req, res) => {
     }
 });
 
+// Per-guest alert configuration endpoint
+app.post('/api/alerts/config', (req, res) => {
+    try {
+        const alertConfig = req.body;
+        
+        // Validate the alert configuration
+        if (!alertConfig || typeof alertConfig !== 'object') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Invalid alert configuration' 
+            });
+        }
+        
+        // Create a rule from the per-guest configuration
+        const rule = {
+            id: 'per-guest-alerts',
+            name: 'Per-Guest Alert Thresholds',
+            description: 'Auto-generated rule from per-guest threshold configuration',
+            type: 'per_guest_thresholds',
+            globalThresholds: alertConfig.globalThresholds || {},
+            guestThresholds: alertConfig.guestThresholds || {},
+            enabled: alertConfig.enabled !== false,
+            notifications: alertConfig.notifications || {
+                dashboard: true,
+                email: false,
+                webhook: false
+            },
+            createdAt: alertConfig.lastUpdated || new Date().toISOString()
+        };
+        
+        // Check if the rule already exists
+        const existingRule = stateManager.alertManager.alertRules.get('per-guest-alerts');
+        
+        if (existingRule) {
+            // Update existing rule
+            const success = stateManager.alertManager.updateRule('per-guest-alerts', {
+                globalThresholds: rule.globalThresholds,
+                guestThresholds: rule.guestThresholds,
+                notifications: rule.notifications,
+                enabled: rule.enabled,
+                lastUpdated: new Date().toISOString()
+            });
+            
+            if (success) {
+                res.json({ 
+                    success: true, 
+                    message: 'Alert configuration updated successfully' 
+                });
+            } else {
+                res.status(500).json({ 
+                    success: false, 
+                    error: 'Failed to update alert configuration' 
+                });
+            }
+        } else {
+            // Create new rule
+            try {
+                const newRule = stateManager.alertManager.addRule(rule);
+                res.json({ 
+                    success: true, 
+                    message: 'Alert configuration created successfully',
+                    rule: newRule 
+                });
+            } catch (error) {
+                res.status(400).json({ 
+                    success: false, 
+                    error: error.message 
+                });
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error saving alert configuration:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Internal server error while saving alert configuration' 
+        });
+    }
+});
+
+// Get per-guest alert configuration endpoint
+app.get('/api/alerts/config', (req, res) => {
+    try {
+        const existingRule = stateManager.alertManager.alertRules.get('per-guest-alerts');
+        
+        if (existingRule && existingRule.type === 'per_guest_thresholds') {
+            res.json({
+                success: true,
+                config: {
+                    type: 'per_guest_thresholds',
+                    globalThresholds: existingRule.globalThresholds || {},
+                    guestThresholds: existingRule.guestThresholds || {},
+                    notifications: existingRule.notifications || {
+                        dashboard: true,
+                        email: false,
+                        webhook: false
+                    },
+                    enabled: existingRule.enabled,
+                    lastUpdated: existingRule.lastUpdated || existingRule.createdAt
+                }
+            });
+        } else {
+            // Return empty config if no per-guest rule exists
+            res.json({
+                success: true,
+                config: {
+                    type: 'per_guest_thresholds',
+                    globalThresholds: {},
+                    guestThresholds: {},
+                    notifications: {
+                        dashboard: true,
+                        email: false,
+                        webhook: false
+                    },
+                    enabled: true,
+                    lastUpdated: null
+                }
+            });
+        }
+    } catch (error) {
+        console.error('Error loading alert configuration:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Internal server error while loading alert configuration' 
+        });
+    }
+});
+
 
 // Version API endpoint
 app.get('/api/version', async (req, res) => {
