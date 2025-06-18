@@ -1,5 +1,14 @@
 # Claude Development Notes
 
+## 🚨 CRITICAL: Git Commit Policy
+
+**NEVER COMMIT ANYTHING WITHOUT EXPLICIT USER REQUEST**
+
+- Only commit when the user explicitly asks you to commit
+- Never commit proactively or automatically after completing work
+- Always wait for explicit permission before running `git commit` or `git push`
+- If you complete work, simply report what you did - don't commit it
+
 ## Git Workflow and Automated Releases
 
 ### 🤖 Ultra-Simple Release Philosophy
@@ -353,21 +362,27 @@ gh workflow run stable-release.yml --ref main
 
 # Development Behavior Preferences
 
+- **🚨 NEVER COMMIT WITHOUT EXPLICIT REQUEST** - Only commit when user explicitly asks
 - Do exactly what's asked - no more, no less
 - Edit existing files over creating new ones
 - No proactive documentation creation
 - Use TodoWrite for complex tasks - helps user track progress
 - Be concise in responses unless detail requested
-- When fixing bugs, test the fix before committing
+- When fixing bugs, test the fix but DO NOT commit unless asked
 
 ## Service Management
 
 **IMPORTANT**: This development environment runs Pulse as a systemd service.
 
-**Always use systemctl commands:**
-- Restart service: `systemctl restart pulse`
+**Hot reloading enabled:**
+- File changes automatically restart the service
+- No need to manually restart service during development
+- Just save files and changes take effect immediately
+
+**Service commands (if needed):**
 - Check status: `systemctl status pulse`
 - View logs: `journalctl -u pulse -f`
+- Manual restart: `systemctl restart pulse` (rarely needed)
 
 **Never use:**
 - `npm start` or `npm run start` (service handles this)

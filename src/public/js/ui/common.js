@@ -367,19 +367,18 @@ PulseApp.ui.common = (() => {
         PulseApp.state.set('filterStatus', 'all');
         document.getElementById('filter-status-all').checked = true;
 
-        // Reset thresholds (but keep threshold row open)
-        PulseApp.ui.thresholds.resetThresholds(); // This will also trigger a save
+        // Note: Thresholds are now handled by their own dedicated reset button
 
         // Update table and save states
         PulseApp.ui.dashboard.updateDashboardTable();
-        PulseApp.state.saveFilterState(); // Thresholds are saved by its own reset
+        PulseApp.state.saveFilterState();
         // Sort state is not reset by this action intentionally
         
         // Update reset button highlighting
         updateResetButtonState();
     }
     
-    function hasActiveFiltersOrThresholds() {
+    function hasActiveFilters() {
         // Check search input
         if (searchInput && searchInput.value.trim() !== '') return true;
         
@@ -390,11 +389,7 @@ PulseApp.ui.common = (() => {
         
         if (filterGuestType !== 'all' || filterStatus !== 'all' || groupByNode !== true) return true;
         
-        // Check thresholds
-        const thresholdState = PulseApp.state.getThresholdState();
-        for (const type in thresholdState) {
-            if (thresholdState[type] && thresholdState[type].value > 0) return true;
-        }
+        // Note: Thresholds are no longer included - they have their own reset button
         
         return false;
     }
@@ -403,7 +398,7 @@ PulseApp.ui.common = (() => {
         const resetButton = document.getElementById('reset-filters-button');
         if (!resetButton) return;
         
-        const hasActiveStates = hasActiveFiltersOrThresholds();
+        const hasActiveStates = hasActiveFilters();
         
         if (hasActiveStates) {
             // Highlighted state - button is active
@@ -441,6 +436,6 @@ PulseApp.ui.common = (() => {
         resetDashboardView,
         generateNodeGroupHeaderCellHTML,
         updateResetButtonState,
-        hasActiveFiltersOrThresholds
+        hasActiveFilters
     };
 })();

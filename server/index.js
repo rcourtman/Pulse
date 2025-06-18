@@ -363,6 +363,29 @@ app.get('/api/alerts', (req, res) => {
     }
 });
 
+// Active alerts endpoint (simplified response for alert monitor modal)
+app.get('/api/alerts/active', (req, res) => {
+    try {
+        const filters = {
+            severity: req.query.severity,
+            group: req.query.group,
+            node: req.query.node,
+            acknowledged: req.query.acknowledged === 'true' ? true : 
+                         req.query.acknowledged === 'false' ? false : undefined
+        };
+        
+        const activeAlerts = stateManager.alertManager.getActiveAlerts(filters);
+        
+        res.json({
+            success: true,
+            alerts: activeAlerts
+        });
+    } catch (error) {
+        console.error("Error in /api/alerts/active:", error);
+        res.status(500).json({ success: false, error: "Failed to fetch active alerts" });
+    }
+});
+
 // Alert history endpoint with pagination and filtering
 app.get('/api/alerts/history', (req, res) => {
     try {

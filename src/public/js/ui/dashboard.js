@@ -60,7 +60,7 @@ PulseApp.ui.dashboard = (() => {
         const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
         
         return `
-            <div class="${containerClass}" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
+            <div class="${containerClass} h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
                 ${sliderHtml}
             </div>
         `;
@@ -97,7 +97,7 @@ PulseApp.ui.dashboard = (() => {
         const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
         
         return `
-            <div class="${containerClass}" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
+            <div class="${containerClass} h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
                 ${selectHtml}
             </div>
         `;
@@ -782,7 +782,7 @@ PulseApp.ui.dashboard = (() => {
         
         // Ensure name cell keeps sticky styling even after row class updates
         if (cells[0]) {
-            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600';
+            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600';
         }
         if (cells.length >= 10) {
             // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
@@ -804,12 +804,12 @@ PulseApp.ui.dashboard = (() => {
             
             // Ensure ID cell (2) has proper classes
             if (cells[2]) {
-                cells[2].className = 'p-1 px-2';
+                cells[2].className = 'py-1 px-2 align-middle';
             }
             
             // Ensure uptime cell (3) has proper classes
             if (cells[3]) {
-                cells[3].className = 'p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis';
+                cells[3].className = 'py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis';
             }
 
             // Update uptime (cell 3)
@@ -864,7 +864,7 @@ PulseApp.ui.dashboard = (() => {
             // Ensure I/O cells (7-10) have proper classes
             [7, 8, 9, 10].forEach(index => {
                 if (cells[index]) {
-                    cells[index].className = 'p-1 px-2';
+                    cells[index].className = 'py-1 px-2 align-middle';
                 }
             });
 
@@ -1001,6 +1001,8 @@ PulseApp.ui.dashboard = (() => {
             const allThresholds = PulseApp.ui.alerts.getGuestThresholds();
             const guestThresholds = allThresholds[guest.id] || {};
             PulseApp.ui.alerts.updateCellStyling?.(row, guest.id, guestThresholds);
+            // Also trigger row-level styling update based on alert thresholds
+            PulseApp.ui.alerts.updateRowStylingOnly?.();
         }
     }
 
@@ -1526,23 +1528,23 @@ PulseApp.ui.dashboard = (() => {
         }
 
         row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">
                 <div class="flex items-center gap-1">
                     <span>${guest.name}</span>
                     ${alertIndicator}
                     ${thresholdIndicator}
                 </div>
             </td>
-            <td class="p-1 px-2">${typeIcon}</td>
-            <td class="p-1 px-2">${guest.id}</td>
-            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>
-            <td class="p-1 px-2">${cpuBarHTML}</td>
-            <td class="p-1 px-2">${memoryBarHTML}</td>
-            <td class="p-1 px-2">${diskBarHTML}</td>
-            <td class="p-1 px-2">${diskReadCell}</td>
-            <td class="p-1 px-2">${diskWriteCell}</td>
-            <td class="p-1 px-2">${netInCell}</td>
-            <td class="p-1 px-2">${netOutCell}</td>
+            <td class="py-1 px-2 align-middle">${typeIcon}</td>
+            <td class="py-1 px-2 align-middle">${guest.vmid}</td>
+            <td class="py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>
+            <td class="py-1 px-2 align-middle">${cpuBarHTML}</td>
+            <td class="py-1 px-2 align-middle">${memoryBarHTML}</td>
+            <td class="py-1 px-2 align-middle">${diskBarHTML}</td>
+            <td class="py-1 px-2 align-middle">${diskReadCell}</td>
+            <td class="py-1 px-2 align-middle">${diskWriteCell}</td>
+            <td class="py-1 px-2 align-middle">${netInCell}</td>
+            <td class="py-1 px-2 align-middle">${netOutCell}</td>
         `;
         
         // Setup event listeners for alert sliders and dropdowns

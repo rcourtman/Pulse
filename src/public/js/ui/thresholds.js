@@ -41,6 +41,7 @@ PulseApp.ui.thresholds = (() => {
         _setupSliderListeners();
         _setupSelectListeners();
         _setupDragEndListeners();
+        _setupResetButtonListener();
     }
 
     function applyInitialThresholdUI() {
@@ -109,12 +110,24 @@ PulseApp.ui.thresholds = (() => {
         document.addEventListener('touchend', _handleThresholdDragEnd);
     }
 
+    function _setupResetButtonListener() {
+        const resetButton = document.getElementById('reset-thresholds');
+        if (resetButton) {
+            resetButton.addEventListener('click', resetThresholds);
+        }
+    }
+
     function updateThreshold(type, value, immediate = false) {
         PulseApp.state.setThresholdValue(type, value);
         updateThresholdIndicator();
 
         // Always update dashboard immediately for live responsiveness
         updateDashboardFromThreshold();
+        
+        // Update reset button highlighting
+        if (PulseApp.ui.common && PulseApp.ui.common.updateResetButtonState) {
+            PulseApp.ui.common.updateResetButtonState();
+        }
     }
 
     function updateDashboardFromThreshold() {
@@ -277,6 +290,11 @@ PulseApp.ui.thresholds = (() => {
         updateThresholdIndicator();
         clearAllRowDimming();
         
+        // Update reset button highlighting
+        if (PulseApp.ui.common && PulseApp.ui.common.updateResetButtonState) {
+            PulseApp.ui.common.updateResetButtonState();
+        }
+        
         PulseApp.ui.toast?.success('Thresholds reset');
     }
 
@@ -307,7 +325,7 @@ PulseApp.ui.thresholds = (() => {
         
         return `
             <select id="${id}" 
-                    class="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${additionalClasses}">
+                    class="threshold-select px-1 py-0 h-5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-[10px] w-full focus:outline-none focus:ring-1 focus:ring-blue-500 ${additionalClasses}">
                 ${optionsHtml}
             </select>
         `;
