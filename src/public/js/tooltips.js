@@ -93,11 +93,26 @@ PulseApp.tooltips = (() => {
     function updateSliderTooltip(sliderElement) {
         if (!sliderValueTooltip || !sliderElement) return;
 
-        const type = sliderElement.id.replace('threshold-slider-', '');
-        if (!PulseApp.state.getThresholdState()[type]) return; // Only process actual threshold sliders
-
-        const numericValue = parseInt(sliderElement.value);
-        let displayText = `${numericValue}%`;
+        // Check if this is a threshold slider or alert slider
+        let displayText;
+        let isThresholdSlider = false;
+        let isAlertSlider = false;
+        
+        if (sliderElement.id.startsWith('threshold-slider-')) {
+            const type = sliderElement.id.replace('threshold-slider-', '');
+            if (PulseApp.state.getThresholdState()[type]) {
+                isThresholdSlider = true;
+                const numericValue = parseInt(sliderElement.value);
+                displayText = `${numericValue}%`;
+            }
+        } else if (sliderElement.id.startsWith('alert-slider-') || sliderElement.id.startsWith('global-alert-')) {
+            isAlertSlider = true;
+            const numericValue = parseInt(sliderElement.value);
+            displayText = `${numericValue}%`;
+        }
+        
+        // If neither threshold nor alert slider, don't show tooltip
+        if (!isThresholdSlider && !isAlertSlider) return;
 
         const rect = sliderElement.getBoundingClientRect();
         const min = parseFloat(sliderElement.min);
@@ -109,20 +124,69 @@ PulseApp.tooltips = (() => {
         const thumbWidthEstimate = 16;
         let thumbX = rect.left + (percent * (rect.width - thumbWidthEstimate)) + (thumbWidthEstimate / 2);
 
+        // Cancel any pending hide timeout when showing tooltip
+        if (hideTooltipTimeout) {
+            clearTimeout(hideTooltipTimeout);
+            hideTooltipTimeout = null;
+        }
+        
         sliderValueTooltip.textContent = displayText;
         sliderValueTooltip.classList.remove('hidden');
         const tooltipRect = sliderValueTooltip.getBoundingClientRect();
 
         const posX = thumbX - (tooltipRect.width / 2);
-        const posY = rect.top - tooltipRect.height - 5;
+        
+        // Check if slider is in table header (global alert sliders)
+        const isInTableHeader = sliderElement.closest('thead') !== null;
+        const isGlobalAlertSlider = sliderElement.id && sliderElement.id.startsWith('global-alert-');
+        let posY;
+        
+        // Debug logging (commented out)
+        // if (isGlobalAlertSlider) {
+        //     console.log('Global alert slider detected:', sliderElement.id, 'isInTableHeader:', isInTableHeader);
+        // }
+        
+        if (isInTableHeader || isGlobalAlertSlider) {
+            // For sliders in table header or global alert sliders, position tooltip above the slider but with more space
+            posY = rect.top + window.pageYOffset - tooltipRect.height - 10;
+        } else {
+            // For regular sliders, position tooltip above the slider
+            posY = rect.top + window.pageYOffset - tooltipRect.height - 5;
+        }
 
         sliderValueTooltip.style.left = `${posX}px`;
         sliderValueTooltip.style.top = `${posY}px`;
     }
 
+    let hideTooltipTimeout = null;
+
     function hideSliderTooltip() {
+        // Clear any existing timeout
+        if (hideTooltipTimeout) {
+            clearTimeout(hideTooltipTimeout);
+        }
+        
+        // Hide tooltip after a brief delay to allow user to see final value
+        hideTooltipTimeout = setTimeout(() => {
+            if (sliderValueTooltip) {
+                sliderValueTooltip.classList.add('hidden');
+            }
+        }, 800); // 800ms delay
+    }
+
+    function hideSliderTooltipImmediately() {
+        // Clear any existing timeout
+        if (hideTooltipTimeout) {
+            clearTimeout(hideTooltipTimeout);
+            hideTooltipTimeout = null;
+        }
+        
+        // Hide tooltip immediately and reset its position
         if (sliderValueTooltip) {
             sliderValueTooltip.classList.add('hidden');
+            // Reset position to prevent positioning issues
+            sliderValueTooltip.style.left = '0px';
+            sliderValueTooltip.style.top = '0px';
         }
     }
 
@@ -146,6 +210,7 @@ PulseApp.tooltips = (() => {
         init,
         updateSliderTooltip,
         hideSliderTooltip,
+        hideSliderTooltipImmediately,
         showTooltip,
         hideTooltip
     };

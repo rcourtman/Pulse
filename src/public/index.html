@@ -95,6 +95,27 @@
         @apply font-semibold;
     }
 
+    /* Alert threshold inheritance styles */
+    .alert-threshold-input.using-global {
+        position: relative;
+    }
+    
+    .alert-threshold-input.using-global::before {
+        content: "↑";
+        position: absolute;
+        top: -2px;
+        right: 2px;
+        font-size: 10px;
+        color: #3b82f6;
+        opacity: 0.7;
+        z-index: 10;
+        pointer-events: none;
+    }
+    
+    .dark .alert-threshold-input.using-global::before {
+        color: #60a5fa;
+    }
+
     /* Dot animation for logging indicator */
     @keyframes dot-pulse {
       0%, 100% { opacity: 0.2; }
@@ -199,6 +220,98 @@
     
     .net-disk-col {
         min-width: 60px;
+    }
+
+    /* Alerts mode styling */
+    .alerts-mode .metric-text {
+        display: none;
+    }
+    
+    .alerts-mode .metric-chart {
+        display: none;
+    }
+    
+    .alerts-mode .alert-threshold-input {
+        display: block;
+        padding: 4px;
+    }
+    
+    .alert-threshold-input {
+        display: none;
+    }
+    
+    /* Alert threshold slider styling */
+    .alert-threshold-slider {
+        -webkit-appearance: none;
+        appearance: none;
+        background: transparent;
+        cursor: pointer;
+    }
+    
+    .alert-threshold-slider::-webkit-slider-track {
+        background: #e5e7eb;
+        height: 8px;
+        border-radius: 4px;
+    }
+    
+    .dark .alert-threshold-slider::-webkit-slider-track {
+        background: #374151;
+    }
+    
+    .alert-threshold-slider::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        background: #3b82f6;
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+    }
+    
+    .dark .alert-threshold-slider::-webkit-slider-thumb {
+        border-color: #1f2937;
+    }
+    
+    .alert-threshold-slider::-moz-range-track {
+        background: #e5e7eb;
+        height: 8px;
+        border-radius: 4px;
+        border: none;
+    }
+    
+    .dark .alert-threshold-slider::-moz-range-track {
+        background: #374151;
+    }
+    
+    .alert-threshold-slider::-moz-range-thumb {
+        height: 16px;
+        width: 16px;
+        border-radius: 50%;
+        background: #3b82f6;
+        border: 2px solid #ffffff;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+        border: none;
+    }
+    
+    .dark .alert-threshold-slider::-moz-range-thumb {
+        border: 2px solid #1f2937;
+    }
+    
+    /* Alert threshold select styling */
+    .alert-threshold-select {
+        font-size: 11px;
+        padding: 2px 4px;
+        min-height: auto;
+    }
+    
+    .alert-threshold-select:focus {
+        outline: none;
+        ring: 1px;
+        ring-color: #3b82f6;
+        border-color: #3b82f6;
     }
     
     /* Prevent text wrapping in all table cells */
@@ -537,7 +650,7 @@
               </button>
               <div class="flex items-center gap-1 flex-shrink-0 relative">
                 <span class="text-xs text-gray-600 dark:text-gray-400 font-medium hidden sm:inline">View:</span>
-                <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden flex-shrink-0">
+                <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded flex-shrink-0">
                   <label class="relative">
                     <input type="checkbox" id="toggle-charts-checkbox" class="hidden peer">
                     <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
@@ -549,7 +662,7 @@
                       <span class="hidden md:inline">Charts</span>
                     </span>
                   </label>
-                  <label>
+                  <label class="relative">
                     <input type="checkbox" id="toggle-thresholds-checkbox" class="hidden peer">
                     <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
@@ -565,9 +678,19 @@
                       </svg>
                       <span class="hidden md:inline">Thresholds</span>
                     </span>
+                    <span id="threshold-count-badge" class="absolute -top-1 -right-1 z-30 inline-flex items-center justify-center px-1 py-0.5 text-[9px] font-bold leading-none text-white bg-blue-600 rounded-full hidden">0</span>
+                  </label>
+                  <label>
+                    <input type="checkbox" id="toggle-alerts-checkbox" class="hidden peer">
+                    <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
+                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                        <path d="m13.73 21a2 2 0 0 1-3.46 0"></path>
+                      </svg>
+                      <span class="hidden md:inline">Alerts</span>
+                    </span>
                   </label>
                 </div>
-                <span id="threshold-count-badge" class="absolute -top-1 -right-1 z-30 inline-flex items-center justify-center px-1 py-0.5 text-[9px] font-bold leading-none text-white bg-blue-600 rounded-full hidden">0</span>
               </div>
               <div class="h-4 w-px bg-gray-300 dark:bg-gray-600 hidden lg:block flex-shrink-0"></div>
               <div class="flex items-center gap-1 flex-shrink-0">
@@ -624,6 +747,8 @@
             </div>
           </div>
 
+
+
           <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
             <!-- Mobile scroll hint -->
             <div class="fixed bottom-4 right-4 bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-full md:hidden animate-pulse shadow-lg z-50 pointer-events-none" id="scroll-hint" style="display: none;">
@@ -657,29 +782,34 @@
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
                 </tr>
-                <tr id="threshold-slider-row" class="hidden mt-3 p-3 border rounded-md bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600">
-                  <th class="py-1 px-2 align-middle"></th>
-                  <th class="py-1 px-1 align-middle"></th>
-                  <th class="py-1 px-2 align-middle"></th>
-                  <th class="py-1 px-2 align-middle">
-                      <!-- Empty cell for Uptime column -->
-                  </th>
-                  <th class="py-1 px-2 align-middle">
+                <tr id="threshold-slider-row" class="hidden mt-3 p-3 border rounded-md bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-600">
+                  <td class="sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 py-1 px-2 align-middle border-r border-blue-300 dark:border-blue-600">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs text-blue-700 dark:text-blue-300">Filters</span>
+                      <button id="reset-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
+                        Reset
+                      </button>
+                    </div>
+                  </td>
+                  <td class="py-1 px-2 align-middle">-</td>
+                  <td class="py-1 px-2 align-middle">-</td>
+                  <td class="py-1 px-2 align-middle">-</td>
+                  <td class="py-1 px-2 align-middle">
                     <div class="flex flex-row items-center gap-1">
                       <input type="range" id="threshold-slider-cpu" min="0" max="100" step="1" value="0" class="custom-slider w-full h-3 rounded-full bg-gray-300 dark:bg-gray-600 appearance-none cursor-pointer flex-grow">
                     </div>
-                  </th>
-                  <th class="py-1 px-2 align-middle">
+                  </td>
+                  <td class="py-1 px-2 align-middle">
                     <div class="flex flex-row items-center gap-1">
                       <input type="range" id="threshold-slider-memory" min="0" max="100" step="1" value="0" class="custom-slider w-full h-3 rounded-full bg-gray-300 dark:bg-gray-600 appearance-none cursor-pointer flex-grow">
                     </div>
-                  </th>
-                  <th class="py-1 px-2 align-middle">
+                  </td>
+                  <td class="py-1 px-2 align-middle">
                     <div class="flex flex-row items-center gap-1">
                       <input type="range" id="threshold-slider-disk" min="0" max="100" step="1" value="0" class="custom-slider w-full h-3 rounded-full bg-gray-300 dark:bg-gray-600 appearance-none cursor-pointer flex-grow">
                     </div>
-                  </th>
-                  <th class="py-1 px-2 align-middle">
+                  </td>
+                  <td class="py-1 px-2 align-middle">
                     <select id="threshold-select-diskread" class="threshold-select px-1 py-0 h-5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-[10px] w-full focus:outline-none focus:ring-1 focus:ring-blue-500">
                         <option value="0" selected>Any</option>
                         <option value="1048576">&gt; 1 MB/s</option>
@@ -687,8 +817,8 @@
                         <option value="52428800">&gt; 50 MB/s</option>
                         <option value="104857600">&gt; 100 MB/s</option>
                     </select>
-                  </th>
-                  <th class="py-1 px-2 align-middle">
+                  </td>
+                  <td class="py-1 px-2 align-middle">
                     <select id="threshold-select-diskwrite" class="threshold-select px-1 py-0 h-5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-[10px] w-full focus:outline-none focus:ring-1 focus:ring-blue-500">
                         <option value="0" selected>Any</option>
                         <option value="1048576">&gt; 1 MB/s</option>
@@ -696,8 +826,8 @@
                         <option value="52428800">&gt; 50 MB/s</option>
                         <option value="104857600">&gt; 100 MB/s</option>
                     </select>
-                  </th>
-                  <th class="py-1 px-2 align-middle">
+                  </td>
+                  <td class="py-1 px-2 align-middle">
                     <select id="threshold-select-netin" class="threshold-select px-1 py-0 h-5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-[10px] w-full focus:outline-none focus:ring-1 focus:ring-blue-500">
                         <option value="0" selected>Any</option>
                         <option value="1048576">&gt; 1 MB/s</option>
@@ -705,8 +835,8 @@
                         <option value="52428800">&gt; 50 MB/s</option>
                         <option value="104857600">&gt; 100 MB/s</option>
                     </select>
-                  </th>
-                  <th class="py-1 px-2 align-middle">
+                  </td>
+                  <td class="py-1 px-2 align-middle">
                     <select id="threshold-select-netout" class="threshold-select px-1 py-0 h-5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-[10px] w-full focus:outline-none focus:ring-1 focus:ring-blue-500">
                         <option value="0" selected>Any</option>
                         <option value="1048576">&gt; 1 MB/s</option>
@@ -714,34 +844,28 @@
                         <option value="52428800">&gt; 50 MB/s</option>
                         <option value="104857600">&gt; 100 MB/s</option>
                     </select>
-                  </th>
+                  </td>
                 </tr>
-                <!-- Alert Rule Creation Row -->
-                <tr id="alert-rule-row" class="hidden">
-                  <td colspan="11" class="py-2 px-4 bg-blue-50 dark:bg-blue-900/20 border-t border-blue-200 dark:border-blue-700">
+                <!-- Global Alert Thresholds Row -->
+                <tr id="global-alert-thresholds-row" class="hidden bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-600">
+                  <td class="sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 py-1 px-2 align-middle border-r border-blue-300 dark:border-blue-600">
                     <div class="flex items-center justify-between">
-                      <div class="flex items-center gap-2">
-                        <svg class="h-4 w-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5zm-2-8V7a1 1 0 00-1-1H5a1 1 0 00-1 1v3a1 1 0 001 1h7a1 1 0 001-1z"></path>
-                        </svg>
-                        <span class="text-sm font-medium text-blue-700 dark:text-blue-300">
-                          Create Alert Rule from Current Thresholds
-                        </span>
-                        <span id="active-thresholds-summary" class="text-xs text-blue-600 dark:text-blue-400"></span>
-                      </div>
-                      <div class="flex items-center gap-2">
-                        <button id="create-alert-rule-btn" 
-                                class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
-                                disabled>
-                          Create Alert Rule
-                        </button>
-                        <button id="view-alert-rules-btn" 
-                                class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-xs font-medium rounded transition-colors">
-                          View Rules
-                        </button>
-                      </div>
+                      <span class="text-xs text-blue-700 dark:text-blue-300">Defaults</span>
+                      <button id="reset-global-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
+                        Reset
+                      </button>
                     </div>
                   </td>
+                  <td class="py-1 px-2 align-middle">-</td>
+                  <td class="py-1 px-2 align-middle">-</td>
+                  <td class="py-1 px-2 align-middle">-</td>
+                  <td class="py-1 px-2 align-middle" id="global-cpu-cell"></td>
+                  <td class="py-1 px-2 align-middle" id="global-memory-cell"></td>
+                  <td class="py-1 px-2 align-middle" id="global-disk-cell"></td>
+                  <td class="py-1 px-2 align-middle" id="global-diskread-cell"></td>
+                  <td class="py-1 px-2 align-middle" id="global-diskwrite-cell"></td>
+                  <td class="py-1 px-2 align-middle" id="global-netin-cell"></td>
+                  <td class="py-1 px-2 align-middle" id="global-netout-cell"></td>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -956,6 +1080,9 @@
           <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="pbs">
             Backup Server
           </button>
+          <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="notifications">
+            Notifications
+          </button>
           <button class="settings-tab py-3 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-tab="system">
             System
           </button>
@@ -1007,6 +1134,7 @@
   <script src="/js/charts.js" defer></script>
   <script src="/js/ui/toastNotifications.js" defer></script>
   <script src="/js/ui/thresholds.js" defer></script>
+  <script src="/js/ui/alerts.js" defer></script>
   <script src="/js/ui/empty-states.js" defer></script>
   <script src="/js/ui/config-banner.js" defer></script>
   <script src="/js/ui/status-icons.js" defer></script>
@@ -1027,7 +1155,7 @@
   <script src="/js/main.js" defer></script>
 
   <footer class="text-center text-xs text-gray-500 py-4">
-    Pulse for Proxmox | Version: <a href="https://github.com/rcourtman/Pulse/releases" target="_blank" rel="noopener noreferrer" id="app-version" class="text-blue-600 dark:text-blue-400 hover:underline">loading...</a>
+    Pulse | Version: <a href="https://github.com/rcourtman/Pulse/releases" target="_blank" rel="noopener noreferrer" id="app-version" class="text-blue-600 dark:text-blue-400 hover:underline">loading...</a>
   </footer>
 </body>
 </html> 

@@ -26,6 +26,149 @@ PulseApp.ui.dashboard = (() => {
     let virtualScroller = null;
     const VIRTUAL_SCROLL_THRESHOLD = 100; // Use virtual scrolling for >100 items
 
+    // Alert helper functions (defined early to be available everywhere)
+    function _createAlertSliderHtml(guestId, metricType, config) {
+        // Get current threshold value for this guest/metric from alerts system
+        const guestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
+        const globalThresholds = PulseApp.ui.alerts?.getGlobalThresholds?.() || {};
+        
+        // Use individual guest threshold if set, otherwise use global threshold, otherwise use config min
+        let currentValue = config.min;
+        let isUsingGlobal = false;
+        
+        if (guestThresholds[guestId] && guestThresholds[guestId][metricType] !== undefined) {
+            // Guest has individual threshold set
+            currentValue = guestThresholds[guestId][metricType];
+        } else if (globalThresholds[metricType] !== undefined && globalThresholds[metricType] !== '') {
+            // Use global threshold as default
+            currentValue = globalThresholds[metricType];
+            isUsingGlobal = true;
+        }
+        
+        // Use the threshold system's helper function to create identical HTML
+        const sliderId = `alert-slider-${guestId}-${metricType}`;
+        const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
+            sliderId, 
+            config.min, 
+            config.max, 
+            config.step, 
+            currentValue
+        );
+        
+        // Add alert-specific data attributes to the container and visual indicator for global values
+        const globalIndicator = isUsingGlobal ? ' data-using-global="true"' : '';
+        const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
+        
+        return `
+            <div class="${containerClass} h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
+                ${sliderHtml}
+            </div>
+        `;
+    }
+
+    function _createAlertDropdownHtml(guestId, metricType, options) {
+        // Get current threshold value for this guest/metric from alerts system
+        const guestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
+        const globalThresholds = PulseApp.ui.alerts?.getGlobalThresholds?.() || {};
+        
+        // Use individual guest threshold if set, otherwise use global threshold, otherwise use empty
+        let currentValue = '';
+        let isUsingGlobal = false;
+        
+        if (guestThresholds[guestId] && guestThresholds[guestId][metricType] !== undefined) {
+            // Guest has individual threshold set
+            currentValue = guestThresholds[guestId][metricType];
+        } else if (globalThresholds[metricType] !== undefined) {
+            // Use global threshold as default
+            currentValue = globalThresholds[metricType];
+            isUsingGlobal = true;
+        }
+        
+        // Use the threshold system's helper function to create identical HTML
+        const selectId = `alert-select-${guestId}-${metricType}`;
+        const selectHtml = PulseApp.ui.thresholds.createThresholdSelectHtml(
+            selectId, 
+            options, 
+            currentValue
+        );
+        
+        // Add alert-specific data attributes to the container and visual indicator for global values
+        const globalIndicator = isUsingGlobal ? ' data-using-global="true"' : '';
+        const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
+        
+        return `
+            <div class="${containerClass} h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
+                ${selectHtml}
+            </div>
+        `;
+    }
+
+    // Helper function to setup event listeners for alert sliders and dropdowns
+    function _setupAlertEventListeners(container) {
+        if (!container) return;
+        
+        // Setup event listeners for all alert sliders in this container
+        const alertSliders = container.querySelectorAll('.alert-threshold-input input[type="range"]');
+        alertSliders.forEach(slider => {
+            const container = slider.closest('.alert-threshold-input');
+            const guestId = container?.getAttribute('data-guest-id');
+            const metricType = container?.getAttribute('data-metric');
+            
+            if (guestId && metricType) {
+                // Set up alert-specific events (save only on release, not during drag)
+                slider.addEventListener('input', (event) => {
+                    const value = event.target.value;
+                    // Update during drag but don't save
+                    PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, value, false);
+                    PulseApp.tooltips.updateSliderTooltip(event.target);
+                    
+                    // Remove global indicator visual styling
+                    container.classList.remove('using-global');
+                    container.removeAttribute('data-using-global');
+                });
+                
+                // Save only on release
+                slider.addEventListener('change', (event) => {
+                    const value = event.target.value;
+                    PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, value, true);
+                });
+                
+                slider.addEventListener('mousedown', (event) => {
+                    PulseApp.tooltips.updateSliderTooltip(event.target);
+                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
+                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
+                    }
+                });
+                
+                slider.addEventListener('touchstart', (event) => {
+                    PulseApp.tooltips.updateSliderTooltip(event.target);
+                    if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
+                        PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
+                    }
+                }, { passive: true });
+            }
+        });
+        
+        // Setup event listeners for all alert dropdowns in this container
+        const alertSelects = container.querySelectorAll('.alert-threshold-input select');
+        alertSelects.forEach(select => {
+            const container = select.closest('.alert-threshold-input');
+            const guestId = container?.getAttribute('data-guest-id');
+            const metricType = container?.getAttribute('data-metric');
+            
+            if (guestId && metricType) {
+                select.addEventListener('change', (e) => {
+                    // When user changes value, it becomes an individual threshold (no longer global)
+                    PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, e.target.value);
+                    
+                    // Remove global indicator visual styling
+                    container.classList.remove('using-global');
+                    container.removeAttribute('data-using-global');
+                });
+            }
+        });
+    }
+
     function _initMobileScrollIndicators() {
         const tableContainer = document.querySelector('.table-container');
         const scrollHint = document.getElementById('scroll-hint');
@@ -279,7 +422,7 @@ PulseApp.ui.dashboard = (() => {
         }
 
         const returnObj = {
-            id: guest.vmid,
+            id: guestUniqueId,
             uniqueId: guestUniqueId,
             vmid: guest.vmid,
             name: guest.name || `${guest.type === 'qemu' ? GUEST_TYPE_VM : GUEST_TYPE_CT} ${guest.vmid}`,
@@ -356,21 +499,30 @@ PulseApp.ui.dashboard = (() => {
                 (guest.uniqueId && guest.uniqueId.toString().includes(term))
             );
 
+            // Check if any thresholds are active
+            const hasActiveThresholds = Object.values(thresholdState).some(state => state && state.value > 0);
+            
+            // For threshold filtering, we'll add a property to track if thresholds are met
+            // but don't filter out - we'll use this for styling instead
             let thresholdsMet = true;
-            for (const type in thresholdState) {
-                const state = thresholdState[type];
-                let guestValue;
+            
+            if (hasActiveThresholds) {
+                for (const type in thresholdState) {
+                    const state = thresholdState[type];
+                    if (!state || state.value <= 0) continue;
+                    
+                    let guestValue;
 
-                if (type === METRIC_CPU) guestValue = guest.cpu;
-                else if (type === METRIC_MEMORY) guestValue = guest.memory;
-                else if (type === METRIC_DISK) guestValue = guest.disk;
-                else if (type === METRIC_DISK_READ) guestValue = guest.diskread;
-                else if (type === METRIC_DISK_WRITE) guestValue = guest.diskwrite;
-                else if (type === METRIC_NET_IN) guestValue = guest.netin;
-                else if (type === METRIC_NET_OUT) guestValue = guest.netout;
-                else continue;
+                    if (type === METRIC_CPU) guestValue = guest.cpu;
+                    else if (type === METRIC_MEMORY) guestValue = guest.memory;
+                    else if (type === METRIC_DISK) guestValue = guest.disk;
+                    else if (type === METRIC_DISK_READ) guestValue = guest.diskread;
+                    else if (type === METRIC_DISK_WRITE) guestValue = guest.diskwrite;
+                    else if (type === METRIC_NET_IN) guestValue = guest.netin;
+                    else if (type === METRIC_NET_OUT) guestValue = guest.netout;
+                    else continue;
 
-                if (state.value > 0) {
+
                     if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) {
                         thresholdsMet = false;
                         break;
@@ -381,7 +533,13 @@ PulseApp.ui.dashboard = (() => {
                     }
                 }
             }
-            return typeMatch && statusMatch && searchMatch && thresholdsMet;
+            
+            // Add threshold status to guest data for styling
+            // Only set to false if we have active thresholds and guest doesn't meet them
+            guest.meetsThresholds = hasActiveThresholds ? thresholdsMet : true;
+            
+            // Only filter out based on type, status and search - not thresholds
+            return typeMatch && statusMatch && searchMatch;
         });
     }
 
@@ -544,33 +702,114 @@ PulseApp.ui.dashboard = (() => {
         row.setAttribute('data-type', guest.type.toLowerCase());
         row.setAttribute('data-node', guest.node.toLowerCase());
         
-        // Update class - same styling for both stopped and running
-        row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        // Update class - apply dimming based on active mode
+        const baseClasses = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        row.className = baseClasses;
+        
+        // Check if alerts mode is active
+        const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
+        
+        if (isAlertsMode) {
+            // Apply alert-specific dimming with granular cell control
+            const allGuestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
+            const guestThresholds = allGuestThresholds[guest.id] || {};
+            const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
+            
+            if (!hasIndividualSettings) {
+                // Using only global alert values - dim the whole row
+                row.style.opacity = '0.4';
+                row.style.transition = 'opacity 0.1s ease-out';
+                row.setAttribute('data-alert-dimmed', 'true');
+                // Ensure threshold dimming attribute is removed
+                row.removeAttribute('data-dimmed');
+            } else {
+                // Has some individual settings - apply cell-specific dimming immediately
+                row.style.opacity = '';
+                row.style.transition = '';
+                row.removeAttribute('data-alert-dimmed');
+                row.setAttribute('data-alert-mixed', 'true'); // Mark as having mixed values
+                // Ensure threshold dimming attribute is removed
+                row.removeAttribute('data-dimmed');
+                
+                // Apply granular cell styling immediately to prevent flashing
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 11) {
+                    // Map metric types to cell indices
+                    const metricCells = {
+                        'cpu': cells[4], 'memory': cells[5], 'disk': cells[6],
+                        'diskread': cells[7], 'diskwrite': cells[8], 'netin': cells[9], 'netout': cells[10]
+                    };
+                    
+                    // Apply cell-specific opacity immediately
+                    Object.entries(metricCells).forEach(([metricType, cell]) => {
+                        if (!cell) return;
+                        const hasCustomValue = guestThresholds[metricType] !== undefined;
+                        cell.style.opacity = hasCustomValue ? '1' : '0.4';
+                        cell.style.transition = 'opacity 0.1s ease-out';
+                        if (hasCustomValue) {
+                            cell.setAttribute('data-alert-custom', 'true');
+                        } else {
+                            cell.removeAttribute('data-alert-custom');
+                        }
+                    });
+                    
+                    // Dim non-metric cells
+                    for (let i = 0; i < 4; i++) {
+                        if (cells[i]) {
+                            cells[i].style.opacity = '0.4';
+                            cells[i].style.transition = 'opacity 0.1s ease-out';
+                        }
+                    }
+                }
+            }
+        } else if (guest.meetsThresholds === false) {
+            // Apply threshold dimming (only when not in alerts mode)
+            row.style.opacity = '0.4';
+            row.style.transition = 'opacity 0.2s ease-in-out';
+            row.setAttribute('data-dimmed', 'true');
+            // Ensure alert dimming attribute is removed
+            row.removeAttribute('data-alert-dimmed');
+        } else {
+            // No dimming needed
+            row.style.opacity = '';
+            row.style.transition = '';
+            row.removeAttribute('data-dimmed');
+            row.removeAttribute('data-alert-dimmed');
+        }
         
         // Update specific cells that might have changed
         const cells = row.querySelectorAll('td');
         
         // Ensure name cell keeps sticky styling even after row class updates
         if (cells[0]) {
-            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600';
+            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600';
         }
         if (cells.length >= 10) {
             // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
             
-            // Update name (cell 0) content only (styling handled above)
-            if (cells[0].textContent !== guest.name) {
-                cells[0].textContent = guest.name;
+            // Update name (cell 0) with full HTML structure including indicators
+            const thresholdIndicator = createThresholdIndicator(guest);
+            const alertIndicator = createAlertIndicator(guest);
+            const nameHTML = `
+                <div class="flex items-center gap-1">
+                    <span>${guest.name}</span>
+                    ${alertIndicator}
+                    ${thresholdIndicator}
+                </div>
+            `;
+            if (cells[0].innerHTML !== nameHTML) {
+                cells[0].innerHTML = nameHTML;
                 cells[0].title = guest.name;
             }
             
             // Ensure ID cell (2) has proper classes
             if (cells[2]) {
-                cells[2].className = 'p-1 px-2';
+                cells[2].className = 'py-1 px-2 align-middle';
             }
             
             // Ensure uptime cell (3) has proper classes
             if (cells[3]) {
-                cells[3].className = 'p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis';
+                cells[3].className = 'py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis';
             }
 
             // Update uptime (cell 3)
@@ -590,83 +829,180 @@ PulseApp.ui.dashboard = (() => {
 
             // Update CPU (cell 4)
             const cpuCell = cells[4];
-            const newCpuHTML = _createCpuBarHtml(guest);
-            if (cpuCell.innerHTML !== newCpuHTML) {
-                cpuCell.innerHTML = newCpuHTML;
+            const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
+            if (isAlertsMode && cpuCell.querySelector('.alert-threshold-input')) {
+                // Skip update if already has alert control to preserve event listeners
+            } else {
+                const newCpuHTML = _createCpuBarHtml(guest);
+                if (cpuCell.innerHTML !== newCpuHTML) {
+                    cpuCell.innerHTML = newCpuHTML;
+                }
             }
 
             // Update Memory (cell 5)
             const memCell = cells[5];
-            const newMemHTML = _createMemoryBarHtml(guest);
-            if (memCell.innerHTML !== newMemHTML) {
-                memCell.innerHTML = newMemHTML;
+            if (isAlertsMode && memCell.querySelector('.alert-threshold-input')) {
+                // Skip update if already has alert control to preserve event listeners
+            } else {
+                const newMemHTML = _createMemoryBarHtml(guest);
+                if (memCell.innerHTML !== newMemHTML) {
+                    memCell.innerHTML = newMemHTML;
+                }
             }
 
             // Update Disk (cell 6)
             const diskCell = cells[6];
-            const newDiskHTML = _createDiskBarHtml(guest);
-            if (diskCell.innerHTML !== newDiskHTML) {
-                diskCell.innerHTML = newDiskHTML;
+            if (isAlertsMode && diskCell.querySelector('.alert-threshold-input')) {
+                // Skip update if already has alert control to preserve event listeners
+            } else {
+                const newDiskHTML = _createDiskBarHtml(guest);
+                if (diskCell.innerHTML !== newDiskHTML) {
+                    diskCell.innerHTML = newDiskHTML;
+                }
             }
 
             // Ensure I/O cells (7-10) have proper classes
             [7, 8, 9, 10].forEach(index => {
                 if (cells[index]) {
-                    cells[index].className = 'p-1 px-2';
+                    cells[index].className = 'py-1 px-2 align-middle';
                 }
             });
+
+            // isAlertsMode already declared above
 
             // Update I/O cells (7-10) if running
             if (guest.status === STATUS_RUNNING) {
                 // Disk Read (cell 7)
                 const diskReadCell = cells[7];
-                const diskReadFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskread, 0);
-                const newDiskReadHTML = PulseApp.charts ? 
-                    `<div class="metric-text">${diskReadFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'diskread')}</div>` :
-                    diskReadFormatted;
-                if (diskReadCell.innerHTML !== newDiskReadHTML) {
-                    diskReadCell.innerHTML = newDiskReadHTML;
+                let newDiskReadHTML;
+                if (isAlertsMode) {
+                    // Only regenerate if not already an alert control
+                    if (!diskReadCell.querySelector('.alert-threshold-input')) {
+                        newDiskReadHTML = _createAlertDropdownHtml(guest.id, 'diskread', [
+                            { value: '', label: 'No alert' },
+                            { value: '1048576', label: '> 1 MB/s' },
+                            { value: '10485760', label: '> 10 MB/s' },
+                            { value: '52428800', label: '> 50 MB/s' },
+                            { value: '104857600', label: '> 100 MB/s' }
+                        ]);
+                        diskReadCell.innerHTML = newDiskReadHTML;
+                    }
+                } else {
+                    const diskReadFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskread, 0);
+                    newDiskReadHTML = PulseApp.charts ? 
+                        `<div class="metric-text">${diskReadFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'diskread')}</div>` :
+                        diskReadFormatted;
+                    if (diskReadCell.innerHTML !== newDiskReadHTML) {
+                        diskReadCell.innerHTML = newDiskReadHTML;
+                    }
                 }
 
                 // Disk Write (cell 8)
                 const diskWriteCell = cells[8];
-                const diskWriteFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskwrite, 0);
-                const newDiskWriteHTML = PulseApp.charts ? 
-                    `<div class="metric-text">${diskWriteFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'diskwrite')}</div>` :
-                    diskWriteFormatted;
-                if (diskWriteCell.innerHTML !== newDiskWriteHTML) {
-                    diskWriteCell.innerHTML = newDiskWriteHTML;
+                let newDiskWriteHTML;
+                if (isAlertsMode) {
+                    // Only regenerate if not already an alert control
+                    if (!diskWriteCell.querySelector('.alert-threshold-input')) {
+                        newDiskWriteHTML = _createAlertDropdownHtml(guest.id, 'diskwrite', [
+                            { value: '', label: 'No alert' },
+                            { value: '1048576', label: '> 1 MB/s' },
+                            { value: '10485760', label: '> 10 MB/s' },
+                            { value: '52428800', label: '> 50 MB/s' },
+                            { value: '104857600', label: '> 100 MB/s' }
+                        ]);
+                        diskWriteCell.innerHTML = newDiskWriteHTML;
+                    }
+                } else {
+                    const diskWriteFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskwrite, 0);
+                    newDiskWriteHTML = PulseApp.charts ? 
+                        `<div class="metric-text">${diskWriteFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'diskwrite')}</div>` :
+                        diskWriteFormatted;
+                    if (diskWriteCell.innerHTML !== newDiskWriteHTML) {
+                        diskWriteCell.innerHTML = newDiskWriteHTML;
+                    }
                 }
 
                 // Net In (cell 9)
                 const netInCell = cells[9];
-                const netInFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netin, 0);
-                const newNetInHTML = PulseApp.charts ? 
-                    `<div class="metric-text">${netInFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'netin')}</div>` :
-                    netInFormatted;
-                if (netInCell.innerHTML !== newNetInHTML) {
-                    netInCell.innerHTML = newNetInHTML;
+                let newNetInHTML;
+                if (isAlertsMode) {
+                    // Only regenerate if not already an alert control
+                    if (!netInCell.querySelector('.alert-threshold-input')) {
+                        newNetInHTML = _createAlertDropdownHtml(guest.id, 'netin', [
+                            { value: '', label: 'No alert' },
+                            { value: '1048576', label: '> 1 MB/s' },
+                            { value: '10485760', label: '> 10 MB/s' },
+                            { value: '52428800', label: '> 50 MB/s' },
+                            { value: '104857600', label: '> 100 MB/s' }
+                        ]);
+                        netInCell.innerHTML = newNetInHTML;
+                    }
+                } else {
+                    const netInFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netin, 0);
+                    newNetInHTML = PulseApp.charts ? 
+                        `<div class="metric-text">${netInFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'netin')}</div>` :
+                        netInFormatted;
+                    if (netInCell.innerHTML !== newNetInHTML) {
+                        netInCell.innerHTML = newNetInHTML;
+                    }
                 }
 
                 // Net Out (cell 10)
                 if (cells[10]) {
                     const netOutCell = cells[10];
-                    const netOutFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netout, 0);
-                    const newNetOutHTML = PulseApp.charts ? 
-                        `<div class="metric-text">${netOutFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'netout')}</div>` :
-                        netOutFormatted;
-                    if (netOutCell.innerHTML !== newNetOutHTML) {
-                        netOutCell.innerHTML = newNetOutHTML;
+                    let newNetOutHTML;
+                    if (isAlertsMode) {
+                        // Only regenerate if not already an alert control
+                        if (!netOutCell.querySelector('.alert-threshold-input')) {
+                            newNetOutHTML = _createAlertDropdownHtml(guest.id, 'netout', [
+                                { value: '', label: 'No alert' },
+                                { value: '1048576', label: '> 1 MB/s' },
+                                { value: '10485760', label: '> 10 MB/s' },
+                                { value: '52428800', label: '> 50 MB/s' },
+                                { value: '104857600', label: '> 100 MB/s' }
+                            ]);
+                            netOutCell.innerHTML = newNetOutHTML;
+                        }
+                    } else {
+                        const netOutFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netout, 0);
+                        newNetOutHTML = PulseApp.charts ? 
+                            `<div class="metric-text">${netOutFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'netout')}</div>` :
+                            netOutFormatted;
+                        if (netOutCell.innerHTML !== newNetOutHTML) {
+                            netOutCell.innerHTML = newNetOutHTML;
+                        }
                     }
                 }
             } else {
-                // Set I/O cells to '-' if not running
+                // Set I/O cells to '-' if not running, or show alert dropdowns if in alerts mode
                 [7, 8, 9, 10].forEach(index => {
-                    if (cells[index] && cells[index].innerHTML !== '-') {
-                        cells[index].innerHTML = '-';
+                    if (cells[index]) {
+                        let newHTML = '-';
+                        if (isAlertsMode) {
+                            const metricMap = { 7: 'diskread', 8: 'diskwrite', 9: 'netin', 10: 'netout' };
+                            newHTML = _createAlertDropdownHtml(guest.id, metricMap[index], [
+                                { value: '', label: 'No alert' },
+                                { value: '1048576', label: '> 1 MB/s' },
+                                { value: '10485760', label: '> 10 MB/s' },
+                                { value: '52428800', label: '> 50 MB/s' },
+                                { value: '104857600', label: '> 100 MB/s' }
+                            ]);
+                        }
+                        if (cells[index].innerHTML !== newHTML) {
+                            cells[index].innerHTML = newHTML;
+                        }
                     }
                 });
             }
+        }
+        
+        // Reapply alert styling if in alerts mode
+        if (PulseApp.ui.alerts?.isAlertsMode?.()) {
+            const allThresholds = PulseApp.ui.alerts.getGuestThresholds();
+            const guestThresholds = allThresholds[guest.id] || {};
+            PulseApp.ui.alerts.updateCellStyling?.(row, guest.id, guestThresholds);
+            // Also trigger row-level styling update based on alert thresholds
+            PulseApp.ui.alerts.updateRowStylingOnly?.();
         }
     }
 
@@ -864,6 +1200,7 @@ PulseApp.ui.dashboard = (() => {
             console.warn('[Dashboard] PulseApp.ui.common not available for updateSortUI');
         }
 
+        
         // Update charts immediately after table is rendered, but only if in charts mode
         const mainContainer = document.getElementById('main');
         if (PulseApp.charts && visibleCount > 0 && mainContainer && mainContainer.classList.contains('charts-mode')) {
@@ -888,7 +1225,21 @@ PulseApp.ui.dashboard = (() => {
     }
 
     function _createCpuBarHtml(guest) {
+        // Check if alerts mode is active
+        const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
+        if (isAlertsMode) {
+            // In alerts mode, always show alert controls regardless of running status
+            return _createAlertSliderHtml(guest.id, 'cpu', {
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%'
+            });
+        }
+        
+        // Normal mode: only show metrics for running guests
         if (guest.status !== STATUS_RUNNING) return '-';
+        
         const cpuPercent = Math.round(guest.cpu);
         const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus / 100).toFixed(1)}/${guest.cpus} cores)` : ''}`;
         const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
@@ -905,7 +1256,21 @@ PulseApp.ui.dashboard = (() => {
     }
 
     function _createMemoryBarHtml(guest) {
+        // Check if alerts mode is active
+        const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
+        if (isAlertsMode) {
+            // In alerts mode, always show alert controls regardless of running status
+            return _createAlertSliderHtml(guest.id, 'memory', {
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%'
+            });
+        }
+        
+        // Normal mode: only show metrics for running guests
         if (guest.status !== STATUS_RUNNING) return '-';
+        
         const memoryPercent = guest.memory;
         let memoryTooltipText = `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)} (${memoryPercent}%)`;
         if (guest.type === GUEST_TYPE_VM && guest.memorySource === 'guest' && guest.rawHostMemory !== null && guest.rawHostMemory !== undefined) {
@@ -925,7 +1290,21 @@ PulseApp.ui.dashboard = (() => {
     }
 
     function _createDiskBarHtml(guest) {
+        // Check if alerts mode is active
+        const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
+        if (isAlertsMode && guest.type === GUEST_TYPE_CT) {
+            // In alerts mode, always show alert controls for CTs regardless of running status
+            return _createAlertSliderHtml(guest.id, 'disk', {
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%'
+            });
+        }
+        
+        // Normal mode: only show metrics for running guests
         if (guest.status !== STATUS_RUNNING) return '-';
+        
         if (guest.type === GUEST_TYPE_CT) {
             const diskPercent = guest.disk;
             const diskTooltipText = guest.diskTotal ? `${PulseApp.utils.formatBytes(guest.diskCurrent)} / ${PulseApp.utils.formatBytes(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
@@ -975,16 +1354,96 @@ PulseApp.ui.dashboard = (() => {
         return '';
     }
 
+    function createAlertIndicator(guest) {
+        // Get active alerts for this guest
+        const activeAlerts = PulseApp.alerts?.getActiveAlertsForGuest?.(guest.endpointId, guest.node, guest.id) || [];
+        
+        if (activeAlerts.length === 0) {
+            return '';
+        }
+        
+        // Determine highest severity
+        const criticalAlerts = activeAlerts.filter(alert => alert.severity === 'critical');
+        const warningAlerts = activeAlerts.filter(alert => alert.severity === 'warning');
+        
+        let iconColor, severityText, alertDetails;
+        
+        if (criticalAlerts.length > 0) {
+            iconColor = 'bg-red-500';
+            severityText = 'Critical';
+            alertDetails = `${criticalAlerts.length} critical alert${criticalAlerts.length > 1 ? 's' : ''}`;
+        } else if (warningAlerts.length > 0) {
+            iconColor = 'bg-yellow-500';
+            severityText = 'Warning';
+            alertDetails = `${warningAlerts.length} warning alert${warningAlerts.length > 1 ? 's' : ''}`;
+        } else {
+            iconColor = 'bg-blue-500';
+            severityText = 'Info';
+            alertDetails = `${activeAlerts.length} alert${activeAlerts.length > 1 ? 's' : ''}`;
+        }
+        
+        const totalText = activeAlerts.length > 1 ? ` (${activeAlerts.length} total)` : '';
+        
+        return `
+            <span class="inline-flex items-center justify-center w-3 h-3 text-xs font-bold text-white ${iconColor} rounded-full cursor-pointer alert-indicator" 
+                  title="${severityText}: ${alertDetails}${totalText} - Click to view details"
+                  data-guest-id="${guest.endpointId}-${guest.node}-${guest.id}"
+                  onclick="PulseApp.ui.dashboard.toggleGuestAlertDetails('${guest.endpointId}', '${guest.node}', '${guest.id}')">
+                !
+            </span>
+        `;
+    }
+
     function createGuestRow(guest) {
         const row = document.createElement('tr');
-        row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        
+        // Apply dimming based on active mode
+        const baseClasses = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        row.className = baseClasses;
+        
+        // Check if alerts mode is active
+        const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
+        
+        if (isAlertsMode) {
+            // Apply alert-specific dimming with granular cell control
+            const allGuestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
+            const guestThresholds = allGuestThresholds[guest.id] || {};
+            const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
+            
+            if (!hasIndividualSettings) {
+                // Using only global alert values - dim the whole row
+                row.style.opacity = '0.4';
+                row.style.transition = 'opacity 0.1s ease-out';
+                row.setAttribute('data-alert-dimmed', 'true');
+            } else {
+                // Has some individual settings - mark as mixed for later cell styling
+                row.style.opacity = '';
+                row.style.transition = '';
+                row.removeAttribute('data-alert-dimmed');
+                row.setAttribute('data-alert-mixed', 'true'); // Mark as having mixed values
+                
+                // Note: Cell styling will be applied after row HTML is complete
+                row.setAttribute('data-needs-cell-styling', JSON.stringify(guestThresholds));
+            }
+        } else if (guest.meetsThresholds === false) {
+            // Apply threshold dimming (only when not in alerts mode)
+            row.style.opacity = '0.4';
+            row.style.transition = 'opacity 0.2s ease-in-out';
+            row.setAttribute('data-dimmed', 'true');
+        } else {
+            // No dimming needed
+            row.style.opacity = '';
+            row.style.transition = '';
+        }
+        
         row.setAttribute('data-name', guest.name.toLowerCase());
         row.setAttribute('data-type', guest.type.toLowerCase());
         row.setAttribute('data-node', guest.node.toLowerCase());
         row.setAttribute('data-id', guest.id);
 
-        // Check if guest has custom thresholds
+        // Check if guest has custom thresholds and alerts
         const thresholdIndicator = createThresholdIndicator(guest);
+        const alertIndicator = createAlertIndicator(guest);
 
         const cpuBarHTML = _createCpuBarHtml(guest);
         const memoryBarHTML = _createMemoryBarHtml(guest);
@@ -1000,7 +1459,37 @@ PulseApp.ui.dashboard = (() => {
         
         let diskReadCell, diskWriteCell, netInCell, netOutCell;
         
-        if (guest.status === STATUS_RUNNING && PulseApp.charts) {
+        if (isAlertsMode) {
+            // Create alert dropdowns for I/O cells
+            diskReadCell = _createAlertDropdownHtml(guest.id, 'diskread', [
+                { value: '', label: 'No alert' },
+                { value: '1048576', label: '> 1 MB/s' },
+                { value: '10485760', label: '> 10 MB/s' },
+                { value: '52428800', label: '> 50 MB/s' },
+                { value: '104857600', label: '> 100 MB/s' }
+            ]);
+            diskWriteCell = _createAlertDropdownHtml(guest.id, 'diskwrite', [
+                { value: '', label: 'No alert' },
+                { value: '1048576', label: '> 1 MB/s' },
+                { value: '10485760', label: '> 10 MB/s' },
+                { value: '52428800', label: '> 50 MB/s' },
+                { value: '104857600', label: '> 100 MB/s' }
+            ]);
+            netInCell = _createAlertDropdownHtml(guest.id, 'netin', [
+                { value: '', label: 'No alert' },
+                { value: '1048576', label: '> 1 MB/s' },
+                { value: '10485760', label: '> 10 MB/s' },
+                { value: '52428800', label: '> 50 MB/s' },
+                { value: '104857600', label: '> 100 MB/s' }
+            ]);
+            netOutCell = _createAlertDropdownHtml(guest.id, 'netout', [
+                { value: '', label: 'No alert' },
+                { value: '1048576', label: '> 1 MB/s' },
+                { value: '10485760', label: '> 10 MB/s' },
+                { value: '52428800', label: '> 50 MB/s' },
+                { value: '104857600', label: '> 100 MB/s' }
+            ]);
+        } else if (guest.status === STATUS_RUNNING && PulseApp.charts) {
             // Text versions - clean, no arrows
             const diskReadText = diskReadFormatted;
             const diskWriteText = diskWriteFormatted;
@@ -1039,23 +1528,68 @@ PulseApp.ui.dashboard = (() => {
         }
 
         row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">
                 <div class="flex items-center gap-1">
                     <span>${guest.name}</span>
+                    ${alertIndicator}
                     ${thresholdIndicator}
                 </div>
             </td>
-            <td class="p-1 px-2">${typeIcon}</td>
-            <td class="p-1 px-2">${guest.id}</td>
-            <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>
-            <td class="p-1 px-2">${cpuBarHTML}</td>
-            <td class="p-1 px-2">${memoryBarHTML}</td>
-            <td class="p-1 px-2">${diskBarHTML}</td>
-            <td class="p-1 px-2">${diskReadCell}</td>
-            <td class="p-1 px-2">${diskWriteCell}</td>
-            <td class="p-1 px-2">${netInCell}</td>
-            <td class="p-1 px-2">${netOutCell}</td>
+            <td class="py-1 px-2 align-middle">${typeIcon}</td>
+            <td class="py-1 px-2 align-middle">${guest.vmid}</td>
+            <td class="py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>
+            <td class="py-1 px-2 align-middle">${cpuBarHTML}</td>
+            <td class="py-1 px-2 align-middle">${memoryBarHTML}</td>
+            <td class="py-1 px-2 align-middle">${diskBarHTML}</td>
+            <td class="py-1 px-2 align-middle">${diskReadCell}</td>
+            <td class="py-1 px-2 align-middle">${diskWriteCell}</td>
+            <td class="py-1 px-2 align-middle">${netInCell}</td>
+            <td class="py-1 px-2 align-middle">${netOutCell}</td>
         `;
+        
+        // Setup event listeners for alert sliders and dropdowns
+        if (isAlertsMode) {
+            _setupAlertEventListeners(row);
+            
+            // Apply cell styling if this row needs it (mixed values)
+            if (row.hasAttribute('data-needs-cell-styling')) {
+                const guestThresholds = JSON.parse(row.getAttribute('data-needs-cell-styling'));
+                const cells = row.querySelectorAll('td');
+                
+                if (cells.length >= 11) {
+                    // Map metric types to cell indices
+                    const metricCells = {
+                        'cpu': cells[4], 'memory': cells[5], 'disk': cells[6],
+                        'diskread': cells[7], 'diskwrite': cells[8], 'netin': cells[9], 'netout': cells[10]
+                    };
+                    
+                    // Apply cell-specific opacity immediately
+                    Object.entries(metricCells).forEach(([metricType, cell]) => {
+                        if (!cell) return;
+                        const hasCustomValue = guestThresholds[metricType] !== undefined;
+                        cell.style.opacity = hasCustomValue ? '1' : '0.4';
+                        cell.style.transition = 'opacity 0.1s ease-out';
+                        if (hasCustomValue) {
+                            cell.setAttribute('data-alert-custom', 'true');
+                        } else {
+                            cell.removeAttribute('data-alert-custom');
+                        }
+                    });
+                    
+                    // Dim non-metric cells
+                    for (let i = 0; i < 4; i++) {
+                        if (cells[i]) {
+                            cells[i].style.opacity = '0.4';
+                            cells[i].style.transition = 'opacity 0.1s ease-out';
+                        }
+                    }
+                }
+                
+                // Clean up the temporary attribute
+                row.removeAttribute('data-needs-cell-styling');
+            }
+        }
+        
         return row;
     }
 
@@ -1102,6 +1636,163 @@ PulseApp.ui.dashboard = (() => {
         }
     }
 
+    // Alert details expansion functionality
+    function toggleGuestAlertDetails(endpointId, node, vmid) {
+        const guestId = `${endpointId}-${node}-${vmid}`;
+        const existingRow = document.querySelector(`tr[data-id="${vmid}"] + tr.alert-details-row`);
+        
+        if (existingRow) {
+            // Collapse existing alert details
+            existingRow.remove();
+            return;
+        }
+        
+        // Find the guest row
+        const guestRow = document.querySelector(`tr[data-id="${vmid}"]`);
+        if (!guestRow) return;
+        
+        // Get alerts for this guest
+        const activeAlerts = PulseApp.alerts?.getActiveAlertsForGuest?.(endpointId, node, vmid) || [];
+        
+        if (activeAlerts.length === 0) {
+            return;
+        }
+        
+        // Create expanded alert details row
+        const alertDetailsRow = document.createElement('tr');
+        alertDetailsRow.className = 'alert-details-row bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-700';
+        
+        const alertsHTML = activeAlerts.map(alert => {
+            const severity = alert.severity || 'info';
+            const severityColor = severity === 'critical' ? 'text-red-600 dark:text-red-400' : 
+                                 severity === 'warning' ? 'text-yellow-600 dark:text-yellow-400' : 
+                                 'text-blue-600 dark:text-blue-400';
+            
+            const startTime = new Date(alert.startTime).toLocaleString();
+            const duration = alert.startTime ? formatAlertDuration(Date.now() - alert.startTime) : 'Unknown';
+            
+            return `
+                <div class="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                    <div class="flex items-start justify-between mb-2">
+                        <div class="flex-1">
+                            <h4 class="font-semibold text-gray-900 dark:text-gray-100 ${severityColor}">
+                                ${alert.name || 'Unknown Alert'}
+                            </h4>
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                ${alert.description || 'No description available'}
+                            </p>
+                        </div>
+                        <div class="flex gap-2 ml-4">
+                            ${!alert.acknowledged ? `
+                                <button onclick="PulseApp.ui.dashboard.acknowledgeAlert('${alert.id}')" 
+                                        class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition-colors">
+                                    Acknowledge
+                                </button>
+                            ` : `
+                                <span class="px-3 py-1 bg-gray-500 text-white text-xs rounded">
+                                    Acknowledged
+                                </span>
+                            `}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Metric:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${alert.metricType || alert.metric || 'Unknown'}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Current Value:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${formatAlertValue(alert.currentValue, alert.metricType)}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Threshold:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${formatAlertValue(alert.effectiveThreshold || alert.threshold, alert.metricType)}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Started:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${startTime}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
+                            <span class="text-gray-600 dark:text-gray-400">${duration}</span>
+                        </div>
+                        <div>
+                            <span class="font-medium text-gray-700 dark:text-gray-300">Severity:</span>
+                            <span class="${severityColor} capitalize">${severity}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        alertDetailsRow.innerHTML = `
+            <td colspan="11" class="p-4">
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-lg font-semibold text-orange-900 dark:text-orange-100">
+                            Alert Details for ${guestRow.querySelector('span').textContent}
+                        </h3>
+                        <button onclick="PulseApp.ui.dashboard.toggleGuestAlertDetails('${endpointId}', '${node}', '${vmid}')" 
+                                class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded transition-colors">
+                            Collapse
+                        </button>
+                    </div>
+                    ${alertsHTML}
+                </div>
+            </td>
+        `;
+        
+        // Insert after the guest row
+        guestRow.parentNode.insertBefore(alertDetailsRow, guestRow.nextSibling);
+    }
+    
+    function acknowledgeAlert(alertId) {
+        if (!alertId) return;
+        
+        // Call the alert management system to acknowledge
+        if (PulseApp.alerts?.acknowledgeAlert) {
+            PulseApp.alerts.acknowledgeAlert(alertId).then(() => {
+                // Refresh the table to update alert indicators
+                refreshDashboardData();
+            }).catch(error => {
+                console.error('Failed to acknowledge alert:', error);
+                if (PulseApp.ui.toast) {
+                    PulseApp.ui.toast.error('Failed to acknowledge alert');
+                }
+            });
+        }
+    }
+    
+    function formatAlertDuration(milliseconds) {
+        const seconds = Math.floor(milliseconds / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+        const days = Math.floor(hours / 24);
+        
+        if (days > 0) return `${days}d ${hours % 24}h`;
+        if (hours > 0) return `${hours}h ${minutes % 60}m`;
+        if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+        return `${seconds}s`;
+    }
+    
+    function formatAlertValue(value, metricType) {
+        if (value === null || value === undefined) return 'N/A';
+        
+        switch (metricType) {
+            case 'cpu':
+            case 'memory':
+            case 'disk':
+                return `${Math.round(value)}%`;
+            case 'diskread':
+            case 'diskwrite':
+            case 'netin':
+            case 'netout':
+                return PulseApp.utils?.formatBytes ? PulseApp.utils.formatBytes(value) + '/s' : `${value} B/s`;
+            default:
+                return String(value);
+        }
+    }
+
     return {
         init,
         refreshDashboardData,
@@ -1109,6 +1800,8 @@ PulseApp.ui.dashboard = (() => {
         createGuestRow,
         snapshotGuestMetricsForDrag, // Export snapshot function
         clearGuestMetricSnapshots,    // Export clear function
-        toggleChartsMode
+        toggleChartsMode,
+        toggleGuestAlertDetails,
+        acknowledgeAlert
     };
 })();

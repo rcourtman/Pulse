@@ -18,6 +18,9 @@ PulseApp.ui.common = (() => {
         _setupTabSwitchListeners();
         applyInitialFilterUI();
         applyInitialSortUI();
+        
+        // Initialize reset button state
+        setTimeout(() => updateResetButtonState(), 100); // Small delay to ensure all UI is initialized
     }
 
     function applyInitialFilterUI() {
@@ -69,6 +72,7 @@ PulseApp.ui.common = (() => {
                     PulseApp.ui.dashboard.updateDashboardTable();
                     if (searchInput) searchInput.dispatchEvent(new Event('input'));
                     PulseApp.state.saveFilterState();
+                    updateResetButtonState();
                 }
             });
         });
@@ -83,6 +87,7 @@ PulseApp.ui.common = (() => {
                     if (PulseApp.ui.thresholds && typeof PulseApp.ui.thresholds.updateLogControlsVisibility === 'function') {
                         PulseApp.ui.thresholds.updateLogControlsVisibility();
                     }
+                    updateResetButtonState();
                 }
             });
         });
@@ -97,6 +102,7 @@ PulseApp.ui.common = (() => {
                     if (PulseApp.ui.thresholds && typeof PulseApp.ui.thresholds.updateLogControlsVisibility === 'function') {
                         PulseApp.ui.thresholds.updateLogControlsVisibility();
                     }
+                    updateResetButtonState();
                 }
             });
         });
@@ -107,6 +113,7 @@ PulseApp.ui.common = (() => {
                 if (PulseApp.ui.thresholds && typeof PulseApp.ui.thresholds.updateLogControlsVisibility === 'function') {
                     PulseApp.ui.thresholds.updateLogControlsVisibility();
                 }
+                updateResetButtonState();
             }, 300);
             
             searchInput.addEventListener('input', debouncedUpdate);
@@ -360,13 +367,46 @@ PulseApp.ui.common = (() => {
         PulseApp.state.set('filterStatus', 'all');
         document.getElementById('filter-status-all').checked = true;
 
-        // Reset thresholds
-        PulseApp.ui.thresholds.resetThresholds(); // This will also trigger a save
+        // Note: Thresholds are now handled by their own dedicated reset button
 
         // Update table and save states
         PulseApp.ui.dashboard.updateDashboardTable();
-        PulseApp.state.saveFilterState(); // Thresholds are saved by its own reset
+        PulseApp.state.saveFilterState();
         // Sort state is not reset by this action intentionally
+        
+        // Update reset button highlighting
+        updateResetButtonState();
+    }
+    
+    function hasActiveFilters() {
+        // Check search input
+        if (searchInput && searchInput.value.trim() !== '') return true;
+        
+        // Check filters
+        const filterGuestType = PulseApp.state.get('filterGuestType');
+        const filterStatus = PulseApp.state.get('filterStatus');
+        const groupByNode = PulseApp.state.get('groupByNode');
+        
+        if (filterGuestType !== 'all' || filterStatus !== 'all' || groupByNode !== true) return true;
+        
+        // Note: Thresholds are no longer included - they have their own reset button
+        
+        return false;
+    }
+    
+    function updateResetButtonState() {
+        const resetButton = document.getElementById('reset-filters-button');
+        if (!resetButton) return;
+        
+        const hasActiveStates = hasActiveFilters();
+        
+        if (hasActiveStates) {
+            // Highlighted state - button is active
+            resetButton.className = 'flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border-2 border-orange-500 rounded bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/40 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors flex-shrink-0';
+        } else {
+            // Default state - button is inactive
+            resetButton.className = 'flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0';
+        }
     }
 
     function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td') {
@@ -394,6 +434,8 @@ PulseApp.ui.common = (() => {
         updateSortUI,
         setupTableSorting,
         resetDashboardView,
-        generateNodeGroupHeaderCellHTML
+        generateNodeGroupHeaderCellHTML,
+        updateResetButtonState,
+        hasActiveFilters
     };
 })();
