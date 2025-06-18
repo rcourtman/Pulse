@@ -857,6 +857,34 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
+    async function getActiveAlertsForGuest(endpointId, node, vmid) {
+        try {
+            // Get all active alerts from the server
+            const response = await fetch('/api/alerts/active');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            if (!data.success || !Array.isArray(data.alerts)) {
+                return [];
+            }
+            
+            // Filter alerts for this specific guest
+            const guestAlerts = data.alerts.filter(alert => {
+                return alert.guest && 
+                       alert.guest.endpointId === endpointId && 
+                       alert.guest.node === node && 
+                       String(alert.guest.vmid) === String(vmid);
+            });
+            
+            return guestAlerts;
+        } catch (error) {
+            console.error('Failed to get active alerts for guest:', error);
+            return [];
+        }
+    }
+
     // Public API
     return {
         init,
@@ -866,6 +894,7 @@ PulseApp.ui.alerts = (() => {
         clearAllAlerts: clearAllAlerts,
         updateGuestThreshold: updateGuestThreshold,
         updateRowStylingOnly: updateRowStylingOnly,
-        updateCellStyling: updateCellStyling
+        updateCellStyling: updateCellStyling,
+        getActiveAlertsForGuest: getActiveAlertsForGuest
     };
 })();
