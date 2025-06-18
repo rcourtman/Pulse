@@ -444,9 +444,8 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderNotificationsTab(config) {
-        const alerts = config.advanced?.alerts || {};
-        const emailEnabled = alerts.email?.enabled !== false;
-        const webhookEnabled = alerts.webhook?.enabled !== false;
+        const emailEnabled = config.ALERT_EMAIL_ENABLED !== false && config.GLOBAL_EMAIL_ENABLED !== false;
+        const webhookEnabled = config.ALERT_WEBHOOK_ENABLED !== false && config.GLOBAL_WEBHOOK_ENABLED !== false;
         
         return `
             <!-- Global Notification Controls -->
@@ -489,42 +488,42 @@ PulseApp.ui.settings = (() => {
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Email</label>
                         <input type="email" name="ALERT_FROM_EMAIL" 
-                               value="${alerts.email?.from || ''}"
+                               value="${config.ALERT_FROM_EMAIL || ''}"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                placeholder="alerts@yourdomain.com">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">To Email</label>
                         <input type="email" name="ALERT_TO_EMAIL" 
-                               value="${alerts.email?.to || ''}"
+                               value="${config.ALERT_TO_EMAIL || ''}"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                placeholder="admin@yourdomain.com">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Server</label>
                         <input type="text" name="SMTP_HOST" 
-                               value="${alerts.email?.smtp?.host || ''}"
+                               value="${config.SMTP_HOST || ''}"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                placeholder="smtp.gmail.com">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">SMTP Port</label>
                         <input type="number" name="SMTP_PORT" 
-                               value="${alerts.email?.smtp?.port || 587}"
+                               value="${config.SMTP_PORT || 587}"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                placeholder="587">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Username</label>
                         <input type="text" name="SMTP_USER" 
-                               value="${alerts.email?.smtp?.user || ''}"
+                               value="${config.SMTP_USER || ''}"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                placeholder="your.email@gmail.com">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Password</label>
                         <input type="password" name="SMTP_PASS" 
-                               value="${alerts.email?.smtp?.pass || ''}"
+                               value="${config.SMTP_PASS || ''}"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                placeholder="Enter password">
                     </div>
@@ -560,7 +559,7 @@ PulseApp.ui.settings = (() => {
                 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pt-3 border-t border-gray-200 dark:border-gray-700">
                     <label class="flex items-center">
                         <input type="checkbox" name="SMTP_SECURE" 
-                               ${alerts.email?.smtp?.secure !== false ? 'checked' : ''}
+                               ${config.SMTP_SECURE !== false ? 'checked' : ''}
                                class="h-4 w-4 text-blue-600 border-gray-300 rounded">
                         <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">Use SSL/TLS encryption</span>
                     </label>
@@ -581,7 +580,7 @@ PulseApp.ui.settings = (() => {
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
                         <input type="url" name="WEBHOOK_URL" 
-                               value="${alerts.webhook?.url || ''}"
+                               value="${config.WEBHOOK_URL || ''}"
                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                placeholder="https://hooks.slack.com/services/...">
                     </div>
@@ -4100,13 +4099,11 @@ PulseApp.ui.settings = (() => {
             const response = await PulseApp.apiClient.post('/api/test-email', {
                 from: formData.ALERT_FROM_EMAIL,
                 to: formData.ALERT_TO_EMAIL,
-                smtp: {
-                    host: formData.SMTP_HOST,
-                    port: parseInt(formData.SMTP_PORT) || 587,
-                    user: formData.SMTP_USER,
-                    pass: formData.SMTP_PASS,
-                    secure: formData.SMTP_SECURE === 'on'
-                }
+                host: formData.SMTP_HOST,
+                port: parseInt(formData.SMTP_PORT) || 587,
+                user: formData.SMTP_USER,
+                pass: formData.SMTP_PASS,
+                secure: formData.SMTP_SECURE === 'on'
             });
             
             if (response.success) {

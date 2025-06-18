@@ -3,26 +3,17 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.alerts = (() => {
     let alertsToggle = null;
-    let alertConfigHeader = null;
     let globalAlertThresholds = null;
     let mainTable = null;
     let isAlertsMode = false;
     let guestAlertThresholds = {}; // Store per-guest thresholds
     let globalThresholds = {}; // Store global default thresholds
-    
-    // DOM elements for alert configuration
-    let alertNotifyEmail = null;
-    let alertNotifyWebhook = null;
 
     function init() {
         // Get DOM elements
         alertsToggle = document.getElementById('toggle-alerts-checkbox');
-        alertConfigHeader = document.getElementById('alert-config-header');
         globalAlertThresholds = document.getElementById('global-alert-thresholds-row');
         mainTable = document.getElementById('main-table');
-        
-        alertNotifyEmail = document.getElementById('alert-notify-email');
-        alertNotifyWebhook = document.getElementById('alert-notify-webhook');
 
         if (!alertsToggle) {
             console.warn('Alerts toggle not found');
@@ -49,13 +40,6 @@ PulseApp.ui.alerts = (() => {
             alertsToggle.addEventListener('change', handleAlertsToggle);
         }
 
-        // Notification settings - auto-save when changed
-        if (alertNotifyEmail) {
-            alertNotifyEmail.addEventListener('change', autoSaveAlertConfig);
-        }
-        if (alertNotifyWebhook) {
-            alertNotifyWebhook.addEventListener('change', autoSaveAlertConfig);
-        }
 
         // Make sure charts and thresholds toggles are mutually exclusive with alerts
         const chartsToggle = document.getElementById('toggle-charts-checkbox');
@@ -103,11 +87,10 @@ PulseApp.ui.alerts = (() => {
     }
 
     function updateAlertsMode() {
-        if (!alertConfigHeader || !globalAlertThresholds || !mainTable) return;
+        if (!globalAlertThresholds || !mainTable) return;
 
         if (isAlertsMode) {
-            // Show alert configuration header and global thresholds row
-            alertConfigHeader.classList.remove('hidden');
+            // Show global thresholds row
             globalAlertThresholds.classList.remove('hidden');
             
             // Add alerts mode class to body for CSS targeting
@@ -120,8 +103,7 @@ PulseApp.ui.alerts = (() => {
             updateRowStylingOnly();
             
         } else {
-            // Hide alert configuration header and global thresholds row
-            alertConfigHeader.classList.add('hidden');
+            // Hide global thresholds row
             globalAlertThresholds.classList.add('hidden');
             
             // Remove alerts mode class
@@ -222,14 +204,14 @@ PulseApp.ui.alerts = (() => {
         sliderElement.addEventListener('input', (event) => {
             const value = event.target.value;
             globalThresholds[metricType] = value; // Update state immediately
-            updateAlertRowStylingOnly(); // Fast styling-only update
+            updateRowStylingOnly(); // Fast styling-only update
             PulseApp.tooltips.updateSliderTooltip(event.target);
         });
         
         // Full update on release (input values + save)
         sliderElement.addEventListener('change', (event) => {
             const value = event.target.value;
-            updateGuestInputValues(metricType, value); // Update input values on release
+            updateGuestInputValues(metricType, value, true); // Update input values on release, skip tooltips
             autoSaveAlertConfig();
         });
         
@@ -314,7 +296,10 @@ PulseApp.ui.alerts = (() => {
         globalThresholds[metricType] = newValue;
         
         // Fast path: only update styling, not input values (like threshold system)
-        updateAlertRowStylingOnly();
+        updateRowStylingOnly();
+        
+        // Update reset button state when global thresholds change
+        updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
         
         if (shouldSave) {
             autoSaveAlertConfig();
@@ -348,6 +333,55 @@ PulseApp.ui.alerts = (() => {
         });
     }
 
+    // Check if a guest would trigger alerts based on current threshold settings
+    function checkGuestWouldTriggerAlerts(guestId, guestThresholds) {
+        // Get guest data from the dashboard
+        const dashboardData = PulseApp.state.get('dashboardData') || [];
+        const guest = dashboardData.find(g => g.id === guestId);
+        if (!guest) return false;
+        
+        // Only check running guests for alerts (stopped guests can't trigger metric alerts)
+        if (guest.status !== 'running') return false;
+        
+        // Check each metric type
+        const metricsToCheck = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+        
+        for (const metricType of metricsToCheck) {
+            // Get the effective threshold for this guest/metric
+            let thresholdValue;
+            if (guestThresholds[metricType] !== undefined) {
+                // Guest has individual threshold
+                thresholdValue = guestThresholds[metricType];
+            } else {
+                // Use global threshold
+                thresholdValue = globalThresholds[metricType];
+            }
+            
+            // Skip if no threshold is set for this metric
+            if (!thresholdValue || thresholdValue === '' || thresholdValue === '0') continue;
+            
+            // Get guest's current value for this metric
+            let guestValue;
+            if (metricType === 'cpu') guestValue = guest.cpu;
+            else if (metricType === 'memory') guestValue = guest.memory;
+            else if (metricType === 'disk') guestValue = guest.disk;
+            else if (metricType === 'diskread') guestValue = guest.diskread;
+            else if (metricType === 'diskwrite') guestValue = guest.diskwrite;
+            else if (metricType === 'netin') guestValue = guest.netin;
+            else if (metricType === 'netout') guestValue = guest.netout;
+            
+            // Skip if guest value is not available
+            if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) continue;
+            
+            // Check if guest value exceeds threshold (would trigger alert)
+            if (guestValue >= parseFloat(thresholdValue)) {
+                return true; // This guest would trigger an alert
+            }
+        }
+        
+        return false; // No alerts would be triggered for this guest
+    }
+
     // Standalone row styling update with granular cell dimming
     function updateRowStylingOnly() {
         if (!isAlertsMode) return;
@@ -367,21 +401,40 @@ PulseApp.ui.alerts = (() => {
                 hasAnyCustomValues = true;
             }
             
-            // Apply row-level dimming for overall state
-            if (!hasIndividualSettings) {
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
+            // Check if this guest would trigger alerts based on current thresholds
+            const wouldTriggerAlerts = checkGuestWouldTriggerAlerts(guestId, guestThresholds);
+            
+            // Apply row-level dimming: dim if guest WOULDN'T trigger alerts (like threshold system)
+            if (!wouldTriggerAlerts) {
+                if (!hasIndividualSettings) {
+                    // Pure global settings - full row dimming
+                    row.style.opacity = '0.4';
+                    row.style.transition = 'opacity 0.1s ease-out';
+                    row.setAttribute('data-alert-dimmed', 'true');
+                    row.removeAttribute('data-alert-mixed');
+                } else {
+                    // Mixed settings - let cell styling handle granular dimming
+                    row.style.opacity = '';
+                    row.style.transition = '';
+                    row.removeAttribute('data-alert-dimmed');
+                    row.setAttribute('data-alert-mixed', 'true');
+                }
             } else {
-                // Has some individual settings - remove row opacity and let cells handle their own dimming
+                // Would trigger alerts - keep visible
                 row.style.opacity = '';
                 row.style.transition = '';
                 row.removeAttribute('data-alert-dimmed');
-                row.setAttribute('data-alert-mixed', 'true'); // Mark as having mixed values
+                if (hasIndividualSettings) {
+                    row.setAttribute('data-alert-mixed', 'true');
+                } else {
+                    row.removeAttribute('data-alert-mixed');
+                }
             }
             
-            // Apply granular cell-level dimming/undimming
-            updateCellStyling(row, guestId, guestThresholds);
+            // Apply granular cell-level dimming/undimming for mixed rows
+            if (hasIndividualSettings) {
+                updateCellStyling(row, guestId, guestThresholds);
+            }
         });
         
         // Update reset button visibility based on whether there are any custom values
@@ -448,7 +501,23 @@ PulseApp.ui.alerts = (() => {
     function updateResetButtonVisibility(hasCustomValues) {
         const resetButton = document.getElementById('reset-global-thresholds');
         if (resetButton) {
-            if (hasCustomValues) {
+            // Check if global thresholds have been changed from defaults
+            const defaultThresholds = {
+                cpu: 80,
+                memory: 85,
+                disk: 90,
+                diskread: '',
+                diskwrite: '',
+                netin: '',
+                netout: ''
+            };
+            
+            const hasGlobalChanges = Object.keys(defaultThresholds).some(key => 
+                globalThresholds[key] != defaultThresholds[key] // Use != for loose comparison
+            );
+            
+            // Enable button if there are either custom guest values OR global changes
+            if (hasCustomValues || hasGlobalChanges) {
                 resetButton.classList.remove('opacity-50', 'cursor-not-allowed');
                 resetButton.disabled = false;
             } else {
@@ -458,7 +527,7 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
-    function updateGuestInputValues(metricType, newValue) {
+    function updateGuestInputValues(metricType, newValue, skipTooltips = false) {
         if (!isAlertsMode) return;
         
         const tableBody = mainTable.querySelector('tbody');
@@ -479,8 +548,8 @@ PulseApp.ui.alerts = (() => {
                 if (metricInput) {
                     metricInput.value = newValue;
                     
-                    // Update tooltip for sliders
-                    if (metricInput.type === 'range') {
+                    // Update tooltip for sliders (skip during reset operations)
+                    if (metricInput.type === 'range' && !skipTooltips) {
                         PulseApp.tooltips.updateSliderTooltip(metricInput);
                     }
                 }
@@ -549,15 +618,12 @@ PulseApp.ui.alerts = (() => {
         
         if (cpuSlider) {
             cpuSlider.value = globalThresholds.cpu;
-            PulseApp.tooltips.updateSliderTooltip(cpuSlider);
         }
         if (memorySlider) {
             memorySlider.value = globalThresholds.memory;
-            PulseApp.tooltips.updateSliderTooltip(memorySlider);
         }
         if (diskSlider) {
             diskSlider.value = globalThresholds.disk;
-            PulseApp.tooltips.updateSliderTooltip(diskSlider);
         }
         if (diskreadSelect) diskreadSelect.value = globalThresholds.diskread;
         if (diskwriteSelect) diskwriteSelect.value = globalThresholds.diskwrite;
@@ -572,14 +638,17 @@ PulseApp.ui.alerts = (() => {
             // First, immediately clean up all styling and apply final dimming to prevent flash
             clearAllAlertStyling();
             
-            // Then update input values to match global thresholds
+            // Then update input values to match global thresholds (skip tooltips during reset)
             for (const metricType in globalThresholds) {
-                updateGuestInputValues(metricType, globalThresholds[metricType]);
+                updateGuestInputValues(metricType, globalThresholds[metricType], true);
             }
         }
         
         // Auto-save
         autoSaveAlertConfig();
+        
+        // Clear any tooltip positioning issues that might have occurred during reset
+        PulseApp.tooltips.hideSliderTooltipImmediately();
         
         PulseApp.ui.toast?.success('Global thresholds reset to defaults');
     }
@@ -650,7 +719,7 @@ PulseApp.ui.alerts = (() => {
             );
             
             cell.innerHTML = `
-                <div class="alert-threshold-input" data-guest-id="${guestId}" data-metric="${metricType}">
+                <div class="alert-threshold-input h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}">
                     ${sliderHtml}
                 </div>
             `;
@@ -688,7 +757,7 @@ PulseApp.ui.alerts = (() => {
             );
             
             cell.innerHTML = `
-                <div class="alert-threshold-input" data-guest-id="${guestId}" data-metric="${metricType}">
+                <div class="alert-threshold-input h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}">
                     ${selectHtml}
                 </div>
             `;
@@ -723,12 +792,12 @@ PulseApp.ui.alerts = (() => {
         const globalValue = globalThresholds[metricType] || '';
         const isMatchingGlobal = value === globalValue || 
                                  value == globalValue || 
-                                 (value === '' && globalValue === '') ||
-                                 (value === '0' && globalValue === '');
+                                 (value === '' && globalValue === '');
         
         
-        if (isMatchingGlobal || value === '' || value === '0') {
-            // Remove threshold if it matches global or is empty/zero
+        if (isMatchingGlobal || value === '') {
+            // Remove threshold if it matches global or is explicitly empty
+            // Note: 0 is a valid threshold value, don't remove it just because it's 0
             delete guestAlertThresholds[guestId][metricType];
             
             // Remove guest object if no thresholds left
@@ -744,6 +813,9 @@ PulseApp.ui.alerts = (() => {
         // Update row styling immediately using the same pattern as threshold system
         updateRowStylingOnly();
         
+        // Update reset button state when guest thresholds change
+        updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
+        
         // Only auto-save when explicitly requested (on release, not during drag)
         if (shouldSave) {
             autoSaveAlertConfig();
@@ -756,9 +828,7 @@ PulseApp.ui.alerts = (() => {
             globalThresholds: globalThresholds,
             guestThresholds: guestAlertThresholds,
             notifications: {
-                dashboard: true,
-                email: alertNotifyEmail?.checked || false,
-                webhook: alertNotifyWebhook?.checked || false
+                dashboard: true
             },
             enabled: true,
             lastUpdated: new Date().toISOString()
@@ -839,13 +909,11 @@ PulseApp.ui.alerts = (() => {
                     guestAlertThresholds = config.guestThresholds;
                 }
                 
-                // Load notification settings
-                if (config.notifications) {
-                    if (alertNotifyEmail) alertNotifyEmail.checked = config.notifications.email || false;
-                    if (alertNotifyWebhook) alertNotifyWebhook.checked = config.notifications.webhook || false;
-                }
                 
                 console.log('Alert configuration loaded successfully');
+                
+                // Update reset button state after loading configuration
+                updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
                 
                 // Update styling if in alerts mode
                 if (isAlertsMode) {
