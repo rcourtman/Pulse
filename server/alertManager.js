@@ -219,7 +219,7 @@ class AlertManager extends EventEmitter {
             });
             
             // Use the new simplified evaluation
-            this.evaluateSimpleThresholds(allGuestMetrics);
+            await this.evaluateSimpleThresholds(allGuestMetrics);
             
         } catch (error) {
             console.error('[AlertManager] Error in simplified checkMetrics:', error);
@@ -275,7 +275,7 @@ class AlertManager extends EventEmitter {
                             } else if (rule.type === 'per_guest_thresholds' && (rule.guestThresholds || rule.globalThresholds)) {
                                 // Handle per-guest threshold rules
                                 console.log(`[AlertManager] Processing per-guest threshold rule ${rule.id} for guest ${guest.name} (${guest.vmid})`);
-                                const triggeredAlerts = this.evaluatePerGuestThresholdRule(rule, guest, metrics, timestamp);
+                                const triggeredAlerts = await this.evaluatePerGuestThresholdRule(rule, guest, metrics, timestamp);
                                 if (triggeredAlerts.length > 0) {
                                     console.log(`[AlertManager] Per-guest rule ${rule.id} triggered ${triggeredAlerts.length} alerts for guest ${guest.name}`);
                                 }
@@ -629,7 +629,15 @@ class AlertManager extends EventEmitter {
             console.log(`[AlertManager] Email disabled globally - sendEmail set to false`);
         } else {
             // Global email is enabled - check individual rule preferences and transporter
-            const ruleEmailEnabled = alert.rule && alert.rule.sendEmail !== false; // Default to true for system rules
+            // Check both old format (sendEmail) and new format (notifications.email)
+            let ruleEmailEnabled = true; // Default to true for system rules
+            if (alert.rule) {
+                if (alert.rule.notifications && typeof alert.rule.notifications.email === 'boolean') {
+                    ruleEmailEnabled = alert.rule.notifications.email;
+                } else if (typeof alert.rule.sendEmail === 'boolean') {
+                    ruleEmailEnabled = alert.rule.sendEmail;
+                }
+            }
             sendEmail = ruleEmailEnabled && !!this.emailTransporter;
             console.log(`[AlertManager] Email enabled globally - ruleEmailEnabled: ${ruleEmailEnabled}, hasTransporter: ${!!this.emailTransporter}, sendEmail: ${sendEmail}`);
         }
@@ -639,7 +647,15 @@ class AlertManager extends EventEmitter {
             sendWebhook = false;
         } else {
             // Global webhook is enabled - check individual rule preferences
-            const ruleWebhookEnabled = alert.rule && alert.rule.sendWebhook === true;
+            // Check both old format (sendWebhook) and new format (notifications.webhook)
+            let ruleWebhookEnabled = false; // Default to false for webhooks
+            if (alert.rule) {
+                if (alert.rule.notifications && typeof alert.rule.notifications.webhook === 'boolean') {
+                    ruleWebhookEnabled = alert.rule.notifications.webhook;
+                } else if (typeof alert.rule.sendWebhook === 'boolean') {
+                    ruleWebhookEnabled = alert.rule.sendWebhook;
+                }
+            }
             sendWebhook = ruleWebhookEnabled && process.env.WEBHOOK_URL;
         }
         
@@ -1896,7 +1912,7 @@ class AlertManager extends EventEmitter {
     /**
      * Evaluate per-guest threshold rules - handles individual guest thresholds and global fallbacks
      */
-    evaluatePerGuestThresholdRule(rule, guest, metrics, timestamp) {
+    async evaluatePerGuestThresholdRule(rule, guest, metrics, timestamp) {
         const triggeredAlerts = [];
         
         // Find metrics for this guest
@@ -2578,9 +2594,32 @@ class AlertManager extends EventEmitter {
         const effectiveThreshold = alert.effectiveThreshold || alert.rule.threshold;
         
         // Format values for display - handle both single values and compound objects
-        let valueDisplay, thresholdDisplay;
+        let valueDisplay, thresholdDisplay, metricDisplay;
         
-        if (alert.rule.type === 'compound_threshold' && typeof currentValue === 'object' && currentValue !== null) {
+        console.log(`[AlertManager] Email alert details - metric: ${alert.metric}, exceededMetrics: ${alert.exceededMetrics ? alert.exceededMetrics.length : 'undefined'}, rule.type: ${alert.rule?.type}`);
+        console.log(`[AlertManager] Alert object keys:`, Object.keys(alert));
+        console.log(`[AlertManager] Checking conditions - metric === 'bundled': ${alert.metric === 'bundled'}, exceededMetrics truthy: ${!!alert.exceededMetrics}`);
+        
+        if (alert.metric === 'bundled' && alert.exceededMetrics) {
+            // Handle bundled alerts (per-guest threshold system)
+            console.log(`[AlertManager] Formatting bundled alert email with ${alert.exceededMetrics.length} exceeded metrics`);
+            console.log(`[AlertManager] Exceeded metrics:`, JSON.stringify(alert.exceededMetrics));
+            const metrics = alert.exceededMetrics.map(m => {
+                const isPercentage = ['cpu', 'memory', 'disk'].includes(m.metricType);
+                const formattedValue = typeof m.currentValue === 'number' ? Math.round(m.currentValue * 10) / 10 : m.currentValue;
+                const formattedThreshold = typeof m.threshold === 'number' ? Math.round(m.threshold * 10) / 10 : m.threshold;
+                return {
+                    name: m.metricType.toUpperCase(),
+                    value: `${formattedValue}${isPercentage ? '%' : ''}`,
+                    threshold: `${formattedThreshold}${isPercentage ? '%' : ''}`
+                };
+            });
+            
+            metricDisplay = metrics.map(m => m.name).join(', ');
+            valueDisplay = metrics.map(m => `${m.name}: ${m.value}`).join(', ');
+            thresholdDisplay = metrics.map(m => `${m.name}: >${m.threshold}`).join(', ');
+            console.log(`[AlertManager] Bundled alert formatted - metricDisplay: ${metricDisplay}, valueDisplay: ${valueDisplay}, thresholdDisplay: ${thresholdDisplay}`);
+        } else if (alert.rule.type === 'compound_threshold' && typeof currentValue === 'object' && currentValue !== null) {
             // Format compound threshold values
             const values = [];
             for (const [metric, value] of Object.entries(currentValue)) {
@@ -2589,6 +2628,7 @@ class AlertManager extends EventEmitter {
                 values.push(`${metric.toUpperCase()}: ${formattedValue}${isPercentage ? '%' : ''}`);
             }
             valueDisplay = values.join(', ');
+            metricDisplay = 'Multiple Thresholds';
             
             // Format compound thresholds
             if (Array.isArray(effectiveThreshold)) {
@@ -2602,12 +2642,16 @@ class AlertManager extends EventEmitter {
             }
         } else {
             // Format single metric values
+            console.log(`[AlertManager] Formatting non-bundled alert email - rule type: ${alert.rule?.type}, metric: ${alert.rule?.metric}`);
             const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.rule.metric);
             valueDisplay = isPercentageMetric ? `${Math.round(currentValue || 0)}%` : (currentValue || 'N/A');
             thresholdDisplay = isPercentageMetric ? `${effectiveThreshold || 0}%` : (effectiveThreshold || 'N/A');
+            metricDisplay = alert.rule.metric ? alert.rule.metric.toUpperCase() : 'N/A';
         }
 
         const subject = `🚨 Pulse Alert: ${alert.rule.name}`;
+        
+        console.log(`[AlertManager] Final email values - metricDisplay: "${metricDisplay}", valueDisplay: "${valueDisplay}", thresholdDisplay: "${thresholdDisplay}"`);
         
         const html = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -2630,7 +2674,7 @@ class AlertManager extends EventEmitter {
                         </tr>
                         <tr>
                             <td style="padding: 8px 0; font-weight: bold; color: #374151;">Metric:</td>
-                            <td style="padding: 8px 0; color: #6b7280;">${alert.rule.metric ? alert.rule.metric.toUpperCase() : (alert.rule.type === 'compound_threshold' ? 'Multiple Thresholds' : 'N/A')}</td>
+                            <td style="padding: 8px 0; color: #6b7280;">${metricDisplay}</td>
                         </tr>
                         <tr>
                             <td style="padding: 8px 0; font-weight: bold; color: #374151;">Current Value:</td>
@@ -2666,16 +2710,18 @@ class AlertManager extends EventEmitter {
         const text = `
 PULSE ALERT: ${alert.rule.name}
 
-VM/LXC: ${alert.guest.name} (${alert.guest.type} ${alert.guest.vmid})
-Node: ${alert.guest.node}
-Metric: ${alert.rule.metric ? alert.rule.metric.toUpperCase() : (alert.rule.type === 'compound_threshold' ? 'Multiple Thresholds' : 'N/A')}
+Alert Details
+VM/LXC:        ${alert.guest.name} (${alert.guest.type} ${alert.guest.vmid})
+Node:          ${alert.guest.node}
+Metric:        ${metricDisplay}
 Current Value: ${valueDisplay}
-Threshold: ${thresholdDisplay}
-Status: ${alert.guest.status}
-Time: ${new Date(this.getValidTimestamp(alert)).toLocaleString()}
+Threshold:     ${thresholdDisplay}
+Status:        ${alert.guest.status}
+Time:          ${new Date(this.getValidTimestamp(alert)).toLocaleString()}
 
-Description: ${alert.rule.description || 'Alert triggered for the specified conditions'}
+${alert.rule.description || 'Alert triggered for the specified conditions'}
 
+---
 This alert was generated by Pulse monitoring system.
         `;
 
@@ -3302,7 +3348,7 @@ Pulse Monitoring System`,
      * SIMPLIFIED ALERT SYSTEM - Direct threshold checking with guest-level bundling
      * Creates one alert per guest containing all exceeded metrics
      */
-    evaluateSimpleThresholds(allGuestMetrics) {
+    async evaluateSimpleThresholds(allGuestMetrics) {
         if (this.processingMetrics) {
             console.log('[AlertManager] Already processing metrics, skipping...');
             return;
@@ -3331,7 +3377,7 @@ Pulse Monitoring System`,
                     continue;
                 }
                 
-                this.evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics, alertDuration);
+                await this.evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics, alertDuration);
             }
             
         } catch (error) {
@@ -3344,7 +3390,7 @@ Pulse Monitoring System`,
     /**
      * Evaluate all metrics for a guest and create one bundled alert
      */
-    evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics = null, alertDuration = 0) {
+    async evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics = null, alertDuration = 0) {
         // Get threshold for this guest
         const guestKey = `${guest.endpointId || 'unknown'}-${guest.node}-${guest.vmid}`;
         const guestSpecificThresholds = guestThresholds[guestKey] || {};
@@ -3417,8 +3463,8 @@ Pulse Monitoring System`,
                     
                     console.log(`[AlertManager] Triggered bundled alert for ${guest.name} after ${elapsedTime}ms`);
                     
-                    // Emit alert event
-                    this.emit('alert', existingAlert);
+                    // Trigger the alert (which handles notifications)
+                    await this.triggerAlert(existingAlert);
                 } else {
                     // Update pending alert with current data
                     existingAlert.lastUpdate = timestamp;

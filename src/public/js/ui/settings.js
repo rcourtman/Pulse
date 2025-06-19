@@ -1256,6 +1256,12 @@ PulseApp.ui.settings = (() => {
             
             if (result.success) {
                 showSuccessToast('Configuration Saved', 'Your settings have been applied successfully');
+                
+                // Update alert mode notification status if alerts module is available
+                if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
+                    PulseApp.ui.alerts.updateNotificationStatus();
+                }
+                
                 setTimeout(() => {
                     closeModal();
                 }, 1500);
@@ -3541,6 +3547,11 @@ PulseApp.ui.settings = (() => {
                 emailSection.classList.add('opacity-50', 'pointer-events-none');
             }
         }
+        
+        // Update alert mode notification status if alerts module is available
+        if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
+            PulseApp.ui.alerts.updateNotificationStatus();
+        }
     }
 
     function handleGlobalWebhookToggle(enabled) {
@@ -3551,6 +3562,11 @@ PulseApp.ui.settings = (() => {
             } else {
                 webhookSection.classList.add('opacity-50', 'pointer-events-none');
             }
+        }
+        
+        // Update alert mode notification status if alerts module is available
+        if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
+            PulseApp.ui.alerts.updateNotificationStatus();
         }
     }
 
