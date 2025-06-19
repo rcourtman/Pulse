@@ -470,10 +470,9 @@ PulseApp.ui.pbs = (() => {
             specialHoverClass = 'hover:bg-blue-100 dark:hover:bg-blue-900/30';
         }
         
-        // Use helper to create consistent row with subtle hover for PBS tables
+        // Use helper to create consistent row
         const newRow = PulseApp.ui.common.createTableRow({
             classes: additionalClasses,
-            baseClasses: 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50/50 dark:hover:bg-gray-700/30',
             isSpecialRow: !!(specialBgClass),
             specialBgClass: specialBgClass,
             specialHoverClass: specialHoverClass
@@ -914,16 +913,23 @@ PulseApp.ui.pbs = (() => {
                     const usageText = totalBytes > 0 ? `${usagePercent}% (${PulseApp.utils.formatBytes(usedBytes)} of ${PulseApp.utils.formatBytes(totalBytes)})` : 'N/A';
                     const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
 
-                    const row = dsTableBody.insertRow();
+                    // Use consolidated table row helper
+                    let specialBgClass = '';
+                    let specialHoverClass = '';
                     
-                    // Add critical usage highlighting
-                    let rowClass = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
                     if (usagePercent >= 95) {
-                        rowClass = 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30';
+                        specialBgClass = 'bg-red-50 dark:bg-red-900/20';
+                        specialHoverClass = 'hover:bg-red-100 dark:hover:bg-red-900/30';
                     } else if (usagePercent >= 85) {
-                        rowClass = 'bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30';
+                        specialBgClass = 'bg-yellow-50 dark:bg-yellow-900/20';
+                        specialHoverClass = 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30';
                     }
-                    row.className = rowClass;
+                    
+                    const row = PulseApp.ui.common.createTableRow({
+                        isSpecialRow: !!(specialBgClass),
+                        specialBgClass: specialBgClass,
+                        specialHoverClass: specialHoverClass
+                    });
 
                     const createCell = (content, classNames = [], isHtml = false) => {
                         const cell = row.insertCell();
@@ -970,6 +976,8 @@ PulseApp.ui.pbs = (() => {
                     createCell(deduplicationText, [CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400, CSS_CLASSES.FONT_SEMIBOLD]);
 
                     createCell(gcStatusHtml, [], true);
+                    
+                    dsTableBody.appendChild(row);
                 });
             }
         } else {
@@ -1125,14 +1133,12 @@ PulseApp.ui.pbs = (() => {
             const lastOk = PulseApp.utils.formatPbsTimestampRelative(summary.lastOk);
             const lastFailed = PulseApp.utils.formatPbsTimestampRelative(summary.lastFailed);
 
-            const row = tbody.insertRow();
-            
-            // Add row highlighting for failed tasks
-            if (failed > 0) {
-                row.className = `${CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700} bg-red-50 dark:bg-red-900/20`;
-            } else {
-                row.className = CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700;
-            }
+            // Use consolidated table row helper
+            const row = PulseApp.ui.common.createTableRow({
+                isSpecialRow: failed > 0,
+                specialBgClass: failed > 0 ? 'bg-red-50 dark:bg-red-900/20' : '',
+                specialHoverClass: failed > 0 ? 'hover:bg-red-100 dark:hover:bg-red-900/30' : ''
+            });
 
             const cellTaskType = row.insertCell();
             cellTaskType.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}`;
@@ -1166,6 +1172,8 @@ PulseApp.ui.pbs = (() => {
             } else {
                 cellLastFail.textContent = lastFailed;
             }
+            
+            tbody.appendChild(row);
         });
 
         table.appendChild(tbody);
@@ -1332,7 +1340,9 @@ PulseApp.ui.pbs = (() => {
         // Table body
         const tbody = document.createElement('tbody');
         tbody.className = CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700;
-        const valueRow = document.createElement('tr');
+        
+        // Use consolidated table row helper
+        const valueRow = PulseApp.ui.common.createTableRow();
 
         // PBS VER
         const versionInfo = pbsInstanceData.versionInfo || {};
