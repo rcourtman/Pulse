@@ -180,7 +180,7 @@ class AlertManager extends EventEmitter {
             
             guests.forEach(guest => {
                 if (guest && guest.name) {
-                    const guestKey = `${guest.endpointId || 'unknown'}_${guest.node}_${guest.vmid}`;
+                    const guestKey = `${guest.endpointId || 'unknown'}-${guest.node}-${guest.vmid}`;
                     
                     // Find matching metrics data for this guest (which has calculated I/O rates)
                     const guestMetricsData = metrics.find(m => 
@@ -191,6 +191,7 @@ class AlertManager extends EventEmitter {
                     
                     // Use metrics data if available (has calculated rates), fallback to guest data
                     const currentMetrics = guestMetricsData ? guestMetricsData.current : guest;
+                    
                     
                     allGuestMetrics.set(guestKey, {
                         current: currentMetrics,
@@ -1875,6 +1876,7 @@ class AlertManager extends EventEmitter {
             if (currentValue === null) {
                 continue;
             }
+            
             
             // Evaluate threshold condition (default to greater_than)
             const condition = rule.condition || 'greater_than';
