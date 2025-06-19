@@ -421,12 +421,16 @@ PulseApp.ui.common = (() => {
         }
         
         // Always create individual cells so first one can be sticky
-        let html = `<${cellTag} class="sticky left-0 bg-gray-200 dark:bg-gray-700 z-10 ${baseClasses}">${nodeContent}</${cellTag}>`;
+        let html = `<${cellTag} class="sticky left-0 bg-gray-200 dark:bg-gray-700 z-10 ${baseClasses} border-r border-gray-300 dark:border-gray-600">${nodeContent}</${cellTag}>`;
         // Add empty cells for remaining columns
         for (let i = 1; i < colspan; i++) {
             html += `<${cellTag} class="bg-gray-200 dark:bg-gray-700"></${cellTag}>`;
         }
         return html;
+    }
+
+    function addTableFixedLine(containerSelector, columnWidthVar) {
+        // No longer needed - using CSS border styling instead
     }
 
     return {

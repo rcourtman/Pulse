@@ -25,6 +25,51 @@
     .pulse-logo-inner { fill: #ffffff; }
     .dark .pulse-logo-outer { fill: #3b82f6; }
     .dark .pulse-logo-inner { fill: #dbeafe; }
+    
+    /* Fixed table column widths to prevent shifting */
+    #main-table {
+      table-layout: fixed !important;
+    }
+    
+    #main-table td {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    /* Only apply nowrap to specific cells that need it */
+    #main-table td:nth-child(1),
+    #main-table td:nth-child(2),
+    #main-table td:nth-child(3),
+    #main-table td:nth-child(4),
+    #main-table td:nth-child(8),
+    #main-table td:nth-child(9),
+    #main-table td:nth-child(10),
+    #main-table td:nth-child(11) {
+      white-space: nowrap;
+    }
+    
+    /* Ensure metric cells don't expand */
+    #main-table td:nth-child(5),
+    #main-table td:nth-child(6),
+    #main-table td:nth-child(7),
+    #main-table td:nth-child(8),
+    #main-table td:nth-child(9),
+    #main-table td:nth-child(10),
+    #main-table td:nth-child(11) {
+      overflow: hidden;
+    }
+    
+    /* Ensure progress bars don't affect layout */
+    #main-table .metric-text,
+    #main-table .metric-chart {
+      overflow: hidden;
+    }
+    
+    /* Fix dropdowns in alert mode */
+    #main-table select {
+      width: 100%;
+      max-width: 100%;
+    }
 
     /* Custom Slider Thumb Styles */
     input[type=range].custom-slider::-webkit-slider-thumb {
@@ -552,6 +597,125 @@
     body.switching-modes #main-table td {
         transition: none !important;
     }
+    
+    /* Dimmed filter row styling */
+    #threshold-slider-row.dimmed {
+        opacity: 0.5;
+        transition: opacity 0.2s ease-out;
+    }
+    #threshold-slider-row:not(.dimmed) {
+        opacity: 1;
+        transition: opacity 0.2s ease-out;
+    }
+    
+    /* Fix sticky cell background in threshold row */
+    #threshold-slider-row td.sticky.left-0,
+    #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(239, 246, 255) !important; /* Solid blue-50 */
+        opacity: 1 !important; /* Always fully opaque */
+    }
+    .dark #threshold-slider-row td.sticky.left-0,
+    .dark #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(23, 37, 84) !important; /* Solid dark blue */
+        opacity: 1 !important;
+    }
+    
+    /* Make the content inside sticky cell match row opacity */
+    #threshold-slider-row.dimmed td.sticky.left-0 > *,
+    #global-alert-thresholds-row.dimmed td.sticky.left-0 > * {
+        opacity: 0.5;
+    }
+    #threshold-slider-row:not(.dimmed) td.sticky.left-0 > *,
+    #global-alert-thresholds-row:not(.dimmed) td.sticky.left-0 > * {
+        opacity: 1;
+    }
+    
+    /* Ensure sticky column borders don't overlap with scrollbar */
+    .table-container {
+        position: relative;
+    }
+    
+    /* Consistent border styling for all sticky columns */
+    .sticky.left-0.border-r {
+        border-right-width: 1px;
+    }
+    
+    /* Ensure sticky columns stay above scrolling content */
+    th.sticky.left-0 {
+        z-index: 20 !important;
+    }
+    
+    td.sticky.left-0 {
+        z-index: 15 !important;
+    }
+    
+    /* Special rows need higher z-index */
+    #threshold-slider-row td.sticky.left-0,
+    #global-alert-thresholds-row td.sticky.left-0 {
+        z-index: 16 !important;
+    }
+    
+    /* Consistent sticky column styling across all devices */
+    /* Remove the broken border from sticky cells */
+    .sticky.left-0 {
+        border-right: none !important;
+    }
+    
+    /* Add a proper separator using box-shadow that stays with the sticky column */
+    th.sticky.left-0,
+    td.sticky.left-0 {
+        box-shadow: 2px 0 0 0 rgb(209, 213, 219);
+        position: sticky !important;
+        left: 0 !important;
+    }
+    
+    .dark th.sticky.left-0,
+    .dark td.sticky.left-0 {
+        box-shadow: 2px 0 0 0 rgb(75, 85, 99);
+    }
+    
+    /* Ensure proper background colors for sticky cells to prevent transparency */
+    th.sticky.left-0 {
+        background-color: rgb(243, 244, 246) !important; /* gray-100 */
+    }
+    
+    .dark th.sticky.left-0 {
+        background-color: rgb(55, 65, 81) !important; /* gray-700 */
+    }
+    
+    /* Regular data rows */
+    td.sticky.left-0 {
+        background-color: white !important;
+    }
+    
+    .dark td.sticky.left-0 {
+        background-color: rgb(31, 41, 55) !important; /* gray-800 */
+    }
+    
+    /* Node/group header rows - use lighter background for all tables */
+    .node-header td.sticky.left-0,
+    .node-storage-header td.sticky.left-0,
+    tr.bg-gray-100.font-semibold td.sticky.left-0 {
+        background-color: rgb(243, 244, 246) !important; /* gray-100 */
+    }
+    
+    .dark .node-header td.sticky.left-0,
+    .dark .node-storage-header td.sticky.left-0,
+    .dark tr.font-semibold td.sticky.left-0 {
+        background-color: rgba(55, 65, 81, 0.8) !important; /* gray-700/80 */
+    }
+    
+    /* Special rows need their specific colors - solid backgrounds */
+    #threshold-slider-row td.sticky.left-0,
+    #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(239, 246, 255) !important; /* blue-50 */
+    }
+    
+    .dark #threshold-slider-row td.sticky.left-0,
+    .dark #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(30, 41, 66) !important; /* blue-900 solid */
+    }
+    
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
@@ -701,41 +865,41 @@
             </div>
           </div>
 
-          <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
+          <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar relative">
             <!-- Mobile scroll hint -->
             <div class="fixed bottom-4 right-4 bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-full md:hidden animate-pulse shadow-lg z-50 pointer-events-none" id="scroll-hint" style="display: none;">
                 ← Swipe for more →
             </div>
-            <table id="main-table" class="w-full min-w-[800px] table-auto text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
+            <table id="main-table" class="w-full min-w-[1100px] table-fixed text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
                 <colgroup>
-                  <col class="name-col" style="min-width: 140px; max-width: 250px;">
+                  <col class="name-col" style="width: 150px;">
                   <col class="type-col" style="width: 50px;">
-                  <col class="id-col" style="width: 50px;">
-                  <col class="uptime-col" style="min-width: 60px; max-width: 100px;">
-                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
-                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
-                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
-                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
-                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
-                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
-                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="id-col" style="width: 60px;">
+                  <col class="uptime-col" style="width: 70px;">
+                  <col class="usage-col" style="width: 120px;">
+                  <col class="usage-col" style="width: 120px;">
+                  <col class="usage-col" style="width: 120px;">
+                  <col class="net-disk-col" style="width: 95px;">
+                  <col class="net-disk-col" style="width: 95px;">
+                  <col class="net-disk-col" style="width: 95px;">
+                  <col class="net-disk-col" style="width: 95px;">
                 </colgroup>
               <thead class="bg-gray-100 dark:bg-gray-800">
                 <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                  <th class="sticky left-0 top-0 bg-gray-100 dark:bg-gray-700 z-20 sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
+                  <th class="sticky left-0 top-0 bg-gray-100 dark:bg-gray-700 z-20 sortable p-1 px-2" data-sort="name" style="width: 150px;">Name</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2" style="width: 50px;">Type</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="id" style="width: 50px;">ID</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="id" style="width: 60px;">ID</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="uptime" style="width: 70px;" title="Uptime">Up</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="cpu" style="width: 120px;">CPU</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="memory" style="width: 120px;">Memory</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="disk" style="width: 120px;">Disk</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskread" style="width: 95px;">Read</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskwrite" style="width: 95px;">Write</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 95px;">Net In</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 95px;">Net Out</th>
                 </tr>
                 <tr id="threshold-slider-row" class="bg-blue-50 dark:bg-blue-900/20">
-                  <td class="sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 py-1 px-2 align-middle border-r border-blue-300 dark:border-blue-600">
+                  <td class="sticky left-0 z-10 py-1 px-2 align-middle">
                     <div class="flex items-center justify-between">
                       <span class="text-xs text-blue-700 dark:text-blue-300">Filters</span>
                       <button id="reset-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
@@ -800,7 +964,7 @@
                 </tr>
                 <!-- Global Alert Thresholds Row -->
                 <tr id="global-alert-thresholds-row" class="hidden bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-600">
-                  <td class="sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 py-1 px-2 align-middle border-r border-blue-300 dark:border-blue-600">
+                  <td class="sticky left-0 z-10 py-1 px-2 align-middle">
                     <div class="flex flex-col gap-1">
                       <div class="flex items-center justify-between">
                         <span class="text-xs text-blue-700 dark:text-blue-300">Defaults</span>

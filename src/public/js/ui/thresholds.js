@@ -25,7 +25,7 @@ PulseApp.ui.thresholds = (() => {
 
         // Set initial dimmed state for filter row
         if (thresholdRow) {
-            thresholdRow.style.opacity = '0.5';
+            thresholdRow.classList.add('dimmed');
         }
 
         applyInitialThresholdUI();
@@ -343,11 +343,9 @@ PulseApp.ui.thresholds = (() => {
         // Dim filter row when no filters are active
         if (thresholdRow) {
             if (activeCount > 0) {
-                thresholdRow.style.opacity = '1';
-                thresholdRow.style.transition = 'opacity 0.2s ease-out';
+                thresholdRow.classList.remove('dimmed');
             } else {
-                thresholdRow.style.opacity = '0.5';
-                thresholdRow.style.transition = 'opacity 0.2s ease-out';
+                thresholdRow.classList.add('dimmed');
             }
         }
     }

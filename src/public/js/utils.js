@@ -71,6 +71,14 @@ PulseApp.utils = (() => {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
     }
 
+    function formatBytesCompact(bytes, decimals = 1, k = 1024) {
+        if (bytes === 0 || bytes === null || bytes === undefined) return '0B';
+        const dm = decimals < 0 ? 0 : decimals;
+        const sizes = ['B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + sizes[i];
+    }
+
     function formatSpeed(bytesPerSecond, decimals = 1) {
         if (bytesPerSecond === null || bytesPerSecond === undefined) return 'N/A';
         if (bytesPerSecond < 1) return '0 B/s';
@@ -585,6 +593,7 @@ PulseApp.utils = (() => {
         getUsageColor,
         createProgressTextBarHTML,
         formatBytes,
+        formatBytesCompact,
         formatSpeed,
         formatSpeedWithStyling,
         formatUptime,

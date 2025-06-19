@@ -36,6 +36,10 @@ PulseApp.ui.storage = (() => {
         }, { passive: true });
     }
 
+    function _initTableFixedLine() {
+        // No longer needed - using CSS border styling instead
+    }
+
     function getStorageTypeIcon(type) {
         if (iconCache.has(type)) {
             return iconCache.get(type);
@@ -325,7 +329,7 @@ PulseApp.ui.storage = (() => {
             
             thead.innerHTML = `
                 <tr class="border-b border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-xs font-medium tracking-wider text-left text-gray-600 uppercase dark:text-gray-300">
-                  <th class="sticky left-0 top-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2 border-r border-gray-300 dark:border-gray-600">Storage</th>
+                  <th class="sticky left-0 top-0 bg-gray-50 dark:bg-gray-700 z-20 p-1 px-2">Storage</th>
                   <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Content</th>
                   <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Type</th>
                   <th class="sticky top-0 bg-gray-50 dark:bg-gray-700 z-10 p-1 px-2">Shared</th>
@@ -415,6 +419,9 @@ PulseApp.ui.storage = (() => {
         if (window.innerWidth < 768) {
             setTimeout(() => _initMobileScrollIndicators(), 100);
         }
+        
+        // Initialize fixed table line
+        _initTableFixedLine();
         
         // Restore scroll position to the new table container with multiple timing strategies
         if (tableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
@@ -606,7 +613,7 @@ PulseApp.ui.storage = (() => {
                             (isWarning ? ' <span class="inline-block w-2 h-2 bg-yellow-500 rounded-full ml-1"></span>' : '');
 
         row.innerHTML = `
-            <td class="sticky left-0 ${isCritical ? 'bg-red-50 dark:bg-red-900/20' : (isWarning ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-white dark:bg-gray-800')} z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100 border-r border-gray-300 dark:border-gray-600">${store.storage || 'N/A'}${warningBadge}</td>
+            <td class="sticky left-0 ${isCritical ? 'bg-red-50 dark:bg-red-900/20' : (isWarning ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-white dark:bg-gray-800')} z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100">${store.storage || 'N/A'}${warningBadge}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${contentBadges}</td>
             <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${store.type || 'N/A'}</td>
             <td class="p-1 px-2 whitespace-nowrap text-center">${sharedText}</td>

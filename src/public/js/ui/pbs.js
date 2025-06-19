@@ -465,7 +465,7 @@ PulseApp.ui.pbs = (() => {
             } else if (task.status && task.status.toLowerCase().includes('running')) {
                 stickyBg = 'bg-blue-50 dark:bg-blue-900/20';
             }
-            targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 ${stickyBg} z-10 border-r border-gray-300 dark:border-gray-600`;
+            targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 ${stickyBg} z-10`;
         } else {
             targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
         }
@@ -1211,7 +1211,7 @@ PulseApp.ui.pbs = (() => {
             
             if (index === 0 && isBackupTable) {
                 // Make first header sticky for backup tables
-                th.className = `${CSS_CLASSES.P1_PX2} sticky left-0 bg-gray-100 dark:bg-gray-800 z-20 border-r border-gray-300 dark:border-gray-600`;
+                th.className = `${CSS_CLASSES.P1_PX2} sticky left-0 bg-gray-100 dark:bg-gray-800 z-20`;
             } else {
                 th.className = CSS_CLASSES.P1_PX2;
             }
@@ -2406,6 +2406,13 @@ PulseApp.ui.pbs = (() => {
                 });
             });
         }
+        
+        // Initialize fixed table line for mobile
+        _initTableFixedLine();
+    }
+
+    function _initTableFixedLine() {
+        // No longer needed - using CSS border styling instead
     }
 
     function initPbsEventListeners() {
