@@ -119,15 +119,18 @@ PulseApp.alerts = (() => {
             // Create dropdown as a sibling, positioned relative to the header container
             alertDropdown = document.createElement('div');
             alertDropdown.id = 'alerts-dropdown';
-            alertDropdown.className = 'absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden hidden';
+            alertDropdown.className = 'absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg hidden';
             
             // More compact positioning for the dropdown
             alertDropdown.style.position = 'fixed';
             alertDropdown.style.zIndex = '1000';
             alertDropdown.style.top = '60px';
             alertDropdown.style.right = '20px';
-            alertDropdown.style.maxWidth = '320px';
-            alertDropdown.style.maxHeight = '400px';
+            alertDropdown.style.left = '400px';
+            alertDropdown.style.width = 'auto';
+            alertDropdown.style.maxWidth = 'none';
+            alertDropdown.style.maxHeight = '500px';
+            alertDropdown.style.overflowY = 'auto';
             
             // Append dropdown to body for better positioning control
             document.body.appendChild(alertDropdown);
@@ -147,6 +150,7 @@ PulseApp.alerts = (() => {
                 window.socket.on('alert', handleNewAlert);
                 window.socket.on('alertResolved', handleResolvedAlert);
                 window.socket.on('alertAcknowledged', handleAcknowledgedAlert);
+                window.socket.on('alertRulesRefreshed', handleRulesRefreshed);
                 
                 // Handle reconnection - reload alert data when reconnected
                 window.socket.on('connect', () => {
@@ -287,13 +291,8 @@ PulseApp.alerts = (() => {
                         </button>
                     </div>
                 </div>
-                <div class="max-h-64 overflow-y-auto">
-                    ${unacknowledgedAlerts.slice(0, 8).map(alert => createCompactAlertCard(alert, false)).join('')}
-                    ${unacknowledgedAlerts.length > 8 ? `
-                        <div class="p-2 text-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700">
-                            +${unacknowledgedAlerts.length - 8} more unacknowledged
-                        </div>
-                    ` : ''}
+                <div class="max-h-80 overflow-y-auto">
+                    ${unacknowledgedAlerts.map(alert => createCompactAlertCard(alert, false)).join('')}
                 </div>
             `;
         }
@@ -349,12 +348,12 @@ PulseApp.alerts = (() => {
         // If acknowledged, heavily grey out the entire card
         const cardClasses = acknowledged ? 
             'border-l-2 border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30 p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0 opacity-60' :
-            `border-l-2 ${severityColor} ${severityBg} p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0`;
+            `border-l-2 ${alertColor} ${alertBg} p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0`;
         
-        const duration = Math.round((Date.now() - alert.triggeredAt) / 1000);
-        const durationStr = duration < 60 ? `${duration}s` : 
-                           duration < 3600 ? `${Math.round(duration/60)}m` : 
-                           `${Math.round(duration/3600)}h`;
+        const duration = Math.max(0, Math.round((Date.now() - alert.triggeredAt) / 1000));
+        const durationStr = duration < 60 ? `${duration}s ago` : 
+                           duration < 3600 ? `${Math.round(duration/60)}m ago` : 
+                           `${Math.round(duration/3600)}h ago`;
         
         const icon = ALERT_ICONS.active;
         
@@ -382,9 +381,9 @@ PulseApp.alerts = (() => {
         }
         
         // Muted text classes for acknowledged alerts
-        const nameClass = acknowledged ? 'text-xs font-medium text-gray-500 dark:text-gray-500 truncate' : 'text-xs font-medium text-gray-900 dark:text-gray-100 truncate';
+        const nameClass = acknowledged ? 'text-xs font-medium text-gray-500 dark:text-gray-500' : 'text-xs font-medium text-gray-900 dark:text-gray-100';
         const valueClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500' : 'text-xs text-gray-500 dark:text-gray-400';
-        const ruleClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500 truncate' : 'text-xs text-gray-500 dark:text-gray-400 truncate';
+        const ruleClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500' : 'text-xs text-gray-500 dark:text-gray-400';
         
         return `
             <div class="${cardClasses}">
@@ -402,8 +401,48 @@ PulseApp.alerts = (() => {
                             </span>
                             ${acknowledged ? '<span class="text-xs bg-green-500/70 text-white px-1 rounded opacity-70">✓</span>' : ''}
                         </div>
-                        <div class="${ruleClass}">
-                            ${alert.ruleName} • ${durationStr}${acknowledged ? ' • acknowledged' : ''}
+                        <div class="${ruleClass}" style="white-space: normal; overflow: visible;">
+                            ${(() => {
+                                const parts = alert.message.split(': ');
+                                const metricsText = parts.slice(1).join(': ');
+                                const metrics = metricsText.split(', ');
+                                
+                                return metrics.map(metric => {
+                                    const trimmed = metric.trim();
+                                    // Parse metric like "CPU: 56% (≥20%)"
+                                    const match = trimmed.match(/^(.+?):\s*(\d+)%\s*\(≥(\d+)%\)$/);
+                                    
+                                    if (match) {
+                                        const [, name, current, threshold] = match;
+                                        const currentVal = parseInt(current);
+                                        const thresholdVal = parseInt(threshold);
+                                        
+                                        // Determine color based on how much it exceeds threshold
+                                        const excess = currentVal - thresholdVal;
+                                        let barColor = 'bg-red-500';
+                                        if (excess <= 5) barColor = 'bg-yellow-500';
+                                        if (excess > 20) barColor = 'bg-red-600';
+                                        
+                                        return `
+                                            <div class="mb-0.5">
+                                                <div class="flex justify-between text-xs mb-0.5">
+                                                    <span class="font-medium">${name}</span>
+                                                    <span>${currentVal}% / ${thresholdVal}%</span>
+                                                </div>
+                                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 relative">
+                                                    <div class="bg-gray-300 dark:bg-gray-600 h-2 rounded absolute top-0 left-0" style="width: ${Math.min(thresholdVal, 100)}%; z-index: 1;"></div>
+                                                    <div class="${barColor} h-2 rounded absolute top-0 left-0" style="width: ${Math.min(currentVal, 100)}%; z-index: 2;"></div>
+                                                    ${thresholdVal < 100 && thresholdVal > 0 ? `<div class="absolute top-0 bg-orange-400 h-2" style="left: ${thresholdVal}%; width: 2px; z-index: 3;"></div>` : ''}
+                                                </div>
+                                            </div>
+                                        `;
+                                    } else {
+                                        // Fallback for non-percentage metrics
+                                        return `<div class="mb-1">${trimmed}</div>`;
+                                    }
+                                }).join('');
+                            })()}
+                            <div class="mt-1 text-xs text-gray-500">${durationStr}${acknowledged ? ' • acknowledged' : ''}</div>
                         </div>
                     </div>
                     <div class="flex-shrink-0 space-x-1">
@@ -492,24 +531,21 @@ PulseApp.alerts = (() => {
                         `${count} unacknowledged alert${count !== 1 ? 's' : ''} - Click to view`;
     }
 
-    function showNotification(alert, type = 'info') {
+    function showNotification(alert, type = 'alert') {
         const notification = document.createElement('div');
         notification.className = `pointer-events-auto transform transition-all duration-200 ease-out opacity-0 translate-y-2 scale-95`;
         
-        // More subtle styling with muted colors
-        const colorClasses = {
-            'critical': 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-700 dark:text-red-200',
-            'warning': 'bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-700 dark:text-yellow-200',
-            'info': 'bg-blue-50 border border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-200',
-            'resolved': 'bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-200'
-        };
+        // Simple styling based on notification type
+        let colorClass, title;
+        if (type === 'resolved') {
+            colorClass = 'bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-200';
+            title = 'Resolved';
+        } else {
+            colorClass = 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-700 dark:text-red-200';
+            title = alert.message && alert.message.includes('acknowledged') ? 'Success' : 'Alert';
+        }
         
-        const colorClass = colorClasses[type] || colorClasses.info;
         const icon = ALERT_ICONS.active;
-        
-        const title = type === 'resolved' ? 'Resolved' : 
-                     type === 'info' ? (alert.message && alert.message.includes('acknowledged') ? 'Success' : 'Alert') :
-                     'Alert';
         
         const message = alert.message || `${alert.guest?.name || 'Unknown'}`;
         
@@ -813,6 +849,16 @@ PulseApp.alerts = (() => {
         }
     }
     
+    function handleRulesRefreshed() {
+        // Trigger the alerts UI to reload its configuration
+        if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.alerts && window.PulseApp.ui.alerts.loadSavedConfiguration) {
+            window.PulseApp.ui.alerts.loadSavedConfiguration();
+        }
+        
+        // Also reload the alert data to get any new rules
+        loadInitialData();
+    }
+    
     // Cleanup function to prevent memory leaks
     function cleanup() {
         // Clear all cleanup timeouts
@@ -826,11 +872,12 @@ PulseApp.alerts = (() => {
             window.socket.off('alert', handleNewAlert);
             window.socket.off('alertResolved', handleResolvedAlert);
             window.socket.off('alertAcknowledged', handleAcknowledgedAlert);
+            window.socket.off('alertRulesRefreshed', handleRulesRefreshed);
         }
     }
 
     // Helper function for toast notifications
-    function showToastNotification(message, type = 'info') {
+    function showToastNotification(message, type = 'alert') {
         if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.toastNotifications) {
             window.PulseApp.ui.toastNotifications.show(message, type);
         } else {

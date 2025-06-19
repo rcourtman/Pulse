@@ -81,6 +81,9 @@ class AlertManager extends EventEmitter {
                         await this.loadAlertRules();
                         console.log('[AlertManager] Alert rules reloaded successfully');
                         
+                        // Notify frontend that rules have been refreshed
+                        this.emit('rulesRefreshed');
+                        
                         // Safely evaluate current state with new rules
                         await this.evaluateCurrentState();
                     } catch (error) {
@@ -168,6 +171,38 @@ class AlertManager extends EventEmitter {
             return;
         }
         
+        // SIMPLIFIED ALERT SYSTEM - Use direct threshold checking instead of complex rules
+        console.log('[AlertManager] Using simplified threshold evaluation system');
+        
+        try {
+            // Convert guests array to metrics map format expected by simplified system
+            const allGuestMetrics = new Map();
+            
+            guests.forEach(guest => {
+                if (guest && guest.name) {
+                    const guestKey = `${guest.endpointId || 'unknown'}_${guest.node}_${guest.vmid}`;
+                    allGuestMetrics.set(guestKey, {
+                        current: guest,
+                        previous: null // Not needed for simple threshold checking
+                    });
+                }
+            });
+            
+            // Use the new simplified evaluation
+            this.evaluateSimpleThresholds(allGuestMetrics);
+            
+        } catch (error) {
+            console.error('[AlertManager] Error in simplified checkMetrics:', error);
+        }
+        
+        // Save state
+        this.saveActiveAlerts();
+        
+        return;
+        
+        // === OLD COMPLEX RULE SYSTEM BELOW (DISABLED) ===
+        // TODO: Remove this code block after testing simplified system
+        /*
         if (this.processingMetrics || this.reloadingRules) {
             console.log('[AlertManager] Skipping metrics check - already processing or reloading rules');
             return;
@@ -239,6 +274,7 @@ class AlertManager extends EventEmitter {
         } finally {
             this.processingMetrics = false;
         }
+        */
     }
 
     processMetrics(metricsData) {
@@ -713,15 +749,15 @@ class AlertManager extends EventEmitter {
                     type: alert.guest?.type || 'unknown',
                     endpointId: alert.guest?.endpointId || 'unknown'
                 },
-                metric: alert.rule?.metric || (alert.rule?.type === 'compound_threshold' ? 'compound' : null),
-                threshold: alert.effectiveThreshold || alert.rule?.threshold || 0,
+                metric: alert.metric || alert.rule?.metric || (alert.rule?.type === 'compound_threshold' ? 'compound' : 'unknown'),
+                threshold: alert.threshold || alert.effectiveThreshold || alert.rule?.threshold || 0,
                 currentValue: alert.currentValue || null,
                 triggeredAt: alert.triggeredAt || Date.now(),
                 duration: (alert.triggeredAt ? Date.now() - alert.triggeredAt : 0),
                 acknowledged: alert.acknowledged || false,
                 acknowledgedBy: alert.acknowledgedBy || null,
                 acknowledgedAt: alert.acknowledgedAt || null,
-                message: this.generateAlertMessage(alert),
+                message: alert.message || this.generateAlertMessage(alert),
                 type: alert.rule?.type || 'single_metric',
                 thresholds: Array.isArray(alert.rule?.thresholds) ? 
                     alert.rule.thresholds.map(t => ({
@@ -985,16 +1021,18 @@ class AlertManager extends EventEmitter {
                 // If value is <= 1.0, assume it's in decimal format and convert to percentage
                 return cpuValue > 1.0 ? cpuValue : cpuValue * 100;
             case 'memory':
-                if (metrics.maxmem && metrics.mem) {
-                    const memoryPercent = (metrics.mem / metrics.maxmem) * 100;
-                    console.log(`[AlertManager] Memory calculation: ${metrics.mem}/${metrics.maxmem} = ${memoryPercent}%`);
+                if (metrics.maxmem) {
+                    const mem = metrics.mem || 0; // Treat undefined/null mem as 0
+                    const memoryPercent = (mem / metrics.maxmem) * 100;
+                    console.log(`[AlertManager] Memory calculation: ${mem}/${metrics.maxmem} = ${memoryPercent}%`);
                     return memoryPercent;
                 }
-                console.log(`[AlertManager] Memory calculation failed: maxmem=${metrics.maxmem}, mem=${metrics.mem}`);
+                console.log(`[AlertManager] Memory calculation failed: missing maxmem (maxmem=${metrics.maxmem}, mem=${metrics.mem})`);
                 return null;
             case 'disk':
-                if (metrics.maxdisk && metrics.disk) {
-                    return (metrics.disk / metrics.maxdisk) * 100;
+                if (metrics.maxdisk) {
+                    const disk = metrics.disk || 0; // Treat undefined/null disk as 0
+                    return (disk / metrics.maxdisk) * 100;
                 }
                 return null;
             default:
@@ -1088,6 +1126,12 @@ class AlertManager extends EventEmitter {
             return `${rule.name} - Unknown guest - ${rule.type === 'compound_threshold' ? 'Compound threshold met' : 'Alert triggered'}`;
         }
         
+        // Handle per-guest threshold alerts first (different from compound threshold rules)
+        if (rule.metric === 'combined_thresholds') {
+            // Use the detailed threshold info from rule name (already formatted)
+            return `${guest.name || 'Unknown'} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid || 'N/A'}) on ${guest.node || 'Unknown'} - ${rule.name}`;
+        }
+        
         // Handle compound threshold rules
         if (rule.type === 'compound_threshold' && rule.thresholds) {
             // For compound rules, show all threshold values
@@ -1127,6 +1171,10 @@ class AlertManager extends EventEmitter {
             thresholdStr = `${rule.threshold}${isPercentageMetric ? '%' : ''}`;
         }
         
+        // For per-guest threshold alerts, use cleaner format without rule name prefix
+        if (rule.metric === 'combined_thresholds') {
+            return `${guest.name || 'Unknown'} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid || 'N/A'}) on ${guest.node || 'Unknown'} - ${valueStr} (threshold: ${thresholdStr})`;
+        }
         return `${rule.name} - ${guest.name || 'Unknown'} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid || 'N/A'}) on ${guest.node || 'Unknown'} - ${valueStr} (threshold: ${thresholdStr})`;
     }
 
@@ -1779,7 +1827,13 @@ class AlertManager extends EventEmitter {
         // Metrics to check for alerts
         const metricsToCheck = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
         
-        metricsToCheck.forEach(metricType => {
+        // Collect all configured thresholds and their current values
+        const configuredThresholds = {};
+        const exceededThresholds = {};
+        let hasConfiguredThresholds = false;
+        
+        // First pass: collect all configured thresholds and check if they're exceeded
+        for (const metricType of metricsToCheck) {
             // Determine the effective threshold for this metric and guest
             let effectiveThreshold = null;
             
@@ -1792,77 +1846,153 @@ class AlertManager extends EventEmitter {
                 effectiveThreshold = parseFloat(globalThresholds[metricType]);
             }
             
-            // Skip if no threshold is set for this metric
-            if (effectiveThreshold === null || isNaN(effectiveThreshold) || effectiveThreshold <= 0) {
-                return;
+            // Skip if no threshold is set for this metric (but 0 is a valid threshold)
+            if (effectiveThreshold === null || isNaN(effectiveThreshold)) {
+                continue;
             }
+            
+            // Accept 0 as a valid threshold, only skip negative values
+            if (effectiveThreshold < 0) {
+                continue;
+            }
+            
+            hasConfiguredThresholds = true;
+            configuredThresholds[metricType] = effectiveThreshold;
             
             // Get current metric value
             const currentValue = this.getMetricValue(guestMetrics.current, metricType, guest);
             if (currentValue === null) {
-                return;
+                continue;
             }
             
             // Evaluate threshold condition (default to greater_than)
             const condition = rule.condition || 'greater_than';
-            const isTriggered = this.evaluateCondition(currentValue, condition, effectiveThreshold);
+            const isThresholdExceeded = this.evaluateCondition(currentValue, condition, effectiveThreshold);
             
-            // Create alert key for this specific metric
-            const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}_${metricType}`;
-            const existingAlert = this.activeAlerts.get(alertKey);
-            
-            if (isTriggered) {
-                if (!existingAlert) {
-                    // Create new alert
-                    const newAlert = {
-                        id: this.generateAlertId(),
-                        rule: this.createSafeRuleCopy({
-                            ...rule,
-                            metric: metricType,
-                            threshold: effectiveThreshold,
-                            name: `${rule.name} (${this.getThresholdDisplayName(metricType)})`
-                        }),
-                        guest: this.createSafeGuestCopy(guest),
-                        startTime: timestamp,
-                        lastUpdate: timestamp,
-                        currentValue: currentValue,
-                        effectiveThreshold: effectiveThreshold,
-                        state: 'pending',
-                        acknowledged: false,
-                        metricType: metricType // Add this to track which metric triggered
-                    };
-                    this.activeAlerts.set(alertKey, newAlert);
-                } else if (existingAlert.state === 'pending') {
-                    // Check if duration threshold is met
-                    const duration = timestamp - existingAlert.startTime;
-                    if (duration >= (rule.duration || 300000)) {
-                        // Trigger alert
-                        existingAlert.state = 'active';
-                        existingAlert.triggeredAt = timestamp;
-                        this.triggerAlert(existingAlert).catch(error => {
-                            console.error(`[AlertManager] Error triggering per-guest alert ${existingAlert.id}:`, error);
-                        });
-                        triggeredAlerts.push(existingAlert);
-                    }
-                    existingAlert.lastUpdate = timestamp;
-                    existingAlert.currentValue = currentValue;
-                } else if (existingAlert.state === 'active' && !existingAlert.acknowledged) {
-                    // Update existing active alert
-                    existingAlert.lastUpdate = timestamp;
-                    existingAlert.currentValue = currentValue;
-                }
-            } else {
-                if (existingAlert && (existingAlert.state === 'active' || existingAlert.state === 'pending')) {
-                    // Resolve alert when condition clears
-                    existingAlert.state = 'resolved';
-                    existingAlert.resolvedAt = timestamp;
-                    existingAlert.resolveReason = 'Condition cleared';
-                    if (existingAlert.rule.autoResolve !== false) {
-                        this.resolveAlert(existingAlert);
-                    }
-                }
+            if (isThresholdExceeded) {
+                exceededThresholds[metricType] = {
+                    currentValue: currentValue,
+                    threshold: effectiveThreshold,
+                    condition: condition
+                };
             }
-        });
+        }
+        
+        // If no thresholds are configured, return early
+        if (!hasConfiguredThresholds) {
+            console.log(`[AlertManager] No valid thresholds configured for guest ${guest.name}`);
+            return triggeredAlerts;
+        }
+        
+        // Determine alert logic mode (default to 'and' for backward compatibility)
+        const alertLogic = (rule.alertLogic || 'and').toLowerCase();
+        
+        // Check if alert conditions are met based on logic mode
+        const configuredMetrics = Object.keys(configuredThresholds);
+        const exceededMetrics = Object.keys(exceededThresholds);
+        
+        let alertConditionMet = false;
+        let alertDescription = '';
+        
+        if (alertLogic === 'or') {
+            // OR logic: Any configured threshold exceeded triggers alert
+            alertConditionMet = exceededMetrics.length > 0;
+            if (alertConditionMet) {
+                // Create detailed description of exceeded thresholds
+                const exceededDetails = exceededMetrics.map(metric => {
+                    const data = exceededThresholds[metric];
+                    const currentFormatted = this.formatMetricValue(data.currentValue, metric);
+                    const thresholdFormatted = this.formatMetricValue(data.threshold, metric);
+                    const metricName = this.getReadableMetricName(metric);
+                    return `${metricName}: ${currentFormatted} (≥${thresholdFormatted})`;
+                }).join(', ');
+                alertDescription = exceededDetails;
+            } else {
+                alertDescription = `No Thresholds Exceeded (${exceededMetrics.length}/${configuredMetrics.length})`;
+            }
+        } else {
+            // AND logic: All configured thresholds must be exceeded
+            alertConditionMet = configuredMetrics.every(metric => exceededMetrics.includes(metric));
+            if (alertConditionMet) {
+                // Create detailed description of all exceeded thresholds
+                const exceededDetails = exceededMetrics.map(metric => {
+                    const data = exceededThresholds[metric];
+                    const currentFormatted = this.formatMetricValue(data.currentValue, metric);
+                    const thresholdFormatted = this.formatMetricValue(data.threshold, metric);
+                    const metricName = this.getReadableMetricName(metric);
+                    return `${metricName}: ${currentFormatted} (≥${thresholdFormatted})`;
+                }).join(', ');
+                alertDescription = exceededDetails;
+            } else {
+                alertDescription = `Not All Thresholds Exceeded (${exceededMetrics.length}/${configuredMetrics.length})`;
+            }
+        }
+        
+        console.log(`[AlertManager] Guest ${guest.name}: Logic=${alertLogic.toUpperCase()}, Configured: [${configuredMetrics.join(', ')}], Exceeded: [${exceededMetrics.join(', ')}], Condition met: ${alertConditionMet}`);
+        
+        // Create single alert key for this guest (not per-metric)
+        const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
+        const existingAlert = this.activeAlerts.get(alertKey);
+        
+        if (alertConditionMet) {
+            // Alert conditions are met - create or update single alert
+            if (!existingAlert) {
+                // Create new consolidated alert
+                const newAlert = {
+                    id: this.generateAlertId(),
+                    rule: this.createSafeRuleCopy({
+                        ...rule,
+                        metric: 'combined_thresholds',
+                        name: alertDescription
+                    }),
+                    guest: this.createSafeGuestCopy(guest),
+                    startTime: timestamp,
+                    lastUpdate: timestamp,
+                    state: 'pending',
+                    acknowledged: false,
+                    exceededThresholds: exceededThresholds, // Include all exceeded threshold data
+                    configuredThresholds: configuredThresholds, // Include all configured thresholds
+                    alertLogic: alertLogic // Include logic mode for reference
+                };
+                this.activeAlerts.set(alertKey, newAlert);
+                console.log(`[AlertManager] Created new ${alertLogic.toUpperCase()} alert for guest ${guest.name} with ${exceededMetrics.length} exceeded thresholds`);
+            } else if (existingAlert.state === 'pending') {
+                // Check if duration threshold is met
+                const duration = timestamp - existingAlert.startTime;
+                if (duration >= rule.duration) {
+                    // Trigger the consolidated alert
+                    existingAlert.state = 'active';
+                    existingAlert.triggeredAt = timestamp;
+                    existingAlert.exceededThresholds = exceededThresholds; // Update with current exceeded thresholds
+                    existingAlert.alertLogic = alertLogic; // Update logic mode
+                    this.triggerAlert(existingAlert).catch(error => {
+                        console.error(`[AlertManager] Error triggering combined per-guest alert ${existingAlert.id}:`, error);
+                    });
+                    triggeredAlerts.push(existingAlert);
+                    console.log(`[AlertManager] Triggered ${alertLogic.toUpperCase()} alert for guest ${guest.name} after ${duration}ms duration`);
+                }
+                existingAlert.lastUpdate = timestamp;
+                existingAlert.exceededThresholds = exceededThresholds; // Always update with current data
+                existingAlert.alertLogic = alertLogic; // Update logic mode
+            } else if (existingAlert.state === 'active' && !existingAlert.acknowledged) {
+                // Update existing active alert with current threshold data
+                existingAlert.lastUpdate = timestamp;
+                existingAlert.exceededThresholds = exceededThresholds;
+                existingAlert.alertLogic = alertLogic; // Update logic mode
+                console.log(`[AlertManager] Updated active ${alertLogic.toUpperCase()} alert for guest ${guest.name}`);
+            }
+        } else {
+            // Alert conditions are not met - resolve any existing alert
+            if (existingAlert && (existingAlert.state === 'active' || existingAlert.state === 'pending')) {
+                existingAlert.state = 'resolved';
+                existingAlert.resolvedAt = timestamp;
+                existingAlert.resolveReason = alertDescription;
+                if (existingAlert.rule.autoResolve !== false) {
+                    this.resolveAlert(existingAlert);
+                }
+                console.log(`[AlertManager] Resolved ${alertLogic.toUpperCase()} alert for guest ${guest.name} - ${alertDescription.toLowerCase()}`);
+            }
+        }
         
         return triggeredAlerts;
     }
@@ -3012,7 +3142,6 @@ Pulse Monitoring System`,
                 guest: testAlert.guest,
                 triggeredAt: testAlert.triggeredAt,
                 message: testAlert.message,
-                severity: testAlert.severity,
                 details: testAlert.details
             };
             
@@ -3029,6 +3158,362 @@ Pulse Monitoring System`,
         } catch (error) {
             console.error('[AlertManager] Error adding test alert:', error);
             throw error;
+        }
+    }
+
+    /**
+     * Format metric values with appropriate units
+     */
+    formatMetricValue(value, metricType) {
+        if (metricType === 'cpu' || metricType === 'memory' || metricType === 'disk') {
+            return `${Math.round(value)}%`;
+        } else if (metricType === 'diskread' || metricType === 'diskwrite' || metricType === 'netin' || metricType === 'netout') {
+            // Format as MB/s or similar
+            if (value >= 1024 * 1024 * 1024) {
+                return `${Math.round(value / (1024 * 1024 * 1024) * 100) / 100} GB/s`;
+            } else if (value >= 1024 * 1024) {
+                return `${Math.round(value / (1024 * 1024) * 100) / 100} MB/s`;
+            } else if (value >= 1024) {
+                return `${Math.round(value / 1024 * 100) / 100} KB/s`;
+            } else {
+                return `${Math.round(value * 100) / 100} B/s`;
+            }
+        }
+        return value.toString();
+    }
+
+    /**
+     * Get readable metric names
+     */
+    getReadableMetricName(metricType) {
+        const names = {
+            'cpu': 'CPU',
+            'memory': 'Memory',
+            'disk': 'Disk',
+            'diskread': 'Disk Read',
+            'diskwrite': 'Disk Write',
+            'netin': 'Network In',
+            'netout': 'Network Out'
+        };
+        return names[metricType] || metricType.toUpperCase();
+    }
+
+    /**
+     * SIMPLIFIED ALERT SYSTEM - Direct threshold checking with guest-level bundling
+     * Creates one alert per guest containing all exceeded metrics
+     */
+    evaluateSimpleThresholds(allGuestMetrics) {
+        if (this.processingMetrics) {
+            console.log('[AlertManager] Already processing metrics, skipping...');
+            return;
+        }
+        
+        this.processingMetrics = true;
+        
+        try {
+            // Get current thresholds from the alert-rules.json (keeping existing config structure)
+            const thresholdConfig = Array.from(this.alertRules.values()).find(rule => rule.type === 'per_guest_thresholds');
+            if (!thresholdConfig) {
+                console.log('[AlertManager] No threshold configuration found');
+                return;
+            }
+            
+            const globalThresholds = thresholdConfig.globalThresholds || {};
+            const guestThresholds = thresholdConfig.guestThresholds || {};
+            const timestamp = Date.now();
+            
+            // Process each guest and bundle all their metric alerts
+            for (const [guestKey, guestMetrics] of allGuestMetrics.entries()) {
+                const guest = guestMetrics.current;
+                if (!guest || !guest.name) continue;
+                
+                this.evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp);
+            }
+            
+        } catch (error) {
+            console.error('[AlertManager] Error in simplified threshold evaluation:', error);
+        } finally {
+            this.processingMetrics = false;
+        }
+    }
+
+    /**
+     * Evaluate all metrics for a guest and create one bundled alert
+     */
+    evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp) {
+        // Get threshold for this guest
+        const guestKey = `${guest.endpointId || 'unknown'}-${guest.node}-${guest.vmid}`;
+        const guestSpecificThresholds = guestThresholds[guestKey] || {};
+        
+        // Check all metrics for this guest
+        const metrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+        const exceededMetrics = [];
+        
+        for (const metricType of metrics) {
+            const metricResult = this.evaluateMetricForGuest(guest, metricType, guestSpecificThresholds, globalThresholds);
+            if (metricResult && metricResult.isExceeded) {
+                exceededMetrics.push(metricResult);
+            }
+        }
+        
+        // Create unique alert key for this guest (one alert per guest)
+        const alertKey = `${guest.endpointId || 'unknown'}_${guest.node}_${guest.vmid}_bundled`;
+        const existingAlert = this.activeAlerts.get(alertKey);
+        
+        if (exceededMetrics.length > 0) {
+            // Create or update bundled alert for this guest
+            const alertName = `${guest.name} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid})`;
+            const metricsDetail = exceededMetrics.map(m => 
+                `${this.getReadableMetricName(m.metricType)}: ${this.formatMetricValue(m.currentValue, m.metricType)} (≥${this.formatMetricValue(m.threshold, m.metricType)})`
+            ).join(', ');
+            
+            if (!existingAlert) {
+                // Create new bundled alert
+                const newAlert = {
+                    id: this.generateAlertId(),
+                    rule: {
+                        id: 'guest-bundled',
+                        name: alertName,
+                        description: `Bundled guest alert for multiple metrics`,
+                        group: 'guest_bundled',
+                        tags: ['bundled', ...exceededMetrics.map(m => m.metricType)],
+                        type: 'guest_bundled',
+                        autoResolve: true
+                    },
+                    guest: this.createSafeGuestCopy(guest),
+                    metric: 'bundled',
+                    exceededMetrics: exceededMetrics,
+                    metricsCount: exceededMetrics.length,
+                    triggeredAt: timestamp,
+                    state: 'active',
+                    acknowledged: false,
+                    message: `${alertName}: ${metricsDetail}`,
+                    notificationChannels: ['dashboard'],
+                    emailSent: false,
+                    webhookSent: false
+                };
+                
+                this.activeAlerts.set(alertKey, newAlert);
+                console.log(`[AlertManager] Created bundled alert for ${guest.name}: ${exceededMetrics.length} metrics exceeded`);
+                
+                // Emit alert event
+                this.emit('alert', newAlert);
+            } else {
+                // Update existing bundled alert
+                existingAlert.rule.name = alertName;
+                existingAlert.exceededMetrics = exceededMetrics;
+                existingAlert.metricsCount = exceededMetrics.length;
+                existingAlert.triggeredAt = timestamp; // Always use current timestamp
+                existingAlert.message = `${alertName}: ${metricsDetail}`;
+                existingAlert.rule.tags = ['bundled', ...exceededMetrics.map(m => m.metricType)];
+            }
+        } else {
+            // No thresholds exceeded - resolve alert if it exists
+            if (existingAlert && existingAlert.state === 'active') {
+                existingAlert.state = 'resolved';
+                existingAlert.resolvedAt = timestamp;
+                
+                console.log(`[AlertManager] Resolved bundled alert for ${guest.name}`);
+                
+                // Emit resolved event
+                this.emit('alertResolved', existingAlert);
+                
+                // Remove from active alerts
+                this.activeAlerts.delete(alertKey);
+            }
+        }
+    }
+
+    /**
+     * Evaluate a single metric for a guest and return result
+     */
+    evaluateMetricForGuest(guest, metricType, guestSpecificThresholds, globalThresholds) {
+        let threshold = guestSpecificThresholds[metricType] || globalThresholds[metricType];
+        
+        // Skip if no threshold set or empty
+        if (threshold === undefined || threshold === null || threshold === '') {
+            return null;
+        }
+        
+        threshold = parseFloat(threshold);
+        if (isNaN(threshold) || threshold < 0) {
+            return null;
+        }
+        
+        // Get current metric value
+        let currentValue = this.getMetricValueForGuest(guest, metricType);
+        if (currentValue === null) {
+            return null;
+        }
+        
+        // Check if threshold is exceeded
+        const isExceeded = currentValue >= threshold;
+        
+        return {
+            metricType,
+            currentValue,
+            threshold,
+            isExceeded
+        };
+    }
+
+    /**
+     * Get metric value for a guest (extracted from old method)
+     */
+    getMetricValueForGuest(guest, metricType) {
+        let currentValue = null;
+        
+        if (metricType === 'cpu') {
+            // CPU percentage calculation (same as dashboard)
+            if (guest.cpu !== undefined && guest.cpus && guest.cpus > 0) {
+                currentValue = (guest.cpu / guest.cpus) * 100;
+            } else {
+                currentValue = guest.cpu || 0;
+            }
+        } else if (metricType === 'memory') {
+            // Memory percentage calculation
+            if (guest.mem && guest.maxmem) {
+                currentValue = (guest.mem / guest.maxmem) * 100;
+            }
+        } else if (metricType === 'disk') {
+            // Disk percentage calculation  
+            if (guest.disk && guest.maxdisk) {
+                currentValue = (guest.disk / guest.maxdisk) * 100;
+            }
+        } else if (metricType === 'diskread') {
+            currentValue = guest.diskread || 0;
+        } else if (metricType === 'diskwrite') {
+            currentValue = guest.diskwrite || 0;
+        } else if (metricType === 'netin') {
+            currentValue = guest.netin || 0;
+        } else if (metricType === 'netout') {
+            currentValue = guest.netout || 0;
+        }
+        
+        return currentValue;
+    }
+
+    /**
+     * Evaluate a single metric threshold for a guest (OLD METHOD - DISABLED)
+     * This method is replaced by evaluateGuestBundledAlerts for cleaner UI
+     */
+    evaluateMetricThreshold(guest, metricType, globalThresholds, guestThresholds, timestamp) {
+        // DISABLED - Using bundled alerts instead
+        return;
+        // Get threshold for this guest/metric  
+        const guestKey = `${guest.endpointId || 'unknown'}-${guest.node}-${guest.vmid}`;
+        const guestSpecificThresholds = guestThresholds[guestKey] || {};
+        
+        let threshold = guestSpecificThresholds[metricType] || globalThresholds[metricType];
+        
+        // Skip if no threshold set or empty
+        if (threshold === undefined || threshold === null || threshold === '') {
+            return;
+        }
+        
+        threshold = parseFloat(threshold);
+        if (isNaN(threshold) || threshold < 0) {
+            return;
+        }
+        
+        // Get current metric value directly from guest object (simplified approach)
+        let currentValue = null;
+        
+        if (metricType === 'cpu') {
+            // CPU percentage calculation (same as dashboard)
+            if (guest.cpu !== undefined && guest.cpus && guest.cpus > 0) {
+                currentValue = (guest.cpu / guest.cpus) * 100;
+            } else {
+                currentValue = guest.cpu || 0;
+            }
+        } else if (metricType === 'memory') {
+            // Memory percentage calculation
+            if (guest.mem && guest.maxmem) {
+                currentValue = (guest.mem / guest.maxmem) * 100;
+            }
+        } else if (metricType === 'disk') {
+            // Disk percentage calculation  
+            if (guest.disk && guest.maxdisk) {
+                currentValue = (guest.disk / guest.maxdisk) * 100;
+            }
+        } else if (metricType === 'diskread') {
+            currentValue = guest.diskread || 0;
+        } else if (metricType === 'diskwrite') {
+            currentValue = guest.diskwrite || 0;
+        } else if (metricType === 'netin') {
+            currentValue = guest.netin || 0;
+        } else if (metricType === 'netout') {
+            currentValue = guest.netout || 0;
+        }
+        
+        
+        if (currentValue === null) {
+            return;
+        }
+        
+        // Check if threshold is exceeded
+        const isExceeded = currentValue >= threshold;
+        
+        // Create unique alert key for this guest + metric
+        const alertKey = `${guest.endpointId || 'unknown'}_${guest.node}_${guest.vmid}_${metricType}`;
+        const existingAlert = this.activeAlerts.get(alertKey);
+        
+        if (isExceeded) {
+            const alertName = `${this.getReadableMetricName(metricType)}: ${this.formatMetricValue(currentValue, metricType)} (≥${this.formatMetricValue(threshold, metricType)})`;
+            
+            if (!existingAlert) {
+                // Create new alert for this specific metric
+                const newAlert = {
+                    id: this.generateAlertId(),
+                    rule: {
+                        id: `simple-${metricType}`,
+                        name: alertName,
+                        description: `Simplified ${metricType} threshold alert`,
+                        group: 'simple_thresholds',
+                        tags: [metricType],
+                        type: 'simple_threshold',
+                        autoResolve: true
+                    },
+                    guest: this.createSafeGuestCopy(guest),
+                    metric: metricType,
+                    currentValue: currentValue,
+                    threshold: threshold,
+                    triggeredAt: timestamp,
+                    state: 'active',
+                    acknowledged: false,
+                    message: `${guest.name} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid}) on ${guest.node} - ${alertName}`,
+                    notificationChannels: ['dashboard'],
+                    emailSent: false,
+                    webhookSent: false
+                };
+                
+                this.activeAlerts.set(alertKey, newAlert);
+                console.log(`[AlertManager] Created simple ${metricType.toUpperCase()} alert for ${guest.name}: ${this.formatMetricValue(currentValue, metricType)} > ${this.formatMetricValue(threshold, metricType)}`);
+                
+                // Emit alert event
+                this.emit('alert', newAlert);
+            } else {
+                // Always update existing alert with current values and fresh timestamp
+                existingAlert.rule.name = alertName;
+                existingAlert.currentValue = currentValue;
+                existingAlert.threshold = threshold;
+                existingAlert.triggeredAt = timestamp; // Always use current timestamp
+                existingAlert.message = `${guest.name} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid}) on ${guest.node} - ${alertName}`;
+            }
+        } else {
+            // Threshold not exceeded - resolve alert if it exists
+            if (existingAlert && existingAlert.state === 'active') {
+                existingAlert.state = 'resolved';
+                existingAlert.resolvedAt = timestamp;
+                
+                console.log(`[AlertManager] Resolved simple ${metricType.toUpperCase()} alert for ${guest.name}`);
+                
+                // Emit resolved event
+                this.emit('alertResolved', existingAlert);
+                
+                // Remove from active alerts
+                this.activeAlerts.delete(alertKey);
+            }
         }
     }
 }
