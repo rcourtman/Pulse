@@ -199,6 +199,10 @@ PulseApp.ui.dashboard = (() => {
         }, { passive: true });
     }
 
+    function _initTableFixedLine() {
+        // No longer needed - using CSS border styling instead
+    }
+
     function init() {
         // Attempt to find elements, with fallback retry mechanism
         function findElements() {
@@ -239,6 +243,9 @@ PulseApp.ui.dashboard = (() => {
         if (window.innerWidth < 768) {
             _initMobileScrollIndicators();
         }
+        
+        // Initialize fixed table line
+        _initTableFixedLine();
         
         // Add resize listener for progress bar text updates
         window.addEventListener('resize', PulseApp.utils.updateProgressBarTextsDebounced);
@@ -480,7 +487,8 @@ PulseApp.ui.dashboard = (() => {
         containersData.forEach(ct => dashboardData.push(_processSingleGuestData(ct)));
         
         PulseApp.state.set('dashboardData', dashboardData);
-        _setDashboardColumnWidths(dashboardData);
+        // Disabled dynamic width calculation to prevent column shifting
+        // _setDashboardColumnWidths(dashboardData);
     }
 
     function _filterDashboardData(dashboardData, searchInput, filterGuestType, filterStatus, thresholdState) {
@@ -782,7 +790,7 @@ PulseApp.ui.dashboard = (() => {
         
         // Ensure name cell keeps sticky styling even after row class updates
         if (cells[0]) {
-            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600';
+            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0';
         }
         if (cells.length >= 10) {
             // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
@@ -1238,9 +1246,9 @@ PulseApp.ui.dashboard = (() => {
         if (guest.status !== STATUS_RUNNING) return '-';
         
         const cpuPercent = Math.round(guest.cpu);
-        const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus / 100).toFixed(1)}/${guest.cpus} cores)` : ''}`;
+        const cpuFullText = guest.cpus ? `${(guest.cpu * guest.cpus / 100).toFixed(1)}/${guest.cpus} cores` : `${cpuPercent}%`;
         const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
-        const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass, `${cpuPercent}%`);
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuFullText, cpuColorClass);
         
         // Create both text and chart versions
         const guestId = guest.uniqueId;
@@ -1269,12 +1277,9 @@ PulseApp.ui.dashboard = (() => {
         if (guest.status !== STATUS_RUNNING) return '-';
         
         const memoryPercent = guest.memory;
-        let memoryTooltipText = `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)} (${memoryPercent}%)`;
-        if (guest.type === GUEST_TYPE_VM && guest.memorySource === 'guest' && guest.rawHostMemory !== null && guest.rawHostMemory !== undefined) {
-            memoryTooltipText += ` (Host: ${PulseApp.utils.formatBytes(guest.rawHostMemory)})`;
-        }
+        const memoryFullText = `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)}`;
         const memColorClass = PulseApp.utils.getUsageColor(memoryPercent, 'memory');
-        const progressBar = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass, `${memoryPercent}%`);
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryFullText, memColorClass);
         
         // Create both text and chart versions
         const guestId = guest.uniqueId;
@@ -1304,9 +1309,9 @@ PulseApp.ui.dashboard = (() => {
         
         if (guest.type === GUEST_TYPE_CT) {
             const diskPercent = guest.disk;
-            const diskTooltipText = guest.diskTotal ? `${PulseApp.utils.formatBytes(guest.diskCurrent)} / ${PulseApp.utils.formatBytes(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
+            const diskFullText = guest.diskTotal ? `${PulseApp.utils.formatBytes(guest.diskCurrent)} / ${PulseApp.utils.formatBytes(guest.diskTotal)}` : `${diskPercent}%`;
             const diskColorClass = PulseApp.utils.getUsageColor(diskPercent, 'disk');
-            const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass, `${diskPercent}%`);
+            const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskFullText, diskColorClass);
             
             // Create both text and chart versions
             const guestId = guest.uniqueId;
@@ -1509,7 +1514,7 @@ PulseApp.ui.dashboard = (() => {
         }
 
         row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title="${guest.name}">
                 <div class="flex items-center gap-1">
                     <span>${guest.name}</span>
                     ${alertIndicator}

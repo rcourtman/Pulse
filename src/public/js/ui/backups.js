@@ -110,6 +110,10 @@ PulseApp.ui.backups = (() => {
     }
 
 
+    function _initTableFixedLine() {
+        // No longer needed - using CSS border styling instead
+    }
+
     function init() {
         // Initialize DOM cache first
         _initDomCache();
@@ -1146,7 +1150,7 @@ PulseApp.ui.backups = (() => {
         const namespaceCell = guestStatus.pbsNamespaceText || '-';
 
         row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100 border-r border-gray-300 dark:border-gray-600" title="${guestStatus.guestName}">
+            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">
                 <div class="flex items-center gap-1">
                     <span>${guestStatus.guestName}</span>
                     ${thresholdIndicator}
@@ -2452,6 +2456,9 @@ PulseApp.ui.backups = (() => {
                 tableBody.appendChild(fragment);
                 noDataMsg.classList.add('hidden');
                 tableContainer.classList.remove('hidden');
+                
+                // Initialize fixed table line for mobile
+                _initTableFixedLine();
             } else {
             tableContainer.classList.add('hidden');
             let emptyMessage = "No backup information found for any guests.";
