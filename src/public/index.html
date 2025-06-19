@@ -692,6 +692,40 @@
         background-color: rgb(31, 41, 55) !important; /* gray-800 */
     }
     
+    /* Hover state for sticky columns in regular rows */
+    tr:hover td.sticky.left-0 {
+        background-color: rgb(249, 250, 251) !important; /* gray-50 */
+    }
+    
+    .dark tr:hover td.sticky.left-0 {
+        background-color: rgb(55, 65, 81) !important; /* gray-700 */
+    }
+    
+    /* Special hover states for rows with warning/critical/failed backgrounds */
+    tr.bg-red-50:hover td.sticky.left-0 {
+        background-color: rgb(254, 226, 226) !important; /* red-100 */
+    }
+    
+    .dark tr.bg-red-900\/20:hover td.sticky.left-0 {
+        background-color: rgba(127, 29, 29, 0.3) !important; /* red-900/30 */
+    }
+    
+    tr.bg-yellow-50:hover td.sticky.left-0 {
+        background-color: rgb(254, 240, 138) !important; /* yellow-100 */
+    }
+    
+    .dark tr.bg-yellow-900\/20:hover td.sticky.left-0 {
+        background-color: rgba(113, 63, 18, 0.3) !important; /* yellow-900/30 */
+    }
+    
+    tr.bg-blue-50:hover td.sticky.left-0 {
+        background-color: rgb(219, 234, 254) !important; /* blue-100 */
+    }
+    
+    .dark tr.bg-blue-900\/20:hover td.sticky.left-0 {
+        background-color: rgba(30, 64, 175, 0.3) !important; /* blue-900/30 */
+    }
+    
     /* Node/group header rows - use lighter background for all tables */
     .node-header td.sticky.left-0,
     .node-storage-header td.sticky.left-0,
@@ -704,6 +738,7 @@
     .dark tr.font-semibold td.sticky.left-0 {
         background-color: rgba(55, 65, 81, 0.8) !important; /* gray-700/80 */
     }
+    
     
     /* Special rows need their specific colors - solid backgrounds */
     #threshold-slider-row td.sticky.left-0,
@@ -1008,6 +1043,18 @@
                     <option value="300000">5m</option>
                     <option value="600000">10m</option>
                   </select>
+                </div>
+                <div class="flex items-center gap-4 ml-4">
+                  <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <span class="text-xs text-blue-700 dark:text-blue-300">Email:</span>
+                    <input type="checkbox" id="alert-email-toggle" class="sr-only peer">
+                    <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                  </label>
+                  <label class="inline-flex items-center gap-2 cursor-pointer">
+                    <span class="text-xs text-blue-700 dark:text-blue-300">Webhook:</span>
+                    <input type="checkbox" id="alert-webhook-toggle" class="sr-only peer">
+                    <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                  </label>
                 </div>
               </div>
               <div class="text-xs text-blue-600 dark:text-blue-400">

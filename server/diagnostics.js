@@ -388,7 +388,7 @@ class DiagnosticTool {
                                             // Test backup content access on each storage that supports backups
                                             for (const storage of storageData.data.data) {
                                                 if (storage && storage.storage && storage.content && 
-                                                    storage.content.includes('backup')) {
+                                                    storage.content.includes('backup') && storage.type !== 'pbs') {
                                                     totalStoragesTested++;
                                                     
                                                     try {
@@ -622,7 +622,8 @@ class DiagnosticTool {
                     instances: state.pbs?.length || 0,
                     totalBackups: 0,
                     datastores: 0,
-                    sampleBackupIds: []
+                    sampleBackupIds: [],
+                    instanceDetails: [] // Add array to store individual PBS instance details
                 },
                 pveBackups: {
                     backupTasks: state.pveBackups?.backupTasks?.length || 0,
@@ -642,11 +643,21 @@ class DiagnosticTool {
             // Count PBS backups and get samples
             if (state.pbs && Array.isArray(state.pbs)) {
                 state.pbs.forEach((pbsInstance, idx) => {
+                    // Store instance details for matching in recommendations
+                    const instanceDetail = {
+                        name: pbsInstance.pbsInstanceName || `pbs-${idx}`,
+                        datastores: 0,
+                        snapshots: 0
+                    };
+                    
                     if (pbsInstance.datastores) {
                         info.pbs.datastores += pbsInstance.datastores.length;
+                        instanceDetail.datastores = pbsInstance.datastores.length;
+                        
                         pbsInstance.datastores.forEach(ds => {
                             if (ds.snapshots) {
                                 info.pbs.totalBackups += ds.snapshots.length;
+                                instanceDetail.snapshots += ds.snapshots.length;
                                 // Get unique backup IDs
                                 ds.snapshots.forEach(snap => {
                                     const backupId = snap['backup-id'];
@@ -657,6 +668,8 @@ class DiagnosticTool {
                             }
                         });
                     }
+                    
+                    info.pbs.instanceDetails.push(instanceDetail);
                 });
                 // Limit sample backup IDs
                 info.pbs.sampleBackupIds = info.pbs.sampleBackupIds.slice(0, 10);
@@ -753,7 +766,7 @@ class DiagnosticTool {
                                 report.recommendations.push({
                                     severity: 'info',
                                     category: 'Backup Status',
-                                    message: `Proxmox "${perm.name}": Successfully accessing ${storageAccess.accessibleStorages} backup storage(s) with ${backupCount} backup files. Storage permissions are correctly configured.`
+                                    message: `Proxmox "${perm.name}": Successfully accessing ${storageAccess.accessibleStorages} backup storage(s) with ${backupCount} backup files (PBS storage excluded). Storage permissions are correctly configured.`
                                 });
                             }
                         }
@@ -793,6 +806,29 @@ class DiagnosticTool {
                             category: 'PBS Configuration',
                             message: `PBS instance "${perm.name}" is missing PBS_NODE_NAME. This is required for the backups tab to work. SSH to your PBS server and run 'hostname' to get the correct value, then add PBS_NODE_NAME=<hostname> to your .env file.`
                         });
+                    }
+                    
+                    // Add success message for PBS with backup counts from state data
+                    if (perm.canConnect && perm.canListDatastores && report.state && report.state.pbs && report.state.pbs.instanceDetails) {
+                        // Find the corresponding PBS instance in state data by matching name
+                        const pbsStateData = report.state.pbs.instanceDetails.find(instance => 
+                            instance.name === perm.name
+                        );
+                        
+                        if (pbsStateData && pbsStateData.datastores > 0) {
+                            report.recommendations.push({
+                                severity: 'info',
+                                category: 'Backup Status',
+                                message: `PBS "${perm.name}": Successfully accessing ${pbsStateData.datastores} datastore(s) with ${pbsStateData.snapshots} backup snapshots. PBS permissions are correctly configured.`
+                            });
+                        } else if (perm.canListDatastores && perm.datastoreCount > 0) {
+                            // Fallback to permission data if state data not available
+                            report.recommendations.push({
+                                severity: 'info',
+                                category: 'Backup Status',
+                                message: `PBS "${perm.name}": Successfully connected with ${perm.datastoreCount} datastore(s) accessible. PBS permissions are correctly configured.`
+                            });
+                        }
                     }
                 });
             }

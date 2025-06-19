@@ -34,6 +34,9 @@ PulseApp.ui.alerts = (() => {
         
         // Load saved configuration
         loadSavedConfiguration();
+        
+        // Load notification status
+        updateNotificationStatus();
     }
 
     function setupEventListeners() {
@@ -49,6 +52,17 @@ PulseApp.ui.alerts = (() => {
             alertDurationSelect.addEventListener('change', handleAlertDurationChange);
         }
 
+        // Email toggle
+        const emailToggle = document.getElementById('alert-email-toggle');
+        if (emailToggle) {
+            emailToggle.addEventListener('change', handleEmailToggle);
+        }
+
+        // Webhook toggle
+        const webhookToggle = document.getElementById('alert-webhook-toggle');
+        if (webhookToggle) {
+            webhookToggle.addEventListener('change', handleWebhookToggle);
+        }
 
         // Make sure charts toggle is mutually exclusive with alerts
         const chartsToggle = document.getElementById('toggle-charts-checkbox');
@@ -98,6 +112,84 @@ PulseApp.ui.alerts = (() => {
         autoSaveAlertConfig();
     }
 
+    async function handleEmailToggle(event) {
+        const enabled = event.target.checked;
+        
+        try {
+            // Get current config
+            const configResponse = await fetch('/api/config');
+            if (!configResponse.ok) {
+                throw new Error('Failed to get current config');
+            }
+            const configData = await configResponse.json();
+            
+            // Update only ALERT_EMAIL_ENABLED
+            const updatedConfig = {
+                ...configData,
+                ALERT_EMAIL_ENABLED: enabled
+            };
+            
+            // Save updated config
+            const saveResponse = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedConfig)
+            });
+            
+            const saveResult = await saveResponse.json();
+            
+            if (!saveResult.success) {
+                throw new Error('Failed to save config');
+            }
+            
+            PulseApp.ui.toast?.success(`Alert emails ${enabled ? 'enabled' : 'disabled'}`);
+        } catch (error) {
+            console.error('Failed to toggle alert emails:', error);
+            PulseApp.ui.toast?.error('Failed to update email setting');
+            // Revert toggle on error
+            event.target.checked = !enabled;
+        }
+    }
+
+    async function handleWebhookToggle(event) {
+        const enabled = event.target.checked;
+        
+        try {
+            // Get current config
+            const configResponse = await fetch('/api/config');
+            if (!configResponse.ok) {
+                throw new Error('Failed to get current config');
+            }
+            const configData = await configResponse.json();
+            
+            // Update only ALERT_WEBHOOK_ENABLED
+            const updatedConfig = {
+                ...configData,
+                ALERT_WEBHOOK_ENABLED: enabled
+            };
+            
+            // Save updated config
+            const saveResponse = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedConfig)
+            });
+            
+            const saveResult = await saveResponse.json();
+            
+            if (!saveResult.success) {
+                throw new Error('Failed to save config');
+            }
+            
+            PulseApp.ui.toast?.success(`Alert webhooks ${enabled ? 'enabled' : 'disabled'}`);
+        } catch (error) {
+            console.error('Failed to toggle alert webhooks:', error);
+            PulseApp.ui.toast?.error('Failed to update webhook setting');
+            // Revert toggle on error
+            event.target.checked = !enabled;
+        }
+    }
+
     function updateAlertsMode() {
         if (!globalAlertThresholds || !mainTable) return;
         
@@ -119,6 +211,9 @@ PulseApp.ui.alerts = (() => {
             if (alertModeControls) {
                 alertModeControls.classList.remove('hidden');
             }
+            
+            // Update notification status when showing alerts mode
+            updateNotificationStatus();
             
             // Add alerts mode class to body for CSS targeting
             document.body.classList.add('alerts-mode');
@@ -912,6 +1007,10 @@ PulseApp.ui.alerts = (() => {
     }
 
     async function autoSaveAlertConfig() {
+        // Get current toggle states
+        const emailToggle = document.getElementById('alert-email-toggle');
+        const webhookToggle = document.getElementById('alert-webhook-toggle');
+        
         const alertConfig = {
             type: 'per_guest_thresholds',
             globalThresholds: globalThresholds,
@@ -919,7 +1018,9 @@ PulseApp.ui.alerts = (() => {
             alertLogic: alertLogic,
             duration: alertDuration,
             notifications: {
-                dashboard: true
+                dashboard: true,
+                email: emailToggle ? emailToggle.checked : false,
+                webhook: webhookToggle ? webhookToggle.checked : false
             },
             enabled: true,
             lastUpdated: new Date().toISOString()
@@ -1055,6 +1156,36 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
+    async function updateNotificationStatus() {
+        try {
+            // Fetch current configuration to get notification status
+            const response = await fetch('/api/config');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            // Extract notification status from config
+            const emailEnabled = data.ALERT_EMAIL_ENABLED !== false && data.GLOBAL_EMAIL_ENABLED !== false;
+            const webhookEnabled = data.ALERT_WEBHOOK_ENABLED !== false && data.GLOBAL_WEBHOOK_ENABLED !== false;
+            
+            // Update toggle switches
+            const emailToggle = document.getElementById('alert-email-toggle');
+            const webhookToggle = document.getElementById('alert-webhook-toggle');
+            
+            if (emailToggle) {
+                emailToggle.checked = emailEnabled;
+            }
+            
+            if (webhookToggle) {
+                webhookToggle.checked = webhookEnabled;
+            }
+        } catch (error) {
+            console.error('Failed to update notification status:', error);
+        }
+    }
+
     // Public API
     return {
         init,
@@ -1065,6 +1196,7 @@ PulseApp.ui.alerts = (() => {
         updateGuestThreshold: updateGuestThreshold,
         updateRowStylingOnly: updateRowStylingOnly,
         getActiveAlertsForGuest: getActiveAlertsForGuest,
-        loadSavedConfiguration: loadSavedConfiguration
+        loadSavedConfiguration: loadSavedConfiguration,
+        updateNotificationStatus: updateNotificationStatus
     };
 })();

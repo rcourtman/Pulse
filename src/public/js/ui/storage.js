@@ -371,8 +371,10 @@ PulseApp.ui.storage = (() => {
         sortedNodeNames.forEach(nodeName => {
           const nodeStorageData = storageByNode[nodeName]; // Already sorted
 
-          const nodeHeaderRow = document.createElement('tr');
-          nodeHeaderRow.className = 'bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs node-storage-header';
+          const nodeHeaderRow = PulseApp.ui.common.createTableRow({
+              classes: 'bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs node-storage-header',
+              baseClasses: '' // Override base classes for node headers
+          });
           nodeHeaderRow.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(`${nodeName}`, 7, 'td');
           tbody.appendChild(nodeHeaderRow);
 
@@ -587,16 +589,28 @@ PulseApp.ui.storage = (() => {
         const isWarning = usagePercent >= 80 && usagePercent < 90;
         const isCritical = usagePercent >= 90;
         
-        let rowClasses = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        // Use helper with special row handling
+        let specialBgClass = '';
+        let additionalClasses = '';
+        
         if (isDisabled) {
-            rowClasses += ' opacity-50 grayscale-[50%]';
+            additionalClasses = 'opacity-50 grayscale-[50%]';
         }
         if (isCritical) {
-            rowClasses += ' bg-red-50 dark:bg-red-900/10';
+            specialBgClass = 'bg-red-50 dark:bg-red-900/10';
         } else if (isWarning) {
-            rowClasses += ' bg-yellow-50 dark:bg-yellow-900/10';
+            specialBgClass = 'bg-yellow-50 dark:bg-yellow-900/10';
         }
-        row.className = rowClasses;
+        
+        // Replace the existing row element with one from helper
+        const newRow = PulseApp.ui.common.createTableRow({
+            classes: additionalClasses,
+            isSpecialRow: !!(specialBgClass),
+            specialBgClass: specialBgClass
+        });
+        
+        // Copy attributes from original row
+        row.className = newRow.className;
 
         const usageTooltipText = `${PulseApp.utils.formatBytes(store.used)} / ${PulseApp.utils.formatBytes(store.total)} (${usagePercent.toFixed(1)}%)`;
         const usageColorClass = PulseApp.utils.getUsageColor(usagePercent);
@@ -612,15 +626,20 @@ PulseApp.ui.storage = (() => {
         const warningBadge = isCritical ? ' <span class="inline-block w-2 h-2 bg-red-500 rounded-full ml-1"></span>' : 
                             (isWarning ? ' <span class="inline-block w-2 h-2 bg-yellow-500 rounded-full ml-1"></span>' : '');
 
-        row.innerHTML = `
-            <td class="sticky left-0 ${isCritical ? 'bg-red-50 dark:bg-red-900/20' : (isWarning ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-white dark:bg-gray-800')} z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100">${store.storage || 'N/A'}${warningBadge}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${contentBadges}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs">${store.type || 'N/A'}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-center">${sharedText}</td>
-            <td class="p-1 px-2 text-gray-600 dark:text-gray-300 min-w-[250px]">${usageBarHTML}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${PulseApp.utils.formatBytes(store.avail)}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300">${PulseApp.utils.formatBytes(store.total)}</td>
-        `;
+        // Create sticky storage name column
+        const storageNameContent = `${store.storage || 'N/A'}${warningBadge}`;
+        const stickyStorageCell = PulseApp.ui.common.createStickyColumn(storageNameContent, {
+            additionalClasses: 'text-gray-900 dark:text-gray-100'
+        });
+        row.appendChild(stickyStorageCell);
+        
+        // Create regular cells
+        row.appendChild(PulseApp.ui.common.createTableCell(contentBadges, 'p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs'));
+        row.appendChild(PulseApp.ui.common.createTableCell(store.type || 'N/A', 'p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs'));
+        row.appendChild(PulseApp.ui.common.createTableCell(sharedText, 'p-1 px-2 whitespace-nowrap text-center'));
+        row.appendChild(PulseApp.ui.common.createTableCell(usageBarHTML, 'p-1 px-2 text-gray-600 dark:text-gray-300 min-w-[250px]'));
+        row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.avail), 'p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300'));
+        row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.total), 'p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300'));
         return row;
     }
 

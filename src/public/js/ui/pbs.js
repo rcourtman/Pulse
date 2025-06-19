@@ -40,6 +40,7 @@ PulseApp.ui.pbs = (() => {
         TEXT_GRAY_600_DARK_GRAY_400: 'text-gray-600 dark:text-gray-400',
         TEXT_GRAY_700_DARK_GRAY_300: 'text-gray-700 dark:text-gray-300',
         TEXT_GRAY_500_DARK_GRAY_400: 'text-gray-500 dark:text-gray-400',
+        TEXT_GRAY_800_DARK_GRAY_200: 'text-gray-800 dark:text-gray-200',
         
         // Font weights
         FONT_SEMIBOLD: 'font-semibold',
@@ -71,6 +72,21 @@ PulseApp.ui.pbs = (() => {
         // Borders & dividers
         BORDER_GRAY_200_DARK_BORDER_GRAY_700: 'border border-gray-200 dark:border-gray-700',
         DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700: 'divide-y divide-gray-200 dark:divide-gray-700',
+        BORDER_B_GRAY_300_DARK_BORDER_GRAY_600: 'border-b border-gray-300 dark:border-gray-600',
+        
+        // Background colors
+        BG_GRAY_100_DARK_BG_GRAY_800: 'bg-gray-100 dark:bg-gray-800',
+        BG_GRAY_100_DARK_BG_GRAY_700: 'bg-gray-100 dark:bg-gray-700',
+        HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50: 'hover:bg-gray-50 dark:hover:bg-gray-700/50',
+        
+        // Text styling
+        TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300: 'text-gray-600 uppercase dark:text-gray-300',
+        FONT_MEDIUM: 'font-medium',
+        
+        // Positioning
+        STICKY: 'sticky',
+        TOP_0: 'top-0',
+        Z_10: 'z-10',
         
         // PBS specific
         PBS_TASK_TBODY: 'pbs-task-tbody',
@@ -438,34 +454,38 @@ PulseApp.ui.pbs = (() => {
         row.dataset.upid = task.upid || '';
         
         // Add status-based row styling for better problem visibility
-        let rowClasses = 'border-b border-gray-200 dark:border-gray-700 transition-colors duration-150 ease-in-out';
-        
         const isFailed = isTaskFailed(task);
+        let specialBgClass = '';
+        let specialHoverClass = '';
+        let additionalClasses = 'transition-colors duration-150 ease-in-out';
         
         if (isFailed) {
             // Failed tasks get red background and cursor pointer if expandable
-            rowClasses += ` bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 cursor-pointer`;
+            specialBgClass = 'bg-red-50 dark:bg-red-900/20';
+            specialHoverClass = 'hover:bg-red-100 dark:hover:bg-red-900/30';
+            additionalClasses += ' cursor-pointer';
         } else if (task.status && task.status.toLowerCase().includes('running')) {
             // Running tasks get blue background
-            rowClasses += ` bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30`;
-        } else {
-            // Normal hover for successful tasks
-            rowClasses += ` hover:bg-gray-50 dark:hover:bg-gray-700`;
+            specialBgClass = 'bg-blue-50 dark:bg-blue-900/20';
+            specialHoverClass = 'hover:bg-blue-100 dark:hover:bg-blue-900/30';
         }
         
-        row.className = rowClasses;
+        // Use helper to create consistent row with subtle hover for PBS tables
+        const newRow = PulseApp.ui.common.createTableRow({
+            classes: additionalClasses,
+            baseClasses: 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50/50 dark:hover:bg-gray-700/30',
+            isSpecialRow: !!(specialBgClass),
+            specialBgClass: specialBgClass,
+            specialHoverClass: specialHoverClass
+        });
+        
+        row.className = newRow.className;
 
         const targetCell = document.createElement('td');
         
         if (isBackupTable) {
             // Only apply sticky to backup tasks table
-            let stickyBg = 'bg-white dark:bg-gray-800';
-            if (isFailed) {
-                stickyBg = 'bg-red-50 dark:bg-red-900/20';
-            } else if (task.status && task.status.toLowerCase().includes('running')) {
-                stickyBg = 'bg-blue-50 dark:bg-blue-900/20';
-            }
-            targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 ${stickyBg} z-10`;
+            targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 z-10 bg-white dark:bg-gray-800 border-r border-gray-300 dark:border-gray-600`;
         } else {
             targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
         }
@@ -897,7 +917,7 @@ PulseApp.ui.pbs = (() => {
                     const row = dsTableBody.insertRow();
                     
                     // Add critical usage highlighting
-                    let rowClass = `${CSS_CLASSES.HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50}`;
+                    let rowClass = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
                     if (usagePercent >= 95) {
                         rowClass = 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30';
                     } else if (usagePercent >= 85) {
@@ -1034,7 +1054,7 @@ PulseApp.ui.pbs = (() => {
         dsTable.id = ID_PREFIXES.PBS_DS_TABLE + instanceId;
         dsTable.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}`;
         const dsThead = document.createElement('thead');
-        dsThead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+        dsThead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_700}`;
         const dsHeaderRow = document.createElement('tr');
         dsHeaderRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
         ['Name', 'Path', 'Used', 'Available', 'Total', 'Usage', 'Deduplication', 'GC Status'].forEach(headerText => {
@@ -1073,7 +1093,7 @@ PulseApp.ui.pbs = (() => {
         table.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.TEXT_SM}`;
         
         const thead = document.createElement('thead');
-        thead.className = `${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+        thead.className = `${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_700}`;
         const headerRow = document.createElement('tr');
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
 
@@ -1198,7 +1218,7 @@ PulseApp.ui.pbs = (() => {
         table.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}`;
 
         const thead = document.createElement('thead');
-        thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+        thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_700}`;
         const headerRow = document.createElement('tr');
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
 
@@ -1211,7 +1231,7 @@ PulseApp.ui.pbs = (() => {
             
             if (index === 0 && isBackupTable) {
                 // Make first header sticky for backup tables
-                th.className = `${CSS_CLASSES.P1_PX2} sticky left-0 bg-gray-100 dark:bg-gray-800 z-20`;
+                th.className = `${CSS_CLASSES.P1_PX2} sticky left-0 bg-gray-100 dark:bg-gray-700 z-20 border-r border-gray-300 dark:border-gray-600`;
             } else {
                 th.className = CSS_CLASSES.P1_PX2;
             }
@@ -1289,7 +1309,7 @@ PulseApp.ui.pbs = (() => {
 
         // Table header
         const thead = document.createElement('thead');
-        thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+        thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_700}`;
         const headerRow = document.createElement('tr');
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
         const headerClasses = [

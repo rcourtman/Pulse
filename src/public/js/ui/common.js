@@ -410,7 +410,7 @@ PulseApp.ui.common = (() => {
     }
 
     function generateNodeGroupHeaderCellHTML(text, colspan, cellTag = 'td') {
-        const baseClasses = 'py-0.5 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300';
+        const baseClasses = 'py-1 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300';
         
         // Check if we can make this node name clickable
         const hostUrl = PulseApp.utils.getHostUrl(text);
@@ -421,16 +421,67 @@ PulseApp.ui.common = (() => {
         }
         
         // Always create individual cells so first one can be sticky
-        let html = `<${cellTag} class="sticky left-0 bg-gray-200 dark:bg-gray-700 z-10 ${baseClasses} border-r border-gray-300 dark:border-gray-600">${nodeContent}</${cellTag}>`;
+        let html = `<${cellTag} class="sticky left-0 bg-gray-200 dark:bg-gray-700 z-10 ${baseClasses} border-r border-b border-gray-300 dark:border-gray-600">${nodeContent}</${cellTag}>`;
         // Add empty cells for remaining columns
         for (let i = 1; i < colspan; i++) {
-            html += `<${cellTag} class="bg-gray-200 dark:bg-gray-700"></${cellTag}>`;
+            html += `<${cellTag} class="bg-gray-200 dark:bg-gray-700 border-b border-gray-300 dark:border-gray-600"></${cellTag}>`;
         }
         return html;
     }
 
     function addTableFixedLine(containerSelector, columnWidthVar) {
         // No longer needed - using CSS border styling instead
+    }
+    
+    function createTableRow(options = {}) {
+        const {
+            classes = '',
+            baseClasses = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700',
+            isSpecialRow = false,
+            specialBgClass = '',
+            specialHoverClass = ''
+        } = options;
+        
+        const row = document.createElement('tr');
+        
+        if (isSpecialRow && specialBgClass) {
+            row.className = `${baseClasses} ${specialBgClass} ${specialHoverClass} ${classes}`.trim();
+        } else {
+            row.className = `${baseClasses} ${classes}`.trim();
+        }
+        
+        return row;
+    }
+    
+    function createStickyColumn(content, options = {}) {
+        const {
+            tag = 'td',
+            title = '',
+            additionalClasses = '',
+            padding = 'py-1 px-2'
+        } = options;
+        
+        const element = document.createElement(tag);
+        element.className = `sticky left-0 z-10 ${padding} align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 ${additionalClasses}`.trim();
+        
+        if (title) {
+            element.title = title;
+        }
+        
+        if (typeof content === 'string') {
+            element.innerHTML = content;
+        } else {
+            element.appendChild(content);
+        }
+        
+        return element;
+    }
+    
+    function createTableCell(content, classes = 'py-1 px-2 align-middle') {
+        const cell = document.createElement('td');
+        cell.className = classes;
+        cell.innerHTML = content;
+        return cell;
     }
 
     return {
@@ -440,6 +491,9 @@ PulseApp.ui.common = (() => {
         resetDashboardView,
         generateNodeGroupHeaderCellHTML,
         updateResetButtonState,
-        hasActiveFilters
+        hasActiveFilters,
+        createTableRow,
+        createStickyColumn,
+        createTableCell
     };
 })();
