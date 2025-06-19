@@ -21,7 +21,7 @@ PulseApp.alerts = (() => {
     const MAX_ACTIVE_ALERTS = 100; // Prevent memory exhaustion
     const ALERT_STORM_THRESHOLD = 10; // Alerts per second to trigger storm mode
     const ALERT_COLORS = {
-        'active': 'bg-red-500 border-red-600 text-white',
+        'active': 'bg-amber-500 border-amber-600 text-white',
         'resolved': 'bg-green-500 border-green-600 text-white'
     };
 
@@ -31,10 +31,10 @@ PulseApp.alerts = (() => {
     };
 
     const GROUP_COLORS = {
-        'critical_alerts': '#ef4444',
+        'critical_alerts': '#f59e0b',
         'system_performance': '#f59e0b',
         'storage_alerts': '#8b5cf6',
-        'availability_alerts': '#ef4444',
+        'availability_alerts': '#f59e0b',
         'network_alerts': '#10b981',
         'custom': '#6b7280'
     };
@@ -265,14 +265,14 @@ PulseApp.alerts = (() => {
             
             if (recentAlerts.length === 1) {
                 // Single alert
-                window.PulseApp.ui.toast.error(`Alert: ${recentAlerts[0].guest} - ${recentAlerts[0].message}`);
+                window.PulseApp.ui.toast.warning(`Alert: ${recentAlerts[0].guest} - ${recentAlerts[0].message}`);
             } else if (recentAlerts.length > 1) {
                 // Multiple alerts - show summary
                 const guestNames = [...new Set(recentAlerts.map(a => a.guest))];
                 if (guestNames.length <= 3) {
-                    window.PulseApp.ui.toast.error(`Alerts: ${guestNames.join(', ')}`);
+                    window.PulseApp.ui.toast.warning(`Alerts: ${guestNames.join(', ')}`);
                 } else {
-                    window.PulseApp.ui.toast.error(`${recentAlerts.length} alerts from ${guestNames.length} guests`);
+                    window.PulseApp.ui.toast.warning(`${recentAlerts.length} alerts from ${guestNames.length} guests`);
                 }
             }
             
@@ -404,8 +404,8 @@ PulseApp.alerts = (() => {
     }
 
     function createCompactAlertCard(alert, acknowledged = false) {
-        const alertColor = 'border-red-400';
-        const alertBg = 'bg-red-50 dark:bg-red-900/10';
+        const alertColor = 'border-amber-400';
+        const alertBg = 'bg-amber-50 dark:bg-amber-900/10';
         
         // If acknowledged, heavily grey out the entire card
         const cardClasses = acknowledged ? 
@@ -669,7 +669,7 @@ PulseApp.alerts = (() => {
         if (count === 0) {
             className = 'text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-pointer relative flex-shrink-0 transition-colors';
         } else {
-            className = 'text-xs px-1.5 py-0.5 rounded bg-red-400 text-white cursor-pointer relative flex-shrink-0 transition-colors';
+            className = 'text-xs px-1.5 py-0.5 rounded bg-amber-500 text-white cursor-pointer relative flex-shrink-0 transition-colors';
         }
         
         indicator.className = className;
@@ -700,7 +700,7 @@ PulseApp.alerts = (() => {
             colorClass = 'bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-200';
             title = 'Resolved';
         } else {
-            colorClass = 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-700 dark:text-red-200';
+            colorClass = 'bg-amber-50 border border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-200';
             title = alert.message && alert.message.includes('acknowledged') ? 'Success' : 'Alert';
         }
         
