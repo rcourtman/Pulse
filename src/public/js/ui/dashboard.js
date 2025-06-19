@@ -998,10 +998,7 @@ PulseApp.ui.dashboard = (() => {
         
         // Reapply alert styling if in alerts mode
         if (PulseApp.ui.alerts?.isAlertsMode?.()) {
-            const allThresholds = PulseApp.ui.alerts.getGuestThresholds();
-            const guestThresholds = allThresholds[guest.id] || {};
-            PulseApp.ui.alerts.updateCellStyling?.(row, guest.id, guestThresholds);
-            // Also trigger row-level styling update based on alert thresholds
+            // Trigger unified row-level styling update based on alert thresholds
             PulseApp.ui.alerts.updateRowStylingOnly?.();
         }
     }
@@ -1362,31 +1359,15 @@ PulseApp.ui.dashboard = (() => {
             return '';
         }
         
-        // Determine highest severity
-        const criticalAlerts = activeAlerts.filter(alert => alert.severity === 'critical');
-        const warningAlerts = activeAlerts.filter(alert => alert.severity === 'warning');
-        
-        let iconColor, severityText, alertDetails;
-        
-        if (criticalAlerts.length > 0) {
-            iconColor = 'bg-red-500';
-            severityText = 'Critical';
-            alertDetails = `${criticalAlerts.length} critical alert${criticalAlerts.length > 1 ? 's' : ''}`;
-        } else if (warningAlerts.length > 0) {
-            iconColor = 'bg-yellow-500';
-            severityText = 'Warning';
-            alertDetails = `${warningAlerts.length} warning alert${warningAlerts.length > 1 ? 's' : ''}`;
-        } else {
-            iconColor = 'bg-blue-500';
-            severityText = 'Info';
-            alertDetails = `${activeAlerts.length} alert${activeAlerts.length > 1 ? 's' : ''}`;
-        }
+        // Simple alert indicator without severity levels
+        const iconColor = 'bg-red-500';
+        const alertDetails = `${activeAlerts.length} alert${activeAlerts.length > 1 ? 's' : ''}`;
         
         const totalText = activeAlerts.length > 1 ? ` (${activeAlerts.length} total)` : '';
         
         return `
             <span class="inline-flex items-center justify-center w-3 h-3 text-xs font-bold text-white ${iconColor} rounded-full cursor-pointer alert-indicator" 
-                  title="${severityText}: ${alertDetails}${totalText} - Click to view details"
+                  title="${alertDetails}${totalText} - Click to view details"
                   data-guest-id="${guest.endpointId}-${guest.node}-${guest.id}"
                   onclick="PulseApp.ui.dashboard.toggleGuestAlertDetails('${guest.endpointId}', '${guest.node}', '${guest.id}')">
                 !
@@ -1663,11 +1644,6 @@ PulseApp.ui.dashboard = (() => {
         alertDetailsRow.className = 'alert-details-row bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-700';
         
         const alertsHTML = activeAlerts.map(alert => {
-            const severity = alert.severity || 'info';
-            const severityColor = severity === 'critical' ? 'text-red-600 dark:text-red-400' : 
-                                 severity === 'warning' ? 'text-yellow-600 dark:text-yellow-400' : 
-                                 'text-blue-600 dark:text-blue-400';
-            
             const startTime = new Date(alert.startTime).toLocaleString();
             const duration = alert.startTime ? formatAlertDuration(Date.now() - alert.startTime) : 'Unknown';
             
@@ -1675,7 +1651,7 @@ PulseApp.ui.dashboard = (() => {
                 <div class="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
                     <div class="flex items-start justify-between mb-2">
                         <div class="flex-1">
-                            <h4 class="font-semibold text-gray-900 dark:text-gray-100 ${severityColor}">
+                            <h4 class="font-semibold text-gray-900 dark:text-gray-100 text-red-600 dark:text-red-400">
                                 ${alert.name || 'Unknown Alert'}
                             </h4>
                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -1715,10 +1691,6 @@ PulseApp.ui.dashboard = (() => {
                         <div>
                             <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
                             <span class="text-gray-600 dark:text-gray-400">${duration}</span>
-                        </div>
-                        <div>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">Severity:</span>
-                            <span class="${severityColor} capitalize">${severity}</span>
                         </div>
                     </div>
                 </div>

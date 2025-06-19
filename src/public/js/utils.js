@@ -175,43 +175,8 @@ PulseApp.utils = (() => {
         }
     }
 
-    function getReadableThresholdName(type) {
-        const names = {
-            cpu: 'CPU',
-            memory: 'Memory',
-            disk: 'Disk Usage',
-            diskread: 'Disk Read',
-            diskwrite: 'Disk Write',
-            netin: 'Net In',
-            netout: 'Net Out'
-        };
-        return names[type] || type;
-    }
 
-    function formatThresholdValue(type, value) {
-        const numericValue = Number(value);
-        if (isNaN(numericValue)) return 'N/A';
 
-        if (['cpu', 'memory', 'disk'].includes(type)) {
-            return `${Math.round(numericValue)}%`;
-        }
-        if (['diskread', 'diskwrite', 'netin', 'netout'].includes(type)) {
-            return formatSpeed(numericValue, 0);
-        }
-        return String(value); // Fallback
-    }
-
-    function getReadableThresholdCriteria(type, value) {
-        const operatorMap = {
-             diskread: '>=',
-             diskwrite: '>=',
-             netin: '>=',
-             netout: '>='
-         };
-        const operator = operatorMap[type] || '>=';
-        const displayValue = formatThresholdValue(type, value);
-        return `${type}${operator}${displayValue}`;
-    }
 
     function sortData(data, column, direction, tableType = 'main') {
         if (!column) return data;
@@ -459,22 +424,6 @@ PulseApp.utils = (() => {
         return d.toLocaleString();
     }
 
-    function formatRelativeTime(date) {
-        if (!date) return '';
-        const d = date instanceof Date ? date : new Date(date);
-        const now = new Date();
-        const diffMs = now - d;
-        const diffSec = Math.floor(diffMs / 1000);
-        const diffMin = Math.floor(diffSec / 60);
-        const diffHour = Math.floor(diffMin / 60);
-        const diffDay = Math.floor(diffHour / 24);
-
-        if (diffSec < 60) return `${diffSec} seconds ago`;
-        if (diffMin < 60) return `${diffMin} minutes ago`;
-        if (diffHour < 24) return `${diffHour} hours ago`;
-        if (diffDay < 30) return `${diffDay} days ago`;
-        return formatDate(d);
-    }
 
     // Format time ago for backup age display
     function formatTimeAgo(daysAgo) {
@@ -557,6 +506,32 @@ PulseApp.utils = (() => {
         
         return `<span class="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-700 ${colorClass}" ${tooltipAttr}>${statusDisplay}</span>`;
     }
+
+    // Get readable threshold name for display
+    function getReadableThresholdName(type) {
+        const names = {
+            'cpu': 'CPU',
+            'memory': 'Memory', 
+            'disk': 'Disk',
+            'diskread': 'Disk Read',
+            'diskwrite': 'Disk Write',
+            'netin': 'Net In',
+            'netout': 'Net Out'
+        };
+        return names[type] || type;
+    }
+
+    // Format threshold value with appropriate units
+    function formatThresholdValue(type, value) {
+        if (['cpu', 'memory', 'disk'].includes(type)) {
+            return `${value}%`;
+        } else {
+            const mb = value / (1024 * 1024);
+            if (mb >= 100) return `${Math.round(mb)}MB/s`;
+            if (mb >= 10) return `${Math.round(mb)}MB/s`;
+            return `${Math.round(mb * 10) / 10}MB/s`;
+        }
+    }
     
     // Common CSS class constants for consistency
     const CSS_CLASSES = {
@@ -603,6 +578,7 @@ PulseApp.utils = (() => {
         FONT_SEMIBOLD: 'font-semibold'
     };
 
+
     // Return the public API for this module
     return {
         sanitizeForId: (str) => str.replace(/[^a-zA-Z0-9-]/g, '-'),
@@ -615,9 +591,6 @@ PulseApp.utils = (() => {
         formatDuration,
         formatPbsTimestamp,
         formatPbsTimestampRelative,
-        getReadableThresholdName,
-        formatThresholdValue,
-        getReadableThresholdCriteria,
         sortData,
         renderTableBody,
         debounce,
@@ -632,12 +605,14 @@ PulseApp.utils = (() => {
         // Date formatting
         formatDate,
         formatDateTime,
-        formatRelativeTime,
         formatTimeAgo,
         // UI utilities
         initMobileScrollIndicators,
         getBackupStatusColor,
         createHealthBadgeHTML,
+        // Threshold utilities
+        getReadableThresholdName,
+        formatThresholdValue,
         // CSS class constants
         CSS_CLASSES
     };

@@ -519,11 +519,6 @@ PulseApp.charts = (() => {
         }
     }
 
-    function clearGuestCharts(guestId) {
-        const metrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
-        metrics.forEach(metric => clearChart(guestId, metric));
-        chartCache.delete(guestId);
-    }
 
     let chartUpdateInterval = null;
 
@@ -541,12 +536,6 @@ PulseApp.charts = (() => {
         getChartData();
     }
 
-    function stopChartUpdates() {
-        if (chartUpdateInterval) {
-            clearInterval(chartUpdateInterval);
-            chartUpdateInterval = null;
-        }
-    }
 
     // Adaptive sampling: more points for changing data, fewer for stable sections
     function processChartData(serverData, chartType = 'mini') {
@@ -671,58 +660,17 @@ PulseApp.charts = (() => {
         return scores;
     }
 
-    // Find critical points that should always be included
-    function findCriticalPoints(data) {
-        const critical = new Set();
-        
-        // Always include first and last points
-        critical.add(0);
-        critical.add(data.length - 1);
-        
-        // Find local extrema (peaks and valleys)
-        for (let i = 1; i < data.length - 1; i++) {
-            const prev = data[i - 1].value;
-            const curr = data[i].value;
-            const next = data[i + 1].value;
-            
-            // Local maximum
-            if (curr > prev && curr > next) {
-                critical.add(i);
-            }
-            // Local minimum  
-            else if (curr < prev && curr < next) {
-                critical.add(i);
-            }
-            // Significant inflection points
-            else if (Math.abs((next - curr) - (curr - prev)) > (getDataRange(data) * 0.05)) {
-                critical.add(i);
-            }
-        }
-        
-        return critical;
-    }
 
-    // Helper function to get data range for threshold calculations
-    function getDataRange(data) {
-        const values = data.map(p => p.value);
-        return Math.max(...values) - Math.min(...values);
-    }
 
     return {
         createUsageChartHTML,
         createSparklineHTML,
         renderGuestCharts,
         updateAllCharts,
-        clearGuestCharts,
         getChartData,
         startChartUpdates,
-        stopChartUpdates,
-        isDataAvailable: (guestId) => chartDataCache && chartDataCache[guestId],
-        getConfig: () => CHART_CONFIG,
         processChartData,
-        getCurrentRenderPoints: () => CHART_CONFIG.renderPoints,
         adaptiveSample,
         calculateImportanceScores,
-        findCriticalPoints
     };
 })(); 
