@@ -389,13 +389,38 @@ PulseApp.ui.alerts = (() => {
             
             // Get guest's current value for this metric
             let guestValue;
-            if (metricType === 'cpu') guestValue = guest.cpu;
-            else if (metricType === 'memory') guestValue = guest.memory;
-            else if (metricType === 'disk') guestValue = guest.disk;
-            else if (metricType === 'diskread') guestValue = guest.diskread;
-            else if (metricType === 'diskwrite') guestValue = guest.diskwrite;
-            else if (metricType === 'netin') guestValue = guest.netin;
-            else if (metricType === 'netout') guestValue = guest.netout;
+            if (metricType === 'cpu') {
+                guestValue = guest.cpu;
+            } else if (metricType === 'memory') {
+                // Since we don't have raw mem/maxmem values in frontend, use the pre-calculated value
+                // but adjust for rounding differences with backend
+                guestValue = guest.memory;
+                
+                // If the value is exactly at the threshold when rounded, check if it would be below when not rounded
+                // This accounts for cases like 44.7% that rounds to 45% but is actually below the 45% threshold
+                if (guestValue === parseFloat(thresholdValue)) {
+                    // Assume worst case: the actual value could be up to 0.5% lower
+                    // This ensures frontend matches backend behavior
+                    guestValue = guestValue - 0.01;
+                }
+                
+            } else if (metricType === 'disk') {
+                // Same issue as memory - use pre-calculated value with rounding adjustment
+                guestValue = guest.disk;
+                
+                // If the value is exactly at the threshold when rounded, adjust for potential rounding
+                if (guestValue === parseFloat(thresholdValue)) {
+                    guestValue = guestValue - 0.01;
+                }
+            } else if (metricType === 'diskread') {
+                guestValue = guest.diskread;
+            } else if (metricType === 'diskwrite') {
+                guestValue = guest.diskwrite;
+            } else if (metricType === 'netin') {
+                guestValue = guest.netin;
+            } else if (metricType === 'netout') {
+                guestValue = guest.netout;
+            }
             
             // Skip if guest value is not available
             if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) continue;
