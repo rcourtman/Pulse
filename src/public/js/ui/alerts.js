@@ -631,6 +631,8 @@ PulseApp.ui.alerts = (() => {
         }
         if (diskSlider) {
             diskSlider.value = globalThresholds.disk;
+            // Hide any lingering tooltip that might have been triggered
+            PulseApp.tooltips.hideSliderTooltipImmediately();
         }
         if (diskreadSelect) diskreadSelect.value = globalThresholds.diskread;
         if (diskwriteSelect) diskwriteSelect.value = globalThresholds.diskwrite;
@@ -897,16 +899,16 @@ PulseApp.ui.alerts = (() => {
                     
                     if (cpuSlider && globalThresholds.cpu) {
                         cpuSlider.value = globalThresholds.cpu;
-                        PulseApp.tooltips.updateSliderTooltip(cpuSlider);
                     }
                     if (memorySlider && globalThresholds.memory) {
                         memorySlider.value = globalThresholds.memory;
-                        PulseApp.tooltips.updateSliderTooltip(memorySlider);
                     }
                     if (diskSlider && globalThresholds.disk) {
                         diskSlider.value = globalThresholds.disk;
-                        PulseApp.tooltips.updateSliderTooltip(diskSlider);
                     }
+                    
+                    // Hide any tooltips that might have been triggered during value setting
+                    PulseApp.tooltips.hideSliderTooltipImmediately();
                     if (diskreadSelect && globalThresholds.diskread) diskreadSelect.value = globalThresholds.diskread;
                     if (diskwriteSelect && globalThresholds.diskwrite) diskwriteSelect.value = globalThresholds.diskwrite;
                     if (netinSelect && globalThresholds.netin) netinSelect.value = globalThresholds.netin;
