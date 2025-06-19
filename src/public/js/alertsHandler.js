@@ -7,11 +7,19 @@ PulseApp.alerts = (() => {
     let notificationContainer = null;
     let alertsInitialized = false;
     let alertDropdown = null;
+    let dropdownUpdateTimeout = null;
+    let alertStormMode = false;
+    let alertsReceivedTimestamps = [];
+    let toastRateLimitCount = 0;
+    let lastToastTime = 0;
+    let pendingAlertToasts = [];
 
     // Configuration - More subtle and less intrusive
     const MAX_NOTIFICATIONS = 3; // Reduced from 5
     const NOTIFICATION_TIMEOUT = 5000; // Reduced from 10 seconds to 5
     const ACKNOWLEDGED_CLEANUP_DELAY = 300000; // 5 minutes
+    const MAX_ACTIVE_ALERTS = 100; // Prevent memory exhaustion
+    const ALERT_STORM_THRESHOLD = 10; // Alerts per second to trigger storm mode
     const ALERT_COLORS = {
         'active': 'bg-red-500 border-red-600 text-white',
         'resolved': 'bg-green-500 border-green-600 text-white'
@@ -228,6 +236,57 @@ PulseApp.alerts = (() => {
             closeDropdown();
         }
     }
+    
+    // Process queued toast notifications
+    let toastProcessingTimeout = null;
+    function processToastQueue() {
+        if (!window.PulseApp || !window.PulseApp.ui || !window.PulseApp.ui.toast) {
+            return;
+        }
+        
+        // Don't process during alert storm
+        if (alertStormMode) {
+            pendingAlertToasts = []; // Clear queue during storm
+            return;
+        }
+        
+        const now = Date.now();
+        const timeSinceLastToast = now - lastToastTime;
+        
+        // If enough time has passed, show next toast
+        if (timeSinceLastToast >= 500 && pendingAlertToasts.length > 0) { // 500ms between toasts
+            // Group alerts that arrived close together
+            const recentAlerts = [];
+            const cutoffTime = now - 1000; // Group alerts from last second
+            
+            while (pendingAlertToasts.length > 0 && pendingAlertToasts[0].timestamp >= cutoffTime) {
+                recentAlerts.push(pendingAlertToasts.shift());
+            }
+            
+            if (recentAlerts.length === 1) {
+                // Single alert
+                window.PulseApp.ui.toast.error(`Alert: ${recentAlerts[0].guest} - ${recentAlerts[0].message}`);
+            } else if (recentAlerts.length > 1) {
+                // Multiple alerts - show summary
+                const guestNames = [...new Set(recentAlerts.map(a => a.guest))];
+                if (guestNames.length <= 3) {
+                    window.PulseApp.ui.toast.error(`Alerts: ${guestNames.join(', ')}`);
+                } else {
+                    window.PulseApp.ui.toast.error(`${recentAlerts.length} alerts from ${guestNames.length} guests`);
+                }
+            }
+            
+            lastToastTime = now;
+        }
+        
+        // Schedule next processing if more alerts pending
+        if (pendingAlertToasts.length > 0 && !toastProcessingTimeout) {
+            toastProcessingTimeout = setTimeout(() => {
+                toastProcessingTimeout = null;
+                processToastQueue();
+            }, 500);
+        }
+    }
 
     function openDropdown() {
         if (!alertDropdown) return;
@@ -252,6 +311,11 @@ PulseApp.alerts = (() => {
 
     function updateDropdownContent() {
         if (!alertDropdown) return;
+        
+        // During alert storm, skip updates if too frequent
+        if (alertStormMode && dropdownUpdateTimeout) {
+            return;
+        }
 
         const unacknowledgedAlerts = activeAlerts.filter(a => !a.acknowledged);
         const acknowledgedAlerts = activeAlerts.filter(a => a.acknowledged);
@@ -498,6 +562,24 @@ PulseApp.alerts = (() => {
     }
 
     function handleNewAlert(alert) {
+        // Detect alert storm
+        const now = Date.now();
+        alertsReceivedTimestamps.push(now);
+        // Keep only timestamps from last second
+        alertsReceivedTimestamps = alertsReceivedTimestamps.filter(ts => now - ts < 1000);
+        
+        if (alertsReceivedTimestamps.length >= ALERT_STORM_THRESHOLD) {
+            if (!alertStormMode) {
+                alertStormMode = true;
+                console.warn('[Alerts] Alert storm detected! Entering protective mode.');
+                if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.toast) {
+                    window.PulseApp.ui.toast.warning('High alert volume detected - notifications limited');
+                }
+            }
+        } else if (alertStormMode && alertsReceivedTimestamps.length < ALERT_STORM_THRESHOLD / 2) {
+            alertStormMode = false;
+            console.log('[Alerts] Alert storm subsided. Resuming normal operation.');
+        }
         
         const existingIndex = activeAlerts.findIndex(a => 
             a.ruleId === alert.ruleId && 
@@ -509,13 +591,44 @@ PulseApp.alerts = (() => {
             activeAlerts[existingIndex] = alert;
         } else {
             activeAlerts.unshift(alert);
+            
+            // Limit the size of activeAlerts array
+            if (activeAlerts.length > MAX_ACTIVE_ALERTS) {
+                // Remove oldest acknowledged alerts first, then oldest unacknowledged
+                const acknowledged = activeAlerts.filter(a => a.acknowledged);
+                const unacknowledged = activeAlerts.filter(a => !a.acknowledged);
+                
+                if (acknowledged.length > MAX_ACTIVE_ALERTS / 2) {
+                    // Keep only recent acknowledged alerts
+                    const recentAcknowledged = acknowledged.slice(0, MAX_ACTIVE_ALERTS / 2);
+                    activeAlerts = [...unacknowledged.slice(0, MAX_ACTIVE_ALERTS / 2), ...recentAcknowledged];
+                } else {
+                    activeAlerts = activeAlerts.slice(0, MAX_ACTIVE_ALERTS);
+                }
+            }
+            
+            // Queue toast notification
+            pendingAlertToasts.push({
+                guest: alert.guest.name,
+                message: alert.message,
+                timestamp: now
+            });
+            
+            // Process toast queue
+            processToastQueue();
         }
         
         updateHeaderIndicator();
         
-        
+        // Debounced dropdown update
         if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
-            updateDropdownContent();
+            if (dropdownUpdateTimeout) {
+                clearTimeout(dropdownUpdateTimeout);
+            }
+            dropdownUpdateTimeout = setTimeout(() => {
+                updateDropdownContent();
+                dropdownUpdateTimeout = null;
+            }, alertStormMode ? 500 : 100); // Longer delay during storm
         }
         
         document.dispatchEvent(new CustomEvent('pulseAlert', { detail: alert }));
@@ -531,6 +644,10 @@ PulseApp.alerts = (() => {
         
         updateHeaderIndicator();
         
+        // Show toast notification when alert is resolved
+        if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.toast) {
+            window.PulseApp.ui.toast.success(`Resolved: ${alert.guest.name} - ${alert.message}`);
+        }
         
         if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
             updateDropdownContent();
@@ -569,6 +686,11 @@ PulseApp.alerts = (() => {
     }
 
     function showNotification(alert, type = 'alert') {
+        // Ensure notification container exists
+        if (!notificationContainer) {
+            createNotificationContainer();
+        }
+        
         const notification = document.createElement('div');
         notification.className = `pointer-events-auto transform transition-all duration-200 ease-out opacity-0 translate-y-2 scale-95`;
         
@@ -903,6 +1025,21 @@ PulseApp.alerts = (() => {
             clearTimeout(timeoutId);
         }
         cleanupTimeouts.clear();
+        
+        // Clear dropdown update timeout
+        if (dropdownUpdateTimeout) {
+            clearTimeout(dropdownUpdateTimeout);
+            dropdownUpdateTimeout = null;
+        }
+        
+        // Clear toast processing timeout
+        if (toastProcessingTimeout) {
+            clearTimeout(toastProcessingTimeout);
+            toastProcessingTimeout = null;
+        }
+        
+        // Clear pending toasts
+        pendingAlertToasts = [];
         
         // Remove socket listeners if needed
         if (window.socket) {
