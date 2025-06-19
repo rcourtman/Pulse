@@ -126,9 +126,7 @@ PulseApp.alerts = (() => {
             alertDropdown.style.zIndex = '1000';
             alertDropdown.style.top = '60px';
             alertDropdown.style.right = '20px';
-            alertDropdown.style.left = '400px';
-            alertDropdown.style.width = 'auto';
-            alertDropdown.style.maxWidth = 'none';
+            alertDropdown.style.width = '420px';
             alertDropdown.style.maxHeight = '500px';
             alertDropdown.style.overflowY = 'auto';
             
