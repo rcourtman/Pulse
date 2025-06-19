@@ -190,8 +190,26 @@ class AlertManager extends EventEmitter {
                     );
                     
                     // Use metrics data if available (has calculated rates), fallback to guest data
-                    const currentMetrics = guestMetricsData ? guestMetricsData.current : guest;
+                    let currentMetrics = guest;
                     
+                    // If we have metrics data, merge it with guest data to get I/O rates
+                    if (guestMetricsData && guestMetricsData.current) {
+                        // Create a new object that combines guest properties with metrics data
+                        currentMetrics = {
+                            ...guest, // Start with all guest properties
+                            ...guestMetricsData.current, // Override with metrics data
+                            // Ensure critical guest properties are preserved
+                            name: guest.name,
+                            type: guest.type,
+                            endpointId: guest.endpointId,
+                            node: guest.node,
+                            vmid: guest.vmid,
+                            status: guest.status,
+                            maxmem: guest.maxmem,
+                            maxdisk: guest.maxdisk,
+                            cpus: guest.cpus
+                        };
+                    }
                     
                     allGuestMetrics.set(guestKey, {
                         current: currentMetrics,
@@ -1019,6 +1037,68 @@ class AlertManager extends EventEmitter {
     }
 
     // Rest of the existing methods with enhancements...
+    calculateIORate(metrics, metricName, guest) {
+        // Calculate I/O rate from cumulative counters using metrics history
+        const guestId = `${guest.endpointId}-${guest.node}-${guest.vmid}`;
+        const currentValue = metrics[metricName] || 0;
+        const timestamp = Date.now();
+        
+        
+        
+        
+        // Get or initialize metrics history for this guest
+        if (!this.guestMetricsHistory) {
+            this.guestMetricsHistory = new Map();
+        }
+        
+        const guestHistory = this.guestMetricsHistory.get(guestId) || [];
+        const currentEntry = { timestamp, [metricName]: currentValue };
+        
+        // Add current entry to history
+        guestHistory.push(currentEntry);
+        
+        // Keep only last 10 entries (enough for rate calculation)
+        if (guestHistory.length > 10) {
+            guestHistory.shift();
+        }
+        
+        this.guestMetricsHistory.set(guestId, guestHistory);
+        
+        // Need at least 2 data points to calculate rate
+        if (guestHistory.length < 2) {
+            return 0; // No rate can be calculated yet
+        }
+        
+        // Calculate rate using the same logic as dashboard
+        const validHistory = guestHistory.filter(entry =>
+            typeof entry.timestamp === 'number' && !isNaN(entry.timestamp) &&
+            typeof entry[metricName] === 'number' && !isNaN(entry[metricName])
+        );
+        
+        if (validHistory.length < 2) {
+            return 0;
+        }
+        
+        const oldest = validHistory[0];
+        const newest = validHistory[validHistory.length - 1];
+        const valueDiff = newest[metricName] - oldest[metricName];
+        const timeDiffSeconds = (newest.timestamp - oldest.timestamp) / 1000;
+        
+        if (timeDiffSeconds <= 0 || valueDiff < 0) {
+            return 0;
+        }
+        
+        // Return rate in bytes per second
+        const rate = valueDiff / timeDiffSeconds;
+        
+        // Debug logging to see actual rates
+        if (guest && guest.name && rate > 0) {
+            console.log(`[AlertManager] ${guest.name} ${metricName} rate: ${Math.round(rate/1024/1024*100)/100} MB/s`);
+        }
+        
+        return rate;
+    }
+
     getMetricValue(metrics, metricName, guest) {
         switch (metricName) {
             case 'cpu':
@@ -1047,6 +1127,12 @@ class AlertManager extends EventEmitter {
                     return (disk / metrics.maxdisk) * 100;
                 }
                 return null;
+            case 'diskread':
+            case 'diskwrite':
+            case 'netin':
+            case 'netout':
+                // I/O metrics are cumulative counters, need to calculate rate
+                return this.calculateIORate(metrics, metricName, guest);
             default:
                 return metrics[metricName] || null;
         }
@@ -1708,16 +1794,16 @@ class AlertManager extends EventEmitter {
                 }
                 break;
             case 'diskread':
-                metricValue = currentMetrics.diskread;
+                metricValue = this.calculateIORate(currentMetrics, 'diskread', guest);
                 break;
             case 'diskwrite':
-                metricValue = currentMetrics.diskwrite;
+                metricValue = this.calculateIORate(currentMetrics, 'diskwrite', guest);
                 break;
             case 'netin':
-                metricValue = currentMetrics.netin;
+                metricValue = this.calculateIORate(currentMetrics, 'netin', guest);
                 break;
             case 'netout':
-                metricValue = currentMetrics.netout;
+                metricValue = this.calculateIORate(currentMetrics, 'netout', guest);
                 break;
             default:
                 return false;
@@ -1785,10 +1871,11 @@ class AlertManager extends EventEmitter {
                     return Math.round(diskPercentage * 10) / 10; // Round to 1 decimal place
                 }
                 return 0;
-            case 'diskread': return currentMetrics.diskread || 0;
-            case 'diskwrite': return currentMetrics.diskwrite || 0;
-            case 'netin': return currentMetrics.netin || 0;
-            case 'netout': return currentMetrics.netout || 0;
+            case 'diskread': 
+                return this.calculateIORate(currentMetrics, 'diskread', guest);
+            case 'diskwrite': return this.calculateIORate(currentMetrics, 'diskwrite', guest);
+            case 'netin': return this.calculateIORate(currentMetrics, 'netin', guest);
+            case 'netout': return this.calculateIORate(currentMetrics, 'netout', guest);
             default: return 0;
         }
     }
@@ -3236,11 +3323,15 @@ Pulse Monitoring System`,
             const timestamp = Date.now();
             
             // Process each guest and bundle all their metric alerts
+            console.log(`[AlertManager] Processing ${allGuestMetrics.size} guests for bundled alerts`);
             for (const [guestKey, guestMetrics] of allGuestMetrics.entries()) {
                 const guest = guestMetrics.current;
-                if (!guest || !guest.name) continue;
+                if (!guest || !guest.name) {
+                    console.log(`[AlertManager] Skipping invalid guest: ${guestKey}`);
+                    continue;
+                }
                 
-                this.evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp);
+                this.evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics);
             }
             
         } catch (error) {
@@ -3253,17 +3344,21 @@ Pulse Monitoring System`,
     /**
      * Evaluate all metrics for a guest and create one bundled alert
      */
-    evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp) {
+    evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics = null) {
         // Get threshold for this guest
         const guestKey = `${guest.endpointId || 'unknown'}-${guest.node}-${guest.vmid}`;
         const guestSpecificThresholds = guestThresholds[guestKey] || {};
+        
+        // Debug to see if this function is being called
+        console.log(`[AlertManager] Evaluating bundled alerts for ${guest.name}`);
         
         // Check all metrics for this guest
         const metrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
         const exceededMetrics = [];
         
+        
         for (const metricType of metrics) {
-            const metricResult = this.evaluateMetricForGuest(guest, metricType, guestSpecificThresholds, globalThresholds);
+            const metricResult = this.evaluateMetricForGuest(guest, metricType, guestSpecificThresholds, globalThresholds, guestMetrics);
             if (metricResult && metricResult.isExceeded) {
                 exceededMetrics.push(metricResult);
             }
@@ -3340,7 +3435,7 @@ Pulse Monitoring System`,
     /**
      * Evaluate a single metric for a guest and return result
      */
-    evaluateMetricForGuest(guest, metricType, guestSpecificThresholds, globalThresholds) {
+    evaluateMetricForGuest(guest, metricType, guestSpecificThresholds, globalThresholds, guestMetrics = null) {
         let threshold = guestSpecificThresholds[metricType] || globalThresholds[metricType];
         
         // Skip if no threshold set or empty
@@ -3354,9 +3449,14 @@ Pulse Monitoring System`,
         }
         
         // Get current metric value
-        let currentValue = this.getMetricValueForGuest(guest, metricType);
+        let currentValue = this.getMetricValueForGuest(guest, metricType, guestMetrics);
         if (currentValue === null) {
             return null;
+        }
+        
+        // Debug for I/O metrics
+        if (metricType.includes('disk') || metricType.includes('net')) {
+            console.log(`[AlertManager] ${guest.name} ${metricType}: ${Math.round(currentValue/1024/1024*100)/100} MB/s vs threshold ${Math.round(threshold/1024/1024*100)/100} MB/s`);
         }
         
         // Check if threshold is exceeded
@@ -3373,16 +3473,12 @@ Pulse Monitoring System`,
     /**
      * Get metric value for a guest (extracted from old method)
      */
-    getMetricValueForGuest(guest, metricType) {
+    getMetricValueForGuest(guest, metricType, guestMetrics = null) {
         let currentValue = null;
         
         if (metricType === 'cpu') {
-            // CPU percentage calculation (same as dashboard)
-            if (guest.cpu !== undefined && guest.cpus && guest.cpus > 0) {
-                currentValue = (guest.cpu / guest.cpus) * 100;
-            } else {
-                currentValue = guest.cpu || 0;
-            }
+            // CPU value is already in percentage format when it reaches the alert system
+            currentValue = guest.cpu || 0;
         } else if (metricType === 'memory') {
             // Memory percentage calculation
             if (guest.mem && guest.maxmem) {
@@ -3394,13 +3490,18 @@ Pulse Monitoring System`,
                 currentValue = (guest.disk / guest.maxdisk) * 100;
             }
         } else if (metricType === 'diskread') {
-            currentValue = guest.diskread || 0;
+            // Use guestMetrics if available, otherwise fallback to guest data
+            const metricsData = guestMetrics?.current || guest;
+            currentValue = this.calculateIORate(metricsData, 'diskread', guest);
         } else if (metricType === 'diskwrite') {
-            currentValue = guest.diskwrite || 0;
+            const metricsData = guestMetrics?.current || guest;
+            currentValue = this.calculateIORate(metricsData, 'diskwrite', guest);
         } else if (metricType === 'netin') {
-            currentValue = guest.netin || 0;
+            const metricsData = guestMetrics?.current || guest;
+            currentValue = this.calculateIORate(metricsData, 'netin', guest);
         } else if (metricType === 'netout') {
-            currentValue = guest.netout || 0;
+            const metricsData = guestMetrics?.current || guest;
+            currentValue = this.calculateIORate(metricsData, 'netout', guest);
         }
         
         return currentValue;
@@ -3433,12 +3534,8 @@ Pulse Monitoring System`,
         let currentValue = null;
         
         if (metricType === 'cpu') {
-            // CPU percentage calculation (same as dashboard)
-            if (guest.cpu !== undefined && guest.cpus && guest.cpus > 0) {
-                currentValue = (guest.cpu / guest.cpus) * 100;
-            } else {
-                currentValue = guest.cpu || 0;
-            }
+            // CPU value is already in percentage format when it reaches the alert system
+            currentValue = guest.cpu || 0;
         } else if (metricType === 'memory') {
             // Memory percentage calculation
             if (guest.mem && guest.maxmem) {
@@ -3450,13 +3547,13 @@ Pulse Monitoring System`,
                 currentValue = (guest.disk / guest.maxdisk) * 100;
             }
         } else if (metricType === 'diskread') {
-            currentValue = guest.diskread || 0;
+            currentValue = this.calculateIORate(guest, 'diskread', guest);
         } else if (metricType === 'diskwrite') {
-            currentValue = guest.diskwrite || 0;
+            currentValue = this.calculateIORate(guest, 'diskwrite', guest);
         } else if (metricType === 'netin') {
-            currentValue = guest.netin || 0;
+            currentValue = this.calculateIORate(guest, 'netin', guest);
         } else if (metricType === 'netout') {
-            currentValue = guest.netout || 0;
+            currentValue = this.calculateIORate(guest, 'netout', guest);
         }
         
         

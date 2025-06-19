@@ -408,10 +408,10 @@ PulseApp.alerts = (() => {
                                 return metrics.map(metric => {
                                     const trimmed = metric.trim();
                                     // Parse metric like "CPU: 56% (≥20%)"
-                                    const match = trimmed.match(/^(.+?):\s*(\d+)%\s*\(≥(\d+)%\)$/);
+                                    const percentMatch = trimmed.match(/^(.+?):\s*(\d+)%\s*\(≥(\d+)%\)$/);
                                     
-                                    if (match) {
-                                        const [, name, current, threshold] = match;
+                                    if (percentMatch) {
+                                        const [, name, current, threshold] = percentMatch;
                                         const currentVal = parseInt(current);
                                         const thresholdVal = parseInt(threshold);
                                         
@@ -434,10 +434,49 @@ PulseApp.alerts = (() => {
                                                 </div>
                                             </div>
                                         `;
-                                    } else {
-                                        // Fallback for non-percentage metrics
-                                        return `<div class="mb-1">${trimmed}</div>`;
+                                    } 
+                                    
+                                    // Parse I/O metrics like "Disk Read: 2.5 MB/s (≥1 MB/s)" or "Network In: 831.67 GB/s (≥1 MB/s)"
+                                    const ioMatch = trimmed.match(/^(.+?):\s*([\d.]+)\s*([KMGT]?B\/s)\s*\(≥([\d.]+)\s*([KMGT]?B\/s)\)$/);
+                                    if (ioMatch) {
+                                        const [, name, current, currentUnit, threshold, thresholdUnit] = ioMatch;
+                                        const currentVal = parseFloat(current);
+                                        const thresholdVal = parseFloat(threshold);
+                                        
+                                        // Convert to same unit for comparison (MB/s as base)
+                                        const unitMultipliers = { 'B/s': 1/1048576, 'KB/s': 1/1024, 'MB/s': 1, 'GB/s': 1024, 'TB/s': 1048576 };
+                                        const currentMBps = currentVal * (unitMultipliers[currentUnit] || 1);
+                                        const thresholdMBps = thresholdVal * (unitMultipliers[thresholdUnit] || 1);
+                                        
+                                        // Calculate percentage for visual bar (cap at reasonable max for display)
+                                        const maxDisplayMBps = Math.max(thresholdMBps * 2, 10); // At least 10 MB/s or 2x threshold
+                                        const currentPercent = Math.min((currentMBps / maxDisplayMBps) * 100, 100);
+                                        const thresholdPercent = Math.min((thresholdMBps / maxDisplayMBps) * 100, 100);
+                                        
+                                        // Determine color based on how much it exceeds threshold
+                                        const excessRatio = currentMBps / thresholdMBps;
+                                        let barColor = 'bg-blue-500';
+                                        if (excessRatio > 1) barColor = 'bg-yellow-500';
+                                        if (excessRatio > 2) barColor = 'bg-orange-500';
+                                        if (excessRatio > 5) barColor = 'bg-red-500';
+                                        
+                                        return `
+                                            <div class="mb-0.5">
+                                                <div class="flex justify-between text-xs mb-0.5">
+                                                    <span class="font-medium">${name}</span>
+                                                    <span>${currentVal}${currentUnit} / ${thresholdVal}${thresholdUnit}</span>
+                                                </div>
+                                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 relative">
+                                                    <div class="bg-gray-300 dark:bg-gray-600 h-2 rounded absolute top-0 left-0" style="width: ${thresholdPercent}%; z-index: 1;"></div>
+                                                    <div class="${barColor} h-2 rounded absolute top-0 left-0" style="width: ${currentPercent}%; z-index: 2;"></div>
+                                                    ${thresholdPercent < 90 ? `<div class="absolute top-0 bg-gray-400 h-2" style="left: ${thresholdPercent}%; width: 1px; z-index: 3;"></div>` : ''}
+                                                </div>
+                                            </div>
+                                        `;
                                     }
+                                    
+                                    // Fallback for other metrics
+                                    return `<div class="mb-1">${trimmed}</div>`;
                                 }).join('');
                             })()}
                             <div class="mt-1 text-xs text-gray-500">${durationStr}${acknowledged ? ' • acknowledged' : ''}</div>
