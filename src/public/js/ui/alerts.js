@@ -642,13 +642,13 @@ PulseApp.ui.alerts = (() => {
         
         // Update all guest rows smoothly
         if (isAlertsMode) {
-            // First, immediately clean up all styling and apply final dimming to prevent flash
-            clearAllAlertStyling();
-            
-            // Then update input values to match global thresholds (skip tooltips during reset)
+            // First update input values to match global thresholds (skip tooltips during reset)
             for (const metricType in globalThresholds) {
                 updateGuestInputValues(metricType, globalThresholds[metricType], true);
             }
+            
+            // Then update row styling with new thresholds (no flash since inputs are already updated)
+            updateRowStylingOnly();
         }
         
         // Auto-save
