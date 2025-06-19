@@ -132,11 +132,7 @@ PulseApp.ui.loadingSkeletons = (() => {
     }
     
     return {
-        createTableRowSkeleton,
         createTableSkeleton,
-        createNodeCardSkeleton,
-        createStorageRowSkeleton,
-        createBackupRowSkeleton,
         showTableSkeleton,
         showNodeCardsSkeleton
     };

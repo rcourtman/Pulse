@@ -8,6 +8,8 @@ PulseApp.ui.alerts = (() => {
     let isAlertsMode = false;
     let guestAlertThresholds = {}; // Store per-guest thresholds
     let globalThresholds = {}; // Store global default thresholds
+    let alertLogic = 'or'; // Fixed to OR logic (dropdown removed)
+    let alertDuration = 0; // Track alert duration in milliseconds (default instant for testing)
 
     function init() {
         // Get DOM elements
@@ -38,6 +40,13 @@ PulseApp.ui.alerts = (() => {
         // Alerts toggle
         if (alertsToggle) {
             alertsToggle.addEventListener('change', handleAlertsToggle);
+        }
+        
+        
+        // Alert duration selector
+        const alertDurationSelect = document.getElementById('alert-duration-select');
+        if (alertDurationSelect) {
+            alertDurationSelect.addEventListener('change', handleAlertDurationChange);
         }
 
 
@@ -85,6 +94,15 @@ PulseApp.ui.alerts = (() => {
         
         updateAlertsMode();
     }
+    
+    
+    function handleAlertDurationChange(event) {
+        alertDuration = parseInt(event.target.value);
+        console.log(`Alert duration changed to: ${alertDuration}ms`);
+        
+        // Save the updated duration to the backend
+        autoSaveAlertConfig();
+    }
 
     function updateAlertsMode() {
         if (!globalAlertThresholds || !mainTable) return;
@@ -114,6 +132,9 @@ PulseApp.ui.alerts = (() => {
             
             // Clear only alert-specific row styling
             clearAllAlertStyling();
+            
+            // Hide alerts count badge
+            updateAlertsCountBadge();
         }
     }
 
@@ -343,8 +364,11 @@ PulseApp.ui.alerts = (() => {
         // Only check running guests for alerts (stopped guests can't trigger metric alerts)
         if (guest.status !== 'running') return false;
         
-        // Check each metric type
+        // Check each metric type using selected logic (AND or OR)
         const metricsToCheck = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+        let hasAnyThresholds = false;
+        let exceededThresholds = 0;
+        let totalThresholds = 0;
         
         for (const metricType of metricsToCheck) {
             // Get the effective threshold for this guest/metric
@@ -357,8 +381,11 @@ PulseApp.ui.alerts = (() => {
                 thresholdValue = globalThresholds[metricType];
             }
             
-            // Skip if no threshold is set for this metric
-            if (!thresholdValue || thresholdValue === '' || thresholdValue === '0') continue;
+            // Skip if no threshold is set for this metric (but 0 is a valid threshold)
+            if (thresholdValue === undefined || thresholdValue === null || thresholdValue === '') continue;
+            
+            hasAnyThresholds = true;
+            totalThresholds++;
             
             // Get guest's current value for this metric
             let guestValue;
@@ -373,13 +400,28 @@ PulseApp.ui.alerts = (() => {
             // Skip if guest value is not available
             if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) continue;
             
-            // Check if guest value exceeds threshold (would trigger alert)
+            // Check if guest value exceeds threshold
             if (guestValue >= parseFloat(thresholdValue)) {
-                return true; // This guest would trigger an alert
+                exceededThresholds++;
+                
+                // For OR logic, return true immediately if any threshold is exceeded
+                if (alertLogic === 'or') {
+                    return true;
+                }
+            } else if (alertLogic === 'and') {
+                // For AND logic, return false immediately if any threshold is not exceeded
+                return false;
             }
         }
         
-        return false; // No alerts would be triggered for this guest
+        // Return result based on logic mode
+        if (alertLogic === 'and') {
+            // Return true only if we have thresholds and ALL of them are exceeded
+            return hasAnyThresholds && exceededThresholds === totalThresholds;
+        } else {
+            // OR logic - already returned true above if any threshold was exceeded
+            return false;
+        }
     }
 
     // Standalone row styling update with granular cell dimming
@@ -404,99 +446,74 @@ PulseApp.ui.alerts = (() => {
             // Check if this guest would trigger alerts based on current thresholds
             const wouldTriggerAlerts = checkGuestWouldTriggerAlerts(guestId, guestThresholds);
             
-            // Apply row-level dimming: dim if guest WOULDN'T trigger alerts (like threshold system)
+            // Apply unified row-level styling: dim if guest WOULDN'T trigger alerts
             if (!wouldTriggerAlerts) {
-                if (!hasIndividualSettings) {
-                    // Pure global settings - full row dimming
-                    row.style.opacity = '0.4';
-                    row.style.transition = 'opacity 0.1s ease-out';
-                    row.setAttribute('data-alert-dimmed', 'true');
-                    row.removeAttribute('data-alert-mixed');
-                } else {
-                    // Mixed settings - let cell styling handle granular dimming
-                    row.style.opacity = '';
-                    row.style.transition = '';
-                    row.removeAttribute('data-alert-dimmed');
-                    row.setAttribute('data-alert-mixed', 'true');
-                }
+                // Dim rows that wouldn't trigger alerts
+                row.style.opacity = '0.4';
+                row.style.transition = 'opacity 0.1s ease-out';
+                row.setAttribute('data-alert-dimmed', 'true');
             } else {
-                // Would trigger alerts - keep visible
+                // Light up rows that would trigger alerts
                 row.style.opacity = '';
                 row.style.transition = '';
                 row.removeAttribute('data-alert-dimmed');
-                if (hasIndividualSettings) {
-                    row.setAttribute('data-alert-mixed', 'true');
-                } else {
-                    row.removeAttribute('data-alert-mixed');
-                }
             }
             
-            // Apply granular cell-level dimming/undimming for mixed rows
-            if (hasIndividualSettings) {
-                updateCellStyling(row, guestId, guestThresholds);
-            }
-        });
-        
-        // Update reset button visibility based on whether there are any custom values
-        updateResetButtonVisibility(hasAnyCustomValues);
-    }
-    
-    // Apply dimming to individual cells based on which metrics have custom values
-    function updateCellStyling(row, guestId, guestThresholds) {
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 11) return;
-        
-        
-        // Map metric types to cell indices: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
-        const metricCells = {
-            'cpu': cells[4],
-            'memory': cells[5], 
-            'disk': cells[6],
-            'diskread': cells[7],
-            'diskwrite': cells[8],
-            'netin': cells[9],
-            'netout': cells[10]
-        };
-        
-        // Check if this row has mixed values
-        const isMixedRow = row.hasAttribute('data-alert-mixed');
-        
-        if (isMixedRow) {
-            // For mixed rows, apply cell-specific opacity
-            Object.entries(metricCells).forEach(([metricType, cell]) => {
-                if (!cell) return;
-                
-                const hasCustomValue = guestThresholds[metricType] !== undefined;
-                
-                if (hasCustomValue) {
-                    // This specific metric has a custom value - full opacity
-                    cell.style.opacity = '1';
-                    cell.style.transition = 'opacity 0.1s ease-out';
-                    cell.setAttribute('data-alert-custom', 'true');
-                } else {
-                    // This metric uses global value - dim it
-                    cell.style.opacity = '0.4';
-                    cell.style.transition = 'opacity 0.1s ease-out';
-                    cell.removeAttribute('data-alert-custom');
-                }
-            });
-            
-            // Also dim non-metric cells in mixed rows
-            for (let i = 0; i < 4; i++) { // name, type, id, uptime
-                if (cells[i]) {
-                    cells[i].style.opacity = '0.4';
-                    cells[i].style.transition = 'opacity 0.1s ease-out';
-                }
-            }
-        } else {
-            // For non-mixed rows, clear all cell-specific styling
+            // Clear any cell-level styling
+            const cells = row.querySelectorAll('td');
             cells.forEach(cell => {
                 cell.style.opacity = '';
                 cell.style.transition = '';
                 cell.removeAttribute('data-alert-custom');
             });
+            
+            // Remove mixed row attributes (no longer used)
+            row.removeAttribute('data-alert-mixed');
+        });
+        
+        // Update reset button visibility based on whether there are any custom values
+        updateResetButtonVisibility(hasAnyCustomValues);
+        
+        // Update alerts count badge
+        updateAlertsCountBadge();
+    }
+    
+    function updateAlertsCountBadge() {
+        const alertsBadge = document.getElementById('alerts-count-badge');
+        if (!alertsBadge || !isAlertsMode) {
+            if (alertsBadge) {
+                alertsBadge.classList.add('hidden');
+            }
+            return;
+        }
+        
+        // Count guests that would trigger alerts
+        let alertsCount = 0;
+        const dashboardData = PulseApp.state?.get('dashboardData') || [];
+        if (dashboardData.length > 0 && mainTable) {
+            const tableBody = mainTable.querySelector('tbody');
+            if (tableBody) {
+                const rows = tableBody.querySelectorAll('tr[data-id]');
+                rows.forEach(row => {
+                    const guestId = row.getAttribute('data-id');
+                    const guestThresholds = guestAlertThresholds[guestId] || {};
+                    
+                    if (checkGuestWouldTriggerAlerts(guestId, guestThresholds)) {
+                        alertsCount++;
+                    }
+                });
+            }
+        }
+        
+        // Update badge
+        alertsBadge.textContent = alertsCount;
+        if (alertsCount > 0) {
+            alertsBadge.classList.remove('hidden');
+        } else {
+            alertsBadge.classList.add('hidden');
         }
     }
+    
     
     function updateResetButtonVisibility(hasCustomValues) {
         const resetButton = document.getElementById('reset-global-thresholds');
@@ -561,34 +578,24 @@ PulseApp.ui.alerts = (() => {
         const tableBody = mainTable.querySelector('tbody');
         if (!tableBody) return;
         
-        // Aggressively clear ALL alert-related styling from all rows and cells
+        // Clear ALL alert-related styling from all rows and cells
         const rows = tableBody.querySelectorAll('tr[data-id]');
         rows.forEach(row => {
-            // Disable transitions temporarily to prevent flash
-            row.style.transition = 'none';
+            // Clear row-level styling immediately
+            row.style.opacity = '';
+            row.style.transition = '';
+            row.removeAttribute('data-alert-dimmed');
+            row.removeAttribute('data-alert-mixed');
             
-            // Clear ALL cell-level styling first
+            // Clear ALL cell-level styling
             const allCells = row.querySelectorAll('td');
             allCells.forEach(cell => {
-                cell.style.transition = 'none';
                 cell.style.opacity = '';
+                cell.style.transition = '';
                 cell.style.backgroundColor = '';
                 cell.style.borderLeft = '';
                 cell.removeAttribute('data-alert-custom');
             });
-            
-            // Then set row-level styling
-            row.style.opacity = '0.4'; // Apply dimming immediately
-            row.setAttribute('data-alert-dimmed', 'true'); // Mark as properly dimmed
-            row.removeAttribute('data-alert-mixed');
-            
-            // Re-enable transitions after a brief delay
-            setTimeout(() => {
-                row.style.transition = 'opacity 0.1s ease-out';
-                allCells.forEach(cell => {
-                    cell.style.transition = '';
-                });
-            }, 10);
         });
     }
 
@@ -827,6 +834,8 @@ PulseApp.ui.alerts = (() => {
             type: 'per_guest_thresholds',
             globalThresholds: globalThresholds,
             guestThresholds: guestAlertThresholds,
+            alertLogic: alertLogic,
+            duration: alertDuration,
             notifications: {
                 dashboard: true
             },
@@ -909,6 +918,17 @@ PulseApp.ui.alerts = (() => {
                     guestAlertThresholds = config.guestThresholds;
                 }
                 
+                // Alert logic is now fixed to OR (dropdown removed)
+                
+                // Load alert duration
+                if (config.duration) {
+                    alertDuration = config.duration;
+                    const alertDurationSelect = document.getElementById('alert-duration-select');
+                    if (alertDurationSelect) {
+                        alertDurationSelect.value = alertDuration.toString();
+                    }
+                }
+                
                 
                 console.log('Alert configuration loaded successfully');
                 
@@ -962,7 +982,7 @@ PulseApp.ui.alerts = (() => {
         clearAllAlerts: clearAllAlerts,
         updateGuestThreshold: updateGuestThreshold,
         updateRowStylingOnly: updateRowStylingOnly,
-        updateCellStyling: updateCellStyling,
-        getActiveAlertsForGuest: getActiveAlertsForGuest
+        getActiveAlertsForGuest: getActiveAlertsForGuest,
+        loadSavedConfiguration: loadSavedConfiguration
     };
 })();
