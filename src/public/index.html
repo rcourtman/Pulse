@@ -544,6 +544,14 @@
             border-width: 0.5px;
         }
     }
+    
+    /* Instant mode switching - no transitions during mode changes */
+    body.switching-modes #main-table tr {
+        transition: none !important;
+    }
+    body.switching-modes #main-table td {
+        transition: none !important;
+    }
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
@@ -626,24 +634,6 @@
                     </span>
                   </label>
                   <label class="relative">
-                    <input type="checkbox" id="toggle-thresholds-checkbox" class="hidden peer">
-                    <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
-                        <line x1="4" y1="21" x2="4" y2="14"></line>
-                        <line x1="4" y1="10" x2="4" y2="3"></line>
-                        <line x1="12" y1="21" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12" y2="3"></line>
-                        <line x1="20" y1="21" x2="20" y2="16"></line>
-                        <line x1="20" y1="12" x2="20" y2="3"></line>
-                        <line x1="1" y1="14" x2="7" y2="14"></line>
-                        <line x1="9" y1="8" x2="15" y2="8"></line>
-                        <line x1="17" y1="16" x2="23" y2="16"></line>
-                      </svg>
-                      <span class="hidden md:inline">Thresholds</span>
-                    </span>
-                    <span id="threshold-count-badge" class="absolute -top-1 -right-1 z-30 inline-flex items-center justify-center px-1 py-0.5 text-[9px] font-bold leading-none text-white bg-blue-600 rounded-full hidden">0</span>
-                  </label>
-                  <label class="relative">
                     <input type="checkbox" id="toggle-alerts-checkbox" class="hidden peer">
                     <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
@@ -711,8 +701,6 @@
             </div>
           </div>
 
-
-
           <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
             <!-- Mobile scroll hint -->
             <div class="fixed bottom-4 right-4 bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-full md:hidden animate-pulse shadow-lg z-50 pointer-events-none" id="scroll-hint" style="display: none;">
@@ -746,7 +734,7 @@
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
                 </tr>
-                <tr id="threshold-slider-row" class="hidden mt-3 p-3 border rounded-md bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-600">
+                <tr id="threshold-slider-row" class="bg-blue-50 dark:bg-blue-900/20">
                   <td class="sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 py-1 px-2 align-middle border-r border-blue-300 dark:border-blue-600">
                     <div class="flex items-center justify-between">
                       <span class="text-xs text-blue-700 dark:text-blue-300">Filters</span>
@@ -820,17 +808,6 @@
                           Reset
                         </button>
                       </div>
-                      <div class="flex items-center justify-between">
-                        <span class="text-xs text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">Duration</span>
-                        <select id="alert-duration-select" class="text-xs bg-blue-50 dark:bg-blue-900/20 border border-blue-300 dark:border-blue-600 rounded px-1 py-0.5 text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">
-                          <option value="0" selected>Instant</option>
-                          <option value="10000">10s</option>
-                          <option value="30000">30s</option>
-                          <option value="60000">1m</option>
-                          <option value="300000">5m</option>
-                          <option value="600000">10m</option>
-                        </select>
-                      </div>
                     </div>
                   </td>
                   <td class="py-1 px-2 align-middle">-</td>
@@ -853,7 +830,30 @@
             </table>
           </div>
 
-          <span id="dashboard-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading dashboard data...</span>
+          <!-- Alert Mode Controls -->
+          <div id="alert-mode-controls" class="hidden mt-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4">
+                <span class="text-xs text-blue-700 dark:text-blue-300 font-medium">Alert Settings</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-xs text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">Duration:</span>
+                  <select id="alert-duration-select" class="text-xs bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded px-2 py-1 text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">
+                    <option value="0" selected>Instant</option>
+                    <option value="10000">10s</option>
+                    <option value="30000">30s</option>
+                    <option value="60000">1m</option>
+                    <option value="300000">5m</option>
+                    <option value="600000">10m</option>
+                  </select>
+                </div>
+              </div>
+              <div class="text-xs text-blue-600 dark:text-blue-400">
+                <span>Alerts triggered when any threshold is exceeded</span>
+              </div>
+            </div>
+          </div>
+
+          <span id="dashboard-status-text" class="text-xs text-gray-500 dark:text-gray-400 mt-2">Loading dashboard data...</span>
 
           <!-- Separator -->
           <hr class="border-gray-200 dark:border-gray-700 my-2">
