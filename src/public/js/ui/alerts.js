@@ -50,22 +50,12 @@ PulseApp.ui.alerts = (() => {
         }
 
 
-        // Make sure charts and thresholds toggles are mutually exclusive with alerts
+        // Make sure charts toggle is mutually exclusive with alerts
         const chartsToggle = document.getElementById('toggle-charts-checkbox');
-        const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
         
         if (chartsToggle) {
             chartsToggle.addEventListener('change', () => {
                 if (chartsToggle.checked && isAlertsMode) {
-                    alertsToggle.checked = false;
-                    handleAlertsToggle();
-                }
-            });
-        }
-        
-        if (thresholdsToggle) {
-            thresholdsToggle.addEventListener('change', () => {
-                if (thresholdsToggle.checked && isAlertsMode) {
                     alertsToggle.checked = false;
                     handleAlertsToggle();
                 }
@@ -76,23 +66,27 @@ PulseApp.ui.alerts = (() => {
     function handleAlertsToggle() {
         isAlertsMode = alertsToggle.checked;
         
+        // Add class to disable transitions during switch
+        document.body.classList.add('switching-modes');
+        
         // Disable other modes when alerts is enabled
         if (isAlertsMode) {
             const chartsToggle = document.getElementById('toggle-charts-checkbox');
-            const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
             
             if (chartsToggle && chartsToggle.checked) {
                 chartsToggle.checked = false;
                 chartsToggle.dispatchEvent(new Event('change'));
             }
-            
-            if (thresholdsToggle && thresholdsToggle.checked) {
-                thresholdsToggle.checked = false;
-                thresholdsToggle.dispatchEvent(new Event('change'));
-            }
         }
         
         updateAlertsMode();
+        
+        // Remove class after mode switch is complete
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                document.body.classList.remove('switching-modes');
+            });
+        });
     }
     
     
@@ -106,23 +100,48 @@ PulseApp.ui.alerts = (() => {
 
     function updateAlertsMode() {
         if (!globalAlertThresholds || !mainTable) return;
+        
+        // Get the alert mode controls container
+        const alertModeControls = document.getElementById('alert-mode-controls');
+        // Get the main threshold row
+        const thresholdRow = document.getElementById('threshold-slider-row');
 
         if (isAlertsMode) {
+            // Hide the main threshold row
+            if (thresholdRow) {
+                thresholdRow.classList.add('hidden');
+            }
+            
             // Show global thresholds row
             globalAlertThresholds.classList.remove('hidden');
+            
+            // Show alert mode controls
+            if (alertModeControls) {
+                alertModeControls.classList.remove('hidden');
+            }
             
             // Add alerts mode class to body for CSS targeting
             document.body.classList.add('alerts-mode');
             
-            // Transform table to show threshold inputs instead of values
+            // First apply dimming immediately to prevent flash
+            applyAlertDimmingFast();
+            
+            // Then transform table to show threshold inputs
             transformTableToAlertsMode();
             
-            // Apply initial row styling like threshold system
-            updateRowStylingOnly();
-            
         } else {
+            // Show the main threshold row
+            if (thresholdRow) {
+                thresholdRow.classList.remove('hidden');
+            }
+            
             // Hide global thresholds row
             globalAlertThresholds.classList.add('hidden');
+            
+            // Hide alert mode controls
+            if (alertModeControls) {
+                alertModeControls.classList.add('hidden');
+            }
             
             // Remove alerts mode class
             document.body.classList.remove('alerts-mode');
@@ -135,6 +154,11 @@ PulseApp.ui.alerts = (() => {
             
             // Hide alerts count badge
             updateAlertsCountBadge();
+            
+            // Re-apply threshold filtering when exiting alerts mode
+            if (PulseApp.ui.thresholds && PulseApp.ui.thresholds.applyThresholdDimmingNow) {
+                PulseApp.ui.thresholds.applyThresholdDimmingNow();
+            }
         }
     }
 
@@ -621,6 +645,37 @@ PulseApp.ui.alerts = (() => {
                 cell.style.borderLeft = '';
                 cell.removeAttribute('data-alert-custom');
             });
+        });
+    }
+    
+    function applyAlertDimmingFast() {
+        const tableBody = mainTable.querySelector('tbody');
+        if (!tableBody) return;
+        
+        const rows = tableBody.querySelectorAll('tr[data-id]');
+        
+        // Single pass: directly transition from threshold to alert styling
+        rows.forEach(row => {
+            const guestId = row.getAttribute('data-id');
+            const guestThresholds = guestAlertThresholds[guestId] || {};
+            
+            // Remove threshold attributes
+            row.removeAttribute('data-dimmed');
+            row.style.transition = '';
+            
+            // Check if this guest would trigger alerts
+            const wouldTriggerAlerts = checkGuestWouldTriggerAlerts(guestId, guestThresholds);
+            
+            // Apply or maintain opacity based on alert state
+            if (!wouldTriggerAlerts) {
+                // Keep dimmed (or apply dimming if not already)
+                row.style.opacity = '0.4';
+                row.setAttribute('data-alert-dimmed', 'true');
+            } else {
+                // Only clear opacity if row should be visible
+                row.style.opacity = '';
+                row.removeAttribute('data-alert-dimmed');
+            }
         });
     }
 
