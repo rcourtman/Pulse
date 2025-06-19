@@ -3320,10 +3320,10 @@ Pulse Monitoring System`,
             
             const globalThresholds = thresholdConfig.globalThresholds || {};
             const guestThresholds = thresholdConfig.guestThresholds || {};
+            const alertDuration = thresholdConfig.duration || 0; // Get duration from config
             const timestamp = Date.now();
             
             // Process each guest and bundle all their metric alerts
-            console.log(`[AlertManager] Processing ${allGuestMetrics.size} guests for bundled alerts`);
             for (const [guestKey, guestMetrics] of allGuestMetrics.entries()) {
                 const guest = guestMetrics.current;
                 if (!guest || !guest.name) {
@@ -3331,7 +3331,7 @@ Pulse Monitoring System`,
                     continue;
                 }
                 
-                this.evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics);
+                this.evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics, alertDuration);
             }
             
         } catch (error) {
@@ -3344,13 +3344,11 @@ Pulse Monitoring System`,
     /**
      * Evaluate all metrics for a guest and create one bundled alert
      */
-    evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics = null) {
+    evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics = null, alertDuration = 0) {
         // Get threshold for this guest
         const guestKey = `${guest.endpointId || 'unknown'}-${guest.node}-${guest.vmid}`;
         const guestSpecificThresholds = guestThresholds[guestKey] || {};
         
-        // Debug to see if this function is being called
-        console.log(`[AlertManager] Evaluating bundled alerts for ${guest.name}`);
         
         // Check all metrics for this guest
         const metrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
@@ -3376,7 +3374,7 @@ Pulse Monitoring System`,
             ).join(', ');
             
             if (!existingAlert) {
-                // Create new bundled alert
+                // Create new bundled alert in pending state
                 const newAlert = {
                     id: this.generateAlertId(),
                     rule: {
@@ -3386,14 +3384,16 @@ Pulse Monitoring System`,
                         group: 'guest_bundled',
                         tags: ['bundled', ...exceededMetrics.map(m => m.metricType)],
                         type: 'guest_bundled',
-                        autoResolve: true
+                        autoResolve: true,
+                        duration: alertDuration
                     },
                     guest: this.createSafeGuestCopy(guest),
                     metric: 'bundled',
                     exceededMetrics: exceededMetrics,
                     metricsCount: exceededMetrics.length,
-                    triggeredAt: timestamp,
-                    state: 'active',
+                    startTime: timestamp,
+                    lastUpdate: timestamp,
+                    state: 'pending', // Start in pending state
                     acknowledged: false,
                     message: `${alertName}: ${metricsDetail}`,
                     notificationChannels: ['dashboard'],
@@ -3402,29 +3402,52 @@ Pulse Monitoring System`,
                 };
                 
                 this.activeAlerts.set(alertKey, newAlert);
-                console.log(`[AlertManager] Created bundled alert for ${guest.name}: ${exceededMetrics.length} metrics exceeded`);
-                
-                // Emit alert event
-                this.emit('alert', newAlert);
-            } else {
-                // Update existing bundled alert
+                console.log(`[AlertManager] Created pending bundled alert for ${guest.name}: ${exceededMetrics.length} metrics exceeded`);
+            } else if (existingAlert.state === 'pending') {
+                // Check if duration threshold is met
+                const elapsedTime = timestamp - existingAlert.startTime;
+                if (elapsedTime >= alertDuration) {
+                    // Trigger the alert
+                    existingAlert.state = 'active';
+                    existingAlert.triggeredAt = timestamp;
+                    existingAlert.exceededMetrics = exceededMetrics;
+                    existingAlert.metricsCount = exceededMetrics.length;
+                    existingAlert.message = `${alertName}: ${metricsDetail}`;
+                    existingAlert.rule.tags = ['bundled', ...exceededMetrics.map(m => m.metricType)];
+                    
+                    console.log(`[AlertManager] Triggered bundled alert for ${guest.name} after ${elapsedTime}ms`);
+                    
+                    // Emit alert event
+                    this.emit('alert', existingAlert);
+                } else {
+                    // Update pending alert with current data
+                    existingAlert.lastUpdate = timestamp;
+                    existingAlert.exceededMetrics = exceededMetrics;
+                    existingAlert.metricsCount = exceededMetrics.length;
+                    existingAlert.message = `${alertName}: ${metricsDetail}`;
+                    existingAlert.rule.tags = ['bundled', ...exceededMetrics.map(m => m.metricType)];
+                }
+            } else if (existingAlert.state === 'active') {
+                // Update existing active alert
                 existingAlert.rule.name = alertName;
                 existingAlert.exceededMetrics = exceededMetrics;
                 existingAlert.metricsCount = exceededMetrics.length;
-                existingAlert.triggeredAt = timestamp; // Always use current timestamp
+                existingAlert.lastUpdate = timestamp;
                 existingAlert.message = `${alertName}: ${metricsDetail}`;
                 existingAlert.rule.tags = ['bundled', ...exceededMetrics.map(m => m.metricType)];
             }
         } else {
             // No thresholds exceeded - resolve alert if it exists
-            if (existingAlert && existingAlert.state === 'active') {
+            if (existingAlert && (existingAlert.state === 'active' || existingAlert.state === 'pending')) {
                 existingAlert.state = 'resolved';
                 existingAlert.resolvedAt = timestamp;
                 
                 console.log(`[AlertManager] Resolved bundled alert for ${guest.name}`);
                 
-                // Emit resolved event
-                this.emit('alertResolved', existingAlert);
+                // Emit resolved event if it was active
+                if (existingAlert.state === 'active') {
+                    this.emit('alertResolved', existingAlert);
+                }
                 
                 // Remove from active alerts
                 this.activeAlerts.delete(alertKey);
@@ -3454,10 +3477,6 @@ Pulse Monitoring System`,
             return null;
         }
         
-        // Debug for I/O metrics
-        if (metricType.includes('disk') || metricType.includes('net')) {
-            console.log(`[AlertManager] ${guest.name} ${metricType}: ${Math.round(currentValue/1024/1024*100)/100} MB/s vs threshold ${Math.round(threshold/1024/1024*100)/100} MB/s`);
-        }
         
         // Check if threshold is exceeded
         const isExceeded = currentValue >= threshold;
