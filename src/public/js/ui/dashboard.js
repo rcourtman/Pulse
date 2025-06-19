@@ -623,8 +623,10 @@ PulseApp.ui.dashboard = (() => {
                 let nodeHeader = nodeHeaders.get(nodeName);
                 if (!nodeHeader) {
                     // Create new node header
-                    nodeHeader = document.createElement('tr');
-                    nodeHeader.className = 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs';
+                    nodeHeader = PulseApp.ui.common.createTableRow({
+                        classes: 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs border-b border-gray-300 dark:border-gray-600',
+                        baseClasses: '' // Override base classes for node headers
+                    });
                     nodeHeader.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td');
                 }
                 
@@ -790,7 +792,11 @@ PulseApp.ui.dashboard = (() => {
         
         // Ensure name cell keeps sticky styling even after row class updates
         if (cells[0]) {
-            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0';
+            // Preserve the existing content while updating classes
+            const content = cells[0].innerHTML;
+            const title = cells[0].title;
+            const newCell = PulseApp.ui.common.createStickyColumn(content, { title });
+            cells[0].className = newCell.className;
         }
         if (cells.length >= 10) {
             // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
@@ -1381,11 +1387,7 @@ PulseApp.ui.dashboard = (() => {
     }
 
     function createGuestRow(guest) {
-        const row = document.createElement('tr');
-        
-        // Apply dimming based on active mode
-        const baseClasses = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
-        row.className = baseClasses;
+        const row = PulseApp.ui.common.createTableRow();
         
         // Check if alerts mode is active
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
@@ -1513,25 +1515,28 @@ PulseApp.ui.dashboard = (() => {
             }
         }
 
-        row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0" title="${guest.name}">
-                <div class="flex items-center gap-1">
-                    <span>${guest.name}</span>
-                    ${alertIndicator}
-                    ${thresholdIndicator}
-                </div>
-            </td>
-            <td class="py-1 px-2 align-middle">${typeIcon}</td>
-            <td class="py-1 px-2 align-middle">${guest.vmid}</td>
-            <td class="py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>
-            <td class="py-1 px-2 align-middle">${cpuBarHTML}</td>
-            <td class="py-1 px-2 align-middle">${memoryBarHTML}</td>
-            <td class="py-1 px-2 align-middle">${diskBarHTML}</td>
-            <td class="py-1 px-2 align-middle">${diskReadCell}</td>
-            <td class="py-1 px-2 align-middle">${diskWriteCell}</td>
-            <td class="py-1 px-2 align-middle">${netInCell}</td>
-            <td class="py-1 px-2 align-middle">${netOutCell}</td>
+        // Create sticky name column
+        const nameContent = `
+            <div class="flex items-center gap-1">
+                <span>${guest.name}</span>
+                ${alertIndicator}
+                ${thresholdIndicator}
+            </div>
         `;
+        const stickyNameCell = PulseApp.ui.common.createStickyColumn(nameContent, { title: guest.name });
+        row.appendChild(stickyNameCell);
+        
+        // Create regular cells
+        row.appendChild(PulseApp.ui.common.createTableCell(typeIcon));
+        row.appendChild(PulseApp.ui.common.createTableCell(guest.vmid));
+        row.appendChild(PulseApp.ui.common.createTableCell(uptimeDisplay, 'py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis'));
+        row.appendChild(PulseApp.ui.common.createTableCell(cpuBarHTML));
+        row.appendChild(PulseApp.ui.common.createTableCell(memoryBarHTML));
+        row.appendChild(PulseApp.ui.common.createTableCell(diskBarHTML));
+        row.appendChild(PulseApp.ui.common.createTableCell(diskReadCell));
+        row.appendChild(PulseApp.ui.common.createTableCell(diskWriteCell));
+        row.appendChild(PulseApp.ui.common.createTableCell(netInCell));
+        row.appendChild(PulseApp.ui.common.createTableCell(netOutCell));
         
         // Setup event listeners for alert sliders and dropdowns
         if (isAlertsMode) {

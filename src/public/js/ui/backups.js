@@ -1084,8 +1084,7 @@ PulseApp.ui.backups = (() => {
     }
 
     function _renderBackupTableRow(guestStatus) {
-        const row = document.createElement('tr');
-        row.className = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
+        const row = PulseApp.ui.common.createTableRow();
         row.dataset.guestId = guestStatus.guestId;
         row.id = `backup-row-${guestStatus.guestId}`; // Add ID for row tracking
 
@@ -1149,23 +1148,30 @@ PulseApp.ui.backups = (() => {
         // Create namespace cell
         const namespaceCell = guestStatus.pbsNamespaceText || '-';
 
-        row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100" title="${guestStatus.guestName}">
-                <div class="flex items-center gap-1">
-                    <span>${guestStatus.guestName}</span>
-                    ${thresholdIndicator}
-                </div>
-            </td>
-            <td class="p-1 px-2 text-gray-500 dark:text-gray-400">${guestStatus.guestId}</td>
-            <td class="p-1 px-2">${typeIcon}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${guestStatus.node}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${namespaceCell}</td>
-            <td class="p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400">${latestBackupFormatted}</td>
-            <td class="p-1 px-2 text-center">${snapshotCell}</td>
-            <td class="p-1 px-2 text-center">${pveBackupCell}</td>
-            <td class="p-1 px-2 text-center">${pbsBackupCell}</td>
-            <td class="p-1 px-2 text-center">${failuresCell}</td>
+        // Create sticky guest name column
+        const guestNameContent = `
+            <div class="flex items-center gap-1">
+                <span>${guestStatus.guestName}</span>
+                ${thresholdIndicator}
+            </div>
         `;
+        const stickyGuestCell = PulseApp.ui.common.createStickyColumn(guestNameContent, {
+            title: guestStatus.guestName,
+            additionalClasses: 'text-gray-900 dark:text-gray-100',
+            padding: 'p-1 px-2'
+        });
+        row.appendChild(stickyGuestCell);
+        
+        // Create regular cells
+        row.appendChild(PulseApp.ui.common.createTableCell(guestStatus.guestId, 'p-1 px-2 text-gray-500 dark:text-gray-400'));
+        row.appendChild(PulseApp.ui.common.createTableCell(typeIcon, 'p-1 px-2'));
+        row.appendChild(PulseApp.ui.common.createTableCell(guestStatus.node, 'p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400'));
+        row.appendChild(PulseApp.ui.common.createTableCell(namespaceCell, 'p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400'));
+        row.appendChild(PulseApp.ui.common.createTableCell(latestBackupFormatted, 'p-1 px-2 whitespace-nowrap text-gray-500 dark:text-gray-400'));
+        row.appendChild(PulseApp.ui.common.createTableCell(snapshotCell, 'p-1 px-2 text-center'));
+        row.appendChild(PulseApp.ui.common.createTableCell(pveBackupCell, 'p-1 px-2 text-center'));
+        row.appendChild(PulseApp.ui.common.createTableCell(pbsBackupCell, 'p-1 px-2 text-center'));
+        row.appendChild(PulseApp.ui.common.createTableCell(failuresCell, 'p-1 px-2 text-center'));
         return row;
     }
 

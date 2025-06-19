@@ -31,6 +31,7 @@
 
 ## Service Management
 **systemd service** with hot reloading enabled. File changes auto-restart.
+- Port: `7655` (Pulse web interface)
 - Status: `systemctl status pulse`
 - Logs: `journalctl -u pulse -f`
 - Never use `npm start` - service handles it
