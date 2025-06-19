@@ -1371,7 +1371,7 @@ PulseApp.ui.dashboard = (() => {
         }
         
         // Simple alert indicator without severity levels
-        const iconColor = 'bg-red-500';
+        const iconColor = 'bg-amber-500';
         const alertDetails = `${activeAlerts.length} alert${activeAlerts.length > 1 ? 's' : ''}`;
         
         const totalText = activeAlerts.length > 1 ? ` (${activeAlerts.length} total)` : '';
@@ -1661,7 +1661,7 @@ PulseApp.ui.dashboard = (() => {
                 <div class="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
                     <div class="flex items-start justify-between mb-2">
                         <div class="flex-1">
-                            <h4 class="font-semibold text-gray-900 dark:text-gray-100 text-red-600 dark:text-red-400">
+                            <h4 class="font-semibold text-gray-900 dark:text-gray-100 text-amber-600 dark:text-amber-400">
                                 ${alert.name || 'Unknown Alert'}
                             </h4>
                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">

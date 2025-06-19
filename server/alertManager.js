@@ -2577,6 +2577,235 @@ class AlertManager extends EventEmitter {
     /**
      * Send email notification using environment configuration
      */
+    /**
+     * Generate unified email HTML template
+     * @param {Object} options - Email template options
+     * @param {string} options.type - Type of email: 'alert', 'test', or 'test-alert'
+     * @param {Object} options.data - Data for the email template
+     * @returns {string} HTML email content
+     */
+    generateEmailTemplate(options) {
+        const { type, data } = options;
+        const timestamp = new Date();
+        
+        // Common header for all emails
+        const header = `
+            <div style="background: linear-gradient(135deg, #1f2937, #111827); color: white; padding: 24px; border-bottom: 3px solid #2563eb;">
+                <div style="margin-bottom: 12px;">
+                    <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.025em;">Pulse</h1>
+                    <div style="font-size: 12px; opacity: 0.7; margin-top: 2px;">Alert Notification System</div>
+                </div>
+                <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; padding: 12px;">
+                    <h2 style="margin: 0; font-size: 16px; font-weight: 500;">${data.title}</h2>
+                    <div style="font-size: 13px; opacity: 0.8; margin-top: 4px;">${data.subtitle}</div>
+                </div>
+            </div>
+        `;
+        
+        // Common footer for all emails
+        const footer = `
+            <div style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); padding: 16px; border-top: 1px solid #e5e7eb;">
+                <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #6b7280;">
+                    <div>
+                        <div style="color: #374151; font-weight: 600;">Pulse Monitoring System</div>
+                        <div style="margin-top: 1px;">${data.fromEmail} → ${data.toEmail}</div>
+                    </div>
+                    <div style="text-align: right; font-family: monospace; font-size: 11px;">
+                        <div style="color: #2563eb; font-weight: 500;">SMTP: ${data.smtpHost}:${data.smtpPort}</div>
+                        <div style="margin-top: 2px; color: #94a3b8;">${timestamp.toISOString().split('T')[0]} • ${timestamp.toISOString().split('T')[1].split('.')[0]}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        let content = '';
+        
+        if (type === 'alert') {
+            // Real alert content
+            const alert = data.alert;
+            const statusColor = alert.type === 'triggered' ? '#dc2626' : '#10b981';
+            const statusIcon = alert.type === 'triggered' ? '🚨' : '✅';
+            const statusText = alert.type === 'triggered' ? 'Alert Triggered' : 'Alert Resolved';
+            
+            content = `
+                <!-- Alert Status Banner -->
+                <div style="background: ${alert.type === 'triggered' ? '#fef2f2' : '#f0fdf4'}; border-left: 4px solid ${statusColor}; padding: 12px 16px; margin-bottom: 24px;">
+                    <p style="margin: 0; color: #374151; font-size: 14px;">
+                        <strong>${statusIcon} ${statusText}:</strong> ${alert.description || 'Monitoring threshold exceeded'}
+                    </p>
+                </div>
+                
+                <!-- System and Timestamp Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Target System</h3>
+                        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px;">
+                            <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${alert.guestName}</div>
+                            <div style="font-size: 13px; color: #6b7280;">${alert.guestType.toUpperCase()} ${alert.guestId} • ${alert.node}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Timestamp</h3>
+                        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px;">
+                            <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${timestamp.toLocaleDateString()}</div>
+                            <div style="font-size: 13px; color: #6b7280;">${timestamp.toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Metrics Details -->
+                <div style="margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Alert Details</h3>
+                    <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px;">
+                        ${alert.metrics && alert.metrics.length > 0 ? 
+                            // For bundled alerts with multiple metrics
+                            alert.metrics.map((m, index) => `
+                                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0;${index < alert.metrics.length - 1 ? ' border-bottom: 1px solid #e5e7eb;' : ''}">
+                                    <span style="font-weight: 500; color: #374151; min-width: 100px;">${m.name}</span>
+                                    <div style="text-align: right;">
+                                        <span style="font-family: monospace; color: ${alert.type === 'triggered' ? '#dc2626' : '#10b981'}; font-weight: 600; margin-right: 8px;">${m.value}</span>
+                                        <span style="font-family: monospace; color: #6b7280; font-size: 13px;">(threshold: ${m.threshold})</span>
+                                    </div>
+                                </div>
+                            `).join('') :
+                            // For single metric alerts
+                            `<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                <span style="font-weight: 500; color: #374151;">Metric</span>
+                                <span style="font-family: monospace; color: #6b7280;">${alert.metric}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                                <span style="font-weight: 500; color: #374151;">Current Value</span>
+                                <span style="font-family: monospace; color: ${alert.type === 'triggered' ? '#dc2626' : '#10b981'}; font-weight: 600;">${alert.currentValue}</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+                                <span style="font-weight: 500; color: #374151;">Threshold</span>
+                                <span style="font-family: monospace; color: #6b7280;">${alert.threshold}</span>
+                            </div>`
+                        }
+                    </div>
+                </div>
+                
+                <!-- Additional Info -->
+                ${alert.additionalInfo ? `
+                <div style="background: #eff6ff; border: 1px solid #dbeafe; border-radius: 6px; padding: 16px; margin-bottom: 24px;">
+                    <p style="margin: 0; color: #1e40af; font-size: 14px;">${alert.additionalInfo}</p>
+                </div>
+                ` : ''}
+            `;
+        } else if (type === 'test') {
+            // Simple test email content
+            content = `
+                <!-- Test Notice -->
+                <div style="background: #f0fdf4; border-left: 4px solid #10b981; padding: 12px 16px; margin-bottom: 24px;">
+                    <p style="margin: 0; color: #374151; font-size: 14px;">
+                        <strong>✅ Test Successful:</strong> Email configuration is working correctly
+                    </p>
+                </div>
+                
+                <!-- Configuration Details -->
+                <div style="margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Configuration Details</h3>
+                    <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                            <span style="font-weight: 500; color: #374151;">SMTP Host</span>
+                            <span style="font-family: monospace; color: #6b7280;">${data.smtpHost}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                            <span style="font-weight: 500; color: #374151;">SMTP Port</span>
+                            <span style="font-family: monospace; color: #6b7280;">${data.smtpPort}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
+                            <span style="font-weight: 500; color: #374151;">From Address</span>
+                            <span style="font-family: monospace; color: #6b7280;">${data.fromEmail}</span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+                            <span style="font-weight: 500; color: #374151;">To Address</span>
+                            <span style="font-family: monospace; color: #6b7280;">${data.toEmail}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Success Message -->
+                <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 6px; padding: 16px; color: white;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <div style="width: 6px; height: 6px; background: #34d399; border-radius: 50%;"></div>
+                        <span style="font-weight: 600;">Email System Verified</span>
+                    </div>
+                    <p style="margin: 0; opacity: 0.9; font-size: 14px;">
+                        Your email notifications are configured correctly. You will receive alerts at this address when monitoring thresholds are exceeded.
+                    </p>
+                </div>
+            `;
+        } else if (type === 'test-alert') {
+            // Test alert email content
+            const testAlert = data.testAlert;
+            content = `
+                <!-- Test Notice -->
+                <div style="background: #f8fafc; border-left: 4px solid #f59e0b; padding: 12px 16px; margin-bottom: 24px;">
+                    <p style="margin: 0; color: #374151; font-size: 14px;">
+                        <strong>Test Notification:</strong> Verifying alert configuration for ${testAlert.description || 'monitoring rule'}
+                    </p>
+                </div>
+                
+                <!-- Alert Overview -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Target System</h3>
+                        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px;">
+                            <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${testAlert.guestName}</div>
+                            <div style="font-size: 13px; color: #6b7280;">${testAlert.guestType.toUpperCase()} ${testAlert.guestId} • ${testAlert.node}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Timestamp</h3>
+                        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px;">
+                            <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${timestamp.toLocaleDateString()}</div>
+                            <div style="font-size: 13px; color: #6b7280;">${timestamp.toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Thresholds -->
+                <div style="margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Alert Thresholds</h3>
+                    <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px;">
+                        ${testAlert.thresholds && testAlert.thresholds.length > 0 ? 
+                            testAlert.thresholds.map((t, index) => 
+                                `<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;${index < testAlert.thresholds.length - 1 ? ' border-bottom: 1px solid #e5e7eb;' : ''}">
+                                    <span style="font-weight: 500; color: #374151;">${(t.metric || t.type || 'unknown').charAt(0).toUpperCase() + (t.metric || t.type || 'unknown').slice(1)}</span>
+                                    <span style="font-family: monospace; color: #6b7280;">≥ ${t.threshold || t.value}%</span>
+                                </div>`
+                            ).join('') :
+                            '<div style="color: #6b7280; text-align: center; padding: 16px;">No thresholds configured</div>'
+                        }
+                    </div>
+                </div>
+                
+                <!-- Status -->
+                <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 6px; padding: 16px; color: white;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <div style="width: 6px; height: 6px; background: #34d399; border-radius: 50%;"></div>
+                        <span style="font-weight: 600;">Email Configuration Verified</span>
+                    </div>
+                    <p style="margin: 0; opacity: 0.9; font-size: 14px;">
+                        Alert notifications are working correctly. Real alerts will be delivered using this configuration when thresholds are exceeded.
+                    </p>
+                </div>
+            `;
+        }
+        
+        // Combine all parts
+        return `
+            <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #ffffff;">
+                ${header}
+                <div style="padding: 24px;">
+                    ${content}
+                </div>
+                ${footer}
+            </div>
+        `;
+    }
+
     async sendDirectEmailNotification(alert) {
         if (!this.emailTransporter) {
             throw new Error('Email transporter not configured');
@@ -2595,6 +2824,7 @@ class AlertManager extends EventEmitter {
         
         // Format values for display - handle both single values and compound objects
         let valueDisplay, thresholdDisplay, metricDisplay;
+        let metricsArray = null; // For bundled alerts
         
         console.log(`[AlertManager] Email alert details - metric: ${alert.metric}, exceededMetrics: ${alert.exceededMetrics ? alert.exceededMetrics.length : 'undefined'}, rule.type: ${alert.rule?.type}`);
         console.log(`[AlertManager] Alert object keys:`, Object.keys(alert));
@@ -2604,7 +2834,7 @@ class AlertManager extends EventEmitter {
             // Handle bundled alerts (per-guest threshold system)
             console.log(`[AlertManager] Formatting bundled alert email with ${alert.exceededMetrics.length} exceeded metrics`);
             console.log(`[AlertManager] Exceeded metrics:`, JSON.stringify(alert.exceededMetrics));
-            const metrics = alert.exceededMetrics.map(m => {
+            metricsArray = alert.exceededMetrics.map(m => {
                 const isPercentage = ['cpu', 'memory', 'disk'].includes(m.metricType);
                 const formattedValue = typeof m.currentValue === 'number' ? Math.round(m.currentValue * 10) / 10 : m.currentValue;
                 const formattedThreshold = typeof m.threshold === 'number' ? Math.round(m.threshold * 10) / 10 : m.threshold;
@@ -2615,9 +2845,9 @@ class AlertManager extends EventEmitter {
                 };
             });
             
-            metricDisplay = metrics.map(m => m.name).join(', ');
-            valueDisplay = metrics.map(m => `${m.name}: ${m.value}`).join(', ');
-            thresholdDisplay = metrics.map(m => `${m.name}: >${m.threshold}`).join(', ');
+            metricDisplay = metricsArray.map(m => m.name).join(', ');
+            valueDisplay = metricsArray.map(m => m.value).join(', ');
+            thresholdDisplay = metricsArray.map(m => `>${m.threshold}`).join(', ');
             console.log(`[AlertManager] Bundled alert formatted - metricDisplay: ${metricDisplay}, valueDisplay: ${valueDisplay}, thresholdDisplay: ${thresholdDisplay}`);
         } else if (alert.rule.type === 'compound_threshold' && typeof currentValue === 'object' && currentValue !== null) {
             // Format compound threshold values
@@ -2649,63 +2879,43 @@ class AlertManager extends EventEmitter {
             metricDisplay = alert.rule.metric ? alert.rule.metric.toUpperCase() : 'N/A';
         }
 
+        // Get email configuration
+        const config = await this.loadEmailConfig();
+        const fromEmail = this.emailConfig?.from || process.env.ALERT_FROM_EMAIL || 'alerts@pulse-monitoring.local';
+        const toEmailAddresses = recipients.join(', ');
+        const smtpHost = config.host || process.env.SMTP_HOST || 'localhost';
+        const smtpPort = config.port || process.env.SMTP_PORT || '587';
+        
         const subject = `🚨 Pulse Alert: ${alert.rule.name}`;
         
         console.log(`[AlertManager] Final email values - metricDisplay: "${metricDisplay}", valueDisplay: "${valueDisplay}", thresholdDisplay: "${thresholdDisplay}"`);
         
-        const html = `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <div style="background: #dc2626; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-                    <h1 style="margin: 0; font-size: 24px;">🚨 ${alert.rule.name}</h1>
-                    <p style="margin: 5px 0 0 0; opacity: 0.9; font-size: 16px;">Alert Triggered</p>
-                </div>
-                
-                <div style="background: #f9fafb; padding: 20px; border-left: 4px solid #dc2626;">
-                    <h2 style="margin: 0 0 15px 0; color: #374151;">Alert Details</h2>
-                    
-                    <table style="width: 100%; border-collapse: collapse;">
-                        <tr>
-                            <td style="padding: 8px 0; font-weight: bold; color: #374151; width: 120px;">VM/LXC:</td>
-                            <td style="padding: 8px 0; color: #6b7280;">${alert.guest.name} (${alert.guest.type} ${alert.guest.vmid})</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Node:</td>
-                            <td style="padding: 8px 0; color: #6b7280;">${alert.guest.node}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Metric:</td>
-                            <td style="padding: 8px 0; color: #6b7280;">${metricDisplay}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Current Value:</td>
-                            <td style="padding: 8px 0; color: #6b7280;">${valueDisplay}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Threshold:</td>
-                            <td style="padding: 8px 0; color: #6b7280;">${thresholdDisplay}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Status:</td>
-                            <td style="padding: 8px 0; color: #6b7280;">${alert.guest.status}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 8px 0; font-weight: bold; color: #374151;">Time:</td>
-                            <td style="padding: 8px 0; color: #6b7280;">${new Date(this.getValidTimestamp(alert)).toLocaleString()}</td>
-                        </tr>
-                    </table>
-                </div>
-                
-                <div style="background: white; padding: 20px; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e7eb;">
-                    <p style="margin: 0; color: #6b7280; font-size: 14px;">
-                        <strong>Description:</strong> ${alert.rule.description || 'Alert triggered for the specified conditions'}
-                    </p>
-                    <p style="margin: 15px 0 0 0; color: #9ca3af; font-size: 12px;">
-                        This alert was generated by Pulse monitoring system. 
-                        Please check your Proxmox dashboard for more details.
-                    </p>
-                </div>
-            </div>
-        `;
+        // Use the unified template
+        const html = this.generateEmailTemplate({
+            type: 'alert',
+            data: {
+                title: alert.rule.name,
+                subtitle: 'Alert notification',
+                fromEmail: fromEmail,
+                toEmail: toEmailAddresses,
+                smtpHost: smtpHost,
+                smtpPort: smtpPort,
+                alert: {
+                    type: 'triggered',
+                    description: alert.rule.description,
+                    guestName: alert.guest.name,
+                    guestType: alert.guest.type,
+                    guestId: alert.guest.vmid,
+                    node: alert.guest.node,
+                    metric: metricDisplay,
+                    currentValue: valueDisplay,
+                    threshold: thresholdDisplay,
+                    metrics: metricsArray, // For bundled alerts
+                    status: alert.guest.status,
+                    timestamp: this.getValidTimestamp(alert)
+                }
+            }
+        });
 
         const text = `
 PULSE ALERT: ${alert.rule.name}
@@ -3026,6 +3236,19 @@ This alert was generated by Pulse monitoring system.
                 return { success: false, error: 'No recipient email address configured' };
             }
 
+            // Use the unified template
+            const html = this.generateEmailTemplate({
+                type: 'test',
+                data: {
+                    title: 'Test Email',
+                    subtitle: 'Email configuration test',
+                    fromEmail: config.ALERT_FROM_EMAIL || 'noreply@pulse.local',
+                    toEmail: config.ALERT_TO_EMAIL,
+                    smtpHost: config.SMTP_HOST || 'localhost',
+                    smtpPort: config.SMTP_PORT || '587'
+                }
+            });
+            
             const testEmailOptions = {
                 from: config.ALERT_FROM_EMAIL || 'noreply@pulse.local',
                 to: config.ALERT_TO_EMAIL,
@@ -3045,29 +3268,7 @@ Configuration used:
 
 Best regards,
 Pulse Monitoring System`,
-                html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-    <h2 style="color: #3b82f6;">Pulse Alert System - Test Email</h2>
-    <p>This is a test email from your Pulse monitoring system.</p>
-    
-    <div style="background-color: #f3f4f6; padding: 15px; border-radius: 5px; margin: 20px 0;">
-        <strong>Test Details:</strong><br>
-        <strong>Sent at:</strong> ${new Date().toISOString()}<br>
-        <strong>From:</strong> ${require('os').hostname()}<br><br>
-        <strong>Configuration used:</strong><br>
-        <strong>SMTP Host:</strong> ${config.SMTP_HOST}<br>
-        <strong>SMTP Port:</strong> ${config.SMTP_PORT}<br>
-        <strong>From:</strong> ${config.ALERT_FROM_EMAIL}<br>
-        <strong>To:</strong> ${config.ALERT_TO_EMAIL}
-    </div>
-    
-    <p style="color: #16a34a;"><strong>✅ Success!</strong> If you received this email, your email configuration is working correctly!</p>
-    
-    <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;">
-    <p style="color: #6b7280; font-size: 12px;">
-        Best regards,<br>
-        Pulse Monitoring System
-    </p>
-</div>`
+                html: html
             };
 
             await this.emailTransporter.sendMail(testEmailOptions);
@@ -3129,88 +3330,25 @@ Configuration used:
 
 Best regards,
 Pulse Monitoring System`,
-                html: `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #ffffff;">
-    <!-- Header -->
-    <div style="background: linear-gradient(135deg, #1f2937, #111827); color: white; padding: 24px; border-bottom: 3px solid #2563eb;">
-        <div style="margin-bottom: 12px;">
-            <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.025em;">Pulse</h1>
-            <div style="font-size: 12px; opacity: 0.7; margin-top: 2px;">Alert Notification System</div>
-        </div>
-        <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 6px; padding: 12px;">
-            <h2 style="margin: 0; font-size: 16px; font-weight: 500;">${alertName}</h2>
-            <div style="font-size: 13px; opacity: 0.8; margin-top: 4px;">Test notification • Configuration verification</div>
-        </div>
-    </div>
-
-    <!-- Content -->
-    <div style="padding: 24px;">
-        <!-- Test Notice -->
-        <div style="background: #f8fafc; border-left: 4px solid #f59e0b; padding: 12px 16px; margin-bottom: 24px;">
-            <p style="margin: 0; color: #374151; font-size: 14px;">
-                <strong>Test Notification:</strong> Verifying alert configuration for ${testAlert.rule.description || 'monitoring rule'}
-            </p>
-        </div>
-
-        <!-- Alert Overview -->
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
-            <div>
-                <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Target System</h3>
-                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px;">
-                    <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${testAlert.guest.name}</div>
-                    <div style="font-size: 13px; color: #6b7280;">${testAlert.guest.type.toUpperCase()} ${testAlert.guest.vmid} • ${testAlert.guest.node}</div>
-                </div>
-            </div>
-            <div>
-                <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Timestamp</h3>
-                <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 12px;">
-                    <div style="font-weight: 600; color: #111827; margin-bottom: 4px;">${new Date().toLocaleDateString()}</div>
-                    <div style="font-size: 13px; color: #6b7280;">${new Date().toLocaleTimeString()}</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Thresholds -->
-        <div style="margin-bottom: 24px;">
-            <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Alert Thresholds</h3>
-            <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px;">
-                ${testAlert.rule.thresholds && testAlert.rule.thresholds.length > 0 ? 
-                    testAlert.rule.thresholds.map(t => 
-                        `<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb;">
-                            <span style="font-weight: 500; color: #374151;">${(t.metric || t.type || 'unknown').charAt(0).toUpperCase() + (t.metric || t.type || 'unknown').slice(1)}</span>
-                            <span style="font-family: monospace; color: #6b7280;">≥ ${t.threshold || t.value}%</span>
-                        </div>`
-                    ).join('').replace(/border-bottom: 1px solid #e5e7eb;(?=[^>]*>(?!.*<div))/g, '') :
-                    '<div style="color: #6b7280; text-align: center; padding: 16px;">No thresholds configured</div>'
-                }
-            </div>
-        </div>
-
-        <!-- Status -->
-        <div style="background: linear-gradient(135deg, #10b981, #059669); border-radius: 6px; padding: 16px; color: white;">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                <div style="width: 6px; height: 6px; background: #34d399; border-radius: 50%;"></div>
-                <span style="font-weight: 600;">Email Configuration Verified</span>
-            </div>
-            <p style="margin: 0; opacity: 0.9; font-size: 14px;">
-                Alert notifications are working correctly. Real alerts will be delivered using this configuration when thresholds are exceeded.
-            </p>
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <div style="background: linear-gradient(135deg, #f8fafc, #f1f5f9); padding: 16px; border-top: 1px solid #e5e7eb;">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #6b7280;">
-            <div>
-                <div style="color: #374151; font-weight: 600;">Pulse Monitoring System</div>
-                <div style="margin-top: 1px;">${config.ALERT_FROM_EMAIL} → ${config.ALERT_TO_EMAIL}</div>
-            </div>
-            <div style="text-align: right; font-family: monospace; font-size: 11px;">
-                <div style="color: #2563eb; font-weight: 500;">SMTP: ${config.SMTP_HOST}:${config.SMTP_PORT}</div>
-                <div style="margin-top: 2px; color: #94a3b8;">${new Date().toISOString().split('T')[0]} • ${new Date().toISOString().split('T')[1].split('.')[0]}</div>
-            </div>
-        </div>
-    </div>
-</div>`
+                html: this.generateEmailTemplate({
+                    type: 'test-alert',
+                    data: {
+                        title: alertName,
+                        subtitle: 'Test notification • Configuration verification',
+                        fromEmail: config.ALERT_FROM_EMAIL || 'noreply@pulse.local',
+                        toEmail: config.ALERT_TO_EMAIL,
+                        smtpHost: config.SMTP_HOST || 'localhost',
+                        smtpPort: config.SMTP_PORT || '587',
+                        testAlert: {
+                            description: testAlert.rule.description,
+                            guestName: testAlert.guest.name,
+                            guestType: testAlert.guest.type,
+                            guestId: testAlert.guest.vmid,
+                            node: testAlert.guest.node,
+                            thresholds: testAlert.rule.thresholds
+                        }
+                    }
+                })
             };
 
             await this.emailTransporter.sendMail(testAlertEmailOptions);
