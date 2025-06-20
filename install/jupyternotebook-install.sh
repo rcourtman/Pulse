@@ -22,6 +22,9 @@ $STD uv venv /opt/jupyter/.venv
 $STD /opt/jupyter/.venv/bin/python -m ensurepip --upgrade
 $STD /opt/jupyter/.venv/bin/python -m pip install --upgrade pip
 $STD /opt/jupyter/.venv/bin/python -m pip install jupyter
+ln -s /opt/jupyter/.venv/bin/jupyter /usr/local/bin/jupyter
+ln -s /opt/jupyter/.venv/bin/jupyter-lab /usr/local/bin/jupyter-lab
+ln -s /opt/jupyter/.venv/bin/jupyter-notebook /usr/local/bin/jupyter-notebook
 msg_ok "Installed Jupyter"
 
 msg_info "Creating Service"
