@@ -1393,25 +1393,22 @@ PulseApp.ui.dashboard = (() => {
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
         
         if (isAlertsMode) {
-            // Apply alert-specific dimming with granular cell control
+            // Apply alert-specific dimming based on whether guest has custom settings
             const allGuestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
             const guestThresholds = allGuestThresholds[guest.id] || {};
             const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
             
-            if (!hasIndividualSettings) {
-                // Using only global alert values - dim the whole row
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-            } else {
-                // Has some individual settings - mark as mixed for later cell styling
+            // New behavior: Light up rows that have custom alert settings
+            if (hasIndividualSettings) {
+                // Light up rows with custom settings
                 row.style.opacity = '';
                 row.style.transition = '';
                 row.removeAttribute('data-alert-dimmed');
-                row.setAttribute('data-alert-mixed', 'true'); // Mark as having mixed values
-                
-                // Note: Cell styling will be applied after row HTML is complete
-                row.setAttribute('data-needs-cell-styling', JSON.stringify(guestThresholds));
+            } else {
+                // Dim rows using only default settings
+                row.style.opacity = '0.4';
+                row.style.transition = 'opacity 0.1s ease-out';
+                row.setAttribute('data-alert-dimmed', 'true');
             }
         } else if (guest.meetsThresholds === false && document.getElementById('toggle-thresholds-checkbox')?.checked) {
             // Apply threshold dimming (only when threshold mode is enabled)
@@ -1541,44 +1538,6 @@ PulseApp.ui.dashboard = (() => {
         // Setup event listeners for alert sliders and dropdowns
         if (isAlertsMode) {
             _setupAlertEventListeners(row);
-            
-            // Apply cell styling if this row needs it (mixed values)
-            if (row.hasAttribute('data-needs-cell-styling')) {
-                const guestThresholds = JSON.parse(row.getAttribute('data-needs-cell-styling'));
-                const cells = row.querySelectorAll('td');
-                
-                if (cells.length >= 11) {
-                    // Map metric types to cell indices
-                    const metricCells = {
-                        'cpu': cells[4], 'memory': cells[5], 'disk': cells[6],
-                        'diskread': cells[7], 'diskwrite': cells[8], 'netin': cells[9], 'netout': cells[10]
-                    };
-                    
-                    // Apply cell-specific opacity immediately
-                    Object.entries(metricCells).forEach(([metricType, cell]) => {
-                        if (!cell) return;
-                        const hasCustomValue = guestThresholds[metricType] !== undefined;
-                        cell.style.opacity = hasCustomValue ? '1' : '0.4';
-                        cell.style.transition = 'opacity 0.1s ease-out';
-                        if (hasCustomValue) {
-                            cell.setAttribute('data-alert-custom', 'true');
-                        } else {
-                            cell.removeAttribute('data-alert-custom');
-                        }
-                    });
-                    
-                    // Dim non-metric cells
-                    for (let i = 0; i < 4; i++) {
-                        if (cells[i]) {
-                            cells[i].style.opacity = '0.4';
-                            cells[i].style.transition = 'opacity 0.1s ease-out';
-                        }
-                    }
-                }
-                
-                // Clean up the temporary attribute
-                row.removeAttribute('data-needs-cell-styling');
-            }
         }
         
         return row;
