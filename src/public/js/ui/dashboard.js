@@ -60,7 +60,7 @@ PulseApp.ui.dashboard = (() => {
         const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
         
         return `
-            <div class="${containerClass} h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
+            <div class="alert-threshold-input flex items-center" data-guest-id="${guestId}" data-metric="${metricType}">
                 ${sliderHtml}
             </div>
         `;
@@ -92,11 +92,8 @@ PulseApp.ui.dashboard = (() => {
             currentValue
         );
         
-        return `
-            <div class="alert-threshold-input h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}">
-                ${selectHtml}
-            </div>
-        `;
+        // Return just the select HTML without wrapper to match threshold styling
+        return selectHtml;
     }
 
     // Helper function to setup event listeners for alert sliders and dropdowns
