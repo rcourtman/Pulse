@@ -195,6 +195,7 @@ icons() {
   CREATING="${TAB}🚀${TAB}${CL}"
   ADVANCED="${TAB}🧩${TAB}${CL}"
   FUSE="${TAB}🗂️${TAB}${CL}"
+  HOURGLASS="${TAB}⏳${TAB}"
 }
 
 # ------------------------------------------------------------------------------
@@ -446,7 +447,7 @@ msg_info() {
   if [[ "${VERBOSE:-no}" == "no" && -t 2 ]]; then
     start_spinner "$msg"
   else
-    printf "\r\e[2K%s %b"${TAB}"" "⏳" "${YW}${msg}${CL}" >&2
+    printf "\r\e[2K%s %b" "$HOURGLASS" "${YW}${msg}${CL}" >&2
   fi
 }
 
