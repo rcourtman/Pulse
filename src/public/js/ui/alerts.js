@@ -44,13 +44,6 @@ PulseApp.ui.alerts = (() => {
         if (autoResolveToggle && autoResolve !== undefined) {
             autoResolveToggle.checked = autoResolve;
         }
-        
-        // Show/hide email cooldown settings based on initial email toggle state
-        const emailToggle = document.getElementById('alert-email-toggle');
-        const cooldownSettings = document.getElementById('email-cooldown-settings');
-        if (emailToggle && cooldownSettings) {
-            cooldownSettings.style.display = emailToggle.checked ? 'flex' : 'none';
-        }
     }
 
     function setupEventListeners() {
@@ -82,6 +75,18 @@ PulseApp.ui.alerts = (() => {
         const saveButton = document.getElementById('save-alert-config');
         if (saveButton) {
             saveButton.addEventListener('click', saveAlertConfig);
+        }
+        
+        // Test email button
+        const testEmailButton = document.getElementById('test-email-alert');
+        if (testEmailButton) {
+            testEmailButton.addEventListener('click', sendTestEmail);
+        }
+        
+        // Test webhook button
+        const testWebhookButton = document.getElementById('test-webhook-alert');
+        if (testWebhookButton) {
+            testWebhookButton.addEventListener('click', sendTestWebhook);
         }
         
         // Auto-resolve toggle
@@ -168,8 +173,9 @@ PulseApp.ui.alerts = (() => {
         // Show/hide email cooldown settings
         const cooldownSettings = document.getElementById('email-cooldown-settings');
         if (cooldownSettings) {
-            cooldownSettings.style.display = enabled ? 'flex' : 'none';
+            cooldownSettings.style.display = enabled ? 'block' : 'none';
         }
+        
         
         try {
             // Get current config
@@ -209,6 +215,13 @@ PulseApp.ui.alerts = (() => {
 
     async function handleWebhookToggle(event) {
         const enabled = event.target.checked;
+        
+        // Show/hide webhook cooldown settings
+        const cooldownSettings = document.getElementById('webhook-cooldown-settings');
+        if (cooldownSettings) {
+            cooldownSettings.style.display = enabled ? 'block' : 'none';
+        }
+        
         
         try {
             // Get current config
@@ -283,6 +296,19 @@ PulseApp.ui.alerts = (() => {
             
             // Update save message
             updateAlertSaveMessage();
+            
+            // Update cooldown settings visibility based on toggle states
+            const emailToggle = document.getElementById('alert-email-toggle');
+            const emailCooldownSettings = document.getElementById('email-cooldown-settings');
+            if (emailToggle && emailCooldownSettings) {
+                emailCooldownSettings.style.display = emailToggle.checked ? 'block' : 'none';
+            }
+            
+            const webhookToggle = document.getElementById('alert-webhook-toggle');
+            const webhookCooldownSettings = document.getElementById('webhook-cooldown-settings');
+            if (webhookToggle && webhookCooldownSettings) {
+                webhookCooldownSettings.style.display = webhookToggle.checked ? 'block' : 'none';
+            }
             
             // Add alerts mode class to body for CSS targeting
             document.body.classList.add('alerts-mode');
@@ -1126,10 +1152,15 @@ PulseApp.ui.alerts = (() => {
         const emailToggle = document.getElementById('alert-email-toggle');
         const webhookToggle = document.getElementById('alert-webhook-toggle');
         
-        // Get cooldown settings
+        // Get email cooldown settings
         const cooldownMinutes = document.getElementById('alert-cooldown-minutes');
         const debounceMinutes = document.getElementById('alert-debounce-minutes');
         const maxEmailsPerHour = document.getElementById('alert-max-emails-hour');
+        
+        // Get webhook cooldown settings
+        const webhookCooldownMinutes = document.getElementById('webhook-cooldown-minutes');
+        const webhookDebounceMinutes = document.getElementById('webhook-debounce-minutes');
+        const webhookMaxCallsPerHour = document.getElementById('webhook-max-calls-hour');
         
         const alertConfig = {
             type: 'per_guest_thresholds',
@@ -1148,6 +1179,11 @@ PulseApp.ui.alerts = (() => {
                 debounceMinutes: debounceMinutes ? parseInt(debounceMinutes.value) : 2,
                 maxEmailsPerHour: maxEmailsPerHour ? parseInt(maxEmailsPerHour.value) : 4
             },
+            webhookCooldowns: {
+                cooldownMinutes: webhookCooldownMinutes ? parseInt(webhookCooldownMinutes.value) : 5,
+                debounceMinutes: webhookDebounceMinutes ? parseInt(webhookDebounceMinutes.value) : 1,
+                maxCallsPerHour: webhookMaxCallsPerHour ? parseInt(webhookMaxCallsPerHour.value) : 10
+            },
             enabled: true,
             lastUpdated: new Date().toISOString()
         };
@@ -1163,6 +1199,12 @@ PulseApp.ui.alerts = (() => {
             
             if (response.ok && result.success) {
                 PulseApp.ui.toast?.success('Alert configuration saved');
+                
+                // Return to main dashboard view
+                if (alertsToggle && alertsToggle.checked) {
+                    alertsToggle.checked = false;
+                    handleAlertsToggle();
+                }
             } else {
                 PulseApp.ui.toast?.error('Failed to save alert configuration');
                 console.warn('Failed to save alert configuration:', result.error);
@@ -1266,11 +1308,35 @@ PulseApp.ui.alerts = (() => {
                     }
                 }
                 
+                // Load webhook cooldown settings
+                if (config.webhookCooldowns) {
+                    const webhookCooldownMinutes = document.getElementById('webhook-cooldown-minutes');
+                    const webhookDebounceMinutes = document.getElementById('webhook-debounce-minutes');
+                    const webhookMaxCallsPerHour = document.getElementById('webhook-max-calls-hour');
+                    
+                    if (webhookCooldownMinutes && config.webhookCooldowns.cooldownMinutes !== undefined) {
+                        webhookCooldownMinutes.value = config.webhookCooldowns.cooldownMinutes;
+                    }
+                    if (webhookDebounceMinutes && config.webhookCooldowns.debounceMinutes !== undefined) {
+                        webhookDebounceMinutes.value = config.webhookCooldowns.debounceMinutes;
+                    }
+                    if (webhookMaxCallsPerHour && config.webhookCooldowns.maxCallsPerHour !== undefined) {
+                        webhookMaxCallsPerHour.value = config.webhookCooldowns.maxCallsPerHour;
+                    }
+                }
+                
                 // Show/hide email cooldown settings based on email toggle state
                 const emailToggle = document.getElementById('alert-email-toggle');
-                const cooldownSettings = document.getElementById('email-cooldown-settings');
-                if (emailToggle && cooldownSettings) {
-                    cooldownSettings.style.display = emailToggle.checked ? 'flex' : 'none';
+                const emailCooldownSettings = document.getElementById('email-cooldown-settings');
+                if (emailToggle && emailCooldownSettings) {
+                    emailCooldownSettings.style.display = emailToggle.checked ? 'block' : 'none';
+                }
+                
+                // Show/hide webhook cooldown settings based on webhook toggle state
+                const webhookToggle = document.getElementById('alert-webhook-toggle');
+                const webhookCooldownSettings = document.getElementById('webhook-cooldown-settings');
+                if (webhookToggle && webhookCooldownSettings) {
+                    webhookCooldownSettings.style.display = webhookToggle.checked ? 'block' : 'none';
                 }
                 
                 console.log('Alert configuration loaded successfully');
@@ -1344,6 +1410,72 @@ PulseApp.ui.alerts = (() => {
             }
         } catch (error) {
             console.error('Failed to update notification status:', error);
+        }
+    }
+
+    async function sendTestEmail() {
+        const testButton = document.getElementById('test-email-alert');
+        const originalText = testButton?.textContent || 'Test Email';
+        
+        if (testButton) {
+            testButton.disabled = true;
+            testButton.textContent = 'Sending...';
+        }
+        
+        try {
+            const response = await fetch('/api/alerts/test-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                PulseApp.ui.toast?.success('Test email sent successfully');
+            } else {
+                PulseApp.ui.toast?.error(result.error || 'Failed to send test email');
+            }
+        } catch (error) {
+            console.error('Error sending test email:', error);
+            PulseApp.ui.toast?.error('Error sending test email');
+        } finally {
+            if (testButton) {
+                testButton.disabled = false;
+                testButton.textContent = originalText;
+            }
+        }
+    }
+    
+    async function sendTestWebhook() {
+        const testButton = document.getElementById('test-webhook-alert');
+        const originalText = testButton?.textContent || 'Test Webhook';
+        
+        if (testButton) {
+            testButton.disabled = true;
+            testButton.textContent = 'Sending...';
+        }
+        
+        try {
+            const response = await fetch('/api/alerts/test-webhook', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                PulseApp.ui.toast?.success('Test webhook sent successfully');
+            } else {
+                PulseApp.ui.toast?.error(result.error || 'Failed to send test webhook');
+            }
+        } catch (error) {
+            console.error('Error sending test webhook:', error);
+            PulseApp.ui.toast?.error('Error sending test webhook');
+        } finally {
+            if (testButton) {
+                testButton.disabled = false;
+                testButton.textContent = originalText;
+            }
         }
     }
 

@@ -33,6 +33,15 @@ class AlertManager extends EventEmitter {
             maxEmailsPerHour: parseInt(process.env.ALERT_MAX_EMAILS_PER_HOUR) || 4, // Max 4 emails per hour per alert
             enableFlappingDetection: process.env.ALERT_FLAPPING_DETECTION !== 'false' // Default enabled
         };
+        
+        // Webhook cooldown tracking
+        this.webhookCooldowns = new Map(); // Key: "ruleId-guestId-metric", Value: { lastSent, cooldownUntil }
+        this.webhookCooldownConfig = {
+            defaultCooldownMinutes: parseInt(process.env.ALERT_WEBHOOK_COOLDOWN_MINUTES) || 5, // Default 5 minutes
+            debounceDelayMinutes: parseInt(process.env.ALERT_WEBHOOK_DEBOUNCE_MINUTES) || 1, // Wait 1 minute before first webhook
+            maxCallsPerHour: parseInt(process.env.ALERT_WEBHOOK_MAX_CALLS_PER_HOUR) || 10 // Max 10 webhooks per hour per alert
+        };
+        
         this.perGuestCooldownConfig = null; // Will be loaded from per-guest threshold rule if present
         
         this.maxHistorySize = 10000; // Increased for better analytics
@@ -624,6 +633,14 @@ class AlertManager extends EventEmitter {
         const metric = alert.rule?.metric || 'unknown';
         return `${ruleId}-${guestId}-${metric}`;
     }
+    
+    getWebhookCooldownKey(alert) {
+        // Create a unique key for cooldown tracking per rule, guest, and metric
+        const ruleId = alert.rule?.id || 'unknown';
+        const guestId = `${alert.guest?.endpointId || 'unknown'}-${alert.guest?.node || 'unknown'}-${alert.guest?.vmid || 'unknown'}`;
+        const metric = alert.rule?.metric || 'unknown';
+        return `${ruleId}-${guestId}-${metric}`;
+    }
 
 
 
@@ -772,16 +789,78 @@ class AlertManager extends EventEmitter {
             console.log(`[AlertManager] NOT sending email notification for alert ${alert.id} - sendEmail: ${sendEmail}`);
         }
         
-        // Send webhook notification
+        // Send webhook notification with cooldown check
         if (sendWebhook) {
-            try {
-                await this.sendDirectWebhookNotification(alert);
-                console.log(`[AlertManager] Webhook notification sent successfully for alert ${alert.id}`);
-                statusUpdate.webhookSent = true;
-                statusUpdate.channels.push('webhook');
-            } catch (error) {
-                console.error(`[WEBHOOK ERROR] Failed to send webhook for alert ${alert.id}:`, error);
-                this.emit('notificationError', { type: 'webhook', alert, error });
+            // Check cooldown before sending webhook
+            const cooldownKey = this.getWebhookCooldownKey(alert);
+            const cooldownInfo = this.webhookCooldowns.get(cooldownKey);
+            const now = Date.now();
+            
+            // Use per-guest cooldown config if available, otherwise fall back to default
+            const cooldownConfig = this.perGuestCooldownConfig?.webhook || this.webhookCooldownConfig;
+            
+            if (cooldownInfo && now < cooldownInfo.cooldownUntil) {
+                const remainingMinutes = Math.ceil((cooldownInfo.cooldownUntil - now) / 60000);
+                console.log(`[AlertManager] Webhook cooldown active for alert ${alert.id} - ${remainingMinutes} minutes remaining`);
+                statusUpdate.webhookSkipped = true;
+                statusUpdate.webhookCooldownRemaining = remainingMinutes;
+            } else {
+                // Check if this is a new alert that should be debounced
+                const isNewAlert = !cooldownInfo || !cooldownInfo.lastSent;
+                if (isNewAlert && cooldownConfig.debounceDelayMinutes > 0) {
+                    // For new alerts, wait for debounce period before sending first webhook
+                    if (!cooldownInfo || !cooldownInfo.debounceStarted) {
+                        // Start debounce timer
+                        this.webhookCooldowns.set(cooldownKey, {
+                            debounceStarted: now,
+                            debounceUntil: now + (cooldownConfig.debounceDelayMinutes * 60000)
+                        });
+                        console.log(`[AlertManager] Starting ${cooldownConfig.debounceDelayMinutes} minute debounce for webhook alert ${alert.id}`);
+                        statusUpdate.webhookDebounced = true;
+                    } else if (now < cooldownInfo.debounceUntil) {
+                        // Still in debounce period
+                        const remainingSeconds = Math.ceil((cooldownInfo.debounceUntil - now) / 1000);
+                        console.log(`[AlertManager] Webhook debounce active for alert ${alert.id} - ${remainingSeconds} seconds remaining`);
+                        statusUpdate.webhookDebounced = true;
+                    }
+                }
+                
+                // Check rate limiting (calls per hour)
+                const oneHourAgo = now - 3600000;
+                const recentCalls = cooldownInfo?.callHistory?.filter(timestamp => timestamp > oneHourAgo) || [];
+                if (recentCalls.length >= cooldownConfig.maxCallsPerHour) {
+                    console.log(`[AlertManager] Webhook rate limit reached for alert ${alert.id} - ${recentCalls.length} calls made in last hour`);
+                    statusUpdate.webhookRateLimited = true;
+                }
+                
+                // Only send webhook if not debounced or rate limited
+                if (!statusUpdate.webhookDebounced && !statusUpdate.webhookRateLimited) {
+                    console.log(`[AlertManager] Sending webhook notification for alert ${alert.id}`);
+                    try {
+                        await this.sendDirectWebhookNotification(alert);
+                        console.log(`[AlertManager] Webhook notification sent successfully for alert ${alert.id}`);
+                        
+                        // Update cooldown tracking
+                        const callHistory = cooldownInfo?.callHistory || [];
+                        callHistory.push(now);
+                        // Keep only last 24 hours of history
+                        const oneDayAgo = now - 86400000;
+                        const recentHistory = callHistory.filter(timestamp => timestamp > oneDayAgo);
+                        
+                        this.webhookCooldowns.set(cooldownKey, {
+                            lastSent: now,
+                            cooldownUntil: now + (cooldownConfig.defaultCooldownMinutes * 60000),
+                            callHistory: recentHistory,
+                            debounceStarted: cooldownInfo?.debounceStarted || now
+                        });
+                        
+                        statusUpdate.webhookSent = true;
+                        statusUpdate.channels.push('webhook');
+                    } catch (error) {
+                        console.error(`[WEBHOOK ERROR] Failed to send webhook for alert ${alert.id}:`, error);
+                        this.emit('notificationError', { type: 'webhook', alert, error });
+                    }
+                }
             }
         }
         
@@ -1447,7 +1526,8 @@ class AlertManager extends EventEmitter {
     cleanupExpiredCooldowns() {
         const now = Date.now();
         const oneDayAgo = now - 86400000; // 24 hours
-        let cooldownsRemoved = 0;
+        let emailCooldownsRemoved = 0;
+        let webhookCooldownsRemoved = 0;
         
         // Clean up expired email cooldowns
         for (const [key, cooldownInfo] of this.emailCooldowns) {
@@ -1455,12 +1535,25 @@ class AlertManager extends EventEmitter {
             if (cooldownInfo.cooldownUntil < now && 
                 (!cooldownInfo.lastSent || cooldownInfo.lastSent < oneDayAgo)) {
                 this.emailCooldowns.delete(key);
-                cooldownsRemoved++;
+                emailCooldownsRemoved++;
             }
         }
         
-        if (cooldownsRemoved > 0) {
-            console.log(`[AlertManager] Cleaned up ${cooldownsRemoved} expired email cooldowns`);
+        // Clean up expired webhook cooldowns
+        for (const [key, cooldownInfo] of this.webhookCooldowns) {
+            // Remove cooldowns that have expired and haven't been used in 24 hours
+            if (cooldownInfo.cooldownUntil < now && 
+                (!cooldownInfo.lastSent || cooldownInfo.lastSent < oneDayAgo)) {
+                this.webhookCooldowns.delete(key);
+                webhookCooldownsRemoved++;
+            }
+        }
+        
+        if (emailCooldownsRemoved > 0) {
+            console.log(`[AlertManager] Cleaned up ${emailCooldownsRemoved} expired email cooldowns`);
+        }
+        if (webhookCooldownsRemoved > 0) {
+            console.log(`[AlertManager] Cleaned up ${webhookCooldownsRemoved} expired webhook cooldowns`);
         }
     }
 
@@ -2342,10 +2435,20 @@ class AlertManager extends EventEmitter {
             for (const [key, rule] of Object.entries(savedRules)) {
                 this.alertRules.set(key, rule);
                 
-                // Check if this is a per-guest thresholds rule with email cooldown settings
-                if (rule.type === 'per_guest_thresholds' && rule.emailCooldowns) {
-                    this.perGuestCooldownConfig = rule.emailCooldowns;
-                    console.log(`[AlertManager] Loaded email cooldown settings from per-guest thresholds rule:`, this.perGuestCooldownConfig);
+                // Check if this is a per-guest thresholds rule with cooldown settings
+                if (rule.type === 'per_guest_thresholds') {
+                    if (rule.emailCooldowns) {
+                        this.perGuestCooldownConfig = rule.emailCooldowns;
+                        console.log(`[AlertManager] Loaded email cooldown settings from per-guest thresholds rule:`, this.perGuestCooldownConfig);
+                    }
+                    if (rule.webhookCooldowns) {
+                        // Store webhook cooldowns in the perGuestCooldownConfig object
+                        if (!this.perGuestCooldownConfig) {
+                            this.perGuestCooldownConfig = {};
+                        }
+                        this.perGuestCooldownConfig.webhook = rule.webhookCooldowns;
+                        console.log(`[AlertManager] Loaded webhook cooldown settings from per-guest thresholds rule:`, this.perGuestCooldownConfig.webhook);
+                    }
                 }
             }
             
@@ -3388,6 +3491,69 @@ Pulse Monitoring System`,
         } catch (error) {
             console.error('[AlertManager] Error sending test email:', error);
             return { success: false, error: error.message };
+        }
+    }
+    
+    async sendTestWebhook() {
+        try {
+            console.log('[AlertManager] Sending test webhook...');
+            
+            const webhookUrl = process.env.WEBHOOK_URL;
+            if (!webhookUrl) {
+                return { success: false, error: 'No webhook URL configured' };
+            }
+            
+            // Create a test alert object
+            const testAlert = {
+                id: 'test-' + Date.now(),
+                rule: {
+                    id: 'test-rule',
+                    name: 'Test Alert',
+                    description: 'This is a test webhook notification'
+                },
+                guest: {
+                    name: 'Test VM',
+                    vmid: '999',
+                    node: 'test-node',
+                    type: 'qemu',
+                    endpointId: 'test-endpoint'
+                },
+                metric: 'test',
+                threshold: 0,
+                currentValue: 100,
+                triggeredAt: Date.now(),
+                duration: 0,
+                message: 'This is a test webhook from Pulse monitoring system',
+                type: 'test'
+            };
+            
+            // Send webhook without cooldown checks
+            const response = await axios.post(webhookUrl, {
+                event: 'test',
+                timestamp: new Date().toISOString(),
+                hostname: require('os').hostname(),
+                alert: testAlert,
+                message: 'Pulse Alert System - Test Webhook'
+            }, {
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Pulse-Alert-System/1.0'
+                }
+            });
+            
+            console.log('[AlertManager] Test webhook sent successfully, status:', response.status);
+            return { success: true };
+            
+        } catch (error) {
+            console.error('[AlertManager] Error sending test webhook:', error.message);
+            if (error.response) {
+                return { success: false, error: `Webhook returned ${error.response.status}: ${error.response.statusText}` };
+            } else if (error.request) {
+                return { success: false, error: 'No response from webhook URL' };
+            } else {
+                return { success: false, error: error.message };
+            }
         }
     }
 

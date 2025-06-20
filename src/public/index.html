@@ -1054,66 +1054,118 @@
           </div>
 
           <!-- Alert Mode Controls -->
-          <div id="alert-mode-controls" class="hidden mt-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
-            <div class="flex items-center justify-between">
-              <div class="flex items-center gap-4">
-                <span class="text-xs text-blue-700 dark:text-blue-300 font-medium">Alert Settings</span>
-                <div class="flex items-center gap-2">
-                  <span class="text-xs text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">Duration:</span>
-                  <select id="alert-duration-select" class="text-xs bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded px-2 py-1 text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">
-                    <option value="0" selected>Instant</option>
-                    <option value="10000">10s</option>
-                    <option value="30000">30s</option>
-                    <option value="60000">1m</option>
-                    <option value="300000">5m</option>
-                    <option value="600000">10m</option>
-                  </select>
-                </div>
-                <div class="flex items-center gap-4 ml-4">
-                  <label class="inline-flex items-center gap-2 cursor-pointer">
-                    <span class="text-xs text-blue-700 dark:text-blue-300">Email:</span>
-                    <input type="checkbox" id="alert-email-toggle" class="sr-only peer">
-                    <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                  </label>
-                  <label class="inline-flex items-center gap-2 cursor-pointer">
-                    <span class="text-xs text-blue-700 dark:text-blue-300">Webhook:</span>
-                    <input type="checkbox" id="alert-webhook-toggle" class="sr-only peer">
-                    <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                  </label>
-                  <label class="inline-flex items-center gap-2 cursor-pointer ml-4" title="Automatically clear alerts when thresholds return to normal">
+          <div id="alert-mode-controls" class="hidden mt-3 px-4 py-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
+            <!-- Main Controls -->
+            <div class="space-y-4">
+              <!-- Top row with main controls -->
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-6">
+                  <span class="text-sm text-blue-700 dark:text-blue-300 font-semibold">Alert Settings</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">Duration:</span>
+                    <select id="alert-duration-select" class="text-xs bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded px-2 py-1 text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">
+                      <option value="0" selected>Instant</option>
+                      <option value="10000">10s</option>
+                      <option value="30000">30s</option>
+                      <option value="60000">1m</option>
+                      <option value="300000">5m</option>
+                      <option value="600000">10m</option>
+                    </select>
+                  </div>
+                  <label class="inline-flex items-center gap-2 cursor-pointer" title="Automatically clear alerts when thresholds return to normal">
                     <span class="text-xs text-blue-700 dark:text-blue-300">Auto-resolve:</span>
                     <input type="checkbox" id="alert-auto-resolve-toggle" class="sr-only peer" checked>
                     <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
                   </label>
                 </div>
-              </div>
-              <!-- Email Cooldown Settings -->
-              <div class="flex items-center justify-between mt-2" id="email-cooldown-settings" style="display: none;">
-                <div class="flex items-center gap-3 text-xs">
-                  <span class="text-gray-600 dark:text-gray-400">Email Cooldowns:</span>
-                  <div class="flex items-center gap-2">
-                    <label class="flex items-center gap-1">
-                      <span class="text-gray-600 dark:text-gray-400">Cooldown:</span>
-                      <input type="number" id="alert-cooldown-minutes" min="1" max="120" value="15" class="w-12 px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                      <span class="text-gray-500 dark:text-gray-500">min</span>
-                    </label>
-                    <label class="flex items-center gap-1 ml-2">
-                      <span class="text-gray-600 dark:text-gray-400">Debounce:</span>
-                      <input type="number" id="alert-debounce-minutes" min="0" max="30" value="2" class="w-12 px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                      <span class="text-gray-500 dark:text-gray-500">min</span>
-                    </label>
-                    <label class="flex items-center gap-1 ml-2">
-                      <span class="text-gray-600 dark:text-gray-400">Max/hour:</span>
-                      <input type="number" id="alert-max-emails-hour" min="1" max="20" value="4" class="w-12 px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                    </label>
-                  </div>
+                <div class="flex items-center gap-3">
+                  <span id="alert-save-message" class="text-xs text-blue-600 dark:text-blue-400"></span>
+                  <button id="save-alert-config" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
+                    Save
+                  </button>
                 </div>
               </div>
-              <div class="flex items-center gap-3">
-                <span id="alert-save-message" class="text-xs text-blue-600 dark:text-blue-400"></span>
-                <button id="save-alert-config" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
-                  Save
-                </button>
+              
+              
+              <!-- Cooldown Settings in a grid layout -->
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <!-- Email Settings Card -->
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Email Notifications</h4>
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" id="alert-email-toggle" class="sr-only peer">
+                      <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div id="email-cooldown-settings" style="display: none;">
+                    <div class="space-y-3 mb-4">
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-cooldown-minutes">Time between emails:</label>
+                        <div class="flex items-center gap-1">
+                          <input type="number" id="alert-cooldown-minutes" min="1" max="120" value="15" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500">min</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-debounce-minutes">Wait before first email:</label>
+                        <div class="flex items-center gap-1">
+                          <input type="number" id="alert-debounce-minutes" min="0" max="30" value="2" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500">min</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-max-emails-hour">Max emails per hour:</label>
+                        <div class="flex items-center gap-1">
+                          <input type="number" id="alert-max-emails-hour" min="1" max="20" value="4" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500">/hr</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button id="test-email-alert" class="w-full px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors" title="Send a test email notification">
+                      Test Email
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Webhook Settings Card -->
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Webhook Notifications</h4>
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" id="alert-webhook-toggle" class="sr-only peer">
+                      <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div id="webhook-cooldown-settings" style="display: none;">
+                    <div class="space-y-3 mb-4">
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-cooldown-minutes">Time between webhooks:</label>
+                        <div class="flex items-center gap-1">
+                          <input type="number" id="webhook-cooldown-minutes" min="1" max="120" value="5" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500">min</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-debounce-minutes">Wait before first webhook:</label>
+                        <div class="flex items-center gap-1">
+                          <input type="number" id="webhook-debounce-minutes" min="0" max="30" value="1" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500">min</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-max-calls-hour">Max calls per hour:</label>
+                        <div class="flex items-center gap-1">
+                          <input type="number" id="webhook-max-calls-hour" min="1" max="50" value="10" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500">/hr</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button id="test-webhook-alert" class="w-full px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors" title="Send a test webhook notification">
+                      Test Webhook
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
