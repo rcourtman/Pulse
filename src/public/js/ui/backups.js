@@ -2660,15 +2660,61 @@ PulseApp.ui.backups = (() => {
                         if (dateData) {
                             currentSelectedDate = dateData.date;
                             
-                            // Calendar already provides filtered data, just pass it through
-                            // Mark it as calendar-filtered to use single-date view
-                            const calendarData = {
-                                ...dateData,
-                                isCalendarFiltered: true
+                            // Instead of using raw calendar data, get guests from our namespace-aware data
+                            const selectedDate = dateData.date;
+                            const guestsOnDate = [];
+                            
+                            // Find all guests that have backups on this date from our filtered data
+                            guestsForCalendar.forEach(guestStatus => {
+                                // Check if this guest has backups on the selected date
+                                const hasBackupOnDate = _guestHasBackupOnDate(guestStatus, selectedDate, extendedBackupData);
+                                
+                                if (hasBackupOnDate) {
+                                    // Include the namespace-aware guest data
+                                    guestsOnDate.push({
+                                        vmid: guestStatus.guestId,
+                                        name: guestStatus.guestName,
+                                        type: guestStatus.guestType,
+                                        node: guestStatus.node,
+                                        namespace: guestStatus.pbsNamespace || 'root',
+                                        namespaces: guestStatus.pbsNamespace ? [guestStatus.pbsNamespace] : ['root'],
+                                        pbsBackupInfo: guestStatus.pbsBackupInfo,
+                                        types: hasBackupOnDate.types,
+                                        backupCount: hasBackupOnDate.count
+                                    });
+                                }
+                            });
+                            
+                            // Create enhanced date data with namespace info
+                            const enhancedDateData = {
+                                date: selectedDate,
+                                backups: guestsOnDate,
+                                stats: {
+                                    totalGuests: guestsOnDate.length,
+                                    pbsCount: guestsOnDate.filter(g => g.types.includes('pbsSnapshots')).length,
+                                    pveCount: guestsOnDate.filter(g => g.types.includes('pveBackups')).length,
+                                    snapshotCount: guestsOnDate.filter(g => g.types.includes('vmSnapshots')).length,
+                                    failureCount: 0
+                                },
+                                isCalendarFiltered: true,
+                                namespaceFilter: namespaceFilter
                             };
                             
+                            // Debug: Log what we're sending
+                            console.log('[DEBUG] Calendar date clicked - enhanced:', {
+                                date: selectedDate,
+                                guestCount: guestsOnDate.length,
+                                namespaceFilter: namespaceFilter,
+                                guests: guestsOnDate.slice(0, 3).map(g => ({
+                                    vmid: g.vmid,
+                                    name: g.name,
+                                    namespace: g.namespace,
+                                    pbsInfo: g.pbsBackupInfo
+                                }))
+                            });
+                            
                             // Update immediately with instant flag
-                            PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, calendarData, true);
+                            PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, enhancedDateData, true);
                         } else {
                             currentSelectedDate = null;
                             
@@ -2711,17 +2757,21 @@ PulseApp.ui.backups = (() => {
                         onDateSelect,
                         isUserAction
                     );
+                    // Store current namespace filter on the calendar element
+                    calendarHeatmap.setAttribute('data-namespace-filter', namespaceFilter);
+                    
                     // Replace children instead of using innerHTML to avoid flash
                     while (calendarContainer.firstChild) {
                         calendarContainer.removeChild(calendarContainer.firstChild);
                     }
                     calendarContainer.appendChild(calendarHeatmap);
                 } else {
-                    // Check if namespace filter has changed by comparing filtered guest counts
+                    // Track the previous namespace filter to detect changes
                     const currentCalendar = calendarContainer.querySelector('.calendar-heatmap-container');
-                    const shouldRecreate = namespaceFilter !== 'all' && isUserAction;
+                    const previousNamespace = currentCalendar?.getAttribute('data-namespace-filter');
+                    const namespaceChanged = previousNamespace !== undefined && previousNamespace !== namespaceFilter;
                     
-                    if (shouldRecreate) {
+                    if (namespaceChanged && isUserAction) {
                         // Namespace filter changed - need to recreate calendar with new filteredGuestIds
                         const calendarHeatmap = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(
                             extendedBackupData, 
@@ -2730,6 +2780,9 @@ PulseApp.ui.backups = (() => {
                             onDateSelect,
                             isUserAction
                         );
+                        // Store current namespace filter on the calendar element
+                        calendarHeatmap.setAttribute('data-namespace-filter', namespaceFilter);
+                        
                         while (calendarContainer.firstChild) {
                             calendarContainer.removeChild(calendarContainer.firstChild);
                         }
@@ -3082,6 +3135,66 @@ PulseApp.ui.backups = (() => {
     }
     
     
+    function _guestHasBackupOnDate(guestStatus, dateString, backupData) {
+        const guestId = guestStatus.guestId.toString();
+        const types = [];
+        let count = 0;
+        
+        // Check PBS snapshots
+        if (guestStatus.pbsBackups > 0 && backupData.pbsSnapshots) {
+            backupData.pbsSnapshots.forEach(snap => {
+                const snapId = snap['backup-id'] || snap.backupVMID;
+                if (parseInt(snapId, 10) === parseInt(guestId, 10)) {
+                    const timestamp = snap['backup-time'];
+                    if (timestamp) {
+                        const snapDate = new Date(timestamp * 1000);
+                        const snapDateStr = snapDate.toISOString().split('T')[0];
+                        if (snapDateStr === dateString) {
+                            if (!types.includes('pbsSnapshots')) types.push('pbsSnapshots');
+                            count++;
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Check PVE backups
+        if (guestStatus.pveBackups > 0 && backupData.pveBackups) {
+            backupData.pveBackups.forEach(backup => {
+                if (parseInt(backup.vmid, 10) === parseInt(guestId, 10)) {
+                    const timestamp = backup.ctime || backup['backup-time'];
+                    if (timestamp) {
+                        const backupDate = new Date(timestamp * 1000);
+                        const backupDateStr = backupDate.toISOString().split('T')[0];
+                        if (backupDateStr === dateString) {
+                            if (!types.includes('pveBackups')) types.push('pveBackups');
+                            count++;
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Check VM snapshots
+        if (guestStatus.snapshotCount > 0 && backupData.vmSnapshots) {
+            backupData.vmSnapshots.forEach(snap => {
+                if (parseInt(snap.vmid, 10) === parseInt(guestId, 10)) {
+                    const timestamp = snap.snaptime;
+                    if (timestamp) {
+                        const snapDate = new Date(timestamp * 1000);
+                        const snapDateStr = snapDate.toISOString().split('T')[0];
+                        if (snapDateStr === dateString) {
+                            if (!types.includes('vmSnapshots')) types.push('vmSnapshots');
+                            count++;
+                        }
+                    }
+                }
+            });
+        }
+        
+        return count > 0 ? { types, count } : null;
+    }
+
     function _prepareMultiDateDetailData(filteredBackupStatus, backupData) {
         // Prepare data for multi-date detail view
         const multiDateBackups = [];

@@ -648,16 +648,6 @@ PulseApp.ui.calendarHeatmap = (() => {
                 if (source === 'pbsSnapshots' && namespaceFilter !== 'all') {
                     const itemNamespace = item.namespace || 'root';
                     
-                    // Debug what we're checking
-                    if (window._debugNamespaceFilter && vmid === '106') {
-                        console.log('DEBUG: Checking namespace for VMID 106:', {
-                            itemNamespace: itemNamespace,
-                            expectedNamespace: namespaceFilter,
-                            willSkip: itemNamespace !== namespaceFilter,
-                            item: item
-                        });
-                    }
-                    
                     if (itemNamespace !== namespaceFilter) {
                         // This snapshot is not in the selected namespace, skip it
                         return;
@@ -711,11 +701,19 @@ PulseApp.ui.calendarHeatmap = (() => {
                 }
                 
                 backupsByGuestAndDate[uniqueGuestKey][dateKey].types.add(source);
-                backupsByGuestAndDate[uniqueGuestKey][dateKey].backups.push({
+                
+                // Include namespace for PBS backups
+                const backupEntry = {
                     type: source,
                     time: date.toLocaleTimeString(), // Keep original timestamp for display
                     name: item.volid || item.name || item['backup-id'] || 'Backup'
-                });
+                };
+                
+                if (source === 'pbsSnapshots') {
+                    backupEntry.namespace = item.namespace || 'root';
+                }
+                
+                backupsByGuestAndDate[uniqueGuestKey][dateKey].backups.push(backupEntry);
             });
         });
         
@@ -789,9 +787,17 @@ PulseApp.ui.calendarHeatmap = (() => {
                     if (dateData[dateKey].endpointId && !existingGuest.endpointIds.includes(dateData[dateKey].endpointId)) {
                         existingGuest.endpointIds.push(dateData[dateKey].endpointId);
                     }
+                    
+                    // Merge namespaces
+                    if (!existingGuest.namespaces) existingGuest.namespaces = [];
+                    dateData[dateKey].backups.forEach(backup => {
+                        if (backup.namespace && !existingGuest.namespaces.includes(backup.namespace)) {
+                            existingGuest.namespaces.push(backup.namespace);
+                        }
+                    });
                 } else {
                     // Add new guest entry
-                    monthData[dateKey].guests.push({
+                    const guestEntry = {
                         vmid: vmid,
                         uniqueKey: uniqueGuestKey, // Include unique key for proper identification
                         name: guestInfo.name,
@@ -802,7 +808,20 @@ PulseApp.ui.calendarHeatmap = (() => {
                         endpointIds: dateData[dateKey].endpointId ? [dateData[dateKey].endpointId] : [],
                         types: Array.from(dateData[dateKey].types),
                         backupCount: dateData[dateKey].backups.length
+                    };
+                    
+                    // Include namespace information from backups
+                    const namespaces = new Set();
+                    dateData[dateKey].backups.forEach(backup => {
+                        if (backup.namespace) {
+                            namespaces.add(backup.namespace);
+                        }
                     });
+                    if (namespaces.size > 0) {
+                        guestEntry.namespaces = Array.from(namespaces);
+                    }
+                    
+                    monthData[dateKey].guests.push(guestEntry);
                 }
                 
                 dateData[dateKey].types.forEach(type => {
@@ -1250,11 +1269,19 @@ PulseApp.ui.calendarHeatmap = (() => {
                 }
                 
                 backupsByGuestAndDate[uniqueGuestKey][dateKey].types.add(source);
-                backupsByGuestAndDate[uniqueGuestKey][dateKey].backups.push({
+                
+                // Include namespace for PBS backups
+                const backupEntry = {
                     type: source,
                     time: date.toLocaleTimeString(), // Keep original timestamp for display
                     name: item.volid || item.name || item['backup-id'] || 'Backup'
-                });
+                };
+                
+                if (source === 'pbsSnapshots') {
+                    backupEntry.namespace = item.namespace || 'root';
+                }
+                
+                backupsByGuestAndDate[uniqueGuestKey][dateKey].backups.push(backupEntry);
             });
         });
         
@@ -1466,11 +1493,19 @@ PulseApp.ui.calendarHeatmap = (() => {
                 }
                 
                 backupsByGuestAndDate[uniqueGuestKey][dateKey].types.add(source);
-                backupsByGuestAndDate[uniqueGuestKey][dateKey].backups.push({
+                
+                // Include namespace for PBS backups
+                const backupEntry = {
                     type: source,
                     time: date.toLocaleTimeString(), // Keep original timestamp for display
                     name: item.volid || item.name || item['backup-id'] || 'Backup'
-                });
+                };
+                
+                if (source === 'pbsSnapshots') {
+                    backupEntry.namespace = item.namespace || 'root';
+                }
+                
+                backupsByGuestAndDate[uniqueGuestKey][dateKey].backups.push(backupEntry);
             });
         });
         

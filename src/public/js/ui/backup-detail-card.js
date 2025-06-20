@@ -719,10 +719,26 @@ PulseApp.ui.backupDetailCard = (() => {
             return getEmptyState(false);
         }
         
-        // Sort by guest name
-        const sortedBackups = [...backups].sort((a, b) => 
-            (a.name || a.vmid).localeCompare(b.name || b.vmid)
-        );
+        
+        // Sort by namespace first (if "all" namespaces selected), then by guest name
+        const namespaceFilter = data.namespaceFilter || 'all';
+        const sortedBackups = [...backups].sort((a, b) => {
+            if (namespaceFilter === 'all') {
+                // Sort by namespace path hierarchically
+                const aNamespace = a.namespace || 'root';
+                const bNamespace = b.namespace || 'root';
+                
+                // Root always comes first
+                if (aNamespace === 'root' && bNamespace !== 'root') return -1;
+                if (bNamespace === 'root' && aNamespace !== 'root') return 1;
+                
+                // For nested namespaces, sort by full path
+                const namespaceCompare = aNamespace.localeCompare(bNamespace);
+                if (namespaceCompare !== 0) return namespaceCompare;
+            }
+            // Then sort by name
+            return (a.name || a.vmid).localeCompare(b.name || b.vmid);
+        });
         
         return `
             <div class="flex flex-col h-full">
@@ -742,25 +758,54 @@ PulseApp.ui.backupDetailCard = (() => {
                 <!-- Guest List -->
                 <div class="flex-1 overflow-y-auto">
                     <div class="space-y-0.5">
-                        ${sortedBackups.map(backup => {
-                            // Get filtered backup types and counts based on active filter
-                            const filteredBackupData = getFilteredSingleDateBackupData(backup, filterInfo);
-                            
-                            return `
-                                <div class="flex items-center justify-between px-1 py-0.5 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded">
-                                    <div class="flex items-center gap-1 min-w-0">
-                                        <span class="text-[9px] font-medium ${backup.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${backup.type}</span>
-                                        <span class="font-mono text-gray-600 dark:text-gray-400">${backup.vmid}</span>
-                                        <span class="truncate text-gray-700 dark:text-gray-300">${backup.name}</span>
-                                    </div>
-                                    <div class="flex items-center gap-2 ml-2">
-                                        <div class="flex items-center gap-1 text-[9px]">
-                                            ${filteredBackupData.typeLabels}
+                        ${(() => {
+                            let currentNamespace = null;
+                            return sortedBackups.map(backup => {
+                                // Get filtered backup types and counts based on active filter
+                                const filteredBackupData = getFilteredSingleDateBackupData(backup, filterInfo);
+                                
+                                // Check if we need a namespace header
+                                const backupNamespace = backup.namespace || 'root';
+                                let namespaceHeader = '';
+                                
+                                if (namespaceFilter === 'all' && backupNamespace !== currentNamespace) {
+                                    currentNamespace = backupNamespace;
+                                    
+                                    // Calculate nesting level and format namespace path
+                                    const namespaceParts = currentNamespace.split('/');
+                                    const nestingLevel = namespaceParts.length - 1;
+                                    const displayName = namespaceParts[namespaceParts.length - 1];
+                                    const parentPath = namespaceParts.slice(0, -1).join('/');
+                                    
+                                    namespaceHeader = `
+                                        <div class="px-1 py-1 mt-2 ${currentNamespace !== sortedBackups[0].namespace ? 'border-t border-gray-200 dark:border-gray-700' : ''}">
+                                            <div class="flex items-center" style="padding-left: ${nestingLevel * 12}px">
+                                                ${nestingLevel > 0 ? '<span class="text-[10px] text-gray-400 dark:text-gray-500 mr-1">└─</span>' : ''}
+                                                <span class="text-[10px] font-semibold text-purple-700 dark:text-purple-400 uppercase">
+                                                    ${displayName}
+                                                </span>
+                                                ${parentPath ? `<span class="text-[9px] text-gray-500 dark:text-gray-400 ml-1">(in ${parentPath})</span>` : ''}
+                                            </div>
+                                        </div>
+                                    `;
+                                }
+                                
+                                return namespaceHeader + `
+                                    <div class="flex items-center justify-between px-1 py-0.5 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded">
+                                        <div class="flex items-center gap-1 min-w-0">
+                                            <span class="text-[9px] font-medium ${backup.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${backup.type}</span>
+                                            <span class="font-mono text-gray-600 dark:text-gray-400">${backup.vmid}</span>
+                                            <span class="truncate text-gray-700 dark:text-gray-300">${backup.name}</span>
+                                        </div>
+                                        <div class="flex items-center gap-2 ml-2">
+                                            <div class="flex items-center gap-1 text-[9px]">
+                                                ${filteredBackupData.typeLabels}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            `;
-                        }).join('')}
+                                `;
+                            }).join('');
+                        })()}
                     </div>
                 </div>
             </div>
