@@ -70,11 +70,16 @@ PulseApp.ui.backupDetailCard = (() => {
     }
 
     function getCompactOverview(backups, stats, filterInfo) {
-        
         // Calculate critical metrics
         const now = new Date();
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        
+        // Initialize tracking variables
+        let lastBackupTime = 0;
+        let backupsThisMonth = 0;
+        let backupHours = []; // Track backup hours for window detection
+        let daysWithBackups = new Set(); // Track unique days with backups
         
         // Detect backup schedule pattern
         let backupSchedule = 'unknown';
@@ -83,13 +88,44 @@ PulseApp.ui.backupDetailCard = (() => {
         
         // Collect all backup dates for schedule detection
         backups.forEach(guest => {
+            // First try to use latestBackupTime which should always be available
+            if (guest.latestBackupTime && guest.latestBackupTime > 0) {
+                backupDates.push(guest.latestBackupTime);
+                // Also use it to track last backup time
+                if (guest.latestBackupTime > lastBackupTime) {
+                    lastBackupTime = guest.latestBackupTime;
+                }
+            }
+            
+            // Also collect from backupDates array for more granular schedule detection
             if (guest.backupDates && guest.backupDates.length > 0) {
                 guest.backupDates.forEach(bd => {
                     if (bd.date) {
                         const timestamp = bd.latestTimestamp || new Date(bd.date).getTime() / 1000;
-                        if (timestamp) backupDates.push(timestamp);
+                        if (timestamp) {
+                            backupDates.push(timestamp);
+                            // Track backup hours and days for metrics
+                            const backupDate = new Date(timestamp * 1000);
+                            if (backupDate >= startOfMonth) {
+                                backupsThisMonth += bd.count || 1;
+                                daysWithBackups.add(backupDate.toDateString());
+                            }
+                            if (backupDate >= oneMonthAgo) {
+                                backupHours.push(backupDate.getHours());
+                            }
+                        }
                     }
                 });
+            } else if (guest.latestBackupTime && guest.latestBackupTime > 0) {
+                // If no detailed backup dates but we have latestBackupTime, use it for metrics
+                const backupDate = new Date(guest.latestBackupTime * 1000);
+                if (backupDate >= startOfMonth) {
+                    backupsThisMonth += 1; // Count this guest
+                    daysWithBackups.add(backupDate.toDateString());
+                }
+                if (backupDate >= oneMonthAgo) {
+                    backupHours.push(backupDate.getHours());
+                }
             }
         });
         
@@ -133,14 +169,10 @@ PulseApp.ui.backupDetailCard = (() => {
             none: []       // no backups
         };
         
-        // Track namespace distribution and monthly backups
+        // Track namespace distribution
         const namespaceStats = new Map();
         const pbsBackupsByNamespace = new Map();
-        let backupsThisMonth = 0;
-        let lastBackupTime = 0;
         let recentFailures = 0;
-        let backupHours = []; // Track backup hours for window detection
-        let daysWithBackups = new Set(); // Track unique days with backups
         
         // Analyze each guest
         backups.forEach(guest => {
@@ -286,8 +318,26 @@ PulseApp.ui.backupDetailCard = (() => {
         const recentCoverage = guestsByAge.good.length + guestsByAge.ok.length;
         
         // Calculate daily average
-        const daysInMonth = daysWithBackups.size || 1;
-        const dailyAverage = Math.round(backupsThisMonth / daysInMonth);
+        // If we don't have detailed backup dates, estimate based on schedule
+        let dailyAverage = 0;
+        if (daysWithBackups.size > 0) {
+            dailyAverage = Math.round(backupsThisMonth / daysWithBackups.size);
+        } else if (backupSchedule === 'daily') {
+            // For daily backups, estimate based on total guests
+            dailyAverage = stats.totalGuests;
+        } else if (backupSchedule === 'weekly') {
+            // For weekly backups, estimate ~1/7 of guests per day
+            dailyAverage = Math.max(1, Math.round(stats.totalGuests / 7));
+        } else {
+            // Unknown schedule but all guests healthy - likely daily backups
+            if (healthScore === 100 && stats.totalGuests > 0) {
+                // If all guests are backed up recently, assume daily schedule
+                dailyAverage = stats.totalGuests;
+            } else {
+                // Conservative estimate
+                dailyAverage = Math.max(1, Math.round(stats.totalGuests / 7));
+            }
+        }
         
         // Detect backup window
         let backupWindow = 'Unknown';
