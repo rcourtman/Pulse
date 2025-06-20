@@ -301,19 +301,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         
         
         // Get backup data for this date
-        // Cache the processed data to avoid reprocessing for every cell
-        // Include namespace in cache key to prevent stale data when switching namespaces
-        const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
-        const cacheKey = `${currentDisplayMonth.getTime()}_${namespaceFilter}_${guestId || 'all'}`;
-        
-        if (!window._calendarMonthDataCache || window._calendarMonthDataCache.key !== cacheKey) {
-            window._calendarMonthDataCache = {
-                key: cacheKey,
-                month: currentDisplayMonth.getTime(),
-                data: processBackupDataForSingleMonth(backupData, currentDisplayMonth, guestId, filteredGuestIds)
-            };
-        }
-        const allData = window._calendarMonthDataCache.data;
+        const allData = processBackupDataForSingleMonth(backupData, currentDisplayMonth, guestId, filteredGuestIds);
         const dayData = allData[dateKey];
         
         let shouldShowDay = false;
@@ -372,38 +360,6 @@ PulseApp.ui.calendarHeatmap = (() => {
         }`;
         dayNumber.textContent = date.getDate();
         cell.appendChild(dayNumber);
-        
-        // Add title attribute with backup count information
-        if (dayData && dayData.guests && dayData.guests.length > 0) {
-            const guestCount = dayData.guests.length;
-            const backupTypeCounts = {
-                pbs: 0,
-                pve: 0,
-                snapshots: 0
-            };
-            
-            dayData.guests.forEach(guest => {
-                const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types || []);
-                if (types.includes('pbsSnapshots')) backupTypeCounts.pbs++;
-                if (types.includes('pveBackups')) backupTypeCounts.pve++;
-                if (types.includes('vmSnapshots')) backupTypeCounts.snapshots++;
-            });
-            
-            // Build title text
-            let titleParts = [`${guestCount} guest${guestCount > 1 ? 's' : ''} with backups`];
-            const typeDetails = [];
-            if (backupTypeCounts.pbs > 0) typeDetails.push(`${backupTypeCounts.pbs} PBS`);
-            if (backupTypeCounts.pve > 0) typeDetails.push(`${backupTypeCounts.pve} PVE`);
-            if (backupTypeCounts.snapshots > 0) typeDetails.push(`${backupTypeCounts.snapshots} Snapshots`);
-            
-            if (typeDetails.length > 0) {
-                titleParts.push(`(${typeDetails.join(', ')})`);
-            }
-            
-            cell.title = titleParts.join(' ');
-        } else if (isCurrentMonth) {
-            cell.title = 'No backups';
-        }
         
         // Store data for click handling
         cell.dataset.date = dateKey;
@@ -557,25 +513,12 @@ PulseApp.ui.calendarHeatmap = (() => {
         const startOfMonth = new Date(displayMonth.getFullYear(), displayMonth.getMonth(), 1);
         const endOfMonth = new Date(displayMonth.getFullYear(), displayMonth.getMonth() + 1, 0);
         
-        // Get current namespace filter
-        const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
-        
         // Get guest data for hostname lookup
         const vmsData = PulseApp.state.get('vmsData') || [];
         const containersData = PulseApp.state.get('containersData') || [];
         const allGuests = [...vmsData, ...containersData];
         const guestLookup = {};
-        
-        // When namespace filtering is active, only include filtered guests in lookup
-        const guestsToProcess = (namespaceFilter !== 'all' && filteredGuestIds && filteredGuestIds.length > 0) 
-            ? allGuests.filter(guest => {
-                const nodeIdentifier = guest.node || guest.endpointId || '';
-                const uniqueKey = nodeIdentifier ? `${guest.vmid}-${nodeIdentifier}` : guest.vmid.toString();
-                return filteredGuestIds.includes(uniqueKey) || filteredGuestIds.includes(guest.vmid.toString());
-            })
-            : allGuests;
-        
-        guestsToProcess.forEach(guest => {
+        allGuests.forEach(guest => {
             // Create unique key for guest lookup
             const nodeIdentifier = guest.node || guest.endpointId || '';
             const uniqueKey = nodeIdentifier ? `${guest.vmid}-${nodeIdentifier}` : guest.vmid.toString();
@@ -624,52 +567,6 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 // Apply filtering logic
                 if (guestId && parseInt(vmid, 10) !== parseInt(guestId, 10)) return;
-                
-                // When namespace filtering is active, double-check PBS snapshots
-                if (source === 'pbsSnapshots' && namespaceFilter !== 'all') {
-                    const itemNamespace = item.namespace || 'root';
-                    
-                    // Debug what we're checking
-                    if (window._debugNamespaceFilter && vmid === '106') {
-                        console.log('DEBUG: Checking namespace for VMID 106:', {
-                            itemNamespace: itemNamespace,
-                            expectedNamespace: namespaceFilter,
-                            willSkip: itemNamespace !== namespaceFilter,
-                            item: item
-                        });
-                    }
-                    
-                    if (itemNamespace !== namespaceFilter) {
-                        // This snapshot is not in the selected namespace, skip it
-                        return;
-                    }
-                }
-                
-                // Debug filtering for PBS snapshots when namespace filter is active
-                if (source === 'pbsSnapshots' && filteredGuestIds && filteredGuestIds.length > 0 && window._enableCalendarDebug && !window._calendarDebugLogged) {
-                    window._calendarDebugLogged = true;
-                    console.log('Calendar filtering debug:', {
-                        vmid: vmid,
-                        timestamp: timestamp,
-                        date: date.toString(),
-                        localDate: localDate.toString(),
-                        dateKey: dateKey,
-                        currentMonth: displayMonth.toString(),
-                        startOfMonth: startOfMonth.toString(),
-                        endOfMonth: endOfMonth.toString(),
-                        isInMonth: localDate >= startOfMonth && localDate <= endOfMonth,
-                        item: {
-                            node: item.node,
-                            endpointId: item.endpointId,
-                            owner: item.owner,
-                            'backup-time': item['backup-time']
-                        },
-                        filteredGuestIds: filteredGuestIds.slice(0, 5),
-                        uniqueKey: generateUniqueGuestKey(vmid, item),
-                        willBeFiltered: !isGuestInFilteredList(vmid, item, filteredGuestIds)
-                    });
-                }
-                
                 if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;
                 
                 // Use unique guest key that includes node information
@@ -700,19 +597,6 @@ PulseApp.ui.calendarHeatmap = (() => {
             });
         });
         
-        // Debug monthData after processing
-        if (Object.keys(backupsByGuestAndDate).length > 0 && window._enableCalendarDebug && !window._monthDataDebugLogged) {
-            window._monthDataDebugLogged = true;
-            console.log('Calendar monthData debug:', {
-                backupsByGuestAndDateCount: Object.keys(backupsByGuestAndDate).length,
-                sampleGuests: Object.keys(backupsByGuestAndDate).slice(0, 3),
-                sampleDates: Object.entries(backupsByGuestAndDate).slice(0, 1).map(([guest, dates]) => ({
-                    guest,
-                    dates: Object.keys(dates)
-                }))
-            });
-        }
-        
         // Process backup days and group by date
         Object.entries(backupsByGuestAndDate).forEach(([uniqueGuestKey, dateData]) => {
             Object.keys(dateData).forEach(dateKey => {
@@ -727,23 +611,6 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 // Extract vmid from unique key for guest lookup
                 const vmid = dateData[dateKey].vmid || extractVmidFromGuestKey(uniqueGuestKey);
-                
-                // When namespace filtering is active, verify this guest should be included
-                if (namespaceFilter !== 'all' && filteredGuestIds && filteredGuestIds.length > 0) {
-                    // Check if this guest is in the filtered list
-                    const isInFilteredList = filteredGuestIds.includes(uniqueGuestKey) || 
-                                           filteredGuestIds.includes(vmid.toString()) ||
-                                           filteredGuestIds.some(id => {
-                                               const idVmid = id.split('-')[0];
-                                               return idVmid === vmid.toString();
-                                           });
-                    
-                    if (!isInFilteredList) {
-                        // This guest is not in the namespace, skip it
-                        return;
-                    }
-                }
-                
                 // Use unique key for guest lookup, fall back to vmid if not found
                 const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
                 
@@ -813,20 +680,6 @@ PulseApp.ui.calendarHeatmap = (() => {
                 if (task.status !== 'OK' && monthData[dateKey]) {
                     monthData[dateKey].hasFailures = true;
                 }
-            });
-        }
-        
-        // Final debug - what's in monthData
-        if (Object.keys(monthData).length > 0 && window._enableCalendarDebug && !window._finalMonthDataDebugLogged) {
-            window._finalMonthDataDebugLogged = true;
-            console.log('Calendar final monthData:', {
-                dateCount: Object.keys(monthData).length,
-                dates: Object.keys(monthData).slice(0, 5),
-                sampleDay: Object.entries(monthData).slice(0, 1).map(([date, data]) => ({
-                    date,
-                    guestCount: data.guests.length,
-                    hasBackups: data.hasBackups
-                }))
             });
         }
         
@@ -2001,12 +1854,6 @@ PulseApp.ui.calendarHeatmap = (() => {
         setDisplayMonth: (date) => {
             currentDisplayMonth = new Date(date);
             currentDisplayMonth.setDate(1);
-        },
-        clearCache: () => {
-            window._calendarMonthDataCache = null;
-            window._calendarDebugLogged = false;
-            window._monthDataDebugLogged = false;
-            window._namespaceFilterLogged = false;
         }
     };
 })();

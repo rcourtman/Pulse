@@ -47,11 +47,17 @@ PulseApp.utils = (() => {
             green: 'bg-green-500/60 dark:bg-green-500/50'
         }[color] || 'bg-gray-500/60 dark:bg-gray-500/50'; // Fallback progress color with opacity
 
+        // Use simpleText for narrow screens if provided, otherwise just show percentage
+        const mobileText = simpleText || `${percentage}%`;
+        
+        // Generate a unique ID for this progress bar to handle dynamic text switching
+        const uniqueId = `pb-${Math.random().toString(36).substr(2, 9)}`;
+
         return `
             <div class="relative w-full h-3.5 rounded overflow-hidden ${bgColorClass}">
                 <div class="absolute top-0 left-0 h-full ${progressColorClass}" style="width: ${percentage}%;"></div>
                 <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                    <span class="truncate px-1">${text}</span>
+                    <span class="progress-text-full truncate px-1" data-progress-id="${uniqueId}" data-full-text="${text.replace(/"/g, '&quot;')}" data-simple-text="${mobileText.replace(/"/g, '&quot;')}">${text}</span>
                 </span>
             </div>
         `;
@@ -63,14 +69,6 @@ PulseApp.utils = (() => {
         const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-    }
-
-    function formatBytesCompact(bytes, decimals = 1, k = 1024) {
-        if (bytes === 0 || bytes === null || bytes === undefined) return '0B';
-        const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + sizes[i];
     }
 
     function formatSpeed(bytesPerSecond, decimals = 1) {
@@ -177,8 +175,43 @@ PulseApp.utils = (() => {
         }
     }
 
+    function getReadableThresholdName(type) {
+        const names = {
+            cpu: 'CPU',
+            memory: 'Memory',
+            disk: 'Disk Usage',
+            diskread: 'Disk Read',
+            diskwrite: 'Disk Write',
+            netin: 'Net In',
+            netout: 'Net Out'
+        };
+        return names[type] || type;
+    }
 
+    function formatThresholdValue(type, value) {
+        const numericValue = Number(value);
+        if (isNaN(numericValue)) return 'N/A';
 
+        if (['cpu', 'memory', 'disk'].includes(type)) {
+            return `${Math.round(numericValue)}%`;
+        }
+        if (['diskread', 'diskwrite', 'netin', 'netout'].includes(type)) {
+            return formatSpeed(numericValue, 0);
+        }
+        return String(value); // Fallback
+    }
+
+    function getReadableThresholdCriteria(type, value) {
+        const operatorMap = {
+             diskread: '>=',
+             diskwrite: '>=',
+             netin: '>=',
+             netout: '>='
+         };
+        const operator = operatorMap[type] || '>=';
+        const displayValue = formatThresholdValue(type, value);
+        return `${type}${operator}${displayValue}`;
+    }
 
     function sortData(data, column, direction, tableType = 'main') {
         if (!column) return data;
@@ -253,13 +286,33 @@ PulseApp.utils = (() => {
     }
 
     // Function to check and update progress bar text based on available width
-    // DISABLED: Progress bars now always show full text
     function updateProgressBarTexts() {
-        // No-op - functionality disabled
+        const progressTexts = document.querySelectorAll('.progress-text-full');
+        
+        progressTexts.forEach(span => {
+            const fullText = span.getAttribute('data-full-text');
+            const simpleText = span.getAttribute('data-simple-text');
+            
+            if (!fullText || !simpleText) return;
+            
+            // Check if the current text is overflowing
+            const parent = span.parentElement;
+            if (parent) {
+                // Temporarily set to full text to measure
+                span.textContent = fullText;
+                
+                // Check if text is truncated (scrollWidth > clientWidth)
+                if (span.scrollWidth > parent.clientWidth - 8) { // 8px for padding
+                    span.textContent = simpleText;
+                } else {
+                    span.textContent = fullText;
+                }
+            }
+        });
     }
     
     // Debounced version for resize events
-    const updateProgressBarTextsDebounced = () => {}; // No-op - functionality disabled
+    const updateProgressBarTextsDebounced = debounce(updateProgressBarTexts, 100);
 
     // Scroll position preservation for table updates
     function preserveScrollPosition(element, updateFn) {
@@ -406,6 +459,22 @@ PulseApp.utils = (() => {
         return d.toLocaleString();
     }
 
+    function formatRelativeTime(date) {
+        if (!date) return '';
+        const d = date instanceof Date ? date : new Date(date);
+        const now = new Date();
+        const diffMs = now - d;
+        const diffSec = Math.floor(diffMs / 1000);
+        const diffMin = Math.floor(diffSec / 60);
+        const diffHour = Math.floor(diffMin / 60);
+        const diffDay = Math.floor(diffHour / 24);
+
+        if (diffSec < 60) return `${diffSec} seconds ago`;
+        if (diffMin < 60) return `${diffMin} minutes ago`;
+        if (diffHour < 24) return `${diffHour} hours ago`;
+        if (diffDay < 30) return `${diffDay} days ago`;
+        return formatDate(d);
+    }
 
     // Format time ago for backup age display
     function formatTimeAgo(daysAgo) {
@@ -488,32 +557,6 @@ PulseApp.utils = (() => {
         
         return `<span class="px-2 py-0.5 text-xs font-medium rounded-full bg-gray-100 dark:bg-gray-700 ${colorClass}" ${tooltipAttr}>${statusDisplay}</span>`;
     }
-
-    // Get readable threshold name for display
-    function getReadableThresholdName(type) {
-        const names = {
-            'cpu': 'CPU',
-            'memory': 'Memory', 
-            'disk': 'Disk',
-            'diskread': 'Disk Read',
-            'diskwrite': 'Disk Write',
-            'netin': 'Net In',
-            'netout': 'Net Out'
-        };
-        return names[type] || type;
-    }
-
-    // Format threshold value with appropriate units
-    function formatThresholdValue(type, value) {
-        if (['cpu', 'memory', 'disk'].includes(type)) {
-            return `${value}%`;
-        } else {
-            const mb = value / (1024 * 1024);
-            if (mb >= 100) return `${Math.round(mb)}MB/s`;
-            if (mb >= 10) return `${Math.round(mb)}MB/s`;
-            return `${Math.round(mb * 10) / 10}MB/s`;
-        }
-    }
     
     // Common CSS class constants for consistency
     const CSS_CLASSES = {
@@ -560,20 +603,21 @@ PulseApp.utils = (() => {
         FONT_SEMIBOLD: 'font-semibold'
     };
 
-
     // Return the public API for this module
     return {
         sanitizeForId: (str) => str.replace(/[^a-zA-Z0-9-]/g, '-'),
         getUsageColor,
         createProgressTextBarHTML,
         formatBytes,
-        formatBytesCompact,
         formatSpeed,
         formatSpeedWithStyling,
         formatUptime,
         formatDuration,
         formatPbsTimestamp,
         formatPbsTimestampRelative,
+        getReadableThresholdName,
+        formatThresholdValue,
+        getReadableThresholdCriteria,
         sortData,
         renderTableBody,
         debounce,
@@ -588,14 +632,12 @@ PulseApp.utils = (() => {
         // Date formatting
         formatDate,
         formatDateTime,
+        formatRelativeTime,
         formatTimeAgo,
         // UI utilities
         initMobileScrollIndicators,
         getBackupStatusColor,
         createHealthBadgeHTML,
-        // Threshold utilities
-        getReadableThresholdName,
-        formatThresholdValue,
         // CSS class constants
         CSS_CLASSES
     };

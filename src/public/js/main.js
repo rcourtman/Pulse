@@ -303,4 +303,58 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Global function to cycle through alert options
+window.cycleAlertOption = function(span) {
+    try {
+        const options = JSON.parse(span.getAttribute('data-options'));
+        const currentValue = span.getAttribute('data-value');
+        
+        // Find current option index
+        const currentIndex = options.findIndex(option => option.value === currentValue);
+        
+        // Get next option (cycle back to 0 if at end)
+        const nextIndex = (currentIndex + 1) % options.length;
+        const nextOption = options[nextIndex];
+        
+        // Update span
+        span.textContent = nextOption.label;
+        span.setAttribute('data-value', nextOption.value);
+        
+        // Trigger change event
+        const changeEvent = new CustomEvent('change', {
+            detail: { value: nextOption.value, label: nextOption.label }
+        });
+        span.dispatchEvent(changeEvent);
+    } catch (error) {
+        console.error('Error cycling alert option:', error);
+    }
+};
 
+// Global function to cycle slider values in steps
+window.cycleSliderValue = function(span) {
+    try {
+        const currentValue = parseInt(span.getAttribute('data-value'));
+        const min = parseInt(span.getAttribute('data-min'));
+        const max = parseInt(span.getAttribute('data-max'));
+        const step = parseInt(span.getAttribute('data-step'));
+        
+        // Calculate next value
+        let nextValue = currentValue + step;
+        if (nextValue > max) {
+            nextValue = min; // Wrap around to minimum
+        }
+        
+        // Update span
+        const unit = max <= 100 ? '%' : '';
+        span.textContent = `${nextValue}${unit}`;
+        span.setAttribute('data-value', nextValue);
+        
+        // Trigger change event
+        const changeEvent = new CustomEvent('change', {
+            detail: { value: nextValue }
+        });
+        span.dispatchEvent(changeEvent);
+    } catch (error) {
+        console.error('Error cycling slider value:', error);
+    }
+};

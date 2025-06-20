@@ -1256,12 +1256,6 @@ PulseApp.ui.settings = (() => {
             
             if (result.success) {
                 showSuccessToast('Configuration Saved', 'Your settings have been applied successfully');
-                
-                // Update alert mode notification status if alerts module is available
-                if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
-                    PulseApp.ui.alerts.updateNotificationStatus();
-                }
-                
                 setTimeout(() => {
                     closeModal();
                 }, 1500);
@@ -3077,14 +3071,27 @@ PulseApp.ui.settings = (() => {
         }
         
         return recommendations.map(rec => {
-            // Simple red styling for all recommendations
-            const bgColor = 'bg-red-50 dark:bg-red-900/20';
-            const textColor = 'text-red-800 dark:text-red-200';
-            const borderColor = 'border-red-500';
+            let bgColor, textColor, borderColor;
+            switch(rec.severity) {
+                case 'critical':
+                    bgColor = 'bg-red-50 dark:bg-red-900/20';
+                    textColor = 'text-red-800 dark:text-red-200';
+                    borderColor = 'border-red-500';
+                    break;
+                case 'warning':
+                    bgColor = 'bg-yellow-50 dark:bg-yellow-900/20';
+                    textColor = 'text-yellow-800 dark:text-yellow-200';
+                    borderColor = 'border-yellow-500';
+                    break;
+                default:
+                    bgColor = 'bg-blue-50 dark:bg-blue-900/20';
+                    textColor = 'text-blue-800 dark:text-blue-200';
+                    borderColor = 'border-blue-500';
+            }
             
             return `
                 <div class="${bgColor} ${textColor} p-3 rounded-lg border-l-4 ${borderColor} mb-3">
-                    <strong>${rec.category}:</strong> ${rec.message}
+                    <strong>[${rec.severity.toUpperCase()}] ${rec.category}:</strong> ${rec.message}
                 </div>
             `;
         }).join('');
@@ -3537,6 +3544,524 @@ PulseApp.ui.settings = (() => {
         updateCache.clear();
     }
 
+    async function initializeAlertManagementTab() {
+        
+        // Set up event listeners for the alert management tab
+        setTimeout(() => {
+            setupAlertManagementEvents();
+            loadDynamicRules();
+            loadCustomThresholds();
+        }, 100);
+    }
+
+    function setupAlertManagementEvents() {
+        // Refresh buttons
+        const refreshDynamicBtn = document.getElementById('refresh-dynamic-rules');
+        const refreshCustomBtn = document.getElementById('refresh-custom-thresholds');
+        
+        if (refreshDynamicBtn) {
+            refreshDynamicBtn.addEventListener('click', loadDynamicRules);
+        }
+        
+        if (refreshCustomBtn) {
+            refreshCustomBtn.addEventListener('click', loadCustomThresholds);
+        }
+        
+        // Quick action buttons
+        const createRuleBtn = document.getElementById('create-threshold-rule');
+        const testNotificationsBtn = document.getElementById('test-notifications');
+        const exportAlertsBtn = document.getElementById('export-alerts');
+        const addCustomBtn = document.getElementById('add-custom-threshold');
+        
+        if (createRuleBtn) {
+            createRuleBtn.addEventListener('click', () => {
+                // Close settings modal and open threshold creation
+                closeModal();
+                // Enable thresholds toggle if not already enabled
+                const thresholdToggle = document.getElementById('toggle-thresholds-checkbox');
+                if (thresholdToggle && !thresholdToggle.checked) {
+                    thresholdToggle.click();
+                }
+                // Show a notification
+                showNotification('Set your thresholds above and click "Create Alert Rule" to create a new dynamic threshold rule.');
+            });
+        }
+        
+        if (testNotificationsBtn) {
+            testNotificationsBtn.addEventListener('click', testAllNotifications);
+        }
+        
+        if (exportAlertsBtn) {
+            exportAlertsBtn.addEventListener('click', exportAlertConfiguration);
+        }
+        
+        if (addCustomBtn) {
+            addCustomBtn.addEventListener('click', () => {
+                // Alert Configuration tab removed - switch to system tab
+                switchTab('system');
+                setTimeout(() => {
+                    // Scroll to the custom threshold section
+                    const customSection = document.querySelector('h3:contains("Custom Threshold Configurations")');
+                    if (customSection) {
+                        customSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                }, 100);
+            });
+        }
+    }
+
+    async function loadDynamicRules() {
+        const container = document.getElementById('dynamic-rules-container');
+        if (!container) return;
+        
+        try {
+            container.innerHTML = `
+                <div class="flex items-center justify-center py-8">
+                    <div class="text-center">
+                        <svg class="mx-auto h-8 w-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading dynamic threshold rules...</p>
+                    </div>
+                </div>
+            `;
+            
+            const response = await fetch('/api/alerts/compound-rules');
+            const result = await response.json();
+            
+            if (result.success && result.rules) {
+                if (result.rules.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No dynamic threshold rules</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Create your first rule using the threshold sliders on the dashboard.</p>
+                            <div class="mt-4">
+                                <button id="goto-thresholds" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                    Go to Thresholds
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Add event listener for the goto button
+                    const gotoBtn = document.getElementById('goto-thresholds');
+                    if (gotoBtn) {
+                        gotoBtn.addEventListener('click', () => {
+                            closeModal();
+                            const thresholdToggle = document.getElementById('toggle-thresholds-checkbox');
+                            if (thresholdToggle && !thresholdToggle.checked) {
+                                thresholdToggle.click();
+                            }
+                        });
+                    }
+                } else {
+                    // Display the rules
+                    container.innerHTML = `
+                        <div class="space-y-4">
+                            ${result.rules.map(rule => formatDynamicRuleCard(rule)).join('')}
+                        </div>
+                    `;
+                    
+                    // Add event listeners for rule actions
+                    setupDynamicRuleActions();
+                }
+            } else {
+                throw new Error(result.error || 'Failed to load rules');
+            }
+        } catch (error) {
+            console.error('[Settings] Error loading dynamic rules:', error);
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <svg class="mx-auto h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                    <p class="mt-2 text-sm text-red-600 dark:text-red-400">Failed to load dynamic rules: ${error.message}</p>
+                    <button onclick="loadDynamicRules()" class="mt-2 text-sm text-blue-600 hover:text-blue-800">Try again</button>
+                </div>
+            `;
+        }
+    }
+
+    function formatDynamicRuleCard(rule) {
+        const createdDate = PulseApp.utils.formatDate(rule.createdAt || Date.now());
+        const severityColor = rule.severity === 'critical' ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+        
+        const thresholdsList = rule.thresholds?.map(t => 
+            `<span class="inline-block bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs rounded mr-2 mb-1">
+                ${getThresholdDisplayName(t.type)} ≥ ${formatThresholdValue(t)}
+            </span>`
+        ).join('') || '';
+
+        const notificationMethods = rule.notificationChannels?.map(channel => {
+            switch (channel) {
+                case 'local': return 'In-app';
+                case 'email': return 'Email';
+                case 'discord': return 'Discord';
+                case 'slack': return 'Slack';
+                case 'webhook': return 'Webhook';
+                default: return channel;
+            }
+        }).join(', ') || 'None';
+        
+        return `
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <h4 class="font-medium text-gray-900 dark:text-gray-100 break-words">${rule.name}</h4>
+                            <span class="px-2 py-1 text-xs font-medium rounded whitespace-nowrap ${severityColor}">
+                                ${rule.severity?.toUpperCase() || 'WARNING'}
+                            </span>
+                            <span class="px-2 py-1 text-xs font-medium rounded whitespace-nowrap ${rule.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
+                                ${rule.enabled ? 'ENABLED' : 'DISABLED'}
+                            </span>
+                        </div>
+                        ${rule.description ? `<p class="text-sm text-gray-600 dark:text-gray-400 mb-2 break-words">${rule.description}</p>` : ''}
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2 break-words">
+                            Created: ${createdDate} • ID: ${rule.id}
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2 break-words">
+                            Notifications: ${notificationMethods}
+                        </div>
+                    </div>
+                    <div class="flex gap-2 flex-shrink-0">
+                        <button onclick="toggleDynamicRule('${rule.id}', ${!rule.enabled})" 
+                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded whitespace-nowrap">
+                            ${rule.enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button onclick="deleteDynamicRule('${rule.id}')" 
+                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded whitespace-nowrap">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-700 dark:text-gray-300 mb-2 break-words">Alert triggers when ANY guest meets ALL conditions:</p>
+                    <div class="flex flex-wrap">
+                        ${thresholdsList}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function getThresholdDisplayName(type) {
+        const names = {
+            'cpu': 'CPU',
+            'memory': 'Memory', 
+            'disk': 'Disk',
+            'diskread': 'Disk Read',
+            'diskwrite': 'Disk Write',
+            'netin': 'Net In',
+            'netout': 'Net Out'
+        };
+        return names[type] || type;
+    }
+
+    function formatThresholdValue(threshold) {
+        if (['cpu', 'memory', 'disk'].includes(threshold.type)) {
+            return `${threshold.value}%`;
+        } else {
+            const mb = threshold.value / (1024 * 1024);
+            if (mb >= 100) return `${Math.round(mb)}MB/s`;
+            if (mb >= 10) return `${Math.round(mb)}MB/s`;
+            return `${Math.round(mb * 10) / 10}MB/s`;
+        }
+    }
+
+    async function loadCustomThresholds() {
+        const container = document.getElementById('custom-thresholds-container');
+        if (!container) return;
+        
+        try {
+            container.innerHTML = `
+                <div class="flex items-center justify-center py-8">
+                    <div class="text-center">
+                        <svg class="mx-auto h-8 w-8 text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading custom thresholds...</p>
+                    </div>
+                </div>
+            `;
+            
+            const response = await fetch('/api/thresholds');
+            const result = await response.json();
+            
+            if (result.success && result.data) {
+                if (result.data.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-8">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No custom thresholds</h3>
+                            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Create custom threshold overrides for specific VMs or containers.</p>
+                            <div class="mt-4">
+                                <button id="goto-custom-thresholds" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                    Add Custom Threshold
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    const gotoBtn = document.getElementById('goto-custom-thresholds');
+                    if (gotoBtn) {
+                        gotoBtn.addEventListener('click', () => switchTab('system'));
+                    }
+                } else {
+                    // Display the custom thresholds
+                    container.innerHTML = `
+                        <div class="space-y-4">
+                            ${result.data.map(config => formatCustomThresholdCard(config)).join('')}
+                        </div>
+                    `;
+                }
+            } else {
+                throw new Error(result.error || 'Failed to load custom thresholds');
+            }
+        } catch (error) {
+            console.error('[Settings] Error loading custom thresholds:', error);
+            container.innerHTML = `
+                <div class="text-center py-8">
+                    <svg class="mx-auto h-12 w-12 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"></path>
+                    </svg>
+                    <p class="mt-2 text-sm text-red-600 dark:text-red-400">Failed to load custom thresholds: ${error.message}</p>
+                    <button onclick="loadCustomThresholds()" class="mt-2 text-sm text-blue-600 hover:text-blue-800">Try again</button>
+                </div>
+            `;
+        }
+    }
+
+    function formatCustomThresholdCard(config) {
+        const createdDate = PulseApp.utils.formatDate(config.createdAt || Date.now());
+        
+        // Build thresholds display
+        const thresholds = [];
+        if (config.thresholds.cpu) {
+            thresholds.push(`CPU: ${config.thresholds.cpu.warning || 'N/A'}%/${config.thresholds.cpu.critical || 'N/A'}%`);
+        }
+        if (config.thresholds.memory) {
+            thresholds.push(`Memory: ${config.thresholds.memory.warning || 'N/A'}%/${config.thresholds.memory.critical || 'N/A'}%`);
+        }
+        if (config.thresholds.disk) {
+            thresholds.push(`Disk: ${config.thresholds.disk.warning || 'N/A'}%/${config.thresholds.disk.critical || 'N/A'}%`);
+        }
+        
+        return `
+            <div class="border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex flex-wrap items-center gap-2 mb-2">
+                            <h4 class="font-medium text-gray-900 dark:text-gray-100 break-words">
+                                ${config.endpointId}:${config.vmid}
+                            </h4>
+                            <span class="px-2 py-1 text-xs font-medium rounded whitespace-nowrap ${config.enabled ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'}">
+                                ${config.enabled ? 'ENABLED' : 'DISABLED'}
+                            </span>
+                        </div>
+                        <div class="text-xs text-gray-500 dark:text-gray-400 mb-2 break-words">
+                            Node: ${config.nodeId} • Created: ${createdDate}
+                        </div>
+                        <div class="text-sm text-gray-600 dark:text-gray-400 break-words">
+                            Thresholds: ${thresholds.join(', ') || 'None configured'}
+                        </div>
+                    </div>
+                    <div class="flex gap-2 flex-shrink-0">
+                        <button onclick="editCustomThreshold('${config.endpointId}', '${config.nodeId}', '${config.vmid}')" 
+                                class="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded whitespace-nowrap">
+                            Edit
+                        </button>
+                        <button onclick="deleteCustomThreshold('${config.endpointId}', '${config.nodeId}', '${config.vmid}')" 
+                                class="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded whitespace-nowrap">
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Global functions for dynamic rule management (called from HTML onclick)
+    window.toggleDynamicRule = async function(ruleId, enabled) {
+        try {
+            const response = await fetch(`/api/alerts/rules/${ruleId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                loadDynamicRules(); // Reload the rules
+                showNotification(`Rule ${enabled ? 'enabled' : 'disabled'} successfully`);
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Error toggling dynamic rule:', error);
+            PulseApp.ui.toast.error(`Failed to ${enabled ? 'enable' : 'disable'} rule: ${error.message}`);
+        }
+    };
+
+    window.deleteDynamicRule = async function(ruleId) {
+        PulseApp.ui.toast.confirm(
+            'Are you sure you want to delete this alert rule? This action cannot be undone.',
+            async () => {
+                await _performDeleteDynamicRule(ruleId);
+            }
+        );
+    }
+
+    async function _performDeleteDynamicRule(ruleId) {
+        
+        try {
+            const response = await fetch(`/api/alerts/rules/${ruleId}`, {
+                method: 'DELETE'
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                loadDynamicRules(); // Reload the rules
+                showNotification('Rule deleted successfully');
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Error deleting dynamic rule:', error);
+            PulseApp.ui.toast.error(`Failed to delete rule: ${error.message}`);
+        }
+    };
+
+    window.editCustomThreshold = function(endpointId, nodeId, vmid) {
+        // Alert Configuration tab removed - switch to system tab
+        switchTab('system');
+        setTimeout(() => {
+            // Scroll to custom threshold section and highlight it
+            const customSection = document.querySelector('h3[contains("Custom Threshold Configurations")]');
+            if (customSection) {
+                customSection.scrollIntoView({ behavior: 'smooth' });
+            }
+            showNotification(`Navigate to the Custom Threshold section to edit ${endpointId}:${vmid}`);
+        }, 100);
+    };
+
+    window.deleteCustomThreshold = async function(endpointId, nodeId, vmid) {
+        PulseApp.ui.toast.confirm(
+            `Are you sure you want to delete the custom threshold for ${endpointId}:${vmid}?`,
+            async () => {
+                await _performDeleteCustomThreshold(endpointId, nodeId, vmid);
+            }
+        );
+    }
+
+    async function _performDeleteCustomThreshold(endpointId, nodeId, vmid) {
+        
+        try {
+            const response = await fetch(`/api/thresholds/${endpointId}/${nodeId}/${vmid}`, {
+                method: 'DELETE'
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                loadCustomThresholds(); // Reload the thresholds
+                showNotification('Custom threshold deleted successfully');
+            } else {
+                throw new Error(result.error);
+            }
+        } catch (error) {
+            console.error('Error deleting custom threshold:', error);
+            PulseApp.ui.toast.error(`Failed to delete custom threshold: ${error.message}`);
+        }
+    };
+
+    function testAllNotifications() {
+        showNotification('Testing all notification methods... (Feature coming soon)');
+    }
+
+    function exportAlertConfiguration() {
+        showNotification('Exporting alert configuration... (Feature coming soon)');
+    }
+
+    function showNotification(message) {
+        // Create a simple notification - you can enhance this
+        const notification = document.createElement('div');
+        notification.className = 'fixed bottom-4 left-4 z-50 bg-blue-600 text-white px-4 py-2 rounded-md shadow-lg';
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.remove();
+        }, 3000);
+    }
+
+    
+    function pollHealthAndRefresh() {
+        const maxAttempts = 30; // Maximum 30 attempts (2 minutes at 4-second intervals)
+        let attempts = 0;
+        const progressText = document.getElementById('update-progress-text');
+        
+        function updateProgressText(message) {
+            if (progressText) {
+                progressText.textContent = message;
+            }
+        }
+        
+        function checkHealth() {
+            attempts++;
+            
+            // Update visual feedback
+            const dots = '.'.repeat((attempts - 1) % 4);
+            updateProgressText(`Waiting for service to restart${dots} (${attempts}/${maxAttempts})`);
+            
+            fetch('/healthz', {
+                method: 'GET',
+                cache: 'no-cache',
+                timeout: 2000
+            })
+            .then(response => {
+                if (response.ok) {
+                    // Server is back up, show success and refresh
+                    updateProgressText('Service is ready! Refreshing page...');
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1000);
+                } else {
+                    // Still not ready, try again
+                    scheduleNextCheck();
+                }
+            })
+            .catch(error => {
+                // Connection failed, service still restarting
+                scheduleNextCheck();
+            });
+        }
+        
+        function scheduleNextCheck() {
+            if (attempts >= maxAttempts) {
+                // Fallback: force refresh after max attempts
+                updateProgressText('Health check timed out, refreshing page...');
+                console.warn('Health check timed out, forcing refresh...');
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
+                return;
+            }
+            
+            // Wait 4 seconds before next check
+            setTimeout(checkHealth, 4000);
+        }
+        
+        // Start health checking immediately
+        checkHealth();
+    }
+
     // Notification settings functions
     function handleGlobalEmailToggle(enabled) {
         const emailSection = document.getElementById('email-config-section');
@@ -3546,11 +4071,6 @@ PulseApp.ui.settings = (() => {
             } else {
                 emailSection.classList.add('opacity-50', 'pointer-events-none');
             }
-        }
-        
-        // Update alert mode notification status if alerts module is available
-        if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
-            PulseApp.ui.alerts.updateNotificationStatus();
         }
     }
 
@@ -3562,11 +4082,6 @@ PulseApp.ui.settings = (() => {
             } else {
                 webhookSection.classList.add('opacity-50', 'pointer-events-none');
             }
-        }
-        
-        // Update alert mode notification status if alerts module is available
-        if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
-            PulseApp.ui.alerts.updateNotificationStatus();
         }
     }
 

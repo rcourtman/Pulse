@@ -289,11 +289,29 @@ app.get('/api/health', (req, res) => {
     }
 });
 
+// Performance metrics endpoint
+app.get('/api/performance', (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 50;
+        const performanceHistory = stateManager.getPerformanceHistory(limit);
+        const connectionHealth = stateManager.getConnectionHealth();
+        
+        res.json({
+            history: performanceHistory,
+            connections: connectionHealth,
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error("Error in /api/performance:", error);
+        res.status(500).json({ error: "Failed to fetch performance data" });
+    }
+});
 
 // Enhanced alerts endpoint with filtering
 app.get('/api/alerts', (req, res) => {
     try {
         const filters = {
+            severity: req.query.severity,
             group: req.query.group,
             node: req.query.node,
             acknowledged: req.query.acknowledged === 'true' ? true : 
@@ -349,6 +367,7 @@ app.get('/api/alerts', (req, res) => {
 app.get('/api/alerts/active', (req, res) => {
     try {
         const filters = {
+            severity: req.query.severity,
             group: req.query.group,
             node: req.query.node,
             acknowledged: req.query.acknowledged === 'true' ? true : 
@@ -367,6 +386,23 @@ app.get('/api/alerts/active', (req, res) => {
     }
 });
 
+// Alert history endpoint with pagination and filtering
+app.get('/api/alerts/history', (req, res) => {
+    try {
+        const limit = parseInt(req.query.limit) || 100;
+        const filters = {
+            severity: req.query.severity,
+            group: req.query.group,
+            node: req.query.node
+        };
+        
+        const history = stateManager.alertManager.getAlertHistory(limit, filters);
+        res.json({ history, timestamp: Date.now() });
+    } catch (error) {
+        console.error("Error in /api/alerts/history:", error);
+        res.status(500).json({ error: "Failed to fetch alert history" });
+    }
+});
 
 // Alert acknowledgment endpoint
 app.post('/api/alerts/:alertId/acknowledge', (req, res) => {
@@ -421,6 +457,28 @@ app.get('/api/alerts/groups', (req, res) => {
 });
 
 
+// Enhanced alert metrics endpoint
+app.get('/api/alerts/metrics', (req, res) => {
+    try {
+        const stats = stateManager.alertManager.getEnhancedAlertStats();
+        res.json({
+            metrics: stats.metrics,
+            summary: {
+                active: stats.active,
+                acknowledged: stats.acknowledged,
+                suppressed: stats.suppressedRules
+            },
+            trends: {
+                last24Hours: stats.last24Hours,
+                lastHour: stats.lastHour
+            },
+            timestamp: Date.now()
+        });
+    } catch (error) {
+        console.error("Error in /api/alerts/metrics:", error);
+        res.status(500).json({ error: "Failed to fetch alert metrics" });
+    }
+});
 
 // Test email configuration
 app.post('/api/alerts/test-email', async (req, res) => {
@@ -504,6 +562,7 @@ app.post('/api/alerts/test', async (req, res) => {
                 type: 'lxc',
                 endpointId: 'primary'
             },
+            severity: 'warning',
             message: `Test notification for alert rule "${alertName}"`,
             triggeredAt: Date.now(),
             details: {
@@ -867,8 +926,6 @@ app.post('/api/alerts/config', (req, res) => {
             type: 'per_guest_thresholds',
             globalThresholds: alertConfig.globalThresholds || {},
             guestThresholds: alertConfig.guestThresholds || {},
-            alertLogic: alertConfig.alertLogic || 'and',
-            duration: alertConfig.duration || 0,
             enabled: alertConfig.enabled !== false,
             notifications: alertConfig.notifications || {
                 dashboard: true,
@@ -886,8 +943,6 @@ app.post('/api/alerts/config', (req, res) => {
             const success = stateManager.alertManager.updateRule('per-guest-alerts', {
                 globalThresholds: rule.globalThresholds,
                 guestThresholds: rule.guestThresholds,
-                alertLogic: rule.alertLogic,
-                duration: rule.duration,
                 notifications: rule.notifications,
                 enabled: rule.enabled,
                 lastUpdated: new Date().toISOString()
@@ -942,8 +997,6 @@ app.get('/api/alerts/config', (req, res) => {
                     type: 'per_guest_thresholds',
                     globalThresholds: existingRule.globalThresholds || {},
                     guestThresholds: existingRule.guestThresholds || {},
-                    alertLogic: existingRule.alertLogic || 'and',
-                    duration: existingRule.duration || 0,
                     notifications: existingRule.notifications || {
                         dashboard: true,
                         email: false,
@@ -961,8 +1014,6 @@ app.get('/api/alerts/config', (req, res) => {
                     type: 'per_guest_thresholds',
                     globalThresholds: {},
                     guestThresholds: {},
-                    alertLogic: 'and',
-                    duration: 0,
                     notifications: {
                         dashboard: true,
                         email: false,
@@ -1089,7 +1140,89 @@ app.get('/api/charts', async (req, res) => {
 });
 
 
+// Direct state inspection endpoint
+app.get('/api/diagnostics-state', (req, res) => {
+    try {
+        const state = stateManager.getState();
+        const summary = {
+            timestamp: new Date().toISOString(),
+            last_update: state.lastUpdate,
+            update_age_seconds: state.lastUpdate ? Math.floor((Date.now() - new Date(state.lastUpdate).getTime()) / 1000) : null,
+            guests_count: state.guests?.length || 0,
+            nodes_count: state.nodes?.length || 0,
+            pbs_count: state.pbs?.length || 0,
+            sample_guests: state.guests?.slice(0, 5).map(g => ({
+                vmid: g.vmid,
+                name: g.name,
+                type: g.type,
+                status: g.status
+            })) || [],
+            sample_backups: [],
+            errors: state.errors || []
+        };
+        
+        // Get sample backups
+        if (state.pbs && Array.isArray(state.pbs)) {
+            state.pbs.forEach(pbsInstance => {
+                if (pbsInstance.datastores) {
+                    pbsInstance.datastores.forEach(ds => {
+                        if (ds.snapshots && ds.snapshots.length > 0) {
+                            ds.snapshots.slice(0, 5).forEach(snap => {
+                                summary.sample_backups.push({
+                                    store: ds.store,
+                                    backup_id: snap['backup-id'],
+                                    backup_type: snap['backup-type'],
+                                    backup_time: new Date(snap['backup-time'] * 1000).toISOString()
+                                });
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        
+        res.json(summary);
+    } catch (error) {
+        console.error("State inspection error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
+// Quick diagnostic check endpoint
+app.get('/api/diagnostics/check', async (req, res) => {
+    try {
+        // Use cached result if available and recent
+        const cacheKey = 'diagnosticCheck';
+        const cached = global.diagnosticCache?.[cacheKey];
+        if (cached && (Date.now() - cached.timestamp) < 60000) { // Cache for 1 minute
+            return res.json(cached.result);
+        }
+
+        // Run a quick check
+        delete require.cache[require.resolve('./diagnostics')];
+        const DiagnosticTool = require('./diagnostics');
+        const diagnosticTool = new DiagnosticTool(stateManager, metricsHistory, apiClients, pbsApiClients);
+        const report = await diagnosticTool.runDiagnostics();
+        
+        const hasIssues = report.recommendations && 
+            report.recommendations.some(r => r.severity === 'critical' || r.severity === 'warning');
+        
+        const result = {
+            hasIssues,
+            criticalCount: report.recommendations?.filter(r => r.severity === 'critical').length || 0,
+            warningCount: report.recommendations?.filter(r => r.severity === 'warning').length || 0
+        };
+        
+        // Cache the result
+        if (!global.diagnosticCache) global.diagnosticCache = {};
+        global.diagnosticCache[cacheKey] = { timestamp: Date.now(), result };
+        
+        res.json(result);
+    } catch (error) {
+        console.error("Error in diagnostic check:", error);
+        res.json({ hasIssues: false }); // Don't show icon on error
+    }
+});
 
 // Raw state endpoint - shows everything
 app.get('/api/raw-state', (req, res) => {
@@ -1564,17 +1697,6 @@ stateManager.alertManager.on('alertAcknowledged', (alert) => {
             io.emit('alertAcknowledged', safeAlert);
         } catch (error) {
             console.error('[Socket] Failed to emit alert acknowledged:', error);
-        }
-    }
-});
-
-stateManager.alertManager.on('rulesRefreshed', () => {
-    if (io.engine.clientsCount > 0) {
-        try {
-            console.log('[Socket] Emitting rules refreshed event');
-            io.emit('alertRulesRefreshed');
-        } catch (error) {
-            console.error('[Socket] Failed to emit rules refreshed:', error);
         }
     }
 });
