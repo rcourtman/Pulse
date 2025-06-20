@@ -2025,12 +2025,9 @@ PulseApp.ui.backups = (() => {
             let guestNamespace = null;
             
             
-            // When namespace filtering is active, we only show guests that match the filter
-            // So this guest should only have backups from one specific namespace
+            // When namespace filtering is active, we need to check if this guest actually has backups
+            // in the filtered namespace, and only show that namespace if it does
             if (namespaceFilter !== 'all') {
-                // Guest is already filtered to be from this specific namespace
-                guestNamespace = namespaceFilter;
-                
                 // Determine endpoint suffix for this guest
                 const guestEndpoint = guest.endpointId || 'primary';
                 let endpointSuffix = '';
@@ -2041,12 +2038,51 @@ PulseApp.ui.backups = (() => {
                     endpointSuffix = `-${guestEndpoint}`;
                 }
                 
+                // Check if this guest has backups in the filtered namespace
+                let hasBackupsInFilteredNamespace = false;
                 filteredPbsDataArray.forEach(pbsInstance => {
                     // Include endpoint suffix in the key to get only backups from the correct source
                     const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}-${namespaceFilter}${endpointSuffix}`;
                     const snapshots = snapshotsByGuest.get(pbsKey) || [];
-                    pbsSnapshots.push(...snapshots);
+                    if (snapshots.length > 0) {
+                        hasBackupsInFilteredNamespace = true;
+                        pbsSnapshots.push(...snapshots);
+                    }
                 });
+                
+                // Only set the namespace if the guest actually has backups there
+                if (hasBackupsInFilteredNamespace) {
+                    guestNamespace = namespaceFilter;
+                } else {
+                    // Guest has no backups in this namespace, check all namespaces to find where it does have backups
+                    let bestNamespace = null;
+                    let mostRecentTime = 0;
+                    
+                    filteredPbsDataArray.forEach(pbsInstance => {
+                        // Look through all available namespace keys for this guest
+                        snapshotsByGuest.forEach((snapshots, key) => {
+                            // Check if key matches pattern: vmid-type-pbsinstance-namespace-endpoint
+                            if (key.startsWith(`${baseKey}-${pbsInstance.pbsInstanceName}-`) && key.endsWith(endpointSuffix)) {
+                                // Extract namespace from the key
+                                const parts = key.split('-');
+                                const namespace = parts[parts.length - 2];
+                                
+                                if (snapshots.length > 0) {
+                                    // Find the most recent backup time in this namespace
+                                    const maxTime = Math.max(...snapshots.map(snap => 
+                                        snap['backup-time'] || snap.backup_time || 0));
+                                    
+                                    if (maxTime > mostRecentTime) {
+                                        mostRecentTime = maxTime;
+                                        bestNamespace = namespace;
+                                    }
+                                }
+                            }
+                        });
+                    });
+                    
+                    guestNamespace = bestNamespace;
+                }
             } else {
                 // When showing all namespaces, determine which namespace this specific guest belongs to
                 // by checking if there's a PBS backup matching the guest+node combination
@@ -2236,9 +2272,29 @@ PulseApp.ui.backups = (() => {
                                                 isCorrectGuest = !matchingSecondaryGuest;
                                             }
                                         } else {
-                                            // For secondary endpoints, owner token should match endpoint name
+                                            // For secondary endpoints, be more flexible with owner token matching
                                             const endpointHostname = guestEndpoint.split('.')[0].toLowerCase();
-                                            isCorrectGuest = (ownerToken === endpointHostname);
+                                            
+                                            // Check if owner token matches endpoint name
+                                            if (ownerToken === endpointHostname) {
+                                                isCorrectGuest = true;
+                                            } else if (guestNode && guestNode.toLowerCase() === ownerToken) {
+                                                // Special case: if the guest node matches the owner token, it's likely correct
+                                                // This handles cases where backups are made with node-specific tokens
+                                                isCorrectGuest = true;
+                                            } else {
+                                                // For secondary endpoints, also accept backups if no other guest claims them
+                                                // Check if any other guest on a different endpoint has the same VMID
+                                                const otherEndpointGuest = allGuestsUnfiltered.find(g => 
+                                                    g.vmid == guest.vmid &&
+                                                    g.endpointId !== guestEndpoint &&
+                                                    g.endpointId && 
+                                                    g.endpointId.split('.')[0].toLowerCase() === ownerToken
+                                                );
+                                                
+                                                // If no other endpoint claims this backup, accept it
+                                                isCorrectGuest = !otherEndpointGuest;
+                                            }
                                         }
                                     }
                                     
@@ -2754,8 +2810,19 @@ PulseApp.ui.backups = (() => {
             }
         }
 
+        // Filter by namespace - only show guests that have backups in the selected namespace
+        let namespaceFilteredStatus = filteredBackupStatus;
+        if (namespaceFilter !== 'all') {
+            namespaceFilteredStatus = filteredBackupStatus.filter(guestStatus => {
+                // When a specific namespace is selected, only show guests that have backups
+                // The backup processing already filtered to only include backups from the selected namespace
+                // So if a guest has any backups at all, they belong in this namespace
+                return guestStatus.totalBackups > 0;
+            });
+        }
+
         const sortStateBackups = PulseApp.state.getSortState('backups');
-        const sortedBackupStatus = PulseApp.utils.sortData(filteredBackupStatus, sortStateBackups.column, sortStateBackups.direction, 'backups');
+        const sortedBackupStatus = PulseApp.utils.sortData(namespaceFilteredStatus, sortStateBackups.column, sortStateBackups.direction, 'backups');
 
         // Calculate dynamic column widths for responsive display
         if (sortedBackupStatus.length > 0) {
