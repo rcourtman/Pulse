@@ -7,6 +7,7 @@ PulseApp.ui.backups = (() => {
     let namespaceFilter = null;
     let pbsInstanceFilter = null;
     let lastUserUpdateTime = 0; // Track when user last triggered an update
+    let isProcessingDateSelection = false; // Prevent re-entrancy during date selection
     
     // Enhanced cache for expensive data transformations
     let dataCache = {
@@ -1700,7 +1701,16 @@ PulseApp.ui.backups = (() => {
         };
         
         // Create calendar respecting current table filters - use unique guest identifiers
-        const filteredGuestIds = filteredBackupStatus.map(guest => {
+        // Apply namespace filtering if active
+        let guestsForIds = filteredBackupStatus;
+        if (namespaceFilter !== 'all') {
+            guestsForIds = filteredBackupStatus.filter(guestStatus => {
+                // Only include guests that have backups in the selected namespace
+                return guestStatus.totalBackups > 0;
+            });
+        }
+        
+        const filteredGuestIds = guestsForIds.map(guest => {
             // Create unique identifier including node/endpoint to handle guests with same vmid on different nodes
             const nodeIdentifier = guest.node || guest.endpointId || '';
             return nodeIdentifier ? `${guest.guestId}-${nodeIdentifier}` : guest.guestId.toString();
@@ -1947,6 +1957,11 @@ PulseApp.ui.backups = (() => {
         // Prevent socket updates too close to user actions
         if (!isUserAction && (Date.now() - lastUserUpdateTime < 1000)) {
             // Skip this update if it's within 1 second of a user action
+            return;
+        }
+        
+        // Prevent updates while processing date selection to avoid overwriting
+        if (isProcessingDateSelection && !isUserAction) {
             return;
         }
         
@@ -2569,8 +2584,17 @@ PulseApp.ui.backups = (() => {
             
             // Create and display calendar heatmap with detail card
             if (calendarContainer && PulseApp.ui.calendarHeatmap && PulseApp.ui.backupDetailCard) {
+                // Apply namespace filtering to get the correct guest list for calendar
+                let guestsForCalendar = filteredBackupStatus;
+                if (namespaceFilter !== 'all') {
+                    guestsForCalendar = filteredBackupStatus.filter(guestStatus => {
+                        // Only show guests that have backups in the selected namespace
+                        return guestStatus.totalBackups > 0;
+                    });
+                }
+                
                 // Get filtered guest IDs for calendar filtering - use unique guest identifiers
-                const filteredGuestIds = filteredBackupStatus.map(guest => {
+                const filteredGuestIds = guestsForCalendar.map(guest => {
                     // Create unique identifier including node/endpoint to handle guests with same vmid on different nodes
                     const nodeIdentifier = guest.node || guest.endpointId || '';
                     return nodeIdentifier ? `${guest.guestId}-${nodeIdentifier}` : guest.guestId.toString();
@@ -2589,8 +2613,8 @@ PulseApp.ui.backups = (() => {
                 if (detailCardContainer && !detailCard) {
                     isInitialRender = true;
                     // Don't show empty state if we already have data to display
-                    const initialData = filteredBackupStatus.length > 0 ? 
-                        _prepareMultiDateDetailData(filteredBackupStatus, extendedBackupData) : null;
+                    const initialData = guestsForCalendar.length > 0 ? 
+                        _prepareMultiDateDetailData(guestsForCalendar, extendedBackupData) : null;
                     detailCard = PulseApp.ui.backupDetailCard.createBackupDetailCard(initialData);
                     // Replace children instead of using innerHTML to avoid flash
                     while (detailCardContainer.firstChild) {
@@ -2601,6 +2625,7 @@ PulseApp.ui.backups = (() => {
                 
                 // Update detail card with filtered data if no calendar date is selected
                 const calendarDateFilter = PulseApp.state.get('calendarDateFilter');
+                // Don't update if we have a selected date to avoid overwriting the date-specific view
                 if (!calendarDateFilter) {
                     // Check if any filters are actually active
                     const hasActiveFilters = (
@@ -2612,10 +2637,9 @@ PulseApp.ui.backups = (() => {
                         (namespaceFilter !== 'all')
                     );
                     
-                    // Use unfiltered data for overview when no filters are active
-                    // When showing all namespaces, use the unfiltered version that includes all guests
-                    const dataToUse = hasActiveFilters ? filteredBackupStatus : 
-                        (namespaceFilter === 'all' ? unfilteredBackupStatusByGuest : backupStatusByGuest);
+                    // Use namespace-filtered data for overview
+                    const dataToUse = hasActiveFilters ? guestsForCalendar : 
+                        (namespaceFilter === 'all' ? unfilteredBackupStatusByGuest : guestsForCalendar);
                     
                     
                     if (dataToUse.length > 0) {
@@ -2627,67 +2651,27 @@ PulseApp.ui.backups = (() => {
                     }
                 }
                 
+                // Track if we have a selected date to prevent overwrites
+                let currentSelectedDate = null;
+                
                 // Create calendar with date selection callback
                 const onDateSelect = (dateData, instant = false) => {
                     if (detailCard && PulseApp.ui.backupDetailCard) {
                         if (dateData) {
-                            // Filter backups based on backup type filter
-                            const backupsFilterBackupType = PulseApp.state.get('backupsFilterBackupType') || 'all';
+                            currentSelectedDate = dateData.date;
                             
-                            // Always work with a copy of the backup data to avoid mutations
-                            const backupsCopy = JSON.parse(JSON.stringify(dateData.backups));
-                            
-                            let filteredDateBackups;
-                            if (backupsFilterBackupType === 'all') {
-                                filteredDateBackups = backupsCopy;
-                            } else {
-                                filteredDateBackups = backupsCopy.filter(backup => {
-                                    const backupTypes = backup.types || [];
-                                    
-                                    switch (backupsFilterBackupType) {
-                                        case 'pbs':
-                                            return backupTypes.includes('pbsSnapshots');
-                                        case 'pve':
-                                            return backupTypes.includes('pveBackups');
-                                        case 'snapshots':
-                                            return backupTypes.includes('vmSnapshots');
-                                        default:
-                                            return false;
-                                    }
-                                });
-                            }
-                            
-                            // Create filtered date data
-                            const filteredDateData = {
+                            // Calendar already provides filtered data, just pass it through
+                            // Mark it as calendar-filtered to use single-date view
+                            const calendarData = {
                                 ...dateData,
-                                backups: filteredDateBackups,
-                                isCalendarFiltered: true, // Flag to indicate this is calendar-filtered data
-                                calendarFilter: backupsFilterBackupType, // Include the filter type
-                                filterInfo: {
-                                    search: backupsSearchInput ? backupsSearchInput.value : '',
-                                    guestType: PulseApp.state.get('backupsFilterGuestType') || 'all',
-                                    backupType: backupsFilterBackupType,
-                                    healthStatus: PulseApp.state.get('backupsFilterHealth') || 'all',
-                                    failuresOnly: PulseApp.state.get('backupsFilterFailures') || false
-                                },
-                                stats: {
-                                    totalGuests: filteredDateBackups.length,
-                                    pbsCount: filteredDateBackups.filter(b => b.types && b.types.includes('pbsSnapshots')).length,
-                                    pveCount: filteredDateBackups.filter(b => b.types && b.types.includes('pveBackups')).length,
-                                    snapshotCount: filteredDateBackups.filter(b => b.types && b.types.includes('vmSnapshots')).length,
-                                    failureCount: dateData.stats.failureCount || 0
-                                }
+                                isCalendarFiltered: true
                             };
                             
-                            // Don't overwrite user selections with empty data from automatic updates
-                            if (filteredDateData.backups.length === 0 && !isUserAction) {
-                                return;
-                            }
-                            
-                            // Force instant updates on API refreshes to prevent flashing
-                            const forceInstant = !isUserAction || instant;
-                            PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, filteredDateData, forceInstant);
+                            // Update immediately with instant flag
+                            PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, calendarData, true);
                         } else {
+                            currentSelectedDate = null;
+                            
                             // No date selected, show multi-date data
                             // Check if any filters are actually active
                             const hasActiveFilters = (
@@ -2699,10 +2683,9 @@ PulseApp.ui.backups = (() => {
                                 (namespaceFilter !== 'all')
                             );
                             
-                            // Use unfiltered data for overview when no filters are active
-                            // When showing all namespaces, use the unfiltered version that includes all guests
-                            const dataToUse = hasActiveFilters ? filteredBackupStatus : 
-                                (namespaceFilter === 'all' ? unfilteredBackupStatusByGuest : backupStatusByGuest);
+                            // Use namespace-filtered data for overview
+                            const dataToUse = hasActiveFilters ? guestsForCalendar : 
+                                (namespaceFilter === 'all' ? unfilteredBackupStatusByGuest : guestsForCalendar);
                             
                             if (dataToUse.length > 0) {
                                 const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);
@@ -2734,16 +2717,27 @@ PulseApp.ui.backups = (() => {
                     }
                     calendarContainer.appendChild(calendarHeatmap);
                 } else {
-                    // Debug calendar data when namespace filter is active
-                    if (namespaceFilter !== 'all') {
-                        console.log('Calendar Debug - Namespace Filter:', namespaceFilter);
-                        console.log('PBS Snapshots count:', pbsSnapshots.length);
-                        console.log('Filtered Guest IDs:', filteredGuestIds);
-                        console.log('Sample PBS snapshots:', pbsSnapshots.slice(0, 3));
-                    }
+                    // Check if namespace filter has changed by comparing filtered guest counts
+                    const currentCalendar = calendarContainer.querySelector('.calendar-heatmap-container');
+                    const shouldRecreate = namespaceFilter !== 'all' && isUserAction;
                     
-                    // Update existing calendar data without recreation to prevent flashing
-                    PulseApp.ui.calendarHeatmap.updateCalendarData(extendedBackupData, null, filteredGuestIds, onDateSelect);
+                    if (shouldRecreate) {
+                        // Namespace filter changed - need to recreate calendar with new filteredGuestIds
+                        const calendarHeatmap = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(
+                            extendedBackupData, 
+                            null, 
+                            filteredGuestIds, 
+                            onDateSelect,
+                            isUserAction
+                        );
+                        while (calendarContainer.firstChild) {
+                            calendarContainer.removeChild(calendarContainer.firstChild);
+                        }
+                        calendarContainer.appendChild(calendarHeatmap);
+                    } else {
+                        // Update existing calendar data without recreation for API updates
+                        PulseApp.ui.calendarHeatmap.updateCalendarData(extendedBackupData, null, filteredGuestIds, onDateSelect);
+                    }
                 }
             }
             
