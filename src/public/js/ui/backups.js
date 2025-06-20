@@ -414,8 +414,8 @@ PulseApp.ui.backups = (() => {
                             const owner = snap.owner || '';
                             const comment = snap.comment || '';
                             
-                            // Extract guest name from comment (first part before comma)
-                            const guestNameFromComment = comment.split(',')[0].trim().toLowerCase();
+                            // Note: We cannot reliably extract guest names from comments
+                            // Comments are user-configurable and inconsistent
                             
                             
                             // Extract owner token if available
@@ -424,15 +424,13 @@ PulseApp.ui.backups = (() => {
                                 ownerToken = owner.split('!')[1].toLowerCase();
                             }
                             
-                            // Find all guests that could match this backup using VMID + Name + Owner
+                            // Find all guests that could match this backup using VMID + Owner
                             const matchingGuests = allGuestsUnfiltered.filter(guest => {
                                 // Must match VMID
                                 if (guest.vmid != guestId) return false;
                                 
-                                // Must match guest name (if available in comment)
-                                if (guestNameFromComment && guest.name.toLowerCase() !== guestNameFromComment) {
-                                    return false;
-                                }
+                                // Skip guest name matching - comments are unreliable
+                                // We can only match by VMID + owner token
                                 
                                 // Use owner token to differentiate between same-named guests
                                 if (ownerToken) {
@@ -440,22 +438,23 @@ PulseApp.ui.backups = (() => {
                                     
                                     // For primary endpoint (cluster), exclude if owner matches a secondary endpoint
                                     if (guestEndpoint === 'primary') {
-                                        // Get all secondary endpoint names
-                                        const secondaryEndpoints = Array.from(new Set(
-                                            allGuestsUnfiltered
-                                                .filter(g => g.endpointId)
-                                                .map(g => g.endpointId.split('.')[0].toLowerCase())
-                                        ));
+                                        // Check if any secondary endpoint has a nodeDisplayName matching the token
+                                        const isSecondaryToken = allGuestsUnfiltered.some(g => {
+                                            if (!g.nodeDisplayName || !g.endpointId || g.endpointId === 'primary') return false;
+                                            const clusterName = g.nodeDisplayName.split(' - ')[0].toLowerCase();
+                                            return clusterName === ownerToken;
+                                        });
                                         
                                         // If owner token matches a secondary endpoint, this backup isn't from primary
-                                        if (secondaryEndpoints.includes(ownerToken)) {
+                                        if (isSecondaryToken) {
                                             return false;
                                         }
                                         return true;
                                     } else {
-                                        // For secondary endpoints, owner token should match endpoint name
-                                        const endpointHostname = guestEndpoint.split('.')[0].toLowerCase();
-                                        return ownerToken === endpointHostname;
+                                        // For secondary endpoints, check if the guest's cluster name matches the token
+                                        if (!guest.nodeDisplayName) return false;
+                                        const clusterName = guest.nodeDisplayName.split(' - ')[0].toLowerCase();
+                                        return ownerToken === clusterName;
                                     }
                                 }
                                 
@@ -463,25 +462,18 @@ PulseApp.ui.backups = (() => {
                             });
                             
                             
-                            // If we found exact matches based on guest name, use those
+                            // If we found matches based on VMID + owner, use those
                             if (matchingGuests.length > 0) {
                                 matchingGuests.forEach(guest => {
                                     guestNodeCombosInNamespace.add(`${guestId}-${guest.node}`);
                                 });
                             } else {
-                                // Fallback: try to parse node from comment if it's in old format
-                                const commentParts = comment.split(', ');
-                                if (commentParts.length >= 3) {
-                                    const sourceNode = commentParts[1];
-                                    guestNodeCombosInNamespace.add(`${guestId}-${sourceNode}`);
-                                } else {
-                                    // Last resort: include all guests with this VMID
-                                    allGuestsUnfiltered.forEach(guest => {
-                                        if (guest.vmid == guestId) {
-                                            guestNodeCombosInNamespace.add(`${guestId}-${guest.node}`);
-                                        }
-                                    });
-                                }
+                                // No matches found - include all guests with this VMID
+                                allGuestsUnfiltered.forEach(guest => {
+                                    if (guest.vmid == guestId) {
+                                        guestNodeCombosInNamespace.add(`${guestId}-${guest.node}`);
+                                    }
+                                });
                             }
                         }
                     });
@@ -509,8 +501,8 @@ PulseApp.ui.backups = (() => {
                             const owner = snap.owner || '';
                             const comment = snap.comment || '';
                             
-                            // Extract guest name from comment (first part before comma)
-                            const guestNameFromComment = comment.split(',')[0].trim().toLowerCase();
+                            // Note: We cannot reliably extract guest names from comments
+                            // Comments are user-configurable and inconsistent
                             
                             
                             // Extract owner token if available
@@ -519,15 +511,13 @@ PulseApp.ui.backups = (() => {
                                 ownerToken = owner.split('!')[1].toLowerCase();
                             }
                             
-                            // Find all guests that could match this backup using VMID + Name + Owner
+                            // Find all guests that could match this backup using VMID + Owner
                             const matchingGuests = allGuestsUnfiltered.filter(guest => {
                                 // Must match VMID
                                 if (guest.vmid != guestId) return false;
                                 
-                                // Must match guest name (if available in comment)
-                                if (guestNameFromComment && guest.name.toLowerCase() !== guestNameFromComment) {
-                                    return false;
-                                }
+                                // Skip guest name matching - comments are unreliable
+                                // We can only match by VMID + owner token
                                 
                                 // Use owner token to differentiate between same-named guests
                                 if (ownerToken) {
@@ -535,22 +525,23 @@ PulseApp.ui.backups = (() => {
                                     
                                     // For primary endpoint (cluster), exclude if owner matches a secondary endpoint
                                     if (guestEndpoint === 'primary') {
-                                        // Get all secondary endpoint names
-                                        const secondaryEndpoints = Array.from(new Set(
-                                            allGuestsUnfiltered
-                                                .filter(g => g.endpointId)
-                                                .map(g => g.endpointId.split('.')[0].toLowerCase())
-                                        ));
+                                        // Check if any secondary endpoint has a nodeDisplayName matching the token
+                                        const isSecondaryToken = allGuestsUnfiltered.some(g => {
+                                            if (!g.nodeDisplayName || !g.endpointId || g.endpointId === 'primary') return false;
+                                            const clusterName = g.nodeDisplayName.split(' - ')[0].toLowerCase();
+                                            return clusterName === ownerToken;
+                                        });
                                         
                                         // If owner token matches a secondary endpoint, this backup isn't from primary
-                                        if (secondaryEndpoints.includes(ownerToken)) {
+                                        if (isSecondaryToken) {
                                             return false;
                                         }
                                         return true;
                                     } else {
-                                        // For secondary endpoints, owner token should match endpoint name
-                                        const endpointHostname = guestEndpoint.split('.')[0].toLowerCase();
-                                        return ownerToken === endpointHostname;
+                                        // For secondary endpoints, check if the guest's cluster name matches the token
+                                        if (!guest.nodeDisplayName) return false;
+                                        const clusterName = guest.nodeDisplayName.split(' - ')[0].toLowerCase();
+                                        return ownerToken === clusterName;
                                     }
                                 }
                                 
@@ -558,25 +549,18 @@ PulseApp.ui.backups = (() => {
                             });
                             
                             
-                            // If we found exact matches based on guest name, use those
+                            // If we found matches based on VMID + owner, use those
                             if (matchingGuests.length > 0) {
                                 matchingGuests.forEach(guest => {
                                     guestNodeCombosInNamespace.add(`${guestId}-${guest.node}`);
                                 });
                             } else {
-                                // Fallback: try to parse node from comment if it's in old format
-                                const commentParts = comment.split(', ');
-                                if (commentParts.length >= 3) {
-                                    const sourceNode = commentParts[1];
-                                    guestNodeCombosInNamespace.add(`${guestId}-${sourceNode}`);
-                                } else {
-                                    // Last resort: include all guests with this VMID
-                                    allGuestsUnfiltered.forEach(guest => {
-                                        if (guest.vmid == guestId) {
-                                            guestNodeCombosInNamespace.add(`${guestId}-${guest.node}`);
-                                        }
-                                    });
-                                }
+                                // No matches found - include all guests with this VMID
+                                allGuestsUnfiltered.forEach(guest => {
+                                    if (guest.vmid == guestId) {
+                                        guestNodeCombosInNamespace.add(`${guestId}-${guest.node}`);
+                                    }
+                                });
                             }
                         }
                     });
@@ -681,10 +665,59 @@ PulseApp.ui.backups = (() => {
             // PBS: Include PBS instance name to prevent cross-PBS contamination
             // PVE: create both node-specific AND generic keys for cross-node matching
             if (snap.source === 'pbs') {
-                // Include PBS instance AND namespace in the key to prevent guests from different clusters
-                // or namespaces seeing each other's backups when they have the same VMID
+                // For PBS, we need to create endpoint-specific keys based on the owner field
+                // This ensures backups only show for the correct guest
+                const owner = snap.owner || '';
+                let endpointSuffix = '';
+                let matchingGuest = null; // Define outside the if block
+                
+                if (owner && owner.includes('!')) {
+                    // Extract token name which identifies the endpoint
+                    const ownerToken = owner.split('!')[1].toLowerCase();
+                    
+                    // Map token to endpoint
+                    // Find if any guest from a secondary endpoint has a nodeDisplayName that matches the token
+                    matchingGuest = allGuestsUnfiltered.find(g => {
+                        if (!g.nodeDisplayName || !g.endpointId || g.endpointId === 'primary') return false;
+                        // nodeDisplayName might be just "pimox" or "pimox - pi" format
+                        const clusterName = g.nodeDisplayName.split(' - ')[0].toLowerCase();
+                        return clusterName === ownerToken;
+                    });
+                    
+                    
+                    if (matchingGuest) {
+                        // This backup is from a secondary endpoint
+                        // Use the actual endpoint ID for consistency
+                        endpointSuffix = `-${matchingGuest.endpointId}`;
+                    } else {
+                        // This backup is from primary endpoint (or token doesn't match any secondary)
+                        endpointSuffix = '-primary';
+                    }
+                } else {
+                    // No owner info - mark as unknown/ambiguous
+                    endpointSuffix = '-unknown';
+                }
+                
                 const namespace = snap.namespace || 'root';
-                const key = `${snap.backupVMID}-${snap.backupType}-${snap.pbsInstanceName}-${namespace}`;
+                // Include endpoint suffix in the key to separate backups by source
+                const key = `${snap.backupVMID}-${snap.backupType}-${snap.pbsInstanceName}-${namespace}${endpointSuffix}`;
+                
+                // Debug first pimox backup key
+                if (!window._pbsDebugLogged && namespace === 'pimox' && snap.backupVMID == '100') {
+                    window._pbsDebugLogged = true;
+                    console.log('PBS Index Key Debug:', {
+                        vmid: snap.backupVMID,
+                        namespace,
+                        endpointSuffix,
+                        fullKey: key,
+                        owner: snap.owner,
+                        matchingGuest: matchingGuest ? {
+                            endpointId: matchingGuest.endpointId,
+                            nodeDisplayName: matchingGuest.nodeDisplayName
+                        } : null
+                    });
+                }
+                
                 if (!snapshotsByGuest.has(key)) snapshotsByGuest.set(key, []);
                 snapshotsByGuest.get(key).push(snap);
             } else {
@@ -944,6 +977,7 @@ PulseApp.ui.backups = (() => {
         let pbsBackupInfo = '';
         let pveBackupCount = 0; 
         let pveBackupInfo = '';
+        let pbsBackupAmbiguous = false; // Track if PBS backups can't be reliably attributed
         
         if (guestSnapshots && guestSnapshots.length > 0) {
             // Separate PBS and PVE snapshots
@@ -955,6 +989,18 @@ PulseApp.ui.backups = (() => {
                 pbsBackupCount = pbsSnapshots.length;
                 const pbsInstances = [...new Set(pbsSnapshots.map(s => s.pbsInstanceName).filter(Boolean))];
                 const datastores = [...new Set(pbsSnapshots.map(s => s.datastoreName).filter(Boolean))];
+                
+                // Since we're now properly filtering by owner/endpoint, we only need to check
+                // if any snapshots have missing owner information
+                const ambiguousSnapshots = pbsSnapshots.filter(snap => {
+                    const owner = snap.owner || '';
+                    return !owner || !owner.includes('!');
+                });
+                
+                // Mark as ambiguous only if we have snapshots without owner info
+                if (ambiguousSnapshots.length > 0) {
+                    pbsBackupAmbiguous = true;
+                }
                 
                 // Group backups by PBS instance and namespace for detailed info
                 const backupsByPbs = {};
@@ -1118,6 +1164,7 @@ PulseApp.ui.backups = (() => {
             mostRecentBackupType: mostRecentBackupType, // NEW: Most recent backup type
             pbsBackups: pbsBackupCount,
             pbsBackupInfo: pbsBackupInfo,
+            pbsBackupAmbiguous: pbsBackupAmbiguous, // NEW: Track if PBS backups are ambiguous
             pveBackups: pveBackupCount,
             pveBackupInfo: pveBackupInfo,
             totalBackups: totalBackups,
@@ -1237,9 +1284,15 @@ PulseApp.ui.backups = (() => {
         let pbsBackupCell = '';
         if (guestStatus.pbsBackups > 0) {
             const pbsIcon = '<span class="inline-block w-2 h-2 bg-purple-500 rounded-full mr-1" title="PBS Backup"></span>';
-            const pbsText = `${pbsIcon}${guestStatus.pbsBackups}`;
+            const ambiguityIcon = guestStatus.pbsBackupAmbiguous 
+                ? '<span class="inline-block ml-1 text-yellow-500 dark:text-yellow-400" title="⚠️ These PBS backups may belong to another guest with the same VMID">⚠️</span>' 
+                : '';
+            const pbsText = `${pbsIcon}${guestStatus.pbsBackups}${ambiguityIcon}`;
             const tooltip = guestStatus.pbsBackupInfo || '';
-            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${tooltip ? `title="${tooltip}"` : ''}>${pbsText}</span>`;
+            const fullTooltip = guestStatus.pbsBackupAmbiguous 
+                ? `${tooltip} (Warning: Backups may belong to another guest with VMID ${guestStatus.guestId})`
+                : tooltip;
+            pbsBackupCell = `<span class="text-purple-700 dark:text-purple-300" ${fullTooltip ? `title="${fullTooltip}"` : ''}>${pbsText}</span>`;
         } else {
             pbsBackupCell = '<span class="text-gray-400 dark:text-gray-500">0</span>';
         }
@@ -1985,8 +2038,20 @@ PulseApp.ui.backups = (() => {
             if (namespaceFilter !== 'all') {
                 // Guest is already filtered to be from this specific namespace
                 guestNamespace = namespaceFilter;
+                
+                // Determine endpoint suffix for this guest
+                const guestEndpoint = guest.endpointId || 'primary';
+                let endpointSuffix = '';
+                if (guestEndpoint === 'primary') {
+                    endpointSuffix = '-primary';
+                } else {
+                    // For secondary endpoints, use the actual endpoint ID for consistency
+                    endpointSuffix = `-${guestEndpoint}`;
+                }
+                
                 filteredPbsDataArray.forEach(pbsInstance => {
-                    const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}-${namespaceFilter}`;
+                    // Include endpoint suffix in the key to get only backups from the correct source
+                    const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}-${namespaceFilter}${endpointSuffix}`;
                     const snapshots = snapshotsByGuest.get(pbsKey) || [];
                     pbsSnapshots.push(...snapshots);
                 });
@@ -1998,32 +2063,28 @@ PulseApp.ui.backups = (() => {
                 let mostRecentTime = 0;
                 const namespaceSnapshots = new Map(); // Store snapshots by namespace
                 
+                // Determine endpoint suffix for this guest
+                const guestEndpoint = guest.endpointId || 'primary';
+                let endpointSuffix = '';
+                if (guestEndpoint === 'primary') {
+                    endpointSuffix = '-primary';
+                } else {
+                    // For secondary endpoints, use the actual endpoint ID for consistency
+                    endpointSuffix = `-${guestEndpoint}`;
+                }
+                
                 filteredPbsDataArray.forEach(pbsInstance => {
-                    // Look through all available namespace keys for this guest
+                    // Look through all available namespace keys for this guest with the correct endpoint
                     snapshotsByGuest.forEach((snapshots, key) => {
-                        if (key.startsWith(`${baseKey}-${pbsInstance.pbsInstanceName}-`)) {
-                            const namespace = key.split('-').pop();
+                        // Check if key matches pattern: vmid-type-pbsinstance-namespace-endpoint
+                        if (key.startsWith(`${baseKey}-${pbsInstance.pbsInstanceName}-`) && key.endsWith(endpointSuffix)) {
+                            // Extract namespace from the key (it's between PBS instance and endpoint suffix)
+                            const parts = key.split('-');
+                            const endpointPart = parts[parts.length - 1];
+                            const namespace = parts[parts.length - 2];
                             
-                            // Check if these snapshots are from this specific guest by matching comment field
-                            const relevantSnapshots = snapshots.filter(snap => {
-                                const comment = snap.comment || '';
-                                const guestNameFromComment = comment.split(',')[0].trim().toLowerCase();
-                                
-                                // First check: guest name must match
-                                if (guestNameFromComment && guestNameFromComment !== guest.name.toLowerCase()) {
-                                    return false;
-                                }
-                                
-                                // If comment has node info (old format), verify it matches
-                                const commentParts = comment.split(', ');
-                                if (commentParts.length >= 3) {
-                                    const sourceNode = commentParts[1];
-                                    return sourceNode === guest.node;
-                                }
-                                
-                                // For newer backups with just guest name, accept if name matches
-                                return guestNameFromComment === guest.name.toLowerCase();
-                            });
+                            // Since we're already filtering by endpoint in the key, all these snapshots belong to this guest
+                            const relevantSnapshots = snapshots;
                             
                             if (relevantSnapshots.length > 0) {
                                 // Store snapshots by namespace
@@ -2147,18 +2208,31 @@ PulseApp.ui.backups = (() => {
                             (ds.snapshots || []).forEach(snap => {
                                 const snapNamespace = snap.namespace || 'root';
                                 if (snapNamespace === namespace && snap['backup-id'] == guest.vmid) {
-                                    // Check if this snapshot is from the same node as the guest
-                                    const comment = snap.comment || '';
-                                    const commentParts = comment.split(', ');
-                                    let isCorrectGuest = false;
-                                    if (commentParts.length >= 3) {
-                                        const sourceNode = commentParts[1];
-                                        if (sourceNode === guest.node) {
-                                            isCorrectGuest = true;
+                                    // Check if this backup belongs to this guest using owner token
+                                    const owner = snap.owner || '';
+                                    let ownerToken = null;
+                                    if (owner && owner.includes('!')) {
+                                        ownerToken = owner.split('!')[1].toLowerCase();
+                                    }
+                                    
+                                    let isCorrectGuest = true;
+                                    if (ownerToken) {
+                                        const guestEndpoint = guest.endpointId || 'primary';
+                                        if (guestEndpoint === 'primary') {
+                                            // For primary endpoint, check if owner token matches a secondary endpoint
+                                            const secondaryEndpoints = Array.from(new Set(
+                                                allGuestsUnfiltered
+                                                    .filter(g => g.endpointId)
+                                                    .map(g => g.endpointId.split('.')[0].toLowerCase())
+                                            ));
+                                            if (secondaryEndpoints.includes(ownerToken)) {
+                                                isCorrectGuest = false;
+                                            }
+                                        } else {
+                                            // For secondary endpoints, owner token should match endpoint name
+                                            const endpointHostname = guestEndpoint.split('.')[0].toLowerCase();
+                                            isCorrectGuest = (ownerToken === endpointHostname);
                                         }
-                                    } else {
-                                        // Fallback: if no comment info, assume it's correct
-                                        isCorrectGuest = true;
                                     }
                                     
                                     if (isCorrectGuest) {
@@ -2245,26 +2319,106 @@ PulseApp.ui.backups = (() => {
             // Use PBS data filtered by instance but not by namespace
             pbsSnapshots = filteredPbsDataArray.flatMap(pbsInstance =>
                 (pbsInstance.datastores || []).flatMap(ds =>
-                    (ds.snapshots || []).map(snap => ({
-                        ...snap,
-                        pbsInstanceName: pbsInstance.pbsInstanceName,
-                        datastoreName: ds.name,
-                        namespace: snap.namespace || 'root',
-                        source: 'pbs'
-                    }))
+                    (ds.snapshots || []).map(snap => {
+                        // Determine endpoint information from owner field
+                        const owner = snap.owner || '';
+                        let endpointId = null;
+                        let node = null;
+                        
+                        if (owner && owner.includes('!')) {
+                            const ownerToken = owner.split('!')[1].toLowerCase();
+                            
+                            // Find matching guest to get endpoint/node info
+                            const matchingGuest = allGuests.find(guest => {
+                                if (guest.vmid != snap['backup-id']) return false;
+                                
+                                // For primary endpoint
+                                if (!guest.endpointId || guest.endpointId === 'primary') {
+                                    // Check if token matches a secondary endpoint
+                                    const isSecondaryToken = allGuests.some(g => {
+                                        if (!g.nodeDisplayName || !g.endpointId || g.endpointId === 'primary') return false;
+                                        const clusterName = g.nodeDisplayName.split(' - ')[0].toLowerCase();
+                                        return clusterName === ownerToken;
+                                    });
+                                    return !isSecondaryToken;
+                                } else {
+                                    // For secondary endpoints
+                                    if (!guest.nodeDisplayName) return false;
+                                    const clusterName = guest.nodeDisplayName.split(' - ')[0].toLowerCase();
+                                    return ownerToken === clusterName;
+                                }
+                            });
+                            
+                            if (matchingGuest) {
+                                endpointId = matchingGuest.endpointId;
+                                node = matchingGuest.node;
+                            }
+                        }
+                        
+                        return {
+                            ...snap,
+                            pbsInstanceName: pbsInstance.pbsInstanceName,
+                            datastoreName: ds.name,
+                            namespace: snap.namespace || 'root',
+                            source: 'pbs',
+                            endpointId: endpointId,
+                            node: node
+                        };
+                    })
                 )
             );
         } else {
-            // When filtering by specific namespace, use filtered data
+            // When filtering by specific namespace, only include snapshots from that namespace
             pbsSnapshots = filteredPbsDataArray.flatMap(pbsInstance =>
                 (pbsInstance.datastores || []).flatMap(ds =>
-                    (ds.snapshots || []).map(snap => ({
-                        ...snap,
-                        pbsInstanceName: pbsInstance.pbsInstanceName,
-                        datastoreName: ds.name,
-                        namespace: snap.namespace || 'root',
-                        source: 'pbs'
-                    }))
+                    (ds.snapshots || [])
+                        .filter(snap => (snap.namespace || 'root') === namespaceFilter)
+                        .map(snap => {
+                            // Determine endpoint information from owner field
+                            const owner = snap.owner || '';
+                            let endpointId = null;
+                            let node = null;
+                            
+                            if (owner && owner.includes('!')) {
+                                const ownerToken = owner.split('!')[1].toLowerCase();
+                                
+                                // Find matching guest to get endpoint/node info
+                                const matchingGuest = backupStatusByGuest.find(guest => {
+                                    if (guest.guestId != snap['backup-id']) return false;
+                                    
+                                    // For primary endpoint
+                                    if (!guest.endpointId || guest.endpointId === 'primary') {
+                                        // Check if token matches a secondary endpoint
+                                        const isSecondaryToken = backupStatusByGuest.some(g => {
+                                            if (!g.nodeDisplayName || !g.endpointId || g.endpointId === 'primary') return false;
+                                            const clusterName = g.nodeDisplayName.split(' - ')[0].toLowerCase();
+                                            return clusterName === ownerToken;
+                                        });
+                                        return !isSecondaryToken;
+                                    } else {
+                                        // For secondary endpoints
+                                        if (!guest.nodeDisplayName) return false;
+                                        const clusterName = guest.nodeDisplayName.split(' - ')[0].toLowerCase();
+                                        return ownerToken === clusterName;
+                                    }
+                                });
+                                
+                                if (matchingGuest) {
+                                    endpointId = matchingGuest.endpointId;
+                                    node = matchingGuest.node;
+                                }
+                            }
+                            
+                            return {
+                                ...snap,
+                                pbsInstanceName: pbsInstance.pbsInstanceName,
+                                datastoreName: ds.name,
+                                namespace: snap.namespace || 'root',
+                                source: 'pbs',
+                                endpointId: endpointId,
+                                node: node
+                            };
+                        })
                 )
             );
         }
@@ -2358,6 +2512,17 @@ PulseApp.ui.backups = (() => {
                     const nodeIdentifier = guest.node || guest.endpointId || '';
                     return nodeIdentifier ? `${guest.guestId}-${nodeIdentifier}` : guest.guestId.toString();
                 });
+                
+                // Debug guest IDs when namespace filtering
+                if (namespaceFilter !== 'all') {
+                    console.log('Filtered guest IDs for calendar:', filteredGuestIds);
+                    console.log('Sample filtered backup status:', filteredBackupStatus.slice(0, 2).map(g => ({
+                        guestId: g.guestId,
+                        node: g.node,
+                        endpointId: g.endpointId,
+                        name: g.guestName
+                    })));
+                }
                 
                 // Get detail card container
                 const detailCardContainer = document.getElementById('backup-detail-card');
@@ -2494,6 +2659,20 @@ PulseApp.ui.backups = (() => {
                 // Only recreate calendar if it doesn't exist or if this is a user action
                 const existingCalendar = calendarContainer.querySelector('.calendar-heatmap-container');
                 if (!existingCalendar || isUserAction) {
+                    // Debug calendar data when namespace filter is active
+                    if (namespaceFilter !== 'all') {
+                        console.log('Calendar CREATION - Namespace Filter:', namespaceFilter);
+                        console.log('Extended backup data PBS count:', extendedBackupData.pbsSnapshots?.length || 0);
+                        console.log('Filtered Guest IDs:', filteredGuestIds);
+                        console.log('Is User Action:', isUserAction);
+                        console.log('Sample PBS snapshots with endpoint info:', extendedBackupData.pbsSnapshots?.slice(0, 3).map(s => ({
+                            vmid: s['backup-id'],
+                            endpointId: s.endpointId,
+                            node: s.node,
+                            owner: s.owner
+                        })));
+                    }
+                    
                     const calendarHeatmap = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(
                         extendedBackupData, 
                         null, 
@@ -2504,6 +2683,14 @@ PulseApp.ui.backups = (() => {
                     calendarContainer.innerHTML = '';
                     calendarContainer.appendChild(calendarHeatmap);
                 } else {
+                    // Debug calendar data when namespace filter is active
+                    if (namespaceFilter !== 'all') {
+                        console.log('Calendar Debug - Namespace Filter:', namespaceFilter);
+                        console.log('PBS Snapshots count:', pbsSnapshots.length);
+                        console.log('Filtered Guest IDs:', filteredGuestIds);
+                        console.log('Sample PBS snapshots:', pbsSnapshots.slice(0, 3));
+                    }
+                    
                     // Update existing calendar data without recreation to prevent flashing
                     PulseApp.ui.calendarHeatmap.updateCalendarData(extendedBackupData, null, filteredGuestIds, onDateSelect);
                 }
@@ -2827,8 +3014,6 @@ PulseApp.ui.backups = (() => {
     
     
     function _prepareMultiDateDetailData(filteredBackupStatus, backupData) {
-        // Debug: Log data being passed to detail card
-        
         // Prepare data for multi-date detail view
         const multiDateBackups = [];
         const stats = {
@@ -2856,17 +3041,27 @@ PulseApp.ui.backups = (() => {
                     
                     // Match by VMID AND node to prevent cross-endpoint contamination
                     if (parseInt(snapId, 10) === parseInt(guestId, 10)) {
-                        // Check if this snapshot is from the same node as the guest
-                        const comment = snap.comment || '';
-                        const commentParts = comment.split(', ');
-                        let isCorrectGuest = false;
+                        // Check if this backup belongs to this guest using owner token
+                        const owner = snap.owner || '';
+                        let ownerToken = null;
+                        if (owner && owner.includes('!')) {
+                            ownerToken = owner.split('!')[1].toLowerCase();
+                        }
                         
-                        if (commentParts.length >= 3) {
-                            const sourceNode = commentParts[1];
-                            isCorrectGuest = (sourceNode === guestStatus.node);
-                        } else {
-                            // Fallback: if no comment info, assume it matches (for backward compatibility)
-                            isCorrectGuest = true;
+                        let isCorrectGuest = true;
+                        if (ownerToken && guestStatus.endpointId) {
+                            // For secondary endpoints, owner token should match endpoint name
+                            const endpointHostname = guestStatus.endpointId.split('.')[0].toLowerCase();
+                            isCorrectGuest = (ownerToken === endpointHostname);
+                        } else if (ownerToken && !guestStatus.endpointId) {
+                            // For primary endpoint, check if owner token matches a secondary endpoint
+                            // If it does, this backup is NOT from primary
+                            const allEndpointIds = [...new Set(PulseApp.state.get('vms').concat(PulseApp.state.get('containers'))
+                                .filter(g => g.endpointId)
+                                .map(g => g.endpointId.split('.')[0].toLowerCase()))];
+                            if (allEndpointIds.includes(ownerToken)) {
+                                isCorrectGuest = false;
+                            }
                         }
                         
                         if (isCorrectGuest) {
@@ -2981,6 +3176,20 @@ PulseApp.ui.backups = (() => {
                     ...guestStatus,
                     backupDates: backupDates.sort((a, b) => b.latestTimestamp - a.latestTimestamp)
                 });
+            } else {
+                // Even if no backup dates found in detail data, include guest if they have backups
+                // This is important for namespace filtering where historical data might be limited
+                if (guestStatus.pbsBackups > 0 || guestStatus.pveBackups > 0 || guestStatus.snapshotCount > 0) {
+                    console.log('Guest has backups but no dates found:', {
+                        guestId: guestStatus.guestId,
+                        pbsBackups: guestStatus.pbsBackups,
+                        latestBackupTime: guestStatus.latestBackupTime
+                    });
+                    multiDateBackups.push({
+                        ...guestStatus,
+                        backupDates: []
+                    });
+                }
             }
         });
         
@@ -3021,12 +3230,18 @@ PulseApp.ui.backups = (() => {
                 if (guest.snapshotCount > 0) uniqueGuestsWithSnapshots.add(uniqueKey);
             } else {
                 // When filtering by specific type, count guests who have that type in their backup dates
-                const hasFilteredBackupType = guest.backupDates.some(dateInfo => {
-                    if (backupTypeFilter === 'pbs') return dateInfo.types.includes('pbsSnapshots');
-                    if (backupTypeFilter === 'pve') return dateInfo.types.includes('pveBackups');
-                    if (backupTypeFilter === 'snapshots') return dateInfo.types.includes('vmSnapshots');
-                    return false;
-                });
+                // OR if they have no backup dates but have backups of that type (important for namespace filtering)
+                const hasFilteredBackupType = guest.backupDates && guest.backupDates.length > 0 ?
+                    guest.backupDates.some(dateInfo => {
+                        if (backupTypeFilter === 'pbs') return dateInfo.types.includes('pbsSnapshots');
+                        if (backupTypeFilter === 'pve') return dateInfo.types.includes('pveBackups');
+                        if (backupTypeFilter === 'snapshots') return dateInfo.types.includes('vmSnapshots');
+                        return false;
+                    }) :
+                    // Fallback to guest backup counts if no dates available
+                    (backupTypeFilter === 'pbs' && guest.pbsBackups > 0) ||
+                    (backupTypeFilter === 'pve' && guest.pveBackups > 0) ||
+                    (backupTypeFilter === 'snapshots' && guest.snapshotCount > 0);
                 
                 if (hasFilteredBackupType) {
                     if (backupTypeFilter === 'pbs') uniqueGuestsWithPBS.add(uniqueKey);
@@ -3066,6 +3281,10 @@ PulseApp.ui.backups = (() => {
         // Add change listener
         namespaceFilter.addEventListener('change', () => {
             PulseApp.state.set('backupsFilterNamespace', namespaceFilter.value);
+            // Clear calendar cache when namespace changes
+            if (PulseApp.ui.calendarHeatmap && PulseApp.ui.calendarHeatmap.clearCache) {
+                PulseApp.ui.calendarHeatmap.clearCache();
+            }
             updateBackupsTab(true);
         });
         
