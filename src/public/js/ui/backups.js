@@ -2608,7 +2608,8 @@ PulseApp.ui.backups = (() => {
                         (PulseApp.state.get('backupsFilterGuestType') !== 'all') ||
                         (PulseApp.state.get('backupsFilterHealth') !== 'all') ||
                         (PulseApp.state.get('backupsFilterBackupType') !== 'all') ||
-                        PulseApp.state.get('backupsFilterFailures')
+                        PulseApp.state.get('backupsFilterFailures') ||
+                        (namespaceFilter !== 'all')
                     );
                     
                     // Use unfiltered data for overview when no filters are active
@@ -2694,7 +2695,8 @@ PulseApp.ui.backups = (() => {
                                 (PulseApp.state.get('backupsFilterGuestType') !== 'all') ||
                                 (PulseApp.state.get('backupsFilterHealth') !== 'all') ||
                                 (PulseApp.state.get('backupsFilterBackupType') !== 'all') ||
-                                PulseApp.state.get('backupsFilterFailures')
+                                PulseApp.state.get('backupsFilterFailures') ||
+                                (namespaceFilter !== 'all')
                             );
                             
                             // Use unfiltered data for overview when no filters are active
