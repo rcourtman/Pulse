@@ -876,11 +876,19 @@ PulseApp.ui.backupDetailCard = (() => {
 
     // Helper functions
     function formatAge(ageInDays) {
-        // Debug for unusual age calculations  
-        if (ageInDays > 0.5 || Math.floor(ageInDays * 24) > 10) {
+        if (ageInDays === Infinity) return 'Never';
+        
+        // Handle negative ages (future timestamps) - likely clock sync issues
+        if (ageInDays < 0) {
+            // Show as "just now" for small negative values (within 1 hour)
+            if (ageInDays > -0.042) { // -1 hour in days
+                return 'Just now';
+            }
+            // For larger negative values, show the absolute time to help debug
+            return `Future (${Math.abs(Math.floor(ageInDays * 24))}h)`;
         }
         
-        if (ageInDays === Infinity) return 'Never';
+        if (ageInDays < 0.042) return 'Just now'; // Less than 1 hour
         if (ageInDays < 1) return `${Math.floor(ageInDays * 24)}h`;
         if (ageInDays < 7) return `${Math.floor(ageInDays)}d`;
         if (ageInDays < 30) return `${Math.floor(ageInDays / 7)}w`;
@@ -900,6 +908,8 @@ PulseApp.ui.backupDetailCard = (() => {
     }
 
     function getAgeColor(ageInDays) {
+        // Handle negative ages (future timestamps) as recent/green
+        if (ageInDays < 0) return 'text-green-600 dark:text-green-400';
         if (ageInDays <= 1) return 'text-green-600 dark:text-green-400';
         if (ageInDays <= 3) return 'text-blue-600 dark:text-blue-400';
         if (ageInDays <= 7) return 'text-yellow-600 dark:text-yellow-400';
