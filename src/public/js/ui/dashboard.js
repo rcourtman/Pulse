@@ -92,12 +92,8 @@ PulseApp.ui.dashboard = (() => {
             currentValue
         );
         
-        // Add alert-specific data attributes to the container and visual indicator for global values
-        const globalIndicator = isUsingGlobal ? ' data-using-global="true"' : '';
-        const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
-        
         return `
-            <div class="${containerClass} h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
+            <div class="alert-threshold-input h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}">
                 ${selectHtml}
             </div>
         `;
@@ -1112,8 +1108,9 @@ PulseApp.ui.dashboard = (() => {
         if (!groupByNode && sortedData.length > VIRTUAL_SCROLL_THRESHOLD && PulseApp.virtualScroll) {
             const tableContainer = document.querySelector('.table-container');
             if (tableContainer && !virtualScroller) {
-                // Set fixed height for virtual scroll container
-                tableContainer.style.height = '600px';
+                // For virtual scrolling, use a much larger viewport or full viewport
+                // This maintains performance while showing more content
+                tableContainer.style.height = '90vh';
                 virtualScroller = PulseApp.virtualScroll.createVirtualScroller(
                     tableContainer,
                     sortedData,

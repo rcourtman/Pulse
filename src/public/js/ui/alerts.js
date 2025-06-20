@@ -397,27 +397,35 @@ PulseApp.ui.alerts = (() => {
         const netoutCell = document.getElementById('global-netout-cell');
         
         if (diskreadCell) {
-            diskreadCell.innerHTML = PulseApp.ui.thresholds.createThresholdSelectHtml(
-                'global-alert-diskread', ioOptions, globalThresholds.diskread
-            );
+            diskreadCell.innerHTML = `<div class="flex items-center justify-center h-full">${
+                PulseApp.ui.thresholds.createThresholdSelectHtml(
+                    'global-alert-diskread', ioOptions, globalThresholds.diskread
+                )
+            }</div>`;
         }
         
         if (diskwriteCell) {
-            diskwriteCell.innerHTML = PulseApp.ui.thresholds.createThresholdSelectHtml(
-                'global-alert-diskwrite', ioOptions, globalThresholds.diskwrite
-            );
+            diskwriteCell.innerHTML = `<div class="flex items-center justify-center h-full">${
+                PulseApp.ui.thresholds.createThresholdSelectHtml(
+                    'global-alert-diskwrite', ioOptions, globalThresholds.diskwrite
+                )
+            }</div>`;
         }
         
         if (netinCell) {
-            netinCell.innerHTML = PulseApp.ui.thresholds.createThresholdSelectHtml(
-                'global-alert-netin', ioOptions, globalThresholds.netin
-            );
+            netinCell.innerHTML = `<div class="flex items-center justify-center h-full">${
+                PulseApp.ui.thresholds.createThresholdSelectHtml(
+                    'global-alert-netin', ioOptions, globalThresholds.netin
+                )
+            }</div>`;
         }
         
         if (netoutCell) {
-            netoutCell.innerHTML = PulseApp.ui.thresholds.createThresholdSelectHtml(
-                'global-alert-netout', ioOptions, globalThresholds.netout
-            );
+            netoutCell.innerHTML = `<div class="flex items-center justify-center h-full">${
+                PulseApp.ui.thresholds.createThresholdSelectHtml(
+                    'global-alert-netout', ioOptions, globalThresholds.netout
+                )
+            }</div>`;
         }
         
         // Setup event listeners for global controls using threshold system pattern
@@ -1082,7 +1090,7 @@ PulseApp.ui.alerts = (() => {
             );
             
             cell.innerHTML = `
-                <div class="alert-threshold-input h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}">
+                <div class="alert-threshold-input flex items-center justify-center h-full" data-guest-id="${guestId}" data-metric="${metricType}">
                     ${selectHtml}
                 </div>
             `;
