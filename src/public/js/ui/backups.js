@@ -1974,6 +1974,10 @@ PulseApp.ui.backups = (() => {
                 loadingMsg.classList.remove('hidden');
                 tableContainer.classList.add('hidden');
                 noDataMsg.classList.add('hidden');
+                // Keep visualization section hidden until data is ready
+                if (domCache.visualizationSection) {
+                    domCache.visualizationSection.classList.add('hidden');
+                }
             }
             return;
         }
@@ -2453,6 +2457,9 @@ PulseApp.ui.backups = (() => {
         const calendarContainer = document.getElementById('backup-calendar-heatmap');
         
         if (visualizationSection && backupStatusByGuest.length > 0) {
+            // Show visualization section immediately to prevent blinking on initial load
+            visualizationSection.classList.remove('hidden');
+            
             // Hide the summary cards container - we're using consolidated summary now
             if (summaryCardsContainer) {
                 summaryCardsContainer.classList.add('hidden');
@@ -2655,17 +2662,6 @@ PulseApp.ui.backups = (() => {
                     // Update existing calendar data without recreation to prevent flashing
                     PulseApp.ui.calendarHeatmap.updateCalendarData(extendedBackupData, null, filteredGuestIds, onDateSelect);
                 }
-            }
-            
-            // Only show visualization section after all content is ready
-            // Use requestAnimationFrame to ensure DOM updates are complete
-            if (isUserAction || !visualizationSection.classList.contains('hidden')) {
-                visualizationSection.classList.remove('hidden');
-            } else {
-                // First time showing - wait for next frame to avoid flash
-                requestAnimationFrame(() => {
-                    visualizationSection.classList.remove('hidden');
-                });
             }
         } else if (visualizationSection) {
             visualizationSection.classList.add('hidden');
