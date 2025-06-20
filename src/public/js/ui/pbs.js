@@ -195,16 +195,10 @@ PulseApp.ui.pbs = (() => {
     };
 
     const parsePbsTaskTarget = (task) => {
-      // For synthetic backup run tasks, enhance with guest name if available
+      // For synthetic backup run tasks, don't enhance with guest names
       if (task.guest && task.pbsBackupRun) {
-          // Check if guest field is in format "ct/103" or "qemu/102"
-          const guestParts = task.guest.split('/');
-          if (guestParts.length === 2) {
-              const guestType = guestParts[0];
-              const guestId = guestParts[1];
-              const guestName = findGuestName(guestType, guestId);
-              return guestName ? `${task.guest} (${guestName})` : task.guest;
-          }
+          // PBS tasks come from different PVE instances, so we can't reliably resolve names
+          // Just return the raw guest string (e.g., "ct/100")
           return task.guest;
       }
       
@@ -223,9 +217,8 @@ PulseApp.ui.pbs = (() => {
               const guestId = targetSubParts[1];
               const baseTarget = `${guestType}/${guestId}`;
               
-              // Try to find guest name and append it if found
-              const guestName = findGuestName(guestType, guestId);
-              displayTarget = guestName ? `${baseTarget} (${guestName})` : baseTarget;
+              // Don't resolve guest names for PBS tasks - they may come from different PVE instances
+              displayTarget = baseTarget;
           }
         }
       } else if (taskType === 'prune' || taskType === 'garbage_collection') {
@@ -1093,6 +1086,12 @@ PulseApp.ui.pbs = (() => {
         heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
         heading.textContent = 'PBS Task Summary';
         sectionDiv.appendChild(heading);
+        
+        // Add a subtitle with timeframe info
+        const subtitle = document.createElement('p');
+        subtitle.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.MB2}`;
+        subtitle.textContent = 'Showing task history from the past year';
+        sectionDiv.appendChild(subtitle);
 
         const tableContainer = document.createElement('div');
         tableContainer.className = `${CSS_CLASSES.OVERFLOW_X_AUTO} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} ${CSS_CLASSES.BG_GRAY_50_DARK_BG_GRAY_800_30} p-3`;
@@ -1128,10 +1127,25 @@ PulseApp.ui.pbs = (() => {
 
         taskHealthData.forEach(taskItem => {
             const summary = taskItem.data?.summary || {};
-            const ok = summary.ok ?? '-';
+            const recentTasks = taskItem.data?.recentTasks || [];
+            const ok = summary.ok ?? 0;
             const failed = summary.failed ?? 0;
+            const total = ok + failed;
             const lastOk = PulseApp.utils.formatPbsTimestampRelative(summary.lastOk);
             const lastFailed = PulseApp.utils.formatPbsTimestampRelative(summary.lastFailed);
+
+            // Calculate additional metrics
+            let last7DaysCount = 0;
+            let last30DaysCount = 0;
+            const now = Date.now();
+            const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
+            const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+            
+            recentTasks.forEach(task => {
+                const taskTime = (task.startTime || task.starttime) * 1000;
+                if (taskTime >= sevenDaysAgo && task.status === 'OK') last7DaysCount++;
+                if (taskTime >= thirtyDaysAgo && task.status === 'OK') last30DaysCount++;
+            });
 
             // Use consolidated table row helper
             const row = PulseApp.ui.common.createTableRow({
@@ -1147,17 +1161,30 @@ PulseApp.ui.pbs = (() => {
             const cellStatus = row.insertCell();
             cellStatus.className = CSS_CLASSES.P1_PX2;
             
-            // More descriptive status text
+            // More descriptive status text with additional context
             let statusHtml = '';
-            if (failed > 0) {
+            if (total === 0) {
+                statusHtml = `<span class="${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}">No tasks</span>`;
+            } else if (failed > 0) {
+                const successRate = total > 0 ? Math.round((ok / total) * 100) : 0;
                 statusHtml = `<span class="${CSS_CLASSES.TEXT_RED_600_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}">${failed} FAILED</span>`;
-                if (ok > 0) {
-                    statusHtml += ` / <span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">${ok} OK</span>`;
-                }
-            } else if (ok > 0) {
-                statusHtml = `<span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">All OK (${ok})</span>`;
+                statusHtml += ` / <span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">${ok} OK</span>`;
+                statusHtml += ` <span class="${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} text-xs">(${successRate}% success)</span>`;
             } else {
-                statusHtml = `<span class="${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}">No recent tasks</span>`;
+                // Show breakdown for successful tasks
+                statusHtml = `<span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">All OK</span>`;
+                statusHtml += ` <span class="${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400} text-xs">`;
+                if (last7DaysCount > 0) {
+                    statusHtml += `${last7DaysCount} this week`;
+                    if (last30DaysCount > last7DaysCount) {
+                        statusHtml += `, ${last30DaysCount} this month`;
+                    }
+                } else if (last30DaysCount > 0) {
+                    statusHtml += `${last30DaysCount} this month`;
+                } else {
+                    statusHtml += `${ok} total`;
+                }
+                statusHtml += `</span>`;
             }
             cellStatus.innerHTML = statusHtml;
             
@@ -1986,9 +2013,10 @@ PulseApp.ui.pbs = (() => {
         }
         
         // Get selected namespace for this instance
+        // Always use 'root' as default namespace to ensure proper filtering
         const selectedNamespace = hasMultipleNamespaces 
             ? (selectedNamespaceByInstance.get(instanceIndex) || 'root')
-            : null;
+            : 'root';
         
         // Filter the instance data by namespace
         const filteredInstanceData = _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace);
@@ -2179,7 +2207,7 @@ PulseApp.ui.pbs = (() => {
     // Filter PBS tasks by namespace
     function _filterPbsTasksByNamespace(tasks, selectedNamespace) {
         if (!selectedNamespace) {
-            // No filtering needed (only root namespace exists)
+            // If no namespace selected, return all tasks (this shouldn't happen with current logic)
             return tasks;
         }
         
@@ -2363,7 +2391,8 @@ PulseApp.ui.pbs = (() => {
             }
             
             // Get current namespace filter selection
-            const selectedNamespace = hasMultipleNamespaces ? selectedNamespaceTab : null;
+            // Always use 'root' as default namespace to ensure proper filtering
+            const selectedNamespace = hasMultipleNamespaces ? selectedNamespaceTab : 'root';
             
             // Filter the instance by namespace
             const filteredInstance = _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace);
