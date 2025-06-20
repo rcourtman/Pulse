@@ -401,8 +401,8 @@ PulseApp.ui.common = (() => {
         const hasActiveStates = hasActiveFilters();
         
         if (hasActiveStates) {
-            // Highlighted state - button is active
-            resetButton.className = 'flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border-2 border-orange-500 rounded bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-900/40 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors flex-shrink-0';
+            // Highlighted state - button is active (toned down)
+            resetButton.className = 'flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-blue-400 dark:border-blue-500 rounded bg-blue-50/50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100/50 dark:hover:bg-blue-900/20 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors flex-shrink-0';
         } else {
             // Default state - button is inactive
             resetButton.className = 'flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors flex-shrink-0';
