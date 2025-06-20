@@ -833,6 +833,17 @@
                     </span>
                   </label>
                   <label class="relative">
+                    <input type="checkbox" id="toggle-thresholds-checkbox" class="hidden peer">
+                    <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                      </svg>
+                      <span class="hidden md:inline">Thresholds</span>
+                    </span>
+                  </label>
+                  <label class="relative">
                     <input type="checkbox" id="toggle-alerts-checkbox" class="hidden peer">
                     <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
@@ -932,7 +943,7 @@
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 95px;">Net In</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 95px;">Net Out</th>
                 </tr>
-                <tr id="threshold-slider-row" class="bg-blue-50 dark:bg-blue-900/20">
+                <tr id="threshold-slider-row" class="hidden bg-blue-50 dark:bg-blue-900/20">
                   <td class="sticky left-0 z-10 py-1 px-2 align-middle">
                     <div class="flex items-center justify-between">
                       <span class="text-xs text-blue-700 dark:text-blue-300">Filters</span>
@@ -1026,6 +1037,20 @@
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Threshold Filter Settings -->
+          <div id="threshold-filter-controls" class="hidden mt-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4">
+                <span class="text-xs text-blue-700 dark:text-blue-300 font-medium">Threshold Settings</span>
+                <label class="inline-flex items-center gap-2 cursor-pointer" title="Hide guests that don't meet thresholds instead of dimming">
+                  <span class="text-xs text-blue-700 dark:text-blue-300">Hide non-matching:</span>
+                  <input type="checkbox" id="threshold-hide-mode" class="sr-only peer">
+                  <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+            </div>
           </div>
 
           <!-- Alert Mode Controls -->
