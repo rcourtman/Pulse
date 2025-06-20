@@ -247,8 +247,8 @@ PulseApp.ui.dashboard = (() => {
         // Initialize fixed table line
         _initTableFixedLine();
         
-        // Add resize listener for progress bar text updates
-        window.addEventListener('resize', PulseApp.utils.updateProgressBarTextsDebounced);
+        // Resize listener for progress bar text updates - DISABLED
+        // window.addEventListener('resize', PulseApp.utils.updateProgressBarTextsDebounced);
 
         document.addEventListener('keydown', (event) => {
             // Handle Escape for resetting filters
@@ -1221,10 +1221,10 @@ PulseApp.ui.dashboard = (() => {
             });
         }
         
-        // Update progress bar texts based on available width
-        requestAnimationFrame(() => {
-            PulseApp.utils.updateProgressBarTexts();
-        });
+        // Update progress bar texts based on available width - DISABLED
+        // requestAnimationFrame(() => {
+        //     PulseApp.utils.updateProgressBarTexts();
+        // });
         
         // Additional scroll position restoration for both axes
         if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
