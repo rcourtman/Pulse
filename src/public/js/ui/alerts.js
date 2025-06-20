@@ -365,21 +365,27 @@ PulseApp.ui.alerts = (() => {
         const diskCell = document.getElementById('global-disk-cell');
         
         if (cpuCell) {
-            cpuCell.innerHTML = PulseApp.ui.thresholds.createThresholdSliderHtml(
-                'global-alert-cpu', 0, 100, 5, globalThresholds.cpu
-            );
+            cpuCell.innerHTML = `<div class="alert-threshold-input">${
+                PulseApp.ui.thresholds.createThresholdSliderHtml(
+                    'global-alert-cpu', 0, 100, 5, globalThresholds.cpu
+                )
+            }</div>`;
         }
         
         if (memoryCell) {
-            memoryCell.innerHTML = PulseApp.ui.thresholds.createThresholdSliderHtml(
-                'global-alert-memory', 0, 100, 5, globalThresholds.memory
-            );
+            memoryCell.innerHTML = `<div class="alert-threshold-input">${
+                PulseApp.ui.thresholds.createThresholdSliderHtml(
+                    'global-alert-memory', 0, 100, 5, globalThresholds.memory
+                )
+            }</div>`;
         }
         
         if (diskCell) {
-            diskCell.innerHTML = PulseApp.ui.thresholds.createThresholdSliderHtml(
-                'global-alert-disk', 0, 100, 5, globalThresholds.disk
-            );
+            diskCell.innerHTML = `<div class="alert-threshold-input">${
+                PulseApp.ui.thresholds.createThresholdSliderHtml(
+                    'global-alert-disk', 0, 100, 5, globalThresholds.disk
+                )
+            }</div>`;
         }
         
         // Create dropdowns for I/O metrics
@@ -397,35 +403,27 @@ PulseApp.ui.alerts = (() => {
         const netoutCell = document.getElementById('global-netout-cell');
         
         if (diskreadCell) {
-            diskreadCell.innerHTML = `<div class="flex items-center justify-center h-full">${
-                PulseApp.ui.thresholds.createThresholdSelectHtml(
-                    'global-alert-diskread', ioOptions, globalThresholds.diskread
-                )
-            }</div>`;
+            diskreadCell.innerHTML = PulseApp.ui.thresholds.createThresholdSelectHtml(
+                'global-alert-diskread', ioOptions, globalThresholds.diskread
+            );
         }
         
         if (diskwriteCell) {
-            diskwriteCell.innerHTML = `<div class="flex items-center justify-center h-full">${
-                PulseApp.ui.thresholds.createThresholdSelectHtml(
-                    'global-alert-diskwrite', ioOptions, globalThresholds.diskwrite
-                )
-            }</div>`;
+            diskwriteCell.innerHTML = PulseApp.ui.thresholds.createThresholdSelectHtml(
+                'global-alert-diskwrite', ioOptions, globalThresholds.diskwrite
+            );
         }
         
         if (netinCell) {
-            netinCell.innerHTML = `<div class="flex items-center justify-center h-full">${
-                PulseApp.ui.thresholds.createThresholdSelectHtml(
-                    'global-alert-netin', ioOptions, globalThresholds.netin
-                )
-            }</div>`;
+            netinCell.innerHTML = PulseApp.ui.thresholds.createThresholdSelectHtml(
+                'global-alert-netin', ioOptions, globalThresholds.netin
+            );
         }
         
         if (netoutCell) {
-            netoutCell.innerHTML = `<div class="flex items-center justify-center h-full">${
-                PulseApp.ui.thresholds.createThresholdSelectHtml(
-                    'global-alert-netout', ioOptions, globalThresholds.netout
-                )
-            }</div>`;
+            netoutCell.innerHTML = PulseApp.ui.thresholds.createThresholdSelectHtml(
+                'global-alert-netout', ioOptions, globalThresholds.netout
+            );
         }
         
         // Setup event listeners for global controls using threshold system pattern
@@ -1052,7 +1050,7 @@ PulseApp.ui.alerts = (() => {
             );
             
             cell.innerHTML = `
-                <div class="alert-threshold-input h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}">
+                <div class="alert-threshold-input" data-guest-id="${guestId}" data-metric="${metricType}">
                     ${sliderHtml}
                 </div>
             `;
@@ -1089,17 +1087,17 @@ PulseApp.ui.alerts = (() => {
                 selectId, config.options, currentValue
             );
             
-            cell.innerHTML = `
-                <div class="alert-threshold-input flex items-center justify-center h-full" data-guest-id="${guestId}" data-metric="${metricType}">
-                    ${selectHtml}
-                </div>
-            `;
-            
-            // Add event listener for select
+            // For dropdowns, we need to preserve the data attributes for event handling
+            cell.innerHTML = selectHtml;
+            // Add data attributes to the select element itself
             const select = cell.querySelector('select');
-            select.addEventListener('change', (e) => {
-                updateGuestThreshold(guestId, metricType, e.target.value);
-            });
+            if (select) {
+                select.setAttribute('data-guest-id', guestId);
+                select.setAttribute('data-metric', metricType);
+                select.addEventListener('change', (e) => {
+                    updateGuestThreshold(guestId, metricType, e.target.value);
+                });
+            }
         }
     }
 
