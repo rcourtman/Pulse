@@ -371,7 +371,7 @@ advanced_settings() {
     fi
   done
 
-   while true; do
+  while true; do
     if PW1=$(whiptail --backtitle "Proxmox VE Helper Scripts" --passwordbox "\nSet Root Password (needed for root ssh access)" 9 58 --title "PASSWORD (leave blank for automatic login)" 3>&1 1>&2 2>&3); then
       # Empty = Autologin
       if [[ -z "$PW1" ]]; then
@@ -428,7 +428,7 @@ advanced_settings() {
       else
         HN=$(echo "${CT_NAME,,}" | tr -d ' ')
       fi
-	# Hostname validate (RFC 1123)
+      # Hostname validate (RFC 1123)
       if [[ "$HN" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]]; then
         echo -e "${HOSTNAME}${BOLD}${DGN}Hostname: ${BGN}$HN${CL}"
         break
@@ -907,7 +907,8 @@ check_container_storage() {
 }
 
 start() {
-	source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/tools.func)  if command -v pveversion >/dev/null 2>&1; then
+  source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/tools.func)
+  if command -v pveversion >/dev/null 2>&1; then
     install_script
   else
     CHOICE=$(whiptail --backtitle "Proxmox VE Helper Scripts" --title "${APP} LXC Update/Setting" --menu \
@@ -1052,7 +1053,7 @@ lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
 EOF
   fi
 
- # This starts the container and executes <app>-install.sh
+  # This starts the container and executes <app>-install.sh
   msg_info "Starting LXC Container"
   pct start "$CTID"
   msg_ok "Started LXC Container"
@@ -1079,7 +1080,7 @@ EOF'
     pct exec "$CTID" -- bash -c "apt-get update >/dev/null && apt-get install -y sudo curl mc gnupg2 >/dev/null"
   fi
   msg_ok "Customized LXC Container"
-lxc-attach -n "$CTID" -- bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/"$var_install".sh)" $?
+  lxc-attach -n "$CTID" -- bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/"$var_install".sh)" $?
 }
 
 # This function sets the description of the container.
