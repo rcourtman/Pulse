@@ -903,6 +903,8 @@ app.post('/api/alerts/config', (req, res) => {
                 email: false,
                 webhook: false
             },
+            emailCooldowns: alertConfig.emailCooldowns || {},
+            webhookCooldowns: alertConfig.webhookCooldowns || {},
             createdAt: alertConfig.lastUpdated || new Date().toISOString()
         };
         
@@ -917,6 +919,8 @@ app.post('/api/alerts/config', (req, res) => {
                 alertLogic: rule.alertLogic,
                 duration: rule.duration,
                 notifications: rule.notifications,
+                emailCooldowns: rule.emailCooldowns,
+                webhookCooldowns: rule.webhookCooldowns,
                 enabled: rule.enabled,
                 lastUpdated: new Date().toISOString()
             });
@@ -977,6 +981,8 @@ app.get('/api/alerts/config', (req, res) => {
                         email: false,
                         webhook: false
                     },
+                    emailCooldowns: existingRule.emailCooldowns || {},
+                    webhookCooldowns: existingRule.webhookCooldowns || {},
                     enabled: existingRule.enabled,
                     lastUpdated: existingRule.lastUpdated || existingRule.createdAt
                 }
@@ -996,6 +1002,8 @@ app.get('/api/alerts/config', (req, res) => {
                         email: false,
                         webhook: false
                     },
+                    emailCooldowns: {},
+                    webhookCooldowns: {},
                     enabled: true,
                     lastUpdated: null
                 }
@@ -1624,10 +1632,20 @@ let metricTimeoutId = null;
 // --- Update Cycle Logic --- 
 // Uses imported fetch functions and updates global state
 async function runDiscoveryCycle() {
-  if (isDiscoveryRunning) return;
+  if (isDiscoveryRunning) {
+    console.warn('[Discovery Cycle] Previous cycle still running, skipping this run');
+    return;
+  }
   isDiscoveryRunning = true;
   
   const startTime = Date.now();
+  const MAX_DISCOVERY_TIME = 120000; // 2 minutes max
+  
+  // Set a timeout to force completion if cycle takes too long
+  const timeoutHandle = setTimeout(() => {
+    console.error('[Discovery Cycle] Cycle exceeded maximum time, forcing completion');
+    isDiscoveryRunning = false;
+  }, MAX_DISCOVERY_TIME);
   let errors = [];
   
   try {
@@ -1672,13 +1690,17 @@ async function runDiscoveryCycle() {
       const duration = Date.now() - startTime;
       stateManager.updateDiscoveryData({ nodes: [], vms: [], containers: [], pbs: [] }, duration, errors);
   } finally {
+      clearTimeout(timeoutHandle);
       isDiscoveryRunning = false;
       scheduleNextDiscovery();
   }
 }
 
 async function runMetricCycle() {
-  if (isMetricsRunning) return;
+  if (isMetricsRunning) {
+    console.warn('[Metrics Cycle] Previous cycle still running, skipping this run');
+    return;
+  }
   if (io.engine.clientsCount === 0) {
     scheduleNextMetric(); 
     return;
@@ -1686,6 +1708,13 @@ async function runMetricCycle() {
   isMetricsRunning = true;
   
   const startTime = Date.now();
+  const MAX_METRICS_TIME = 30000; // 30 seconds max
+  
+  // Set a timeout to force completion if cycle takes too long
+  const timeoutHandle = setTimeout(() => {
+    console.error('[Metrics Cycle] Cycle exceeded maximum time, forcing completion');
+    isMetricsRunning = false;
+  }, MAX_METRICS_TIME);
   let errors = [];
   
   try {
@@ -1762,6 +1791,7 @@ async function runMetricCycle() {
       const duration = Date.now() - startTime;
       stateManager.updateMetricsData([], duration, errors);
   } finally {
+      clearTimeout(timeoutHandle);
       isMetricsRunning = false;
       scheduleNextMetric();
   }

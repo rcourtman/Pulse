@@ -44,7 +44,7 @@ class AlertManager extends EventEmitter {
         
         this.perGuestCooldownConfig = null; // Will be loaded from per-guest threshold rule if present
         
-        this.maxHistorySize = 10000; // Increased for better analytics
+        this.maxHistorySize = 1000; // Limit history to prevent memory issues
         this.alertRulesFile = path.join(__dirname, '../data/alert-rules.json');
         this.activeAlertsFile = path.join(__dirname, '../data/active-alerts.json');
         this.notificationHistoryFile = path.join(__dirname, '../data/notification-history.json');
@@ -772,7 +772,7 @@ class AlertManager extends EventEmitter {
                         
                         this.emailCooldowns.set(cooldownKey, {
                             lastSent: now,
-                            cooldownUntil: now + (cooldownConfig.cooldownMinutes * 60000),
+                            cooldownUntil: now + (cooldownConfig.defaultCooldownMinutes * 60000),
                             emailHistory: recentHistory,
                             debounceStarted: cooldownInfo?.debounceStarted || now
                         });
@@ -944,43 +944,43 @@ class AlertManager extends EventEmitter {
     formatAlertForAPI(alert) {
         try {
             // Create a safe, serializable alert object with no circular references
+            // Use primitive type conversion to ensure no object references are kept
             const safeAlert = {
-                id: alert.id, // Use the stored permanent ID
-                ruleId: alert.rule?.id || 'unknown',
-                ruleName: alert.rule?.name || 'Unknown Rule',
-                description: alert.rule?.description || '',
-                group: alert.rule?.group || 'unknown',
-                tags: Array.isArray(alert.rule?.tags) ? [...alert.rule.tags] : [],
+                id: String(alert.id || 'unknown'), // Use the stored permanent ID
+                ruleId: String(alert.rule?.id || 'unknown'),
+                ruleName: String(alert.rule?.name || 'Unknown Rule'),
+                description: String(alert.rule?.description || ''),
+                group: String(alert.rule?.group || 'unknown'),
+                tags: Array.isArray(alert.rule?.tags) ? alert.rule.tags.map(t => String(t)) : [],
                 guest: {
-                    name: alert.guest?.name || 'Unknown',
-                    vmid: alert.guest?.vmid || 'unknown',
-                    node: alert.guest?.node || 'unknown',
-                    type: alert.guest?.type || 'unknown',
-                    endpointId: alert.guest?.endpointId || 'unknown'
+                    name: String(alert.guest?.name || 'Unknown'),
+                    vmid: String(alert.guest?.vmid || 'unknown'),
+                    node: String(alert.guest?.node || 'unknown'),
+                    type: String(alert.guest?.type || 'unknown'),
+                    endpointId: String(alert.guest?.endpointId || 'unknown')
                 },
-                metric: alert.metric || alert.rule?.metric || (alert.rule?.type === 'compound_threshold' ? 'compound' : 'unknown'),
-                threshold: alert.threshold || alert.effectiveThreshold || alert.rule?.threshold || 0,
-                currentValue: alert.currentValue || null,
-                triggeredAt: alert.triggeredAt || Date.now(),
-                duration: (alert.triggeredAt ? Date.now() - alert.triggeredAt : 0),
-                acknowledged: alert.acknowledged || false,
-                acknowledgedBy: alert.acknowledgedBy || null,
-                acknowledgedAt: alert.acknowledgedAt || null,
-                message: alert.message || this.generateAlertMessage(alert),
-                type: alert.rule?.type || 'single_metric',
+                metric: String(alert.metric || alert.rule?.metric || (alert.rule?.type === 'compound_threshold' ? 'compound' : 'unknown')),
+                threshold: Number(alert.threshold || alert.effectiveThreshold || alert.rule?.threshold || 0),
+                currentValue: alert.currentValue != null ? Number(alert.currentValue) : null,
+                triggeredAt: Number(alert.triggeredAt || Date.now()),
+                duration: Number(alert.triggeredAt ? Date.now() - alert.triggeredAt : 0),
+                acknowledged: Boolean(alert.acknowledged),
+                acknowledgedBy: alert.acknowledgedBy ? String(alert.acknowledgedBy) : null,
+                acknowledgedAt: alert.acknowledgedAt ? Number(alert.acknowledgedAt) : null,
+                message: String(alert.message || this.generateAlertMessage(alert)),
+                type: String(alert.rule?.type || 'single_metric'),
                 thresholds: Array.isArray(alert.rule?.thresholds) ? 
                     alert.rule.thresholds.map(t => ({
-                        metric: t.metric,
-                        condition: t.condition,
-                        threshold: t.threshold
+                        metric: String(t.metric || ''),
+                        condition: String(t.condition || '>'),
+                        threshold: Number(t.threshold || 0)
                     })) : null,
-                emailSent: alert.emailSent || this.notificationStatus?.get(alert.id)?.emailSent || false,
-                webhookSent: alert.webhookSent || this.notificationStatus?.get(alert.id)?.webhookSent || false,
-                notificationChannels: this.notificationStatus?.get(alert.id)?.channels || []
+                emailSent: Boolean(alert.emailSent || this.notificationStatus?.get(alert.id)?.emailSent),
+                webhookSent: Boolean(alert.webhookSent || this.notificationStatus?.get(alert.id)?.webhookSent),
+                notificationChannels: Array.isArray(this.notificationStatus?.get(alert.id)?.channels) ? 
+                    this.notificationStatus.get(alert.id).channels.map(c => String(c)) : []
             };
             
-            // Test serialization
-            JSON.stringify(safeAlert);
             return safeAlert;
         } catch (serializationError) {
             console.error(`[AlertManager] formatAlertForAPI serialization error for alert ${alert.id}:`, serializationError.message);
@@ -3707,7 +3707,7 @@ Pulse Monitoring System`,
             
             this.alertHistory.unshift(historyEntry);
             if (this.alertHistory.length > this.maxHistorySize) {
-                this.alertHistory.pop();
+                this.alertHistory = this.alertHistory.slice(0, this.maxHistorySize);
             }
             
             // Save state

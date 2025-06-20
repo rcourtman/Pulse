@@ -1181,7 +1181,7 @@
       </div>
       
       <!-- Backup History Visualization -->
-      <div id="backup-visualization-section" class="hidden mb-6 space-y-4">
+      <div id="backup-visualization-section" class="mb-6 space-y-4">
         <!-- Hidden: Summary cards (replaced by consolidated summary) -->
         <div id="backup-summary-cards-container" class="hidden">
           <!-- No longer used - replaced by consolidated summary -->
@@ -1195,12 +1195,18 @@
             <div class="w-full lg:w-auto lg:max-w-2xl">
               <div id="backup-calendar-heatmap">
                 <!-- Calendar heatmap will be inserted here -->
+                <div class="animate-pulse">
+                  <div class="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                </div>
               </div>
             </div>
             <!-- Detail card -->
             <div class="flex-1 min-w-0 lg:max-h-[400px]">
               <div id="backup-detail-card" class="h-full">
                 <!-- Detail card will be inserted here -->
+                <div class="animate-pulse h-full">
+                  <div class="h-full bg-gray-200 dark:bg-gray-700 rounded"></div>
+                </div>
               </div>
             </div>
           </div>
