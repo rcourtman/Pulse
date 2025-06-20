@@ -47,17 +47,11 @@ PulseApp.utils = (() => {
             green: 'bg-green-500/60 dark:bg-green-500/50'
         }[color] || 'bg-gray-500/60 dark:bg-gray-500/50'; // Fallback progress color with opacity
 
-        // Use simpleText for narrow screens if provided, otherwise just show percentage
-        const mobileText = simpleText || `${percentage}%`;
-        
-        // Generate a unique ID for this progress bar to handle dynamic text switching
-        const uniqueId = `pb-${Math.random().toString(36).substr(2, 9)}`;
-
         return `
             <div class="relative w-full h-3.5 rounded overflow-hidden ${bgColorClass}">
                 <div class="absolute top-0 left-0 h-full ${progressColorClass}" style="width: ${percentage}%;"></div>
                 <span class="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-gray-800 dark:text-gray-100 leading-none">
-                    <span class="progress-text-full truncate px-1" data-progress-id="${uniqueId}" data-full-text="${text.replace(/"/g, '&quot;')}" data-simple-text="${mobileText.replace(/"/g, '&quot;')}">${text}</span>
+                    <span class="truncate px-1">${text}</span>
                 </span>
             </div>
         `;
@@ -259,33 +253,13 @@ PulseApp.utils = (() => {
     }
 
     // Function to check and update progress bar text based on available width
+    // DISABLED: Progress bars now always show full text
     function updateProgressBarTexts() {
-        const progressTexts = document.querySelectorAll('.progress-text-full');
-        
-        progressTexts.forEach(span => {
-            const fullText = span.getAttribute('data-full-text');
-            const simpleText = span.getAttribute('data-simple-text');
-            
-            if (!fullText || !simpleText) return;
-            
-            // Check if the current text is overflowing
-            const parent = span.parentElement;
-            if (parent) {
-                // Temporarily set to full text to measure
-                span.textContent = fullText;
-                
-                // Check if text is truncated (scrollWidth > clientWidth)
-                if (span.scrollWidth > parent.clientWidth - 8) { // 8px for padding
-                    span.textContent = simpleText;
-                } else {
-                    span.textContent = fullText;
-                }
-            }
-        });
+        // No-op - functionality disabled
     }
     
     // Debounced version for resize events
-    const updateProgressBarTextsDebounced = debounce(updateProgressBarTexts, 100);
+    const updateProgressBarTextsDebounced = () => {}; // No-op - functionality disabled
 
     // Scroll position preservation for table updates
     function preserveScrollPosition(element, updateFn) {
