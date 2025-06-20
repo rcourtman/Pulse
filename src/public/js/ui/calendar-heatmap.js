@@ -289,6 +289,9 @@ PulseApp.ui.calendarHeatmap = (() => {
         const cell = document.createElement('div');
         cell.className = 'relative w-8 h-8 rounded cursor-pointer transition-transform hover:scale-105';
         
+        // Store filteredGuestIds in closure for debugging
+        const capturedFilteredGuestIds = filteredGuestIds;
+        
         // Create local date key
         const dateKey = formatLocalDateKey(date);
         const isCurrentMonth = date.getMonth() === currentDisplayMonth.getMonth();
@@ -465,12 +468,28 @@ PulseApp.ui.calendarHeatmap = (() => {
                 preservedSelectedDate = dateKey;
                 
                 if (onDateSelectCallback && dayData) {
+                    // Get the namespace filter
+                    const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
+                    
+                    
+                    // Filter guests based on filteredGuestIds if namespace filtering is active
+                    let filteredGuests = dayData.guests || [];
+                    if (namespaceFilter !== 'all' && capturedFilteredGuestIds && capturedFilteredGuestIds.length > 0) {
+                        // Convert to Set for O(1) lookup performance
+                        const filterSet = new Set(capturedFilteredGuestIds);
+                        
+                        filteredGuests = filteredGuests.filter(guest => {
+                            const uniqueKey = guest.uniqueKey || (guest.node ? `${guest.vmid}-${guest.node}` : guest.vmid.toString());
+                            return filterSet.has(uniqueKey) || filterSet.has(guest.vmid.toString());
+                        });
+                    }
+                    
                     
                     const callbackData = {
                         date: dateKey,
-                        backups: dayData.guests || [],
+                        backups: filteredGuests,
                         stats: {
-                            totalGuests: dayData.guests ? dayData.guests.length : 0,
+                            totalGuests: filteredGuests.length,
                             pbsCount: 0,
                             pveCount: 0,
                             snapshotCount: 0,
@@ -478,9 +497,9 @@ PulseApp.ui.calendarHeatmap = (() => {
                         }
                     };
                     
-                    // Count backup types
-                    if (dayData.guests) {
-                        dayData.guests.forEach(guest => {
+                    // Count backup types from filtered guests
+                    if (filteredGuests.length > 0) {
+                        filteredGuests.forEach(guest => {
                             const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
                             if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
                             if (types.includes('pveBackups')) callbackData.stats.pveCount++;
@@ -1066,7 +1085,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         calendarContent.className = getResponsiveGridClass(monthsWithData.length);
 
         monthsWithData.forEach(month => {
-            const monthSection = createMonthSection(month, allData, monthsWithData.length);
+            const monthSection = createMonthSection(month, allData, monthsWithData.length, filteredGuestIds);
             calendarContent.appendChild(monthSection);
         });
 
@@ -1674,7 +1693,7 @@ PulseApp.ui.calendarHeatmap = (() => {
         }
     }
 
-    function createMonthSection(month, yearData, totalMonthCount) {
+    function createMonthSection(month, yearData, totalMonthCount, filteredGuestIds) {
         const section = document.createElement('div');
         section.className = '';
 
@@ -1700,7 +1719,7 @@ PulseApp.ui.calendarHeatmap = (() => {
             const dateKey = formatLocalDateKey(date);
             const dayData = yearData[dateKey];
             
-            const dayCell = createDayCell(date, dayData, totalMonthCount);
+            const dayCell = createDayCell(date, dayData, totalMonthCount, filteredGuestIds);
             grid.appendChild(dayCell);
         }
 
@@ -1708,9 +1727,12 @@ PulseApp.ui.calendarHeatmap = (() => {
         return section;
     }
 
-    function createDayCell(date, dayData, totalMonthCount) {
+    function createDayCell(date, dayData, totalMonthCount, filteredGuestIds) {
         const cell = document.createElement('div');
         cell.className = getDayCellClass(totalMonthCount) + ' overflow-hidden';
+        
+        // Store filteredGuestIds in closure
+        const capturedFilteredGuestIds = filteredGuestIds;
         
         // Check if this is today
         const today = new Date();
@@ -1819,10 +1841,25 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 // Call callback with date data
                 if (onDateSelectCallback && dayData) {
-                    // Filter guests based on current backup type filter
-                    const currentFilterType = getCurrentFilterType();
-                    let filteredGuests = dayData.guests || [];
+                    // Get the namespace filter
+                    const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
                     
+                    
+                    // Filter guests based on namespace first
+                    let filteredGuests = dayData.guests || [];
+                    if (namespaceFilter !== 'all' && capturedFilteredGuestIds && capturedFilteredGuestIds.length > 0) {
+                        // Convert to Set for O(1) lookup performance
+                        const filterSet = new Set(capturedFilteredGuestIds);
+                        
+                        filteredGuests = filteredGuests.filter(guest => {
+                            const uniqueKey = guest.uniqueKey || (guest.node ? `${guest.vmid}-${guest.node}` : guest.vmid.toString());
+                            return filterSet.has(uniqueKey) || filterSet.has(guest.vmid.toString());
+                        });
+                    }
+                    
+                    
+                    // Then filter by backup type
+                    const currentFilterType = getCurrentFilterType();
                     if (currentFilterType !== 'all' && filteredGuests.length > 0) {
                         filteredGuests = filteredGuests.filter(guest => {
                             const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
