@@ -24,6 +24,16 @@ class AlertManager extends EventEmitter {
             falsePositiveRate: 0
         };
         
+        // Email cooldown tracking
+        this.emailCooldowns = new Map(); // Key: "ruleId-guestId-metric", Value: { lastSent, cooldownUntil }
+        this.emailCooldownConfig = {
+            defaultCooldownMinutes: parseInt(process.env.ALERT_EMAIL_COOLDOWN_MINUTES) || 15, // Default 15 minutes
+            debounceDelayMinutes: parseInt(process.env.ALERT_EMAIL_DEBOUNCE_MINUTES) || 2, // Wait 2 minutes before first email
+            recoveryDelayMinutes: parseInt(process.env.ALERT_RECOVERY_DELAY_MINUTES) || 5, // Delay recovery emails
+            maxEmailsPerHour: parseInt(process.env.ALERT_MAX_EMAILS_PER_HOUR) || 4, // Max 4 emails per hour per alert
+            enableFlappingDetection: process.env.ALERT_FLAPPING_DETECTION !== 'false' // Default enabled
+        };
+        
         this.maxHistorySize = 10000; // Increased for better analytics
         this.alertRulesFile = path.join(__dirname, '../data/alert-rules.json');
         this.activeAlertsFile = path.join(__dirname, '../data/active-alerts.json');
@@ -49,9 +59,10 @@ class AlertManager extends EventEmitter {
         this.emailConfig = null;
         this.initializeEmailTransporter();
         
-        // Cleanup timer for resolved alerts
+        // Cleanup timer for resolved alerts and expired cooldowns
         this.cleanupInterval = setInterval(() => {
             this.cleanupResolvedAlerts();
+            this.cleanupExpiredCooldowns();
             this.updateMetrics();
         }, 300000); // Every 5 minutes
         
@@ -604,6 +615,14 @@ class AlertManager extends EventEmitter {
     generateSuppressionKey(ruleId, guestFilter) {
         return `${ruleId}_${guestFilter.endpointId || '*'}_${guestFilter.node || '*'}_${guestFilter.vmid || '*'}`;
     }
+    
+    getEmailCooldownKey(alert) {
+        // Create a unique key for cooldown tracking per rule, guest, and metric
+        const ruleId = alert.rule?.id || 'unknown';
+        const guestId = `${alert.guest?.endpointId || 'unknown'}-${alert.guest?.node || 'unknown'}-${alert.guest?.vmid || 'unknown'}`;
+        const metric = alert.rule?.metric || 'unknown';
+        return `${ruleId}-${guestId}-${metric}`;
+    }
 
 
 
@@ -672,17 +691,78 @@ class AlertManager extends EventEmitter {
             channels: []
         };
         
-        // Send email notification
+        // Send email notification with cooldown check
         if (sendEmail) {
-            console.log(`[AlertManager] Sending email notification for alert ${alert.id}`);
-            try {
-                await this.sendDirectEmailNotification(alert);
-                console.log(`[AlertManager] Email notification sent successfully for alert ${alert.id}`);
-                statusUpdate.emailSent = true;
-                statusUpdate.channels.push('email');
-            } catch (error) {
-                console.error(`[EMAIL ERROR] Failed to send email for alert ${alert.id}:`, error);
-                this.emit('notificationError', { type: 'email', alert, error });
+            // Check cooldown before sending email
+            const cooldownKey = this.getEmailCooldownKey(alert);
+            const cooldownInfo = this.emailCooldowns.get(cooldownKey);
+            const now = Date.now();
+            
+            if (cooldownInfo && now < cooldownInfo.cooldownUntil) {
+                const remainingMinutes = Math.ceil((cooldownInfo.cooldownUntil - now) / 60000);
+                console.log(`[AlertManager] Email cooldown active for alert ${alert.id} - ${remainingMinutes} minutes remaining`);
+                statusUpdate.emailSkipped = true;
+                statusUpdate.cooldownRemaining = remainingMinutes;
+            } else {
+                // Check if this is a new alert that should be debounced
+                const isNewAlert = !cooldownInfo || !cooldownInfo.lastSent;
+                if (isNewAlert && this.emailCooldownConfig.debounceDelayMinutes > 0) {
+                    // For new alerts, wait for debounce period before sending first email
+                    if (!cooldownInfo || !cooldownInfo.debounceStarted) {
+                        // Start debounce timer
+                        this.emailCooldowns.set(cooldownKey, {
+                            debounceStarted: now,
+                            debounceUntil: now + (this.emailCooldownConfig.debounceDelayMinutes * 60000)
+                        });
+                        console.log(`[AlertManager] Starting ${this.emailCooldownConfig.debounceDelayMinutes} minute debounce for alert ${alert.id}`);
+                        statusUpdate.emailDebounced = true;
+                        // Don't return early - still need to check webhook
+                    } else if (now < cooldownInfo.debounceUntil) {
+                        // Still in debounce period
+                        const remainingSeconds = Math.ceil((cooldownInfo.debounceUntil - now) / 1000);
+                        console.log(`[AlertManager] Email debounce active for alert ${alert.id} - ${remainingSeconds} seconds remaining`);
+                        statusUpdate.emailDebounced = true;
+                        // Don't return early - still need to check webhook
+                    }
+                }
+                
+                // Check rate limiting (emails per hour)
+                const oneHourAgo = now - 3600000;
+                const recentEmails = cooldownInfo?.emailHistory?.filter(timestamp => timestamp > oneHourAgo) || [];
+                if (recentEmails.length >= this.emailCooldownConfig.maxEmailsPerHour) {
+                    console.log(`[AlertManager] Rate limit reached for alert ${alert.id} - ${recentEmails.length} emails sent in last hour`);
+                    statusUpdate.emailRateLimited = true;
+                    // Don't return early - still need to check webhook
+                }
+                
+                // Only send email if not debounced or rate limited
+                if (!statusUpdate.emailDebounced && !statusUpdate.emailRateLimited) {
+                    console.log(`[AlertManager] Sending email notification for alert ${alert.id}`);
+                    try {
+                        await this.sendDirectEmailNotification(alert);
+                        console.log(`[AlertManager] Email notification sent successfully for alert ${alert.id}`);
+                        
+                        // Update cooldown tracking
+                        const emailHistory = cooldownInfo?.emailHistory || [];
+                        emailHistory.push(now);
+                        // Keep only last 24 hours of history
+                        const oneDayAgo = now - 86400000;
+                        const recentHistory = emailHistory.filter(timestamp => timestamp > oneDayAgo);
+                        
+                        this.emailCooldowns.set(cooldownKey, {
+                            lastSent: now,
+                            cooldownUntil: now + (this.emailCooldownConfig.defaultCooldownMinutes * 60000),
+                            emailHistory: recentHistory,
+                            debounceStarted: cooldownInfo?.debounceStarted || now
+                        });
+                        
+                        statusUpdate.emailSent = true;
+                        statusUpdate.channels.push('email');
+                    } catch (error) {
+                        console.error(`[EMAIL ERROR] Failed to send email for alert ${alert.id}:`, error);
+                        this.emit('notificationError', { type: 'email', alert, error });
+                    }
+                }
             }
         } else {
             console.log(`[AlertManager] NOT sending email notification for alert ${alert.id} - sendEmail: ${sendEmail}`);
@@ -1357,6 +1437,26 @@ class AlertManager extends EventEmitter {
         if (alertsRemoved || acknowledgementsChanged) {
             this.saveActiveAlerts();
             this.saveNotificationHistory();
+        }
+    }
+    
+    cleanupExpiredCooldowns() {
+        const now = Date.now();
+        const oneDayAgo = now - 86400000; // 24 hours
+        let cooldownsRemoved = 0;
+        
+        // Clean up expired email cooldowns
+        for (const [key, cooldownInfo] of this.emailCooldowns) {
+            // Remove cooldowns that have expired and haven't been used in 24 hours
+            if (cooldownInfo.cooldownUntil < now && 
+                (!cooldownInfo.lastSent || cooldownInfo.lastSent < oneDayAgo)) {
+                this.emailCooldowns.delete(key);
+                cooldownsRemoved++;
+            }
+        }
+        
+        if (cooldownsRemoved > 0) {
+            console.log(`[AlertManager] Cleaned up ${cooldownsRemoved} expired email cooldowns`);
         }
     }
 
