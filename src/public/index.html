@@ -103,26 +103,6 @@
         @apply font-semibold;
     }
 
-    /* Alert threshold inheritance styles */
-    .alert-threshold-input.using-global {
-        position: relative;
-    }
-    
-    .alert-threshold-input.using-global::before {
-        content: "↑";
-        position: absolute;
-        top: -2px;
-        right: 2px;
-        font-size: 10px;
-        color: #3b82f6;
-        opacity: 0.7;
-        z-index: 10;
-        pointer-events: none;
-    }
-    
-    .dark .alert-threshold-input.using-global::before {
-        color: #60a5fa;
-    }
 
     /* Dot animation for logging indicator */
     @keyframes dot-pulse {
@@ -910,7 +890,7 @@
             </div>
           </div>
 
-          <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar relative">
+          <div class="table-container overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar relative">
             <!-- Mobile scroll hint -->
             <div class="fixed bottom-4 right-4 bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-full md:hidden animate-pulse shadow-lg z-50 pointer-events-none" id="scroll-hint" style="display: none;">
                 ← Swipe for more →
@@ -1102,23 +1082,23 @@
                     <div class="space-y-3 mb-4">
                       <div class="flex items-center justify-between">
                         <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-cooldown-minutes">Time between emails:</label>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 shrink-0">
                           <input type="number" id="alert-cooldown-minutes" min="1" max="120" value="15" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500">min</span>
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
                         </div>
                       </div>
                       <div class="flex items-center justify-between">
                         <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-debounce-minutes">Wait before first email:</label>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 shrink-0">
                           <input type="number" id="alert-debounce-minutes" min="0" max="30" value="2" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500">min</span>
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
                         </div>
                       </div>
                       <div class="flex items-center justify-between">
                         <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-max-emails-hour">Max emails per hour:</label>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 shrink-0">
                           <input type="number" id="alert-max-emails-hour" min="1" max="20" value="4" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500">/hr</span>
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">/hr</span>
                         </div>
                       </div>
                     </div>
@@ -1141,23 +1121,23 @@
                     <div class="space-y-3 mb-4">
                       <div class="flex items-center justify-between">
                         <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-cooldown-minutes">Time between webhooks:</label>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 shrink-0">
                           <input type="number" id="webhook-cooldown-minutes" min="1" max="120" value="5" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500">min</span>
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
                         </div>
                       </div>
                       <div class="flex items-center justify-between">
                         <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-debounce-minutes">Wait before first webhook:</label>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 shrink-0">
                           <input type="number" id="webhook-debounce-minutes" min="0" max="30" value="1" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500">min</span>
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
                         </div>
                       </div>
                       <div class="flex items-center justify-between">
                         <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-max-calls-hour">Max calls per hour:</label>
-                        <div class="flex items-center gap-1">
+                        <div class="flex items-center gap-1 shrink-0">
                           <input type="number" id="webhook-max-calls-hour" min="1" max="50" value="10" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
-                          <span class="text-xs text-gray-500 dark:text-gray-500">/hr</span>
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">/hr</span>
                         </div>
                       </div>
                     </div>
