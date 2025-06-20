@@ -158,6 +158,12 @@ PulseApp.ui.alerts = (() => {
     async function handleEmailToggle(event) {
         const enabled = event.target.checked;
         
+        // Show/hide email cooldown settings
+        const cooldownSettings = document.getElementById('email-cooldown-settings');
+        if (cooldownSettings) {
+            cooldownSettings.style.display = enabled ? 'flex' : 'none';
+        }
+        
         try {
             // Get current config
             const configResponse = await fetch('/api/config');
@@ -1113,6 +1119,11 @@ PulseApp.ui.alerts = (() => {
         const emailToggle = document.getElementById('alert-email-toggle');
         const webhookToggle = document.getElementById('alert-webhook-toggle');
         
+        // Get cooldown settings
+        const cooldownMinutes = document.getElementById('alert-cooldown-minutes');
+        const debounceMinutes = document.getElementById('alert-debounce-minutes');
+        const maxEmailsPerHour = document.getElementById('alert-max-emails-hour');
+        
         const alertConfig = {
             type: 'per_guest_thresholds',
             globalThresholds: globalThresholds,
@@ -1124,6 +1135,11 @@ PulseApp.ui.alerts = (() => {
                 dashboard: true,
                 email: emailToggle ? emailToggle.checked : false,
                 webhook: webhookToggle ? webhookToggle.checked : false
+            },
+            emailCooldowns: {
+                cooldownMinutes: cooldownMinutes ? parseInt(cooldownMinutes.value) : 15,
+                debounceMinutes: debounceMinutes ? parseInt(debounceMinutes.value) : 2,
+                maxEmailsPerHour: maxEmailsPerHour ? parseInt(maxEmailsPerHour.value) : 4
             },
             enabled: true,
             lastUpdated: new Date().toISOString()
@@ -1226,6 +1242,29 @@ PulseApp.ui.alerts = (() => {
                     }
                 }
                 
+                // Load email cooldown settings
+                if (config.emailCooldowns) {
+                    const cooldownMinutes = document.getElementById('alert-cooldown-minutes');
+                    const debounceMinutes = document.getElementById('alert-debounce-minutes');
+                    const maxEmailsPerHour = document.getElementById('alert-max-emails-hour');
+                    
+                    if (cooldownMinutes && config.emailCooldowns.cooldownMinutes !== undefined) {
+                        cooldownMinutes.value = config.emailCooldowns.cooldownMinutes;
+                    }
+                    if (debounceMinutes && config.emailCooldowns.debounceMinutes !== undefined) {
+                        debounceMinutes.value = config.emailCooldowns.debounceMinutes;
+                    }
+                    if (maxEmailsPerHour && config.emailCooldowns.maxEmailsPerHour !== undefined) {
+                        maxEmailsPerHour.value = config.emailCooldowns.maxEmailsPerHour;
+                    }
+                }
+                
+                // Show/hide email cooldown settings based on email toggle state
+                const emailToggle = document.getElementById('alert-email-toggle');
+                const cooldownSettings = document.getElementById('email-cooldown-settings');
+                if (emailToggle && cooldownSettings) {
+                    cooldownSettings.style.display = emailToggle.checked ? 'flex' : 'none';
+                }
                 
                 console.log('Alert configuration loaded successfully');
                 

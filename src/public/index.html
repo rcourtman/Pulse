@@ -1087,6 +1087,28 @@
                   </label>
                 </div>
               </div>
+              <!-- Email Cooldown Settings -->
+              <div class="flex items-center justify-between mt-2" id="email-cooldown-settings" style="display: none;">
+                <div class="flex items-center gap-3 text-xs">
+                  <span class="text-gray-600 dark:text-gray-400">Email Cooldowns:</span>
+                  <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-1">
+                      <span class="text-gray-600 dark:text-gray-400">Cooldown:</span>
+                      <input type="number" id="alert-cooldown-minutes" min="1" max="120" value="15" class="w-12 px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                      <span class="text-gray-500 dark:text-gray-500">min</span>
+                    </label>
+                    <label class="flex items-center gap-1 ml-2">
+                      <span class="text-gray-600 dark:text-gray-400">Debounce:</span>
+                      <input type="number" id="alert-debounce-minutes" min="0" max="30" value="2" class="w-12 px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                      <span class="text-gray-500 dark:text-gray-500">min</span>
+                    </label>
+                    <label class="flex items-center gap-1 ml-2">
+                      <span class="text-gray-600 dark:text-gray-400">Max/hour:</span>
+                      <input type="number" id="alert-max-emails-hour" min="1" max="20" value="4" class="w-12 px-1 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                    </label>
+                  </div>
+                </div>
+              </div>
               <div class="flex items-center gap-3">
                 <span id="alert-save-message" class="text-xs text-blue-600 dark:text-blue-400"></span>
                 <button id="save-alert-config" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
