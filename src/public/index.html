@@ -1080,10 +1080,18 @@
                     <input type="checkbox" id="alert-webhook-toggle" class="sr-only peer">
                     <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
                   </label>
+                  <label class="inline-flex items-center gap-2 cursor-pointer ml-4" title="Automatically clear alerts when thresholds return to normal">
+                    <span class="text-xs text-blue-700 dark:text-blue-300">Auto-resolve:</span>
+                    <input type="checkbox" id="alert-auto-resolve-toggle" class="sr-only peer" checked>
+                    <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                  </label>
                 </div>
               </div>
-              <div class="text-xs text-blue-600 dark:text-blue-400">
-                <span>Alerts triggered when any threshold is exceeded</span>
+              <div class="flex items-center gap-3">
+                <span id="alert-save-message" class="text-xs text-blue-600 dark:text-blue-400"></span>
+                <button id="save-alert-config" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
+                  Save
+                </button>
               </div>
             </div>
           </div>

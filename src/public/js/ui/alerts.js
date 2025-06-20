@@ -10,6 +10,7 @@ PulseApp.ui.alerts = (() => {
     let globalThresholds = {}; // Store global default thresholds
     let alertLogic = 'or'; // Fixed to OR logic (dropdown removed)
     let alertDuration = 0; // Track alert duration in milliseconds (default instant for testing)
+    let autoResolve = true; // Track whether alerts should auto-resolve
 
     function init() {
         // Get DOM elements
@@ -37,6 +38,12 @@ PulseApp.ui.alerts = (() => {
         
         // Load notification status
         updateNotificationStatus();
+        
+        // Set default auto-resolve state
+        const autoResolveToggle = document.getElementById('alert-auto-resolve-toggle');
+        if (autoResolveToggle && autoResolve !== undefined) {
+            autoResolveToggle.checked = autoResolve;
+        }
     }
 
     function setupEventListeners() {
@@ -62,6 +69,18 @@ PulseApp.ui.alerts = (() => {
         const webhookToggle = document.getElementById('alert-webhook-toggle');
         if (webhookToggle) {
             webhookToggle.addEventListener('change', handleWebhookToggle);
+        }
+        
+        // Save button
+        const saveButton = document.getElementById('save-alert-config');
+        if (saveButton) {
+            saveButton.addEventListener('click', saveAlertConfig);
+        }
+        
+        // Auto-resolve toggle
+        const autoResolveToggle = document.getElementById('alert-auto-resolve-toggle');
+        if (autoResolveToggle) {
+            autoResolveToggle.addEventListener('change', handleAutoResolveToggle);
         }
 
         // Make sure charts toggle is mutually exclusive with alerts
@@ -100,8 +119,8 @@ PulseApp.ui.alerts = (() => {
         
         updateAlertsMode();
         
-        // Clear threshold styling when entering/exiting alerts mode
-        if (isAlertsMode && PulseApp.ui.thresholds) {
+        // Clear threshold styling only when EXITING alerts mode
+        if (!isAlertsMode && PulseApp.ui.thresholds) {
             if (PulseApp.ui.thresholds.clearAllStyling) {
                 PulseApp.ui.thresholds.clearAllStyling();
             } else if (PulseApp.ui.thresholds.clearAllRowDimming) {
@@ -133,8 +152,7 @@ PulseApp.ui.alerts = (() => {
         alertDuration = parseInt(event.target.value);
         console.log(`Alert duration changed to: ${alertDuration}ms`);
         
-        // Save the updated duration to the backend
-        autoSaveAlertConfig();
+        // Changes will be saved when user clicks save button
     }
 
     async function handleEmailToggle(event) {
@@ -214,6 +232,13 @@ PulseApp.ui.alerts = (() => {
             event.target.checked = !enabled;
         }
     }
+    
+    function handleAutoResolveToggle(event) {
+        autoResolve = event.target.checked;
+        console.log(`Alert auto-resolve ${autoResolve ? 'enabled' : 'disabled'}`);
+        
+        // Changes will be saved when user clicks save button
+    }
 
     function updateAlertsMode() {
         if (!globalAlertThresholds || !mainTable) return;
@@ -237,16 +262,20 @@ PulseApp.ui.alerts = (() => {
                 alertModeControls.classList.remove('hidden');
             }
             
+            // Apply initial dimming to global row if using defaults
+            updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
+            
             // Update notification status when showing alerts mode
             updateNotificationStatus();
+            
+            // Update save message
+            updateAlertSaveMessage();
             
             // Add alerts mode class to body for CSS targeting
             document.body.classList.add('alerts-mode');
             
-            // First apply dimming immediately to prevent flash
-            applyAlertDimmingFast();
-            
-            // Then transform table to show threshold inputs
+            // Transform table to show threshold inputs
+            // This will also apply the correct row styling via updateRowStylingOnly()
             transformTableToAlertsMode();
             
         } else {
@@ -368,11 +397,11 @@ PulseApp.ui.alerts = (() => {
             PulseApp.tooltips.updateSliderTooltip(event.target);
         });
         
-        // Full update on release (input values + save)
+        // Full update on release (input values)
         sliderElement.addEventListener('change', (event) => {
             const value = event.target.value;
             updateGuestInputValues(metricType, value, true); // Update input values on release, skip tooltips
-            autoSaveAlertConfig();
+            // Changes will be saved when user clicks save button
         });
         
         sliderElement.addEventListener('mousedown', (event) => {
@@ -461,9 +490,10 @@ PulseApp.ui.alerts = (() => {
         // Update reset button state when global thresholds change
         updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
         
-        if (shouldSave) {
-            autoSaveAlertConfig();
-        }
+        // Update save message
+        updateAlertSaveMessage();
+        
+        // Changes will be saved when user clicks save button
     }
 
     // Lightweight styling-only update (matches threshold system approach)
@@ -497,7 +527,7 @@ PulseApp.ui.alerts = (() => {
     function checkGuestWouldTriggerAlerts(guestId, guestThresholds) {
         // Get guest data from the dashboard
         const dashboardData = PulseApp.state.get('dashboardData') || [];
-        const guest = dashboardData.find(g => g.id === guestId);
+        const guest = dashboardData.find(g => g.id == guestId || g.vmid == guestId);
         if (!guest) return false;
         
         // Only check running guests for alerts (stopped guests can't trigger metric alerts)
@@ -607,20 +637,17 @@ PulseApp.ui.alerts = (() => {
                 hasAnyCustomValues = true;
             }
             
-            // Check if this guest would trigger alerts based on current thresholds
-            const wouldTriggerAlerts = checkGuestWouldTriggerAlerts(guestId, guestThresholds);
-            
-            // Apply unified row-level styling: dim if guest WOULDN'T trigger alerts
-            if (!wouldTriggerAlerts) {
-                // Dim rows that wouldn't trigger alerts
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-            } else {
-                // Light up rows that would trigger alerts
+            // New behavior: Light up rows that have custom alert settings
+            if (hasIndividualSettings) {
+                // Light up rows with custom settings
                 row.style.opacity = '';
                 row.style.transition = '';
                 row.removeAttribute('data-alert-dimmed');
+            } else {
+                // Dim rows using only default settings
+                row.style.opacity = '0.4';
+                row.style.transition = 'opacity 0.1s ease-out';
+                row.setAttribute('data-alert-dimmed', 'true');
             }
             
             // Clear any cell-level styling
@@ -640,6 +667,9 @@ PulseApp.ui.alerts = (() => {
         
         // Update alerts count badge
         updateAlertsCountBadge();
+        
+        // Update save message
+        updateAlertSaveMessage();
     }
     
     function updateAlertsCountBadge() {
@@ -651,52 +681,77 @@ PulseApp.ui.alerts = (() => {
             return;
         }
         
-        // Count guests that would trigger alerts
-        let alertsCount = 0;
-        const dashboardData = PulseApp.state?.get('dashboardData') || [];
-        if (dashboardData.length > 0 && mainTable) {
-            const tableBody = mainTable.querySelector('tbody');
-            if (tableBody) {
-                const rows = tableBody.querySelectorAll('tr[data-id]');
-                rows.forEach(row => {
-                    const guestId = row.getAttribute('data-id');
-                    const guestThresholds = guestAlertThresholds[guestId] || {};
-                    
-                    if (checkGuestWouldTriggerAlerts(guestId, guestThresholds)) {
-                        alertsCount++;
-                    }
-                });
-            }
-        }
+        // Count guests with custom alert settings
+        const customCount = Object.keys(guestAlertThresholds).length;
         
         // Update badge
-        alertsBadge.textContent = alertsCount;
-        if (alertsCount > 0) {
+        alertsBadge.textContent = customCount;
+        if (customCount > 0) {
             alertsBadge.classList.remove('hidden');
         } else {
             alertsBadge.classList.add('hidden');
         }
     }
     
+    function updateAlertSaveMessage() {
+        const saveMessage = document.getElementById('alert-save-message');
+        if (!saveMessage || !isAlertsMode) return;
+        
+        // Count how many guests would trigger alerts
+        let triggerCount = 0;
+        const dashboardData = PulseApp.state?.get('dashboardData') || [];
+        
+        dashboardData.forEach(guest => {
+            const guestThresholds = guestAlertThresholds[guest.id] || {};
+            if (checkGuestWouldTriggerAlerts(guest.id, guestThresholds)) {
+                triggerCount++;
+            }
+        });
+        
+        // Update message
+        if (triggerCount > 0) {
+            saveMessage.textContent = `${triggerCount} alert${triggerCount !== 1 ? 's' : ''} will trigger`;
+            saveMessage.classList.remove('text-green-600', 'dark:text-green-400');
+            saveMessage.classList.add('text-amber-600', 'dark:text-amber-400');
+        } else {
+            saveMessage.textContent = 'No alerts will trigger';
+            saveMessage.classList.remove('text-amber-600', 'dark:text-amber-400');
+            saveMessage.classList.add('text-green-600', 'dark:text-green-400');
+        }
+    }
+    
     
     function updateResetButtonVisibility(hasCustomValues) {
         const resetButton = document.getElementById('reset-global-thresholds');
+        const globalThresholdsRow = document.getElementById('global-alert-thresholds-row');
+        
+        // Check if global thresholds have been changed from defaults
+        const defaultThresholds = {
+            cpu: 80,
+            memory: 85,
+            disk: 90,
+            diskread: '',
+            diskwrite: '',
+            netin: '',
+            netout: ''
+        };
+        
+        const hasGlobalChanges = Object.keys(defaultThresholds).some(key => 
+            globalThresholds[key] != defaultThresholds[key] // Use != for loose comparison
+        );
+        
+        // Update global row dimming based on whether values are customized
+        if (globalThresholdsRow) {
+            if (hasGlobalChanges) {
+                globalThresholdsRow.style.opacity = '';
+                globalThresholdsRow.style.transition = '';
+            } else {
+                globalThresholdsRow.style.opacity = '0.4';
+                globalThresholdsRow.style.transition = 'opacity 0.1s ease-out';
+            }
+        }
+        
         if (resetButton) {
-            // Check if global thresholds have been changed from defaults
-            const defaultThresholds = {
-                cpu: 80,
-                memory: 85,
-                disk: 90,
-                diskread: '',
-                diskwrite: '',
-                netin: '',
-                netout: ''
-            };
-            
-            const hasGlobalChanges = Object.keys(defaultThresholds).some(key => 
-                globalThresholds[key] != defaultThresholds[key] // Use != for loose comparison
-            );
-            
             // Enable button if there are either custom guest values OR global changes
             if (hasCustomValues || hasGlobalChanges) {
                 resetButton.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -769,27 +824,27 @@ PulseApp.ui.alerts = (() => {
         
         const rows = tableBody.querySelectorAll('tr[data-id]');
         
-        // Single pass: directly transition from threshold to alert styling
+        // Single pass: apply dimming based on custom settings
         rows.forEach(row => {
             const guestId = row.getAttribute('data-id');
             const guestThresholds = guestAlertThresholds[guestId] || {};
+            const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
             
             // Remove threshold attributes
             row.removeAttribute('data-dimmed');
             row.style.transition = '';
             
-            // Check if this guest would trigger alerts
-            const wouldTriggerAlerts = checkGuestWouldTriggerAlerts(guestId, guestThresholds);
-            
-            // Apply or maintain opacity based on alert state
-            if (!wouldTriggerAlerts) {
-                // Keep dimmed (or apply dimming if not already)
-                row.style.opacity = '0.4';
-                row.setAttribute('data-alert-dimmed', 'true');
-            } else {
-                // Only clear opacity if row should be visible
+            // New behavior: Light up rows that have custom alert settings
+            if (hasIndividualSettings) {
+                // Light up rows with custom settings
                 row.style.opacity = '';
+                row.style.transition = '';
                 row.removeAttribute('data-alert-dimmed');
+            } else {
+                // Dim rows using only default settings
+                row.style.opacity = '0.4';
+                row.style.transition = 'opacity 0.1s ease-out';
+                row.setAttribute('data-alert-dimmed', 'true');
             }
         });
     }
@@ -848,19 +903,46 @@ PulseApp.ui.alerts = (() => {
             updateRowStylingOnly();
         }
         
-        // Auto-save
-        autoSaveAlertConfig();
-        
         // Clear any tooltip positioning issues that might have occurred during reset
         PulseApp.tooltips.hideSliderTooltipImmediately();
         
-        PulseApp.ui.toast?.success('Global thresholds reset to defaults');
+        // Update reset button and global row dimming after reset
+        updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
+        
+        // Update save message
+        updateAlertSaveMessage();
+        
+        PulseApp.ui.toast?.success('Global thresholds reset to defaults - click Save to apply');
     }
 
     function transformTableToAlertsMode() {
         // Get all guest rows
         const guestRows = mainTable.querySelectorAll('tbody tr[data-id]');
         
+        // First pass: Apply immediate dimming to prevent flash
+        guestRows.forEach(row => {
+            const guestId = row.getAttribute('data-id');
+            const guestThresholds = guestAlertThresholds[guestId] || {};
+            const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
+            
+            // Remove any threshold-specific attributes
+            row.removeAttribute('data-dimmed');
+            
+            // New behavior: Light up rows that have custom alert settings
+            if (hasIndividualSettings) {
+                // Light up rows with custom settings
+                row.style.opacity = '';
+                row.style.transition = '';
+                row.removeAttribute('data-alert-dimmed');
+            } else {
+                // Dim rows using only default settings
+                row.style.opacity = '0.4';
+                row.style.transition = 'opacity 0.1s ease-out';
+                row.setAttribute('data-alert-dimmed', 'true');
+            }
+        });
+        
+        // Second pass: Transform cells
         guestRows.forEach(row => {
             const guestId = row.getAttribute('data-id'); // Use composite unique ID, not just vmid
             
@@ -883,7 +965,7 @@ PulseApp.ui.alerts = (() => {
             transformMetricCell(row, 'diskwrite', guestId, { type: 'select', options: ioOptions });
         });
         
-        // Apply row styling after transformation
+        // Apply final row styling after transformation
         updateRowStylingOnly();
     }
 
@@ -1020,13 +1102,13 @@ PulseApp.ui.alerts = (() => {
         // Update reset button state when guest thresholds change
         updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
         
-        // Only auto-save when explicitly requested (on release, not during drag)
-        if (shouldSave) {
-            autoSaveAlertConfig();
-        }
+        // Update save message
+        updateAlertSaveMessage();
+        
+        // Changes will be saved when user clicks save button
     }
 
-    async function autoSaveAlertConfig() {
+    async function saveAlertConfig() {
         // Get current toggle states
         const emailToggle = document.getElementById('alert-email-toggle');
         const webhookToggle = document.getElementById('alert-webhook-toggle');
@@ -1037,6 +1119,7 @@ PulseApp.ui.alerts = (() => {
             guestThresholds: guestAlertThresholds,
             alertLogic: alertLogic,
             duration: alertDuration,
+            autoResolve: autoResolve,
             notifications: {
                 dashboard: true,
                 email: emailToggle ? emailToggle.checked : false,
@@ -1056,13 +1139,15 @@ PulseApp.ui.alerts = (() => {
             const result = await response.json();
             
             if (response.ok && result.success) {
-                console.log('Alert configuration auto-saved');
+                PulseApp.ui.toast?.success('Alert configuration saved');
             } else {
-                console.warn('Failed to auto-save alert configuration:', result.error);
+                PulseApp.ui.toast?.error('Failed to save alert configuration');
+                console.warn('Failed to save alert configuration:', result.error);
             }
             
         } catch (error) {
-            console.warn('Error auto-saving alert configuration:', error);
+            PulseApp.ui.toast?.error('Error saving alert configuration');
+            console.error('Error saving alert configuration:', error);
         }
     }
 
@@ -1071,10 +1156,10 @@ PulseApp.ui.alerts = (() => {
         
         if (isAlertsMode) {
             transformTableToAlertsMode();
+            updateAlertSaveMessage();
         }
         
-        autoSaveAlertConfig();
-        PulseApp.ui.toast?.success('All alert thresholds cleared');
+        PulseApp.ui.toast?.success('All alert thresholds cleared - click Save to apply');
     }
 
     async function loadSavedConfiguration() {
@@ -1124,7 +1209,7 @@ PulseApp.ui.alerts = (() => {
                 // Alert logic is now fixed to OR (dropdown removed)
                 
                 // Load alert duration
-                if (config.duration) {
+                if (config.duration !== undefined) {
                     alertDuration = config.duration;
                     const alertDurationSelect = document.getElementById('alert-duration-select');
                     if (alertDurationSelect) {
@@ -1132,15 +1217,25 @@ PulseApp.ui.alerts = (() => {
                     }
                 }
                 
+                // Load auto-resolve setting
+                if (config.autoResolve !== undefined) {
+                    autoResolve = config.autoResolve;
+                    const autoResolveToggle = document.getElementById('alert-auto-resolve-toggle');
+                    if (autoResolveToggle) {
+                        autoResolveToggle.checked = autoResolve;
+                    }
+                }
+                
                 
                 console.log('Alert configuration loaded successfully');
                 
-                // Update reset button state after loading configuration
+                // Update reset button state and global row dimming after loading configuration
                 updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
                 
                 // Update styling if in alerts mode
                 if (isAlertsMode) {
                     updateRowStylingOnly();
+                    updateAlertSaveMessage();
                 }
             }
         } catch (error) {
@@ -1217,6 +1312,7 @@ PulseApp.ui.alerts = (() => {
         updateRowStylingOnly: updateRowStylingOnly,
         getActiveAlertsForGuest: getActiveAlertsForGuest,
         loadSavedConfiguration: loadSavedConfiguration,
-        updateNotificationStatus: updateNotificationStatus
+        updateNotificationStatus: updateNotificationStatus,
+        checkGuestWouldTriggerAlerts: checkGuestWouldTriggerAlerts
     };
 })();
