@@ -573,8 +573,7 @@ PulseApp.ui.backups = (() => {
                 return guestNodeCombosInNamespace.has(guestKey);
             });
             
-            console.log(`Showing ${allGuests.length} guests with PBS backups in '${namespaceFilter}' namespace`);
-        } else {
+            } else {
             allGuests = allGuestsUnfiltered;
         }
 
@@ -702,21 +701,6 @@ PulseApp.ui.backups = (() => {
                 // Include endpoint suffix in the key to separate backups by source
                 const key = `${snap.backupVMID}-${snap.backupType}-${snap.pbsInstanceName}-${namespace}${endpointSuffix}`;
                 
-                // Debug first pimox backup key
-                if (!window._pbsDebugLogged && namespace === 'pimox' && snap.backupVMID == '100') {
-                    window._pbsDebugLogged = true;
-                    console.log('PBS Index Key Debug:', {
-                        vmid: snap.backupVMID,
-                        namespace,
-                        endpointSuffix,
-                        fullKey: key,
-                        owner: snap.owner,
-                        matchingGuest: matchingGuest ? {
-                            endpointId: matchingGuest.endpointId,
-                            nodeDisplayName: matchingGuest.nodeDisplayName
-                        } : null
-                    });
-                }
                 
                 if (!snapshotsByGuest.has(key)) snapshotsByGuest.set(key, []);
                 snapshotsByGuest.get(key).push(snap);
@@ -2513,16 +2497,6 @@ PulseApp.ui.backups = (() => {
                     return nodeIdentifier ? `${guest.guestId}-${nodeIdentifier}` : guest.guestId.toString();
                 });
                 
-                // Debug guest IDs when namespace filtering
-                if (namespaceFilter !== 'all') {
-                    console.log('Filtered guest IDs for calendar:', filteredGuestIds);
-                    console.log('Sample filtered backup status:', filteredBackupStatus.slice(0, 2).map(g => ({
-                        guestId: g.guestId,
-                        node: g.node,
-                        endpointId: g.endpointId,
-                        name: g.guestName
-                    })));
-                }
                 
                 // Get detail card container
                 const detailCardContainer = document.getElementById('backup-detail-card');
@@ -2659,19 +2633,6 @@ PulseApp.ui.backups = (() => {
                 // Only recreate calendar if it doesn't exist or if this is a user action
                 const existingCalendar = calendarContainer.querySelector('.calendar-heatmap-container');
                 if (!existingCalendar || isUserAction) {
-                    // Debug calendar data when namespace filter is active
-                    if (namespaceFilter !== 'all') {
-                        console.log('Calendar CREATION - Namespace Filter:', namespaceFilter);
-                        console.log('Extended backup data PBS count:', extendedBackupData.pbsSnapshots?.length || 0);
-                        console.log('Filtered Guest IDs:', filteredGuestIds);
-                        console.log('Is User Action:', isUserAction);
-                        console.log('Sample PBS snapshots with endpoint info:', extendedBackupData.pbsSnapshots?.slice(0, 3).map(s => ({
-                            vmid: s['backup-id'],
-                            endpointId: s.endpointId,
-                            node: s.node,
-                            owner: s.owner
-                        })));
-                    }
                     
                     const calendarHeatmap = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(
                         extendedBackupData, 
@@ -3180,11 +3141,6 @@ PulseApp.ui.backups = (() => {
                 // Even if no backup dates found in detail data, include guest if they have backups
                 // This is important for namespace filtering where historical data might be limited
                 if (guestStatus.pbsBackups > 0 || guestStatus.pveBackups > 0 || guestStatus.snapshotCount > 0) {
-                    console.log('Guest has backups but no dates found:', {
-                        guestId: guestStatus.guestId,
-                        pbsBackups: guestStatus.pbsBackups,
-                        latestBackupTime: guestStatus.latestBackupTime
-                    });
                     multiDateBackups.push({
                         ...guestStatus,
                         backupDates: []
