@@ -8,6 +8,8 @@ PulseApp.ui.alerts = (() => {
     let isAlertsMode = false;
     let guestAlertThresholds = {}; // Store per-guest thresholds
     let globalThresholds = {}; // Store global default thresholds
+    let alertLogic = 'or'; // Fixed to OR logic (dropdown removed)
+    let alertDuration = 0; // Track alert duration in milliseconds (default instant for testing)
 
     function init() {
         // Get DOM elements
@@ -32,6 +34,9 @@ PulseApp.ui.alerts = (() => {
         
         // Load saved configuration
         loadSavedConfiguration();
+        
+        // Load notification status
+        updateNotificationStatus();
     }
 
     function setupEventListeners() {
@@ -39,24 +44,32 @@ PulseApp.ui.alerts = (() => {
         if (alertsToggle) {
             alertsToggle.addEventListener('change', handleAlertsToggle);
         }
+        
+        
+        // Alert duration selector
+        const alertDurationSelect = document.getElementById('alert-duration-select');
+        if (alertDurationSelect) {
+            alertDurationSelect.addEventListener('change', handleAlertDurationChange);
+        }
 
+        // Email toggle
+        const emailToggle = document.getElementById('alert-email-toggle');
+        if (emailToggle) {
+            emailToggle.addEventListener('change', handleEmailToggle);
+        }
 
-        // Make sure charts and thresholds toggles are mutually exclusive with alerts
+        // Webhook toggle
+        const webhookToggle = document.getElementById('alert-webhook-toggle');
+        if (webhookToggle) {
+            webhookToggle.addEventListener('change', handleWebhookToggle);
+        }
+
+        // Make sure charts toggle is mutually exclusive with alerts
         const chartsToggle = document.getElementById('toggle-charts-checkbox');
-        const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
         
         if (chartsToggle) {
             chartsToggle.addEventListener('change', () => {
                 if (chartsToggle.checked && isAlertsMode) {
-                    alertsToggle.checked = false;
-                    handleAlertsToggle();
-                }
-            });
-        }
-        
-        if (thresholdsToggle) {
-            thresholdsToggle.addEventListener('change', () => {
-                if (thresholdsToggle.checked && isAlertsMode) {
                     alertsToggle.checked = false;
                     handleAlertsToggle();
                 }
@@ -67,6 +80,9 @@ PulseApp.ui.alerts = (() => {
     function handleAlertsToggle() {
         isAlertsMode = alertsToggle.checked;
         
+        // Add class to disable transitions during switch
+        document.body.classList.add('switching-modes');
+        
         // Disable other modes when alerts is enabled
         if (isAlertsMode) {
             const chartsToggle = document.getElementById('toggle-charts-checkbox');
@@ -76,7 +92,6 @@ PulseApp.ui.alerts = (() => {
                 chartsToggle.checked = false;
                 chartsToggle.dispatchEvent(new Event('change'));
             }
-            
             if (thresholdsToggle && thresholdsToggle.checked) {
                 thresholdsToggle.checked = false;
                 thresholdsToggle.dispatchEvent(new Event('change'));
@@ -84,27 +99,166 @@ PulseApp.ui.alerts = (() => {
         }
         
         updateAlertsMode();
+        
+        // Clear threshold styling when entering/exiting alerts mode
+        if (isAlertsMode && PulseApp.ui.thresholds) {
+            if (PulseApp.ui.thresholds.clearAllStyling) {
+                PulseApp.ui.thresholds.clearAllStyling();
+            } else if (PulseApp.ui.thresholds.clearAllRowDimming) {
+                PulseApp.ui.thresholds.clearAllRowDimming();
+            }
+        }
+        
+        // Hide any lingering tooltips when entering alerts mode
+        if (isAlertsMode && PulseApp.tooltips) {
+            if (PulseApp.tooltips.hideTooltip) {
+                PulseApp.tooltips.hideTooltip();
+            }
+            if (PulseApp.tooltips.hideSliderTooltipImmediately) {
+                PulseApp.tooltips.hideSliderTooltipImmediately();
+            }
+        }
+        
+        
+        // Remove class after mode switch is complete
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                document.body.classList.remove('switching-modes');
+            });
+        });
+    }
+    
+    
+    function handleAlertDurationChange(event) {
+        alertDuration = parseInt(event.target.value);
+        console.log(`Alert duration changed to: ${alertDuration}ms`);
+        
+        // Save the updated duration to the backend
+        autoSaveAlertConfig();
+    }
+
+    async function handleEmailToggle(event) {
+        const enabled = event.target.checked;
+        
+        try {
+            // Get current config
+            const configResponse = await fetch('/api/config');
+            if (!configResponse.ok) {
+                throw new Error('Failed to get current config');
+            }
+            const configData = await configResponse.json();
+            
+            // Update only ALERT_EMAIL_ENABLED
+            const updatedConfig = {
+                ...configData,
+                ALERT_EMAIL_ENABLED: enabled
+            };
+            
+            // Save updated config
+            const saveResponse = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedConfig)
+            });
+            
+            const saveResult = await saveResponse.json();
+            
+            if (!saveResult.success) {
+                throw new Error('Failed to save config');
+            }
+            
+            PulseApp.ui.toast?.success(`Alert emails ${enabled ? 'enabled' : 'disabled'}`);
+        } catch (error) {
+            console.error('Failed to toggle alert emails:', error);
+            PulseApp.ui.toast?.error('Failed to update email setting');
+            // Revert toggle on error
+            event.target.checked = !enabled;
+        }
+    }
+
+    async function handleWebhookToggle(event) {
+        const enabled = event.target.checked;
+        
+        try {
+            // Get current config
+            const configResponse = await fetch('/api/config');
+            if (!configResponse.ok) {
+                throw new Error('Failed to get current config');
+            }
+            const configData = await configResponse.json();
+            
+            // Update only ALERT_WEBHOOK_ENABLED
+            const updatedConfig = {
+                ...configData,
+                ALERT_WEBHOOK_ENABLED: enabled
+            };
+            
+            // Save updated config
+            const saveResponse = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedConfig)
+            });
+            
+            const saveResult = await saveResponse.json();
+            
+            if (!saveResult.success) {
+                throw new Error('Failed to save config');
+            }
+            
+            PulseApp.ui.toast?.success(`Alert webhooks ${enabled ? 'enabled' : 'disabled'}`);
+        } catch (error) {
+            console.error('Failed to toggle alert webhooks:', error);
+            PulseApp.ui.toast?.error('Failed to update webhook setting');
+            // Revert toggle on error
+            event.target.checked = !enabled;
+        }
     }
 
     function updateAlertsMode() {
         if (!globalAlertThresholds || !mainTable) return;
+        
+        // Get the alert mode controls container
+        const alertModeControls = document.getElementById('alert-mode-controls');
+        // Get the main threshold row
+        const thresholdRow = document.getElementById('threshold-slider-row');
 
         if (isAlertsMode) {
+            // Hide the main threshold row
+            if (thresholdRow) {
+                thresholdRow.classList.add('hidden');
+            }
+            
             // Show global thresholds row
             globalAlertThresholds.classList.remove('hidden');
+            
+            // Show alert mode controls
+            if (alertModeControls) {
+                alertModeControls.classList.remove('hidden');
+            }
+            
+            // Update notification status when showing alerts mode
+            updateNotificationStatus();
             
             // Add alerts mode class to body for CSS targeting
             document.body.classList.add('alerts-mode');
             
-            // Transform table to show threshold inputs instead of values
+            // First apply dimming immediately to prevent flash
+            applyAlertDimmingFast();
+            
+            // Then transform table to show threshold inputs
             transformTableToAlertsMode();
             
-            // Apply initial row styling like threshold system
-            updateRowStylingOnly();
-            
         } else {
+            // Don't show the main threshold row - let the threshold module control its visibility
+            
             // Hide global thresholds row
             globalAlertThresholds.classList.add('hidden');
+            
+            // Hide alert mode controls
+            if (alertModeControls) {
+                alertModeControls.classList.add('hidden');
+            }
             
             // Remove alerts mode class
             document.body.classList.remove('alerts-mode');
@@ -114,6 +268,12 @@ PulseApp.ui.alerts = (() => {
             
             // Clear only alert-specific row styling
             clearAllAlertStyling();
+            
+            // Hide alerts count badge
+            updateAlertsCountBadge();
+            
+            // Don't re-apply threshold filtering when exiting alerts mode
+            // Thresholds should only be applied when the threshold toggle is explicitly checked
         }
     }
 
@@ -343,8 +503,11 @@ PulseApp.ui.alerts = (() => {
         // Only check running guests for alerts (stopped guests can't trigger metric alerts)
         if (guest.status !== 'running') return false;
         
-        // Check each metric type
+        // Check each metric type using selected logic (AND or OR)
         const metricsToCheck = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+        let hasAnyThresholds = false;
+        let exceededThresholds = 0;
+        let totalThresholds = 0;
         
         for (const metricType of metricsToCheck) {
             // Get the effective threshold for this guest/metric
@@ -357,29 +520,72 @@ PulseApp.ui.alerts = (() => {
                 thresholdValue = globalThresholds[metricType];
             }
             
-            // Skip if no threshold is set for this metric
-            if (!thresholdValue || thresholdValue === '' || thresholdValue === '0') continue;
+            // Skip if no threshold is set for this metric (but 0 is a valid threshold)
+            if (thresholdValue === undefined || thresholdValue === null || thresholdValue === '') continue;
+            
+            hasAnyThresholds = true;
+            totalThresholds++;
             
             // Get guest's current value for this metric
             let guestValue;
-            if (metricType === 'cpu') guestValue = guest.cpu;
-            else if (metricType === 'memory') guestValue = guest.memory;
-            else if (metricType === 'disk') guestValue = guest.disk;
-            else if (metricType === 'diskread') guestValue = guest.diskread;
-            else if (metricType === 'diskwrite') guestValue = guest.diskwrite;
-            else if (metricType === 'netin') guestValue = guest.netin;
-            else if (metricType === 'netout') guestValue = guest.netout;
+            if (metricType === 'cpu') {
+                guestValue = guest.cpu;
+            } else if (metricType === 'memory') {
+                // Since we don't have raw mem/maxmem values in frontend, use the pre-calculated value
+                // but adjust for rounding differences with backend
+                guestValue = guest.memory;
+                
+                // If the value is exactly at the threshold when rounded, check if it would be below when not rounded
+                // This accounts for cases like 44.7% that rounds to 45% but is actually below the 45% threshold
+                if (guestValue === parseFloat(thresholdValue)) {
+                    // Assume worst case: the actual value could be up to 0.5% lower
+                    // This ensures frontend matches backend behavior
+                    guestValue = guestValue - 0.01;
+                }
+                
+            } else if (metricType === 'disk') {
+                // Same issue as memory - use pre-calculated value with rounding adjustment
+                guestValue = guest.disk;
+                
+                // If the value is exactly at the threshold when rounded, adjust for potential rounding
+                if (guestValue === parseFloat(thresholdValue)) {
+                    guestValue = guestValue - 0.01;
+                }
+            } else if (metricType === 'diskread') {
+                guestValue = guest.diskread;
+            } else if (metricType === 'diskwrite') {
+                guestValue = guest.diskwrite;
+            } else if (metricType === 'netin') {
+                guestValue = guest.netin;
+            } else if (metricType === 'netout') {
+                guestValue = guest.netout;
+            }
             
             // Skip if guest value is not available
             if (guestValue === undefined || guestValue === null || guestValue === 'N/A' || isNaN(guestValue)) continue;
             
-            // Check if guest value exceeds threshold (would trigger alert)
+            // Check if guest value exceeds threshold
             if (guestValue >= parseFloat(thresholdValue)) {
-                return true; // This guest would trigger an alert
+                exceededThresholds++;
+                
+                // For OR logic, return true immediately if any threshold is exceeded
+                if (alertLogic === 'or') {
+                    return true;
+                }
+            } else if (alertLogic === 'and') {
+                // For AND logic, return false immediately if any threshold is not exceeded
+                return false;
             }
         }
         
-        return false; // No alerts would be triggered for this guest
+        // Return result based on logic mode
+        if (alertLogic === 'and') {
+            // Return true only if we have thresholds and ALL of them are exceeded
+            return hasAnyThresholds && exceededThresholds === totalThresholds;
+        } else {
+            // OR logic - already returned true above if any threshold was exceeded
+            return false;
+        }
     }
 
     // Standalone row styling update with granular cell dimming
@@ -404,99 +610,74 @@ PulseApp.ui.alerts = (() => {
             // Check if this guest would trigger alerts based on current thresholds
             const wouldTriggerAlerts = checkGuestWouldTriggerAlerts(guestId, guestThresholds);
             
-            // Apply row-level dimming: dim if guest WOULDN'T trigger alerts (like threshold system)
+            // Apply unified row-level styling: dim if guest WOULDN'T trigger alerts
             if (!wouldTriggerAlerts) {
-                if (!hasIndividualSettings) {
-                    // Pure global settings - full row dimming
-                    row.style.opacity = '0.4';
-                    row.style.transition = 'opacity 0.1s ease-out';
-                    row.setAttribute('data-alert-dimmed', 'true');
-                    row.removeAttribute('data-alert-mixed');
-                } else {
-                    // Mixed settings - let cell styling handle granular dimming
-                    row.style.opacity = '';
-                    row.style.transition = '';
-                    row.removeAttribute('data-alert-dimmed');
-                    row.setAttribute('data-alert-mixed', 'true');
-                }
+                // Dim rows that wouldn't trigger alerts
+                row.style.opacity = '0.4';
+                row.style.transition = 'opacity 0.1s ease-out';
+                row.setAttribute('data-alert-dimmed', 'true');
             } else {
-                // Would trigger alerts - keep visible
+                // Light up rows that would trigger alerts
                 row.style.opacity = '';
                 row.style.transition = '';
                 row.removeAttribute('data-alert-dimmed');
-                if (hasIndividualSettings) {
-                    row.setAttribute('data-alert-mixed', 'true');
-                } else {
-                    row.removeAttribute('data-alert-mixed');
-                }
             }
             
-            // Apply granular cell-level dimming/undimming for mixed rows
-            if (hasIndividualSettings) {
-                updateCellStyling(row, guestId, guestThresholds);
-            }
-        });
-        
-        // Update reset button visibility based on whether there are any custom values
-        updateResetButtonVisibility(hasAnyCustomValues);
-    }
-    
-    // Apply dimming to individual cells based on which metrics have custom values
-    function updateCellStyling(row, guestId, guestThresholds) {
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 11) return;
-        
-        
-        // Map metric types to cell indices: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
-        const metricCells = {
-            'cpu': cells[4],
-            'memory': cells[5], 
-            'disk': cells[6],
-            'diskread': cells[7],
-            'diskwrite': cells[8],
-            'netin': cells[9],
-            'netout': cells[10]
-        };
-        
-        // Check if this row has mixed values
-        const isMixedRow = row.hasAttribute('data-alert-mixed');
-        
-        if (isMixedRow) {
-            // For mixed rows, apply cell-specific opacity
-            Object.entries(metricCells).forEach(([metricType, cell]) => {
-                if (!cell) return;
-                
-                const hasCustomValue = guestThresholds[metricType] !== undefined;
-                
-                if (hasCustomValue) {
-                    // This specific metric has a custom value - full opacity
-                    cell.style.opacity = '1';
-                    cell.style.transition = 'opacity 0.1s ease-out';
-                    cell.setAttribute('data-alert-custom', 'true');
-                } else {
-                    // This metric uses global value - dim it
-                    cell.style.opacity = '0.4';
-                    cell.style.transition = 'opacity 0.1s ease-out';
-                    cell.removeAttribute('data-alert-custom');
-                }
-            });
-            
-            // Also dim non-metric cells in mixed rows
-            for (let i = 0; i < 4; i++) { // name, type, id, uptime
-                if (cells[i]) {
-                    cells[i].style.opacity = '0.4';
-                    cells[i].style.transition = 'opacity 0.1s ease-out';
-                }
-            }
-        } else {
-            // For non-mixed rows, clear all cell-specific styling
+            // Clear any cell-level styling
+            const cells = row.querySelectorAll('td');
             cells.forEach(cell => {
                 cell.style.opacity = '';
                 cell.style.transition = '';
                 cell.removeAttribute('data-alert-custom');
             });
+            
+            // Remove mixed row attributes (no longer used)
+            row.removeAttribute('data-alert-mixed');
+        });
+        
+        // Update reset button visibility based on whether there are any custom values
+        updateResetButtonVisibility(hasAnyCustomValues);
+        
+        // Update alerts count badge
+        updateAlertsCountBadge();
+    }
+    
+    function updateAlertsCountBadge() {
+        const alertsBadge = document.getElementById('alerts-count-badge');
+        if (!alertsBadge || !isAlertsMode) {
+            if (alertsBadge) {
+                alertsBadge.classList.add('hidden');
+            }
+            return;
+        }
+        
+        // Count guests that would trigger alerts
+        let alertsCount = 0;
+        const dashboardData = PulseApp.state?.get('dashboardData') || [];
+        if (dashboardData.length > 0 && mainTable) {
+            const tableBody = mainTable.querySelector('tbody');
+            if (tableBody) {
+                const rows = tableBody.querySelectorAll('tr[data-id]');
+                rows.forEach(row => {
+                    const guestId = row.getAttribute('data-id');
+                    const guestThresholds = guestAlertThresholds[guestId] || {};
+                    
+                    if (checkGuestWouldTriggerAlerts(guestId, guestThresholds)) {
+                        alertsCount++;
+                    }
+                });
+            }
+        }
+        
+        // Update badge
+        alertsBadge.textContent = alertsCount;
+        if (alertsCount > 0) {
+            alertsBadge.classList.remove('hidden');
+        } else {
+            alertsBadge.classList.add('hidden');
         }
     }
+    
     
     function updateResetButtonVisibility(hasCustomValues) {
         const resetButton = document.getElementById('reset-global-thresholds');
@@ -561,34 +742,55 @@ PulseApp.ui.alerts = (() => {
         const tableBody = mainTable.querySelector('tbody');
         if (!tableBody) return;
         
-        // Aggressively clear ALL alert-related styling from all rows and cells
+        // Clear ALL alert-related styling from all rows and cells
         const rows = tableBody.querySelectorAll('tr[data-id]');
         rows.forEach(row => {
-            // Disable transitions temporarily to prevent flash
-            row.style.transition = 'none';
+            // Clear row-level styling immediately
+            row.style.opacity = '';
+            row.style.transition = '';
+            row.removeAttribute('data-alert-dimmed');
+            row.removeAttribute('data-alert-mixed');
             
-            // Clear ALL cell-level styling first
+            // Clear ALL cell-level styling
             const allCells = row.querySelectorAll('td');
             allCells.forEach(cell => {
-                cell.style.transition = 'none';
                 cell.style.opacity = '';
+                cell.style.transition = '';
                 cell.style.backgroundColor = '';
                 cell.style.borderLeft = '';
                 cell.removeAttribute('data-alert-custom');
             });
+        });
+    }
+    
+    function applyAlertDimmingFast() {
+        const tableBody = mainTable.querySelector('tbody');
+        if (!tableBody) return;
+        
+        const rows = tableBody.querySelectorAll('tr[data-id]');
+        
+        // Single pass: directly transition from threshold to alert styling
+        rows.forEach(row => {
+            const guestId = row.getAttribute('data-id');
+            const guestThresholds = guestAlertThresholds[guestId] || {};
             
-            // Then set row-level styling
-            row.style.opacity = '0.4'; // Apply dimming immediately
-            row.setAttribute('data-alert-dimmed', 'true'); // Mark as properly dimmed
-            row.removeAttribute('data-alert-mixed');
+            // Remove threshold attributes
+            row.removeAttribute('data-dimmed');
+            row.style.transition = '';
             
-            // Re-enable transitions after a brief delay
-            setTimeout(() => {
-                row.style.transition = 'opacity 0.1s ease-out';
-                allCells.forEach(cell => {
-                    cell.style.transition = '';
-                });
-            }, 10);
+            // Check if this guest would trigger alerts
+            const wouldTriggerAlerts = checkGuestWouldTriggerAlerts(guestId, guestThresholds);
+            
+            // Apply or maintain opacity based on alert state
+            if (!wouldTriggerAlerts) {
+                // Keep dimmed (or apply dimming if not already)
+                row.style.opacity = '0.4';
+                row.setAttribute('data-alert-dimmed', 'true');
+            } else {
+                // Only clear opacity if row should be visible
+                row.style.opacity = '';
+                row.removeAttribute('data-alert-dimmed');
+            }
         });
     }
 
@@ -624,6 +826,8 @@ PulseApp.ui.alerts = (() => {
         }
         if (diskSlider) {
             diskSlider.value = globalThresholds.disk;
+            // Hide any lingering tooltip that might have been triggered
+            PulseApp.tooltips.hideSliderTooltipImmediately();
         }
         if (diskreadSelect) diskreadSelect.value = globalThresholds.diskread;
         if (diskwriteSelect) diskwriteSelect.value = globalThresholds.diskwrite;
@@ -635,13 +839,13 @@ PulseApp.ui.alerts = (() => {
         
         // Update all guest rows smoothly
         if (isAlertsMode) {
-            // First, immediately clean up all styling and apply final dimming to prevent flash
-            clearAllAlertStyling();
-            
-            // Then update input values to match global thresholds (skip tooltips during reset)
+            // First update input values to match global thresholds (skip tooltips during reset)
             for (const metricType in globalThresholds) {
                 updateGuestInputValues(metricType, globalThresholds[metricType], true);
             }
+            
+            // Then update row styling with new thresholds (no flash since inputs are already updated)
+            updateRowStylingOnly();
         }
         
         // Auto-save
@@ -823,12 +1027,20 @@ PulseApp.ui.alerts = (() => {
     }
 
     async function autoSaveAlertConfig() {
+        // Get current toggle states
+        const emailToggle = document.getElementById('alert-email-toggle');
+        const webhookToggle = document.getElementById('alert-webhook-toggle');
+        
         const alertConfig = {
             type: 'per_guest_thresholds',
             globalThresholds: globalThresholds,
             guestThresholds: guestAlertThresholds,
+            alertLogic: alertLogic,
+            duration: alertDuration,
             notifications: {
-                dashboard: true
+                dashboard: true,
+                email: emailToggle ? emailToggle.checked : false,
+                webhook: webhookToggle ? webhookToggle.checked : false
             },
             enabled: true,
             lastUpdated: new Date().toISOString()
@@ -888,16 +1100,16 @@ PulseApp.ui.alerts = (() => {
                     
                     if (cpuSlider && globalThresholds.cpu) {
                         cpuSlider.value = globalThresholds.cpu;
-                        PulseApp.tooltips.updateSliderTooltip(cpuSlider);
                     }
                     if (memorySlider && globalThresholds.memory) {
                         memorySlider.value = globalThresholds.memory;
-                        PulseApp.tooltips.updateSliderTooltip(memorySlider);
                     }
                     if (diskSlider && globalThresholds.disk) {
                         diskSlider.value = globalThresholds.disk;
-                        PulseApp.tooltips.updateSliderTooltip(diskSlider);
                     }
+                    
+                    // Hide any tooltips that might have been triggered during value setting
+                    PulseApp.tooltips.hideSliderTooltipImmediately();
                     if (diskreadSelect && globalThresholds.diskread) diskreadSelect.value = globalThresholds.diskread;
                     if (diskwriteSelect && globalThresholds.diskwrite) diskwriteSelect.value = globalThresholds.diskwrite;
                     if (netinSelect && globalThresholds.netin) netinSelect.value = globalThresholds.netin;
@@ -907,6 +1119,17 @@ PulseApp.ui.alerts = (() => {
                 // Load guest thresholds
                 if (config.guestThresholds) {
                     guestAlertThresholds = config.guestThresholds;
+                }
+                
+                // Alert logic is now fixed to OR (dropdown removed)
+                
+                // Load alert duration
+                if (config.duration) {
+                    alertDuration = config.duration;
+                    const alertDurationSelect = document.getElementById('alert-duration-select');
+                    if (alertDurationSelect) {
+                        alertDurationSelect.value = alertDuration.toString();
+                    }
                 }
                 
                 
@@ -953,6 +1176,36 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
+    async function updateNotificationStatus() {
+        try {
+            // Fetch current configuration to get notification status
+            const response = await fetch('/api/config');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            // Extract notification status from config
+            const emailEnabled = data.ALERT_EMAIL_ENABLED !== false && data.GLOBAL_EMAIL_ENABLED !== false;
+            const webhookEnabled = data.ALERT_WEBHOOK_ENABLED !== false && data.GLOBAL_WEBHOOK_ENABLED !== false;
+            
+            // Update toggle switches
+            const emailToggle = document.getElementById('alert-email-toggle');
+            const webhookToggle = document.getElementById('alert-webhook-toggle');
+            
+            if (emailToggle) {
+                emailToggle.checked = emailEnabled;
+            }
+            
+            if (webhookToggle) {
+                webhookToggle.checked = webhookEnabled;
+            }
+        } catch (error) {
+            console.error('Failed to update notification status:', error);
+        }
+    }
+
     // Public API
     return {
         init,
@@ -962,7 +1215,8 @@ PulseApp.ui.alerts = (() => {
         clearAllAlerts: clearAllAlerts,
         updateGuestThreshold: updateGuestThreshold,
         updateRowStylingOnly: updateRowStylingOnly,
-        updateCellStyling: updateCellStyling,
-        getActiveAlertsForGuest: getActiveAlertsForGuest
+        getActiveAlertsForGuest: getActiveAlertsForGuest,
+        loadSavedConfiguration: loadSavedConfiguration,
+        updateNotificationStatus: updateNotificationStatus
     };
 })();

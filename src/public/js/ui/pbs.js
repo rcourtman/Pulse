@@ -40,6 +40,7 @@ PulseApp.ui.pbs = (() => {
         TEXT_GRAY_600_DARK_GRAY_400: 'text-gray-600 dark:text-gray-400',
         TEXT_GRAY_700_DARK_GRAY_300: 'text-gray-700 dark:text-gray-300',
         TEXT_GRAY_500_DARK_GRAY_400: 'text-gray-500 dark:text-gray-400',
+        TEXT_GRAY_800_DARK_GRAY_200: 'text-gray-800 dark:text-gray-200',
         
         // Font weights
         FONT_SEMIBOLD: 'font-semibold',
@@ -71,6 +72,21 @@ PulseApp.ui.pbs = (() => {
         // Borders & dividers
         BORDER_GRAY_200_DARK_BORDER_GRAY_700: 'border border-gray-200 dark:border-gray-700',
         DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700: 'divide-y divide-gray-200 dark:divide-gray-700',
+        BORDER_B_GRAY_300_DARK_BORDER_GRAY_600: 'border-b border-gray-300 dark:border-gray-600',
+        
+        // Background colors
+        BG_GRAY_100_DARK_BG_GRAY_800: 'bg-gray-100 dark:bg-gray-800',
+        BG_GRAY_100_DARK_BG_GRAY_700: 'bg-gray-100 dark:bg-gray-700',
+        HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50: 'hover:bg-gray-50 dark:hover:bg-gray-700/50',
+        
+        // Text styling
+        TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300: 'text-gray-600 uppercase dark:text-gray-300',
+        FONT_MEDIUM: 'font-medium',
+        
+        // Positioning
+        STICKY: 'sticky',
+        TOP_0: 'top-0',
+        Z_10: 'z-10',
         
         // PBS specific
         PBS_TASK_TBODY: 'pbs-task-tbody',
@@ -179,16 +195,10 @@ PulseApp.ui.pbs = (() => {
     };
 
     const parsePbsTaskTarget = (task) => {
-      // For synthetic backup run tasks, enhance with guest name if available
+      // For synthetic backup run tasks, don't enhance with guest names
       if (task.guest && task.pbsBackupRun) {
-          // Check if guest field is in format "ct/103" or "qemu/102"
-          const guestParts = task.guest.split('/');
-          if (guestParts.length === 2) {
-              const guestType = guestParts[0];
-              const guestId = guestParts[1];
-              const guestName = findGuestName(guestType, guestId);
-              return guestName ? `${task.guest} (${guestName})` : task.guest;
-          }
+          // PBS tasks come from different PVE instances, so we can't reliably resolve names
+          // Just return the raw guest string (e.g., "ct/100")
           return task.guest;
       }
       
@@ -207,9 +217,8 @@ PulseApp.ui.pbs = (() => {
               const guestId = targetSubParts[1];
               const baseTarget = `${guestType}/${guestId}`;
               
-              // Try to find guest name and append it if found
-              const guestName = findGuestName(guestType, guestId);
-              displayTarget = guestName ? `${baseTarget} (${guestName})` : baseTarget;
+              // Don't resolve guest names for PBS tasks - they may come from different PVE instances
+              displayTarget = baseTarget;
           }
         }
       } else if (taskType === 'prune' || taskType === 'garbage_collection') {
@@ -438,34 +447,37 @@ PulseApp.ui.pbs = (() => {
         row.dataset.upid = task.upid || '';
         
         // Add status-based row styling for better problem visibility
-        let rowClasses = 'border-b border-gray-200 dark:border-gray-700 transition-colors duration-150 ease-in-out';
-        
         const isFailed = isTaskFailed(task);
+        let specialBgClass = '';
+        let specialHoverClass = '';
+        let additionalClasses = 'transition-colors duration-150 ease-in-out';
         
         if (isFailed) {
             // Failed tasks get red background and cursor pointer if expandable
-            rowClasses += ` bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 cursor-pointer`;
+            specialBgClass = 'bg-red-50 dark:bg-red-900/20';
+            specialHoverClass = 'hover:bg-red-100 dark:hover:bg-red-900/30';
+            additionalClasses += ' cursor-pointer';
         } else if (task.status && task.status.toLowerCase().includes('running')) {
             // Running tasks get blue background
-            rowClasses += ` bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30`;
-        } else {
-            // Normal hover for successful tasks
-            rowClasses += ` hover:bg-gray-50 dark:hover:bg-gray-700`;
+            specialBgClass = 'bg-blue-50 dark:bg-blue-900/20';
+            specialHoverClass = 'hover:bg-blue-100 dark:hover:bg-blue-900/30';
         }
         
-        row.className = rowClasses;
+        // Use helper to create consistent row
+        const newRow = PulseApp.ui.common.createTableRow({
+            classes: additionalClasses,
+            isSpecialRow: !!(specialBgClass),
+            specialBgClass: specialBgClass,
+            specialHoverClass: specialHoverClass
+        });
+        
+        row.className = newRow.className;
 
         const targetCell = document.createElement('td');
         
         if (isBackupTable) {
             // Only apply sticky to backup tasks table
-            let stickyBg = 'bg-white dark:bg-gray-800';
-            if (isFailed) {
-                stickyBg = 'bg-red-50 dark:bg-red-900/20';
-            } else if (task.status && task.status.toLowerCase().includes('running')) {
-                stickyBg = 'bg-blue-50 dark:bg-blue-900/20';
-            }
-            targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 ${stickyBg} z-10 border-r border-gray-300 dark:border-gray-600`;
+            targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300} sticky left-0 z-10 bg-white dark:bg-gray-800 border-r border-gray-300 dark:border-gray-600`;
         } else {
             targetCell.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
         }
@@ -894,16 +906,23 @@ PulseApp.ui.pbs = (() => {
                     const usageText = totalBytes > 0 ? `${usagePercent}% (${PulseApp.utils.formatBytes(usedBytes)} of ${PulseApp.utils.formatBytes(totalBytes)})` : 'N/A';
                     const gcStatusHtml = getPbsGcStatusText(ds.gcStatus);
 
-                    const row = dsTableBody.insertRow();
+                    // Use consolidated table row helper
+                    let specialBgClass = '';
+                    let specialHoverClass = '';
                     
-                    // Add critical usage highlighting
-                    let rowClass = `${CSS_CLASSES.HOVER_BG_GRAY_50_DARK_HOVER_BG_GRAY_700_50}`;
                     if (usagePercent >= 95) {
-                        rowClass = 'bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30';
+                        specialBgClass = 'bg-red-50 dark:bg-red-900/20';
+                        specialHoverClass = 'hover:bg-red-100 dark:hover:bg-red-900/30';
                     } else if (usagePercent >= 85) {
-                        rowClass = 'bg-yellow-50 dark:bg-yellow-900/20 hover:bg-yellow-100 dark:hover:bg-yellow-900/30';
+                        specialBgClass = 'bg-yellow-50 dark:bg-yellow-900/20';
+                        specialHoverClass = 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30';
                     }
-                    row.className = rowClass;
+                    
+                    const row = PulseApp.ui.common.createTableRow({
+                        isSpecialRow: !!(specialBgClass),
+                        specialBgClass: specialBgClass,
+                        specialHoverClass: specialHoverClass
+                    });
 
                     const createCell = (content, classNames = [], isHtml = false) => {
                         const cell = row.insertCell();
@@ -950,6 +969,8 @@ PulseApp.ui.pbs = (() => {
                     createCell(deduplicationText, [CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400, CSS_CLASSES.FONT_SEMIBOLD]);
 
                     createCell(gcStatusHtml, [], true);
+                    
+                    dsTableBody.appendChild(row);
                 });
             }
         } else {
@@ -1034,7 +1055,7 @@ PulseApp.ui.pbs = (() => {
         dsTable.id = ID_PREFIXES.PBS_DS_TABLE + instanceId;
         dsTable.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}`;
         const dsThead = document.createElement('thead');
-        dsThead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+        dsThead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_700}`;
         const dsHeaderRow = document.createElement('tr');
         dsHeaderRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
         ['Name', 'Path', 'Used', 'Available', 'Total', 'Usage', 'Deduplication', 'GC Status'].forEach(headerText => {
@@ -1065,6 +1086,12 @@ PulseApp.ui.pbs = (() => {
         heading.className = `${CSS_CLASSES.TEXT_MD} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.MB2} ${CSS_CLASSES.TEXT_GRAY_700_DARK_GRAY_300}`;
         heading.textContent = 'PBS Task Summary';
         sectionDiv.appendChild(heading);
+        
+        // Add a subtitle with timeframe info
+        const subtitle = document.createElement('p');
+        subtitle.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.MB2}`;
+        subtitle.textContent = 'Showing task history from the past year';
+        sectionDiv.appendChild(subtitle);
 
         const tableContainer = document.createElement('div');
         tableContainer.className = `${CSS_CLASSES.OVERFLOW_X_AUTO} ${CSS_CLASSES.BORDER_GRAY_200_DARK_BORDER_GRAY_700} ${CSS_CLASSES.ROUNDED} ${CSS_CLASSES.BG_GRAY_50_DARK_BG_GRAY_800_30} p-3`;
@@ -1073,7 +1100,7 @@ PulseApp.ui.pbs = (() => {
         table.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.TEXT_SM}`;
         
         const thead = document.createElement('thead');
-        thead.className = `${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+        thead.className = `${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_700}`;
         const headerRow = document.createElement('tr');
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
 
@@ -1100,19 +1127,32 @@ PulseApp.ui.pbs = (() => {
 
         taskHealthData.forEach(taskItem => {
             const summary = taskItem.data?.summary || {};
-            const ok = summary.ok ?? '-';
+            const recentTasks = taskItem.data?.recentTasks || [];
+            const ok = summary.ok ?? 0;
             const failed = summary.failed ?? 0;
+            const total = ok + failed;
             const lastOk = PulseApp.utils.formatPbsTimestampRelative(summary.lastOk);
             const lastFailed = PulseApp.utils.formatPbsTimestampRelative(summary.lastFailed);
 
-            const row = tbody.insertRow();
+            // Calculate additional metrics
+            let last7DaysCount = 0;
+            let last30DaysCount = 0;
+            const now = Date.now();
+            const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
+            const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
             
-            // Add row highlighting for failed tasks
-            if (failed > 0) {
-                row.className = `${CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700} bg-red-50 dark:bg-red-900/20`;
-            } else {
-                row.className = CSS_CLASSES.BORDER_B_GRAY_200_DARK_GRAY_700;
-            }
+            recentTasks.forEach(task => {
+                const taskTime = (task.startTime || task.starttime) * 1000;
+                if (taskTime >= sevenDaysAgo && task.status === 'OK') last7DaysCount++;
+                if (taskTime >= thirtyDaysAgo && task.status === 'OK') last30DaysCount++;
+            });
+
+            // Use consolidated table row helper
+            const row = PulseApp.ui.common.createTableRow({
+                isSpecialRow: failed > 0,
+                specialBgClass: failed > 0 ? 'bg-red-50 dark:bg-red-900/20' : '',
+                specialHoverClass: failed > 0 ? 'hover:bg-red-100 dark:hover:bg-red-900/30' : ''
+            });
 
             const cellTaskType = row.insertCell();
             cellTaskType.className = `${CSS_CLASSES.P1_PX2} ${CSS_CLASSES.FONT_SEMIBOLD} ${CSS_CLASSES.TEXT_GRAY_800_DARK_GRAY_200}`;
@@ -1121,17 +1161,30 @@ PulseApp.ui.pbs = (() => {
             const cellStatus = row.insertCell();
             cellStatus.className = CSS_CLASSES.P1_PX2;
             
-            // More descriptive status text
+            // More descriptive status text with additional context
             let statusHtml = '';
-            if (failed > 0) {
+            if (total === 0) {
+                statusHtml = `<span class="${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}">No tasks</span>`;
+            } else if (failed > 0) {
+                const successRate = total > 0 ? Math.round((ok / total) * 100) : 0;
                 statusHtml = `<span class="${CSS_CLASSES.TEXT_RED_600_DARK_RED_400} ${CSS_CLASSES.FONT_BOLD}">${failed} FAILED</span>`;
-                if (ok > 0) {
-                    statusHtml += ` / <span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">${ok} OK</span>`;
-                }
-            } else if (ok > 0) {
-                statusHtml = `<span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">All OK (${ok})</span>`;
+                statusHtml += ` / <span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">${ok} OK</span>`;
+                statusHtml += ` <span class="${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} text-xs">(${successRate}% success)</span>`;
             } else {
-                statusHtml = `<span class="${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400}">No recent tasks</span>`;
+                // Show breakdown for successful tasks
+                statusHtml = `<span class="${CSS_CLASSES.TEXT_GREEN_600_DARK_GREEN_400}">All OK</span>`;
+                statusHtml += ` <span class="${CSS_CLASSES.TEXT_GRAY_600_DARK_GRAY_400} text-xs">`;
+                if (last7DaysCount > 0) {
+                    statusHtml += `${last7DaysCount} this week`;
+                    if (last30DaysCount > last7DaysCount) {
+                        statusHtml += `, ${last30DaysCount} this month`;
+                    }
+                } else if (last30DaysCount > 0) {
+                    statusHtml += `${last30DaysCount} this month`;
+                } else {
+                    statusHtml += `${ok} total`;
+                }
+                statusHtml += `</span>`;
             }
             cellStatus.innerHTML = statusHtml;
             
@@ -1146,6 +1199,8 @@ PulseApp.ui.pbs = (() => {
             } else {
                 cellLastFail.textContent = lastFailed;
             }
+            
+            tbody.appendChild(row);
         });
 
         table.appendChild(tbody);
@@ -1198,7 +1253,7 @@ PulseApp.ui.pbs = (() => {
         table.className = `${CSS_CLASSES.MIN_W_FULL} ${CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700} ${CSS_CLASSES.TEXT_SM}`;
 
         const thead = document.createElement('thead');
-        thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+        thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_700}`;
         const headerRow = document.createElement('tr');
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
 
@@ -1211,7 +1266,7 @@ PulseApp.ui.pbs = (() => {
             
             if (index === 0 && isBackupTable) {
                 // Make first header sticky for backup tables
-                th.className = `${CSS_CLASSES.P1_PX2} sticky left-0 bg-gray-100 dark:bg-gray-800 z-20 border-r border-gray-300 dark:border-gray-600`;
+                th.className = `${CSS_CLASSES.P1_PX2} sticky left-0 bg-gray-100 dark:bg-gray-700 z-20 border-r border-gray-300 dark:border-gray-600`;
             } else {
                 th.className = CSS_CLASSES.P1_PX2;
             }
@@ -1289,7 +1344,7 @@ PulseApp.ui.pbs = (() => {
 
         // Table header
         const thead = document.createElement('thead');
-        thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_800}`;
+        thead.className = `${CSS_CLASSES.STICKY} ${CSS_CLASSES.TOP_0} ${CSS_CLASSES.Z_10} ${CSS_CLASSES.BG_GRAY_100_DARK_BG_GRAY_700}`;
         const headerRow = document.createElement('tr');
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
         const headerClasses = [
@@ -1312,7 +1367,9 @@ PulseApp.ui.pbs = (() => {
         // Table body
         const tbody = document.createElement('tbody');
         tbody.className = CSS_CLASSES.DIVIDE_Y_GRAY_200_DARK_DIVIDE_GRAY_700;
-        const valueRow = document.createElement('tr');
+        
+        // Use consolidated table row helper
+        const valueRow = PulseApp.ui.common.createTableRow();
 
         // PBS VER
         const versionInfo = pbsInstanceData.versionInfo || {};
@@ -1956,9 +2013,10 @@ PulseApp.ui.pbs = (() => {
         }
         
         // Get selected namespace for this instance
+        // Always use 'root' as default namespace to ensure proper filtering
         const selectedNamespace = hasMultipleNamespaces 
             ? (selectedNamespaceByInstance.get(instanceIndex) || 'root')
-            : null;
+            : 'root';
         
         // Filter the instance data by namespace
         const filteredInstanceData = _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace);
@@ -2149,7 +2207,7 @@ PulseApp.ui.pbs = (() => {
     // Filter PBS tasks by namespace
     function _filterPbsTasksByNamespace(tasks, selectedNamespace) {
         if (!selectedNamespace) {
-            // No filtering needed (only root namespace exists)
+            // If no namespace selected, return all tasks (this shouldn't happen with current logic)
             return tasks;
         }
         
@@ -2333,7 +2391,8 @@ PulseApp.ui.pbs = (() => {
             }
             
             // Get current namespace filter selection
-            const selectedNamespace = hasMultipleNamespaces ? selectedNamespaceTab : null;
+            // Always use 'root' as default namespace to ensure proper filtering
+            const selectedNamespace = hasMultipleNamespaces ? selectedNamespaceTab : 'root';
             
             // Filter the instance by namespace
             const filteredInstance = _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace);
@@ -2406,6 +2465,13 @@ PulseApp.ui.pbs = (() => {
                 });
             });
         }
+        
+        // Initialize fixed table line for mobile
+        _initTableFixedLine();
+    }
+
+    function _initTableFixedLine() {
+        // No longer needed - using CSS border styling instead
     }
 
     function initPbsEventListeners() {

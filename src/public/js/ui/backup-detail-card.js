@@ -70,32 +70,143 @@ PulseApp.ui.backupDetailCard = (() => {
     }
 
     function getCompactOverview(backups, stats, filterInfo) {
-        
         // Calculate critical metrics
         const now = new Date();
-        const criticalAge = 14; // days
-        const warningAge = 7; // days
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+        
+        // Initialize tracking variables
+        let lastBackupTime = 0;
+        let backupsThisMonth = 0;
+        let backupHours = []; // Track backup hours for window detection
+        let daysWithBackups = new Set(); // Track unique days with backups
+        
+        // Detect backup schedule pattern
+        let backupSchedule = 'unknown';
+        let scheduleThreshold = 7; // days for "recent" coverage
+        const backupDates = [];
+        
+        // Collect all backup dates for schedule detection
+        backups.forEach(guest => {
+            // First try to use latestBackupTime which should always be available
+            if (guest.latestBackupTime && guest.latestBackupTime > 0) {
+                backupDates.push(guest.latestBackupTime);
+                // Also use it to track last backup time
+                if (guest.latestBackupTime > lastBackupTime) {
+                    lastBackupTime = guest.latestBackupTime;
+                }
+            }
+            
+            // Also collect from backupDates array for more granular schedule detection
+            if (guest.backupDates && guest.backupDates.length > 0) {
+                guest.backupDates.forEach(bd => {
+                    if (bd.date) {
+                        const timestamp = bd.latestTimestamp || new Date(bd.date).getTime() / 1000;
+                        if (timestamp) {
+                            backupDates.push(timestamp);
+                            // Track backup hours and days for metrics
+                            const backupDate = new Date(timestamp * 1000);
+                            if (backupDate >= startOfMonth) {
+                                backupsThisMonth += bd.count || 1;
+                                daysWithBackups.add(backupDate.toDateString());
+                            }
+                            if (backupDate >= oneMonthAgo) {
+                                backupHours.push(backupDate.getHours());
+                            }
+                        }
+                    }
+                });
+            } else if (guest.latestBackupTime && guest.latestBackupTime > 0) {
+                // If no detailed backup dates but we have latestBackupTime, use it for metrics
+                const backupDate = new Date(guest.latestBackupTime * 1000);
+                if (backupDate >= startOfMonth) {
+                    backupsThisMonth += 1; // Count this guest
+                    daysWithBackups.add(backupDate.toDateString());
+                }
+                if (backupDate >= oneMonthAgo) {
+                    backupHours.push(backupDate.getHours());
+                }
+            }
+        });
+        
+        // Sort backup dates
+        backupDates.sort((a, b) => b - a);
+        
+        // Detect schedule pattern from recent backups
+        if (backupDates.length >= 7) {
+            const recentDates = backupDates.slice(0, 14); // Look at last 2 weeks
+            const gaps = [];
+            for (let i = 1; i < recentDates.length; i++) {
+                const gap = (recentDates[i-1] - recentDates[i]) / (24 * 60 * 60); // days
+                if (gap < 30) gaps.push(gap); // Ignore monthly+ gaps
+            }
+            
+            if (gaps.length > 0) {
+                const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+                if (avgGap <= 1.5) {
+                    backupSchedule = 'daily';
+                    scheduleThreshold = 2; // 2 days for daily backups
+                } else if (avgGap <= 8) {
+                    backupSchedule = 'weekly';
+                    scheduleThreshold = 10; // 10 days for weekly backups
+                } else {
+                    backupSchedule = 'monthly';
+                    scheduleThreshold = 35; // 35 days for monthly backups
+                }
+            }
+        }
+        
+        // Adjust age thresholds based on schedule
+        const criticalAge = scheduleThreshold * 2; // 2x the schedule
+        const warningAge = scheduleThreshold; // 1x the schedule
         
         // Group guests by backup age
         const guestsByAge = {
             good: [],      // < 24h
-            ok: [],        // 1-7 days
-            warning: [],   // 7-14 days
-            critical: [],  // > 14 days
+            ok: [],        // 1-scheduleThreshold days
+            warning: [],   // scheduleThreshold-criticalAge days
+            critical: [],  // > criticalAge days
             none: []       // no backups
         };
         
         // Track namespace distribution
         const namespaceStats = new Map();
         const pbsBackupsByNamespace = new Map();
+        let recentFailures = 0;
         
         // Analyze each guest
         backups.forEach(guest => {
             let mostRecentBackup = null;
             
+            // Count backups this month and track backup times
+            if (guest.backupDates && guest.backupDates.length > 0) {
+                guest.backupDates.forEach(bd => {
+                    const timestamp = bd.latestTimestamp || (bd.date ? new Date(bd.date).getTime() / 1000 : 0);
+                    if (timestamp) {
+                        const backupDate = new Date(timestamp * 1000);
+                        if (backupDate >= startOfMonth) {
+                            backupsThisMonth += bd.count || 1;
+                            daysWithBackups.add(backupDate.toDateString());
+                        }
+                        // Track backup hours for window detection
+                        if (backupDate >= oneMonthAgo) {
+                            backupHours.push(backupDate.getHours());
+                        }
+                        // Track most recent backup across all guests
+                        if (timestamp > lastBackupTime) {
+                            lastBackupTime = timestamp;
+                        }
+                    }
+                });
+            }
+            
+            // Count recent failures
+            if (guest.recentFailures > 0) {
+                recentFailures += guest.recentFailures;
+            }
+            
             // Check if we have filter info to determine which backup types to consider
             const activeBackupFilter = filterInfo?.backupType;
-            
             
             // If a specific backup type filter is active, use type-specific latest times
             if (activeBackupFilter && activeBackupFilter !== 'all') {
@@ -184,7 +295,7 @@ PulseApp.ui.backupDetailCard = (() => {
                 
                 if (ageInDays < 1) {
                     guestsByAge.good.push(guestData);
-                } else if (ageInDays <= warningAge) {
+                } else if (ageInDays <= scheduleThreshold) {
                     guestsByAge.ok.push(guestData);
                 } else if (ageInDays <= criticalAge) {
                     guestsByAge.warning.push(guestData);
@@ -204,6 +315,70 @@ PulseApp.ui.backupDetailCard = (() => {
         // Calculate summary stats
         const totalIssues = guestsByAge.critical.length + guestsByAge.warning.length + guestsByAge.none.length;
         const healthScore = Math.round(((stats.totalGuests - totalIssues) / stats.totalGuests) * 100) || 0;
+        const recentCoverage = guestsByAge.good.length + guestsByAge.ok.length;
+        
+        // Calculate daily average
+        // If we don't have detailed backup dates, estimate based on schedule
+        let dailyAverage = 0;
+        if (daysWithBackups.size > 0) {
+            dailyAverage = Math.round(backupsThisMonth / daysWithBackups.size);
+        } else if (backupSchedule === 'daily') {
+            // For daily backups, estimate based on total guests
+            dailyAverage = stats.totalGuests;
+        } else if (backupSchedule === 'weekly') {
+            // For weekly backups, estimate ~1/7 of guests per day
+            dailyAverage = Math.max(1, Math.round(stats.totalGuests / 7));
+        } else {
+            // Unknown schedule but all guests healthy - likely daily backups
+            if (healthScore === 100 && stats.totalGuests > 0) {
+                // If all guests are backed up recently, assume daily schedule
+                dailyAverage = stats.totalGuests;
+            } else {
+                // Conservative estimate
+                dailyAverage = Math.max(1, Math.round(stats.totalGuests / 7));
+            }
+        }
+        
+        // Detect backup window
+        let backupWindow = 'Unknown';
+        if (backupHours.length > 0) {
+            // Find most common hour
+            const hourCounts = {};
+            backupHours.forEach(hour => {
+                hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+            });
+            const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1]);
+            const primaryHour = parseInt(sortedHours[0][0]);
+            
+            // Check if there's a clear window
+            let consecutiveHours = [primaryHour];
+            sortedHours.forEach(([hour, count]) => {
+                const h = parseInt(hour);
+                if (count > hourCounts[primaryHour] * 0.3 && // At least 30% of primary hour
+                    (Math.abs(h - primaryHour) <= 2 || Math.abs(h - primaryHour) >= 22)) { // Within 2 hours
+                    consecutiveHours.push(h);
+                }
+            });
+            
+            const minHour = Math.min(...consecutiveHours);
+            const maxHour = Math.max(...consecutiveHours);
+            
+            // Format time window
+            const formatHour = (h) => {
+                const period = h >= 12 ? 'PM' : 'AM';
+                const hour12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+                return `${hour12}${period}`;
+            };
+            
+            if (maxHour - minHour <= 3 || maxHour - minHour >= 21) {
+                backupWindow = `${formatHour(minHour)}-${formatHour((maxHour + 1) % 24)}`;
+            } else {
+                backupWindow = `~${formatHour(primaryHour)}`;
+            }
+        }
+        
+        // Check if all namespaces are the same
+        const allSameNamespace = namespaceStats.size <= 1;
         
         return `
             <div class="flex flex-col h-full">
@@ -216,6 +391,7 @@ PulseApp.ui.backupDetailCard = (() => {
                             <div class="text-[9px] text-gray-500 dark:text-gray-400">${stats.totalGuests - totalIssues}/${stats.totalGuests} healthy</div>
                         </div>
                     </div>
+                    ${healthScore < 100 ? `
                     <div class="grid grid-cols-4 gap-2 text-[10px]">
                         <div class="text-center">
                             <div class="font-semibold text-green-600 dark:text-green-400">${guestsByAge.good.length}</div>
@@ -223,17 +399,18 @@ PulseApp.ui.backupDetailCard = (() => {
                         </div>
                         <div class="text-center">
                             <div class="font-semibold text-blue-600 dark:text-blue-400">${guestsByAge.ok.length}</div>
-                            <div class="text-gray-500 dark:text-gray-400">1-7d</div>
+                            <div class="text-gray-500 dark:text-gray-400">&lt;${Math.ceil(scheduleThreshold)}d</div>
                         </div>
                         <div class="text-center">
                             <div class="font-semibold text-orange-600 dark:text-orange-400">${guestsByAge.warning.length}</div>
-                            <div class="text-gray-500 dark:text-gray-400">7-14d</div>
+                            <div class="text-gray-500 dark:text-gray-400">${Math.ceil(scheduleThreshold)}-${Math.ceil(criticalAge)}d</div>
                         </div>
                         <div class="text-center">
                             <div class="font-semibold text-red-600 dark:text-red-400">${guestsByAge.critical.length + guestsByAge.none.length}</div>
-                            <div class="text-gray-500 dark:text-gray-400">&gt;14d</div>
+                            <div class="text-gray-500 dark:text-gray-400">${guestsByAge.none.length > 0 ? 'Old/None' : `>${Math.ceil(criticalAge)}d`}</div>
                         </div>
                     </div>
+                    ` : ''}
                 </div>
                 
                 <!-- Scrollable Guest List -->
@@ -271,32 +448,57 @@ PulseApp.ui.backupDetailCard = (() => {
                         </div>
                     ` : ''}
                     
-                    <!-- Recent Backups -->
-                    ${guestsByAge.good.length > 0 ? `
+                    <!-- Healthy Status Message or Guest List -->
+                    ${healthScore === 100 ? `
+                        <div class="flex items-center justify-center py-8 text-center">
+                            <div>
+                                <svg class="w-12 h-12 text-green-500 dark:text-green-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <p class="text-sm font-medium text-green-700 dark:text-green-400">All ${stats.totalGuests} guests backed up successfully</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${backupSchedule.charAt(0).toUpperCase() + backupSchedule.slice(1)} schedule • ${backupWindow}</p>
+                            </div>
+                        </div>
+                    ` : guestsByAge.good.length > 0 ? `
                         <div class="mb-2">
-                            <h4 class="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider mb-1">Recent (${guestsByAge.good.length})</h4>
+                            <div class="flex items-center justify-between mb-1">
+                                <h4 class="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider">Recent (${guestsByAge.good.length})</h4>
+                                ${guestsByAge.good.length > 5 ? `
+                                    <button onclick="const list = this.parentElement.parentElement.querySelector('.space-y-0\\\\.5'); const hidden = list.querySelector('.hidden'); if(hidden) { hidden.classList.remove('hidden'); this.textContent = 'Show Less'; } else { list.querySelector('div:last-child').classList.add('hidden'); this.textContent = 'Show All'; }" 
+                                        class="text-[9px] text-blue-600 dark:text-blue-400 hover:underline">
+                                        Show All
+                                    </button>
+                                ` : ''}
+                            </div>
                             <div class="space-y-0.5">
-                                ${guestsByAge.good.map(guest => `
+                                ${guestsByAge.good.slice(0, 5).map(guest => `
                                     <div class="flex items-center justify-between px-1 py-0.5 rounded text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30">
                                         <div class="flex items-center gap-1 flex-1 min-w-0">
                                             <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
                                             <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
                                             <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
-                                            ${guest.namespaces && guest.namespaces.length > 0 ? 
-                                                `<span class="text-[8px] text-purple-600 dark:text-purple-400">[${guest.namespaces.join(', ')}]</span>` : 
-                                                ''
-                                            }
                                         </div>
                                         <div class="flex items-center gap-2 ml-2">
-                                            <div class="flex items-center gap-1 text-[9px]">
-                                                ${guest.mostRecentBackupType === 'pbs' ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
-                                                ${guest.mostRecentBackupType === 'pve' ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
-                                                ${guest.mostRecentBackupType === 'snapshot' ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
-                                            </div>
                                             <span class="text-green-600 dark:text-green-400 font-medium">${formatAge(guest.ageInDays)}</span>
                                         </div>
                                     </div>
                                 `).join('')}
+                                ${guestsByAge.good.length > 5 ? `
+                                    <div class="hidden">
+                                        ${guestsByAge.good.slice(5).map(guest => `
+                                            <div class="flex items-center justify-between px-1 py-0.5 rounded text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                                <div class="flex items-center gap-1 flex-1 min-w-0">
+                                                    <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
+                                                    <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
+                                                    <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
+                                                </div>
+                                                <div class="flex items-center gap-2 ml-2">
+                                                    <span class="text-green-600 dark:text-green-400 font-medium">${formatAge(guest.ageInDays)}</span>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
                             </div>
                         </div>
                     ` : ''}
@@ -304,15 +506,32 @@ PulseApp.ui.backupDetailCard = (() => {
                     <!-- Summary Stats -->
                     <div class="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
                         <div class="space-y-2">
-                            <!-- Total Backups and Coverage -->
-                            <div class="grid grid-cols-2 gap-3 text-[10px]">
+                            <!-- Schedule and Last Backup -->
+                            <div class="text-[9px] text-gray-600 dark:text-gray-400">
+                                <div class="flex justify-between items-center mb-1">
+                                    <span>Schedule:</span>
+                                    <span class="font-medium ${backupSchedule === 'daily' ? 'text-green-600 dark:text-green-400' : backupSchedule === 'weekly' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}">\n                                        ${backupSchedule.charAt(0).toUpperCase() + backupSchedule.slice(1)} backups
+                                    </span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span>Last Backup:</span>
+                                    <span class="font-medium">${lastBackupTime ? formatTimeAgo(lastBackupTime) : 'Never'}</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Key Metrics -->
+                            <div class="grid grid-cols-3 gap-2 text-[10px]">
                                 <div class="text-center">
-                                    <div class="font-semibold text-blue-600 dark:text-blue-400">${stats.totalBackups || 0}</div>
-                                    <div class="text-gray-500 dark:text-gray-400">Total Backups</div>
+                                    <div class="font-semibold text-blue-600 dark:text-blue-400">~${dailyAverage}</div>
+                                    <div class="text-gray-500 dark:text-gray-400">Per Day</div>
                                 </div>
                                 <div class="text-center">
-                                    <div class="font-semibold text-green-600 dark:text-green-400">${guestsByAge.good.length + guestsByAge.ok.length}</div>
-                                    <div class="text-gray-500 dark:text-gray-400">Recent Coverage</div>
+                                    <div class="font-semibold text-purple-600 dark:text-purple-400">${backupWindow}</div>
+                                    <div class="text-gray-500 dark:text-gray-400">Window</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="font-semibold ${recentCoverage === stats.totalGuests ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}">${recentCoverage}/${stats.totalGuests}</div>
+                                    <div class="text-gray-500 dark:text-gray-400">Coverage</div>
                                 </div>
                             </div>
                             
@@ -328,34 +547,37 @@ PulseApp.ui.backupDetailCard = (() => {
                                 </div>
                             </div>
                             
-                            <!-- Coverage Detail -->
+                            <!-- Coverage and Failures -->
                             <div class="text-[9px] text-gray-600 dark:text-gray-400">
-                                <div class="flex justify-between items-center">
+                                <div class="flex justify-between items-center mb-1">
                                     <span>Coverage:</span>
                                     <span>${stats.totalGuests - guestsByAge.none.length}/${stats.totalGuests} guests protected</span>
                                 </div>
+                                ${recentFailures > 0 ? `
+                                <div class="flex justify-between items-center">
+                                    <span>Recent Failures:</span>
+                                    <span class="text-red-600 dark:text-red-400 font-medium">${recentFailures} tasks failed</span>
+                                </div>` : ''}
                             </div>
                             
                             <!-- Namespace Distribution -->
-                            ${namespaceStats.size > 0 ? `
+                            ${namespaceStats.size > 1 ? `
                                 <div class="text-[9px] text-gray-600 dark:text-gray-400">
-                                    <div class="mb-1">
-                                        <span class="font-medium">PBS Namespaces:</span>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-medium">Namespaces:</span>
                                     </div>
-                                    <div class="space-y-0.5">
+                                    <div class="flex gap-1 flex-wrap">
                                         ${Array.from(namespaceStats.entries())
                                             .sort((a, b) => b[1] - a[1])
-                                            .slice(0, 5)
-                                            .map(([ns, count]) => `
-                                                <div class="flex justify-between items-center">
-                                                    <span class="text-purple-600 dark:text-purple-400">${ns}</span>
-                                                    <span>${count} guests, ${pbsBackupsByNamespace.get(ns) || 0} backups</span>
-                                                </div>
-                                            `).join('')}
-                                        ${namespaceStats.size > 5 ? 
-                                            `<div class="text-center text-gray-500 dark:text-gray-400">...and ${namespaceStats.size - 5} more</div>` : 
-                                            ''
-                                        }
+                                            .map(([ns, count]) => {
+                                                const percentage = Math.round((count / stats.totalGuests) * 100);
+                                                return `
+                                                    <div class="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 rounded">
+                                                        <span class="text-purple-700 dark:text-purple-300 font-medium">${ns}</span>
+                                                        <span class="text-purple-600 dark:text-purple-400">${count}</span>
+                                                    </div>
+                                                `;
+                                            }).join('')}
                                     </div>
                                 </div>
                             ` : ''}
@@ -663,6 +885,18 @@ PulseApp.ui.backupDetailCard = (() => {
         if (ageInDays < 7) return `${Math.floor(ageInDays)}d`;
         if (ageInDays < 30) return `${Math.floor(ageInDays / 7)}w`;
         return `${Math.floor(ageInDays / 30)}mo`;
+    }
+    
+    function formatTimeAgo(timestamp) {
+        const now = Math.floor(Date.now() / 1000);
+        const diff = now - timestamp;
+        
+        if (diff < 60) return 'Just now';
+        if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+        if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+        if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
+        if (diff < 2592000) return `${Math.floor(diff / 604800)} weeks ago`;
+        return `${Math.floor(diff / 2592000)} months ago`;
     }
 
     function getAgeColor(ageInDays) {

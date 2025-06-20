@@ -119,8 +119,7 @@ PulseApp.socketHandler = (() => {
         // Show notification to user
         if (PulseApp.alerts && PulseApp.alerts.showNotification) {
             PulseApp.alerts.showNotification({
-                message: 'Configuration has been updated and reloaded',
-                severity: 'info'
+                message: 'Configuration has been updated and reloaded'
             });
         }
         
@@ -134,8 +133,7 @@ PulseApp.socketHandler = (() => {
         // Show error notification to user
         if (PulseApp.alerts && PulseApp.alerts.showNotification) {
             PulseApp.alerts.showNotification({
-                message: 'Failed to reload configuration: ' + data.error,
-                severity: 'critical'
+                message: 'Failed to reload configuration: ' + data.error
             });
         }
     }

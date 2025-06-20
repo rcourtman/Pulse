@@ -199,6 +199,10 @@ PulseApp.ui.dashboard = (() => {
         }, { passive: true });
     }
 
+    function _initTableFixedLine() {
+        // No longer needed - using CSS border styling instead
+    }
+
     function init() {
         // Attempt to find elements, with fallback retry mechanism
         function findElements() {
@@ -240,8 +244,11 @@ PulseApp.ui.dashboard = (() => {
             _initMobileScrollIndicators();
         }
         
-        // Add resize listener for progress bar text updates
-        window.addEventListener('resize', PulseApp.utils.updateProgressBarTextsDebounced);
+        // Initialize fixed table line
+        _initTableFixedLine();
+        
+        // Resize listener for progress bar text updates - DISABLED
+        // window.addEventListener('resize', PulseApp.utils.updateProgressBarTextsDebounced);
 
         document.addEventListener('keydown', (event) => {
             // Handle Escape for resetting filters
@@ -480,7 +487,8 @@ PulseApp.ui.dashboard = (() => {
         containersData.forEach(ct => dashboardData.push(_processSingleGuestData(ct)));
         
         PulseApp.state.set('dashboardData', dashboardData);
-        _setDashboardColumnWidths(dashboardData);
+        // Disabled dynamic width calculation to prevent column shifting
+        // _setDashboardColumnWidths(dashboardData);
     }
 
     function _filterDashboardData(dashboardData, searchInput, filterGuestType, filterStatus, thresholdState) {
@@ -615,8 +623,10 @@ PulseApp.ui.dashboard = (() => {
                 let nodeHeader = nodeHeaders.get(nodeName);
                 if (!nodeHeader) {
                     // Create new node header
-                    nodeHeader = document.createElement('tr');
-                    nodeHeader.className = 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs';
+                    nodeHeader = PulseApp.ui.common.createTableRow({
+                        classes: 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs border-b border-gray-300 dark:border-gray-600',
+                        baseClasses: '' // Override base classes for node headers
+                    });
                     nodeHeader.innerHTML = PulseApp.ui.common.generateNodeGroupHeaderCellHTML(nodeName, 11, 'td');
                 }
                 
@@ -762,8 +772,8 @@ PulseApp.ui.dashboard = (() => {
                     }
                 }
             }
-        } else if (guest.meetsThresholds === false) {
-            // Apply threshold dimming (only when not in alerts mode)
+        } else if (guest.meetsThresholds === false && document.getElementById('toggle-thresholds-checkbox')?.checked) {
+            // Apply threshold dimming (only when threshold mode is enabled)
             row.style.opacity = '0.4';
             row.style.transition = 'opacity 0.2s ease-in-out';
             row.setAttribute('data-dimmed', 'true');
@@ -782,7 +792,11 @@ PulseApp.ui.dashboard = (() => {
         
         // Ensure name cell keeps sticky styling even after row class updates
         if (cells[0]) {
-            cells[0].className = 'sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600';
+            // Preserve the existing content while updating classes
+            const content = cells[0].innerHTML;
+            const title = cells[0].title;
+            const newCell = PulseApp.ui.common.createStickyColumn(content, { title });
+            cells[0].className = newCell.className;
         }
         if (cells.length >= 10) {
             // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
@@ -998,10 +1012,7 @@ PulseApp.ui.dashboard = (() => {
         
         // Reapply alert styling if in alerts mode
         if (PulseApp.ui.alerts?.isAlertsMode?.()) {
-            const allThresholds = PulseApp.ui.alerts.getGuestThresholds();
-            const guestThresholds = allThresholds[guest.id] || {};
-            PulseApp.ui.alerts.updateCellStyling?.(row, guest.id, guestThresholds);
-            // Also trigger row-level styling update based on alert thresholds
+            // Trigger unified row-level styling update based on alert thresholds
             PulseApp.ui.alerts.updateRowStylingOnly?.();
         }
     }
@@ -1210,10 +1221,10 @@ PulseApp.ui.dashboard = (() => {
             });
         }
         
-        // Update progress bar texts based on available width
-        requestAnimationFrame(() => {
-            PulseApp.utils.updateProgressBarTexts();
-        });
+        // Update progress bar texts based on available width - DISABLED
+        // requestAnimationFrame(() => {
+        //     PulseApp.utils.updateProgressBarTexts();
+        // });
         
         // Additional scroll position restoration for both axes
         if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
@@ -1241,9 +1252,9 @@ PulseApp.ui.dashboard = (() => {
         if (guest.status !== STATUS_RUNNING) return '-';
         
         const cpuPercent = Math.round(guest.cpu);
-        const cpuTooltipText = `${cpuPercent}% ${guest.cpus ? `(${(guest.cpu * guest.cpus / 100).toFixed(1)}/${guest.cpus} cores)` : ''}`;
+        const cpuFullText = guest.cpus ? `${(guest.cpu * guest.cpus / 100).toFixed(1)}/${guest.cpus} cores` : `${cpuPercent}%`;
         const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
-        const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass, `${cpuPercent}%`);
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuFullText, cpuColorClass);
         
         // Create both text and chart versions
         const guestId = guest.uniqueId;
@@ -1272,12 +1283,9 @@ PulseApp.ui.dashboard = (() => {
         if (guest.status !== STATUS_RUNNING) return '-';
         
         const memoryPercent = guest.memory;
-        let memoryTooltipText = `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)} (${memoryPercent}%)`;
-        if (guest.type === GUEST_TYPE_VM && guest.memorySource === 'guest' && guest.rawHostMemory !== null && guest.rawHostMemory !== undefined) {
-            memoryTooltipText += ` (Host: ${PulseApp.utils.formatBytes(guest.rawHostMemory)})`;
-        }
+        const memoryFullText = `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)}`;
         const memColorClass = PulseApp.utils.getUsageColor(memoryPercent, 'memory');
-        const progressBar = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryTooltipText, memColorClass, `${memoryPercent}%`);
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryFullText, memColorClass);
         
         // Create both text and chart versions
         const guestId = guest.uniqueId;
@@ -1307,9 +1315,9 @@ PulseApp.ui.dashboard = (() => {
         
         if (guest.type === GUEST_TYPE_CT) {
             const diskPercent = guest.disk;
-            const diskTooltipText = guest.diskTotal ? `${PulseApp.utils.formatBytes(guest.diskCurrent)} / ${PulseApp.utils.formatBytes(guest.diskTotal)} (${diskPercent}%)` : `${diskPercent}%`;
+            const diskFullText = guest.diskTotal ? `${PulseApp.utils.formatBytes(guest.diskCurrent)} / ${PulseApp.utils.formatBytes(guest.diskTotal)}` : `${diskPercent}%`;
             const diskColorClass = PulseApp.utils.getUsageColor(diskPercent, 'disk');
-            const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass, `${diskPercent}%`);
+            const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskFullText, diskColorClass);
             
             // Create both text and chart versions
             const guestId = guest.uniqueId;
@@ -1362,31 +1370,15 @@ PulseApp.ui.dashboard = (() => {
             return '';
         }
         
-        // Determine highest severity
-        const criticalAlerts = activeAlerts.filter(alert => alert.severity === 'critical');
-        const warningAlerts = activeAlerts.filter(alert => alert.severity === 'warning');
-        
-        let iconColor, severityText, alertDetails;
-        
-        if (criticalAlerts.length > 0) {
-            iconColor = 'bg-red-500';
-            severityText = 'Critical';
-            alertDetails = `${criticalAlerts.length} critical alert${criticalAlerts.length > 1 ? 's' : ''}`;
-        } else if (warningAlerts.length > 0) {
-            iconColor = 'bg-yellow-500';
-            severityText = 'Warning';
-            alertDetails = `${warningAlerts.length} warning alert${warningAlerts.length > 1 ? 's' : ''}`;
-        } else {
-            iconColor = 'bg-blue-500';
-            severityText = 'Info';
-            alertDetails = `${activeAlerts.length} alert${activeAlerts.length > 1 ? 's' : ''}`;
-        }
+        // Simple alert indicator without severity levels
+        const iconColor = 'bg-amber-500';
+        const alertDetails = `${activeAlerts.length} alert${activeAlerts.length > 1 ? 's' : ''}`;
         
         const totalText = activeAlerts.length > 1 ? ` (${activeAlerts.length} total)` : '';
         
         return `
             <span class="inline-flex items-center justify-center w-3 h-3 text-xs font-bold text-white ${iconColor} rounded-full cursor-pointer alert-indicator" 
-                  title="${severityText}: ${alertDetails}${totalText} - Click to view details"
+                  title="${alertDetails}${totalText} - Click to view details"
                   data-guest-id="${guest.endpointId}-${guest.node}-${guest.id}"
                   onclick="PulseApp.ui.dashboard.toggleGuestAlertDetails('${guest.endpointId}', '${guest.node}', '${guest.id}')">
                 !
@@ -1395,11 +1387,7 @@ PulseApp.ui.dashboard = (() => {
     }
 
     function createGuestRow(guest) {
-        const row = document.createElement('tr');
-        
-        // Apply dimming based on active mode
-        const baseClasses = 'border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700';
-        row.className = baseClasses;
+        const row = PulseApp.ui.common.createTableRow();
         
         // Check if alerts mode is active
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
@@ -1425,8 +1413,8 @@ PulseApp.ui.dashboard = (() => {
                 // Note: Cell styling will be applied after row HTML is complete
                 row.setAttribute('data-needs-cell-styling', JSON.stringify(guestThresholds));
             }
-        } else if (guest.meetsThresholds === false) {
-            // Apply threshold dimming (only when not in alerts mode)
+        } else if (guest.meetsThresholds === false && document.getElementById('toggle-thresholds-checkbox')?.checked) {
+            // Apply threshold dimming (only when threshold mode is enabled)
             row.style.opacity = '0.4';
             row.style.transition = 'opacity 0.2s ease-in-out';
             row.setAttribute('data-dimmed', 'true');
@@ -1527,25 +1515,28 @@ PulseApp.ui.dashboard = (() => {
             }
         }
 
-        row.innerHTML = `
-            <td class="sticky left-0 bg-white dark:bg-gray-800 z-10 py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 border-r border-gray-300 dark:border-gray-600" title="${guest.name}">
-                <div class="flex items-center gap-1">
-                    <span>${guest.name}</span>
-                    ${alertIndicator}
-                    ${thresholdIndicator}
-                </div>
-            </td>
-            <td class="py-1 px-2 align-middle">${typeIcon}</td>
-            <td class="py-1 px-2 align-middle">${guest.vmid}</td>
-            <td class="py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis">${uptimeDisplay}</td>
-            <td class="py-1 px-2 align-middle">${cpuBarHTML}</td>
-            <td class="py-1 px-2 align-middle">${memoryBarHTML}</td>
-            <td class="py-1 px-2 align-middle">${diskBarHTML}</td>
-            <td class="py-1 px-2 align-middle">${diskReadCell}</td>
-            <td class="py-1 px-2 align-middle">${diskWriteCell}</td>
-            <td class="py-1 px-2 align-middle">${netInCell}</td>
-            <td class="py-1 px-2 align-middle">${netOutCell}</td>
+        // Create sticky name column
+        const nameContent = `
+            <div class="flex items-center gap-1">
+                <span>${guest.name}</span>
+                ${alertIndicator}
+                ${thresholdIndicator}
+            </div>
         `;
+        const stickyNameCell = PulseApp.ui.common.createStickyColumn(nameContent, { title: guest.name });
+        row.appendChild(stickyNameCell);
+        
+        // Create regular cells
+        row.appendChild(PulseApp.ui.common.createTableCell(typeIcon));
+        row.appendChild(PulseApp.ui.common.createTableCell(guest.vmid));
+        row.appendChild(PulseApp.ui.common.createTableCell(uptimeDisplay, 'py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis'));
+        row.appendChild(PulseApp.ui.common.createTableCell(cpuBarHTML));
+        row.appendChild(PulseApp.ui.common.createTableCell(memoryBarHTML));
+        row.appendChild(PulseApp.ui.common.createTableCell(diskBarHTML));
+        row.appendChild(PulseApp.ui.common.createTableCell(diskReadCell));
+        row.appendChild(PulseApp.ui.common.createTableCell(diskWriteCell));
+        row.appendChild(PulseApp.ui.common.createTableCell(netInCell));
+        row.appendChild(PulseApp.ui.common.createTableCell(netOutCell));
         
         // Setup event listeners for alert sliders and dropdowns
         if (isAlertsMode) {
@@ -1623,6 +1614,34 @@ PulseApp.ui.dashboard = (() => {
             mainContainer.classList.add('charts-mode');
             if (label) label.title = 'Toggle Metrics View';
             
+            // Turn off thresholds toggle and hide its elements
+            const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
+            if (thresholdsToggle && thresholdsToggle.checked) {
+                thresholdsToggle.checked = false;
+                thresholdsToggle.dispatchEvent(new Event('change'));
+            }
+            
+            // Clear threshold styling when entering charts mode
+            if (PulseApp.ui.thresholds) {
+                if (PulseApp.ui.thresholds.clearAllRowDimming) {
+                    PulseApp.ui.thresholds.clearAllRowDimming();
+                }
+                // Use the more comprehensive clearAllStyling if available
+                if (PulseApp.ui.thresholds.clearAllStyling) {
+                    PulseApp.ui.thresholds.clearAllStyling();
+                }
+            }
+            
+            // Hide any lingering tooltips from thresholds
+            if (PulseApp.tooltips) {
+                if (PulseApp.tooltips.hideTooltip) {
+                    PulseApp.tooltips.hideTooltip();
+                }
+                if (PulseApp.tooltips.hideSliderTooltipImmediately) {
+                    PulseApp.tooltips.hideSliderTooltipImmediately();
+                }
+            }
+            
             // Immediately render charts when switching to charts mode
             if (PulseApp.charts) {
                 requestAnimationFrame(() => {
@@ -1663,11 +1682,6 @@ PulseApp.ui.dashboard = (() => {
         alertDetailsRow.className = 'alert-details-row bg-orange-50 dark:bg-orange-900/20 border-b border-orange-200 dark:border-orange-700';
         
         const alertsHTML = activeAlerts.map(alert => {
-            const severity = alert.severity || 'info';
-            const severityColor = severity === 'critical' ? 'text-red-600 dark:text-red-400' : 
-                                 severity === 'warning' ? 'text-yellow-600 dark:text-yellow-400' : 
-                                 'text-blue-600 dark:text-blue-400';
-            
             const startTime = new Date(alert.startTime).toLocaleString();
             const duration = alert.startTime ? formatAlertDuration(Date.now() - alert.startTime) : 'Unknown';
             
@@ -1675,7 +1689,7 @@ PulseApp.ui.dashboard = (() => {
                 <div class="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
                     <div class="flex items-start justify-between mb-2">
                         <div class="flex-1">
-                            <h4 class="font-semibold text-gray-900 dark:text-gray-100 ${severityColor}">
+                            <h4 class="font-semibold text-gray-900 dark:text-gray-100 text-amber-600 dark:text-amber-400">
                                 ${alert.name || 'Unknown Alert'}
                             </h4>
                             <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
@@ -1715,10 +1729,6 @@ PulseApp.ui.dashboard = (() => {
                         <div>
                             <span class="font-medium text-gray-700 dark:text-gray-300">Duration:</span>
                             <span class="text-gray-600 dark:text-gray-400">${duration}</span>
-                        </div>
-                        <div>
-                            <span class="font-medium text-gray-700 dark:text-gray-300">Severity:</span>
-                            <span class="${severityColor} capitalize">${severity}</span>
                         </div>
                     </div>
                 </div>
