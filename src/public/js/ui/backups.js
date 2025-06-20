@@ -2210,6 +2210,9 @@ PulseApp.ui.backups = (() => {
                                     let isCorrectGuest = true;
                                     if (ownerToken) {
                                         const guestEndpoint = guest.endpointId || 'primary';
+                                        const guestNode = guest.node;
+                                        
+                                        // More flexible owner token matching
                                         if (guestEndpoint === 'primary') {
                                             // For primary endpoint, check if owner token matches a secondary endpoint
                                             const secondaryEndpoints = Array.from(new Set(
@@ -2217,8 +2220,20 @@ PulseApp.ui.backups = (() => {
                                                     .filter(g => g.endpointId)
                                                     .map(g => g.endpointId.split('.')[0].toLowerCase())
                                             ));
-                                            if (secondaryEndpoints.includes(ownerToken)) {
-                                                isCorrectGuest = false;
+                                            
+                                            // Special case: if the guest node matches the owner token, it's likely correct
+                                            // This handles cases where a node name matches the cluster name
+                                            if (guestNode && guestNode.toLowerCase() === ownerToken) {
+                                                isCorrectGuest = true;
+                                            } else if (secondaryEndpoints.includes(ownerToken)) {
+                                                // Only reject if we find a matching secondary endpoint AND this guest
+                                                // doesn't belong to that endpoint's cluster
+                                                const matchingSecondaryGuest = allGuestsUnfiltered.find(g => 
+                                                    g.endpointId && 
+                                                    g.endpointId.split('.')[0].toLowerCase() === ownerToken &&
+                                                    g.vmid == guest.vmid
+                                                );
+                                                isCorrectGuest = !matchingSecondaryGuest;
                                             }
                                         } else {
                                             // For secondary endpoints, owner token should match endpoint name
@@ -3045,13 +3060,29 @@ PulseApp.ui.backups = (() => {
                             const endpointHostname = guestStatus.endpointId.split('.')[0].toLowerCase();
                             isCorrectGuest = (ownerToken === endpointHostname);
                         } else if (ownerToken && !guestStatus.endpointId) {
-                            // For primary endpoint, check if owner token matches a secondary endpoint
-                            // If it does, this backup is NOT from primary
-                            const allEndpointIds = [...new Set(PulseApp.state.get('vms').concat(PulseApp.state.get('containers'))
-                                .filter(g => g.endpointId)
-                                .map(g => g.endpointId.split('.')[0].toLowerCase()))];
-                            if (allEndpointIds.includes(ownerToken)) {
-                                isCorrectGuest = false;
+                            // For primary endpoint, more flexible owner token matching
+                            const guestNode = guestStatus.node;
+                            
+                            // Special case: if the guest node matches the owner token, it's likely correct
+                            if (guestNode && guestNode.toLowerCase() === ownerToken) {
+                                isCorrectGuest = true;
+                            } else {
+                                // Check if owner token matches a secondary endpoint
+                                const allGuests = PulseApp.state.get('vms').concat(PulseApp.state.get('containers'));
+                                const allEndpointIds = [...new Set(allGuests
+                                    .filter(g => g.endpointId)
+                                    .map(g => g.endpointId.split('.')[0].toLowerCase()))];
+                                
+                                if (allEndpointIds.includes(ownerToken)) {
+                                    // Only reject if we find a matching secondary endpoint AND this guest
+                                    // doesn't belong to that endpoint's cluster
+                                    const matchingSecondaryGuest = allGuests.find(g => 
+                                        g.endpointId && 
+                                        g.endpointId.split('.')[0].toLowerCase() === ownerToken &&
+                                        g.vmid == guestStatus.guestId
+                                    );
+                                    isCorrectGuest = !matchingSecondaryGuest;
+                                }
                             }
                         }
                         
