@@ -10,6 +10,7 @@ PulseApp.ui.thresholds = (() => {
     function init() {
         thresholdRow = document.getElementById('threshold-slider-row');
         thresholdBadge = document.getElementById('threshold-count-badge');
+        const thresholdSettingsPanel = document.getElementById('threshold-filter-controls');
 
         sliders = {
             cpu: document.getElementById('threshold-slider-cpu'),
@@ -23,25 +24,28 @@ PulseApp.ui.thresholds = (() => {
             netout: document.getElementById('threshold-select-netout'),
         };
 
-        // Set initial dimmed state for filter row
+        // Initially hide the threshold row, badge and settings panel
         if (thresholdRow) {
-            thresholdRow.classList.add('dimmed');
+            thresholdRow.classList.add('hidden');
+        }
+        if (thresholdBadge) {
+            thresholdBadge.classList.add('hidden');
+        }
+        if (thresholdSettingsPanel) {
+            thresholdSettingsPanel.classList.add('hidden');
         }
 
         applyInitialThresholdUI();
-        updateThresholdIndicator();
+        // Don't call updateThresholdIndicator on init - it might show elements
         
-        // Apply initial threshold dimming - thresholds are always active now
-        const thresholdState = PulseApp.state.getThresholdState();
-        const hasActiveThresholds = Object.values(thresholdState).some(t => t && t.value > 0);
-        if (hasActiveThresholds) {
-            updateRowStylingOnly(thresholdState);
-        }
+        // Don't apply threshold dimming on init - wait for toggle to be checked
 
         _setupSliderListeners();
         _setupSelectListeners();
         _setupDragEndListeners();
         _setupResetButtonListener();
+        _setupHideModeListener();
+        _setupThresholdToggleListener();
     }
 
     function applyInitialThresholdUI() {
@@ -117,6 +121,91 @@ PulseApp.ui.thresholds = (() => {
         }
     }
 
+    function _setupHideModeListener() {
+        const hideModeCheckbox = document.getElementById('threshold-hide-mode');
+        if (hideModeCheckbox) {
+            // Set initial state from saved preference
+            hideModeCheckbox.checked = PulseApp.state.get('thresholdHideMode') || false;
+            
+            hideModeCheckbox.addEventListener('change', (event) => {
+                PulseApp.state.set('thresholdHideMode', event.target.checked);
+                // Immediately update the display
+                updateDashboardFromThreshold();
+            });
+        }
+    }
+
+    function _setupThresholdToggleListener() {
+        const thresholdToggle = document.getElementById('toggle-thresholds-checkbox');
+        if (thresholdToggle) {
+            thresholdToggle.addEventListener('change', (event) => {
+                const isChecked = event.target.checked;
+                
+                if (isChecked) {
+                    // Clear any existing styling first
+                    clearAllStyling();
+                    
+                    // Show threshold row
+                    if (thresholdRow) thresholdRow.classList.remove('hidden');
+                    
+                    // Check if there are active thresholds to show settings panel
+                    const thresholdState = PulseApp.state.getThresholdState();
+                    const hasActiveThresholds = Object.values(thresholdState).some(t => t && t.value > 0);
+                    const thresholdSettingsPanel = document.getElementById('threshold-filter-controls');
+                    if (thresholdSettingsPanel && hasActiveThresholds) {
+                        thresholdSettingsPanel.classList.remove('hidden');
+                    }
+                    
+                    // Disable other modes (mutually exclusive)
+                    const chartsToggle = document.getElementById('toggle-charts-checkbox');
+                    const alertsToggle = document.getElementById('toggle-alerts-checkbox');
+                    if (chartsToggle && chartsToggle.checked) {
+                        chartsToggle.checked = false;
+                        chartsToggle.dispatchEvent(new Event('change'));
+                    }
+                    if (alertsToggle && alertsToggle.checked) {
+                        alertsToggle.checked = false;
+                        alertsToggle.dispatchEvent(new Event('change'));
+                    }
+                    
+                    // Apply thresholds if any are active
+                    if (hasActiveThresholds) {
+                        updateRowStylingOnly(thresholdState);
+                    }
+                } else {
+                    // Hide threshold row and settings
+                    if (thresholdRow) thresholdRow.classList.add('hidden');
+                    const thresholdSettingsPanel = document.getElementById('threshold-filter-controls');
+                    if (thresholdSettingsPanel) thresholdSettingsPanel.classList.add('hidden');
+                    
+                    // Clear all threshold styling when toggle is turned off
+                    clearAllStyling();
+            
+            // Also clear any alert-specific styling
+            const rows = document.querySelectorAll('#main-table tbody tr[data-id]');
+            rows.forEach(row => {
+                row.removeAttribute('data-alert-dimmed');
+                row.removeAttribute('data-alert-mixed');
+            });
+                    
+                    // Reset threshold header styles to default
+                    resetThresholdHeaderStyles();
+                    
+                    // Hide any lingering tooltips
+                    if (PulseApp.tooltips) {
+                        if (PulseApp.tooltips.hideTooltip) {
+                            PulseApp.tooltips.hideTooltip();
+                        }
+                        if (PulseApp.tooltips.hideSliderTooltipImmediately) {
+                            PulseApp.tooltips.hideSliderTooltipImmediately();
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+
     function updateThreshold(type, value, immediate = false) {
         PulseApp.state.setThresholdValue(type, value);
         updateThresholdIndicator();
@@ -131,6 +220,13 @@ PulseApp.ui.thresholds = (() => {
     }
 
     function updateDashboardFromThreshold() {
+        // Only apply thresholds if the toggle is checked
+        const thresholdToggle = document.getElementById('toggle-thresholds-checkbox');
+        if (!thresholdToggle || !thresholdToggle.checked) {
+            clearAllRowDimming();
+            return;
+        }
+        
         // Fast path: just update row styling without full table rebuild
         const thresholdState = PulseApp.state.getThresholdState();
         const hasActiveThresholds = Object.values(thresholdState).some(state => state && state.value > 0);
@@ -149,6 +245,12 @@ PulseApp.ui.thresholds = (() => {
         
         const rows = tableBody.querySelectorAll('tr[data-id]');
         const dashboardData = PulseApp.state.get('dashboardData') || [];
+        let hiddenCount = 0;
+        
+        // First, show all rows to reset the state
+        rows.forEach(row => {
+            row.style.display = '';
+        });
         
         rows.forEach(row => {
             const guestId = row.getAttribute('data-id');
@@ -194,28 +296,57 @@ PulseApp.ui.thresholds = (() => {
                 }
             }
             
-            // Apply dimming directly to row
+            // Apply dimming or hiding based on mode
+            const hideMode = PulseApp.state.get('thresholdHideMode');
             if (!thresholdsMet) {
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-dimmed', 'true');
+                if (hideMode) {
+                    row.style.display = 'none';
+                    row.setAttribute('data-threshold-hidden', 'true');
+                    hiddenCount++;
+                } else {
+                    row.style.opacity = '0.4';
+                    row.style.transition = 'opacity 0.1s ease-out';
+                    row.setAttribute('data-dimmed', 'true');
+                }
             } else {
+                row.style.display = '';
                 row.style.opacity = '';
                 row.style.transition = '';
                 row.removeAttribute('data-dimmed');
+                row.removeAttribute('data-threshold-hidden');
             }
         });
+        
+        // Handle node headers when in hide mode
+        const hideMode = PulseApp.state.get('thresholdHideMode');
+        if (hideMode) {
+            updateNodeHeaderVisibility();
+        }
+        
+        // Update the status message to reflect hidden guests
+        if (hideMode && hiddenCount > 0) {
+            updateStatusMessageForHiddenGuests(hiddenCount);
+        }
     }
     
     function clearAllRowDimming() {
         const tableBody = document.querySelector('#main-table tbody');
         if (!tableBody) return;
         
-        const rows = tableBody.querySelectorAll('tr[data-dimmed]');
+        // Clear ALL rows with data-id attribute (guest rows)
+        const rows = tableBody.querySelectorAll('tr[data-id]');
         rows.forEach(row => {
+            row.style.display = '';
             row.style.opacity = '';
             row.style.transition = '';
             row.removeAttribute('data-dimmed');
+            row.removeAttribute('data-threshold-hidden');
+        });
+        
+        // Also show all node headers
+        const nodeHeaders = tableBody.querySelectorAll('tr.node-header');
+        nodeHeaders.forEach(header => {
+            header.style.display = '';
         });
     }
     
@@ -227,9 +358,11 @@ PulseApp.ui.thresholds = (() => {
         const rows = tableBody.querySelectorAll('tr[data-id]');
         rows.forEach(row => {
             // Clear row-level styling
+            row.style.display = '';
             row.style.opacity = '';
             row.style.transition = '';
             row.removeAttribute('data-dimmed');
+            row.removeAttribute('data-threshold-hidden');
             row.removeAttribute('data-alert-dimmed');
             row.removeAttribute('data-alert-mixed');
             
@@ -249,6 +382,12 @@ PulseApp.ui.thresholds = (() => {
         
         const rows = tableBody.querySelectorAll('tr[data-id]');
         const dashboardData = PulseApp.state.get('dashboardData') || [];
+        let hiddenCount = 0;
+        
+        // First, show all rows to reset the state
+        rows.forEach(row => {
+            row.style.display = '';
+        });
         
         rows.forEach(row => {
             const guestId = row.getAttribute('data-id');
@@ -287,15 +426,35 @@ PulseApp.ui.thresholds = (() => {
                 }
             }
             
-            // Apply threshold dimming immediately
+            // Apply threshold dimming or hiding immediately
+            const hideMode = PulseApp.state.get('thresholdHideMode');
             if (!thresholdsMet) {
-                row.style.opacity = '0.4';
-                row.setAttribute('data-dimmed', 'true');
+                if (hideMode) {
+                    row.style.display = 'none';
+                    row.setAttribute('data-threshold-hidden', 'true');
+                    hiddenCount++;
+                } else {
+                    row.style.opacity = '0.4';
+                    row.setAttribute('data-dimmed', 'true');
+                }
             } else {
+                row.style.display = '';
                 row.style.opacity = '';
                 row.removeAttribute('data-dimmed');
+                row.removeAttribute('data-threshold-hidden');
             }
         });
+        
+        // Handle node headers when in hide mode
+        const hideMode = PulseApp.state.get('thresholdHideMode');
+        if (hideMode) {
+            updateNodeHeaderVisibility();
+        }
+        
+        // Update the status message to reflect hidden guests
+        if (hideMode && hiddenCount > 0) {
+            updateStatusMessageForHiddenGuests(hiddenCount);
+        }
     }
 
 
@@ -324,15 +483,40 @@ PulseApp.ui.thresholds = (() => {
         }
         return activeCount;
     }
+    
+    function resetThresholdHeaderStyles() {
+        const mainTableHeader = document.querySelector('#main-table thead');
+        if (!mainTableHeader) return;
+
+        const defaultColorClasses = ['text-gray-600', 'dark:text-gray-300'];
+        const activeColorClasses = ['text-blue-600', 'dark:text-blue-400'];
+        const thresholdTypes = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+
+        for (const type of thresholdTypes) {
+            const headerCell = mainTableHeader.querySelector(`th[data-sort="${type}"]`);
+            if (!headerCell) continue;
+
+            headerCell.classList.remove('threshold-active-header');
+            headerCell.classList.remove(...activeColorClasses);
+            headerCell.classList.add(...defaultColorClasses);
+        }
+    }
 
     function updateThresholdIndicator() {
+        const thresholdToggle = document.getElementById('toggle-thresholds-checkbox');
         const thresholdState = PulseApp.state.getThresholdState();
-        const activeCount = _updateThresholdHeaderStyles(thresholdState);
+        
+        // Only update header styles and count if threshold toggle is checked
+        let activeCount = 0;
+        if (thresholdToggle && thresholdToggle.checked) {
+            activeCount = _updateThresholdHeaderStyles(thresholdState);
+        }
+        
         const activeThresholds = _getActiveThresholds(thresholdState);
 
-        // Update badge
+        // Update badge only if threshold toggle is checked
         if (thresholdBadge) {
-            if (activeCount > 0) {
+            if (thresholdToggle && thresholdToggle.checked && activeCount > 0) {
                 thresholdBadge.textContent = activeCount;
                 thresholdBadge.classList.remove('hidden');
             } else {
@@ -340,12 +524,22 @@ PulseApp.ui.thresholds = (() => {
             }
         }
 
-        // Dim filter row when no filters are active
-        if (thresholdRow) {
+        // Update threshold row dimming only if thresholds toggle is checked
+        if (thresholdToggle && thresholdToggle.checked && thresholdRow) {
             if (activeCount > 0) {
                 thresholdRow.classList.remove('dimmed');
             } else {
                 thresholdRow.classList.add('dimmed');
+            }
+        }
+
+        // Show/hide settings panel based on active thresholds only if toggle is checked
+        const thresholdSettingsPanel = document.getElementById('threshold-filter-controls');
+        if (thresholdToggle && thresholdToggle.checked && thresholdSettingsPanel) {
+            if (activeCount > 0) {
+                thresholdSettingsPanel.classList.remove('hidden');
+            } else {
+                thresholdSettingsPanel.classList.add('hidden');
             }
         }
     }
@@ -364,6 +558,13 @@ PulseApp.ui.thresholds = (() => {
         // Reset state
         PulseApp.state.resetThresholds();
         
+        // Reset hide mode checkbox
+        const hideModeCheckbox = document.getElementById('threshold-hide-mode');
+        if (hideModeCheckbox) {
+            hideModeCheckbox.checked = false;
+            PulseApp.state.set('thresholdHideMode', false);
+        }
+        
         // Reset UI
         for (const type in sliders) {
             if (sliders[type]) {
@@ -372,7 +573,7 @@ PulseApp.ui.thresholds = (() => {
         }
         for (const type in thresholdSelects) {
             if (thresholdSelects[type]) {
-                thresholdSelects[type].value = '';
+                thresholdSelects[type].value = '0';
             }
         }
         
@@ -454,11 +655,64 @@ PulseApp.ui.thresholds = (() => {
         }
     }
 
+    function updateStatusMessageForHiddenGuests(hiddenCount) {
+        const statusElement = document.getElementById('dashboard-status-text');
+        if (!statusElement) return;
+        
+        const currentText = statusElement.textContent;
+        const hideMode = PulseApp.state.get('thresholdHideMode');
+        
+        if (hideMode && hiddenCount > 0) {
+            // Add hidden count info to the status text if not already present
+            if (!currentText.includes('hidden')) {
+                const totalRows = document.querySelectorAll('#main-table tbody tr[data-id]').length;
+                const visibleRows = totalRows - hiddenCount;
+                
+                // Update the showing count to reflect visible rows
+                const updatedText = currentText.replace(
+                    /Showing (\d+) guests/,
+                    `Showing ${visibleRows} guests (${hiddenCount} hidden)`
+                );
+                statusElement.textContent = updatedText;
+            }
+        }
+    }
+
+    function updateNodeHeaderVisibility() {
+        const tableBody = document.querySelector('#main-table tbody');
+        if (!tableBody) return;
+        
+        const nodeHeaders = tableBody.querySelectorAll('tr.node-header');
+        
+        nodeHeaders.forEach(header => {
+            let hasVisibleGuests = false;
+            let sibling = header.nextElementSibling;
+            
+            // Check all following rows until we hit another node header or end of table
+            while (sibling && !sibling.classList.contains('node-header')) {
+                if (sibling.getAttribute('data-id') && sibling.style.display !== 'none') {
+                    hasVisibleGuests = true;
+                    break;
+                }
+                sibling = sibling.nextElementSibling;
+            }
+            
+            // Hide or show the node header based on whether it has visible guests
+            if (!hasVisibleGuests) {
+                header.style.display = 'none';
+            } else {
+                header.style.display = '';
+            }
+        });
+    }
+
     return {
         init,
         resetThresholds,
         isThresholdDragInProgress,
         applyThresholdDimmingNow,
+        clearAllRowDimming,
+        clearAllStyling,
         // Expose helper functions for alerts system
         createThresholdSliderHtml,
         createThresholdSelectHtml,
