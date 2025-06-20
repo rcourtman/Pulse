@@ -3077,10 +3077,31 @@ PulseApp.ui.settings = (() => {
         }
         
         return recommendations.map(rec => {
-            // Simple red styling for all recommendations
-            const bgColor = 'bg-red-50 dark:bg-red-900/20';
-            const textColor = 'text-red-800 dark:text-red-200';
-            const borderColor = 'border-red-500';
+            // Style based on severity level
+            let bgColor, textColor, borderColor;
+            
+            switch (rec.severity) {
+                case 'critical':
+                    bgColor = 'bg-red-50 dark:bg-red-900/20';
+                    textColor = 'text-red-800 dark:text-red-200';
+                    borderColor = 'border-red-500';
+                    break;
+                case 'warning':
+                    bgColor = 'bg-yellow-50 dark:bg-yellow-900/20';
+                    textColor = 'text-yellow-800 dark:text-yellow-200';
+                    borderColor = 'border-yellow-500';
+                    break;
+                case 'info':
+                    bgColor = 'bg-blue-50 dark:bg-blue-900/20';
+                    textColor = 'text-blue-800 dark:text-blue-200';
+                    borderColor = 'border-blue-500';
+                    break;
+                default:
+                    // Fallback to red for any unknown severity
+                    bgColor = 'bg-red-50 dark:bg-red-900/20';
+                    textColor = 'text-red-800 dark:text-red-200';
+                    borderColor = 'border-red-500';
+            }
             
             return `
                 <div class="${bgColor} ${textColor} p-3 rounded-lg border-l-4 ${borderColor} mb-3">
