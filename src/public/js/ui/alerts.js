@@ -86,14 +86,39 @@ PulseApp.ui.alerts = (() => {
         // Disable other modes when alerts is enabled
         if (isAlertsMode) {
             const chartsToggle = document.getElementById('toggle-charts-checkbox');
+            const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
             
             if (chartsToggle && chartsToggle.checked) {
                 chartsToggle.checked = false;
                 chartsToggle.dispatchEvent(new Event('change'));
             }
+            if (thresholdsToggle && thresholdsToggle.checked) {
+                thresholdsToggle.checked = false;
+                thresholdsToggle.dispatchEvent(new Event('change'));
+            }
         }
         
         updateAlertsMode();
+        
+        // Clear threshold styling when entering/exiting alerts mode
+        if (isAlertsMode && PulseApp.ui.thresholds) {
+            if (PulseApp.ui.thresholds.clearAllStyling) {
+                PulseApp.ui.thresholds.clearAllStyling();
+            } else if (PulseApp.ui.thresholds.clearAllRowDimming) {
+                PulseApp.ui.thresholds.clearAllRowDimming();
+            }
+        }
+        
+        // Hide any lingering tooltips when entering alerts mode
+        if (isAlertsMode && PulseApp.tooltips) {
+            if (PulseApp.tooltips.hideTooltip) {
+                PulseApp.tooltips.hideTooltip();
+            }
+            if (PulseApp.tooltips.hideSliderTooltipImmediately) {
+                PulseApp.tooltips.hideSliderTooltipImmediately();
+            }
+        }
+        
         
         // Remove class after mode switch is complete
         requestAnimationFrame(() => {
@@ -225,10 +250,7 @@ PulseApp.ui.alerts = (() => {
             transformTableToAlertsMode();
             
         } else {
-            // Show the main threshold row
-            if (thresholdRow) {
-                thresholdRow.classList.remove('hidden');
-            }
+            // Don't show the main threshold row - let the threshold module control its visibility
             
             // Hide global thresholds row
             globalAlertThresholds.classList.add('hidden');
@@ -250,10 +272,8 @@ PulseApp.ui.alerts = (() => {
             // Hide alerts count badge
             updateAlertsCountBadge();
             
-            // Re-apply threshold filtering when exiting alerts mode
-            if (PulseApp.ui.thresholds && PulseApp.ui.thresholds.applyThresholdDimmingNow) {
-                PulseApp.ui.thresholds.applyThresholdDimmingNow();
-            }
+            // Don't re-apply threshold filtering when exiting alerts mode
+            // Thresholds should only be applied when the threshold toggle is explicitly checked
         }
     }
 

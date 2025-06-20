@@ -772,8 +772,8 @@ PulseApp.ui.dashboard = (() => {
                     }
                 }
             }
-        } else if (guest.meetsThresholds === false) {
-            // Apply threshold dimming (only when not in alerts mode)
+        } else if (guest.meetsThresholds === false && document.getElementById('toggle-thresholds-checkbox')?.checked) {
+            // Apply threshold dimming (only when threshold mode is enabled)
             row.style.opacity = '0.4';
             row.style.transition = 'opacity 0.2s ease-in-out';
             row.setAttribute('data-dimmed', 'true');
@@ -1413,8 +1413,8 @@ PulseApp.ui.dashboard = (() => {
                 // Note: Cell styling will be applied after row HTML is complete
                 row.setAttribute('data-needs-cell-styling', JSON.stringify(guestThresholds));
             }
-        } else if (guest.meetsThresholds === false) {
-            // Apply threshold dimming (only when not in alerts mode)
+        } else if (guest.meetsThresholds === false && document.getElementById('toggle-thresholds-checkbox')?.checked) {
+            // Apply threshold dimming (only when threshold mode is enabled)
             row.style.opacity = '0.4';
             row.style.transition = 'opacity 0.2s ease-in-out';
             row.setAttribute('data-dimmed', 'true');
@@ -1613,6 +1613,34 @@ PulseApp.ui.dashboard = (() => {
             // Switch to charts mode  
             mainContainer.classList.add('charts-mode');
             if (label) label.title = 'Toggle Metrics View';
+            
+            // Turn off thresholds toggle and hide its elements
+            const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
+            if (thresholdsToggle && thresholdsToggle.checked) {
+                thresholdsToggle.checked = false;
+                thresholdsToggle.dispatchEvent(new Event('change'));
+            }
+            
+            // Clear threshold styling when entering charts mode
+            if (PulseApp.ui.thresholds) {
+                if (PulseApp.ui.thresholds.clearAllRowDimming) {
+                    PulseApp.ui.thresholds.clearAllRowDimming();
+                }
+                // Use the more comprehensive clearAllStyling if available
+                if (PulseApp.ui.thresholds.clearAllStyling) {
+                    PulseApp.ui.thresholds.clearAllStyling();
+                }
+            }
+            
+            // Hide any lingering tooltips from thresholds
+            if (PulseApp.tooltips) {
+                if (PulseApp.tooltips.hideTooltip) {
+                    PulseApp.tooltips.hideTooltip();
+                }
+                if (PulseApp.tooltips.hideSliderTooltipImmediately) {
+                    PulseApp.tooltips.hideSliderTooltipImmediately();
+                }
+            }
             
             // Immediately render charts when switching to charts mode
             if (PulseApp.charts) {
