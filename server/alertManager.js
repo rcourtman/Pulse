@@ -33,6 +33,7 @@ class AlertManager extends EventEmitter {
             maxEmailsPerHour: parseInt(process.env.ALERT_MAX_EMAILS_PER_HOUR) || 4, // Max 4 emails per hour per alert
             enableFlappingDetection: process.env.ALERT_FLAPPING_DETECTION !== 'false' // Default enabled
         };
+        this.perGuestCooldownConfig = null; // Will be loaded from per-guest threshold rule if present
         
         this.maxHistorySize = 10000; // Increased for better analytics
         this.alertRulesFile = path.join(__dirname, '../data/alert-rules.json');
@@ -698,6 +699,9 @@ class AlertManager extends EventEmitter {
             const cooldownInfo = this.emailCooldowns.get(cooldownKey);
             const now = Date.now();
             
+            // Use per-guest cooldown config if available, otherwise fall back to default
+            const cooldownConfig = this.perGuestCooldownConfig || this.emailCooldownConfig;
+            
             if (cooldownInfo && now < cooldownInfo.cooldownUntil) {
                 const remainingMinutes = Math.ceil((cooldownInfo.cooldownUntil - now) / 60000);
                 console.log(`[AlertManager] Email cooldown active for alert ${alert.id} - ${remainingMinutes} minutes remaining`);
@@ -706,15 +710,15 @@ class AlertManager extends EventEmitter {
             } else {
                 // Check if this is a new alert that should be debounced
                 const isNewAlert = !cooldownInfo || !cooldownInfo.lastSent;
-                if (isNewAlert && this.emailCooldownConfig.debounceDelayMinutes > 0) {
+                if (isNewAlert && cooldownConfig.debounceDelayMinutes > 0) {
                     // For new alerts, wait for debounce period before sending first email
                     if (!cooldownInfo || !cooldownInfo.debounceStarted) {
                         // Start debounce timer
                         this.emailCooldowns.set(cooldownKey, {
                             debounceStarted: now,
-                            debounceUntil: now + (this.emailCooldownConfig.debounceDelayMinutes * 60000)
+                            debounceUntil: now + (cooldownConfig.debounceDelayMinutes * 60000)
                         });
-                        console.log(`[AlertManager] Starting ${this.emailCooldownConfig.debounceDelayMinutes} minute debounce for alert ${alert.id}`);
+                        console.log(`[AlertManager] Starting ${cooldownConfig.debounceDelayMinutes} minute debounce for alert ${alert.id}`);
                         statusUpdate.emailDebounced = true;
                         // Don't return early - still need to check webhook
                     } else if (now < cooldownInfo.debounceUntil) {
@@ -729,7 +733,7 @@ class AlertManager extends EventEmitter {
                 // Check rate limiting (emails per hour)
                 const oneHourAgo = now - 3600000;
                 const recentEmails = cooldownInfo?.emailHistory?.filter(timestamp => timestamp > oneHourAgo) || [];
-                if (recentEmails.length >= this.emailCooldownConfig.maxEmailsPerHour) {
+                if (recentEmails.length >= cooldownConfig.maxEmailsPerHour) {
                     console.log(`[AlertManager] Rate limit reached for alert ${alert.id} - ${recentEmails.length} emails sent in last hour`);
                     statusUpdate.emailRateLimited = true;
                     // Don't return early - still need to check webhook
@@ -751,7 +755,7 @@ class AlertManager extends EventEmitter {
                         
                         this.emailCooldowns.set(cooldownKey, {
                             lastSent: now,
-                            cooldownUntil: now + (this.emailCooldownConfig.defaultCooldownMinutes * 60000),
+                            cooldownUntil: now + (cooldownConfig.cooldownMinutes * 60000),
                             emailHistory: recentHistory,
                             debounceStarted: cooldownInfo?.debounceStarted || now
                         });
@@ -2337,6 +2341,12 @@ class AlertManager extends EventEmitter {
             // Load all rules from JSON
             for (const [key, rule] of Object.entries(savedRules)) {
                 this.alertRules.set(key, rule);
+                
+                // Check if this is a per-guest thresholds rule with email cooldown settings
+                if (rule.type === 'per_guest_thresholds' && rule.emailCooldowns) {
+                    this.perGuestCooldownConfig = rule.emailCooldowns;
+                    console.log(`[AlertManager] Loaded email cooldown settings from per-guest thresholds rule:`, this.perGuestCooldownConfig);
+                }
             }
             
             console.log(`[AlertManager] Loaded ${Object.keys(savedRules).length} alert rules`);
