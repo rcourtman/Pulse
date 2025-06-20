@@ -1525,7 +1525,10 @@ PulseApp.ui.backups = (() => {
         
         // Create filtered calendar for this specific guest
         const filteredCalendar = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(backupData, guestId, [guestId], onDateSelect, isUserAction);
-        calendarContainer.innerHTML = '';
+        // Replace children instead of using innerHTML to avoid flash
+        while (calendarContainer.firstChild) {
+            calendarContainer.removeChild(calendarContainer.firstChild);
+        }
         calendarContainer.appendChild(filteredCalendar);
     }
     
@@ -1725,7 +1728,10 @@ PulseApp.ui.backups = (() => {
         }
         
         const restoredCalendar = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(backupData, null, filteredGuestIds, onDateSelect);
-        calendarContainer.innerHTML = '';
+        // Replace children instead of using innerHTML to avoid flash
+        while (calendarContainer.firstChild) {
+            calendarContainer.removeChild(calendarContainer.firstChild);
+        }
         calendarContainer.appendChild(restoredCalendar);
     }
 
@@ -1948,6 +1954,7 @@ PulseApp.ui.backups = (() => {
             lastUserUpdateTime = Date.now();
         }
         
+        
         // Ensure DOM cache is initialized
         if (!domCache.tableBody) {
             _initDomCache();
@@ -1974,10 +1981,7 @@ PulseApp.ui.backups = (() => {
                 loadingMsg.classList.remove('hidden');
                 tableContainer.classList.add('hidden');
                 noDataMsg.classList.add('hidden');
-                // Keep visualization section hidden until data is ready
-                if (domCache.visualizationSection) {
-                    domCache.visualizationSection.classList.add('hidden');
-                }
+                // Don't hide visualization section to prevent blinking
             }
             return;
         }
@@ -2457,9 +2461,6 @@ PulseApp.ui.backups = (() => {
         const calendarContainer = document.getElementById('backup-calendar-heatmap');
         
         if (visualizationSection && backupStatusByGuest.length > 0) {
-            // Show visualization section immediately to prevent blinking on initial load
-            visualizationSection.classList.remove('hidden');
-            
             // Hide the summary cards container - we're using consolidated summary now
             if (summaryCardsContainer) {
                 summaryCardsContainer.classList.add('hidden');
@@ -2513,12 +2514,17 @@ PulseApp.ui.backups = (() => {
                 detailCard = detailCardContainer.querySelector('.bg-white.dark\\:bg-gray-800');
                 
                 // Create detail card only if it doesn't exist
+                let isInitialRender = false;
                 if (detailCardContainer && !detailCard) {
+                    isInitialRender = true;
                     // Don't show empty state if we already have data to display
                     const initialData = filteredBackupStatus.length > 0 ? 
                         _prepareMultiDateDetailData(filteredBackupStatus, extendedBackupData) : null;
                     detailCard = PulseApp.ui.backupDetailCard.createBackupDetailCard(initialData);
-                    detailCardContainer.innerHTML = '';
+                    // Replace children instead of using innerHTML to avoid flash
+                    while (detailCardContainer.firstChild) {
+                        detailCardContainer.removeChild(detailCardContainer.firstChild);
+                    }
                     detailCardContainer.appendChild(detailCard);
                 }
                 
@@ -2542,9 +2548,10 @@ PulseApp.ui.backups = (() => {
                     
                     if (dataToUse.length > 0) {
                         const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);
-                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, !isUserAction);
+                        // Always use instant updates to prevent any blinking
+                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, true);
                     } else {
-                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, null, !isUserAction);
+                        PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, null, true);
                     }
                 }
                 
@@ -2637,9 +2644,9 @@ PulseApp.ui.backups = (() => {
                     // No need to refresh the table when calendar date is selected
                 };
                 
-                // Only recreate calendar if it doesn't exist or if this is a user action
+                // Only recreate calendar if it doesn't exist
                 const existingCalendar = calendarContainer.querySelector('.calendar-heatmap-container');
-                if (!existingCalendar || isUserAction) {
+                if (!existingCalendar) {
                     
                     const calendarHeatmap = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(
                         extendedBackupData, 
@@ -2648,7 +2655,10 @@ PulseApp.ui.backups = (() => {
                         onDateSelect,
                         isUserAction
                     );
-                    calendarContainer.innerHTML = '';
+                    // Replace children instead of using innerHTML to avoid flash
+                    while (calendarContainer.firstChild) {
+                        calendarContainer.removeChild(calendarContainer.firstChild);
+                    }
                     calendarContainer.appendChild(calendarHeatmap);
                 } else {
                     // Debug calendar data when namespace filter is active
@@ -2663,8 +2673,32 @@ PulseApp.ui.backups = (() => {
                     PulseApp.ui.calendarHeatmap.updateCalendarData(extendedBackupData, null, filteredGuestIds, onDateSelect);
                 }
             }
+            
+            // Show visualization section immediately to prevent blinking
+            visualizationSection.classList.remove('hidden');
         } else if (visualizationSection) {
-            visualizationSection.classList.add('hidden');
+            // Instead of hiding, show an empty state message
+            if (calendarContainer) {
+                // Clear and add empty state
+                while (calendarContainer.firstChild) {
+                    calendarContainer.removeChild(calendarContainer.firstChild);
+                }
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'text-center py-8 text-gray-500 dark:text-gray-400';
+                emptyDiv.textContent = 'No backup data available';
+                calendarContainer.appendChild(emptyDiv);
+            }
+            const emptyDetailCardContainer = document.getElementById('backup-detail-card');
+            if (emptyDetailCardContainer) {
+                // Clear and add empty state
+                while (emptyDetailCardContainer.firstChild) {
+                    emptyDetailCardContainer.removeChild(emptyDetailCardContainer.firstChild);
+                }
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'text-center py-8 text-gray-500 dark:text-gray-400';
+                emptyDiv.textContent = 'No backup details to display';
+                emptyDetailCardContainer.appendChild(emptyDiv);
+            }
         }
 
         // Calculate PBS instances summary - only show if multiple PBS instances
