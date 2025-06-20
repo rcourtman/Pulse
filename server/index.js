@@ -463,6 +463,34 @@ app.post('/api/alerts/test-email', async (req, res) => {
     }
 });
 
+// Test webhook endpoint
+app.post('/api/alerts/test-webhook', async (req, res) => {
+    try {
+        console.log('[Test Webhook] Sending test webhook...');
+        
+        // Get webhook URL from environment
+        const webhookUrl = process.env.WEBHOOK_URL;
+        
+        if (!webhookUrl) {
+            return res.status(400).json({ success: false, error: 'No webhook URL configured' });
+        }
+        
+        // Use the alert manager to send a test webhook
+        const testResult = await stateManager.alertManager.sendTestWebhook();
+        
+        if (testResult.success) {
+            console.log('[Test Webhook] Test webhook sent successfully');
+            res.json({ success: true, message: 'Test webhook sent successfully' });
+        } else {
+            console.error('[Test Webhook] Failed to send test webhook:', testResult.error);
+            res.status(400).json({ success: false, error: testResult.error || 'Failed to send test webhook' });
+        }
+    } catch (error) {
+        console.error('[Test Webhook] Error sending test webhook:', error);
+        res.status(500).json({ success: false, error: 'Internal server error while sending test webhook' });
+    }
+});
+
 // Test alert notifications
 app.post('/api/alerts/test', async (req, res) => {
     try {
