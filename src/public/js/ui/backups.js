@@ -2700,18 +2700,6 @@ PulseApp.ui.backups = (() => {
                                 namespaceFilter: namespaceFilter
                             };
                             
-                            // Debug: Log what we're sending
-                            console.log('[DEBUG] Calendar date clicked - enhanced:', {
-                                date: selectedDate,
-                                guestCount: guestsOnDate.length,
-                                namespaceFilter: namespaceFilter,
-                                guests: guestsOnDate.slice(0, 3).map(g => ({
-                                    vmid: g.vmid,
-                                    name: g.name,
-                                    namespace: g.namespace,
-                                    pbsInfo: g.pbsBackupInfo
-                                }))
-                            });
                             
                             // Update immediately with instant flag
                             PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, enhancedDateData, true);
