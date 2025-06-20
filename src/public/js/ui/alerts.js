@@ -44,6 +44,13 @@ PulseApp.ui.alerts = (() => {
         if (autoResolveToggle && autoResolve !== undefined) {
             autoResolveToggle.checked = autoResolve;
         }
+        
+        // Show/hide email cooldown settings based on initial email toggle state
+        const emailToggle = document.getElementById('alert-email-toggle');
+        const cooldownSettings = document.getElementById('email-cooldown-settings');
+        if (emailToggle && cooldownSettings) {
+            cooldownSettings.style.display = emailToggle.checked ? 'flex' : 'none';
+        }
     }
 
     function setupEventListeners() {
