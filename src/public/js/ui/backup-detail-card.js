@@ -298,6 +298,8 @@ PulseApp.ui.backupDetailCard = (() => {
                 id: guest.guestId,
                 name: guest.guestName,
                 type: guest.guestType,
+                node: guest.node,
+                endpointId: guest.endpointId,
                 pbsCount: guest.pbsBackups || 0,
                 pveCount: guest.pveBackups || 0,
                 snapCount: guest.snapshotCount || 0,
@@ -446,6 +448,7 @@ PulseApp.ui.backupDetailCard = (() => {
                                             <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
                                             <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
                                             <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
+                                            ${guest.node ? `<span class="text-[8px] text-gray-500 dark:text-gray-400">@${guest.node}</span>` : ''}
                                             ${guest.namespaces && guest.namespaces.length > 0 ? 
                                                 `<span class="text-[8px] text-purple-600 dark:text-purple-400">[${guest.namespaces.join(', ')}]</span>` : 
                                                 ''
@@ -497,6 +500,7 @@ PulseApp.ui.backupDetailCard = (() => {
                                             <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
                                             <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
                                             <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
+                                            ${guest.node ? `<span class="text-[8px] text-gray-500 dark:text-gray-400">@${guest.node}</span>` : ''}
                                         </div>
                                         <div class="flex items-center gap-2 ml-2">
                                             <span class="text-green-600 dark:text-green-400 font-medium">${formatAge(guest.ageInDays)}</span>
@@ -511,6 +515,7 @@ PulseApp.ui.backupDetailCard = (() => {
                                                     <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
                                                     <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
                                                     <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
+                                                    ${guest.node ? `<span class="text-[8px] text-gray-500 dark:text-gray-400">@${guest.node}</span>` : ''}
                                                 </div>
                                                 <div class="flex items-center gap-2 ml-2">
                                                     <span class="text-green-600 dark:text-green-400 font-medium">${formatAge(guest.ageInDays)}</span>
@@ -693,6 +698,7 @@ PulseApp.ui.backupDetailCard = (() => {
                                         <span class="text-[9px] font-medium ${guest.guestType === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.guestType}</span>
                                         <span class="font-mono text-gray-600 dark:text-gray-400">${guest.guestId}</span>
                                         <span class="truncate text-gray-700 dark:text-gray-300">${guest.guestName}</span>
+                                        ${guest.node ? `<span class="text-[8px] text-gray-500 dark:text-gray-400">@${guest.node}</span>` : ''}
                                     </div>
                                     <div class="col-span-3 flex items-center gap-1 text-[9px]">
                                         ${filteredBackupData.typeLabels}
