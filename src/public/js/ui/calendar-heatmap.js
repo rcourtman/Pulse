@@ -628,15 +628,29 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 const date = new Date(timestamp * 1000);
                 
-                // Create local date for the timestamp
-                const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                // Create local date for the timestamp - use local timezone
+                const year = date.getFullYear();
+                const month = date.getMonth();
+                const day = date.getDate();
+                const localDate = new Date(year, month, day, 0, 0, 0, 0);
                 
                 // Only process items within the current month
-                if (localDate < startOfMonth || localDate > endOfMonth) return;
+                if (localDate < startOfMonth || localDate > endOfMonth) {
+                    return;
+                }
                 
                 const dateKey = formatLocalDateKey(date);
                 
                 const vmid = item.vmid || item['backup-id'] || item.backupVMID;
+                
+                if (source === 'pveBackups') {
+                    console.log('[Calendar] PVE backup passed date filter:', {
+                        dateKey,
+                        vmid,
+                        localDate: localDate.toDateString(),
+                        monthBounds: `${startOfMonth.toDateString()} to ${endOfMonth.toDateString()}`
+                    });
+                }
                 
                 
                 if (!vmid) return;

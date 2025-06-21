@@ -153,7 +153,33 @@ PulseApp.ui.backups = (() => {
         filterElements.forEach(id => {
             const element = document.getElementById(id);
             if (element) {
-                element.addEventListener('change', () => updateBackupsTab(true));
+                element.addEventListener('change', () => {
+                    // Update state based on which filter was changed
+                    if (id.includes('filter-type-')) {
+                        // Guest type filter
+                        if (element.checked) {
+                            const type = id.replace('backups-filter-type-', '');
+                            PulseApp.state.set('backupsFilterGuestType', type);
+                        }
+                    } else if (id.includes('filter-backup-')) {
+                        // Backup type filter
+                        if (element.checked) {
+                            const backupType = id.replace('backups-filter-backup-', '');
+                            PulseApp.state.set('backupsFilterBackupType', backupType);
+                        }
+                    } else if (id.includes('filter-status-')) {
+                        // Health status filter
+                        if (element.checked) {
+                            const status = id.replace('backups-filter-status-', '');
+                            PulseApp.state.set('backupsFilterHealth', status);
+                        }
+                    } else if (id === 'backups-filter-failures') {
+                        // Failures checkbox
+                        PulseApp.state.set('backupsFilterFailures', element.checked);
+                    }
+                    
+                    updateBackupsTab(true);
+                });
             }
         });
         
@@ -491,7 +517,7 @@ PulseApp.ui.backups = (() => {
         // Filter guests by namespace using guest+node matching from PBS comment fields
         let allGuests;
         if (namespaceFilter !== 'all') {
-            // Get guest+node combinations that have backups in the selected namespace
+            // Get guest+node combinations that have PBS backups in the selected namespace
             const guestNodeCombosInNamespace = new Set();
             filteredPbsDataArray.forEach(pbsInstance => {
                 (pbsInstance.datastores || []).forEach(ds => {
@@ -569,6 +595,7 @@ PulseApp.ui.backups = (() => {
             });
             
             // Filter guests to only include those with backups in the selected namespace
+            // Note: We'll add PVE backup filtering after pveStorageBackups is defined
             allGuests = allGuestsUnfiltered.filter(guest => {
                 const guestKey = `${guest.vmid}-${guest.node}`;
                 return guestNodeCombosInNamespace.has(guestKey);
@@ -630,6 +657,7 @@ PulseApp.ui.backups = (() => {
             
             return {
                 'backup-time': backup.ctime,
+                ctime: backup.ctime, // Include ctime directly for calendar
                 backupType: _extractBackupTypeFromVolid(backup.volid, vmidStr),
                 backupVMID: vmidStr,
                 vmid: vmidStr, // Ensure vmid is preserved for filtering
@@ -646,6 +674,35 @@ PulseApp.ui.backups = (() => {
         // PVE guest snapshots are NOT backups - they should be handled separately
         // Only include actual PVE backup files in the backup processing
         const allSnapshots = [...pbsSnapshots, ...pveStorageBackups];
+        
+        // Now that pveStorageBackups is defined, update the guest filter if namespace filtering is active
+        if (namespaceFilter !== 'all') {
+            // Get guest+node combinations that have PVE backups (always include these)
+            const guestNodeCombosWithPVEBackups = new Set();
+            pveStorageBackups.forEach(backup => {
+                const guestKey = `${backup.vmid}-${backup.node}`;
+                guestNodeCombosWithPVEBackups.add(guestKey);
+            });
+            
+            // Re-filter guests to include those with PBS backups in namespace OR PVE backups
+            const guestNodeCombosInNamespace = new Set();
+            filteredPbsDataArray.forEach(pbsInstance => {
+                (pbsInstance.datastores || []).forEach(ds => {
+                    (ds.snapshots || []).forEach(snap => {
+                        const snapNamespace = snap.namespace || 'root';
+                        if (snapNamespace === namespaceFilter) {
+                            const guestId = snap['backup-id'];
+                            guestNodeCombosInNamespace.add(`${guestId}-${snap.node || 'unknown'}`);
+                        }
+                    });
+                });
+            });
+            
+            allGuests = allGuestsUnfiltered.filter(guest => {
+                const guestKey = `${guest.vmid}-${guest.node}`;
+                return guestNodeCombosInNamespace.has(guestKey) || guestNodeCombosWithPVEBackups.has(guestKey);
+            });
+        }
 
         // Pre-index data by guest ID and type for performance
         const tasksByGuest = new Map();
@@ -2027,6 +2084,9 @@ PulseApp.ui.backups = (() => {
         // Get the current namespace filter
         const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
         
+        // Get the current backup type filter
+        const backupTypeFilter = PulseApp.state.get('backupsFilterBackupType') || 'all';
+        
         const backupStatusByGuest = allGuests.map(guest => {
             // Try PBS (generic), PVE (endpoint-generic), and PVE (fully-specific) keys
             const baseKey = `${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`;
@@ -2213,13 +2273,17 @@ PulseApp.ui.backups = (() => {
         
         const filteredBackupStatus = _filterBackupData(backupStatusByGuest, backupsSearchInput);
         
-        // Create unfiltered backup status for health card when showing all namespaces
+        // Create unfiltered backup status for health card
         let unfilteredBackupStatusByGuest = backupStatusByGuest;
+        
+        // When any namespace is selected (including 'all'), we need to show ALL guests' backup status
+        // This ensures the backup health summary includes all guests, not just those with backups in the selected namespace
+        const vmsData = PulseApp.state.get('vmsData') || [];
+        const containersData = PulseApp.state.get('containersData') || [];
+        const allGuestsUnfiltered = [...vmsData, ...containersData];
+        
         if (namespaceFilter === 'all') {
             // When showing all namespaces, create separate backup status entries for each guest in each namespace
-            const vmsData = PulseApp.state.get('vmsData') || [];
-            const containersData = PulseApp.state.get('containersData') || [];
-            const allGuestsUnfiltered = [...vmsData, ...containersData];
             
             // Get all available namespaces from PBS data
             const originalPbsDataArray = pbsDataArray; // Use the same PBS data that was used for the main backup status
@@ -2385,6 +2449,86 @@ PulseApp.ui.backups = (() => {
                     }
                 });
             });
+        } else {
+            // When a specific namespace is selected, build unfilteredBackupStatusByGuest from ALL guests
+            // This ensures the backup health summary includes all guests, not just those with backups in the namespace
+            unfilteredBackupStatusByGuest = [];
+            
+            allGuestsUnfiltered.forEach(guest => {
+                // Get all backup data for this guest across all namespaces
+                const baseKey = `${guest.vmid}-${guest.type === 'qemu' ? 'vm' : 'ct'}`;
+                const endpointKey = guest.endpointId ? `-${guest.endpointId}` : '';
+                const nodeKey = guest.node ? `-${guest.node}` : '';
+                const endpointGenericKey = `${baseKey}${endpointKey}`;
+                const fullSpecificKey = `${baseKey}${endpointKey}${nodeKey}`;
+                
+                // Get all PBS snapshots for this guest (from all namespaces)
+                const pbsSnapshots = [];
+                filteredPbsDataArray.forEach(pbsInstance => {
+                    // Get all possible namespaces from the PBS instance
+                    const namespaces = new Set(['root']); // Always include root
+                    if (pbsInstance.datastores) {
+                        pbsInstance.datastores.forEach(ds => {
+                            if (ds.snapshots) {
+                                ds.snapshots.forEach(snap => {
+                                    if (snap.namespace) {
+                                        namespaces.add(snap.namespace);
+                                    }
+                                });
+                            }
+                        });
+                    }
+                    
+                    // Check all namespace keys for this guest
+                    namespaces.forEach(namespace => {
+                        // Determine endpoint suffix for this guest
+                        const guestEndpoint = guest.endpointId || 'primary';
+                        let endpointSuffix = '';
+                        if (guestEndpoint === 'primary') {
+                            endpointSuffix = '-primary';
+                        } else {
+                            endpointSuffix = `-${guestEndpoint}`;
+                        }
+                        
+                        const pbsKey = `${baseKey}-${pbsInstance.pbsInstanceName}-${namespace}${endpointSuffix}`;
+                        const snapshots = snapshotsByGuest.get(pbsKey) || [];
+                        pbsSnapshots.push(...snapshots);
+                    });
+                });
+                
+                // Get PVE snapshots
+                const pveEndpointSnapshots = snapshotsByGuest.get(endpointGenericKey) || [];
+                const pveSpecificSnapshots = snapshotsByGuest.get(fullSpecificKey) || [];
+                
+                // Deduplicate PVE snapshots by volid
+                const pveSnapshotsMap = new Map();
+                [...pveEndpointSnapshots, ...pveSpecificSnapshots].forEach(snap => {
+                    if (snap.volid) {
+                        pveSnapshotsMap.set(snap.volid, snap);
+                    }
+                });
+                const uniquePveSnapshots = Array.from(pveSnapshotsMap.values());
+                
+                const allGuestSnapshots = [...pbsSnapshots, ...uniquePveSnapshots];
+                
+                // Get tasks for this guest
+                const pbsTasks = tasksByGuest.get(baseKey) || [];
+                const pveEndpointTasks = tasksByGuest.get(endpointGenericKey) || [];
+                const pveSpecificTasks = tasksByGuest.get(fullSpecificKey) || [];
+                const allGuestTasks = [...pbsTasks, ...pveEndpointTasks, ...pveSpecificTasks];
+                
+                // Create backup status for this guest (includes all backups from all namespaces)
+                const guestStatus = _determineGuestBackupStatus(
+                    guest, 
+                    allGuestSnapshots,
+                    allGuestTasks,
+                    dayBoundaries,
+                    threeDaysAgo,
+                    sevenDaysAgo
+                );
+                
+                unfilteredBackupStatusByGuest.push(guestStatus);
+            });
         }
 
         // Prepare backup data for consolidated summary
@@ -2546,6 +2690,7 @@ PulseApp.ui.backups = (() => {
         const summaryCardsContainer = document.getElementById('backup-summary-cards-container');
         const calendarContainer = document.getElementById('backup-calendar-heatmap');
         
+        
         if (visualizationSection && backupStatusByGuest.length > 0) {
             // Hide the summary cards container - we're using consolidated summary now
             if (summaryCardsContainer) {
@@ -2627,19 +2772,19 @@ PulseApp.ui.backups = (() => {
                 const calendarDateFilter = PulseApp.state.get('calendarDateFilter');
                 // Don't update if we have a selected date to avoid overwriting the date-specific view
                 if (!calendarDateFilter) {
-                    // Check if any filters are actually active
+                    // Check if any filters are actually active (excluding namespace filter)
+                    // Namespace filter alone should not trigger filtered view since we want to show all guests
                     const hasActiveFilters = (
                         (backupsSearchInput && backupsSearchInput.value) ||
                         (PulseApp.state.get('backupsFilterGuestType') !== 'all') ||
                         (PulseApp.state.get('backupsFilterHealth') !== 'all') ||
                         (PulseApp.state.get('backupsFilterBackupType') !== 'all') ||
-                        PulseApp.state.get('backupsFilterFailures') ||
-                        (namespaceFilter !== 'all')
+                        PulseApp.state.get('backupsFilterFailures')
                     );
                     
-                    // Use namespace-filtered data for overview
-                    const dataToUse = hasActiveFilters ? guestsForCalendar : 
-                        (namespaceFilter === 'all' ? unfilteredBackupStatusByGuest : guestsForCalendar);
+                    // Use unfiltered data when only namespace filter is active
+                    // This ensures backup health summary shows all guests regardless of namespace
+                    const dataToUse = hasActiveFilters ? guestsForCalendar : unfilteredBackupStatusByGuest;
                     
                     
                     if (dataToUse.length > 0) {
@@ -2707,19 +2852,19 @@ PulseApp.ui.backups = (() => {
                             currentSelectedDate = null;
                             
                             // No date selected, show multi-date data
-                            // Check if any filters are actually active
+                            // Check if any filters are actually active (excluding namespace filter)
+                            // Namespace filter alone should not trigger filtered view since we want to show all guests
                             const hasActiveFilters = (
                                 (backupsSearchInput && backupsSearchInput.value) ||
                                 (PulseApp.state.get('backupsFilterGuestType') !== 'all') ||
                                 (PulseApp.state.get('backupsFilterHealth') !== 'all') ||
                                 (PulseApp.state.get('backupsFilterBackupType') !== 'all') ||
-                                PulseApp.state.get('backupsFilterFailures') ||
-                                (namespaceFilter !== 'all')
+                                PulseApp.state.get('backupsFilterFailures')
                             );
                             
-                            // Use namespace-filtered data for overview
-                            const dataToUse = hasActiveFilters ? guestsForCalendar : 
-                                (namespaceFilter === 'all' ? unfilteredBackupStatusByGuest : guestsForCalendar);
+                            // Use unfiltered data when only namespace filter is active
+                            // This ensures backup health summary shows all guests regardless of namespace
+                            const dataToUse = hasActiveFilters ? guestsForCalendar : unfilteredBackupStatusByGuest;
                             
                             if (dataToUse.length > 0) {
                                 const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);
@@ -2745,8 +2890,9 @@ PulseApp.ui.backups = (() => {
                         onDateSelect,
                         isUserAction
                     );
-                    // Store current namespace filter on the calendar element
+                    // Store current namespace and backup type filters on the calendar element
                     calendarHeatmap.setAttribute('data-namespace-filter', namespaceFilter);
+                    calendarHeatmap.setAttribute('data-backup-type-filter', backupTypeFilter);
                     
                     // Replace children instead of using innerHTML to avoid flash
                     while (calendarContainer.firstChild) {
@@ -2754,13 +2900,15 @@ PulseApp.ui.backups = (() => {
                     }
                     calendarContainer.appendChild(calendarHeatmap);
                 } else {
-                    // Track the previous namespace filter to detect changes
+                    // Track the previous namespace and backup type filters to detect changes
                     const currentCalendar = calendarContainer.querySelector('.calendar-heatmap-container');
                     const previousNamespace = currentCalendar?.getAttribute('data-namespace-filter');
+                    const previousBackupType = currentCalendar?.getAttribute('data-backup-type-filter');
                     const namespaceChanged = previousNamespace !== undefined && previousNamespace !== namespaceFilter;
+                    const backupTypeChanged = previousBackupType !== undefined && previousBackupType !== backupTypeFilter;
                     
-                    if (namespaceChanged && isUserAction) {
-                        // Namespace filter changed - need to recreate calendar with new filteredGuestIds
+                    if ((namespaceChanged || backupTypeChanged) && isUserAction) {
+                        // Namespace or backup type filter changed - need to recreate calendar
                         const calendarHeatmap = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(
                             extendedBackupData, 
                             null, 
@@ -2768,8 +2916,9 @@ PulseApp.ui.backups = (() => {
                             onDateSelect,
                             isUserAction
                         );
-                        // Store current namespace filter on the calendar element
+                        // Store current namespace and backup type filters on the calendar element
                         calendarHeatmap.setAttribute('data-namespace-filter', namespaceFilter);
+                        calendarHeatmap.setAttribute('data-backup-type-filter', backupTypeFilter);
                         
                         while (calendarContainer.firstChild) {
                             calendarContainer.removeChild(calendarContainer.firstChild);
