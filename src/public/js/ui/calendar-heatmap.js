@@ -337,6 +337,7 @@ PulseApp.ui.calendarHeatmap = (() => {
             }
         }
         
+        
         // Apply styling based on state
         if (isCurrentMonth) {
             if (shouldShowDay) {
@@ -643,14 +644,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 
                 const vmid = item.vmid || item['backup-id'] || item.backupVMID;
                 
-                if (source === 'pveBackups') {
-                    console.log('[Calendar] PVE backup passed date filter:', {
-                        dateKey,
-                        vmid,
-                        localDate: localDate.toDateString(),
-                        monthBounds: `${startOfMonth.toDateString()} to ${endOfMonth.toDateString()}`
-                    });
-                }
+                
                 
                 
                 if (!vmid) return;
@@ -693,7 +687,11 @@ PulseApp.ui.calendarHeatmap = (() => {
                     });
                 }
                 
-                if (filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) return;
+                // Only apply guest filtering to PBS snapshots when namespace filter is active
+                // PVE backups and VM snapshots should always be shown regardless of namespace filter
+                if (source === 'pbsSnapshots' && filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) {
+                    return;
+                }
                 
                 // Use unique guest key that includes node information
                 const uniqueGuestKey = generateUniqueGuestKey(vmid, item);
@@ -731,18 +729,6 @@ PulseApp.ui.calendarHeatmap = (() => {
             });
         });
         
-        // Debug monthData after processing
-        if (Object.keys(backupsByGuestAndDate).length > 0 && window._enableCalendarDebug && !window._monthDataDebugLogged) {
-            window._monthDataDebugLogged = true;
-            console.log('Calendar monthData debug:', {
-                backupsByGuestAndDateCount: Object.keys(backupsByGuestAndDate).length,
-                sampleGuests: Object.keys(backupsByGuestAndDate).slice(0, 3),
-                sampleDates: Object.entries(backupsByGuestAndDate).slice(0, 1).map(([guest, dates]) => ({
-                    guest,
-                    dates: Object.keys(dates)
-                }))
-            });
-        }
         
         // Process backup days and group by date
         Object.entries(backupsByGuestAndDate).forEach(([uniqueGuestKey, dateData]) => {
@@ -2061,6 +2047,36 @@ PulseApp.ui.calendarHeatmap = (() => {
         }
     }
 
+    // Debug function to navigate to specific month
+    window.navigateToMonth = function(year, month) {
+        if (!currentDisplayMonth) {
+            console.error('Calendar not initialized');
+            return;
+        }
+        
+        currentDisplayMonth = new Date(year, month - 1, 1); // month is 1-based
+        console.log(`Navigating to ${currentDisplayMonth.toLocaleString('default', { month: 'long', year: 'numeric' })}`);
+        
+        // Find container and refresh
+        const container = document.querySelector('.calendar-container');
+        if (container) {
+            const backupData = {
+                pbsSnapshots: PulseApp.state.get('pbsData')?.flatMap(pbs => 
+                    pbs.datastores?.flatMap(ds => ds.snapshots || []) || []
+                ) || [],
+                pveBackups: PulseApp.state.get('pveBackups')?.storageBackups || [],
+                vmSnapshots: PulseApp.state.get('vmsData')?.concat(PulseApp.state.get('containersData') || [])
+                    .flatMap(guest => guest.snapshots || []) || [],
+                backupTasks: PulseApp.state.get('pveBackups')?.backupTasks || []
+            };
+            
+            refreshMonthView(container, backupData, null, null);
+            return 'Navigated to ' + currentDisplayMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
+        }
+        
+        return 'Calendar container not found';
+    };
+    
     return {
         createCalendarHeatmap,
         updateCalendarData,
