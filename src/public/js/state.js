@@ -31,7 +31,6 @@ PulseApp.state = (() => {
             dashboard: false
         },
         isThresholdRowVisible: false,
-        thresholdHideMode: savedFilterState.thresholdHideMode || false,
         groupByNode: savedFilterState.groupByNode ?? true,
         filterGuestType: savedFilterState.filterGuestType || 'all',
         filterStatus: savedFilterState.filterStatus || 'all',
@@ -112,8 +111,7 @@ PulseApp.state = (() => {
             filterGuestType: internalState.filterGuestType,
             filterStatus: internalState.filterStatus,
             backupsFilterHealth: internalState.backupsFilterHealth,
-            backupsFilterGuestType: internalState.backupsFilterGuestType,
-            thresholdHideMode: internalState.thresholdHideMode
+            backupsFilterGuestType: internalState.backupsFilterGuestType
         };
         localStorage.setItem('pulseFilterState', JSON.stringify(stateToSave));
         localStorage.setItem('pulseThresholdState', JSON.stringify(internalState.thresholdState));
@@ -292,7 +290,7 @@ PulseApp.state = (() => {
         get: (key) => internalState[key],
         set: (key, value) => {
             internalState[key] = value;
-            if (['groupByNode', 'filterGuestType', 'filterStatus', 'backupsFilterHealth', 'backupsFilterGuestType', 'thresholdState', 'thresholdHideMode'].includes(key)) {
+            if (['groupByNode', 'filterGuestType', 'filterStatus', 'backupsFilterHealth', 'backupsFilterGuestType', 'thresholdState'].includes(key)) {
                 saveFilterState();
             }
         },
