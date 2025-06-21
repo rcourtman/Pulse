@@ -652,44 +652,22 @@ PulseApp.ui.calendarHeatmap = (() => {
                 // Apply filtering logic
                 if (guestId && parseInt(vmid, 10) !== parseInt(guestId, 10)) return;
                 
-                // When namespace filtering is active, double-check PBS snapshots
-                if (source === 'pbsSnapshots' && namespaceFilter !== 'all') {
-                    const itemNamespace = item.namespace || 'root';
-                    
-                    if (itemNamespace !== namespaceFilter) {
-                        // This snapshot is not in the selected namespace, skip it
-                        return;
-                    }
+                // Use the centralized filter manager for filtering decisions
+                const filterManager = PulseApp.utils.backupFilterManager;
+                
+                // Build current filters
+                const currentFilters = {
+                    namespace: namespaceFilter,
+                    backupType: getCurrentFilterType()
+                };
+                
+                // Check if this backup should be included
+                if (!filterManager.shouldIncludeBackup(item, source, currentFilters)) {
+                    return;
                 }
                 
-                // Debug filtering for PBS snapshots when namespace filter is active
-                if (source === 'pbsSnapshots' && filteredGuestIds && filteredGuestIds.length > 0 && window._enableCalendarDebug && !window._calendarDebugLogged) {
-                    window._calendarDebugLogged = true;
-                    console.log('Calendar filtering debug:', {
-                        vmid: vmid,
-                        timestamp: timestamp,
-                        date: date.toString(),
-                        localDate: localDate.toString(),
-                        dateKey: dateKey,
-                        currentMonth: displayMonth.toString(),
-                        startOfMonth: startOfMonth.toString(),
-                        endOfMonth: endOfMonth.toString(),
-                        isInMonth: localDate >= startOfMonth && localDate <= endOfMonth,
-                        item: {
-                            node: item.node,
-                            endpointId: item.endpointId,
-                            owner: item.owner,
-                            'backup-time': item['backup-time']
-                        },
-                        filteredGuestIds: filteredGuestIds.slice(0, 5),
-                        uniqueKey: generateUniqueGuestKey(vmid, item),
-                        willBeFiltered: !isGuestInFilteredList(vmid, item, filteredGuestIds)
-                    });
-                }
-                
-                // Only apply guest filtering to PBS snapshots when namespace filter is active
-                // PVE backups and VM snapshots should always be shown regardless of namespace filter
-                if (source === 'pbsSnapshots' && filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) {
+                // Additional guest filtering only for types that support namespaces
+                if (filterManager.supportsNamespaces(source) && filteredGuestIds && !isGuestInFilteredList(vmid, item, filteredGuestIds)) {
                     return;
                 }
                 

@@ -404,10 +404,6 @@ PulseApp.ui.backups = (() => {
             return dataCache.processedBackupData;
         }
         
-        // DEBUG: Log namespace filtering summary
-        if (namespaceFilter !== 'all') {
-            console.log(`Namespace filtering: '${namespaceFilter}' selected`);
-        }
 
         // PBS instance filter already retrieved above for cache hash
         
@@ -428,10 +424,12 @@ PulseApp.ui.backups = (() => {
             }));
         });
         
+        // Track guest+node combinations for namespace filtering
+        const guestNodeCombosInNamespace = new Set();
+        
         // If a specific namespace is selected, filter backup tasks using guest+node matching
         if (namespaceFilter !== 'all') {
-            // Get guest+node combinations that have backups in the selected namespace
-            const guestNodeCombosInNamespace = new Set();
+            // Populate guest+node combinations that have backups in the selected namespace
             filteredPbsDataArray.forEach(pbsInstance => {
                 (pbsInstance.datastores || []).forEach(ds => {
                     (ds.snapshots || []).forEach(snap => {
@@ -516,87 +514,21 @@ PulseApp.ui.backups = (() => {
         
         // Filter guests by namespace using guest+node matching from PBS comment fields
         let allGuests;
+        const vmidsInNamespace = new Set();
+        
         if (namespaceFilter !== 'all') {
-            // Get guest+node combinations that have PBS backups in the selected namespace
-            const guestNodeCombosInNamespace = new Set();
-            filteredPbsDataArray.forEach(pbsInstance => {
-                (pbsInstance.datastores || []).forEach(ds => {
-                    (ds.snapshots || []).forEach(snap => {
-                        const snapNamespace = snap.namespace || 'root';
-                        if (snapNamespace === namespaceFilter) {
-                            const guestId = snap['backup-id'];
-                            const owner = snap.owner || '';
-                            const comment = snap.comment || '';
-                            
-                            // Note: We cannot reliably extract guest names from comments
-                            // Comments are user-configurable and inconsistent
-                            
-                            
-                            // Extract owner token if available
-                            let ownerToken = null;
-                            if (owner && owner.includes('!')) {
-                                ownerToken = owner.split('!')[1].toLowerCase();
-                            }
-                            
-                            // Find all guests that could match this backup using VMID + Owner
-                            const matchingGuests = allGuestsUnfiltered.filter(guest => {
-                                // Must match VMID
-                                if (guest.vmid != guestId) return false;
-                                
-                                // Skip guest name matching - comments are unreliable
-                                // We can only match by VMID + owner token
-                                
-                                // Use owner token to differentiate between same-named guests
-                                if (ownerToken) {
-                                    const guestEndpoint = guest.endpointId || 'primary';
-                                    
-                                    // For primary endpoint (cluster), exclude if owner matches a secondary endpoint
-                                    if (guestEndpoint === 'primary') {
-                                        // Check if any secondary endpoint has a nodeDisplayName matching the token
-                                        const isSecondaryToken = allGuestsUnfiltered.some(g => {
-                                            if (!g.nodeDisplayName || !g.endpointId || g.endpointId === 'primary') return false;
-                                            const clusterName = g.nodeDisplayName.split(' - ')[0].toLowerCase();
-                                            return clusterName === ownerToken;
-                                        });
-                                        
-                                        // If owner token matches a secondary endpoint, this backup isn't from primary
-                                        if (isSecondaryToken) {
-                                            return false;
-                                        }
-                                        return true;
-                                    } else {
-                                        // For secondary endpoints, check if the guest's cluster name matches the token
-                                        if (!guest.nodeDisplayName) return false;
-                                        const clusterName = guest.nodeDisplayName.split(' - ')[0].toLowerCase();
-                                        return ownerToken === clusterName;
-                                    }
-                                }
-                                
-                                return true;
-                            });
-                            
-                            
-                            // If we found matches based on VMID + owner, use those
-                            if (matchingGuests.length > 0) {
-                                matchingGuests.forEach(guest => {
-                                    guestNodeCombosInNamespace.add(`${guestId}-${guest.node}`);
-                                });
-                            } else {
-                                // No matches found - include all guests with this VMID
-                                allGuestsUnfiltered.forEach(guest => {
-                                    if (guest.vmid == guestId) {
-                                        guestNodeCombosInNamespace.add(`${guestId}-${guest.node}`);
-                                    }
-                                });
-                            }
-                        }
-                    });
-                });
+            // Use the already populated guestNodeCombosInNamespace from above
+            // Filter allGuests to only include those that have backups in the selected namespace
+            // Extract just the VMIDs from the namespace (ignore node mismatches)
+            guestNodeCombosInNamespace.forEach(combo => {
+                const vmid = combo.split('-')[0];
+                vmidsInNamespace.add(vmid);
             });
             
-            // Don't filter guests yet - we need to check PVE backups too
-            // Keep all guests for now
-            allGuests = allGuestsUnfiltered;
+            // Filter guests by VMID only (don't require exact node match)
+            allGuests = allGuestsUnfiltered.filter(guest => {
+                return vmidsInNamespace.has(guest.vmid.toString());
+            });
             
         } else {
             allGuests = allGuestsUnfiltered;
@@ -674,30 +606,14 @@ PulseApp.ui.backups = (() => {
         
         // Now that pveStorageBackups is defined, update the guest filter if namespace filtering is active
         if (namespaceFilter !== 'all') {
-            // Get guest+node combinations that have PVE backups (always include these)
-            const guestNodeCombosWithPVEBackups = new Set();
+            // Add PVE backup VMIDs to the set (PVE backups should always be shown)
             pveStorageBackups.forEach(backup => {
-                const guestKey = `${backup.vmid}-${backup.node}`;
-                guestNodeCombosWithPVEBackups.add(guestKey);
+                vmidsInNamespace.add(backup.vmid.toString());
             });
             
             // Re-filter guests to include those with PBS backups in namespace OR PVE backups
-            const guestNodeCombosInNamespace = new Set();
-            filteredPbsDataArray.forEach(pbsInstance => {
-                (pbsInstance.datastores || []).forEach(ds => {
-                    (ds.snapshots || []).forEach(snap => {
-                        const snapNamespace = snap.namespace || 'root';
-                        if (snapNamespace === namespaceFilter) {
-                            const guestId = snap['backup-id'];
-                            guestNodeCombosInNamespace.add(`${guestId}-${snap.node || 'unknown'}`);
-                        }
-                    });
-                });
-            });
-            
             allGuests = allGuestsUnfiltered.filter(guest => {
-                const guestKey = `${guest.vmid}-${guest.node}`;
-                return guestNodeCombosInNamespace.has(guestKey) || guestNodeCombosWithPVEBackups.has(guestKey);
+                return vmidsInNamespace.has(guest.vmid.toString());
             });
         }
 
@@ -795,10 +711,6 @@ PulseApp.ui.backups = (() => {
         const threeDaysAgo = Math.floor(Date.now() / 1000) - (3 * 24 * 60 * 60);
         const sevenDaysAgo = Math.floor(Date.now() / 1000) - (7 * 24 * 60 * 60);
 
-        // Debug summary
-        if (namespaceFilter !== 'all') {
-            console.log(`Namespace filtering complete: ${allGuests.length} guests, ${snapshotsByGuest.size} snapshot keys`);
-        }
 
         const result = { 
             allGuests, 
