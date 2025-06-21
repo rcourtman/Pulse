@@ -134,6 +134,8 @@ class DiagnosticTool {
                     name: this.sanitizeUrl(pbs.name),
                     // Sanitize node_name
                     node_name: pbs.node_name === 'NOT SET' ? 'NOT SET' : `pbs-node-${index + 1}`,
+                    // Keep namespace if configured
+                    namespace: pbs.namespace || null,
                     // Remove potentially sensitive fields, keep only structure info
                     tokenConfigured: pbs.tokenConfigured,
                     selfSignedCerts: pbs.selfSignedCerts
@@ -160,6 +162,12 @@ class DiagnosticTool {
                     name: this.sanitizeUrl(perm.name),
                     // Sanitize node_name
                     node_name: perm.node_name === 'NOT SET' ? 'NOT SET' : `pbs-node-${index + 1}`,
+                    // Keep namespace if configured
+                    namespace: perm.namespace || null,
+                    // Keep namespace test results
+                    canListNamespaces: perm.canListNamespaces,
+                    discoveredNamespaces: perm.discoveredNamespaces ? perm.discoveredNamespaces.length : 0,
+                    namespaceAccess: perm.namespaceAccess || {},
                     // Keep diagnostic info but sanitize error messages
                     errors: perm.errors ? perm.errors.map(err => this.sanitizeErrorMessage(err)) : []
                 }));
@@ -388,7 +396,7 @@ class DiagnosticTool {
                                             // Test backup content access on each storage that supports backups
                                             for (const storage of storageData.data.data) {
                                                 if (storage && storage.storage && storage.content && 
-                                                    storage.content.includes('backup')) {
+                                                    storage.content.includes('backup') && storage.type !== 'pbs') {
                                                     totalStoragesTested++;
                                                     
                                                     try {
@@ -465,9 +473,12 @@ class DiagnosticTool {
                     name: clientObj.config?.name || id,
                     host: clientObj.config?.host,
                     node_name: clientObj.config?.nodeName || clientObj.config?.node_name || 'NOT SET',
+                    namespace: clientObj.config?.namespace || null,
                     canConnect: false,
                     canListDatastores: false,
                     canListBackups: false,
+                    canListNamespaces: false,
+                    namespaceAccess: {},
                     errors: []
                 };
 
@@ -490,22 +501,70 @@ class DiagnosticTool {
                             permCheck.canListDatastores = true;
                             permCheck.datastoreCount = datastoreData.data.data.length;
                             
-                            // Test backup listing on first datastore
+                            // Test backup listing and namespace access on first datastore
                             const firstDatastore = datastoreData.data.data[0];
                             if (firstDatastore && firstDatastore.store) {
+                                // Test namespace listing capability
                                 try {
-                                    // Add namespace parameter if configured
+                                    const namespaceResponse = await clientObj.client.get(`/admin/datastore/${firstDatastore.store}/namespace`);
+                                    if (namespaceResponse && namespaceResponse.data) {
+                                        permCheck.canListNamespaces = true;
+                                        const namespaces = namespaceResponse.data.data || [];
+                                        permCheck.discoveredNamespaces = namespaces.map(ns => ns.ns || ns.path || ns.name).filter(ns => ns !== undefined);
+                                    }
+                                } catch (nsError) {
+                                    if (nsError.response?.status !== 404) {
+                                        permCheck.errors.push(`Cannot list namespaces in datastore ${firstDatastore.store}: ${nsError.message}`);
+                                    }
+                                    // 404 is expected on older PBS versions without namespace support
+                                }
+                                
+                                // Test backup listing in configured namespace or root
+                                try {
                                     const groupsParams = {};
+                                    const namespacesToTest = [];
+                                    
+                                    // Always test root namespace
+                                    namespacesToTest.push({ ns: '', label: 'root' });
+                                    
+                                    // Test configured namespace if present
                                     if (clientObj.config.namespace) {
-                                        groupsParams.ns = clientObj.config.namespace;
+                                        namespacesToTest.push({ ns: clientObj.config.namespace, label: 'configured' });
                                     }
-                                    const backupData = await clientObj.client.get(`/admin/datastore/${firstDatastore.store}/groups`, {
-                                        params: groupsParams
-                                    });
-                                    if (backupData && backupData.data) {
-                                        permCheck.canListBackups = true;
-                                        permCheck.backupCount = backupData.data.data ? backupData.data.data.length : 0;
+                                    
+                                    for (const nsTest of namespacesToTest) {
+                                        try {
+                                            const testParams = { ...groupsParams };
+                                            if (nsTest.ns) {
+                                                testParams.ns = nsTest.ns;
+                                            }
+                                            
+                                            const backupData = await clientObj.client.get(`/admin/datastore/${firstDatastore.store}/groups`, {
+                                                params: testParams
+                                            });
+                                            
+                                            if (backupData && backupData.data) {
+                                                permCheck.canListBackups = true;
+                                                permCheck.namespaceAccess[nsTest.label] = {
+                                                    namespace: nsTest.ns || 'root',
+                                                    accessible: true,
+                                                    backupCount: backupData.data.data ? backupData.data.data.length : 0
+                                                };
+                                            }
+                                        } catch (nsBackupError) {
+                                            permCheck.namespaceAccess[nsTest.label] = {
+                                                namespace: nsTest.ns || 'root',
+                                                accessible: false,
+                                                error: nsBackupError.message
+                                            };
+                                        }
                                     }
+                                    
+                                    // Calculate total backup count from accessible namespaces
+                                    permCheck.backupCount = Object.values(permCheck.namespaceAccess)
+                                        .filter(ns => ns.accessible)
+                                        .reduce((sum, ns) => sum + (ns.backupCount || 0), 0);
+                                        
                                 } catch (error) {
                                     permCheck.errors.push(`Cannot list backup groups in datastore ${firstDatastore.store}: ${error.message}`);
                                 }
@@ -581,6 +640,7 @@ class DiagnosticTool {
                         name: clientObj.config.name || id,
                         port: clientObj.config.port || '8007',
                         node_name: nodeName || 'NOT SET',
+                        namespace: clientObj.config.namespace || null,
                         tokenConfigured: !!clientObj.config.tokenId,
                         selfSignedCerts: clientObj.config.allowSelfSignedCerts || false
                     });
@@ -622,7 +682,9 @@ class DiagnosticTool {
                     instances: state.pbs?.length || 0,
                     totalBackups: 0,
                     datastores: 0,
-                    sampleBackupIds: []
+                    sampleBackupIds: [],
+                    instanceDetails: [], // Add array to store individual PBS instance details
+                    namespaceInfo: {} // Track namespace usage
                 },
                 pveBackups: {
                     backupTasks: state.pveBackups?.backupTasks?.length || 0,
@@ -642,22 +704,59 @@ class DiagnosticTool {
             // Count PBS backups and get samples
             if (state.pbs && Array.isArray(state.pbs)) {
                 state.pbs.forEach((pbsInstance, idx) => {
+                    // Store instance details for matching in recommendations
+                    const instanceDetail = {
+                        name: pbsInstance.pbsInstanceName || `pbs-${idx}`,
+                        datastores: 0,
+                        snapshots: 0,
+                        namespaces: new Set()
+                    };
+                    
                     if (pbsInstance.datastores) {
                         info.pbs.datastores += pbsInstance.datastores.length;
+                        instanceDetail.datastores = pbsInstance.datastores.length;
+                        
                         pbsInstance.datastores.forEach(ds => {
                             if (ds.snapshots) {
                                 info.pbs.totalBackups += ds.snapshots.length;
-                                // Get unique backup IDs
+                                instanceDetail.snapshots += ds.snapshots.length;
+                                // Get unique backup IDs and track namespaces
                                 ds.snapshots.forEach(snap => {
                                     const backupId = snap['backup-id'];
                                     if (backupId && !info.pbs.sampleBackupIds.includes(backupId)) {
                                         info.pbs.sampleBackupIds.push(backupId);
                                     }
+                                    
+                                    // Track namespace usage
+                                    if (snap.ns !== undefined) {
+                                        const namespace = snap.ns || 'root';
+                                        instanceDetail.namespaces.add(namespace);
+                                        
+                                        // Track global namespace info
+                                        if (!info.pbs.namespaceInfo[namespace]) {
+                                            info.pbs.namespaceInfo[namespace] = {
+                                                backupCount: 0,
+                                                instances: new Set()
+                                            };
+                                        }
+                                        info.pbs.namespaceInfo[namespace].backupCount++;
+                                        info.pbs.namespaceInfo[namespace].instances.add(instanceDetail.name);
+                                    }
                                 });
                             }
                         });
                     }
+                    
+                    // Convert Set to Array for JSON serialization
+                    instanceDetail.namespaces = Array.from(instanceDetail.namespaces);
+                    info.pbs.instanceDetails.push(instanceDetail);
                 });
+                
+                // Convert namespace info Sets to Arrays for JSON serialization
+                Object.keys(info.pbs.namespaceInfo).forEach(ns => {
+                    info.pbs.namespaceInfo[ns].instances = Array.from(info.pbs.namespaceInfo[ns].instances);
+                });
+                
                 // Limit sample backup IDs
                 info.pbs.sampleBackupIds = info.pbs.sampleBackupIds.slice(0, 10);
             }
@@ -753,7 +852,7 @@ class DiagnosticTool {
                                 report.recommendations.push({
                                     severity: 'info',
                                     category: 'Backup Status',
-                                    message: `Proxmox "${perm.name}": Successfully accessing ${storageAccess.accessibleStorages} backup storage(s) with ${backupCount} backup files. Storage permissions are correctly configured.`
+                                    message: `Proxmox "${perm.name}": Successfully accessing ${storageAccess.accessibleStorages} backup storage(s) with ${backupCount} backup files (PBS storage excluded). Storage permissions are correctly configured.`
                                 });
                             }
                         }
@@ -793,6 +892,77 @@ class DiagnosticTool {
                             category: 'PBS Configuration',
                             message: `PBS instance "${perm.name}" is missing PBS_NODE_NAME. This is required for the backups tab to work. SSH to your PBS server and run 'hostname' to get the correct value, then add PBS_NODE_NAME=<hostname> to your .env file.`
                         });
+                    }
+                    
+                    // Check namespace configuration and access
+                    if (perm.namespace && perm.namespaceAccess) {
+                        const configuredNsAccess = perm.namespaceAccess.configured;
+                        if (configuredNsAccess && !configuredNsAccess.accessible) {
+                            report.recommendations.push({
+                                severity: 'critical',
+                                category: 'PBS Namespace Access',
+                                message: `PBS "${perm.name}": Cannot access configured namespace '${perm.namespace}'. Error: ${configuredNsAccess.error}. Verify the namespace exists and the token has permission.`
+                            });
+                        }
+                    }
+                    
+                    // Check if namespaces are discovered but not configured
+                    if (perm.canListNamespaces && perm.discoveredNamespaces && perm.discoveredNamespaces.length > 0 && !perm.namespace) {
+                        report.recommendations.push({
+                            severity: 'info',
+                            category: 'PBS Namespace Configuration',
+                            message: `PBS "${perm.name}": Found ${perm.discoveredNamespaces.length} namespace(s) but none configured. Available namespaces: ${perm.discoveredNamespaces.slice(0, 5).join(', ')}${perm.discoveredNamespaces.length > 5 ? '...' : ''}. Consider adding PBS_NAMESPACE to target a specific namespace.`
+                        });
+                    }
+                    
+                    // Add success message for PBS with backup counts and namespace info
+                    if (perm.canConnect && perm.canListDatastores && report.state && report.state.pbs && report.state.pbs.instanceDetails) {
+                        // Find the corresponding PBS instance in state data by matching name
+                        const pbsStateData = report.state.pbs.instanceDetails.find(instance => 
+                            instance.name === perm.name
+                        );
+                        
+                        if (pbsStateData && pbsStateData.datastores > 0) {
+                            let successMsg = `PBS "${perm.name}": Successfully accessing ${pbsStateData.datastores} datastore(s) with ${pbsStateData.snapshots} backup snapshots.`;
+                            
+                            // Add namespace info if available
+                            if (perm.namespaceAccess && Object.keys(perm.namespaceAccess).length > 0) {
+                                const accessibleNamespaces = Object.values(perm.namespaceAccess).filter(ns => ns.accessible);
+                                if (accessibleNamespaces.length > 0) {
+                                    const nsInfo = accessibleNamespaces.map(ns => 
+                                        `${ns.namespace || 'root'} (${ns.backupCount} backups)`
+                                    ).join(', ');
+                                    successMsg += ` Namespace access: ${nsInfo}.`;
+                                }
+                            }
+                            
+                            successMsg += ' PBS permissions are correctly configured.';
+                            
+                            report.recommendations.push({
+                                severity: 'info',
+                                category: 'Backup Status',
+                                message: successMsg
+                            });
+                        } else if (perm.canListDatastores && perm.datastoreCount > 0) {
+                            // Fallback to permission data if state data not available
+                            let successMsg = `PBS "${perm.name}": Successfully connected with ${perm.datastoreCount} datastore(s) accessible.`;
+                            
+                            // Add namespace info if available
+                            if (perm.namespaceAccess && Object.keys(perm.namespaceAccess).length > 0) {
+                                const accessibleNamespaces = Object.values(perm.namespaceAccess).filter(ns => ns.accessible);
+                                if (accessibleNamespaces.length > 0) {
+                                    successMsg += ` Can access ${accessibleNamespaces.length} namespace(s).`;
+                                }
+                            }
+                            
+                            successMsg += ' PBS permissions are correctly configured.';
+                            
+                            report.recommendations.push({
+                                severity: 'info',
+                                category: 'Backup Status',
+                                message: successMsg
+                            });
+                        }
                     }
                 });
             }

@@ -16,8 +16,21 @@ let pLimit;
 let requestLimiter;
 let pLimitInitialized = false;
 
-// Cache for direct node connections
+// Cache for direct node connections with TTL
 const nodeConnectionCache = new Map();
+const nodeConnectionTimestamps = new Map();
+const NODE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes TTL
+
+// Cleanup old connections periodically
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, timestamp] of nodeConnectionTimestamps.entries()) {
+        if (now - timestamp > NODE_CACHE_TTL) {
+            nodeConnectionCache.delete(key);
+            nodeConnectionTimestamps.delete(key);
+        }
+    }
+}, 60000); // Run cleanup every minute
 
 /**
  * Creates a direct connection to a specific node, bypassing cluster routing.
@@ -106,8 +119,9 @@ async function getDirectNodeConnection(node, clusterConfig) {
             return null;
         }
         
-        // Cache the connection
+        // Cache the connection with timestamp
         nodeConnectionCache.set(cacheKey, nodeClient);
+        nodeConnectionTimestamps.set(cacheKey, Date.now());
         
         return nodeClient;
         
@@ -394,7 +408,7 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
 
 // Cache for last known good node states
 const nodeStateCache = new Map();
-const NODE_CACHE_TTL = 60000; // 1 minute
+// NODE_CACHE_TTL already declared above
 
 /**
  * Deduplicates nodes from multiple endpoints that may point to the same cluster

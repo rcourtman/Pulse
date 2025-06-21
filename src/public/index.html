@@ -25,6 +25,51 @@
     .pulse-logo-inner { fill: #ffffff; }
     .dark .pulse-logo-outer { fill: #3b82f6; }
     .dark .pulse-logo-inner { fill: #dbeafe; }
+    
+    /* Fixed table column widths to prevent shifting */
+    #main-table {
+      table-layout: fixed !important;
+    }
+    
+    #main-table td {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    /* Only apply nowrap to specific cells that need it */
+    #main-table td:nth-child(1),
+    #main-table td:nth-child(2),
+    #main-table td:nth-child(3),
+    #main-table td:nth-child(4),
+    #main-table td:nth-child(8),
+    #main-table td:nth-child(9),
+    #main-table td:nth-child(10),
+    #main-table td:nth-child(11) {
+      white-space: nowrap;
+    }
+    
+    /* Ensure metric cells don't expand */
+    #main-table td:nth-child(5),
+    #main-table td:nth-child(6),
+    #main-table td:nth-child(7),
+    #main-table td:nth-child(8),
+    #main-table td:nth-child(9),
+    #main-table td:nth-child(10),
+    #main-table td:nth-child(11) {
+      overflow: hidden;
+    }
+    
+    /* Ensure progress bars don't affect layout */
+    #main-table .metric-text,
+    #main-table .metric-chart {
+      overflow: hidden;
+    }
+    
+    /* Fix dropdowns in alert mode */
+    #main-table select {
+      width: 100%;
+      max-width: 100%;
+    }
 
     /* Custom Slider Thumb Styles */
     input[type=range].custom-slider::-webkit-slider-thumb {
@@ -52,69 +97,12 @@
         background-color: #3b82f6; /* Blue-500 */
     }
 
-    /* Range slider styles for alert modal */
-    input[type=range].range-slider {
-      -webkit-appearance: none;
-      appearance: none;
-      height: 8px;
-      border-radius: 4px;
-      background: #e5e7eb;
-      outline: none;
-    }
-    .dark input[type=range].range-slider {
-      background: #4b5563;
-    }
-    input[type=range].range-slider::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      appearance: none;
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: #2563eb;
-      cursor: pointer;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .dark input[type=range].range-slider::-webkit-slider-thumb {
-      background: #3b82f6;
-    }
-    input[type=range].range-slider::-moz-range-thumb {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      background: #2563eb;
-      cursor: pointer;
-      border: none;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    .dark input[type=range].range-slider::-moz-range-thumb {
-      background: #3b82f6;
-    }
 
     /* Style for header when threshold is active */
     .threshold-active-header {
         @apply font-semibold;
     }
 
-    /* Alert threshold inheritance styles */
-    .alert-threshold-input.using-global {
-        position: relative;
-    }
-    
-    .alert-threshold-input.using-global::before {
-        content: "↑";
-        position: absolute;
-        top: -2px;
-        right: 2px;
-        font-size: 10px;
-        color: #3b82f6;
-        opacity: 0.7;
-        z-index: 10;
-        pointer-events: none;
-    }
-    
-    .dark .alert-threshold-input.using-global::before {
-        color: #60a5fa;
-    }
 
     /* Dot animation for logging indicator */
     @keyframes dot-pulse {
@@ -581,6 +569,168 @@
             border-width: 0.5px;
         }
     }
+    
+    /* Instant mode switching - no transitions during mode changes */
+    body.switching-modes #main-table tr {
+        transition: none !important;
+    }
+    body.switching-modes #main-table td {
+        transition: none !important;
+    }
+    
+    /* Dimmed filter row styling */
+    #threshold-slider-row.dimmed {
+        opacity: 0.5;
+        transition: opacity 0.2s ease-out;
+    }
+    #threshold-slider-row:not(.dimmed) {
+        opacity: 1;
+        transition: opacity 0.2s ease-out;
+    }
+    
+    /* Fix sticky cell background in threshold row */
+    #threshold-slider-row td.sticky.left-0,
+    #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(239, 246, 255) !important; /* Solid blue-50 */
+        opacity: 1 !important; /* Always fully opaque */
+    }
+    .dark #threshold-slider-row td.sticky.left-0,
+    .dark #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(23, 37, 84) !important; /* Solid dark blue */
+        opacity: 1 !important;
+    }
+    
+    /* Make the content inside sticky cell match row opacity */
+    #threshold-slider-row.dimmed td.sticky.left-0 > *,
+    #global-alert-thresholds-row.dimmed td.sticky.left-0 > * {
+        opacity: 0.5;
+    }
+    #threshold-slider-row:not(.dimmed) td.sticky.left-0 > *,
+    #global-alert-thresholds-row:not(.dimmed) td.sticky.left-0 > * {
+        opacity: 1;
+    }
+    
+    /* Ensure sticky column borders don't overlap with scrollbar */
+    .table-container {
+        position: relative;
+    }
+    
+    /* Consistent border styling for all sticky columns */
+    .sticky.left-0.border-r {
+        border-right-width: 1px;
+    }
+    
+    /* Ensure sticky columns stay above scrolling content */
+    th.sticky.left-0 {
+        z-index: 20 !important;
+    }
+    
+    td.sticky.left-0 {
+        z-index: 15 !important;
+    }
+    
+    /* Special rows need higher z-index */
+    #threshold-slider-row td.sticky.left-0,
+    #global-alert-thresholds-row td.sticky.left-0 {
+        z-index: 16 !important;
+    }
+    
+    /* Consistent sticky column styling across all devices */
+    /* Remove the broken border from sticky cells */
+    .sticky.left-0 {
+        border-right: none !important;
+    }
+    
+    /* Add a proper separator using box-shadow that stays with the sticky column */
+    th.sticky.left-0,
+    td.sticky.left-0 {
+        box-shadow: 2px 0 0 0 rgb(209, 213, 219);
+        position: sticky !important;
+        left: 0 !important;
+    }
+    
+    .dark th.sticky.left-0,
+    .dark td.sticky.left-0 {
+        box-shadow: 2px 0 0 0 rgb(75, 85, 99);
+    }
+    
+    /* Ensure proper background colors for sticky cells to prevent transparency */
+    th.sticky.left-0 {
+        background-color: rgb(243, 244, 246) !important; /* gray-100 */
+    }
+    
+    .dark th.sticky.left-0 {
+        background-color: rgb(55, 65, 81) !important; /* gray-700 */
+    }
+    
+    /* Regular data rows */
+    td.sticky.left-0 {
+        background-color: white !important;
+    }
+    
+    .dark td.sticky.left-0 {
+        background-color: rgb(31, 41, 55) !important; /* gray-800 */
+    }
+    
+    /* Hover state for sticky columns in regular rows */
+    tr:hover td.sticky.left-0 {
+        background-color: rgb(249, 250, 251) !important; /* gray-50 */
+    }
+    
+    .dark tr:hover td.sticky.left-0 {
+        background-color: rgb(55, 65, 81) !important; /* gray-700 */
+    }
+    
+    /* Special hover states for rows with warning/critical/failed backgrounds */
+    tr.bg-red-50:hover td.sticky.left-0 {
+        background-color: rgb(254, 226, 226) !important; /* red-100 */
+    }
+    
+    .dark tr.bg-red-900\/20:hover td.sticky.left-0 {
+        background-color: rgba(127, 29, 29, 0.3) !important; /* red-900/30 */
+    }
+    
+    tr.bg-yellow-50:hover td.sticky.left-0 {
+        background-color: rgb(254, 240, 138) !important; /* yellow-100 */
+    }
+    
+    .dark tr.bg-yellow-900\/20:hover td.sticky.left-0 {
+        background-color: rgba(113, 63, 18, 0.3) !important; /* yellow-900/30 */
+    }
+    
+    tr.bg-blue-50:hover td.sticky.left-0 {
+        background-color: rgb(219, 234, 254) !important; /* blue-100 */
+    }
+    
+    .dark tr.bg-blue-900\/20:hover td.sticky.left-0 {
+        background-color: rgba(30, 64, 175, 0.3) !important; /* blue-900/30 */
+    }
+    
+    /* Node/group header rows - use lighter background for all tables */
+    .node-header td.sticky.left-0,
+    .node-storage-header td.sticky.left-0,
+    tr.bg-gray-100.font-semibold td.sticky.left-0 {
+        background-color: rgb(243, 244, 246) !important; /* gray-100 */
+    }
+    
+    .dark .node-header td.sticky.left-0,
+    .dark .node-storage-header td.sticky.left-0,
+    .dark tr.font-semibold td.sticky.left-0 {
+        background-color: rgba(55, 65, 81, 0.8) !important; /* gray-700/80 */
+    }
+    
+    
+    /* Special rows need their specific colors - solid backgrounds */
+    #threshold-slider-row td.sticky.left-0,
+    #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(239, 246, 255) !important; /* blue-50 */
+    }
+    
+    .dark #threshold-slider-row td.sticky.left-0,
+    .dark #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(30, 41, 66) !important; /* blue-900 solid */
+    }
+    
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
@@ -666,21 +816,14 @@
                     <input type="checkbox" id="toggle-thresholds-checkbox" class="hidden peer">
                     <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
-                        <line x1="4" y1="21" x2="4" y2="14"></line>
-                        <line x1="4" y1="10" x2="4" y2="3"></line>
-                        <line x1="12" y1="21" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12" y2="3"></line>
-                        <line x1="20" y1="21" x2="20" y2="16"></line>
-                        <line x1="20" y1="12" x2="20" y2="3"></line>
-                        <line x1="1" y1="14" x2="7" y2="14"></line>
-                        <line x1="9" y1="8" x2="15" y2="8"></line>
-                        <line x1="17" y1="16" x2="23" y2="16"></line>
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
                       </svg>
                       <span class="hidden md:inline">Thresholds</span>
                     </span>
-                    <span id="threshold-count-badge" class="absolute -top-1 -right-1 z-30 inline-flex items-center justify-center px-1 py-0.5 text-[9px] font-bold leading-none text-white bg-blue-600 rounded-full hidden">0</span>
                   </label>
-                  <label>
+                  <label class="relative">
                     <input type="checkbox" id="toggle-alerts-checkbox" class="hidden peer">
                     <span class="flex items-center justify-center gap-1 px-3 py-2 sm:px-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked:bg-blue-100 dark:peer-checked:bg-blue-800/50 peer-checked:text-blue-700 dark:peer-checked:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto] transition-colors">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden">
@@ -747,43 +890,41 @@
             </div>
           </div>
 
-
-
-          <div class="table-container max-h-[70vh] overflow-y-auto overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
+          <div class="table-container overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar relative">
             <!-- Mobile scroll hint -->
             <div class="fixed bottom-4 right-4 bg-blue-500 text-white text-[11px] px-3 py-1.5 rounded-full md:hidden animate-pulse shadow-lg z-50 pointer-events-none" id="scroll-hint" style="display: none;">
                 ← Swipe for more →
             </div>
-            <table id="main-table" class="w-full min-w-[800px] table-auto text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
+            <table id="main-table" class="w-full min-w-[1100px] table-fixed text-xs sm:text-sm" role="table" aria-label="Virtual machines and containers">
                 <colgroup>
-                  <col class="name-col" style="min-width: 140px; max-width: 250px;">
+                  <col class="name-col" style="width: 150px;">
                   <col class="type-col" style="width: 50px;">
-                  <col class="id-col" style="width: 50px;">
-                  <col class="uptime-col" style="min-width: 60px; max-width: 100px;">
-                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
-                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
-                  <col class="usage-col" style="min-width: 100px; max-width: 150px;">
-                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
-                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
-                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
-                  <col class="net-disk-col" style="min-width: 60px; max-width: 100px;">
+                  <col class="id-col" style="width: 60px;">
+                  <col class="uptime-col" style="width: 70px;">
+                  <col class="usage-col" style="width: 120px;">
+                  <col class="usage-col" style="width: 120px;">
+                  <col class="usage-col" style="width: 120px;">
+                  <col class="net-disk-col" style="width: 95px;">
+                  <col class="net-disk-col" style="width: 95px;">
+                  <col class="net-disk-col" style="width: 95px;">
+                  <col class="net-disk-col" style="width: 95px;">
                 </colgroup>
               <thead class="bg-gray-100 dark:bg-gray-800">
                 <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                  <th class="sticky left-0 top-0 bg-gray-100 dark:bg-gray-700 z-20 sortable p-1 px-2" data-sort="name" style="width: var(--name-col-width, 150px);">Name</th>
+                  <th class="sticky left-0 top-0 bg-gray-100 dark:bg-gray-700 z-20 sortable p-1 px-2" data-sort="name" style="width: 150px;">Name</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 p-1 px-2" style="width: 50px;">Type</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="id" style="width: 50px;">ID</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="uptime" style="width: var(--uptime-col-width, 80px);" title="Uptime">Up</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="id" style="width: 60px;">ID</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="uptime" style="width: 70px;" title="Uptime">Up</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="cpu" style="width: 120px;">CPU</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="memory" style="width: 120px;">Memory</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="disk" style="width: 120px;">Disk</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskread" style="width: 70px;">Read</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskwrite" style="width: 70px;">Write</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 70px;">Net In</th>
-                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 70px;">Net Out</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskread" style="width: 95px;">Read</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="diskwrite" style="width: 95px;">Write</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 95px;">Net In</th>
+                  <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 95px;">Net Out</th>
                 </tr>
-                <tr id="threshold-slider-row" class="hidden mt-3 p-3 border rounded-md bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-600">
-                  <td class="sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 py-1 px-2 align-middle border-r border-blue-300 dark:border-blue-600">
+                <tr id="threshold-slider-row" class="hidden bg-blue-50 dark:bg-blue-900/20">
+                  <td class="sticky left-0 z-10 py-1 px-2 align-middle">
                     <div class="flex items-center justify-between">
                       <span class="text-xs text-blue-700 dark:text-blue-300">Filters</span>
                       <button id="reset-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
@@ -848,12 +989,14 @@
                 </tr>
                 <!-- Global Alert Thresholds Row -->
                 <tr id="global-alert-thresholds-row" class="hidden bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-600">
-                  <td class="sticky left-0 bg-blue-50 dark:bg-blue-900/20 z-10 py-1 px-2 align-middle border-r border-blue-300 dark:border-blue-600">
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs text-blue-700 dark:text-blue-300">Defaults</span>
-                      <button id="reset-global-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
-                        Reset
-                      </button>
+                  <td class="sticky left-0 z-10 py-1 px-2 align-middle">
+                    <div class="flex flex-col gap-1">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs text-blue-700 dark:text-blue-300">Defaults</span>
+                        <button id="reset-global-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
+                          Reset
+                        </button>
+                      </div>
                     </div>
                   </td>
                   <td class="py-1 px-2 align-middle">-</td>
@@ -876,7 +1019,138 @@
             </table>
           </div>
 
-          <span id="dashboard-status-text" class="text-xs text-gray-500 dark:text-gray-400">Loading dashboard data...</span>
+          <!-- Threshold Filter Settings -->
+          <div id="threshold-filter-controls" class="hidden mt-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-4">
+                <span class="text-xs text-blue-700 dark:text-blue-300 font-medium">Threshold Settings</span>
+                <label class="inline-flex items-center gap-2 cursor-pointer" title="Hide guests that don't meet thresholds instead of dimming">
+                  <span class="text-xs text-blue-700 dark:text-blue-300">Hide non-matching:</span>
+                  <input type="checkbox" id="threshold-hide-mode" class="sr-only peer">
+                  <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alert Mode Controls -->
+          <div id="alert-mode-controls" class="hidden mt-3 px-4 py-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
+            <!-- Main Controls -->
+            <div class="space-y-4">
+              <!-- Top row with main controls -->
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-6">
+                  <span class="text-sm text-blue-700 dark:text-blue-300 font-semibold">Alert Settings</span>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">Duration:</span>
+                    <select id="alert-duration-select" class="text-xs bg-white dark:bg-gray-800 border border-blue-300 dark:border-blue-600 rounded px-2 py-1 text-blue-700 dark:text-blue-300" title="How long thresholds must be exceeded before triggering alerts">
+                      <option value="0" selected>Instant</option>
+                      <option value="10000">10s</option>
+                      <option value="30000">30s</option>
+                      <option value="60000">1m</option>
+                      <option value="300000">5m</option>
+                      <option value="600000">10m</option>
+                    </select>
+                  </div>
+                  <label class="inline-flex items-center gap-2 cursor-pointer" title="Automatically clear alerts when thresholds return to normal">
+                    <span class="text-xs text-blue-700 dark:text-blue-300">Auto-resolve:</span>
+                    <input type="checkbox" id="alert-auto-resolve-toggle" class="sr-only peer" checked>
+                    <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                  </label>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span id="alert-save-message" class="text-xs text-blue-600 dark:text-blue-400"></span>
+                  <button id="save-alert-config" class="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors">
+                    Save
+                  </button>
+                </div>
+              </div>
+              
+              
+              <!-- Cooldown Settings in a grid layout -->
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <!-- Email Settings Card -->
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Email Notifications</h4>
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" id="alert-email-toggle" class="sr-only peer">
+                      <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div id="email-cooldown-settings" style="display: none;">
+                    <div class="space-y-3 mb-4">
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-cooldown-minutes">Time between emails:</label>
+                        <div class="flex items-center gap-1 shrink-0">
+                          <input type="number" id="alert-cooldown-minutes" min="1" max="120" value="15" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-debounce-minutes">Wait before first email:</label>
+                        <div class="flex items-center gap-1 shrink-0">
+                          <input type="number" id="alert-debounce-minutes" min="0" max="30" value="2" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="alert-max-emails-hour">Max emails per hour:</label>
+                        <div class="flex items-center gap-1 shrink-0">
+                          <input type="number" id="alert-max-emails-hour" min="1" max="20" value="4" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">/hr</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button id="test-email-alert" class="w-full px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors" title="Send a test email notification">
+                      Test Email
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Webhook Settings Card -->
+                <div class="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg p-4">
+                  <div class="flex items-center justify-between mb-4">
+                    <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Webhook Notifications</h4>
+                    <label class="inline-flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" id="alert-webhook-toggle" class="sr-only peer">
+                      <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+                    </label>
+                  </div>
+                  <div id="webhook-cooldown-settings" style="display: none;">
+                    <div class="space-y-3 mb-4">
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-cooldown-minutes">Time between webhooks:</label>
+                        <div class="flex items-center gap-1 shrink-0">
+                          <input type="number" id="webhook-cooldown-minutes" min="1" max="120" value="5" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-debounce-minutes">Wait before first webhook:</label>
+                        <div class="flex items-center gap-1 shrink-0">
+                          <input type="number" id="webhook-debounce-minutes" min="0" max="30" value="1" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">min</span>
+                        </div>
+                      </div>
+                      <div class="flex items-center justify-between">
+                        <label class="text-xs text-gray-600 dark:text-gray-400" for="webhook-max-calls-hour">Max calls per hour:</label>
+                        <div class="flex items-center gap-1 shrink-0">
+                          <input type="number" id="webhook-max-calls-hour" min="1" max="50" value="10" class="w-16 px-2 py-1 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-blue-500">
+                          <span class="text-xs text-gray-500 dark:text-gray-500 w-6">/hr</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button id="test-webhook-alert" class="w-full px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors" title="Send a test webhook notification">
+                      Test Webhook
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <span id="dashboard-status-text" class="text-xs text-gray-500 dark:text-gray-400 mt-2">Loading dashboard data...</span>
 
           <!-- Separator -->
           <hr class="border-gray-200 dark:border-gray-700 my-2">
@@ -907,7 +1181,7 @@
       </div>
       
       <!-- Backup History Visualization -->
-      <div id="backup-visualization-section" class="hidden mb-6 space-y-4">
+      <div id="backup-visualization-section" class="mb-6 space-y-4">
         <!-- Hidden: Summary cards (replaced by consolidated summary) -->
         <div id="backup-summary-cards-container" class="hidden">
           <!-- No longer used - replaced by consolidated summary -->
@@ -921,12 +1195,18 @@
             <div class="w-full lg:w-auto lg:max-w-2xl">
               <div id="backup-calendar-heatmap">
                 <!-- Calendar heatmap will be inserted here -->
+                <div class="animate-pulse">
+                  <div class="h-32 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                </div>
               </div>
             </div>
             <!-- Detail card -->
             <div class="flex-1 min-w-0 lg:max-h-[400px]">
               <div id="backup-detail-card" class="h-full">
                 <!-- Detail card will be inserted here -->
+                <div class="animate-pulse h-full">
+                  <div class="h-full bg-gray-200 dark:bg-gray-700 rounded"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -1123,8 +1403,8 @@
   <script>
   </script>
   <script src="/js/state.js" defer></script>
-  <script src="/js/virtual-scroll.js" defer></script>
   <script src="/js/utils.js" defer></script>
+  <script src="/js/utils/backupFilterManager.js" defer></script>
   <script src="/js/modalManager.js" defer></script>
   <script src="/js/apiClient.js" defer></script>
   <script src="/js/theme.js" defer></script>
@@ -1136,8 +1416,6 @@
   <script src="/js/ui/thresholds.js" defer></script>
   <script src="/js/ui/alerts.js" defer></script>
   <script src="/js/ui/empty-states.js" defer></script>
-  <script src="/js/ui/config-banner.js" defer></script>
-  <script src="/js/ui/status-icons.js" defer></script>
   <script src="/js/ui/loading-skeletons.js" defer></script>
   <script src="/js/ui/common.js" defer></script>
   <script src="/js/ui/nodes.js" defer></script>
@@ -1149,7 +1427,6 @@
   <script src="/js/ui/backup-detail-card.js" defer></script>
   <script src="/js/ui/backups.js" defer></script>
   <script src="/js/ui/settings.js" defer></script>
-  <script src="/js/ui/alertManagementModal.js" defer></script>
   <script src="/js/alertsHandler.js" defer></script>
   <script src="/js/hotReload.js" defer></script>
   <script src="/js/main.js" defer></script>

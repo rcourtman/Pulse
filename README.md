@@ -334,19 +334,28 @@ For advanced monitoring scenarios, Pulse supports custom alert thresholds on a p
 
 #### Webhook Notifications (Optional)
 
-Pulse supports webhook notifications for alerts, compatible with Discord, Slack, and Microsoft Teams:
+Pulse supports webhook notifications for alerts, compatible with Discord, Slack, Microsoft Teams, Home Assistant, and any service that accepts webhooks.
 
 **Configuration via Web Interface:**
-1. Navigate to **Settings → Alerts** tab
-2. Enable "Webhook Notifications"
+1. Navigate to **Settings → Notifications** tab
+2. Enable "Webhook Notifications" toggle
 3. Enter your webhook URL
 4. Click "Test Webhook" to verify connectivity
 5. Save configuration
 
-**Webhook URL Examples:**
-- **Discord**: `https://discord.com/api/webhooks/YOUR_WEBHOOK_ID/YOUR_WEBHOOK_TOKEN`
-- **Slack**: `https://hooks.slack.com/services/YOUR/WEBHOOK/URL`
-- **Teams**: `https://outlook.office.com/webhook/YOUR-WEBHOOK-URL`
+**Built-in Setup Guide:**
+- Click "How to get a webhook URL?" below the URL field for step-by-step instructions
+- Pulse automatically detects and formats messages for Discord and Slack
+- Other services receive standard JSON payloads
+
+**Supported Services:**
+- **Discord** - Rich embeds with color coding
+- **Slack** - Formatted attachments
+- **Microsoft Teams** - Adaptive cards
+- **Home Assistant** - Trigger automations
+- **Any webhook endpoint** - Standard JSON format
+
+📖 **For detailed setup instructions, see [Webhook Setup Guide](docs/webhooks.md)**
 
 **Features:**
 - Rich embed formatting with color-coded severity levels

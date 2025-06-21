@@ -60,7 +60,7 @@ PulseApp.ui.dashboard = (() => {
         const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
         
         return `
-            <div class="${containerClass} h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
+            <div class="alert-threshold-input flex items-center" data-guest-id="${guestId}" data-metric="${metricType}">
                 ${sliderHtml}
             </div>
         `;
@@ -92,15 +92,8 @@ PulseApp.ui.dashboard = (() => {
             currentValue
         );
         
-        // Add alert-specific data attributes to the container and visual indicator for global values
-        const globalIndicator = isUsingGlobal ? ' data-using-global="true"' : '';
-        const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
-        
-        return `
-            <div class="${containerClass} h-5 leading-5" data-guest-id="${guestId}" data-metric="${metricType}"${globalIndicator}>
-                ${selectHtml}
-            </div>
-        `;
+        // Return just the select HTML without wrapper to match threshold styling
+        return selectHtml;
     }
 
     // Helper function to setup event listeners for alert sliders and dropdowns
@@ -1101,8 +1094,9 @@ PulseApp.ui.dashboard = (() => {
         if (!groupByNode && sortedData.length > VIRTUAL_SCROLL_THRESHOLD && PulseApp.virtualScroll) {
             const tableContainer = document.querySelector('.table-container');
             if (tableContainer && !virtualScroller) {
-                // Set fixed height for virtual scroll container
-                tableContainer.style.height = '600px';
+                // For virtual scrolling, use a much larger viewport or full viewport
+                // This maintains performance while showing more content
+                tableContainer.style.height = '90vh';
                 virtualScroller = PulseApp.virtualScroll.createVirtualScroller(
                     tableContainer,
                     sortedData,
@@ -1405,25 +1399,22 @@ PulseApp.ui.dashboard = (() => {
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
         
         if (isAlertsMode) {
-            // Apply alert-specific dimming with granular cell control
+            // Apply alert-specific dimming based on whether guest has custom settings
             const allGuestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
             const guestThresholds = allGuestThresholds[guest.id] || {};
             const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
             
-            if (!hasIndividualSettings) {
-                // Using only global alert values - dim the whole row
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-            } else {
-                // Has some individual settings - mark as mixed for later cell styling
+            // New behavior: Light up rows that have custom alert settings
+            if (hasIndividualSettings) {
+                // Light up rows with custom settings
                 row.style.opacity = '';
                 row.style.transition = '';
                 row.removeAttribute('data-alert-dimmed');
-                row.setAttribute('data-alert-mixed', 'true'); // Mark as having mixed values
-                
-                // Note: Cell styling will be applied after row HTML is complete
-                row.setAttribute('data-needs-cell-styling', JSON.stringify(guestThresholds));
+            } else {
+                // Dim rows using only default settings
+                row.style.opacity = '0.4';
+                row.style.transition = 'opacity 0.1s ease-out';
+                row.setAttribute('data-alert-dimmed', 'true');
             }
         } else if (guest.meetsThresholds === false) {
             // Apply threshold dimming (only when not in alerts mode)
@@ -1550,44 +1541,6 @@ PulseApp.ui.dashboard = (() => {
         // Setup event listeners for alert sliders and dropdowns
         if (isAlertsMode) {
             _setupAlertEventListeners(row);
-            
-            // Apply cell styling if this row needs it (mixed values)
-            if (row.hasAttribute('data-needs-cell-styling')) {
-                const guestThresholds = JSON.parse(row.getAttribute('data-needs-cell-styling'));
-                const cells = row.querySelectorAll('td');
-                
-                if (cells.length >= 11) {
-                    // Map metric types to cell indices
-                    const metricCells = {
-                        'cpu': cells[4], 'memory': cells[5], 'disk': cells[6],
-                        'diskread': cells[7], 'diskwrite': cells[8], 'netin': cells[9], 'netout': cells[10]
-                    };
-                    
-                    // Apply cell-specific opacity immediately
-                    Object.entries(metricCells).forEach(([metricType, cell]) => {
-                        if (!cell) return;
-                        const hasCustomValue = guestThresholds[metricType] !== undefined;
-                        cell.style.opacity = hasCustomValue ? '1' : '0.4';
-                        cell.style.transition = 'opacity 0.1s ease-out';
-                        if (hasCustomValue) {
-                            cell.setAttribute('data-alert-custom', 'true');
-                        } else {
-                            cell.removeAttribute('data-alert-custom');
-                        }
-                    });
-                    
-                    // Dim non-metric cells
-                    for (let i = 0; i < 4; i++) {
-                        if (cells[i]) {
-                            cells[i].style.opacity = '0.4';
-                            cells[i].style.transition = 'opacity 0.1s ease-out';
-                        }
-                    }
-                }
-                
-                // Clean up the temporary attribute
-                row.removeAttribute('data-needs-cell-styling');
-            }
         }
         
         return row;

@@ -165,9 +165,15 @@ PulseApp.utils = (() => {
                 return `${diffHours} hour${diffHours !== 1 ? 's' : ''} ago`;
             } else if (diffDays < 7) {
                 return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-            } else {
+            } else if (diffDays < 30) {
                 const diffWeeks = Math.floor(diffDays / 7);
                 return `${diffWeeks} week${diffWeeks !== 1 ? 's' : ''} ago`;
+            } else if (diffDays < 365) {
+                const diffMonths = Math.floor(diffDays / 30);
+                return `${diffMonths} month${diffMonths !== 1 ? 's' : ''} ago`;
+            } else {
+                const diffYears = Math.floor(diffDays / 365);
+                return `${diffYears} year${diffYears !== 1 ? 's' : ''} ago`;
             }
         } catch (e) {
             console.error("Error formatting PBS timestamp:", timestamp, e);
