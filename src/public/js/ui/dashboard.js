@@ -839,7 +839,25 @@ PulseApp.ui.dashboard = (() => {
             const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
             if (isAlertsMode && cpuCell.querySelector('.alert-threshold-input')) {
                 // Skip update if already has alert control to preserve event listeners
+            } else if (guest.status === STATUS_RUNNING) {
+                // Check if we already have the chart structure
+                const existingChartContainer = cpuCell.querySelector(`#chart-${guest.id}-cpu`);
+                const existingMetricText = cpuCell.querySelector('.metric-text');
+                
+                if (existingChartContainer && existingMetricText) {
+                    // Update only the progress bar, preserve the chart container
+                    const cpuPercent = Math.round(guest.cpu);
+                    const cpuFullText = guest.cpus ? `${(guest.cpu * guest.cpus / 100).toFixed(1)}/${guest.cpus} cores` : `${cpuPercent}%`;
+                    const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
+                    const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuFullText, cpuColorClass);
+                    existingMetricText.innerHTML = progressBar;
+                } else {
+                    // Create the initial structure
+                    const newCpuHTML = _createCpuBarHtml(guest);
+                    cpuCell.innerHTML = newCpuHTML;
+                }
             } else {
+                // Not running or alerts mode without existing control
                 const newCpuHTML = _createCpuBarHtml(guest);
                 if (cpuCell.innerHTML !== newCpuHTML) {
                     cpuCell.innerHTML = newCpuHTML;
@@ -850,7 +868,25 @@ PulseApp.ui.dashboard = (() => {
             const memCell = cells[5];
             if (isAlertsMode && memCell.querySelector('.alert-threshold-input')) {
                 // Skip update if already has alert control to preserve event listeners
+            } else if (guest.status === STATUS_RUNNING) {
+                // Check if we already have the chart structure
+                const existingChartContainer = memCell.querySelector(`#chart-${guest.id}-memory`);
+                const existingMetricText = memCell.querySelector('.metric-text');
+                
+                if (existingChartContainer && existingMetricText) {
+                    // Update only the progress bar, preserve the chart container
+                    const memoryPercent = guest.memory;
+                    const memoryFullText = `${PulseApp.utils.formatBytes(guest.memoryCurrent)} / ${PulseApp.utils.formatBytes(guest.memoryTotal)}`;
+                    const memColorClass = PulseApp.utils.getUsageColor(memoryPercent, 'memory');
+                    const progressBar = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryFullText, memColorClass);
+                    existingMetricText.innerHTML = progressBar;
+                } else {
+                    // Create the initial structure
+                    const newMemHTML = _createMemoryBarHtml(guest);
+                    memCell.innerHTML = newMemHTML;
+                }
             } else {
+                // Not running or alerts mode without existing control
                 const newMemHTML = _createMemoryBarHtml(guest);
                 if (memCell.innerHTML !== newMemHTML) {
                     memCell.innerHTML = newMemHTML;
@@ -861,7 +897,25 @@ PulseApp.ui.dashboard = (() => {
             const diskCell = cells[6];
             if (isAlertsMode && diskCell.querySelector('.alert-threshold-input')) {
                 // Skip update if already has alert control to preserve event listeners
+            } else if (guest.status === STATUS_RUNNING && guest.type === GUEST_TYPE_CT) {
+                // Check if we already have the chart structure
+                const existingChartContainer = diskCell.querySelector(`#chart-${guest.id}-disk`);
+                const existingMetricText = diskCell.querySelector('.metric-text');
+                
+                if (existingChartContainer && existingMetricText) {
+                    // Update only the progress bar, preserve the chart container
+                    const diskPercent = guest.disk;
+                    const diskFullText = guest.diskTotal ? `${PulseApp.utils.formatBytes(guest.diskCurrent)} / ${PulseApp.utils.formatBytes(guest.diskTotal)}` : `${diskPercent}%`;
+                    const diskColorClass = PulseApp.utils.getUsageColor(diskPercent, 'disk');
+                    const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskFullText, diskColorClass);
+                    existingMetricText.innerHTML = progressBar;
+                } else {
+                    // Create the initial structure
+                    const newDiskHTML = _createDiskBarHtml(guest);
+                    diskCell.innerHTML = newDiskHTML;
+                }
             } else {
+                // Not running, not CT, or alerts mode without existing control
                 const newDiskHTML = _createDiskBarHtml(guest);
                 if (diskCell.innerHTML !== newDiskHTML) {
                     diskCell.innerHTML = newDiskHTML;
@@ -896,10 +950,19 @@ PulseApp.ui.dashboard = (() => {
                     }
                 } else {
                     const diskReadFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskread, 0);
-                    newDiskReadHTML = PulseApp.charts ? 
-                        `<div class="metric-text">${diskReadFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'diskread')}</div>` :
-                        diskReadFormatted;
-                    if (diskReadCell.innerHTML !== newDiskReadHTML) {
+                    
+                    // Check if we already have the chart structure
+                    const existingChartContainer = diskReadCell.querySelector(`#chart-${guest.id}-diskread`);
+                    const existingMetricText = diskReadCell.querySelector('.metric-text');
+                    
+                    if (existingChartContainer && existingMetricText) {
+                        // Update only the metric text, preserve the chart container
+                        existingMetricText.innerHTML = diskReadFormatted;
+                    } else {
+                        // Create the initial structure
+                        newDiskReadHTML = PulseApp.charts ? 
+                            `<div class="metric-text">${diskReadFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.id, 'diskread')}</div>` :
+                            diskReadFormatted;
                         diskReadCell.innerHTML = newDiskReadHTML;
                     }
                 }
@@ -921,10 +984,19 @@ PulseApp.ui.dashboard = (() => {
                     }
                 } else {
                     const diskWriteFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskwrite, 0);
-                    newDiskWriteHTML = PulseApp.charts ? 
-                        `<div class="metric-text">${diskWriteFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'diskwrite')}</div>` :
-                        diskWriteFormatted;
-                    if (diskWriteCell.innerHTML !== newDiskWriteHTML) {
+                    
+                    // Check if we already have the chart structure
+                    const existingChartContainer = diskWriteCell.querySelector(`#chart-${guest.id}-diskwrite`);
+                    const existingMetricText = diskWriteCell.querySelector('.metric-text');
+                    
+                    if (existingChartContainer && existingMetricText) {
+                        // Update only the metric text, preserve the chart container
+                        existingMetricText.innerHTML = diskWriteFormatted;
+                    } else {
+                        // Create the initial structure
+                        newDiskWriteHTML = PulseApp.charts ? 
+                            `<div class="metric-text">${diskWriteFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.id, 'diskwrite')}</div>` :
+                            diskWriteFormatted;
                         diskWriteCell.innerHTML = newDiskWriteHTML;
                     }
                 }
@@ -946,10 +1018,19 @@ PulseApp.ui.dashboard = (() => {
                     }
                 } else {
                     const netInFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netin, 0);
-                    newNetInHTML = PulseApp.charts ? 
-                        `<div class="metric-text">${netInFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'netin')}</div>` :
-                        netInFormatted;
-                    if (netInCell.innerHTML !== newNetInHTML) {
+                    
+                    // Check if we already have the chart structure
+                    const existingChartContainer = netInCell.querySelector(`#chart-${guest.id}-netin`);
+                    const existingMetricText = netInCell.querySelector('.metric-text');
+                    
+                    if (existingChartContainer && existingMetricText) {
+                        // Update only the metric text, preserve the chart container
+                        existingMetricText.innerHTML = netInFormatted;
+                    } else {
+                        // Create the initial structure
+                        newNetInHTML = PulseApp.charts ? 
+                            `<div class="metric-text">${netInFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.id, 'netin')}</div>` :
+                            netInFormatted;
                         netInCell.innerHTML = newNetInHTML;
                     }
                 }
@@ -972,10 +1053,19 @@ PulseApp.ui.dashboard = (() => {
                         }
                     } else {
                         const netOutFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netout, 0);
-                        newNetOutHTML = PulseApp.charts ? 
-                            `<div class="metric-text">${netOutFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.uniqueId, 'netout')}</div>` :
-                            netOutFormatted;
-                        if (netOutCell.innerHTML !== newNetOutHTML) {
+                        
+                        // Check if we already have the chart structure
+                        const existingChartContainer = netOutCell.querySelector(`#chart-${guest.id}-netout`);
+                        const existingMetricText = netOutCell.querySelector('.metric-text');
+                        
+                        if (existingChartContainer && existingMetricText) {
+                            // Update only the metric text, preserve the chart container
+                            existingMetricText.innerHTML = netOutFormatted;
+                        } else {
+                            // Create the initial structure
+                            newNetOutHTML = PulseApp.charts ? 
+                                `<div class="metric-text">${netOutFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.id, 'netout')}</div>` :
+                                netOutFormatted;
                             netOutCell.innerHTML = newNetOutHTML;
                         }
                     }
@@ -1251,7 +1341,7 @@ PulseApp.ui.dashboard = (() => {
         const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuFullText, cpuColorClass);
         
         // Create both text and chart versions
-        const guestId = guest.uniqueId;
+        const guestId = guest.id;
         const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(guestId, 'cpu') : '';
         
         return `
@@ -1282,7 +1372,7 @@ PulseApp.ui.dashboard = (() => {
         const progressBar = PulseApp.utils.createProgressTextBarHTML(memoryPercent, memoryFullText, memColorClass);
         
         // Create both text and chart versions
-        const guestId = guest.uniqueId;
+        const guestId = guest.id;
         const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(guestId, 'memory') : '';
         
         return `
@@ -1314,7 +1404,7 @@ PulseApp.ui.dashboard = (() => {
             const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskFullText, diskColorClass);
             
             // Create both text and chart versions
-            const guestId = guest.uniqueId;
+            const guestId = guest.id;
             const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(guestId, 'disk') : '';
             
             return `
