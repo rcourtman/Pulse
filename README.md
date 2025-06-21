@@ -481,7 +481,7 @@ Using an API token is the recommended authentication method.
 1.  **Log in to the Proxmox VE web interface.**
 2.  **Create a dedicated user** (optional but recommended):
     *   Go to `Datacenter` → `Permissions` → `Users`.
-    *   Click `Add`. Enter a `User name` (e.g., "pulse-monitor"), set Realm to `Proxmox VE authentication server` (`pam`), set a password, ensure `Enabled`. Click `Add`.
+    *   Click `Add`. Enter a `User name` (e.g., "pulse-monitor"), set Realm to `Linux PAM standard authentication` (`pam`), set a password, ensure `Enabled`. Click `Add`.
 3.  **Create an API token:**
     *   Go to `Datacenter` → `Permissions` → `API Tokens`.
     *   Click `Add`.
