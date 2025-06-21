@@ -594,14 +594,11 @@ PulseApp.ui.backups = (() => {
                 });
             });
             
-            // Filter guests to only include those with backups in the selected namespace
-            // Note: We'll add PVE backup filtering after pveStorageBackups is defined
-            allGuests = allGuestsUnfiltered.filter(guest => {
-                const guestKey = `${guest.vmid}-${guest.node}`;
-                return guestNodeCombosInNamespace.has(guestKey);
-            });
+            // Don't filter guests yet - we need to check PVE backups too
+            // Keep all guests for now
+            allGuests = allGuestsUnfiltered;
             
-            } else {
+        } else {
             allGuests = allGuestsUnfiltered;
         }
 
@@ -2729,21 +2726,19 @@ PulseApp.ui.backups = (() => {
             
             // Create and display calendar heatmap with detail card
             if (calendarContainer && PulseApp.ui.calendarHeatmap && PulseApp.ui.backupDetailCard) {
-                // Apply namespace filtering to get the correct guest list for calendar
+                // For calendar, we want to show ALL guests with any backups
+                // The namespace filter should only affect which PBS backups are shown, not hide PVE/snapshot backups
                 let guestsForCalendar = filteredBackupStatus;
-                if (namespaceFilter !== 'all') {
-                    guestsForCalendar = filteredBackupStatus.filter(guestStatus => {
-                        // Only show guests that have backups in the selected namespace
-                        return guestStatus.totalBackups > 0;
-                    });
-                }
                 
-                // Get filtered guest IDs for calendar filtering - use unique guest identifiers
-                const filteredGuestIds = guestsForCalendar.map(guest => {
-                    // Create unique identifier including node/endpoint to handle guests with same vmid on different nodes
-                    const nodeIdentifier = guest.node || guest.endpointId || '';
-                    return nodeIdentifier ? `${guest.guestId}-${nodeIdentifier}` : guest.guestId.toString();
-                });
+                // Get all guest IDs that have any type of backup for calendar
+                // Don't filter by namespace here - let the calendar handle namespace filtering for PBS only
+                const filteredGuestIds = backupStatusByGuest
+                    .filter(guest => guest.totalBackups > 0)  // Any guest with backups
+                    .map(guest => {
+                        // Create unique identifier including node/endpoint to handle guests with same vmid on different nodes
+                        const nodeIdentifier = guest.node || guest.endpointId || '';
+                        return nodeIdentifier ? `${guest.guestId}-${nodeIdentifier}` : guest.guestId.toString();
+                    });
                 
                 
                 // Get detail card container
@@ -3753,6 +3748,63 @@ PulseApp.ui.backups = (() => {
         }
     }
 
+    // Debug function for console
+    window.debugBackups = function() {
+        const state = PulseApp.state;
+        const pveBackups = state.get('pveBackups');
+        const pbsData = state.get('pbsData');
+        
+        console.log('=== BACKUP DEBUG INFO ===');
+        console.log('Current Date:', new Date().toISOString());
+        console.log('Filters:', {
+            namespace: state.get('backupsFilterNamespace'),
+            backupType: state.get('backupsFilterBackupType')
+        });
+        
+        if (pveBackups && pveBackups.storageBackups) {
+            const backups = pveBackups.storageBackups;
+            console.log('\nPVE Backups:', backups.length);
+            
+            // Look for June 7th
+            const june7 = backups.filter(b => {
+                const d = new Date(b.ctime * 1000);
+                return d.getMonth() === 5 && d.getDate() === 7;
+            });
+            
+            if (june7.length > 0) {
+                console.log('\n🎯 June 7th backups found:');
+                june7.forEach(b => {
+                    const d = new Date(b.ctime * 1000);
+                    console.log(`VMID ${b.vmid}: ${d.toISOString()} (Year: ${d.getFullYear()})`);
+                });
+            }
+            
+            // Recent backups
+            console.log('\nMost recent 3:');
+            backups.sort((a,b) => b.ctime - a.ctime).slice(0,3).forEach(b => {
+                const d = new Date(b.ctime * 1000);
+                console.log(`VMID ${b.vmid}: ${d.toISOString()}`);
+            });
+        }
+        
+        // Check calendar
+        const currentMonth = document.querySelector('.calendar-month-container h3');
+        console.log('\nCalendar showing:', currentMonth ? currentMonth.textContent : 'Not found');
+        
+        const june7Cell = document.querySelector('[data-date="2024-06-07"]');
+        if (june7Cell) {
+            console.log('June 7 2024 cell:', {
+                found: true,
+                highlighted: june7Cell.classList.contains('bg-orange-500'),
+                classes: june7Cell.className
+            });
+        } else {
+            console.log('June 7 2024 cell: Not in current view');
+        }
+        
+        return 'Debug complete - check console output';
+    };
+    
     return {
         init,
         updateBackupsTab,
