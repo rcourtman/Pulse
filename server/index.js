@@ -427,28 +427,8 @@ app.post('/api/alerts/test-email', async (req, res) => {
     try {
         console.log('[Test Email] Sending test email...');
         
-        // Get email configuration from process.env (loaded by configLoader)
-        const config = {
-            ALERT_TO_EMAIL: process.env.ALERT_TO_EMAIL,
-            ALERT_FROM_EMAIL: process.env.ALERT_FROM_EMAIL,
-            SMTP_HOST: process.env.SMTP_HOST,
-            SMTP_PORT: process.env.SMTP_PORT,
-            SMTP_USER: process.env.SMTP_USER,
-            SMTP_SECURE: process.env.SMTP_SECURE
-        };
-        
-        console.log('[Test Email] Config loaded, ALERT_TO_EMAIL:', config.ALERT_TO_EMAIL);
-        
-        if (!config.ALERT_TO_EMAIL) {
-            return res.status(400).json({ success: false, error: 'No recipient email address configured' });
-        }
-        
-        if (!config.SMTP_HOST) {
-            return res.status(400).json({ success: false, error: 'SMTP server not configured' });
-        }
-        
-        // Use the alert manager to send a test email with the config
-        const testResult = await stateManager.alertManager.sendTestEmailWithConfig(config);
+        // Use the unified sendTestEmail method without custom config (uses existing transporter)
+        const testResult = await stateManager.alertManager.sendTestEmail();
         
         if (testResult.success) {
             console.log('[Test Email] Test email sent successfully');
@@ -1186,101 +1166,30 @@ app.post('/api/test-email', async (req, res) => {
     try {
         const { host, port, user, pass, from, to, secure } = req.body;
         
-        if (!host || !port || !user || !pass || !from || !to) {
-            return res.status(400).json({
+        // Use the unified sendTestEmail method with custom config
+        const testResult = await stateManager.alertManager.sendTestEmail({
+            host, port, user, pass, from, to, secure
+        });
+        
+        if (testResult.success) {
+            console.log(`[EMAIL TEST] Test email sent successfully to: ${to}`);
+            res.json({
+                success: true,
+                message: 'Test email sent successfully!'
+            });
+        } else {
+            console.error('[EMAIL TEST] Failed to send test email:', testResult.error);
+            res.status(400).json({
                 success: false,
-                error: 'All email fields are required for testing'
+                error: testResult.error || 'Failed to send test email'
             });
         }
         
-        // Create a temporary transporter for testing
-        const nodemailer = require('nodemailer');
-        const testTransporter = nodemailer.createTransport({
-            host: host,
-            port: parseInt(port),
-            secure: secure === true, // true for 465, false for other ports
-            requireTLS: true, // Force TLS encryption
-            auth: {
-                user: user,
-                pass: pass
-            },
-            tls: {
-                // Do not fail on invalid certs for testing
-                rejectUnauthorized: false
-            }
-        });
-        
-        // Send test email
-        const testMailOptions = {
-            from: from,
-            to: to,
-            subject: '🧪 Pulse Email Test - Configuration Successful',
-            text: `
-This is a test email from your Pulse monitoring system.
-
-If you received this email, your SMTP configuration is working correctly!
-
-Configuration used:
-- SMTP Host: ${host}
-- SMTP Port: ${port}
-- Secure: ${secure ? 'Yes' : 'No'}
-- From: ${from}
-- To: ${to}
-
-You will now receive alert notifications when VMs/LXCs exceed their configured thresholds.
-
-Best regards,
-Pulse Monitoring System
-            `,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: #059669; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-                        <h1 style="margin: 0; font-size: 24px;">🧪 Pulse Email Test</h1>
-                        <p style="margin: 5px 0 0 0; opacity: 0.9;">Configuration Successful!</p>
-                    </div>
-                    
-                    <div style="background: #f0fdf4; padding: 20px; border-left: 4px solid #059669;">
-                        <p style="margin: 0 0 15px 0; color: #065f46;">
-                            <strong>Congratulations!</strong> If you received this email, your SMTP configuration is working correctly.
-                        </p>
-                        
-                        <h3 style="color: #065f46; margin: 15px 0 10px 0;">Configuration Details:</h3>
-                        <ul style="color: #047857; margin: 0; padding-left: 20px;">
-                            <li><strong>SMTP Host:</strong> ${host}</li>
-                            <li><strong>SMTP Port:</strong> ${port}</li>
-                            <li><strong>Secure:</strong> ${secure ? 'Yes (SSL/TLS)' : 'No (STARTTLS)'}</li>
-                            <li><strong>From Address:</strong> ${from}</li>
-                            <li><strong>To Address:</strong> ${to}</li>
-                        </ul>
-                        
-                        <p style="margin: 15px 0 0 0; color: #065f46;">
-                            You will now receive alert notifications when VMs/LXCs exceed their configured thresholds.
-                        </p>
-                    </div>
-                    
-                    <div style="background: white; padding: 20px; border-radius: 0 0 8px 8px; border-top: 1px solid #d1fae5;">
-                        <p style="margin: 0; color: #6b7280; font-size: 12px; text-align: center;">
-                            This test email was sent by your Pulse monitoring system.
-                        </p>
-                    </div>
-                </div>
-            `
-        };
-        
-        await testTransporter.sendMail(testMailOptions);
-        testTransporter.close();
-        
-        console.log(`[EMAIL TEST] Test email sent successfully to: ${to}`);
-        res.json({
-            success: true,
-            message: 'Test email sent successfully!'
-        });
-        
     } catch (error) {
-        console.error('[EMAIL TEST] Failed to send test email:', error);
-        res.status(400).json({
+        console.error('[EMAIL TEST] Error sending test email:', error);
+        res.status(500).json({
             success: false,
-            error: error.message || 'Failed to send test email'
+            error: 'Internal server error while sending test email'
         });
     }
 });
