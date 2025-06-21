@@ -1485,6 +1485,59 @@ app.post('/api/test-webhook', async (req, res) => {
     }
 });
 
+
+// Get webhook status and configuration
+app.get('/api/webhook-status', (req, res) => {
+    try {
+        const alertManager = stateManager.alertManager;
+        const webhookEnabled = process.env.GLOBAL_WEBHOOK_ENABLED === 'true';
+        const webhookUrl = process.env.WEBHOOK_URL;
+        
+        // Get cooldown information
+        const cooldownConfig = alertManager.webhookCooldownConfig;
+        const activeCooldowns = [];
+        
+        for (const [key, info] of alertManager.webhookCooldowns) {
+            if (info.cooldownUntil && info.cooldownUntil > Date.now()) {
+                activeCooldowns.push({
+                    key,
+                    cooldownUntil: new Date(info.cooldownUntil).toISOString(),
+                    remainingMinutes: Math.ceil((info.cooldownUntil - Date.now()) / 60000),
+                    lastSent: info.lastSent ? new Date(info.lastSent).toISOString() : null
+                });
+            }
+        }
+        
+        // Get recent webhook notifications
+        const recentWebhooks = [];
+        for (const [alertId, status] of alertManager.notificationStatus) {
+            if (status.webhookSent) {
+                recentWebhooks.push({
+                    alertId,
+                    sentAt: new Date(status.timestamp || Date.now()).toISOString(),
+                    channels: status.channels
+                });
+            }
+        }
+        
+        res.json({
+            enabled: webhookEnabled,
+            configured: !!webhookUrl,
+            url: webhookUrl ? webhookUrl.replace(/\/[^\/]+$/, '/***') : null, // Hide token part
+            cooldownConfig,
+            activeCooldowns,
+            recentWebhooks: recentWebhooks.slice(0, 10),
+            totalWebhooksSent: recentWebhooks.length
+        });
+    } catch (error) {
+        console.error('[WEBHOOK STATUS] Failed to get status:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 // Global error handler for unhandled API errors
 app.use((err, req, res, next) => {
     console.error('Unhandled API error:', err);
