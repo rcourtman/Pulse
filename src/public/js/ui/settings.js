@@ -444,8 +444,8 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderNotificationsTab(config) {
-        const emailEnabled = config.ALERT_EMAIL_ENABLED !== false && config.GLOBAL_EMAIL_ENABLED !== false;
-        const webhookEnabled = config.ALERT_WEBHOOK_ENABLED !== false && config.GLOBAL_WEBHOOK_ENABLED !== false;
+        const emailEnabled = config.GLOBAL_EMAIL_ENABLED !== 'false' && config.GLOBAL_EMAIL_ENABLED !== false;
+        const webhookEnabled = config.GLOBAL_WEBHOOK_ENABLED !== 'false' && config.GLOBAL_WEBHOOK_ENABLED !== false;
         
         return `
             <!-- Global Notification Controls -->
@@ -459,7 +459,7 @@ PulseApp.ui.settings = (() => {
                         <div class="flex items-center gap-3">
                             <span class="text-sm text-gray-700 dark:text-gray-300">Email Notifications</span>
                             <label for="global-email-toggle" class="relative inline-flex items-center cursor-pointer focus:outline-none">
-                                <input type="checkbox" id="global-email-toggle" name="ALERTS_EMAIL_ENABLED" value="true"
+                                <input type="checkbox" id="global-email-toggle" name="GLOBAL_EMAIL_ENABLED" value="true"
                                        ${emailEnabled ? 'checked' : ''}
                                        class="sr-only peer focus:outline-none"
                                        onchange="PulseApp.ui.settings.handleGlobalEmailToggle(this.checked)">
@@ -469,7 +469,7 @@ PulseApp.ui.settings = (() => {
                         <div class="flex items-center gap-3">
                             <span class="text-sm text-gray-700 dark:text-gray-300">Webhook Notifications</span>
                             <label for="global-webhook-toggle" class="relative inline-flex items-center cursor-pointer focus:outline-none">
-                                <input type="checkbox" id="global-webhook-toggle" name="ALERTS_WEBHOOK_ENABLED" value="true"
+                                <input type="checkbox" id="global-webhook-toggle" name="GLOBAL_WEBHOOK_ENABLED" value="true"
                                        ${webhookEnabled ? 'checked' : ''}
                                        class="sr-only peer focus:outline-none"
                                        onchange="PulseApp.ui.settings.handleGlobalWebhookToggle(this.checked)">
@@ -575,16 +575,70 @@ PulseApp.ui.settings = (() => {
 
             <!-- Webhook Configuration -->
             <div id="webhook-config-section" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 ${!webhookEnabled ? 'opacity-50 pointer-events-none' : ''}">
-                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Webhook Configuration</h4>
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Webhook Configuration</h4>
+                    <span id="webhook-status-indicator" class="text-xs"></span>
+                </div>
                 <div class="space-y-3">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Webhook URL</label>
                         <input type="url" name="WEBHOOK_URL" 
+                               id="webhook-url-input"
                                value="${config.WEBHOOK_URL || ''}"
-                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
-                               placeholder="https://hooks.slack.com/services/...">
+                               class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" 
+                               placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/..."
+                               oninput="PulseApp.ui.settings.updateWebhookStatus()">
+                        <div class="mt-2 text-xs text-gray-600 dark:text-gray-400">
+                            <details class="cursor-pointer">
+                                <summary class="hover:text-gray-800 dark:hover:text-gray-200">
+                                    <i class="fas fa-question-circle"></i> How to get a webhook URL?
+                                </summary>
+                                <div class="mt-2 space-y-3 bg-gray-50 dark:bg-gray-800 p-3 rounded-md">
+                                    <div>
+                                        <strong class="text-gray-700 dark:text-gray-300">Discord:</strong>
+                                        <ol class="ml-4 mt-1 text-xs space-y-1">
+                                            <li>1. Go to Server Settings → Integrations → Webhooks</li>
+                                            <li>2. Click "New Webhook"</li>
+                                            <li>3. Copy the Webhook URL</li>
+                                        </ol>
+                                    </div>
+                                    <div>
+                                        <strong class="text-gray-700 dark:text-gray-300">Slack:</strong>
+                                        <ol class="ml-4 mt-1 text-xs space-y-1">
+                                            <li>1. Go to your Slack workspace → Apps</li>
+                                            <li>2. Search for "Incoming Webhooks"</li>
+                                            <li>3. Add to channel and copy the URL</li>
+                                        </ol>
+                                    </div>
+                                    <div>
+                                        <strong class="text-gray-700 dark:text-gray-300">Home Assistant:</strong>
+                                        <ol class="ml-4 mt-1 text-xs space-y-1">
+                                            <li>1. Go to Settings → Automations</li>
+                                            <li>2. Create automation with "Webhook" trigger</li>
+                                            <li>3. Copy the webhook URL</li>
+                                        </ol>
+                                    </div>
+                                    <div>
+                                        <strong class="text-gray-700 dark:text-gray-300">Microsoft Teams:</strong>
+                                        <ol class="ml-4 mt-1 text-xs space-y-1">
+                                            <li>1. Right-click channel → Connectors</li>
+                                            <li>2. Configure "Incoming Webhook"</li>
+                                            <li>3. Copy the webhook URL</li>
+                                        </ol>
+                                    </div>
+                                    <div class="pt-2 border-t border-gray-200 dark:border-gray-600">
+                                        <p class="text-xs">
+                                            <i class="fas fa-info-circle text-blue-500"></i>
+                                            Pulse automatically formats messages for Discord and Slack.
+                                            Other services receive standard JSON payloads.
+                                        </p>
+                                    </div>
+                                </div>
+                            </details>
+                        </div>
                     </div>
-                    <div class="flex justify-end pt-3 border-t border-gray-200 dark:border-gray-700">
+                    <div class="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <span id="webhook-cooldown-info" class="text-xs text-gray-600 dark:text-gray-400"></span>
                         <button type="button" id="test-webhook-btn" 
                                 onclick="PulseApp.ui.settings.testWebhookConfiguration()"
                                 class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-md transition-colors">
@@ -3585,6 +3639,9 @@ PulseApp.ui.settings = (() => {
             }
         }
         
+        // Update webhook status indicator
+        setTimeout(() => updateWebhookStatus(), 100);
+        
         // Update alert mode notification status if alerts module is available
         if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
             PulseApp.ui.alerts.updateNotificationStatus();
@@ -3626,30 +3683,93 @@ PulseApp.ui.settings = (() => {
     }
 
     async function testWebhookConfiguration() {
+        console.log('[Settings] Testing webhook configuration...');
         const formData = collectFormData();
         const testButton = document.getElementById('test-webhook-btn');
         
-        if (!testButton) return;
+        if (!testButton) {
+            console.error('[Settings] Test button not found');
+            return;
+        }
         
         const originalText = testButton.textContent;
         testButton.disabled = true;
         testButton.textContent = 'Testing...';
         
         try {
+            // First check webhook status
+            console.log('[Settings] Checking webhook status...');
+            const statusResponse = await PulseApp.apiClient.get('/api/webhook-status');
+            console.log('[Settings] Webhook status:', statusResponse);
+            
+            if (!statusResponse.enabled) {
+                showMessage('⚠️ Webhooks are globally disabled. Set GLOBAL_WEBHOOK_ENABLED=true in your environment.', 'warning');
+                testButton.disabled = false;
+                testButton.textContent = originalText;
+                return;
+            }
+            
+            if (!formData.WEBHOOK_URL) {
+                showMessage('Please enter a webhook URL', 'error');
+                testButton.disabled = false;
+                testButton.textContent = originalText;
+                return;
+            }
+            
+            // Send test webhook
+            console.log('[Settings] Sending test webhook to:', formData.WEBHOOK_URL);
             const response = await PulseApp.apiClient.post('/api/test-webhook', {
                 url: formData.WEBHOOK_URL
             });
+            console.log('[Settings] Test webhook response:', response);
             
             if (response.success) {
-                showMessage('Webhook test sent successfully!', 'success');
+                showMessage('✅ Webhook test sent successfully!', 'success');
+                
+                // Show additional status info if there are cooldowns
+                if (statusResponse.activeCooldowns && statusResponse.activeCooldowns.length > 0) {
+                    const cooldown = statusResponse.activeCooldowns[0];
+                    showMessage(`ℹ️ Note: Some alerts may be on cooldown for ${cooldown.remainingMinutes} more minutes`, 'info');
+                }
             } else {
-                showMessage(`Webhook test failed: ${response.error}`, 'error');
+                showMessage(`❌ Webhook test failed: ${response.error}`, 'error');
             }
         } catch (error) {
+            console.error('[Settings] Test webhook error:', error);
             PulseApp.apiClient.handleError(error, 'Test webhook', showMessage);
         } finally {
             testButton.disabled = false;
             testButton.textContent = originalText;
+        }
+    }
+    
+    async function updateWebhookStatus() {
+        try {
+            const statusResponse = await PulseApp.apiClient.get('/api/webhook-status');
+            const statusIndicator = document.getElementById('webhook-status-indicator');
+            const cooldownInfo = document.getElementById('webhook-cooldown-info');
+            
+            if (!statusIndicator) return;
+            
+            if (!statusResponse.enabled) {
+                statusIndicator.innerHTML = '<span class="text-red-600 dark:text-red-400">🔴 Disabled</span>';
+                if (cooldownInfo) cooldownInfo.textContent = 'Webhooks are globally disabled';
+            } else if (statusResponse.configured) {
+                statusIndicator.innerHTML = '<span class="text-green-600 dark:text-green-400">🟢 Enabled</span>';
+                
+                // Show cooldown info if any
+                if (cooldownInfo && statusResponse.activeCooldowns && statusResponse.activeCooldowns.length > 0) {
+                    const cooldown = statusResponse.activeCooldowns[0];
+                    cooldownInfo.textContent = `Cooldown active: ${cooldown.remainingMinutes}m remaining`;
+                } else if (cooldownInfo) {
+                    cooldownInfo.textContent = `Cooldown: ${statusResponse.cooldownConfig.defaultCooldownMinutes}m between alerts`;
+                }
+            } else {
+                statusIndicator.innerHTML = '<span class="text-yellow-600 dark:text-yellow-400">🟡 Not configured</span>';
+                if (cooldownInfo) cooldownInfo.textContent = '';
+            }
+        } catch (error) {
+            console.error('Failed to update webhook status:', error);
         }
     }
     
@@ -3678,7 +3798,8 @@ PulseApp.ui.settings = (() => {
         handleGlobalEmailToggle,
         handleGlobalWebhookToggle,
         testEmailConfiguration,
-        testWebhookConfiguration
+        testWebhookConfiguration,
+        updateWebhookStatus
     };
 })();
 
