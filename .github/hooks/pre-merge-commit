@@ -1,0 +1,41 @@
+#!/bin/bash
+# Pre-merge hook to prevent accidentally merging main into develop
+# This hook runs before a merge commit is made
+
+# Get the current branch
+CURRENT_BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+# Get the branch being merged from MERGE_HEAD
+if [ -f .git/MERGE_HEAD ]; then
+    MERGE_BRANCH=$(git name-rev --name-only MERGE_HEAD 2>/dev/null | sed 's/remotes\/origin\///')
+else
+    # If no MERGE_HEAD, we're not in a merge
+    exit 0
+fi
+
+# Prevent merging main into develop
+if [ "$CURRENT_BRANCH" = "develop" ] && [[ "$MERGE_BRANCH" == *"main"* ]]; then
+    echo "❌ ERROR: Attempting to merge 'main' into 'develop'"
+    echo ""
+    echo "This is usually a mistake. The correct flow is:"
+    echo "  • Merge develop → main (when releasing)"
+    echo "  • Only merge main → develop if main has hotfixes that develop needs"
+    echo ""
+    echo "If you really need to do this merge, you can:"
+    echo "  1. Use --no-verify flag: git merge main --no-verify"
+    echo "  2. Or temporarily disable this hook: mv .git/hooks/pre-merge-commit .git/hooks/pre-merge-commit.disabled"
+    echo ""
+    echo "But first, make sure main is up-to-date with:"
+    echo "  git log --oneline --graph --decorate main..develop"
+    echo ""
+    exit 1
+fi
+
+# Also warn about other potentially problematic merges
+if [ "$CURRENT_BRANCH" = "develop" ] && [[ "$MERGE_BRANCH" == *"master"* ]]; then
+    echo "⚠️  WARNING: Merging 'master' into 'develop'"
+    echo "Make sure this is intentional!"
+    echo ""
+fi
+
+exit 0
