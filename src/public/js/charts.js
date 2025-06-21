@@ -243,12 +243,6 @@ PulseApp.charts = (() => {
             
             // Observe for visibility tracking
             observeChartVisibility(container);
-            
-            // Add transition after initial render
-            requestAnimationFrame(() => {
-                path.style.transition = 'all 0.2s ease-out';
-                area.style.transition = 'all 0.2s ease-out';
-            });
         }
 
         // Update the chart with new color
@@ -419,16 +413,9 @@ PulseApp.charts = (() => {
             overlay._maxValue = maxValue;
         }
 
-        // Update paths with smooth animation
-        if (isNewChart) {
-            path.setAttribute('d', lineData);
-            if (area) area.setAttribute('d', areaData);
-        } else {
-            requestAnimationFrame(() => {
-                path.setAttribute('d', lineData);
-                if (area) area.setAttribute('d', areaData);
-            });
-        }
+        // Update paths immediately to prevent blinking
+        path.setAttribute('d', lineData);
+        if (area) area.setAttribute('d', areaData);
     }
 
     function updateAxisLabels(svg, minValue, maxValue, config, metric) {
