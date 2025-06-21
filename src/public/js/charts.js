@@ -131,10 +131,6 @@ PulseApp.charts = (() => {
     // Visibility tracking for charts
     let visibleCharts = new Set();
     let visibilityObserver = null;
-    
-    // Debounce timer for chart updates
-    let updateDebounceTimer = null;
-    const UPDATE_DEBOUNCE_DELAY = 100; // 100ms debounce
 
     function formatValue(value, metric) {
         if (metric === 'cpu' || metric === 'memory' || metric === 'disk') {
@@ -515,15 +511,8 @@ PulseApp.charts = (() => {
     function updateAllCharts() {
         if (!chartDataCache) return;
         
-        // Debounce rapid updates
-        if (updateDebounceTimer) {
-            clearTimeout(updateDebounceTimer);
-        }
-        
-        updateDebounceTimer = setTimeout(() => {
-            // Batch updates using requestAnimationFrame
-            scheduleChartUpdates();
-        }, UPDATE_DEBOUNCE_DELAY);
+        // Batch updates using requestAnimationFrame immediately
+        scheduleChartUpdates();
     }
     
     function scheduleChartUpdates() {
