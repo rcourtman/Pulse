@@ -50,9 +50,6 @@ PulseApp.ui.settings = (() => {
 
         // Set up tab navigation
         setupTabNavigation();
-        
-        // Set up experimental features
-        setupExperimentalFeatures();
 
         isInitialized = true;
     }
@@ -69,37 +66,6 @@ PulseApp.ui.settings = (() => {
         });
     }
     
-    function setupExperimentalFeatures() {
-        const refactoredBackupsToggle = document.getElementById('feature-refactored-backups');
-        if (refactoredBackupsToggle) {
-            // Set initial state from feature flags
-            refactoredBackupsToggle.checked = PulseApp.config?.featureFlags?.useRefactoredBackups || false;
-            
-            // Handle toggle changes
-            refactoredBackupsToggle.addEventListener('change', (e) => {
-                const enabled = e.target.checked;
-                if (PulseApp.config?.featureFlags) {
-                    PulseApp.config.featureFlags.toggleFeature('useRefactoredBackups', enabled);
-                    
-                    // Show notification
-                    PulseApp.toastNotification?.show(
-                        enabled ? 'Refactored backup system enabled' : 'Original backup system restored',
-                        'info',
-                        3000
-                    );
-                    
-                    // Reload backup data with new system
-                    setTimeout(() => {
-                        if (enabled) {
-                            PulseApp.ui.backupsRefactored?.loadBackupData?.();
-                        } else {
-                            PulseApp.ui.backups?.updateBackupsTab?.();
-                        }
-                    }, 500);
-                }
-            });
-        }
-    }
 
     async function switchTab(tabName) {
         // Preserve current form data before switching tabs
