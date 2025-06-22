@@ -44,6 +44,28 @@ PulseApp.ui.backups = (() => {
     // Row tracking for incremental updates
     const rowTracker = new Map(); // Maps guestId to row element
     
+    // Helper function to parse namespace filter value
+    function _parseNamespaceFilter(namespaceFilter) {
+        if (!namespaceFilter || namespaceFilter === 'all') {
+            return { targetPbsIndex: null, targetNamespace: 'all' };
+        }
+        
+        // Check if filter includes PBS instance prefix (format: "index:namespace")
+        if (namespaceFilter.includes(':')) {
+            const parts = namespaceFilter.split(':');
+            return {
+                targetPbsIndex: parseInt(parts[0], 10),
+                targetNamespace: parts[1]
+            };
+        }
+        
+        // Simple namespace without PBS prefix
+        return {
+            targetPbsIndex: null,
+            targetNamespace: namespaceFilter
+        };
+    }
+    
     // Initialize DOM cache
     function _initDomCache() {
         domCache.tableBody = document.getElementById('backups-overview-tbody');
@@ -430,15 +452,24 @@ PulseApp.ui.backups = (() => {
         
         // If a specific namespace is selected, filter backup tasks using guest+node matching
         if (namespaceFilter !== 'all') {
+            // Parse namespace filter to check if it includes PBS instance prefix
+            const { targetPbsIndex, targetNamespace } = _parseNamespaceFilter(namespaceFilter);
+            
             // Populate guest+node combinations that have backups in the selected namespace
-            filteredPbsDataArray.forEach(pbsInstance => {
+            filteredPbsDataArray.forEach((pbsInstance, currentIndex) => {
+                // If targeting specific PBS instance, skip others
+                const pbsArrayIndex = pbsDataArray.indexOf(pbsInstance);
+                if (targetPbsIndex !== null && pbsArrayIndex !== targetPbsIndex) {
+                    return;
+                }
+                
                 (pbsInstance.datastores || []).forEach(ds => {
                     (ds.snapshots || []).forEach(snap => {
                         // Handle namespace comparison - normalize variations of root namespace
                         const snapNamespace = snap.namespace || 'root';
                         // Root namespace can be represented as null, undefined, '', or 'root'
                         const normalizedSnapNamespace = (!snapNamespace || snapNamespace === '' || snapNamespace === 'root') ? 'root' : snapNamespace;
-                        const normalizedFilterNamespace = (!namespaceFilter || namespaceFilter === '' || namespaceFilter === 'root') ? 'root' : namespaceFilter;
+                        const normalizedFilterNamespace = (!targetNamespace || targetNamespace === '' || targetNamespace === 'root') ? 'root' : targetNamespace;
                         if (normalizedSnapNamespace === normalizedFilterNamespace) {
                             const guestId = snap['backup-id'];
                             const owner = snap.owner || '';
@@ -537,14 +568,21 @@ PulseApp.ui.backups = (() => {
         
         // Filter PBS snapshots by namespace if a specific namespace is selected
         if (namespaceFilter !== 'all') {
-            
+            // Parse namespace filter to check if it includes PBS instance prefix
+            const { targetPbsIndex, targetNamespace } = _parseNamespaceFilter(namespaceFilter);
             
             pbsSnapshots = pbsSnapshots.filter(snap => {
+                // Check PBS instance if specified
+                if (targetPbsIndex !== null) {
+                    const snapPbsIndex = pbsDataArray.findIndex(pbs => pbs.pbsInstanceName === snap.pbsInstanceName);
+                    if (snapPbsIndex !== targetPbsIndex) return false;
+                }
+                
                 // Handle namespace comparison - normalize variations of root namespace
                 const snapNamespace = snap.namespace || 'root';
                 // Root namespace can be represented as null, undefined, '', or 'root'
                 const normalizedSnapNamespace = (!snapNamespace || snapNamespace === '' || snapNamespace === 'root') ? 'root' : snapNamespace;
-                const normalizedFilterNamespace = (!namespaceFilter || namespaceFilter === '' || namespaceFilter === 'root') ? 'root' : namespaceFilter;
+                const normalizedFilterNamespace = (!targetNamespace || targetNamespace === '' || targetNamespace === 'root') ? 'root' : targetNamespace;
                 const matches = normalizedSnapNamespace === normalizedFilterNamespace;
                 return matches;
             });
@@ -2972,10 +3010,19 @@ PulseApp.ui.backups = (() => {
                 (pbsInstance.datastores || []).flatMap(ds =>
                     (ds.snapshots || [])
                         .filter(snap => {
+                            // Parse namespace filter
+                            const { targetPbsIndex, targetNamespace } = _parseNamespaceFilter(namespaceFilter);
+                            
+                            // Check PBS instance if specified
+                            if (targetPbsIndex !== null) {
+                                const pbsIndex = pbsDataArray.findIndex(pbs => pbs.pbsInstanceName === pbsInstance.pbsInstanceName);
+                                if (pbsIndex !== targetPbsIndex) return false;
+                            }
+                            
                             // Normalize namespace - root can be represented as null, undefined, '', or 'root'
                             const snapNamespace = snap.namespace || 'root';
                             const normalizedSnapNamespace = (!snapNamespace || snapNamespace === '' || snapNamespace === 'root') ? 'root' : snapNamespace;
-                            const normalizedFilterNamespace = (!namespaceFilter || namespaceFilter === '' || namespaceFilter === 'root') ? 'root' : namespaceFilter;
+                            const normalizedFilterNamespace = (!targetNamespace || targetNamespace === '' || targetNamespace === 'root') ? 'root' : targetNamespace;
                             return normalizedSnapNamespace === normalizedFilterNamespace;
                         })
                         .map(snap => {
@@ -3787,9 +3834,20 @@ PulseApp.ui.backups = (() => {
                 
                 // Apply namespace filter for PBS snapshots
                 if (namespaceFilter !== 'all') {
+                    const { targetPbsIndex, targetNamespace } = _parseNamespaceFilter(namespaceFilter);
+                    
+                    // Check PBS instance if specified
+                    if (targetPbsIndex !== null) {
+                        const snapPbsInstance = snap.pbsInstanceName || '';
+                        const pbsIndex = backupData.pbsDataArray?.findIndex(pbs => pbs.pbsInstanceName === snapPbsInstance) || -1;
+                        if (pbsIndex !== targetPbsIndex) {
+                            return;
+                        }
+                    }
+                    
                     const snapNamespace = snap.namespace || 'root';
                     const normalizedSnapNamespace = (!snapNamespace || snapNamespace === '' || snapNamespace === 'root') ? 'root' : snapNamespace;
-                    const normalizedFilterNamespace = (!namespaceFilter || namespaceFilter === '' || namespaceFilter === 'root') ? 'root' : namespaceFilter;
+                    const normalizedFilterNamespace = (!targetNamespace || targetNamespace === '' || targetNamespace === 'root') ? 'root' : targetNamespace;
                     if (normalizedSnapNamespace !== normalizedFilterNamespace) {
                         // Skip this snapshot as it doesn't match the namespace filter
                         return;
@@ -4234,15 +4292,18 @@ PulseApp.ui.backups = (() => {
         
         if (!namespaceFilter || !filterGroup) return;
         
-        // Add change listener
-        namespaceFilter.addEventListener('change', () => {
+        // Create debounced update function to prevent rapid updates
+        const debouncedNamespaceUpdate = PulseApp.utils.debounce(() => {
             PulseApp.state.set('backupsFilterNamespace', namespaceFilter.value);
             // Clear calendar cache when namespace changes
             if (PulseApp.ui.calendarHeatmap && PulseApp.ui.calendarHeatmap.clearCache) {
                 PulseApp.ui.calendarHeatmap.clearCache();
             }
             updateBackupsTab(true);
-        });
+        }, 300); // 300ms delay
+        
+        // Add change listener
+        namespaceFilter.addEventListener('change', debouncedNamespaceUpdate);
         
         // Update namespace options when PBS data changes
         // Note: Using state change tracking instead of eventBus
@@ -4271,14 +4332,19 @@ PulseApp.ui.backups = (() => {
         
         const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
         const selectedPbsInstance = pbsInstanceFilter ? pbsInstanceFilter.value : 'all';
-        const namespaces = new Set(); // Don't pre-add root
+        
+        // Collect namespaces grouped by PBS instance
+        const namespacesByInstance = new Map();
         
         // Collect namespaces from PBS data based on selected instance
         const instancesToCheck = selectedPbsInstance === 'all' 
             ? pbsDataArray 
             : pbsDataArray.filter((_, index) => index.toString() === selectedPbsInstance);
             
-        instancesToCheck.forEach(pbsInstance => {
+        instancesToCheck.forEach((pbsInstance, globalIndex) => {
+            const instanceName = pbsInstance.pbsInstanceName || `PBS Instance ${pbsDataArray.indexOf(pbsInstance) + 1}`;
+            const instanceNamespaces = new Set();
+            
             if (pbsInstance.datastores) {
                 pbsInstance.datastores.forEach(ds => {
                     if (ds.snapshots) {
@@ -4286,9 +4352,20 @@ PulseApp.ui.backups = (() => {
                             // Normalize namespace - treat '', null, undefined as 'root'
                             const namespace = snap.namespace || '';
                             const normalizedNamespace = (!namespace || namespace === '') ? 'root' : namespace;
-                            namespaces.add(normalizedNamespace);
+                            instanceNamespaces.add(normalizedNamespace);
                         });
                     }
+                });
+            }
+            
+            if (instanceNamespaces.size > 0) {
+                namespacesByInstance.set(instanceName, {
+                    index: pbsDataArray.indexOf(pbsInstance),
+                    namespaces: Array.from(instanceNamespaces).sort((a, b) => {
+                        if (a === 'root') return -1;
+                        if (b === 'root') return 1;
+                        return a.localeCompare(b);
+                    })
                 });
             }
         });
@@ -4297,22 +4374,48 @@ PulseApp.ui.backups = (() => {
         const currentValue = namespaceFilter.value || 'all';
         namespaceFilter.innerHTML = '<option value="all">All Namespaces</option>';
         
-        // Sort namespaces with root first
-        const sortedNamespaces = Array.from(namespaces).sort((a, b) => {
-            if (a === 'root') return -1;
-            if (b === 'root') return 1;
-            return a.localeCompare(b);
-        });
-        
-        sortedNamespaces.forEach(ns => {
-            const option = document.createElement('option');
-            option.value = ns;
-            option.textContent = ns === 'root' ? 'Root Namespace' : `${ns} Namespace`;
-            namespaceFilter.appendChild(option);
-        });
+        // If multiple PBS instances, group namespaces by instance
+        if (namespacesByInstance.size > 1 && selectedPbsInstance === 'all') {
+            // Add grouped options
+            namespacesByInstance.forEach((instanceData, instanceName) => {
+                // Create optgroup for this PBS instance
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = instanceName;
+                
+                instanceData.namespaces.forEach(ns => {
+                    const option = document.createElement('option');
+                    // Value includes instance index and namespace for unique identification
+                    option.value = `${instanceData.index}:${ns}`;
+                    option.textContent = ns === 'root' ? 'Root Namespace' : ns;
+                    optgroup.appendChild(option);
+                });
+                
+                namespaceFilter.appendChild(optgroup);
+            });
+        } else {
+            // Single PBS instance or specific instance selected - flat list
+            const allNamespaces = new Set();
+            namespacesByInstance.forEach(instanceData => {
+                instanceData.namespaces.forEach(ns => allNamespaces.add(ns));
+            });
+            
+            const sortedNamespaces = Array.from(allNamespaces).sort((a, b) => {
+                if (a === 'root') return -1;
+                if (b === 'root') return 1;
+                return a.localeCompare(b);
+            });
+            
+            sortedNamespaces.forEach(ns => {
+                const option = document.createElement('option');
+                option.value = ns;
+                option.textContent = ns === 'root' ? 'Root Namespace' : `${ns} Namespace`;
+                namespaceFilter.appendChild(option);
+            });
+        }
         
         // Restore selection if it still exists
-        if (Array.from(namespaceFilter.options).some(opt => opt.value === currentValue)) {
+        const hasOption = Array.from(namespaceFilter.options).some(opt => opt.value === currentValue);
+        if (hasOption) {
             namespaceFilter.value = currentValue;
         } else {
             namespaceFilter.value = 'all';
@@ -4326,7 +4429,14 @@ PulseApp.ui.backups = (() => {
         if (filterGroup) {
             const backupTypeFilter = PulseApp.state.get('backupsFilterBackupType') || 'all';
             const isPBSFilterActive = backupTypeFilter === 'pbs';
-            const hasMultipleNamespaces = namespaces.size > 1;
+            
+            // Calculate total unique namespaces across all instances
+            const allNamespacesSet = new Set();
+            namespacesByInstance.forEach(instanceData => {
+                instanceData.namespaces.forEach(ns => allNamespacesSet.add(ns));
+            });
+            
+            const hasMultipleNamespaces = allNamespacesSet.size > 1;
             const hasPBS = instancesToCheck.length > 0;
             
             // Only show namespace filter when PBS type is selected AND conditions are met
@@ -4347,13 +4457,16 @@ PulseApp.ui.backups = (() => {
         
         if (!pbsInstanceFilter || !filterGroup) return;
         
-        // Add change listener
-        pbsInstanceFilter.addEventListener('change', () => {
+        // Create debounced update function to prevent rapid updates
+        const debouncedPbsInstanceUpdate = PulseApp.utils.debounce(() => {
             PulseApp.state.set('backupsFilterPbsInstance', pbsInstanceFilter.value);
             // Update namespace options based on selected instance
             _updateNamespaceOptions();
             updateBackupsTab(true);
-        });
+        }, 300); // 300ms delay
+        
+        // Add change listener
+        pbsInstanceFilter.addEventListener('change', debouncedPbsInstanceUpdate);
         
         // Update PBS instance options when PBS data changes
         const originalPbsData = PulseApp.state.get('pbsDataArray');
