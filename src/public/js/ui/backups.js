@@ -3169,9 +3169,9 @@ PulseApp.ui.backups = (() => {
                     );
                     
                     // Use properly filtered data based on active filters
-                    // When namespace filter is active, use namespace-filtered data
-                    const dataToUse = hasActiveFilters ? filteredBackupStatus : 
-                                     (namespaceFilter !== 'all' ? namespaceFilteredStatus : unfilteredBackupStatusByGuest);
+                    // Always use filteredBackupStatus for the summary to avoid duplicates
+                    // The table and summary should show the same guests
+                    const dataToUse = filteredBackupStatus;
 
                     if (dataToUse.length > 0) {
                         const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);

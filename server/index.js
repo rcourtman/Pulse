@@ -2366,6 +2366,7 @@ async function startServer() {
         
         // Setup hot reload in development mode
         if (process.env.NODE_ENV === 'development' && chokidar) {
+          console.log('[Hot Reload] Development mode detected - initializing hot reload...');
           const watchPaths = [
             path.join(__dirname, '../src/public'),    // Frontend files
             path.join(__dirname, './'),                // Server files
@@ -2391,7 +2392,8 @@ async function startServer() {
             ignoreInitial: true // Don't trigger on initial scan
           });
           
-          devWatcher.on('change', () => {
+          devWatcher.on('change', (path) => {
+            console.log(`[Hot Reload] File changed: ${path}`);
             io.emit('hotReload'); // Notify clients to reload
           });
           

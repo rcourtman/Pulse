@@ -72,210 +72,240 @@ PulseApp.ui.backupDetailCard = (() => {
     }
 
     function getCompactOverview(backups, stats, filterInfo) {
-        // Get grouping preference
+        // Group by node/infrastructure first
+        const nodeGroups = {};
         const groupByNode = PulseApp.state.get('groupByNode') ?? true;
         
-        // First deduplicate guests when viewing "all namespaces"
-        const guestMap = new Map();
         backups.forEach(guest => {
-            const guestKey = `${guest.guestId || guest.vmid}-${guest.node}`;
-            
-            if (!guestMap.has(guestKey)) {
-                guestMap.set(guestKey, guest);
-            } else {
-                const existingGuest = guestMap.get(guestKey);
-                
-                // Compare backup times to keep the entry with the most recent backup
-                let existingTime = 0;
-                let currentTime = 0;
-                
-                if (existingGuest.latestTimes) {
-                    const times = Object.values(existingGuest.latestTimes).filter(t => t && t > 0);
-                    if (times.length > 0) existingTime = Math.max(...times);
-                } else if (existingGuest.latestBackupTime) {
-                    existingTime = existingGuest.latestBackupTime;
-                }
-                
-                if (guest.latestTimes) {
-                    const times = Object.values(guest.latestTimes).filter(t => t && t > 0);
-                    if (times.length > 0) currentTime = Math.max(...times);
-                } else if (guest.latestBackupTime) {
-                    currentTime = guest.latestBackupTime;
-                }
-                
-                if (currentTime > existingTime) {
-                    guestMap.set(guestKey, guest);
-                }
-            }
-        });
-        
-        // Get nodes data to determine infrastructure
-        const nodesData = PulseApp.state.get('nodesData') || [];
-        const nodeGroups = new Map();
-        
-        // Process deduplicated guests and group by node
-        guestMap.forEach(guest => {
             const nodeName = guest.node || 'Unknown';
             
-            if (!nodeGroups.has(nodeName)) {
-                // Find node info
-                const nodeInfo = nodesData.find(n => (n.node || n.name) === nodeName);
-                nodeGroups.set(nodeName, {
-                    cluster: nodeInfo?.clusterIdentifier || 'Standalone',
-                    type: nodeInfo?.endpointType || 'unknown',
+            
+            if (!nodeGroups[nodeName]) {
+                nodeGroups[nodeName] = {
                     guests: [],
+                    totalGuests: 0,
                     healthy: 0,
-                    outdated: 0,
-                    unprotected: 0,
-                    pbsBackups: 0,
-                    pveBackups: 0,
-                    snapshots: 0
-                });
+                    lessThan24h: 0,
+                    oneToSevenDays: 0,
+                    sevenToFourteenDays: 0,
+                    moreThanFourteenDays: 0,
+                    noBackup: 0,
+                    pbsCount: 0,
+                    pveCount: 0,
+                    snapCount: 0
+                };
             }
             
-            const nodeGroup = nodeGroups.get(nodeName);
-            nodeGroup.guests.push(guest);
+            const group = nodeGroups[nodeName];
+            group.totalGuests++;
             
-            // Track backup methods
-            if (guest.pbsBackups > 0) nodeGroup.pbsBackups++;
-            if (guest.pveBackups > 0) nodeGroup.pveBackups++;
-            if (guest.snapshotCount > 0) nodeGroup.snapshots++;
-            
-            // Categorize by backup status
-            const now = Date.now() / 1000;
-            let mostRecent = 0;
+            // Get the latest backup time for this guest
+            let latestTime = 0;
+            let backupType = '';
             
             if (guest.latestTimes) {
-                const times = Object.values(guest.latestTimes).filter(t => t && t > 0);
-                if (times.length > 0) mostRecent = Math.max(...times);
+                // Check PBS backups
+                if (guest.latestTimes.pbs && guest.latestTimes.pbs > 0) {
+                    if (guest.latestTimes.pbs > latestTime) {
+                        latestTime = guest.latestTimes.pbs;
+                        backupType = 'PBS';
+                    }
+                }
+                // Check PVE backups
+                if (guest.latestTimes.pve && guest.latestTimes.pve > 0) {
+                    if (guest.latestTimes.pve > latestTime) {
+                        latestTime = guest.latestTimes.pve;
+                        backupType = 'PVE';
+                    }
+                }
+                // Check snapshots
+                if (guest.latestTimes.snapshot && guest.latestTimes.snapshot > 0) {
+                    if (guest.latestTimes.snapshot > latestTime) {
+                        latestTime = guest.latestTimes.snapshot;
+                        backupType = 'Snap';
+                    }
+                }
             } else if (guest.latestBackupTime) {
-                mostRecent = guest.latestBackupTime;
+                latestTime = guest.latestBackupTime;
+                // Determine backup type from guest data
+                if (guest.pbsBackups > 0) backupType = 'PBS';
+                else if (guest.pveBackups > 0) backupType = 'PVE';
+                else if (guest.snapshotCount > 0) backupType = 'Snap';
             }
             
-            const hasBackup = guest.pbsBackups > 0 || guest.pveBackups > 0 || guest.snapshotCount > 0;
-            const ageInDays = mostRecent ? (now - mostRecent) / 86400 : Infinity;
+            // Track backup types
+            if (guest.pbsBackups > 0) group.pbsCount++;
+            if (guest.pveBackups > 0) group.pveCount++;
+            if (guest.snapshotCount > 0) group.snapCount++;
             
-            if (!hasBackup) {
-                nodeGroup.unprotected++;
-            } else if (ageInDays <= 7) {
-                nodeGroup.healthy++;
+            if (latestTime > 0) {
+                group.healthy++;
+                
+                // Calculate age
+                const now = Date.now() / 1000;
+                const age = now - latestTime;
+                const days = age / 86400;
+                
+                if (days < 1) group.lessThan24h++;
+                else if (days <= 7) group.oneToSevenDays++;
+                else if (days <= 14) group.sevenToFourteenDays++;
+                else group.moreThanFourteenDays++;
+                
+                // Create unique guest key to prevent duplicates
+                const guestKey = `${guest.guestId || guest.vmid}-${guest.node}`;
+                
+                // Check if this guest is already in the list (shouldn't happen but let's be safe)
+                const existingGuestIndex = group.guests.findIndex(g => `${g.id}-${g.node}` === guestKey);
+                if (existingGuestIndex >= 0) {
+                    // Update existing guest if newer backup
+                    if (latestTime > group.guests[existingGuestIndex].time) {
+                        group.guests[existingGuestIndex] = {
+                            type: guest.guestType || 'Unknown',
+                            id: guest.guestId || guest.vmid,
+                            name: guest.guestName || guest.name || 'Unknown',
+                            backupType: backupType,
+                            time: latestTime,
+                            node: guest.node
+                        };
+                    }
+                } else {
+                    group.guests.push({
+                        type: guest.guestType || 'Unknown',
+                        id: guest.guestId || guest.vmid,
+                        name: guest.guestName || guest.name || 'Unknown',
+                        backupType: backupType,
+                        time: latestTime,
+                        node: guest.node
+                    });
+                }
             } else {
-                nodeGroup.outdated++;
+                group.noBackup++;
             }
         });
         
-        // Sort nodes by name
-        const sortedNodes = Array.from(nodeGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+        // Sort guests by time within each group
+        Object.values(nodeGroups).forEach(group => {
+            group.guests.sort((a, b) => b.time - a.time);
+        });
         
-        if (!groupByNode) {
-            // Flat view - combine all into one summary
-            let totalHealthy = 0;
-            let totalOutdated = 0;
-            let totalUnprotected = 0;
+        
+        // Format age for display
+        const formatAge = (timestamp) => {
+            const now = Date.now() / 1000;
+            const age = now - timestamp;
+            const hours = Math.floor(age / 3600);
+            const days = Math.floor(hours / 24);
             
-            nodeGroups.forEach(group => {
-                totalHealthy += group.healthy;
-                totalOutdated += group.outdated;
-                totalUnprotected += group.unprotected;
+            if (days > 0) return `${days}d`;
+            else if (hours > 0) return `${hours}h`;
+            else return 'Now';
+        };
+        
+        // Single unified summary view - groupByNode only affects the table, not the summary
+        const sortedNodes = Object.entries(nodeGroups).sort((a, b) => a[0].localeCompare(b[0]));
+        
+        // Collect all guests but maintain their node information
+        let allGuests = [];
+        let totalByAge = {
+            lessThan24h: 0,
+            oneToSevenDays: 0,
+            sevenToFourteenDays: 0,
+            moreThanFourteenDays: 0,
+            noBackup: 0
+        };
+        
+        sortedNodes.forEach(([nodeName, group]) => {
+            group.guests.forEach(guest => {
+                allGuests.push({...guest, nodeName});
             });
-            
-            const totalGuests = totalHealthy + totalOutdated + totalUnprotected;
-            const overallHealth = totalGuests > 0 ? Math.round((totalHealthy / totalGuests) * 100) : 0;
-            
-            return `
-                <div class="flex flex-col h-full">
-                    <!-- Single Overview -->
-                    <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                        <div class="text-center mb-3">
-                            <div class="text-3xl font-bold ${overallHealth >= 80 ? 'text-green-600' : overallHealth >= 60 ? 'text-yellow-600' : 'text-red-600'}">
-                                ${overallHealth}%
-                            </div>
-                            <div class="text-xs text-gray-500 dark:text-gray-400">
-                                ${totalHealthy}/${totalGuests} guests with current backups
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-3 gap-3 text-center">
-                            <div class="bg-white dark:bg-gray-900 rounded-lg p-3">
-                                <div class="text-2xl font-bold text-green-600">${totalHealthy}</div>
-                                <div class="text-xs text-gray-500">Current</div>
-                                <div class="text-[9px] text-gray-400">≤7 days</div>
-                            </div>
-                            <div class="bg-white dark:bg-gray-900 rounded-lg p-3">
-                                <div class="text-2xl font-bold text-yellow-600">${totalOutdated}</div>
-                                <div class="text-xs text-gray-500">Outdated</div>
-                                <div class="text-[9px] text-gray-400">>7 days</div>
-                            </div>
-                            <div class="bg-white dark:bg-gray-900 rounded-lg p-3">
-                                <div class="text-2xl font-bold text-red-600">${totalUnprotected}</div>
-                                <div class="text-xs text-gray-500">No Backup</div>
-                                <div class="text-[9px] text-gray-400">unprotected</div>
-                            </div>
-                        </div>
+            totalByAge.lessThan24h += group.lessThan24h;
+            totalByAge.oneToSevenDays += group.oneToSevenDays;
+            totalByAge.sevenToFourteenDays += group.sevenToFourteenDays;
+            totalByAge.moreThanFourteenDays += group.moreThanFourteenDays;
+            totalByAge.noBackup += group.noBackup;
+        });
+        
+        // Sort all guests by time
+        allGuests.sort((a, b) => b.time - a.time);
+        
+        return `
+            <div class="h-full flex flex-col text-xs">
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Backup Health Summary</h3>
+                
+                <!-- Time buckets summary -->
+                <div class="grid grid-cols-4 gap-1 mb-2">
+                    <div class="text-center p-1 bg-gray-50 dark:bg-gray-800 rounded">
+                        <div class="text-sm font-bold text-green-600">${totalByAge.lessThan24h}</div>
+                        <div class="text-[10px] text-gray-500">&lt;24h</div>
+                    </div>
+                    <div class="text-center p-1 bg-gray-50 dark:bg-gray-800 rounded">
+                        <div class="text-sm font-bold text-yellow-600">${totalByAge.oneToSevenDays}</div>
+                        <div class="text-[10px] text-gray-500">1-7d</div>
+                    </div>
+                    <div class="text-center p-1 bg-gray-50 dark:bg-gray-800 rounded">
+                        <div class="text-sm font-bold text-orange-600">${totalByAge.sevenToFourteenDays}</div>
+                        <div class="text-[10px] text-gray-500">7-14d</div>
+                    </div>
+                    <div class="text-center p-1 bg-gray-50 dark:bg-gray-800 rounded">
+                        <div class="text-sm font-bold text-red-600">${totalByAge.moreThanFourteenDays}</div>
+                        <div class="text-[10px] text-gray-500">&gt;14d</div>
                     </div>
                 </div>
-            `;
-        } else {
-            // Grouped view - show each node separately
-            return `
-                <div class="flex flex-col h-full overflow-y-auto">
-                    ${sortedNodes.map(([nodeName, group]) => {
-                        const nodeTotal = group.healthy + group.outdated + group.unprotected;
-                        const nodeHealth = nodeTotal > 0 ? Math.round((group.healthy / nodeTotal) * 100) : 0;
-                        const healthColor = nodeHealth >= 80 ? 'green' : nodeHealth >= 60 ? 'yellow' : 'red';
-                        
-                        // Create backup method badges
-                        const backupMethods = [];
-                        if (group.pbsBackups > 0) backupMethods.push(`<span class="text-purple-600">PBS</span>`);
-                        if (group.pveBackups > 0) backupMethods.push(`<span class="text-orange-600">PVE</span>`);
-                        if (group.snapshots > 0) backupMethods.push(`<span class="text-yellow-600">Snap</span>`);
-                        
-                        return `
-                            <div class="mb-3 last:mb-0">
-                                <!-- Node Header -->
-                                <div class="bg-gray-100 dark:bg-gray-700/80 rounded-t-lg px-3 py-2">
-                                    <div class="flex items-center justify-between">
+                
+                <!-- Node breakdown -->
+                <div class="flex-1 overflow-y-auto">
+                    <div class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Backup Status by Node</div>
+                    <div class="space-y-2">
+                        ${sortedNodes.map(([nodeName, group]) => {
+                            const healthPercentage = group.totalGuests > 0 ? Math.round((group.healthy / group.totalGuests) * 100) : 0;
+                            // Show all backups for this node
+                            const nodeRecentBackups = group.guests;
+                            
+                            return `
+                                <div class="bg-gray-50 dark:bg-gray-800 rounded p-2">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">${nodeName}</span>
                                         <div class="flex items-center gap-2">
-                                            <span class="font-semibold text-sm text-gray-700 dark:text-gray-300">${nodeName}</span>
-                                            <span class="text-xs text-gray-500">
-                                                ${nodeTotal} guest${nodeTotal !== 1 ? 's' : ''}
-                                                ${backupMethods.length > 0 ? `• ${backupMethods.join(' ')}` : ''}
-                                            </span>
-                                        </div>
-                                        <div class="flex items-center gap-2">
-                                            <div class="text-lg font-bold text-${healthColor}-600">${nodeHealth}%</div>
+                                            <div class="flex items-center gap-1 text-[10px]">
+                                                ${group.pbsCount > 0 ? `<span class="text-purple-600">${group.pbsCount} PBS</span>` : ''}
+                                                ${group.pveCount > 0 ? `<span class="text-orange-600">${group.pveCount} PVE</span>` : ''}
+                                                ${group.snapCount > 0 ? `<span class="text-yellow-600">${group.snapCount} Snap</span>` : ''}
+                                            </div>
+                                            <span class="text-[10px] font-bold ${healthPercentage >= 80 ? 'text-green-600' : healthPercentage >= 60 ? 'text-yellow-600' : 'text-red-600'}">${healthPercentage}%</span>
                                         </div>
                                     </div>
+                                    
+                                    
+                                    <!-- Most recent backups for this node -->
+                                    ${nodeRecentBackups.length > 0 ? `
+                                        <div class="space-y-0.5 text-[10px]">
+                                            ${nodeRecentBackups.map(guest => `
+                                                <div class="flex items-center justify-between">
+                                                    <div class="flex items-center gap-1 min-w-0">
+                                                        <span class="${guest.type === 'VM' ? 'text-blue-600' : 'text-green-600'}">${guest.type}</span>
+                                                        <span class="text-gray-500">${guest.id}</span>
+                                                        <span class="text-gray-700 dark:text-gray-300 truncate">${guest.name}</span>
+                                                    </div>
+                                                    <div class="flex items-center gap-1">
+                                                        <span class="text-[9px] px-1 rounded ${
+                                                            guest.backupType === 'PBS' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' :
+                                                            guest.backupType === 'PVE' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300' :
+                                                            'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                        }">${guest.backupType}</span>
+                                                        <span class="text-gray-400">${formatAge(guest.time)}</span>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    ` : ''}
                                 </div>
-                                
-                                <!-- Node Stats -->
-                                <div class="bg-white dark:bg-gray-800 rounded-b-lg border border-t-0 border-gray-200 dark:border-gray-700 p-3">
-                                    <div class="flex items-center gap-2 mb-2">
-                                        <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                                            <div class="h-full bg-${healthColor}-500 transition-all" style="width: ${nodeHealth}%"></div>
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-3 gap-2 text-center text-xs">
-                                        <div>
-                                            <span class="font-semibold text-green-600">${group.healthy}</span>
-                                            <span class="text-gray-500 ml-1">current</span>
-                                        </div>
-                                        <div>
-                                            <span class="font-semibold text-yellow-600">${group.outdated}</span>
-                                            <span class="text-gray-500 ml-1">outdated</span>
-                                        </div>
-                                        <div>
-                                            <span class="font-semibold text-red-600">${group.unprotected}</span>
-                                            <span class="text-gray-500 ml-1">none</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
+                            `;
+                        }).join('')}
+                    </div>
                 </div>
-            `;
-        }
+                
+            </div>
+        `;
     }
 
     function getCompactDetailTable(backups, stats, filterInfo) {
@@ -456,30 +486,34 @@ PulseApp.ui.backupDetailCard = (() => {
                                 // Get filtered backup types and counts based on active filter
                                 const filteredBackupData = getFilteredSingleDateBackupData(backup, filterInfo);
                                 
-                                // Check if we need a namespace header
-                                const backupNamespace = backup.namespace || 'root';
+                                // Check if we need a namespace header (only for PBS backups)
                                 let namespaceHeader = '';
                                 
-                                if (namespaceFilter === 'all' && backupNamespace !== currentNamespace) {
-                                    currentNamespace = backupNamespace;
+                                // Only show namespace headers for PBS backups
+                                if (namespaceFilter === 'all' && backup.pbsBackups > 0) {
+                                    const backupNamespace = backup.namespace || 'root';
                                     
-                                    // Calculate nesting level and format namespace path
-                                    const namespaceParts = currentNamespace.split('/');
-                                    const nestingLevel = namespaceParts.length - 1;
-                                    const displayName = namespaceParts[namespaceParts.length - 1];
-                                    const parentPath = namespaceParts.slice(0, -1).join('/');
-                                    
-                                    namespaceHeader = `
-                                        <div class="px-1 py-1 mt-2 ${currentNamespace !== sortedBackups[0].namespace ? 'border-t border-gray-200 dark:border-gray-700' : ''}">
-                                            <div class="flex items-center" style="padding-left: ${nestingLevel * 12}px">
-                                                ${nestingLevel > 0 ? '<span class="text-[10px] text-gray-400 dark:text-gray-500 mr-1">└─</span>' : ''}
-                                                <span class="text-[10px] font-semibold text-purple-700 dark:text-purple-400 uppercase">
-                                                    ${displayName}
-                                                </span>
-                                                ${parentPath ? `<span class="text-[9px] text-gray-500 dark:text-gray-400 ml-1">(in ${parentPath})</span>` : ''}
+                                    if (backupNamespace !== currentNamespace) {
+                                        currentNamespace = backupNamespace;
+                                        
+                                        // Calculate nesting level and format namespace path
+                                        const namespaceParts = currentNamespace.split('/');
+                                        const nestingLevel = namespaceParts.length - 1;
+                                        const displayName = namespaceParts[namespaceParts.length - 1];
+                                        const parentPath = namespaceParts.slice(0, -1).join('/');
+                                        
+                                        namespaceHeader = `
+                                            <div class="px-1 py-1 mt-2 ${currentNamespace !== sortedBackups[0].namespace ? 'border-t border-gray-200 dark:border-gray-700' : ''}">
+                                                <div class="flex items-center" style="padding-left: ${nestingLevel * 12}px">
+                                                    ${nestingLevel > 0 ? '<span class="text-[10px] text-gray-400 dark:text-gray-500 mr-1">└─</span>' : ''}
+                                                    <span class="text-[10px] font-semibold text-purple-700 dark:text-purple-400 uppercase">
+                                                        ${displayName}
+                                                    </span>
+                                                    ${parentPath ? `<span class="text-[9px] text-gray-500 dark:text-gray-400 ml-1">(in ${parentPath})</span>` : ''}
+                                                </div>
                                             </div>
-                                        </div>
-                                    `;
+                                        `;
+                                    }
                                 }
                                 
                                 return namespaceHeader + `
