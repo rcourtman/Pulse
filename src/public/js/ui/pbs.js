@@ -9,6 +9,20 @@ PulseApp.ui.pbs = (() => {
     
     let selectedNamespaceTab = 'root'; // Track selected namespace tab (for single instance)
     let selectedNamespaceByInstance = new Map(); // Track selected namespace per PBS instance
+    let selectedPbsInstance = 'all'; // Track selected PBS instance ('all' or index)
+    
+    // Cache for filtered data to avoid re-filtering
+    const filteredDataCache = new Map(); // Key: "instance:namespace", Value: filtered data
+    const aggregatedDataCache = new Map(); // Key: namespace, Value: aggregated data
+    
+    // Pre-processed namespace data for instant switching
+    let preProcessedNamespaceData = null;
+    
+    // Debounce timer for namespace switching
+    let namespaceSwitchTimer = null;
+    
+    // Flag to prevent full re-renders during namespace switching
+    let isNamespaceSwitching = false;
     
     // Helper function to find task data by UPID
     function findTaskByUpid(pbsArray, upid) {
@@ -434,7 +448,7 @@ PulseApp.ui.pbs = (() => {
         return detailCard;
     };
 
-    const _createTaskTableRow = (task, isBackupTable = false) => {
+    const _createTaskTableRow = (task, isBackupTable = false, showInstance = false) => {
         const target = parsePbsTaskTarget(task);
         const statusDisplayHTML = getPbsStatusDisplay(task.status);
         const { startTime, duration } = formatTaskTiming(task);
@@ -494,6 +508,11 @@ PulseApp.ui.pbs = (() => {
         
         const namespaceText = task.namespace === 'root' ? 'Root' : (task.namespace || 'Root');
         row.appendChild(createTableCell(namespaceText, `${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}`));
+        
+        // Add PBS instance column if showing aggregated view
+        if (showInstance && task.instanceName) {
+            row.appendChild(createTableCell(task.instanceName, `${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}`));
+        }
         
         row.appendChild(createTableCell(startTime, `${CSS_CLASSES.TEXT_SM} ${CSS_CLASSES.TEXT_GRAY_500_DARK_GRAY_400} ${CSS_CLASSES.WHITESPACE_NOWRAP}`));
         
@@ -583,7 +602,7 @@ PulseApp.ui.pbs = (() => {
         return detailRow;
     };
 
-    function populatePbsTaskTable(parentSectionElement, fullTasksArray) {
+    function populatePbsTaskTable(parentSectionElement, fullTasksArray, showInstance = false) {
       if (!parentSectionElement) {
           console.warn('[PBS UI] Parent element not found for task table');
           return;
@@ -664,7 +683,7 @@ PulseApp.ui.pbs = (() => {
 
           displayedTasks.forEach(task => {
               const isBackupTable = tableId && tableId.includes('backup');
-              const taskRow = _createTaskTableRow(task, isBackupTable);
+              const taskRow = _createTaskTableRow(task, isBackupTable, showInstance);
               tableBody.appendChild(taskRow);
               
               // Restore expanded state if this task was previously expanded
@@ -1210,7 +1229,7 @@ PulseApp.ui.pbs = (() => {
         return sectionDiv;
     };
 
-    const _createTaskTableElement = (tableId, title, idColumnHeader, taskData) => {
+    const _createTaskTableElement = (tableId, title, idColumnHeader, taskData, showInstance = false) => {
         const fragment = document.createDocumentFragment();
 
         const heading = document.createElement('h4');
@@ -1257,7 +1276,11 @@ PulseApp.ui.pbs = (() => {
         const headerRow = document.createElement('tr');
         headerRow.className = `${CSS_CLASSES.TEXT_XS} ${CSS_CLASSES.FONT_MEDIUM} ${CSS_CLASSES.TEXT_LEFT} ${CSS_CLASSES.TEXT_GRAY_600_UPPERCASE_DARK_TEXT_GRAY_300} ${CSS_CLASSES.BORDER_B_GRAY_300_DARK_BORDER_GRAY_600}`;
 
-        const headers = [idColumnHeader, 'Status', 'Namespace', 'Start Time', 'Duration'];
+        const headers = [idColumnHeader, 'Status', 'Namespace'];
+        if (showInstance) {
+            headers.push('PBS Instance');
+        }
+        headers.push('Start Time', 'Duration');
         const isBackupTable = tableId && tableId.includes('backup');
         
         headers.forEach((text, index) => {
@@ -1299,6 +1322,15 @@ PulseApp.ui.pbs = (() => {
         toggleButtonContainer.appendChild(noTasksMessage);
 
         fragment.appendChild(toggleButtonContainer);
+        
+        // If we have task data, populate the table immediately
+        if (taskData && taskData.recentTasks) {
+            // We need to wait until the fragment is added to the DOM
+            // So we'll store the data and showInstance flag for later population
+            fragment._taskData = taskData.recentTasks;
+            fragment._showInstance = showInstance;
+        }
+        
         return fragment;
     };
 
@@ -1839,159 +1871,140 @@ PulseApp.ui.pbs = (() => {
     };
 
     function _createPbsInstanceTabs(pbsArray, mainContainer) {
-        // Create a wrapper for better mobile handling
-        const tabWrapper = document.createElement('div');
-        tabWrapper.className = 'mb-6';
+        // Always use dropdown for better scalability
+        const dropdownContainer = document.createElement('div');
+        dropdownContainer.className = 'mb-4 flex items-center gap-3';
         
-        // For mobile or many instances, consider using a dropdown
-        const useDropdown = pbsArray.length > 4 || window.innerWidth < 768;
+        const dropdownLabel = document.createElement('label');
+        dropdownLabel.className = 'text-sm font-medium text-gray-700 dark:text-gray-300';
+        dropdownLabel.textContent = 'PBS Instance:';
+        dropdownLabel.setAttribute('for', 'pbs-instance-selector');
         
-        if (useDropdown) {
-            // Create dropdown for mobile or many instances
-            const dropdownContainer = document.createElement('div');
-            dropdownContainer.className = 'mb-4';
-            
-            const dropdownLabel = document.createElement('label');
-            dropdownLabel.className = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
-            dropdownLabel.textContent = 'Select PBS Instance:';
-            
-            const dropdown = document.createElement('select');
-            dropdown.className = 'block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-200';
-            
-            pbsArray.forEach((pbsInstance, index) => {
-                const option = document.createElement('option');
-                option.value = index;
-                option.textContent = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
-                dropdown.appendChild(option);
-            });
-            
-            // Ensure selected index is valid
-            const safeDropdownIndex = Math.max(0, Math.min(selectedPbsTabIndex, pbsArray.length - 1));
-            dropdown.value = safeDropdownIndex;
-            selectedPbsTabIndex = safeDropdownIndex;
-            
-            dropdown.addEventListener('change', (e) => {
-                selectedPbsTabIndex = parseInt(e.target.value);
-                _renderPbsInstanceContent(pbsArray[selectedPbsTabIndex], selectedPbsTabIndex, pbsArray, tabContentArea);
-            });
-            
-            dropdownContainer.appendChild(dropdownLabel);
-            dropdownContainer.appendChild(dropdown);
-            mainContainer.appendChild(dropdownContainer);
-            
-            const tabContentArea = document.createElement('div');
-            tabContentArea.className = CSS_CLASSES.PBS_TAB_CONTENT_AREA;
-            mainContainer.appendChild(tabContentArea);
-            
-            // Render initial content
-            _renderPbsInstanceContent(pbsArray[safeDropdownIndex], safeDropdownIndex, pbsArray, tabContentArea);
-            return;
-        }
+        const dropdown = document.createElement('select');
+        dropdown.id = 'pbs-instance-selector';
+        dropdown.className = 'px-4 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer';
         
-        // Tab header with instance selector for desktop
-        const tabHeader = document.createElement('div');
-        tabHeader.className = 'bg-gray-50 dark:bg-gray-800 rounded-t-lg border border-gray-200 dark:border-gray-700 p-2';
+        // Add "All PBS Instances" option
+        const allOption = document.createElement('option');
+        allOption.value = 'all';
+        allOption.textContent = 'All PBS Instances';
+        dropdown.appendChild(allOption);
         
-        const tabContainer = document.createElement('div');
-        tabContainer.className = 'flex flex-wrap gap-2 overflow-x-auto';
-
-        const tabContentArea = document.createElement('div');
-        tabContentArea.className = CSS_CLASSES.PBS_TAB_CONTENT_AREA;
-
-        let tabButtons = [];
+        // Add individual PBS instances
         pbsArray.forEach((pbsInstance, index) => {
-            let baseId;
-            if (pbsInstance.pbsInstanceName) {
-                baseId = PulseApp.utils.sanitizeForId(pbsInstance.pbsInstanceName);
-            } else if (pbsInstance.pbsEndpointId) {
-                baseId = PulseApp.utils.sanitizeForId(pbsInstance.pbsEndpointId);
-            } else {
-                baseId = 'pbs-instance';
-            }
-            const instanceId = `${baseId}-${index}`;
-            const instanceName = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
-            
-            // Calculate instance health
-            const overallHealth = _calculateOverallHealth(pbsInstance);
-            const namespaceCount = _collectNamespaces(pbsArray, index).length;
-
-            const tabButton = document.createElement('button');
-            tabButton.id = `${ID_PREFIXES.PBS_TAB_BUTTON_PREFIX}${instanceId}`;
-            tabButton.className = 'flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-transparent font-medium text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-white dark:hover:bg-gray-700 hover:border-gray-300 dark:hover:border-gray-600 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500';
-            
-            // Create tab content with health indicator and info
-            const tabContent = document.createElement('div');
-            tabContent.className = 'flex items-center gap-2';
-            
-            // Health indicator
-            const healthDot = document.createElement('span');
-            healthDot.className = 'w-2 h-2 rounded-full';
-            if (overallHealth.overallHealth === 'ok') {
-                healthDot.classList.add('bg-green-500');
-            } else if (overallHealth.overallHealth === 'warning') {
-                healthDot.classList.add('bg-yellow-500');
-            } else if (overallHealth.overallHealth === 'error') {
-                healthDot.classList.add('bg-red-500');
-            }
-            
-            // Instance name
-            const nameSpan = document.createElement('span');
-            nameSpan.textContent = instanceName;
-            
-            // Namespace count badge
-            if (namespaceCount > 1) {
-                const nsBadge = document.createElement('span');
-                nsBadge.className = 'ml-1 px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-full';
-                nsBadge.textContent = `${namespaceCount} NS`;
-                tabContent.appendChild(healthDot);
-                tabContent.appendChild(nameSpan);
-                tabContent.appendChild(nsBadge);
-            } else {
-                tabContent.appendChild(healthDot);
-                tabContent.appendChild(nameSpan);
-            }
-            
-            tabButton.appendChild(tabContent);
-            tabButton.dataset.instanceId = instanceId;
-            tabButton.dataset.instanceIndex = index;
-
-            tabButton.addEventListener('click', (event) => {
-                // Update all tabs to unselected state
-                tabContainer.querySelectorAll('button').forEach(btn => {
-                    btn.classList.remove('bg-blue-500', 'text-white', 'border-blue-500', 'hover:bg-white', 'hover:text-gray-800', 'dark:hover:bg-gray-700', 'dark:hover:text-gray-200');
-                    btn.classList.add('text-gray-600', 'dark:text-gray-400', 'hover:text-gray-800', 'dark:hover:text-gray-200', 'hover:bg-white', 'dark:hover:bg-gray-700');
-                });
-                
-                // Style selected tab
-                const currentBtn = event.currentTarget;
-                currentBtn.classList.remove('text-gray-600', 'dark:text-gray-400', 'hover:text-gray-800', 'dark:hover:text-gray-200', 'hover:bg-white', 'dark:hover:bg-gray-700');
-                currentBtn.classList.add('bg-blue-500', 'text-white', 'border-blue-500');
-
-                const selectedIndex = parseInt(event.currentTarget.dataset.instanceIndex);
-                selectedPbsTabIndex = selectedIndex; // Update global selected tab index
-                
-                // Use helper function to render content
-                _renderPbsInstanceContent(pbsArray[selectedIndex], selectedIndex, pbsArray, tabContentArea);
-            });
-            tabContainer.appendChild(tabButton);
-            tabButtons.push(tabButton);
+            const option = document.createElement('option');
+            option.value = index;
+            option.textContent = pbsInstance.pbsInstanceName || `PBS Instance ${index + 1}`;
+            dropdown.appendChild(option);
         });
-
-        // Add tabs to header
-        tabHeader.appendChild(tabContainer);
-        tabWrapper.appendChild(tabHeader);
         
-        // Add content area to wrapper
-        tabWrapper.appendChild(tabContentArea);
+        // Set initial selection
+        dropdown.value = selectedPbsInstance;
         
-        // Add wrapper to main container
-        mainContainer.appendChild(tabWrapper);
+        const tabContentArea = document.createElement('div');
+        tabContentArea.id = ID_PREFIXES.PBS_TAB_CONTENT_AREA;
+        tabContentArea.className = CSS_CLASSES.PBS_TAB_CONTENT_AREA;
+        
+        dropdown.addEventListener('change', (e) => {
+            selectedPbsInstance = e.target.value;
+            _renderSelectedPbsContent(pbsArray, tabContentArea);
+        });
+        
+        dropdownContainer.appendChild(dropdownLabel);
+        dropdownContainer.appendChild(dropdown);
+        mainContainer.appendChild(dropdownContainer);
+        mainContainer.appendChild(tabContentArea);
+        
+        // Render initial content
+        _renderSelectedPbsContent(pbsArray, tabContentArea);
+    }
 
-        // Auto-select the previously selected tab if possible, else the first tab
-        const safeIndex = Math.max(0, Math.min(selectedPbsTabIndex, tabButtons.length - 1));
-        if (tabButtons[safeIndex]) {
-            tabButtons[safeIndex].click();
+    function _renderSelectedPbsContent(pbsArray, container) {
+        container.innerHTML = '';
+        
+        if (selectedPbsInstance === 'all') {
+            // Render aggregated view for all instances
+            _renderAllPbsInstances(pbsArray, container);
+        } else {
+            // Render single instance
+            const instanceIndex = parseInt(selectedPbsInstance);
+            const pbsInstance = pbsArray[instanceIndex];
+            _renderPbsInstanceContent(pbsInstance, instanceIndex, pbsArray, container);
         }
+    }
+    
+    function _renderAllPbsInstances(pbsArray, container) {
+        // Collect all namespaces across all instances
+        const allNamespaces = _collectNamespaces(pbsArray);
+        const hasMultipleNamespaces = allNamespaces.length > 1;
+        
+        // Add namespace tabs if multiple namespaces exist
+        if (hasMultipleNamespaces) {
+            const namespaceTabs = _createNamespaceTabs(allNamespaces, container, null);
+            container.appendChild(namespaceTabs);
+            
+            // Add a divider
+            const divider = document.createElement('hr');
+            divider.className = 'my-4 border-gray-200 dark:border-gray-700';
+            container.appendChild(divider);
+        }
+        
+        // Get selected namespace
+        const selectedNamespace = hasMultipleNamespaces ? selectedNamespaceTab : 'root';
+        
+        // Create aggregated view
+        const aggregatedData = _aggregatePbsData(pbsArray, selectedNamespace);
+        
+        // Create a summary card showing all instances
+        const summaryCard = document.createElement('div');
+        summaryCard.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-4';
+        
+        const summaryTitle = document.createElement('h3');
+        summaryTitle.className = 'text-lg font-semibold mb-3 text-gray-800 dark:text-gray-200';
+        summaryTitle.textContent = `All PBS Instances (${pbsArray.length})`;
+        summaryCard.appendChild(summaryTitle);
+        
+        // Instance summary grid
+        const instanceGrid = document.createElement('div');
+        instanceGrid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3';
+        
+        pbsArray.forEach((instance, index) => {
+            const instanceCard = document.createElement('div');
+            instanceCard.className = 'p-3 bg-gray-50 dark:bg-gray-700 rounded-lg';
+            
+            const instanceName = document.createElement('div');
+            instanceName.className = 'font-medium text-sm text-gray-700 dark:text-gray-300';
+            instanceName.textContent = instance.pbsInstanceName || `PBS Instance ${index + 1}`;
+            
+            const instanceStatus = document.createElement('div');
+            instanceStatus.className = 'text-xs mt-1';
+            const health = _calculateOverallHealth(instance);
+            if (health.overallHealth === 'ok') {
+                instanceStatus.className += ' text-green-600 dark:text-green-400';
+                instanceStatus.textContent = '● Healthy';
+            } else if (health.overallHealth === 'warning') {
+                instanceStatus.className += ' text-yellow-600 dark:text-yellow-400';
+                instanceStatus.textContent = '● Warning';
+            } else {
+                instanceStatus.className += ' text-red-600 dark:text-red-400';
+                instanceStatus.textContent = '● Error';
+            }
+            
+            instanceCard.appendChild(instanceName);
+            instanceCard.appendChild(instanceStatus);
+            instanceGrid.appendChild(instanceCard);
+        });
+        
+        summaryCard.appendChild(instanceGrid);
+        container.appendChild(summaryCard);
+        
+        // Create aggregated health table
+        const healthTable = _createAggregatedHealthTable('all-instances', aggregatedData);
+        container.appendChild(healthTable);
+        
+        // Create aggregated task sections
+        const taskSections = _createAggregatedTaskSections('all-instances', aggregatedData);
+        container.appendChild(taskSections);
     }
 
     function _renderPbsInstanceContent(pbsInstance, instanceIndex, pbsArray, container) {
@@ -2019,7 +2032,7 @@ PulseApp.ui.pbs = (() => {
             : 'root';
         
         // Filter the instance data by namespace
-        const filteredInstanceData = _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace);
+        const filteredInstanceData = _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace, instanceIndex);
         
         let baseId;
         if (filteredInstanceData.pbsInstanceName) {
@@ -2109,6 +2122,226 @@ PulseApp.ui.pbs = (() => {
 
     // Layout update function for responsive design
 
+    // Aggregate PBS data across multiple instances
+    function _aggregatePbsData(pbsDataArray, selectedNamespace) {
+        // Check cache first
+        if (aggregatedDataCache.has(selectedNamespace)) {
+            return aggregatedDataCache.get(selectedNamespace);
+        }
+        
+        const aggregated = {
+            datastores: [],
+            backupTasks: { recentTasks: [], summary: { ok: 0, failed: 0, warning: 0, running: 0 } },
+            verificationTasks: { recentTasks: [], summary: { ok: 0, failed: 0, warning: 0, running: 0 } },
+            syncTasks: { recentTasks: [], summary: { ok: 0, failed: 0, warning: 0, running: 0 } },
+            pruneTasks: { recentTasks: [], summary: { ok: 0, failed: 0, warning: 0, running: 0 } }
+        };
+        
+        // Define taskTypes outside the loop
+        const taskTypes = ['backupTasks', 'verificationTasks', 'syncTasks', 'pruneTasks'];
+        
+        pbsDataArray.forEach((instance, index) => {
+            // Filter instance by namespace first
+            const filtered = _filterPbsInstanceByNamespace(instance, selectedNamespace, index);
+            
+            // Aggregate datastores
+            if (filtered.datastores) {
+                filtered.datastores.forEach(ds => {
+                    aggregated.datastores.push({
+                        ...ds,
+                        instanceName: instance.pbsInstanceName || `PBS Instance ${index + 1}`,
+                        instanceIndex: index
+                    });
+                });
+            }
+            
+            // Aggregate tasks
+            taskTypes.forEach(taskType => {
+                if (filtered[taskType]) {
+                    // Add tasks with instance info
+                    if (filtered[taskType].recentTasks) {
+                        filtered[taskType].recentTasks.forEach(task => {
+                            aggregated[taskType].recentTasks.push({
+                                ...task,
+                                instanceName: instance.pbsInstanceName || `PBS Instance ${index + 1}`,
+                                instanceIndex: index
+                            });
+                        });
+                    }
+                    
+                    // Aggregate summary counts
+                    if (filtered[taskType].summary) {
+                        Object.keys(filtered[taskType].summary).forEach(key => {
+                            if (aggregated[taskType].summary[key] !== undefined) {
+                                aggregated[taskType].summary[key] += filtered[taskType].summary[key];
+                            }
+                        });
+                    }
+                }
+            });
+        });
+        
+        // Sort aggregated tasks by start time
+        taskTypes.forEach(taskType => {
+            aggregated[taskType].recentTasks.sort((a, b) => {
+                const timeA = a.startTime || 0;
+                const timeB = b.startTime || 0;
+                return timeB - timeA;
+            });
+        });
+        
+        // Cache the result
+        aggregatedDataCache.set(selectedNamespace, aggregated);
+        
+        return aggregated;
+    }
+    
+    // Create aggregated health table
+    function _createAggregatedHealthTable(instanceId, aggregatedData) {
+        const taskHealthData = [
+            {
+                key: 'backup',
+                title: 'Backup Tasks',
+                data: aggregatedData.backupTasks?.summary || { ok: 0, failed: 0, warning: 0, running: 0 }
+            },
+            {
+                key: 'verify',
+                title: 'Verification Tasks',
+                data: aggregatedData.verificationTasks?.summary || { ok: 0, failed: 0, warning: 0, running: 0 }
+            },
+            {
+                key: 'sync',
+                title: 'Sync Tasks',
+                data: aggregatedData.syncTasks?.summary || { ok: 0, failed: 0, warning: 0, running: 0 }
+            },
+            {
+                key: 'prunegc',
+                title: 'Prune/GC Tasks',
+                data: aggregatedData.pruneTasks?.summary || { ok: 0, failed: 0, warning: 0, running: 0 }
+            }
+        ];
+        
+        return _createPbsTaskHealthTable(instanceId, { aggregatedData }, taskHealthData);
+    }
+    
+    // Create aggregated task sections
+    function _createAggregatedTaskSections(instanceId, aggregatedData) {
+        const container = document.createElement('div');
+        container.className = CSS_CLASSES.SPACE_Y_4;
+
+        const taskDefinitions = [
+            { type: 'backup', title: 'Backup', idCol: 'Guest', tableIdPrefix: ID_PREFIXES.PBS_RECENT_BACKUP_TASKS_TABLE, data: aggregatedData.backupTasks },
+            { type: 'verify', title: 'Verification', idCol: 'Guest/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_VERIFY_TASKS_TABLE, data: aggregatedData.verificationTasks },
+            { type: 'sync', title: 'Sync', idCol: 'Job ID', tableIdPrefix: ID_PREFIXES.PBS_RECENT_SYNC_TASKS_TABLE, data: aggregatedData.syncTasks },
+            { type: 'prunegc', title: 'Prune/GC', idCol: 'Datastore/Group', tableIdPrefix: ID_PREFIXES.PBS_RECENT_PRUNEGC_TASKS_TABLE, data: aggregatedData.pruneTasks }
+        ];
+
+        taskDefinitions.forEach(def => {
+            const taskSection = document.createElement('div');
+            taskSection.className = CSS_CLASSES.PBS_TASK_SECTION;
+            taskSection.dataset.taskType = def.type;
+            const tableElement = _createTaskTableElement(def.tableIdPrefix + instanceId, def.title, def.idCol, def.data, true);
+            taskSection.appendChild(tableElement);
+            container.appendChild(taskSection);
+            
+            // Populate the table after it's in the DOM
+            if (def.data && def.data.recentTasks) {
+                populatePbsTaskTable(taskSection, def.data.recentTasks, true);
+            }
+        });
+        return container;
+    }
+
+    // Ultra-fast namespace update using pre-rendered DOM fragments
+    const namespaceTableCache = new Map(); // Cache pre-rendered table fragments
+    
+    // Try a different approach - keep all namespace content rendered but hidden
+    let currentVisibleNamespace = 'root';
+    
+    // Pre-render table rows for a namespace
+    function _preRenderNamespaceTables(data, namespace, isAggregated = false) {
+        const fragments = new Map();
+        
+        const taskTypes = [
+            { type: 'backup', data: data.backupTasks },
+            { type: 'verify', data: data.verificationTasks },
+            { type: 'sync', data: data.syncTasks },
+            { type: 'prunegc', data: data.pruneTasks }
+        ];
+        
+        taskTypes.forEach(taskInfo => {
+            const fragment = document.createDocumentFragment();
+            const tasks = taskInfo.data?.recentTasks || [];
+            const isBackupTable = taskInfo.type === 'backup';
+            
+            tasks.slice(0, PulseApp.config.INITIAL_PBS_TASK_LIMIT).forEach(task => {
+                const taskRow = _createTaskTableRow(task, isBackupTable, isAggregated);
+                fragment.appendChild(taskRow);
+            });
+            
+            fragments.set(taskInfo.type, fragment);
+        });
+        
+        return fragments;
+    }
+    
+    // Optimized function to update content when namespace changes
+    function _updatePbsContentForNamespace(pbsDataArray, newNamespace, instanceIndex = null) {
+        // Get the content container
+        const contentArea = document.getElementById(ID_PREFIXES.PBS_TAB_CONTENT_AREA);
+        if (!contentArea) return;
+        
+        const startTime = performance.now();
+        
+        // Prepare cache key
+        let cacheKey;
+        let data;
+        
+        if (selectedPbsInstance === 'all') {
+            cacheKey = `all:${newNamespace}`;
+            data = aggregatedDataCache.get(newNamespace);
+            if (!data) return;
+        } else {
+            const index = instanceIndex !== null ? instanceIndex : parseInt(selectedPbsInstance);
+            cacheKey = `${index}:${newNamespace}`;
+            data = filteredDataCache.get(cacheKey);
+            if (!data) return;
+        }
+        
+        // Check if we have pre-rendered fragments
+        if (!namespaceTableCache.has(cacheKey)) {
+            // Pre-render for this namespace
+            const fragments = _preRenderNamespaceTables(data, newNamespace, selectedPbsInstance === 'all');
+            namespaceTableCache.set(cacheKey, fragments);
+        }
+        
+        const fragments = namespaceTableCache.get(cacheKey);
+        
+        // Skip everything if namespace is switching
+        if (isNamespaceSwitching) {
+            return;
+        }
+        
+        // Update all tables instantly
+        const updateStart = performance.now();
+        ['backup', 'verify', 'sync', 'prunegc'].forEach(taskType => {
+            const section = contentArea.querySelector(`.pbs-task-section[data-task-type="${taskType}"]`);
+            if (section) {
+                const tbody = section.querySelector('tbody');
+                if (tbody && fragments.has(taskType)) {
+                    // Clear and append in one operation
+                    tbody.textContent = ''; // Faster than innerHTML = ''
+                    tbody.appendChild(fragments.get(taskType).cloneNode(true));
+                }
+            }
+        });
+        const updateEnd = performance.now();
+        
+        const endTime = performance.now();
+    }
+    
+    // Removed old heavy update functions - now using pre-rendered DOM fragments
+
     // Collect all namespaces from PBS data
     function _collectNamespaces(pbsDataArray, instanceIndex = null) {
         const namespaces = new Set(['root']); // Always include root
@@ -2177,7 +2410,31 @@ PulseApp.ui.pbs = (() => {
             tab.textContent = namespace === 'root' ? 'Root' : namespace;
             tab.dataset.namespace = namespace;
             
-            tab.addEventListener('click', () => {
+            tab.addEventListener('click', (e) => {
+                // Don't do anything if already selected
+                if (namespace === selectedNamespace) return;
+                
+                // Prevent default and stop propagation
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Force immediate visual update without transitions
+                tabsList.querySelectorAll('button').forEach(btn => {
+                    // Remove transition class temporarily
+                    btn.style.transition = 'none';
+                    if (btn.dataset.namespace === namespace) {
+                        btn.className = 'px-4 py-2 rounded-full bg-blue-500 text-white text-sm font-medium';
+                    } else {
+                        btn.className = 'px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium hover:bg-gray-300 dark:hover:bg-gray-600';
+                    }
+                    // Force style recalculation
+                    btn.offsetHeight;
+                    // Re-enable transitions after a frame
+                    setTimeout(() => {
+                        btn.style.transition = '';
+                    }, 0);
+                });
+                
                 // Clear cached status info when namespace changes
                 taskStatusInfo.clear();
                 
@@ -2189,11 +2446,26 @@ PulseApp.ui.pbs = (() => {
                     selectedNamespaceTab = namespace;
                 }
                 
-                // Re-render PBS info with current data
+                // Debounce the update to prevent rapid switching
+                if (namespaceSwitchTimer) {
+                    clearTimeout(namespaceSwitchTimer);
+                }
+                
+                // Set flag to prevent full re-render
+                isNamespaceSwitching = true;
+                
+                // Update immediately - the actual delay must be somewhere else
                 const pbsData = PulseApp.state.get('pbsDataArray');
                 if (pbsData) {
-                    updatePbsInfo(pbsData);
+                    _updatePbsContentForNamespace(pbsData, namespace, instanceIndex);
                 }
+                
+                // Reset flag after a longer delay to catch any delayed updates
+                setTimeout(() => {
+                    isNamespaceSwitching = false;
+                }, 2000); // 2 seconds should catch all server updates
+                
+                // Done
             });
             
             tabsList.appendChild(tab);
@@ -2215,10 +2487,16 @@ PulseApp.ui.pbs = (() => {
     }
     
     // Filter PBS instance data by namespace
-    function _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace) {
+    function _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace, instanceIndex = null) {
         if (!selectedNamespace) {
             // No filtering needed
             return pbsInstance;
+        }
+        
+        // Check cache first
+        const cacheKey = `${instanceIndex}:${selectedNamespace}`;
+        if (filteredDataCache.has(cacheKey)) {
+            return filteredDataCache.get(cacheKey);
         }
         
         const filteredInstance = { ...pbsInstance };
@@ -2273,6 +2551,9 @@ PulseApp.ui.pbs = (() => {
             }));
         }
         
+        // Cache the result
+        filteredDataCache.set(cacheKey, filteredInstance);
+        
         return filteredInstance;
     }
 
@@ -2306,11 +2587,69 @@ PulseApp.ui.pbs = (() => {
     // Track last data hash to avoid unnecessary rebuilds
     let lastPbsDataHash = null;
     
+    // Pre-process all namespace data for instant switching
+    function _preProcessAllNamespaceData(pbsArray) {
+        // Skip if we're switching namespaces
+        if (isNamespaceSwitching) {
+            console.log('[PBS] Skipping pre-processing during namespace switch');
+            return;
+        }
+        
+        const startTime = performance.now();
+        const allNamespaces = _collectNamespaces(pbsArray);
+        
+        // Clear the namespace table cache when new data arrives
+        namespaceTableCache.clear();
+        
+        // Pre-filter all data for each namespace
+        allNamespaces.forEach(namespace => {
+            // Pre-calculate aggregated data
+            if (!aggregatedDataCache.has(namespace)) {
+                const aggregatedData = _aggregatePbsData(pbsArray, namespace);
+                
+                // Pre-render DOM fragments for aggregated view
+                const cacheKey = `all:${namespace}`;
+                const fragments = _preRenderNamespaceTables(aggregatedData, namespace, true);
+                namespaceTableCache.set(cacheKey, fragments);
+            }
+            
+            // Pre-calculate filtered instance data
+            pbsArray.forEach((instance, index) => {
+                const cacheKey = `${index}:${namespace}`;
+                if (!filteredDataCache.has(cacheKey)) {
+                    const filteredData = _filterPbsInstanceByNamespace(instance, namespace, index);
+                    
+                    // Pre-render DOM fragments for instance view
+                    const fragments = _preRenderNamespaceTables(filteredData, namespace, false);
+                    namespaceTableCache.set(cacheKey, fragments);
+                }
+            });
+        });
+        
+        const endTime = performance.now();
+        console.log(`[PBS] Pre-processed ${allNamespaces.length} namespaces with DOM fragments in ${(endTime - startTime).toFixed(2)}ms`);
+    }
+    
     function updatePbsInfo(pbsArray) {
         const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
         if (!container) {
             console.error(`PBS container element #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found!`);
             return;
+        }
+        
+        // Skip full update if we're just switching namespaces
+        if (isNamespaceSwitching) {
+            console.log('[PBS] Skipping full update during namespace switch');
+            return;
+        }
+        
+        // Clear caches when new data arrives
+        filteredDataCache.clear();
+        aggregatedDataCache.clear();
+        
+        // Pre-process all namespace data
+        if (pbsArray && pbsArray.length > 0) {
+            _preProcessAllNamespaceData(pbsArray);
         }
         
         // Generate a simple hash of the data to detect changes
@@ -2395,7 +2734,7 @@ PulseApp.ui.pbs = (() => {
             const selectedNamespace = hasMultipleNamespaces ? selectedNamespaceTab : 'root';
             
             // Filter the instance by namespace
-            const filteredInstance = _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace);
+            const filteredInstance = _filterPbsInstanceByNamespace(pbsInstance, selectedNamespace, 0);
             let baseId;
             if (filteredInstance.pbsInstanceName) {
                 baseId = PulseApp.utils.sanitizeForId(filteredInstance.pbsInstanceName);
@@ -2422,7 +2761,7 @@ PulseApp.ui.pbs = (() => {
             );
             container.appendChild(instanceElement);
         } else {
-            // Multiple instances - use tabs for all viewports
+            // Multiple instances - use dropdown
             _createPbsInstanceTabs(pbsArray, container);
         }
         
