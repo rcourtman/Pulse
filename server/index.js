@@ -274,12 +274,31 @@ app.get('/api/test/mock-update.tar.gz', (req, res) => {
     });
 });
 
-// Health check endpoint
+// Health check endpoint - returns simple OK/NOT OK based on actual readiness
 app.get('/healthz', (req, res) => {
-    res.status(200).send('OK');
+    try {
+        const state = stateManager.getState();
+        const hasData = stateManager.hasData();
+        const clientsInitialized = Object.keys(global.pulseApiClients?.apiClients || {}).length > 0;
+        
+        // Service is healthy if:
+        // 1. API clients are initialized
+        // 2. We have some data (or using placeholder config)
+        const isHealthy = clientsInitialized && (hasData || state.isConfigPlaceholder);
+        
+        if (isHealthy) {
+            res.status(200).send('OK');
+        } else {
+            // 503 Service Unavailable - not ready yet
+            res.status(503).send('Service starting up');
+        }
+    } catch (error) {
+        console.error("Error in health check:", error);
+        res.status(503).send('Service unavailable');
+    }
 });
 
-// Enhanced health endpoint with detailed monitoring info
+// Detailed health endpoint with monitoring info
 app.get('/api/health', (req, res) => {
     try {
         const healthSummary = stateManager.getHealthSummary();
