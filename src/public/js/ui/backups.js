@@ -1184,8 +1184,9 @@ PulseApp.ui.backups = (() => {
             }
 
             const healthMatch = (backupsFilterHealth === 'all') ||
-                                (backupsFilterHealth === 'ok' && (item.backupHealthStatus === 'ok' || item.backupHealthStatus === 'stale')) ||
-                                (backupsFilterHealth === 'warning' && (item.backupHealthStatus === 'old')) ||
+                                (backupsFilterHealth === 'ok' && item.backupHealthStatus === 'ok') ||
+                                (backupsFilterHealth === 'stale' && item.backupHealthStatus === 'stale') ||
+                                (backupsFilterHealth === 'warning' && (item.backupHealthStatus === 'old' || item.backupHealthStatus === 'failed')) ||
                                 (backupsFilterHealth === 'none' && item.backupHealthStatus === 'none');
             if (!healthMatch) return false;
 
