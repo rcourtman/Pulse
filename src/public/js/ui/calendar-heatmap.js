@@ -472,6 +472,9 @@ PulseApp.ui.calendarHeatmap = (() => {
                     // Get the namespace filter
                     const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
                     
+                    console.log(`[Calendar] Date clicked: ${dateKey}, namespace filter: ${namespaceFilter}`);
+                    console.log('[Calendar] dayData.guests:', dayData.guests);
+                    console.log('[Calendar] capturedFilteredGuestIds:', capturedFilteredGuestIds);
                     
                     // Filter guests based on filteredGuestIds if namespace filtering is active
                     let filteredGuests = dayData.guests || [];
@@ -485,6 +488,32 @@ PulseApp.ui.calendarHeatmap = (() => {
                         });
                     }
                     
+                    console.log('[Calendar] filteredGuests after filtering:', filteredGuests);
+                    console.log('[Calendar] Guest details:', filteredGuests.map(g => ({
+                        vmid: g.vmid,
+                        name: g.name,
+                        namespace: g.namespace,
+                        namespaces: g.namespaces,
+                        uniqueKey: g.uniqueKey,
+                        node: g.node,
+                        types: g.types
+                    })));
+                    
+                    
+                    // Check for duplicates by unique key
+                    const uniqueKeyCounts = {};
+                    filteredGuests.forEach(g => {
+                        const key = g.uniqueKey || `${g.vmid}-${g.node || 'unknown'}`;
+                        uniqueKeyCounts[key] = (uniqueKeyCounts[key] || 0) + 1;
+                    });
+                    const duplicates = Object.entries(uniqueKeyCounts).filter(([key, count]) => count > 1);
+                    if (duplicates.length > 0) {
+                        console.warn('[Calendar] DUPLICATE GUESTS FOUND BY UNIQUE KEY:', duplicates);
+                        console.warn('[Calendar] Duplicate entries:', filteredGuests.filter(g => {
+                            const key = g.uniqueKey || `${g.vmid}-${g.node || 'unknown'}`;
+                            return duplicates.some(([dupKey]) => dupKey === key);
+                        }));
+                    }
                     
                     const callbackData = {
                         date: dateKey,
@@ -742,8 +771,18 @@ PulseApp.ui.calendarHeatmap = (() => {
                 // Use unique key for guest lookup, fall back to vmid if not found
                 const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
                 
-                // Check if this guest (by vmid) already exists for this date
-                const existingGuestIndex = monthData[dateKey].guests.findIndex(g => g.vmid === vmid);
+                // Check if this guest already exists for this date
+                // Important: Check by uniqueKey (vmid-node) not just vmid, since different nodes can have same vmid
+                const existingGuestIndex = monthData[dateKey].guests.findIndex(g => {
+                    // First try to match by unique key
+                    if (g.uniqueKey === uniqueGuestKey) return true;
+                    
+                    // For backward compatibility, if no uniqueKey, match by vmid+node
+                    if (!g.uniqueKey && g.node === dateData[dateKey].node && String(g.vmid) === String(vmid)) return true;
+                    
+                    return false;
+                });
+                
                 
                 if (existingGuestIndex >= 0) {
                     // Merge backup data for the same guest
@@ -776,7 +815,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 } else {
                     // Add new guest entry
                     const guestEntry = {
-                        vmid: vmid,
+                        vmid: String(vmid), // Ensure vmid is always stored as string
                         uniqueKey: uniqueGuestKey, // Include unique key for proper identification
                         name: guestInfo.name,
                         type: guestInfo.type,

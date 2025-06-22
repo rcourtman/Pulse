@@ -11,6 +11,7 @@ const {
     getVerificationRecommendations 
 } = require('./pbsVerificationUtils');
 const { runVerificationDiagnostics } = require('./pbsVerificationDiagnostics');
+const { BackupProcessingCoordinator } = require('./services/backupProcessors');
 
 let pLimit;
 let requestLimiter;
@@ -899,7 +900,8 @@ async function fetchPbsDatastoreSnapshots({ client, config }, storeName) {
                 
                 // Add namespace field to each snapshot
                 snapshots.forEach(snap => {
-                    snap.namespace = namespace || 'root';
+                    // Preserve namespace as-is (empty string for root)
+                    snap.namespace = namespace || '';
                 });
                 
                 
@@ -1002,7 +1004,8 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                 
                                 // Add namespace field to each snapshot
                                 allSnapshots.forEach(snapshot => {
-                                    snapshot.namespace = namespace || 'root';
+                                    // Preserve namespace as-is (empty string for root)
+                                    snapshot.namespace = namespace || '';
                                 });
                                 
                                 
@@ -1516,22 +1519,73 @@ async function fetchGuestSnapshots(apiClient, endpointId, nodeName, vmid, type) 
         const snapshots = response.data?.data || [];
         
         if (snapshots.length > 0) {
+            console.log(`[DataFetcher] Found ${snapshots.length} snapshots for ${type} ${vmid} on ${nodeName}`);
+            // Debug specific containers
+            if (vmid == 110 || vmid == 111 || vmid == 114) {
+                snapshots.forEach(snap => {
+                    console.log(`[DataFetcher] Raw snapshot: ${type} ${vmid} name="${snap.name}", snaptime=${snap.snaptime}`);
+                });
+            }
         }
         
         // Filter out the 'current' snapshot which is not a real snapshot
+        const now = Math.floor(Date.now() / 1000);
+        
         return snapshots
             .filter(snap => snap.name !== 'current')
-            .map(snap => ({
-                name: snap.name,
-                description: snap.description,
-                snaptime: snap.snaptime,
-                vmstate: snap.vmstate || false,
-                parent: snap.parent,
-                vmid: parseInt(vmid, 10),
-                type: type,
-                node: nodeName,
-                endpointId: endpointId
-            }));
+            .map(snap => {
+                // Validate snapshot time
+                let validatedSnaptime = snap.snaptime;
+                let timestampIssue = null;
+                
+                // Check if snaptime is missing or invalid
+                if (!snap.snaptime || snap.snaptime === 0) {
+                    console.warn(`[DataFetcher] Snapshot "${snap.name}" for ${type} ${vmid} has invalid timestamp: ${snap.snaptime}`);
+                    validatedSnaptime = now - (7 * 24 * 60 * 60); // Default to 7 days ago
+                    timestampIssue = 'invalid_timestamp';
+                }
+                // Check if snaptime is suspiciously recent or in the future
+                else if (snap.snaptime > now) {
+                    console.warn(`[DataFetcher] Snapshot "${snap.name}" for ${type} ${vmid} has future timestamp: ${snap.snaptime} > ${now}`);
+                    validatedSnaptime = now - (24 * 60 * 60); // Default to 24h ago
+                    timestampIssue = 'future_timestamp';
+                }
+                // Check for system clock issues - if snapshot appears to be from exactly current time
+                else if (Math.abs(snap.snaptime - now) < 5) { // Within 5 seconds
+                    console.warn(`[DataFetcher] Snapshot "${snap.name}" for ${type} ${vmid} has timestamp too close to current time: ${snap.snaptime} (now: ${now})`);
+                    // This might be a clock sync issue
+                    validatedSnaptime = now - (60 * 60); // Default to 1 hour ago
+                    timestampIssue = 'clock_sync_issue';
+                }
+                
+                // Calculate age for logging
+                const ageHours = (now - validatedSnaptime) / 3600;
+                const ageDays = ageHours / 24;
+                
+                // Log if snapshot appears very recent (will show as "Just now")
+                if (ageDays < 0.042) { // Less than 1 hour = "Just now" in UI
+                    console.log(`[DataFetcher] RECENT SNAPSHOT ALERT: ${type} ${vmid} "${snap.name}" will show as "Just now" - age: ${ageHours.toFixed(2)}h, timestamp: ${validatedSnaptime}${timestampIssue ? ` (issue: ${timestampIssue})` : ''}`);
+                }
+                
+                // Log all snapshot processing for debugging
+                if (process.env.DEBUG_SNAPSHOTS || vmid == 110 || vmid == 111 || vmid == 114) {
+                    console.log(`[DataFetcher] Processing snapshot for ${type} ${vmid}: "${snap.name}", original timestamp: ${snap.snaptime}, validated: ${validatedSnaptime}, age: ${ageHours.toFixed(1)}h${timestampIssue ? ` (issue: ${timestampIssue})` : ''}`);
+                }
+                
+                return {
+                    name: snap.name,
+                    description: snap.description,
+                    snaptime: validatedSnaptime,
+                    originalSnaptime: snap.snaptime, // Keep original for debugging
+                    timestampIssue: timestampIssue,
+                    vmstate: snap.vmstate || false,
+                    parent: snap.parent,
+                    vmid: parseInt(vmid, 10),
+                    type: type,
+                    node: nodeName,
+                    endpointId: endpointId
+                };
+            });
     } catch (error) {
         // Guest might not exist or snapshots not supported
         if (error.response?.status !== 404) {
@@ -2695,11 +2749,101 @@ function generateGlobalRecommendations(diagnostics) {
     return recommendations;
 }
 
+/**
+ * Process all backup data using the new backup processing system
+ * This function replaces the complex backup processing logic with a cleaner approach
+ */
+async function processBackupDataWithCoordinator(vms, containers, pbsInstances, pveBackupData, filters = {}) {
+    const coordinator = new BackupProcessingCoordinator();
+    
+    // Prepare data for the coordinator
+    const data = {
+        vms,
+        containers,
+        pbsInstances,
+        storageBackups: pveBackupData?.storageBackups || [],
+        guestSnapshots: pveBackupData?.guestSnapshots || []
+    };
+    
+    // Process all backup data with filters
+    const result = coordinator.processAllBackupData(data, filters);
+    
+    // Convert guests to a format compatible with existing frontend
+    const backupStatusByGuest = result.guests.map(guest => {
+        const counts = guest.getBackupCounts();
+        const latestBackupTime = guest.getLatestBackupTime();
+        const namespaces = guest.getNamespaces();
+        
+        return {
+            // Guest identification
+            guestId: guest.vmid,
+            guestName: guest.name,
+            guestType: guest.type === 'qemu' ? 'VM' : 'LXC',
+            node: guest.node,
+            endpointId: guest.endpointId,
+            compositeKey: guest.compositeKey,
+            
+            // Backup counts
+            pbsBackups: counts.pbs,
+            pveBackups: counts.pve,
+            snapshotCount: counts.snapshots,
+            totalBackups: counts.total,
+            
+            // Backup metadata
+            latestBackupTime,
+            pbsNamespaces: namespaces,
+            pbsNamespaceText: namespaces.length > 0 ? namespaces.join(', ') : '-',
+            
+            // Backup health status (can be calculated based on latest backup time)
+            backupHealthStatus: calculateBackupHealthStatus(latestBackupTime),
+            
+            // Failure tracking (would need to be calculated from backup tasks)
+            recentFailures: 0, // TODO: Calculate from backup tasks
+            lastFailureTime: null,
+            
+            // PBS specific info
+            pbsBackupInfo: guest.pbsBackups.length > 0 
+                ? `${guest.pbsBackups.length} PBS backup${guest.pbsBackups.length > 1 ? 's' : ''}`
+                : '',
+            pveBackupInfo: guest.pveBackups.length > 0
+                ? `${guest.pveBackups.length} PVE backup${guest.pveBackups.length > 1 ? 's' : ''}`
+                : '',
+                
+            // Raw backup data for detail views
+            _pbsBackups: guest.pbsBackups,
+            _pveBackups: guest.pveBackups,
+            _snapshots: guest.snapshots
+        };
+    });
+    
+    return {
+        backupStatusByGuest,
+        availableNamespaces: result.availableNamespaces,
+        stats: result.stats
+    };
+}
+
+/**
+ * Calculate backup health status based on latest backup time
+ */
+function calculateBackupHealthStatus(latestBackupTime) {
+    if (!latestBackupTime) return 'none';
+    
+    const now = Math.floor(Date.now() / 1000);
+    const ageInDays = (now - latestBackupTime) / (24 * 60 * 60);
+    
+    if (ageInDays < 1) return 'ok';
+    if (ageInDays < 3) return 'stale';
+    if (ageInDays < 7) return 'old';
+    return 'none';
+}
+
 module.exports = {
     fetchDiscoveryData,
     fetchPbsData, // Keep exporting the real one
     fetchMetricsData,
     clearCaches, // Export for testing
+    processBackupDataWithCoordinator, // Export new function
     // Potentially export PBS helpers if needed elsewhere, but keep internal if not
     // fetchPbsNodeName,
     // fetchPbsDatastoreData,

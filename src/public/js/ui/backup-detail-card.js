@@ -2,6 +2,8 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.backupDetailCard = (() => {
     let pendingTimeout = null;
+    let expandedClusters = new Set(); // Track which clusters are expanded
+    let lastDataHash = null; // Track data changes to prevent unnecessary updates
     
     function createBackupDetailCard(data) {
         const card = document.createElement('div');
@@ -56,10 +58,10 @@ PulseApp.ui.backupDetailCard = (() => {
             filterInfo.search ||
             (filterInfo.guestType && filterInfo.guestType !== 'all') ||
             (filterInfo.backupType && filterInfo.backupType !== 'all') ||
-            (filterInfo.healthStatus && filterInfo.healthStatus !== 'all')
+            (filterInfo.healthStatus && filterInfo.healthStatus !== 'all') ||
+            (filterInfo.namespace && filterInfo.namespace !== 'all') ||
+            (filterInfo.pbsInstance && filterInfo.pbsInstance !== 'all')
         );
-        
-        
         // If no filters active, show summary view
         if (!hasActiveFilters) {
             return getCompactOverview(backups, stats, filterInfo);
@@ -70,547 +72,210 @@ PulseApp.ui.backupDetailCard = (() => {
     }
 
     function getCompactOverview(backups, stats, filterInfo) {
-        // Calculate critical metrics
-        // Find the most recent backup timestamp to use as reference
-        let maxBackupTime = 0;
+        // Get grouping preference
+        const groupByNode = PulseApp.state.get('groupByNode') ?? true;
+        
+        // First deduplicate guests when viewing "all namespaces"
+        const guestMap = new Map();
         backups.forEach(guest => {
-            if (guest.latestBackupTime && guest.latestBackupTime > maxBackupTime) {
-                maxBackupTime = guest.latestBackupTime;
-            }
-            if (guest.latestTimes) {
-                Object.values(guest.latestTimes).forEach(time => {
-                    if (time && time > maxBackupTime) {
-                        maxBackupTime = time;
-                    }
-                });
-            }
-        });
-        
-        // Use the most recent backup time as "now" if it's in the future
-        // This handles clock sync issues between servers
-        const clientNow = new Date();
-        const maxBackupDate = maxBackupTime ? new Date(maxBackupTime * 1000) : null;
-        const now = (maxBackupDate && maxBackupDate > clientNow) ? maxBackupDate : clientNow;
-        
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        const oneMonthAgo = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
-        
-        // Initialize tracking variables
-        let lastBackupTime = 0;
-        let backupsThisMonth = 0;
-        let backupHours = []; // Track backup hours for window detection
-        let daysWithBackups = new Set(); // Track unique days with backups
-        
-        // Detect backup schedule pattern
-        let backupSchedule = 'unknown';
-        let scheduleThreshold = 7; // days for "recent" coverage
-        const backupDates = [];
-        
-        // Collect all backup dates for schedule detection
-        backups.forEach(guest => {
-            // First try to use latestBackupTime which should always be available
-            if (guest.latestBackupTime && guest.latestBackupTime > 0) {
-                backupDates.push(guest.latestBackupTime);
-                // Also use it to track last backup time
-                if (guest.latestBackupTime > lastBackupTime) {
-                    lastBackupTime = guest.latestBackupTime;
-                }
-            }
+            const guestKey = `${guest.guestId || guest.vmid}-${guest.node}`;
             
-            // Also collect from backupDates array for more granular schedule detection
-            if (guest.backupDates && guest.backupDates.length > 0) {
-                guest.backupDates.forEach(bd => {
-                    if (bd.date) {
-                        const timestamp = bd.latestTimestamp || new Date(bd.date).getTime() / 1000;
-                        if (timestamp) {
-                            backupDates.push(timestamp);
-                            // Track backup hours and days for metrics
-                            const backupDate = new Date(timestamp * 1000);
-                            if (backupDate >= startOfMonth) {
-                                backupsThisMonth += bd.count || 1;
-                                daysWithBackups.add(backupDate.toDateString());
-                            }
-                            if (backupDate >= oneMonthAgo) {
-                                backupHours.push(backupDate.getHours());
-                            }
-                        }
-                    }
-                });
-            } else if (guest.latestBackupTime && guest.latestBackupTime > 0) {
-                // If no detailed backup dates but we have latestBackupTime, use it for metrics
-                const backupDate = new Date(guest.latestBackupTime * 1000);
-                if (backupDate >= startOfMonth) {
-                    backupsThisMonth += 1; // Count this guest
-                    daysWithBackups.add(backupDate.toDateString());
-                }
-                if (backupDate >= oneMonthAgo) {
-                    backupHours.push(backupDate.getHours());
-                }
-            }
-        });
-        
-        // Sort backup dates
-        backupDates.sort((a, b) => b - a);
-        
-        // Detect schedule pattern from recent backups
-        if (backupDates.length >= 7) {
-            const recentDates = backupDates.slice(0, 14); // Look at last 2 weeks
-            const gaps = [];
-            for (let i = 1; i < recentDates.length; i++) {
-                const gap = (recentDates[i-1] - recentDates[i]) / (24 * 60 * 60); // days
-                if (gap < 30) gaps.push(gap); // Ignore monthly+ gaps
-            }
-            
-            if (gaps.length > 0) {
-                const avgGap = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-                if (avgGap <= 1.5) {
-                    backupSchedule = 'daily';
-                    scheduleThreshold = 2; // 2 days for daily backups
-                } else if (avgGap <= 8) {
-                    backupSchedule = 'weekly';
-                    scheduleThreshold = 10; // 10 days for weekly backups
-                } else {
-                    backupSchedule = 'monthly';
-                    scheduleThreshold = 35; // 35 days for monthly backups
-                }
-            }
-        }
-        
-        // Adjust age thresholds based on schedule
-        const criticalAge = scheduleThreshold * 2; // 2x the schedule
-        const warningAge = scheduleThreshold; // 1x the schedule
-        
-        // Group guests by backup age
-        const guestsByAge = {
-            good: [],      // < 24h
-            ok: [],        // 1-scheduleThreshold days
-            warning: [],   // scheduleThreshold-criticalAge days
-            critical: [],  // > criticalAge days
-            none: []       // no backups
-        };
-        
-        // Track namespace distribution
-        const namespaceStats = new Map();
-        const pbsBackupsByNamespace = new Map();
-        let recentFailures = 0;
-        
-        // Analyze each guest
-        backups.forEach(guest => {
-            let mostRecentBackup = null;
-            
-            // Count backups this month and track backup times
-            if (guest.backupDates && guest.backupDates.length > 0) {
-                guest.backupDates.forEach(bd => {
-                    const timestamp = bd.latestTimestamp || (bd.date ? new Date(bd.date).getTime() / 1000 : 0);
-                    if (timestamp) {
-                        const backupDate = new Date(timestamp * 1000);
-                        if (backupDate >= startOfMonth) {
-                            backupsThisMonth += bd.count || 1;
-                            daysWithBackups.add(backupDate.toDateString());
-                        }
-                        // Track backup hours for window detection
-                        if (backupDate >= oneMonthAgo) {
-                            backupHours.push(backupDate.getHours());
-                        }
-                        // Track most recent backup across all guests
-                        if (timestamp > lastBackupTime) {
-                            lastBackupTime = timestamp;
-                        }
-                    }
-                });
-            }
-            
-            // Count recent failures
-            if (guest.recentFailures > 0) {
-                recentFailures += guest.recentFailures;
-            }
-            
-            // Check if we have filter info to determine which backup types to consider
-            const activeBackupFilter = filterInfo?.backupType;
-            
-            // If a specific backup type filter is active, use type-specific latest times
-            if (activeBackupFilter && activeBackupFilter !== 'all') {
-                let latestTimestamp = null;
+            if (!guestMap.has(guestKey)) {
+                guestMap.set(guestKey, guest);
+            } else {
+                const existingGuest = guestMap.get(guestKey);
                 
-                // Use direct timestamp lookup from latestTimes
+                // Compare backup times to keep the entry with the most recent backup
+                let existingTime = 0;
+                let currentTime = 0;
+                
+                if (existingGuest.latestTimes) {
+                    const times = Object.values(existingGuest.latestTimes).filter(t => t && t > 0);
+                    if (times.length > 0) existingTime = Math.max(...times);
+                } else if (existingGuest.latestBackupTime) {
+                    existingTime = existingGuest.latestBackupTime;
+                }
+                
                 if (guest.latestTimes) {
-                    switch(activeBackupFilter) {
-                        case 'pve':
-                            latestTimestamp = guest.latestTimes.pve;
-                            break;
-                        case 'pbs':
-                            latestTimestamp = guest.latestTimes.pbs;
-                            break;
-                        case 'snapshots':
-                            latestTimestamp = guest.latestTimes.snapshots;
-                            break;
-                    }
+                    const times = Object.values(guest.latestTimes).filter(t => t && t > 0);
+                    if (times.length > 0) currentTime = Math.max(...times);
+                } else if (guest.latestBackupTime) {
+                    currentTime = guest.latestBackupTime;
                 }
                 
-                // Convert timestamp to Date object
-                if (latestTimestamp) {
-                    mostRecentBackup = new Date(latestTimestamp * 1000);
-                }
-                
-            } else {
-                // Use overall latest backup time for 'all' filter or when no filter is active
-                
-                // Find most recent backup - only use if it's a valid timestamp
-                if (guest.latestBackupTime && guest.latestBackupTime > 0) {
-                    // latestBackupTime is a Unix timestamp from the main backup status
-                    mostRecentBackup = new Date(guest.latestBackupTime * 1000);
-                } else if (guest.backupDates && guest.backupDates.length > 0) {
-                    // Fallback to backupDates array - find the most recent actual backup
-                    const validDates = guest.backupDates
-                        .filter(bd => bd.date && new Date(bd.date).getTime() > 0)
-                        .map(bd => new Date(bd.date))
-                        .sort((a, b) => b - a);
-                    if (validDates.length > 0) {
-                        mostRecentBackup = validDates[0];
-                    }
+                if (currentTime > existingTime) {
+                    guestMap.set(guestKey, guest);
                 }
             }
+        });
+        
+        // Get nodes data to determine infrastructure
+        const nodesData = PulseApp.state.get('nodesData') || [];
+        const nodeGroups = new Map();
+        
+        // Process deduplicated guests and group by node
+        guestMap.forEach(guest => {
+            const nodeName = guest.node || 'Unknown';
             
-            // Extract namespace information from pbsBackupInfo if available
-            let namespaces = [];
-            if (guest.pbsBackupInfo && guest.pbsBackups > 0) {
-                // Parse namespace info from pbsBackupInfo string
-                const nsMatch = guest.pbsBackupInfo.match(/\[(.*?)\]/g);
-                if (nsMatch) {
-                    nsMatch.forEach(match => {
-                        const nsContent = match.slice(1, -1); // Remove brackets
-                        const nsList = nsContent.split(',').map(ns => ns.trim());
-                        namespaces.push(...nsList);
-                    });
-                }
-                
-                // Track namespace statistics
-                namespaces.forEach(ns => {
-                    namespaceStats.set(ns, (namespaceStats.get(ns) || 0) + 1);
-                    if (!pbsBackupsByNamespace.has(ns)) {
-                        pbsBackupsByNamespace.set(ns, 0);
-                    }
-                    pbsBackupsByNamespace.set(ns, pbsBackupsByNamespace.get(ns) + guest.pbsBackups);
+            if (!nodeGroups.has(nodeName)) {
+                // Find node info
+                const nodeInfo = nodesData.find(n => (n.node || n.name) === nodeName);
+                nodeGroups.set(nodeName, {
+                    cluster: nodeInfo?.clusterIdentifier || 'Standalone',
+                    type: nodeInfo?.endpointType || 'unknown',
+                    guests: [],
+                    healthy: 0,
+                    outdated: 0,
+                    unprotected: 0,
+                    pbsBackups: 0,
+                    pveBackups: 0,
+                    snapshots: 0
                 });
             }
             
-            const guestData = {
-                id: guest.guestId,
-                name: guest.guestName,
-                type: guest.guestType,
-                node: guest.node,
-                endpointId: guest.endpointId,
-                pbsCount: guest.pbsBackups || 0,
-                pveCount: guest.pveBackups || 0,
-                snapCount: guest.snapshotCount || 0,
-                mostRecentBackupType: guest.mostRecentBackupType,
-                failures: guest.recentFailures || 0,
-                lastBackup: mostRecentBackup,
-                namespaces: namespaces
-            };
+            const nodeGroup = nodeGroups.get(nodeName);
+            nodeGroup.guests.push(guest);
             
-            if (!mostRecentBackup) {
-                guestsByAge.none.push(guestData);
+            // Track backup methods
+            if (guest.pbsBackups > 0) nodeGroup.pbsBackups++;
+            if (guest.pveBackups > 0) nodeGroup.pveBackups++;
+            if (guest.snapshotCount > 0) nodeGroup.snapshots++;
+            
+            // Categorize by backup status
+            const now = Date.now() / 1000;
+            let mostRecent = 0;
+            
+            if (guest.latestTimes) {
+                const times = Object.values(guest.latestTimes).filter(t => t && t > 0);
+                if (times.length > 0) mostRecent = Math.max(...times);
+            } else if (guest.latestBackupTime) {
+                mostRecent = guest.latestBackupTime;
+            }
+            
+            const hasBackup = guest.pbsBackups > 0 || guest.pveBackups > 0 || guest.snapshotCount > 0;
+            const ageInDays = mostRecent ? (now - mostRecent) / 86400 : Infinity;
+            
+            if (!hasBackup) {
+                nodeGroup.unprotected++;
+            } else if (ageInDays <= 7) {
+                nodeGroup.healthy++;
             } else {
-                const ageInDays = (now - mostRecentBackup) / (1000 * 60 * 60 * 24);
-                guestData.ageInDays = ageInDays;
-                
-                if (ageInDays < 1) {
-                    guestsByAge.good.push(guestData);
-                } else if (ageInDays <= scheduleThreshold) {
-                    guestsByAge.ok.push(guestData);
-                } else if (ageInDays <= criticalAge) {
-                    guestsByAge.warning.push(guestData);
-                } else {
-                    guestsByAge.critical.push(guestData);
-                }
+                nodeGroup.outdated++;
             }
         });
         
-        // Sort each group
-        Object.keys(guestsByAge).forEach(key => {
-            if (key !== 'none') {
-                guestsByAge[key].sort((a, b) => (a.ageInDays || 0) - (b.ageInDays || 0));
-            }
-        });
+        // Sort nodes by name
+        const sortedNodes = Array.from(nodeGroups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
         
-        // Calculate summary stats
-        const totalIssues = guestsByAge.critical.length + guestsByAge.warning.length + guestsByAge.none.length;
-        const healthScore = Math.round(((stats.totalGuests - totalIssues) / stats.totalGuests) * 100) || 0;
-        const recentCoverage = guestsByAge.good.length + guestsByAge.ok.length;
-        
-        // Calculate daily average
-        // If we don't have detailed backup dates, estimate based on schedule
-        let dailyAverage = 0;
-        if (daysWithBackups.size > 0) {
-            dailyAverage = Math.round(backupsThisMonth / daysWithBackups.size);
-        } else if (backupSchedule === 'daily') {
-            // For daily backups, estimate based on total guests
-            dailyAverage = stats.totalGuests;
-        } else if (backupSchedule === 'weekly') {
-            // For weekly backups, estimate ~1/7 of guests per day
-            dailyAverage = Math.max(1, Math.round(stats.totalGuests / 7));
-        } else {
-            // Unknown schedule but all guests healthy - likely daily backups
-            if (healthScore === 100 && stats.totalGuests > 0) {
-                // If all guests are backed up recently, assume daily schedule
-                dailyAverage = stats.totalGuests;
-            } else {
-                // Conservative estimate
-                dailyAverage = Math.max(1, Math.round(stats.totalGuests / 7));
-            }
-        }
-        
-        // Detect backup window
-        let backupWindow = 'Unknown';
-        if (backupHours.length > 0) {
-            // Find most common hour
-            const hourCounts = {};
-            backupHours.forEach(hour => {
-                hourCounts[hour] = (hourCounts[hour] || 0) + 1;
-            });
-            const sortedHours = Object.entries(hourCounts).sort((a, b) => b[1] - a[1]);
-            const primaryHour = parseInt(sortedHours[0][0]);
+        if (!groupByNode) {
+            // Flat view - combine all into one summary
+            let totalHealthy = 0;
+            let totalOutdated = 0;
+            let totalUnprotected = 0;
             
-            // Check if there's a clear window
-            let consecutiveHours = [primaryHour];
-            sortedHours.forEach(([hour, count]) => {
-                const h = parseInt(hour);
-                if (count > hourCounts[primaryHour] * 0.3 && // At least 30% of primary hour
-                    (Math.abs(h - primaryHour) <= 2 || Math.abs(h - primaryHour) >= 22)) { // Within 2 hours
-                    consecutiveHours.push(h);
-                }
+            nodeGroups.forEach(group => {
+                totalHealthy += group.healthy;
+                totalOutdated += group.outdated;
+                totalUnprotected += group.unprotected;
             });
             
-            const minHour = Math.min(...consecutiveHours);
-            const maxHour = Math.max(...consecutiveHours);
+            const totalGuests = totalHealthy + totalOutdated + totalUnprotected;
+            const overallHealth = totalGuests > 0 ? Math.round((totalHealthy / totalGuests) * 100) : 0;
             
-            // Format time window
-            const formatHour = (h) => {
-                const period = h >= 12 ? 'PM' : 'AM';
-                const hour12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
-                return `${hour12}${period}`;
-            };
-            
-            if (maxHour - minHour <= 3 || maxHour - minHour >= 21) {
-                backupWindow = `${formatHour(minHour)}-${formatHour((maxHour + 1) % 24)}`;
-            } else {
-                backupWindow = `~${formatHour(primaryHour)}`;
-            }
-        }
-        
-        // Check if all namespaces are the same
-        const allSameNamespace = namespaceStats.size <= 1;
-        
-        return `
-            <div class="flex flex-col h-full">
-                <!-- Compact Header with Key Metrics -->
-                <div class="mb-2 pb-2 border-b border-gray-200 dark:border-gray-700">
-                    <div class="flex items-center justify-between mb-2">
-                        <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Backup Health</h3>
-                        <div class="text-right">
-                            <div class="text-lg font-bold ${healthScore >= 80 ? 'text-green-600 dark:text-green-400' : healthScore >= 60 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}">${healthScore}%</div>
-                            <div class="text-[9px] text-gray-500 dark:text-gray-400">${stats.totalGuests - totalIssues}/${stats.totalGuests} healthy</div>
+            return `
+                <div class="flex flex-col h-full">
+                    <!-- Single Overview -->
+                    <div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                        <div class="text-center mb-3">
+                            <div class="text-3xl font-bold ${overallHealth >= 80 ? 'text-green-600' : overallHealth >= 60 ? 'text-yellow-600' : 'text-red-600'}">
+                                ${overallHealth}%
+                            </div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">
+                                ${totalHealthy}/${totalGuests} guests with current backups
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-3 gap-3 text-center">
+                            <div class="bg-white dark:bg-gray-900 rounded-lg p-3">
+                                <div class="text-2xl font-bold text-green-600">${totalHealthy}</div>
+                                <div class="text-xs text-gray-500">Current</div>
+                                <div class="text-[9px] text-gray-400">≤7 days</div>
+                            </div>
+                            <div class="bg-white dark:bg-gray-900 rounded-lg p-3">
+                                <div class="text-2xl font-bold text-yellow-600">${totalOutdated}</div>
+                                <div class="text-xs text-gray-500">Outdated</div>
+                                <div class="text-[9px] text-gray-400">>7 days</div>
+                            </div>
+                            <div class="bg-white dark:bg-gray-900 rounded-lg p-3">
+                                <div class="text-2xl font-bold text-red-600">${totalUnprotected}</div>
+                                <div class="text-xs text-gray-500">No Backup</div>
+                                <div class="text-[9px] text-gray-400">unprotected</div>
+                            </div>
                         </div>
                     </div>
-                    ${healthScore < 100 ? `
-                    <div class="grid grid-cols-4 gap-2 text-[10px]">
-                        <div class="text-center">
-                            <div class="font-semibold text-green-600 dark:text-green-400">${guestsByAge.good.length}</div>
-                            <div class="text-gray-500 dark:text-gray-400">&lt;24h</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="font-semibold text-blue-600 dark:text-blue-400">${guestsByAge.ok.length}</div>
-                            <div class="text-gray-500 dark:text-gray-400">&lt;${Math.ceil(scheduleThreshold)}d</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="font-semibold text-orange-600 dark:text-orange-400">${guestsByAge.warning.length}</div>
-                            <div class="text-gray-500 dark:text-gray-400">${Math.ceil(scheduleThreshold)}-${Math.ceil(criticalAge)}d</div>
-                        </div>
-                        <div class="text-center">
-                            <div class="font-semibold text-red-600 dark:text-red-400">${guestsByAge.critical.length + guestsByAge.none.length}</div>
-                            <div class="text-gray-500 dark:text-gray-400">${guestsByAge.none.length > 0 ? 'Old/None' : `>${Math.ceil(criticalAge)}d`}</div>
-                        </div>
-                    </div>
-                    ` : ''}
                 </div>
-                
-                <!-- Scrollable Guest List -->
-                <div class="flex-1 overflow-y-auto">
-                    ${totalIssues > 0 ? `
-                        <!-- Critical/Warning Guests -->
-                        <div class="mb-2">
-                            <h4 class="text-[10px] font-semibold text-red-700 dark:text-red-400 uppercase tracking-wider mb-1">Needs Attention (${totalIssues})</h4>
-                            <div class="space-y-0.5">
-                                ${[...guestsByAge.none, ...guestsByAge.critical, ...guestsByAge.warning].map(guest => `
-                                    <div class="flex items-center justify-between px-1 py-0.5 rounded text-[11px] bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30">
-                                        <div class="flex items-center gap-1 flex-1 min-w-0">
-                                            <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
-                                            <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
-                                            <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
-                                            ${guest.node ? `<span class="text-[8px] text-gray-500 dark:text-gray-400">@${guest.node}</span>` : ''}
-                                            ${guest.namespaces && guest.namespaces.length > 0 ? 
-                                                `<span class="text-[8px] text-purple-600 dark:text-purple-400">[${guest.namespaces.join(', ')}]</span>` : 
-                                                ''
-                                            }
-                                        </div>
-                                        <div class="flex items-center gap-2 ml-2">
-                                            <div class="flex items-center gap-1 text-[9px]">
-                                                ${guest.mostRecentBackupType === 'pbs' ? '<span class="text-purple-600 dark:text-purple-400 font-medium">PBS</span>' : ''}
-                                                ${guest.mostRecentBackupType === 'pve' ? '<span class="text-orange-600 dark:text-orange-400 font-medium">PVE</span>' : ''}
-                                                ${guest.mostRecentBackupType === 'snapshot' ? '<span class="text-yellow-600 dark:text-yellow-400 font-medium">SNAP</span>' : ''}
-                                            </div>
-                                            ${guest.failures > 0 ? `<span class="text-red-600 dark:text-red-400">⚠ ${guest.failures}</span>` : ''}
-                                            <span class="${guest.lastBackup ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'} font-medium">
-                                                ${guest.lastBackup ? formatAge(guest.ageInDays) : 'Never'}
+            `;
+        } else {
+            // Grouped view - show each node separately
+            return `
+                <div class="flex flex-col h-full overflow-y-auto">
+                    ${sortedNodes.map(([nodeName, group]) => {
+                        const nodeTotal = group.healthy + group.outdated + group.unprotected;
+                        const nodeHealth = nodeTotal > 0 ? Math.round((group.healthy / nodeTotal) * 100) : 0;
+                        const healthColor = nodeHealth >= 80 ? 'green' : nodeHealth >= 60 ? 'yellow' : 'red';
+                        
+                        // Create backup method badges
+                        const backupMethods = [];
+                        if (group.pbsBackups > 0) backupMethods.push(`<span class="text-purple-600">PBS</span>`);
+                        if (group.pveBackups > 0) backupMethods.push(`<span class="text-orange-600">PVE</span>`);
+                        if (group.snapshots > 0) backupMethods.push(`<span class="text-yellow-600">Snap</span>`);
+                        
+                        return `
+                            <div class="mb-3 last:mb-0">
+                                <!-- Node Header -->
+                                <div class="bg-gray-100 dark:bg-gray-700/80 rounded-t-lg px-3 py-2">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-semibold text-sm text-gray-700 dark:text-gray-300">${nodeName}</span>
+                                            <span class="text-xs text-gray-500">
+                                                ${nodeTotal} guest${nodeTotal !== 1 ? 's' : ''}
+                                                ${backupMethods.length > 0 ? `• ${backupMethods.join(' ')}` : ''}
                                             </span>
                                         </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    <!-- Healthy Status Message or Guest List -->
-                    ${healthScore === 100 ? `
-                        <div class="flex items-center justify-center py-8 text-center">
-                            <div>
-                                <svg class="w-12 h-12 text-green-500 dark:text-green-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                                <p class="text-sm font-medium text-green-700 dark:text-green-400">All ${stats.totalGuests} guests backed up successfully</p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">${backupSchedule.charAt(0).toUpperCase() + backupSchedule.slice(1)} schedule • ${backupWindow}</p>
-                            </div>
-                        </div>
-                    ` : guestsByAge.good.length > 0 ? `
-                        <div class="mb-2">
-                            <div class="flex items-center justify-between mb-1">
-                                <h4 class="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase tracking-wider">Recent (${guestsByAge.good.length})</h4>
-                                ${guestsByAge.good.length > 5 ? `
-                                    <button onclick="const list = this.parentElement.parentElement.querySelector('.space-y-0\\\\.5'); const hidden = list.querySelector('.hidden'); if(hidden) { hidden.classList.remove('hidden'); this.textContent = 'Show Less'; } else { list.querySelector('div:last-child').classList.add('hidden'); this.textContent = 'Show All'; }" 
-                                        class="text-[9px] text-blue-600 dark:text-blue-400 hover:underline">
-                                        Show All
-                                    </button>
-                                ` : ''}
-                            </div>
-                            <div class="space-y-0.5">
-                                ${guestsByAge.good.slice(0, 5).map(guest => `
-                                    <div class="flex items-center justify-between px-1 py-0.5 rounded text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                        <div class="flex items-center gap-1 flex-1 min-w-0">
-                                            <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
-                                            <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
-                                            <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
-                                            ${guest.node ? `<span class="text-[8px] text-gray-500 dark:text-gray-400">@${guest.node}</span>` : ''}
-                                        </div>
-                                        <div class="flex items-center gap-2 ml-2">
-                                            <span class="text-green-600 dark:text-green-400 font-medium">${formatAge(guest.ageInDays)}</span>
+                                        <div class="flex items-center gap-2">
+                                            <div class="text-lg font-bold text-${healthColor}-600">${nodeHealth}%</div>
                                         </div>
                                     </div>
-                                `).join('')}
-                                ${guestsByAge.good.length > 5 ? `
-                                    <div class="hidden">
-                                        ${guestsByAge.good.slice(5).map(guest => `
-                                            <div class="flex items-center justify-between px-1 py-0.5 rounded text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                                <div class="flex items-center gap-1 flex-1 min-w-0">
-                                                    <span class="text-[9px] font-medium ${guest.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guest.type}</span>
-                                                    <span class="font-mono text-gray-600 dark:text-gray-400">${guest.id}</span>
-                                                    <span class="truncate text-gray-700 dark:text-gray-300">${guest.name}</span>
-                                                    ${guest.node ? `<span class="text-[8px] text-gray-500 dark:text-gray-400">@${guest.node}</span>` : ''}
-                                                </div>
-                                                <div class="flex items-center gap-2 ml-2">
-                                                    <span class="text-green-600 dark:text-green-400 font-medium">${formatAge(guest.ageInDays)}</span>
-                                                </div>
-                                            </div>
-                                        `).join('')}
+                                </div>
+                                
+                                <!-- Node Stats -->
+                                <div class="bg-white dark:bg-gray-800 rounded-b-lg border border-t-0 border-gray-200 dark:border-gray-700 p-3">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <div class="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                                            <div class="h-full bg-${healthColor}-500 transition-all" style="width: ${nodeHealth}%"></div>
+                                        </div>
                                     </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    ` : ''}
-                    
-                    <!-- Summary Stats -->
-                    <div class="mt-3 pt-2 border-t border-gray-200 dark:border-gray-700">
-                        <div class="space-y-2">
-                            <!-- Schedule and Last Backup -->
-                            <div class="text-[9px] text-gray-600 dark:text-gray-400">
-                                <div class="flex justify-between items-center mb-1">
-                                    <span>Schedule:</span>
-                                    <span class="font-medium ${backupSchedule === 'daily' ? 'text-green-600 dark:text-green-400' : backupSchedule === 'weekly' ? 'text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'}">\n                                        ${backupSchedule.charAt(0).toUpperCase() + backupSchedule.slice(1)} backups
-                                    </span>
-                                </div>
-                                <div class="flex justify-between items-center">
-                                    <span>Last Backup:</span>
-                                    <span class="font-medium">${lastBackupTime ? formatTimeAgo(lastBackupTime) : 'Never'}</span>
-                                </div>
-                            </div>
-                            
-                            <!-- Key Metrics -->
-                            <div class="grid grid-cols-3 gap-2 text-[10px]">
-                                <div class="text-center">
-                                    <div class="font-semibold text-blue-600 dark:text-blue-400">~${dailyAverage}</div>
-                                    <div class="text-gray-500 dark:text-gray-400">Per Day</div>
-                                </div>
-                                <div class="text-center">
-                                    <div class="font-semibold text-purple-600 dark:text-purple-400">${backupWindow}</div>
-                                    <div class="text-gray-500 dark:text-gray-400">Window</div>
-                                </div>
-                                <div class="text-center">
-                                    <div class="font-semibold ${recentCoverage === stats.totalGuests ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'}">${recentCoverage}/${stats.totalGuests}</div>
-                                    <div class="text-gray-500 dark:text-gray-400">Coverage</div>
-                                </div>
-                            </div>
-                            
-                            <!-- Backup Type Distribution -->
-                            <div class="text-[9px] text-gray-600 dark:text-gray-400">
-                                <div class="flex justify-between items-center">
-                                    <span>Backup Types:</span>
-                                    <div class="flex gap-2">
-                                        ${stats.pbsCount > 0 ? `<span class="text-purple-600 dark:text-purple-400">${stats.pbsCount} PBS</span>` : ''}
-                                        ${stats.pveCount > 0 ? `<span class="text-orange-600 dark:text-orange-400">${stats.pveCount} PVE</span>` : ''}
-                                        ${stats.snapshotCount > 0 ? `<span class="text-yellow-600 dark:text-yellow-400">${stats.snapshotCount} Snap</span>` : ''}
+                                    <div class="grid grid-cols-3 gap-2 text-center text-xs">
+                                        <div>
+                                            <span class="font-semibold text-green-600">${group.healthy}</span>
+                                            <span class="text-gray-500 ml-1">current</span>
+                                        </div>
+                                        <div>
+                                            <span class="font-semibold text-yellow-600">${group.outdated}</span>
+                                            <span class="text-gray-500 ml-1">outdated</span>
+                                        </div>
+                                        <div>
+                                            <span class="font-semibold text-red-600">${group.unprotected}</span>
+                                            <span class="text-gray-500 ml-1">none</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            
-                            <!-- Coverage and Failures -->
-                            <div class="text-[9px] text-gray-600 dark:text-gray-400">
-                                <div class="flex justify-between items-center mb-1">
-                                    <span>Coverage:</span>
-                                    <span>${stats.totalGuests - guestsByAge.none.length}/${stats.totalGuests} guests protected</span>
-                                </div>
-                                ${recentFailures > 0 ? `
-                                <div class="flex justify-between items-center">
-                                    <span>Recent Failures:</span>
-                                    <span class="text-red-600 dark:text-red-400 font-medium">${recentFailures} tasks failed</span>
-                                </div>` : ''}
-                            </div>
-                            
-                            <!-- Namespace Distribution -->
-                            ${namespaceStats.size > 1 ? `
-                                <div class="text-[9px] text-gray-600 dark:text-gray-400">
-                                    <div class="flex items-center justify-between mb-1">
-                                        <span class="font-medium">Namespaces:</span>
-                                    </div>
-                                    <div class="flex gap-1 flex-wrap">
-                                        ${Array.from(namespaceStats.entries())
-                                            .sort((a, b) => b[1] - a[1])
-                                            .map(([ns, count]) => {
-                                                const percentage = Math.round((count / stats.totalGuests) * 100);
-                                                return `
-                                                    <div class="flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 rounded">
-                                                        <span class="text-purple-700 dark:text-purple-300 font-medium">${ns}</span>
-                                                        <span class="text-purple-600 dark:text-purple-400">${count}</span>
-                                                    </div>
-                                                `;
-                                            }).join('')}
-                                    </div>
-                                </div>
-                            ` : ''}
-                        </div>
-                    </div>
+                        `;
+                    }).join('')}
                 </div>
-            </div>
-        `;
+            `;
+        }
     }
 
     function getCompactDetailTable(backups, stats, filterInfo) {
@@ -676,11 +341,31 @@ PulseApp.ui.backupDetailCard = (() => {
                                 
                             } else {
                                 // Use overall backup age when no filter is active
-                                if (guest.latestBackupTime && guest.latestBackupTime > 0) {
-                                    // latestBackupTime is a Unix timestamp from the main backup status
+                                // IMPORTANT: Calculate the actual most recent backup across all types
+                                
+                                let latestTimestamp = null;
+                                
+                                // First check latestTimes object for the most recent across all backup types
+                                if (guest.latestTimes) {
+                                    const times = [
+                                        guest.latestTimes.pbs,
+                                        guest.latestTimes.pve,
+                                        guest.latestTimes.snapshots
+                                    ].filter(t => t && t > 0);
+                                    
+                                    if (times.length > 0) {
+                                        latestTimestamp = Math.max(...times);
+                                    }
+                                }
+                                
+                                // If we found a timestamp from latestTimes, use it
+                                if (latestTimestamp) {
+                                    mostRecent = new Date(latestTimestamp * 1000);
+                                } else if (guest.latestBackupTime && guest.latestBackupTime > 0) {
+                                    // Fallback to latestBackupTime if latestTimes is not available
                                     mostRecent = new Date(guest.latestBackupTime * 1000);
                                 } else if (guest.backupDates && guest.backupDates.length > 0) {
-                                    // Fallback to filtered backup dates
+                                    // Final fallback to backupDates array
                                     mostRecent = new Date(guest.backupDates[0].date);
                                 }
                             }
@@ -706,8 +391,8 @@ PulseApp.ui.backupDetailCard = (() => {
                                     <div class="col-span-2 text-right text-gray-600 dark:text-gray-400">
                                         
                                     </div>
-                                    <div class="col-span-2 text-right font-medium ${getAgeColor(ageInDays)}">
-                                        ${formatAge(ageInDays)}
+                                    <div class="col-span-2 text-right font-medium ${PulseApp.utils.backup.getAgeColor(ageInDays)}">
+                                        ${PulseApp.utils.backup.formatAge(ageInDays)}
                                     </div>
                                 </div>
                             `;
@@ -720,6 +405,7 @@ PulseApp.ui.backupDetailCard = (() => {
 
     function getSingleDateContent(data) {
         const { date, backups, stats, filterInfo } = data;
+        
         
         if (!backups || backups.length === 0) {
             return getEmptyState(false);
@@ -752,7 +438,7 @@ PulseApp.ui.backupDetailCard = (() => {
                 <div class="mb-2 pb-1 border-b border-gray-200 dark:border-gray-700">
                     <div class="flex items-center justify-between">
                         <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                            ${formatCompactDate(date)}
+                            ${PulseApp.utils.backup.formatCompactDate(date)}
                         </h3>
                         <span class="text-xs text-gray-500 dark:text-gray-400">${stats.totalGuests} guests</span>
                     </div>
@@ -946,45 +632,6 @@ PulseApp.ui.backupDetailCard = (() => {
     }
 
     // Helper functions
-    function formatAge(ageInDays) {
-        if (ageInDays === Infinity) return 'Never';
-        
-        // With proper time reference, we shouldn't have negative ages
-        // But handle edge cases gracefully
-        if (ageInDays < 0.042) return 'Just now'; // Less than 1 hour
-        if (ageInDays < 1) return `${Math.floor(ageInDays * 24)}h`;
-        if (ageInDays < 7) return `${Math.floor(ageInDays)}d`;
-        if (ageInDays < 30) return `${Math.floor(ageInDays / 7)}w`;
-        return `${Math.floor(ageInDays / 30)}mo`;
-    }
-    
-    function formatTimeAgo(timestamp) {
-        const now = Math.floor(Date.now() / 1000);
-        const diff = now - timestamp;
-        
-        if (diff < 60) return 'Just now';
-        if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-        if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-        if (diff < 604800) return `${Math.floor(diff / 86400)} days ago`;
-        if (diff < 2592000) return `${Math.floor(diff / 604800)} weeks ago`;
-        return `${Math.floor(diff / 2592000)} months ago`;
-    }
-
-    function getAgeColor(ageInDays) {
-        if (ageInDays <= 1) return 'text-green-600 dark:text-green-400';
-        if (ageInDays <= 3) return 'text-blue-600 dark:text-blue-400';
-        if (ageInDays <= 7) return 'text-yellow-600 dark:text-yellow-400';
-        if (ageInDays <= 14) return 'text-orange-600 dark:text-orange-400';
-        return 'text-red-600 dark:text-red-400';
-    }
-
-    function formatCompactDate(dateStr) {
-        const date = new Date(dateStr);
-        const month = date.toLocaleDateString('en-US', { month: 'short' });
-        const day = date.getDate();
-        return `${month} ${day}`;
-    }
-
     function getFilterLabel(filterInfo) {
         const parts = [];
         if (filterInfo.backupType && filterInfo.backupType !== 'all') {
@@ -996,16 +643,20 @@ PulseApp.ui.backupDetailCard = (() => {
         if (filterInfo.healthStatus && filterInfo.healthStatus !== 'all') {
             parts.push(filterInfo.healthStatus);
         }
-        return parts.length > 0 ? parts.join(' / ') : 'Filtered Results';
-    }
-
-    function getBackupTypeLabel(type) {
-        switch(type) {
-            case 'pbs': return 'PBS backups';
-            case 'pve': return 'PVE backups';
-            case 'snapshots': return 'snapshots';
-            default: return 'backups';
+        if (filterInfo.namespace && filterInfo.namespace !== 'all') {
+            parts.push(`NS: ${filterInfo.namespace}`);
         }
+        if (filterInfo.pbsInstance && filterInfo.pbsInstance !== 'all') {
+            // Try to get PBS instance name from state
+            const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
+            const pbsInstance = pbsDataArray[parseInt(filterInfo.pbsInstance)];
+            if (pbsInstance && pbsInstance.name) {
+                parts.push(`PBS: ${pbsInstance.name}`);
+            } else {
+                parts.push(`PBS Instance ${filterInfo.pbsInstance}`);
+            }
+        }
+        return parts.length > 0 ? parts.join(' / ') : 'Filtered Results';
     }
 
     function updateBackupDetailCard(card, data, instant = false) {
@@ -1013,6 +664,21 @@ PulseApp.ui.backupDetailCard = (() => {
         
         const contentDiv = card.querySelector('.backup-detail-content');
         if (!contentDiv) return;
+        
+        // Create a simple hash of the data to detect changes
+        const dataHash = data ? JSON.stringify({
+            totalGuests: data.stats?.totalGuests,
+            healthyGuests: data.stats?.healthyGuests,
+            backupCount: data.backups?.length,
+            filterInfo: data.filterInfo
+        }) : 'empty';
+        
+        // Skip update if data hasn't changed and it's not a user action
+        if (!instant && dataHash === lastDataHash) {
+            return;
+        }
+        
+        lastDataHash = dataHash;
         
         // Cancel any pending timeout
         if (pendingTimeout) {
@@ -1028,6 +694,7 @@ PulseApp.ui.backupDetailCard = (() => {
             const scrollTop = scrollableContainer ? scrollableContainer.scrollTop : 0;
             
             if (!instant) {
+                // For API updates, use a longer debounce to prevent flashing
                 contentDiv.style.opacity = '0';
                 setTimeout(() => {
                     contentDiv.innerHTML = newContent;
@@ -1042,6 +709,7 @@ PulseApp.ui.backupDetailCard = (() => {
                     });
                 }, 150);
             } else {
+                // For user actions, update immediately
                 contentDiv.innerHTML = newContent;
                 
                 // Restore scroll position for instant updates
@@ -1055,7 +723,8 @@ PulseApp.ui.backupDetailCard = (() => {
         };
         
         if (!instant) {
-            pendingTimeout = setTimeout(updateContent, 100);
+            // Use longer debounce for API updates to prevent dropdowns from closing
+            pendingTimeout = setTimeout(updateContent, 500);
         } else {
             updateContent();
         }

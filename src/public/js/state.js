@@ -220,7 +220,16 @@ PulseApp.state = (() => {
             }
             
             // Mark that we've received initial data
-            if (!internalState.initialDataReceived && internalState.dashboardData.length > 0) {
+            // Set to true if we've received any data (nodes, PBS, PVE backups, etc.), not just dashboard data
+            if (!internalState.initialDataReceived && 
+                (internalState.dashboardData.length > 0 || 
+                 internalState.nodesData.length > 0 || 
+                 internalState.pbsDataArray.length > 0 ||
+                 (internalState.pveBackups && (
+                     internalState.pveBackups.backupTasks.length > 0 ||
+                     internalState.pveBackups.storageBackups.length > 0 ||
+                     internalState.pveBackups.guestSnapshots.length > 0
+                 )))) {
                 internalState.initialDataReceived = true;
             }
             

@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.dashboard?.updateDashboardTable();
         PulseApp.ui.storage?.updateStorageInfo();
         PulseApp.ui.pbs?.updatePbsInfo(pbsDataArray);
+        // Update backups
         PulseApp.ui.backups?.updateBackupsTab();
         
         // Restore the original function
@@ -102,9 +103,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const isConnected = PulseApp.socketHandler?.isConnected();
         const initialDataReceived = PulseApp.state?.get('initialDataReceived');
+        
+        // Also check if we have any data at all (not just VMs/containers)
+        const hasAnyData = PulseApp.state && (
+            (PulseApp.state.get('nodesData') || []).length > 0 ||
+            (PulseApp.state.get('vmsData') || []).length > 0 ||
+            (PulseApp.state.get('containersData') || []).length > 0 ||
+            (PulseApp.state.get('pbsDataArray') || []).length > 0
+        );
 
         if (loadingOverlay.style.display !== 'none') { // Only act if currently visible
-            if (isConnected && initialDataReceived) {
+            if (isConnected && (initialDataReceived || hasAnyData)) {
                 loadingOverlay.style.display = 'none';
             } else if (!isConnected) {
             }
@@ -132,6 +141,7 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.dashboard?.init?.();
         PulseApp.ui.storage?.init?.();
         PulseApp.ui.pbs?.initPbsEventListeners?.();
+        // Initialize backups based on feature flag
         PulseApp.ui.backups?.init?.();
         PulseApp.ui.settings?.init?.();
         PulseApp.ui.thresholds?.init?.();

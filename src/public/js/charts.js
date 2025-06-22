@@ -201,11 +201,13 @@ PulseApp.charts = (() => {
             const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
             stop1.setAttribute('offset', '0%');
             stop1.setAttribute('class', 'gradient-start');
+            stop1.style.transition = 'stop-color 0.3s ease-out';
             
             const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
             stop2.setAttribute('offset', '100%');
             stop2.setAttribute('stop-opacity', '0.1');
             stop2.setAttribute('class', 'gradient-end');
+            stop2.style.transition = 'stop-color 0.3s ease-out';
             
             gradient.appendChild(stop1);
             gradient.appendChild(stop2);
@@ -220,6 +222,8 @@ PulseApp.charts = (() => {
             const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             area.setAttribute('fill', `url(#${gradientId})`);
             area.setAttribute('class', 'chart-area');
+            // Add smooth transitions for area changes
+            area.style.transition = 'd 0.3s ease-out';
             
             // Create line path
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -230,6 +234,8 @@ PulseApp.charts = (() => {
             path.setAttribute('stroke-linecap', 'round');
             path.setAttribute('stroke-linejoin', 'round');
             path.setAttribute('class', 'chart-line');
+            // Add smooth transitions for path and color changes
+            path.style.transition = 'd 0.3s ease-out, stroke 0.3s ease-out';
             
             chartGroup.appendChild(area);
             chartGroup.appendChild(path);

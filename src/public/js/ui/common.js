@@ -73,6 +73,12 @@ PulseApp.ui.common = (() => {
                     if (searchInput) searchInput.dispatchEvent(new Event('input'));
                     PulseApp.state.saveFilterState();
                     updateResetButtonState();
+                    
+                    // Also update backups tab if it's active
+                    const backupsTab = document.querySelector('[data-tab="backups"]');
+                    if (backupsTab && backupsTab.classList.contains('active') && PulseApp.ui.backups) {
+                        PulseApp.ui.backups.updateBackupsTab(true);
+                    }
                 }
             });
         });
