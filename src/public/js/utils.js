@@ -265,7 +265,6 @@ PulseApp.utils = (() => {
     }
     
     // Debounced version for resize events
-    const updateProgressBarTextsDebounced = () => {}; // No-op - functionality disabled
 
     // Scroll position preservation for table updates
     function preserveScrollPosition(element, updateFn) {
@@ -584,7 +583,6 @@ PulseApp.utils = (() => {
         renderTableBody,
         debounce,
         updateProgressBarTexts,
-        updateProgressBarTextsDebounced,
         preserveScrollPosition,
         getScrollableParent,
         getHostUrl,
@@ -605,4 +603,4 @@ PulseApp.utils = (() => {
         // CSS class constants
         CSS_CLASSES
     };
-})(); 
+})(); // Test hot reload
