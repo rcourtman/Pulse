@@ -132,7 +132,8 @@ PulseApp.ui.pbs = (() => {
         PBS_RECENT_PRUNEGC_TASKS_TBODY: 'pbs-recent-prunegc-tasks-tbody-',
         PBS_INSTANCES_CONTAINER: 'pbs-instances-container',
         PBS_TAB_BUTTON_PREFIX: 'pbs-tab-button-',
-        PBS_TAB_CONTENT_PREFIX: 'pbs-tab-content-'
+        PBS_TAB_CONTENT_PREFIX: 'pbs-tab-content-',
+        PBS_TAB_CONTENT_AREA: 'pbs-tab-content-area'
     };
 
     const DATA_ATTRIBUTES = {
@@ -2287,9 +2288,14 @@ PulseApp.ui.pbs = (() => {
     
     // Optimized function to update content when namespace changes
     function _updatePbsContentForNamespace(pbsDataArray, newNamespace, instanceIndex = null) {
+        // This function is not currently used - namespace switching now re-renders the content
+        // Keeping for potential future optimization
+        
         // Get the content container
         const contentArea = document.getElementById(ID_PREFIXES.PBS_TAB_CONTENT_AREA);
-        if (!contentArea) return;
+        if (!contentArea) {
+            return;
+        }
         
         const startTime = performance.now();
         
@@ -2317,10 +2323,7 @@ PulseApp.ui.pbs = (() => {
         
         const fragments = namespaceTableCache.get(cacheKey);
         
-        // Skip everything if namespace is switching
-        if (isNamespaceSwitching) {
-            return;
-        }
+        // Don't skip the update - we need to show the new namespace content
         
         // Update all tables instantly
         const updateStart = performance.now();
@@ -2337,7 +2340,7 @@ PulseApp.ui.pbs = (() => {
         });
         const updateEnd = performance.now();
         
-        const endTime = performance.now();
+        console.log(`[PBS] _updatePbsContentForNamespace COMPLETE for: ${newNamespace} in ${(updateEnd - startTime).toFixed(2)}ms at ${new Date().toISOString()}`);
     }
     
     // Removed old heavy update functions - now using pre-rendered DOM fragments
@@ -2411,6 +2414,7 @@ PulseApp.ui.pbs = (() => {
             tab.dataset.namespace = namespace;
             
             tab.addEventListener('click', (e) => {
+                console.log(`[PBS] Namespace click start: ${namespace} at ${new Date().toISOString()}`);
                 // Don't do anything if already selected
                 if (namespace === selectedNamespace) return;
                 
@@ -2446,24 +2450,24 @@ PulseApp.ui.pbs = (() => {
                     selectedNamespaceTab = namespace;
                 }
                 
-                // Debounce the update to prevent rapid switching
-                if (namespaceSwitchTimer) {
-                    clearTimeout(namespaceSwitchTimer);
-                }
-                
-                // Set flag to prevent full re-render
-                isNamespaceSwitching = true;
-                
-                // Update immediately - the actual delay must be somewhere else
+                // Update immediately by re-rendering the PBS tab
+                console.log(`[PBS] Starting namespace update: ${namespace} at ${new Date().toISOString()}`);
                 const pbsData = PulseApp.state.get('pbsDataArray');
                 if (pbsData) {
-                    _updatePbsContentForNamespace(pbsData, namespace, instanceIndex);
+                    // Find the main container and re-render
+                    const mainContainer = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
+                    if (mainContainer) {
+                        // Re-render the selected content
+                        const tabContentArea = mainContainer.querySelector('.pbs-tab-content-area');
+                        if (tabContentArea) {
+                            _renderSelectedPbsContent(pbsData, tabContentArea);
+                        } else {
+                            // Fall back to full update
+                            updatePbsInfo(pbsData);
+                        }
+                    }
                 }
-                
-                // Reset flag after a longer delay to catch any delayed updates
-                setTimeout(() => {
-                    isNamespaceSwitching = false;
-                }, 2000); // 2 seconds should catch all server updates
+                console.log(`[PBS] Finished namespace update: ${namespace} at ${new Date().toISOString()}`);
                 
                 // Done
             });
@@ -2587,6 +2591,9 @@ PulseApp.ui.pbs = (() => {
     // Track last data hash to avoid unnecessary rebuilds
     let lastPbsDataHash = null;
     
+    // Debounce PBS updates
+    let pbsUpdateTimer = null;
+    
     // Pre-process all namespace data for instant switching
     function _preProcessAllNamespaceData(pbsArray) {
         // Skip if we're switching namespaces
@@ -2631,6 +2638,20 @@ PulseApp.ui.pbs = (() => {
     }
     
     function updatePbsInfo(pbsArray) {
+        // Debounce rapid updates
+        if (pbsUpdateTimer) {
+            clearTimeout(pbsUpdateTimer);
+        }
+        
+        // If namespace switching, use shorter delay for better responsiveness
+        const delay = isNamespaceSwitching ? 200 : 100;
+        
+        pbsUpdateTimer = setTimeout(() => {
+            _actuallyUpdatePbsInfo(pbsArray);
+        }, delay);
+    }
+    
+    function _actuallyUpdatePbsInfo(pbsArray) {
         const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
         if (!container) {
             console.error(`PBS container element #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found!`);
