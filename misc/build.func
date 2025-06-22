@@ -1053,6 +1053,8 @@ lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
 EOF
   fi
 
+}
+
 : "${tz:=Etc/UTC}"
 
 msg_info "Starting LXC Container"
