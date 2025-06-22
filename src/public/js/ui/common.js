@@ -47,6 +47,10 @@ PulseApp.ui.common = (() => {
         if (backupTypeRadio) backupTypeRadio.checked = true;
         const calendarBackupRadio = document.getElementById(`backups-filter-backup-${backupsFilterBackupType}`);
         if (calendarBackupRadio) calendarBackupRadio.checked = true;
+        
+        // Set initial state for backups group filter
+        const backupsGroupRadio = document.getElementById(groupByNode ? 'backups-group-grouped' : 'backups-group-list');
+        if (backupsGroupRadio) backupsGroupRadio.checked = true;
     }
 
     function applyInitialSortUI() {
@@ -158,6 +162,17 @@ PulseApp.ui.common = (() => {
                     }
                     
                     PulseApp.state.set('backupsFilterBackupType', this.value);
+                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
+                    PulseApp.state.saveFilterState();
+                }
+            });
+        });
+        
+        // Setup backups group filter (grouped/list)
+        document.querySelectorAll('input[name="backups-group-filter"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.checked) {
+                    PulseApp.state.set('groupByNode', this.value === 'grouped');
                     PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
                     PulseApp.state.saveFilterState();
                 }
