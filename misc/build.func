@@ -1055,13 +1055,13 @@ EOF
 
 }
 
-: "${tz:=Etc/UTC}"
-
+# This starts the container and executes <app>-install.sh
 msg_info "Starting LXC Container"
 pct start "$CTID"
 msg_ok "Started LXC Container"
 
 msg_info "Customizing LXC Container"
+: "${tz:=Etc/UTC}"
 if [ "$var_os" == "alpine" ]; then
   sleep 3
   pct exec "$CTID" -- /bin/sh -c 'cat <<EOF >/etc/apk/repositories
