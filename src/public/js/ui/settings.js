@@ -3808,6 +3808,57 @@ PulseApp.ui.settings = (() => {
         }
     }
     
+    async function pollHealthAndRefresh() {
+        console.log('[Update] Starting health endpoint polling...');
+        const maxAttempts = 60; // 60 attempts = 1 minute max
+        const pollInterval = 1000; // 1 second between attempts
+        let attempts = 0;
+        let lastError = null;
+        
+        // Show a persistent message while polling
+        showMessage('Update complete. Waiting for service to fully restart...', 'info');
+        
+        const checkHealth = async () => {
+            attempts++;
+            try {
+                const response = await fetch('/healthz', {
+                    method: 'GET',
+                    cache: 'no-cache'
+                });
+                
+                if (response.ok) {
+                    // Health check passed, but wait a bit more to ensure full initialization
+                    console.log('[Update] Health check passed, waiting for full initialization...');
+                    showMessage('Service is starting up, please wait...', 'info');
+                    
+                    // Additional delay to ensure the service is fully ready
+                    // This addresses the issue where health endpoint responds before everything is loaded
+                    setTimeout(() => {
+                        console.log('[Update] Refreshing page...');
+                        window.location.reload();
+                    }, 3000); // Wait 3 more seconds after health check passes
+                    return true;
+                }
+                lastError = `Status: ${response.status}`;
+            } catch (error) {
+                lastError = error.message;
+                console.log(`[Update] Health check attempt ${attempts}/${maxAttempts} failed:`, lastError);
+            }
+            
+            if (attempts >= maxAttempts) {
+                console.error('[Update] Max health check attempts reached');
+                showMessage('Service restart is taking longer than expected. Please refresh the page manually.', 'warning');
+                return false;
+            }
+            
+            // Continue polling
+            setTimeout(checkHealth, pollInterval);
+        };
+        
+        // Start polling after a short initial delay
+        setTimeout(checkHealth, 2000); // Wait 2 seconds before first check
+    }
+    
     return {
         init,
         openModal,
