@@ -89,7 +89,6 @@ EOF
 cd /opt/adventurelog/frontend
 $STD pnpm i
 $STD pnpm build
-echo "${RELEASE}" >"/opt/${APPLICATION}_version.txt"
 msg_ok "Installed AdventureLog"
 
 msg_info "Setting up Django Admin"
