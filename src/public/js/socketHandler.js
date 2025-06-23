@@ -237,6 +237,9 @@ PulseApp.socketHandler = (() => {
                 case 'pbs':
                     updatePbsTab(data);
                     break;
+                case 'pbs2':
+                    updatePbs2Tab(data);
+                    break;
                 case 'backups':
                     updateBackupsTab(data);
                     break;
@@ -311,6 +314,16 @@ PulseApp.socketHandler = (() => {
             }
         } catch (error) {
             console.error('[Socket] Error updating storage tab:', error);
+        }
+    }
+
+    function updatePbs2Tab(data) {
+        try {
+            if (PulseApp.ui && PulseApp.ui.pbs2 && data.pbs) {
+                PulseApp.ui.pbs2.updatePbsInfo(data.pbs);
+            }
+        } catch (error) {
+            console.error('[Socket] Error updating PBS2 tab:', error);
         }
     }
 

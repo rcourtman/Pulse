@@ -467,6 +467,10 @@ PulseApp.ui.pbs = (() => {
         // Add UPID as data attribute for tracking expanded state
         row.dataset.upid = task.upid || '';
         
+        // Add task time for instant filtering
+        const taskTimestamp = task.startTime || task.starttime || 0;
+        row.setAttribute('data-task-time', taskTimestamp);
+        
         // Add status-based row styling for better problem visibility
         const isFailed = isTaskFailed(task);
         let specialBgClass = '';
@@ -1069,10 +1073,13 @@ PulseApp.ui.pbs = (() => {
 
     // Track selected time range for PBS view
     let selectedPbsTimeRange = '7d'; // Default to 7 days
+    let activeUpdateCount = 0; // Track concurrent updates
     
     // Helper function to filter tasks by selected time range
     const _filterTasksByTimeRange = (taskData) => {
-        if (!taskData || !taskData.recentTasks) return taskData;
+        if (!taskData || !taskData.recentTasks) {
+            return taskData;
+        }
         
         const now = Date.now() / 1000;
         let cutoffTime;
@@ -1096,11 +1103,13 @@ PulseApp.ui.pbs = (() => {
             return taskTime >= cutoffTime;
         });
         
-        return {
+        const result = {
             ...taskData,
             recentTasks: filteredTasks
         };
+        return result;
     };
+    
     
     // Helper function to update date range description
     const _updateDateRangeDescription = () => {
@@ -1136,18 +1145,6 @@ PulseApp.ui.pbs = (() => {
         `;
     };
     
-    // Helper function to apply time range filter
-    const _applyPbsTimeRangeFilter = () => {
-        // Clear any cached data
-        filteredDataCache.clear();
-        aggregatedDataCache.clear();
-        
-        // Trigger a re-render with current PBS data
-        const pbsData = PulseApp.state?.pbs;
-        if (pbsData) {
-            updatePbsInfo(pbsData);
-        }
-    };
     
     const _createDateRangeInfoCard = () => {
         const cardDiv = document.createElement('div');
@@ -1216,8 +1213,37 @@ PulseApp.ui.pbs = (() => {
         // Add change handler
         selector.addEventListener('change', (e) => {
             selectedPbsTimeRange = e.target.value;
-_updateDateRangeDescription();
-            _applyPbsTimeRangeFilter();
+            
+            // Update the description immediately
+            _updateDateRangeDescription();
+            
+            // Add a loading indicator to the selector
+            selector.disabled = true;
+            selector.style.opacity = '0.7';
+            
+            // Clear caches and force immediate update
+            filteredDataCache.clear();
+            aggregatedDataCache.clear();
+            
+            // Force an immediate update with current data
+            const pbsData = PulseApp.state?.pbs;
+            if (pbsData) {
+                // Cancel any pending updates
+                if (pbsUpdateTimer) {
+                    clearTimeout(pbsUpdateTimer);
+                    pbsUpdateTimer = null;
+                }
+                
+                // Allow this update even if one is in progress
+                activeUpdateCount = 0;
+                _actuallyUpdatePbsInfo(pbsData);
+            }
+            
+            // Re-enable selector after a short delay
+            setTimeout(() => {
+                selector.disabled = false;
+                selector.style.opacity = '1';
+            }, 100);
         });
         
         selectorDiv.appendChild(selector);
@@ -1508,7 +1534,7 @@ _updateDateRangeDescription();
             statusContent = storedStatus ? storedStatus.statusText : '';
         }
         
-        heading.innerHTML = `Recent ${title} Tasks <span id="${tableId}-status" class="text-xs font-normal text-gray-500">${statusContent}</span>`;
+        heading.innerHTML = `Recent ${title} Tasks <span id="${tableId}-status" class="text-xs font-normal text-gray-500" data-task-count="${taskData && taskData.recentTasks ? taskData.recentTasks.length : 0}">${statusContent}</span>`;
         fragment.appendChild(heading);
 
         const tableContainer = document.createElement('div');
@@ -2884,29 +2910,46 @@ _updateDateRangeDescription();
     }
     
     function updatePbsInfo(pbsArray) {
+        
+        // Also skip if an update is currently running
+        if (activeUpdateCount > 0) {
+            return;
+        }
+        
         // Debounce rapid updates
         if (pbsUpdateTimer) {
             clearTimeout(pbsUpdateTimer);
         }
         
-        // If namespace switching, use shorter delay for better responsiveness
-        const delay = isNamespaceSwitching ? 200 : 100;
+        // Check if this is the first render (no existing content)
+        const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
+        const isFirstRender = container && container.children.length === 0;
+        
+        // Use no delay for first render, longer delay for updates
+        const delay = isFirstRender ? 0 : 500;
         
         pbsUpdateTimer = setTimeout(() => {
             _actuallyUpdatePbsInfo(pbsArray);
         }, delay);
     }
     
+    let currentUpdateId = null;
+    
     function _actuallyUpdatePbsInfo(pbsArray) {
-        const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
+        activeUpdateCount++;
+        currentUpdateId = Date.now();
+        
+        try {
+            const container = document.getElementById(ID_PREFIXES.PBS_INSTANCES_CONTAINER);
         if (!container) {
             console.error(`PBS container element #${ID_PREFIXES.PBS_INSTANCES_CONTAINER} not found!`);
+            activeUpdateCount--;
             return;
         }
         
         // Skip full update if we're just switching namespaces
         if (isNamespaceSwitching) {
-            // Removed debug log
+            activeUpdateCount--;
             return;
         }
         
@@ -3059,6 +3102,7 @@ _updateDateRangeDescription();
             requestAnimationFrame(() => {
                 // Wait one more frame to ensure layout is complete
                 requestAnimationFrame(() => {
+                    console.log('[PBS] Restoring scroll positions');
                     scrollPositions.forEach((position, identifier) => {
                         let element = null;
                         
@@ -3091,10 +3135,22 @@ _updateDateRangeDescription();
                     });
                 });
             });
+        } else {
         }
         
         // Initialize fixed table line for mobile
         _initTableFixedLine();
+        
+        // End timing for multiple instances branch
+        if (pbsArray.length > 1) {
+        }
+        
+        activeUpdateCount--;
+        
+        } catch (error) {
+            console.error('[PBS] Update failed with error:', error);
+            activeUpdateCount--;
+        }
     }
 
     function _initTableFixedLine() {
