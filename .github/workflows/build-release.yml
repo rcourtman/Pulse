@@ -8,15 +8,18 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build-release:
     # Only run when:
     # 1. PR is merged from develop to main, OR
-    # 2. Push to main with a merge commit from develop
+    # 2. Push to main with a merge commit message pattern, OR
+    # 3. Manually triggered
     if: |
       (github.event_name == 'pull_request' && github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'develop') ||
-      (github.event_name == 'push' && contains(github.event.head_commit.message, 'Merge PR') && contains(github.event.head_commit.message, 'develop'))
+      (github.event_name == 'push' && contains(github.event.head_commit.message, 'Merge PR') && contains(github.event.head_commit.message, 'Release v')) ||
+      (github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     
     steps:
