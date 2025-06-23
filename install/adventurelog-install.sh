@@ -21,7 +21,7 @@ $STD apt-get install -y \
 msg_ok "Installed Dependencies"
 
 PYTHON_VERSION="3.12" setup_uv
-NODE_VERSION="22" NODE_MODULE="pnpm@latest" install_node_and_modules
+NODE_VERSION="22" NODE_MODULE="pnpm@latest" setup_nodejs
 PG_VERSION="16" PG_MODULES="postgis" install_postgresql
 
 msg_info "Set up PostgreSQL Database"
