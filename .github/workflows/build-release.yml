@@ -1,15 +1,22 @@
-name: Build Docker Images and Create Release Assets
+name: Build Release Assets
 
 on:
-  release:
-    types: [published]
+  pull_request:
+    types: [closed]
+    branches:
+      - main
 
 jobs:
-  build-and-release:
+  build-release:
+    # Only run when PR is merged (not just closed)
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'develop'
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -20,15 +27,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Extract metadata
-        id: meta
+      - name: Extract version from package.json
+        id: get-version
         run: |
-          # Get the tag name from the release
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}"  # Remove 'v' prefix
-          
+          VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "📦 Version from package.json: $VERSION"
           
           # Determine if this is a pre-release (RC)
           if [[ "$VERSION" == *"-rc"* ]]; then
@@ -39,12 +43,39 @@ jobs:
             echo "latest_tag=latest" >> $GITHUB_OUTPUT
           fi
 
+      - name: Look for changelog file
+        id: find-changelog
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          CHANGELOG_FILE="CHANGELOG_v${VERSION}.md"
+          
+          if [ -f "$CHANGELOG_FILE" ]; then
+            echo "📝 Found changelog file: $CHANGELOG_FILE"
+            echo "changelog_file=$CHANGELOG_FILE" >> $GITHUB_OUTPUT
+            echo "has_changelog=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ No changelog file found for v$VERSION"
+            echo "has_changelog=false" >> $GITHUB_OUTPUT
+            
+            # Create a basic changelog
+            cat > CHANGELOG_TEMP.md << EOF
+          ## Release v$VERSION
+
+          This release includes all changes merged from the develop branch.
+
+          For detailed changes, see the [commit history](https://github.com/${{ github.repository }}/compare/v${{ steps.get-version.outputs.version }}...HEAD).
+
+          🤖 *Automated release*
+          EOF
+            echo "changelog_file=CHANGELOG_TEMP.md" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build CSS
         run: npm run build:css
 
       - name: Build release tarball
         env:
-          VERSION: ${{ steps.meta.outputs.version }}
+          VERSION: ${{ steps.get-version.outputs.version }}
         run: |
           echo "📦 Building release tarball for v$VERSION..."
           
@@ -78,13 +109,9 @@ jobs:
           cp README.md "$STAGING_FULL_PATH/"
           cp LICENSE "$STAGING_FULL_PATH/"
           
-          # Create a simple changelog if one doesn't exist
-          if [ -f "CHANGELOG_v${VERSION}.md" ]; then
-            cp "CHANGELOG_v${VERSION}.md" "$STAGING_FULL_PATH/CHANGELOG.md"
-          else
-            echo "# Release v$VERSION" > "$STAGING_FULL_PATH/CHANGELOG.md"
-            echo "" >> "$STAGING_FULL_PATH/CHANGELOG.md"
-            echo "See https://github.com/rcourtman/Pulse/releases/tag/v$VERSION for details." >> "$STAGING_FULL_PATH/CHANGELOG.md"
+          # Copy the changelog
+          if [ -f "${{ steps.find-changelog.outputs.changelog_file }}" ]; then
+            cp "${{ steps.find-changelog.outputs.changelog_file }}" "$STAGING_FULL_PATH/CHANGELOG.md"
           fi
           
           # Copy scripts and docs
@@ -136,15 +163,6 @@ jobs:
           ls -lh "pulse-v$VERSION.tar.gz"
           echo "✅ Release tarball created with production dependencies"
 
-      - name: Upload tarball to release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.meta.outputs.version }}
-        run: |
-          echo "📤 Uploading tarball to release..."
-          gh release upload "${{ github.event.release.tag_name }}" "pulse-v$VERSION.tar.gz" --clobber
-          echo "✅ Tarball uploaded successfully"
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -161,16 +179,26 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            rcourtman/pulse:${{ steps.meta.outputs.tag }}
-            rcourtman/pulse:${{ steps.meta.outputs.latest_tag }}
+            rcourtman/pulse:v${{ steps.get-version.outputs.version }}
+            rcourtman/pulse:${{ steps.get-version.outputs.latest_tag }}
 
-      - name: Update release with Docker info
+      - name: Create GitHub Release (DRAFT)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.get-version.outputs.version }}
         run: |
-          # Add Docker pull commands to release body
-          CURRENT_BODY=$(gh release view ${{ github.event.release.tag_name }} --json body -q .body)
+          echo "📝 Creating DRAFT GitHub release..."
           
+          # Determine if this is a pre-release
+          PRERELEASE_FLAG=""
+          if [ "${{ steps.get-version.outputs.is_rc }}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+          
+          # Read the changelog content
+          CHANGELOG_CONTENT=$(cat "${{ steps.find-changelog.outputs.changelog_file }}")
+          
+          # Add Docker info to the changelog
           DOCKER_INFO="
 
 ## 🐳 Docker Images
@@ -179,13 +207,20 @@ Docker images are now available:
 
 \`\`\`bash
 # Pull this specific version
-docker pull rcourtman/pulse:${{ steps.meta.outputs.tag }}
+docker pull rcourtman/pulse:v$VERSION
 
-# Pull latest ${{ steps.meta.outputs.is_rc == 'true' && 'RC' || 'stable' }} version
-docker pull rcourtman/pulse:${{ steps.meta.outputs.latest_tag }}
+# Pull latest ${{ steps.get-version.outputs.is_rc == 'true' && 'RC' || 'stable' }} version
+docker pull rcourtman/pulse:${{ steps.get-version.outputs.latest_tag }}
 \`\`\`"
           
-          # Only add if not already present
-          if ! echo "$CURRENT_BODY" | grep -q "Docker Images"; then
-            gh release edit ${{ github.event.release.tag_name }} --notes "$CURRENT_BODY$DOCKER_INFO"
-          fi
+          # Create the release as DRAFT
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
+            --notes "$CHANGELOG_CONTENT$DOCKER_INFO" \
+            --target main \
+            $PRERELEASE_FLAG \
+            --draft \
+            "pulse-v$VERSION.tar.gz"
+          
+          echo "✅ Draft release created successfully!"
+          echo "🔗 Review and publish at: https://github.com/${{ github.repository }}/releases"
