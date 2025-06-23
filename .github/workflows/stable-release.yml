@@ -214,8 +214,11 @@ jobs:
           export REASONING="$REASONING"
           
           # Use the standalone script to avoid bash escaping issues
-          if [ -f scripts/generate-changelog.js ]; then
-            echo "🔧 Using standalone changelog script"
+          if [ -f scripts/generate-changelog-v2.js ]; then
+            echo "🔧 Using user-focused changelog script"
+            node scripts/generate-changelog-v2.js
+          elif [ -f scripts/generate-changelog.js ]; then
+            echo "🔧 Using legacy changelog script"
             node scripts/generate-changelog.js
           else
             echo "⚠️ Changelog script not found, creating simple changelog"
