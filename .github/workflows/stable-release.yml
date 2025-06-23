@@ -194,44 +194,54 @@ jobs:
           BUMP_TYPE: ${{ needs.validate-and-prepare.outputs.bump-type }}
           REASONING: ${{ needs.validate-and-prepare.outputs.reasoning }}
         run: |
-          # Use the previous tag that was determined before creating the new tag
-          PREV_TAG="${{ env.PREV_TAG }}"
-          if [ -z "$PREV_TAG" ]; then
-            echo "⚠️ PREV_TAG not set, determining now..."
-            PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | grep -v "v$NEW_VERSION" | sort -V | tail -1)
-            if [ -z "$PREV_TAG" ]; then
-              PREV_TAG="v0.0.0"
-            fi
-          fi
+          # First check if a changelog file already exists for this version
+          CHANGELOG_FILE="CHANGELOG_v$NEW_VERSION.md"
           
-          echo "📝 Generating changelog from $PREV_TAG to current HEAD"
-          echo "📊 Looking for commits in range: $PREV_TAG..HEAD"
-          
-          # Export variables for the script
-          export PREV_TAG="$PREV_TAG"
-          export NEW_VERSION="$NEW_VERSION"
-          export BUMP_TYPE="$BUMP_TYPE"
-          export REASONING="$REASONING"
-          
-          # Use the standalone script to avoid bash escaping issues
-          if [ -f scripts/generate-changelog-v2.js ]; then
-            echo "🔧 Using user-focused changelog script"
-            node scripts/generate-changelog-v2.js
-          elif [ -f scripts/generate-changelog.js ]; then
-            echo "🔧 Using legacy changelog script"
-            node scripts/generate-changelog.js
+          if [ -f "$CHANGELOG_FILE" ]; then
+            echo "📝 Found existing changelog file: $CHANGELOG_FILE"
+            cp "$CHANGELOG_FILE" CHANGELOG.md
           else
-            echo "⚠️ Changelog script not found, creating simple changelog"
-            cat > CHANGELOG.md << EOF
-          ## Release v$NEW_VERSION
+            echo "📝 No existing changelog found, generating new one..."
+            
+            # Use the previous tag that was determined before creating the new tag
+            PREV_TAG="${{ env.PREV_TAG }}"
+            if [ -z "$PREV_TAG" ]; then
+              echo "⚠️ PREV_TAG not set, determining now..."
+              PREV_TAG=$(git tag -l "v*" | grep -v "rc\|alpha\|beta" | grep -v "v$NEW_VERSION" | sort -V | tail -1)
+              if [ -z "$PREV_TAG" ]; then
+                PREV_TAG="v0.0.0"
+              fi
+            fi
+            
+            echo "📝 Generating changelog from $PREV_TAG to current HEAD"
+            echo "📊 Looking for commits in range: $PREV_TAG..HEAD"
+            
+            # Export variables for the script
+            export PREV_TAG="$PREV_TAG"
+            export NEW_VERSION="$NEW_VERSION"
+            export BUMP_TYPE="$BUMP_TYPE"
+            export REASONING="$REASONING"
+            
+            # Use the standalone script to avoid bash escaping issues
+            if [ -f scripts/generate-changelog-v2.js ]; then
+              echo "🔧 Using user-focused changelog script"
+              node scripts/generate-changelog-v2.js
+            elif [ -f scripts/generate-changelog.js ]; then
+              echo "🔧 Using legacy changelog script"
+              node scripts/generate-changelog.js
+            else
+              echo "⚠️ Changelog script not found, creating simple changelog"
+              cat > CHANGELOG.md << EOF
+            ## Release v$NEW_VERSION
 
-          **$BUMP_TYPE release** - $REASONING
+            **$BUMP_TYPE release** - $REASONING
 
-          ### Changes
-          See commit history for details.
+            ### Changes
+            See commit history for details.
 
-          🤖 *Automated release*
-          EOF
+            🤖 *Automated release*
+            EOF
+            fi
           fi
 
       - name: Build release tarball
