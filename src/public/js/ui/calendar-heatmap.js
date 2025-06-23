@@ -472,9 +472,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                     // Get the namespace filter
                     const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
                     
-                    console.log(`[Calendar] Date clicked: ${dateKey}, namespace filter: ${namespaceFilter}`);
-                    console.log('[Calendar] dayData.guests:', dayData.guests);
-                    console.log('[Calendar] capturedFilteredGuestIds:', capturedFilteredGuestIds);
+                    // Removed debug logs
                     
                     // Filter guests based on filteredGuestIds if namespace filtering is active
                     let filteredGuests = dayData.guests || [];
@@ -488,16 +486,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                         });
                     }
                     
-                    console.log('[Calendar] filteredGuests after filtering:', filteredGuests);
-                    console.log('[Calendar] Guest details:', filteredGuests.map(g => ({
-                        vmid: g.vmid,
-                        name: g.name,
-                        namespace: g.namespace,
-                        namespaces: g.namespaces,
-                        uniqueKey: g.uniqueKey,
-                        node: g.node,
-                        types: g.types
-                    })));
+                    // Removed debug logs
                     
                     
                     // Check for duplicates by unique key
