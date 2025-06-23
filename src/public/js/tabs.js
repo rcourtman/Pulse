@@ -215,7 +215,6 @@ PulseApp.ui.tabs = (() => {
 
     function updateTabAvailability() {
         const pbsTab = document.querySelector('.tab[data-tab="pbs"]');
-        const pbs2Tab = document.querySelector('.tab[data-tab="pbs2"]');
         const backupsTab = document.querySelector('.tab[data-tab="backups"]');
 
         if (!pbsTab || !backupsTab) {
@@ -227,9 +226,6 @@ PulseApp.ui.tabs = (() => {
         const isPbsAvailable = pbsDataArray.length > 0 && pbsDataArray.some(pbs => pbs.status === 'ok');
 
         styleTabAvailability(pbsTab, isPbsAvailable);
-        if (pbs2Tab) {
-            styleTabAvailability(pbs2Tab, isPbsAvailable);
-        }
         styleTabAvailability(backupsTab, isPbsAvailable);
 
         // Ensure correct active/inactive styling after availability change
@@ -418,12 +414,7 @@ PulseApp.ui.tabs = (() => {
                 break;
             case 'pbs':
                 if (PulseApp.ui && PulseApp.ui.pbs) {
-                    // PBS data is already fetched, just update the UI
-                }
-                break;
-            case 'pbs2':
-                if (PulseApp.ui && PulseApp.ui.pbs2) {
-                    PulseApp.ui.pbs2.init();
+                    PulseApp.ui.pbs.init();
                 }
                 break;
             case 'settings':
