@@ -111,6 +111,7 @@ toggle-debug.html
 zen-mcp-server/
 
 # Temporary files
+CHANGELOG.md
 CHANGELOG_TEMP.md
 commits.txt
 RELEASE_TRIGGER_*.md
