@@ -4,973 +4,1728 @@ PulseApp.ui.pbs2 = (() => {
     // State management
     let state = {
         pbsData: [],
-        selectedTimeRange: '7d',
+        selectedTimeRange: '24h',
         selectedInstance: 0,
-        selectedNamespaceByInstance: new Map(),
-        searchQuery: '',
-        showOnlyFailures: false,
-        expandedSections: new Set(['health', 'active', 'failures'])
+        viewMode: 'timeline', // timeline, matrix, flow
+        selectedVm: null,
+        hoveredTask: null,
+        timelineData: new Map(),
+        vmBackupPatterns: new Map(),
+        insights: []
     };
 
     // Time range constants
     const TIME_RANGES = {
-        '1h': 60 * 60 * 1000,
-        '24h': 24 * 60 * 60 * 1000,
-        '7d': 7 * 24 * 60 * 60 * 1000,
-        '30d': 30 * 24 * 60 * 60 * 1000
+        '1h': { ms: 60 * 60 * 1000, label: '1 Hour', slots: 12 },
+        '6h': { ms: 6 * 60 * 60 * 1000, label: '6 Hours', slots: 24 },
+        '24h': { ms: 24 * 60 * 60 * 1000, label: '24 Hours', slots: 48 },
+        '7d': { ms: 7 * 24 * 60 * 60 * 1000, label: '7 Days', slots: 28 }
     };
 
-    // Initialize the PBS2 tab
+    // Initialize
     function init() {
-        console.log('[PBS2] Initializing PBS2 dashboard');
+        console.log('[PBS2] Initializing next-gen PBS dashboard');
         const container = document.getElementById('pbs2-instances-container');
         if (!container) {
             console.error('[PBS2] Container not found');
             return;
         }
 
-        // Clear any existing content
-        container.innerHTML = '';
-        
         // Get initial data
         const pbsData = PulseApp.state?.get?.('pbsDataArray') || PulseApp.state?.pbs || [];
-        console.log('[PBS2] Initial PBS data:', pbsData);
-        
-        // Initialize with data
         state.pbsData = pbsData;
-        renderDashboard(container);
+        
+        // Process data for insights
+        processDataForInsights();
+        
+        // Render
+        render(container);
     }
 
-    // Main render function
-    function renderDashboard(container) {
+    // Main render
+    function render(container) {
         container.innerHTML = '';
-        container.className = 'p-4 space-y-6';
+        container.className = 'pbs2-container';
         
         if (!state.pbsData || state.pbsData.length === 0) {
-            container.innerHTML = `
-                <div class="text-center py-12">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path>
-                    </svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">No PBS Servers Connected</h3>
-                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Configure Proxmox Backup Server integration to see backup status.</p>
-                </div>
-            `;
+            renderEmptyState(container);
             return;
         }
+
+        // Create main layout
+        const layout = document.createElement('div');
+        layout.className = 'pbs2-layout';
         
-        // Create main dashboard sections
+        // Critical alerts banner (if any)
+        const alerts = getCriticalAlerts();
+        if (alerts.length > 0) {
+            layout.appendChild(createAlertsBanner(alerts));
+        }
+        
+        // Main dashboard grid
         const dashboard = document.createElement('div');
-        dashboard.className = 'space-y-6';
+        dashboard.className = 'pbs2-dashboard';
         
-        // 1. Header with controls
-        dashboard.appendChild(createHeader());
+        // Left panel - Timeline/Matrix/Flow view
+        const mainView = document.createElement('div');
+        mainView.className = 'pbs2-main-view';
+        mainView.appendChild(createViewControls());
+        mainView.appendChild(createMainVisualization());
+        dashboard.appendChild(mainView);
         
-        // 2. Instance selector (if multiple)
-        if (state.pbsData.length > 1) {
-            dashboard.appendChild(createInstanceSelector());
-        }
+        // Right panel - Context & Insights
+        const sidePanel = document.createElement('div');
+        sidePanel.className = 'pbs2-side-panel';
+        sidePanel.appendChild(createInsightsPanel());
+        sidePanel.appendChild(createVmDetailsPanel());
+        dashboard.appendChild(sidePanel);
         
-        // 3. Health overview cards
-        dashboard.appendChild(createHealthOverview());
+        layout.appendChild(dashboard);
+        container.appendChild(layout);
         
-        // 4. Active tasks section
-        dashboard.appendChild(createActiveTasksSection());
-        
-        // 5. Recent failures section
-        dashboard.appendChild(createFailuresSection());
-        
-        // 6. Task history with charts
-        dashboard.appendChild(createTaskHistorySection());
-        
-        // 7. Storage overview
-        dashboard.appendChild(createStorageOverview());
-        
-        container.appendChild(dashboard);
+        // Add styles
+        injectStyles();
     }
 
-    // Create header with controls
-    function createHeader() {
-        const header = document.createElement('div');
-        header.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4';
+    // Create view controls
+    function createViewControls() {
+        const controls = document.createElement('div');
+        controls.className = 'pbs2-controls';
         
-        header.innerHTML = `
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div>
-                    <h2 class="text-xl font-semibold text-gray-900 dark:text-gray-100">PBS Dashboard</h2>
-                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Monitor and manage your backup infrastructure</p>
+        controls.innerHTML = `
+            <div class="controls-left">
+                <div class="view-switcher">
+                    <button class="view-btn ${state.viewMode === 'timeline' ? 'active' : ''}" data-view="timeline">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="4" rx="1"/>
+                            <rect x="3" y="10" width="14" height="4" rx="1"/>
+                            <rect x="3" y="16" width="10" height="4" rx="1"/>
+                        </svg>
+                        Timeline
+                    </button>
+                    <button class="view-btn ${state.viewMode === 'matrix' ? 'active' : ''}" data-view="matrix">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="6" height="6" rx="1"/>
+                            <rect x="11" y="3" width="6" height="6" rx="1"/>
+                            <rect x="3" y="11" width="6" height="6" rx="1"/>
+                            <rect x="11" y="11" width="6" height="6" rx="1"/>
+                        </svg>
+                        Matrix
+                    </button>
+                    <button class="view-btn ${state.viewMode === 'flow' ? 'active' : ''}" data-view="flow">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                        Flow
+                    </button>
                 </div>
                 
-                <div class="flex flex-wrap items-center gap-3">
-                    <!-- Search -->
-                    <div class="relative">
-                        <input type="text" 
-                               id="pbs2-search" 
-                               placeholder="Search tasks..."
-                               class="pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                        <svg class="absolute left-3 top-2.5 h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                        </svg>
-                    </div>
-                    
-                    <!-- Time range selector -->
-                    <select id="pbs2-time-range" 
-                            class="text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="1h">Last Hour</option>
-                        <option value="24h">Last 24 Hours</option>
-                        <option value="7d" selected>Last 7 Days</option>
-                        <option value="30d">Last 30 Days</option>
+                <div class="time-selector">
+                    ${Object.entries(TIME_RANGES).map(([key, range]) => `
+                        <button class="time-btn ${state.selectedTimeRange === key ? 'active' : ''}" data-time="${key}">
+                            ${range.label}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+            
+            <div class="controls-right">
+                <div class="live-indicator">
+                    <span class="pulse-dot"></span>
+                    <span>Live</span>
+                </div>
+                
+                ${state.pbsData.length > 1 ? `
+                    <select class="instance-selector">
+                        ${state.pbsData.map((instance, idx) => `
+                            <option value="${idx}" ${idx === state.selectedInstance ? 'selected' : ''}>
+                                ${instance.pbsInstanceName || `PBS ${idx + 1}`}
+                            </option>
+                        `).join('')}
                     </select>
-                    
-                    <!-- Quick filters -->
-                    <button id="pbs2-failures-toggle" 
-                            class="text-sm px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                        <span class="flex items-center gap-1">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            Show Only Failures
-                        </span>
-                    </button>
-                    
-                    <!-- Refresh button -->
-                    <button id="pbs2-refresh" 
-                            class="text-sm px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors">
-                        <span class="flex items-center gap-1">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                            </svg>
-                            Refresh
-                        </span>
-                    </button>
-                </div>
-            </div>
-        `;
-        
-        // Add event listeners
-        const searchInput = header.querySelector('#pbs2-search');
-        searchInput.addEventListener('input', (e) => {
-            state.searchQuery = e.target.value.toLowerCase();
-            updateFilteredContent();
-        });
-        
-        const timeRange = header.querySelector('#pbs2-time-range');
-        timeRange.addEventListener('change', (e) => {
-            state.selectedTimeRange = e.target.value;
-            refreshDashboard();
-        });
-        
-        const failuresToggle = header.querySelector('#pbs2-failures-toggle');
-        failuresToggle.addEventListener('click', () => {
-            state.showOnlyFailures = !state.showOnlyFailures;
-            failuresToggle.classList.toggle('bg-red-50', state.showOnlyFailures);
-            failuresToggle.classList.toggle('dark:bg-red-900/20', state.showOnlyFailures);
-            failuresToggle.classList.toggle('border-red-300', state.showOnlyFailures);
-            failuresToggle.classList.toggle('dark:border-red-700', state.showOnlyFailures);
-            updateFilteredContent();
-        });
-        
-        const refreshBtn = header.querySelector('#pbs2-refresh');
-        refreshBtn.addEventListener('click', () => {
-            if (PulseApp.socketHandler) {
-                PulseApp.socketHandler.requestData();
-            }
-        });
-        
-        return header;
-    }
-
-    // Create instance selector
-    function createInstanceSelector() {
-        const selector = document.createElement('div');
-        selector.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm p-3';
-        
-        const tabs = document.createElement('div');
-        tabs.className = 'flex flex-wrap gap-2';
-        
-        state.pbsData.forEach((instance, index) => {
-            const tab = document.createElement('button');
-            tab.className = index === state.selectedInstance ?
-                'px-4 py-2 text-sm font-medium rounded-md bg-blue-600 text-white' :
-                'px-4 py-2 text-sm font-medium rounded-md bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors';
-            tab.textContent = instance.pbsInstanceName || `PBS ${index + 1}`;
-            
-            tab.addEventListener('click', () => {
-                state.selectedInstance = index;
-                refreshDashboard();
-            });
-            
-            tabs.appendChild(tab);
-        });
-        
-        selector.appendChild(tabs);
-        return selector;
-    }
-
-    // Create health overview cards
-    function createHealthOverview() {
-        const instance = state.pbsData[state.selectedInstance];
-        if (!instance) return document.createElement('div');
-        
-        const section = document.createElement('div');
-        section.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4';
-        
-        // Calculate metrics
-        const metrics = calculateHealthMetrics(instance);
-        
-        // Status card
-        section.appendChild(createMetricCard(
-            'System Status',
-            metrics.status,
-            metrics.statusColor,
-            `
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-            `,
-            metrics.statusDetails
-        ));
-        
-        // Active tasks card
-        section.appendChild(createMetricCard(
-            'Active Tasks',
-            metrics.activeTasks.toString(),
-            metrics.activeTasks > 0 ? 'blue' : 'gray',
-            `
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-            `,
-            `${metrics.runningBackups} backups, ${metrics.runningVerify} verifications`
-        ));
-        
-        // Success rate card
-        section.appendChild(createMetricCard(
-            'Success Rate',
-            `${metrics.successRate}%`,
-            metrics.successRate >= 95 ? 'green' : metrics.successRate >= 80 ? 'yellow' : 'red',
-            createProgressRing(metrics.successRate),
-            `${metrics.successfulTasks} of ${metrics.totalTasks} tasks`
-        ));
-        
-        // Recent failures card
-        section.appendChild(createMetricCard(
-            'Recent Failures',
-            metrics.recentFailures.toString(),
-            metrics.recentFailures > 0 ? 'red' : 'green',
-            `
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-            `,
-            metrics.failureDetails
-        ));
-        
-        return section;
-    }
-
-    // Create metric card
-    function createMetricCard(title, value, color, icon, subtitle) {
-        const card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 border border-gray-200 dark:border-gray-700';
-        
-        const colorClasses = {
-            green: 'text-green-600 dark:text-green-400',
-            red: 'text-red-600 dark:text-red-400',
-            yellow: 'text-yellow-600 dark:text-yellow-400',
-            blue: 'text-blue-600 dark:text-blue-400',
-            gray: 'text-gray-600 dark:text-gray-400'
-        };
-        
-        card.innerHTML = `
-            <div class="flex items-start justify-between">
-                <div class="flex-1">
-                    <p class="text-sm font-medium text-gray-600 dark:text-gray-400">${title}</p>
-                    <p class="mt-2 text-2xl font-semibold ${colorClasses[color] || colorClasses.gray}">${value}</p>
-                    ${subtitle ? `<p class="mt-1 text-xs text-gray-500 dark:text-gray-400">${subtitle}</p>` : ''}
-                </div>
-                <div class="${colorClasses[color] || colorClasses.gray}">
-                    ${icon}
-                </div>
-            </div>
-        `;
-        
-        return card;
-    }
-
-    // Create progress ring SVG
-    function createProgressRing(percentage) {
-        const radius = 16;
-        const circumference = 2 * Math.PI * radius;
-        const offset = circumference - (percentage / 100) * circumference;
-        
-        return `
-            <svg class="h-8 w-8 transform -rotate-90">
-                <circle cx="20" cy="20" r="${radius}" stroke="currentColor" stroke-width="4" fill="none" opacity="0.3" />
-                <circle cx="20" cy="20" r="${radius}" stroke="currentColor" stroke-width="4" fill="none"
-                        stroke-dasharray="${circumference}"
-                        stroke-dashoffset="${offset}"
-                        stroke-linecap="round" />
-            </svg>
-        `;
-    }
-
-    // Create active tasks section
-    function createActiveTasksSection() {
-        const instance = state.pbsData[state.selectedInstance];
-        if (!instance) return document.createElement('div');
-        
-        const activeTasks = getActiveTasks(instance);
-        if (activeTasks.length === 0) return document.createElement('div');
-        
-        const section = createCollapsibleSection(
-            'Active Tasks',
-            `${activeTasks.length} running`,
-            'active',
-            'blue'
-        );
-        
-        const content = section.querySelector('.section-content');
-        const grid = document.createElement('div');
-        grid.className = 'grid gap-3';
-        
-        activeTasks.forEach(task => {
-            grid.appendChild(createTaskCard(task, 'active'));
-        });
-        
-        content.appendChild(grid);
-        return section;
-    }
-
-    // Create failures section
-    function createFailuresSection() {
-        const instance = state.pbsData[state.selectedInstance];
-        if (!instance) return document.createElement('div');
-        
-        const failedTasks = getFailedTasks(instance);
-        if (failedTasks.length === 0 && !state.showOnlyFailures) return document.createElement('div');
-        
-        const section = createCollapsibleSection(
-            'Recent Failures',
-            failedTasks.length === 0 ? 'No failures' : `${failedTasks.length} failures`,
-            'failures',
-            failedTasks.length > 0 ? 'red' : 'green'
-        );
-        
-        const content = section.querySelector('.section-content');
-        
-        if (failedTasks.length === 0) {
-            content.innerHTML = `
-                <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <p class="mt-2">No failures in the selected time range</p>
-                </div>
-            `;
-        } else {
-            const grid = document.createElement('div');
-            grid.className = 'grid gap-3';
-            
-            failedTasks.forEach(task => {
-                grid.appendChild(createTaskCard(task, 'failed'));
-            });
-            
-            content.appendChild(grid);
-        }
-        
-        return section;
-    }
-
-    // Create task history section
-    function createTaskHistorySection() {
-        const instance = state.pbsData[state.selectedInstance];
-        if (!instance) return document.createElement('div');
-        
-        const section = createCollapsibleSection(
-            'Task History',
-            'All recent tasks',
-            'history',
-            'gray'
-        );
-        
-        const content = section.querySelector('.section-content');
-        
-        // Add task type tabs
-        const tabs = document.createElement('div');
-        tabs.className = 'border-b border-gray-200 dark:border-gray-700 mb-4';
-        tabs.innerHTML = `
-            <nav class="-mb-px flex space-x-4">
-                <button class="task-type-tab active py-2 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600 dark:text-blue-400" data-type="all">
-                    All Tasks
-                </button>
-                <button class="task-type-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-type="backup">
-                    Backups
-                </button>
-                <button class="task-type-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-type="verify">
-                    Verifications
-                </button>
-                <button class="task-type-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-type="sync">
-                    Sync
-                </button>
-                <button class="task-type-tab py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm" data-type="prune">
-                    Prune/GC
-                </button>
-            </nav>
-        `;
-        
-        // Add tab click handlers
-        tabs.querySelectorAll('.task-type-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                tabs.querySelectorAll('.task-type-tab').forEach(t => {
-                    t.classList.remove('active', 'border-blue-500', 'text-blue-600', 'dark:text-blue-400');
-                    t.classList.add('border-transparent', 'text-gray-500', 'dark:text-gray-400');
-                });
-                tab.classList.add('active', 'border-blue-500', 'text-blue-600', 'dark:text-blue-400');
-                tab.classList.remove('border-transparent', 'text-gray-500', 'dark:text-gray-400');
-                
-                // Filter tasks
-                const type = tab.dataset.type;
-                renderTaskHistory(content.querySelector('.task-history-content'), type);
-            });
-        });
-        
-        content.appendChild(tabs);
-        
-        // Task history content
-        const historyContent = document.createElement('div');
-        historyContent.className = 'task-history-content';
-        content.appendChild(historyContent);
-        
-        // Render all tasks initially
-        renderTaskHistory(historyContent, 'all');
-        
-        return section;
-    }
-
-    // Render task history
-    function renderTaskHistory(container, taskType) {
-        const instance = state.pbsData[state.selectedInstance];
-        if (!instance) return;
-        
-        container.innerHTML = '';
-        
-        const tasks = getAllTasks(instance, taskType);
-        
-        if (tasks.length === 0) {
-            container.innerHTML = `
-                <div class="text-center py-8 text-gray-500 dark:text-gray-400">
-                    <p>No tasks found</p>
-                </div>
-            `;
-            return;
-        }
-        
-        // Create table
-        const table = document.createElement('div');
-        table.className = 'overflow-x-auto';
-        table.innerHTML = `
-            <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead class="bg-gray-50 dark:bg-gray-700">
-                    <tr>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Target</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Started</th>
-                        <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Duration</th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                    ${tasks.map(task => createTaskRow(task)).join('')}
-                </tbody>
-            </table>
-        `;
-        
-        container.appendChild(table);
-    }
-
-    // Create storage overview
-    function createStorageOverview() {
-        const instance = state.pbsData[state.selectedInstance];
-        if (!instance || !instance.datastores) return document.createElement('div');
-        
-        const section = createCollapsibleSection(
-            'Storage Overview',
-            `${instance.datastores.length} datastores`,
-            'storage',
-            'gray'
-        );
-        
-        const content = section.querySelector('.section-content');
-        const grid = document.createElement('div');
-        grid.className = 'grid grid-cols-1 lg:grid-cols-2 gap-4';
-        
-        instance.datastores.forEach(datastore => {
-            grid.appendChild(createDatastoreCard(datastore));
-        });
-        
-        content.appendChild(grid);
-        return section;
-    }
-
-    // Create collapsible section
-    function createCollapsibleSection(title, subtitle, id, color = 'gray') {
-        const section = document.createElement('div');
-        section.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700';
-        
-        const colorClasses = {
-            green: 'text-green-600 dark:text-green-400',
-            red: 'text-red-600 dark:text-red-400',
-            yellow: 'text-yellow-600 dark:text-yellow-400',
-            blue: 'text-blue-600 dark:text-blue-400',
-            gray: 'text-gray-600 dark:text-gray-400'
-        };
-        
-        const isExpanded = state.expandedSections.has(id);
-        
-        section.innerHTML = `
-            <div class="section-header p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors" data-section="${id}">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <svg class="section-chevron h-5 w-5 text-gray-400 transition-transform ${isExpanded ? '' : '-rotate-90'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                        </svg>
-                        <div>
-                            <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">${title}</h3>
-                            <p class="text-sm ${colorClasses[color]}">${subtitle}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="section-content ${isExpanded ? '' : 'hidden'} p-4 pt-0">
-                <!-- Content will be added here -->
-            </div>
-        `;
-        
-        // Add toggle handler
-        const header = section.querySelector('.section-header');
-        header.addEventListener('click', () => {
-            const content = section.querySelector('.section-content');
-            const chevron = section.querySelector('.section-chevron');
-            const sectionId = header.dataset.section;
-            
-            content.classList.toggle('hidden');
-            chevron.classList.toggle('-rotate-90');
-            
-            if (state.expandedSections.has(sectionId)) {
-                state.expandedSections.delete(sectionId);
-            } else {
-                state.expandedSections.add(sectionId);
-            }
-        });
-        
-        return section;
-    }
-
-    // Create task card for active/failed tasks
-    function createTaskCard(task, type) {
-        const card = document.createElement('div');
-        card.className = type === 'failed' ? 
-            'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4' :
-            'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4';
-        
-        const taskType = getTaskType(task);
-        const target = parsePbsTaskTarget(task);
-        const startTime = task.startTime ? PulseApp.utils.formatPbsTimestampRelative(task.startTime) : 'Unknown';
-        const duration = formatDuration(task);
-        
-        card.innerHTML = `
-            <div class="flex items-start justify-between">
-                <div class="flex-1">
-                    <div class="flex items-center gap-2">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getTaskTypeColor(taskType)}">
-                            ${taskType}
-                        </span>
-                        <span class="text-sm font-medium text-gray-900 dark:text-gray-100">${target}</span>
-                    </div>
-                    <div class="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                        <p>Started: ${startTime}</p>
-                        ${type === 'active' ? 
-                            `<p>Running for: ${duration}</p>` :
-                            `<p>Duration: ${duration}</p>`
-                        }
-                        ${task.status && task.status !== 'OK' && task.status !== 'Running' ? 
-                            `<p class="mt-1 text-red-600 dark:text-red-400">Error: ${task.status}</p>` : 
-                            ''
-                        }
-                    </div>
-                </div>
-                ${type === 'active' ? `
-                    <div class="ml-4">
-                        <svg class="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                    </div>
                 ` : ''}
             </div>
         `;
         
-        return card;
+        // Event listeners
+        controls.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.viewMode = btn.dataset.view;
+                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                updateMainVisualization();
+            });
+        });
+        
+        controls.querySelectorAll('.time-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.selectedTimeRange = btn.dataset.time;
+                document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                updateMainVisualization();
+            });
+        });
+        
+        const instanceSelector = controls.querySelector('.instance-selector');
+        if (instanceSelector) {
+            instanceSelector.addEventListener('change', (e) => {
+                state.selectedInstance = parseInt(e.target.value);
+                processDataForInsights();
+                updateMainVisualization();
+            });
+        }
+        
+        return controls;
     }
 
-    // Create task row for history table
-    function createTaskRow(task) {
-        const taskType = getTaskType(task);
-        const target = parsePbsTaskTarget(task);
-        const status = getPbsStatusBadge(task.status);
-        const startTime = task.startTime ? PulseApp.utils.formatPbsTimestampRelative(task.startTime) : 'Unknown';
-        const duration = formatDuration(task);
+    // Create main visualization
+    function createMainVisualization() {
+        const container = document.createElement('div');
+        container.className = 'pbs2-visualization';
         
-        return `
-            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                <td class="px-3 py-2 whitespace-nowrap">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${getTaskTypeColor(taskType)}">
-                        ${taskType}
-                    </span>
-                </td>
-                <td class="px-3 py-2 text-sm text-gray-900 dark:text-gray-100">${target}</td>
-                <td class="px-3 py-2 text-sm">${status}</td>
-                <td class="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">${startTime}</td>
-                <td class="px-3 py-2 text-sm text-gray-600 dark:text-gray-400">${duration}</td>
-            </tr>
-        `;
+        switch (state.viewMode) {
+            case 'timeline':
+                container.appendChild(createTimelineView());
+                break;
+            case 'matrix':
+                container.appendChild(createMatrixView());
+                break;
+            case 'flow':
+                container.appendChild(createFlowView());
+                break;
+        }
+        
+        return container;
     }
 
-    // Create datastore card
-    function createDatastoreCard(datastore) {
-        const card = document.createElement('div');
-        card.className = 'border border-gray-200 dark:border-gray-700 rounded-lg p-4';
+    // Timeline view - shows backup activity over time
+    function createTimelineView() {
+        const timeline = document.createElement('div');
+        timeline.className = 'timeline-view';
         
-        const usagePercent = datastore.total > 0 ? Math.round((datastore.used / datastore.total) * 100) : 0;
-        const usageColor = usagePercent >= 90 ? 'red' : usagePercent >= 75 ? 'yellow' : 'green';
+        const instance = state.pbsData[state.selectedInstance];
+        if (!instance) return timeline;
         
-        card.innerHTML = `
-            <div class="flex items-start justify-between mb-3">
-                <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">${datastore.name}</h4>
-                <span class="text-sm ${getUsageColor(usagePercent)}">${usagePercent}%</span>
-            </div>
+        // Process tasks into timeline slots
+        const range = TIME_RANGES[state.selectedTimeRange];
+        const now = Date.now();
+        const startTime = now - range.ms;
+        const slotDuration = range.ms / range.slots;
+        
+        // Group tasks by VM and time slot
+        const vmTimelines = new Map();
+        const allVms = new Set();
+        
+        ['backupTasks', 'verificationTasks'].forEach(taskType => {
+            if (instance[taskType]?.recentTasks) {
+                instance[taskType].recentTasks.forEach(task => {
+                    const vm = parseVmFromTask(task);
+                    if (!vm) return;
+                    
+                    allVms.add(vm);
+                    if (!vmTimelines.has(vm)) {
+                        vmTimelines.set(vm, Array(range.slots).fill(null).map(() => []));
+                    }
+                    
+                    const taskStartMs = (task.startTime || 0) * 1000;
+                    if (taskStartMs >= startTime) {
+                        const slot = Math.floor((taskStartMs - startTime) / slotDuration);
+                        if (slot >= 0 && slot < range.slots) {
+                            vmTimelines.get(vm)[slot].push({
+                                ...task,
+                                type: taskType === 'backupTasks' ? 'backup' : 'verify'
+                            });
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Create timeline header
+        const header = document.createElement('div');
+        header.className = 'timeline-header';
+        
+        // Time labels
+        const timeLabels = document.createElement('div');
+        timeLabels.className = 'time-labels';
+        for (let i = 0; i < range.slots; i++) {
+            const label = document.createElement('div');
+            label.className = 'time-label';
+            if (i % Math.floor(range.slots / 8) === 0) {
+                const time = new Date(startTime + i * slotDuration);
+                label.textContent = formatTimeLabel(time, state.selectedTimeRange);
+            }
+            timeLabels.appendChild(label);
+        }
+        header.appendChild(timeLabels);
+        timeline.appendChild(header);
+        
+        // VM rows
+        const rows = document.createElement('div');
+        rows.className = 'timeline-rows';
+        
+        Array.from(allVms).sort().forEach(vm => {
+            const row = document.createElement('div');
+            row.className = 'vm-row';
             
-            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-3">
-                <div class="h-2 rounded-full ${getUsageBarColor(usagePercent)}" style="width: ${usagePercent}%"></div>
-            </div>
+            // VM label
+            const label = document.createElement('div');
+            label.className = 'vm-label';
+            label.textContent = vm;
+            label.title = vm;
+            row.appendChild(label);
             
-            <div class="flex justify-between text-xs text-gray-600 dark:text-gray-400">
-                <span>${formatBytes(datastore.used)} used</span>
-                <span>${formatBytes(datastore.avail)} free</span>
-            </div>
+            // Timeline slots
+            const slots = document.createElement('div');
+            slots.className = 'timeline-slots';
             
-            ${datastore.namespaces && datastore.namespaces.length > 0 ? `
-                <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-                    <p class="text-xs text-gray-500 dark:text-gray-400">
-                        ${datastore.namespaces.length} namespaces
-                    </p>
+            const vmSlots = vmTimelines.get(vm) || Array(range.slots).fill(null).map(() => []);
+            vmSlots.forEach((tasks, idx) => {
+                const slot = document.createElement('div');
+                slot.className = 'time-slot';
+                
+                if (tasks.length > 0) {
+                    const primaryTask = tasks[0];
+                    const status = getTaskStatus(primaryTask);
+                    slot.classList.add(`status-${status}`, `type-${primaryTask.type}`);
+                    
+                    if (tasks.length > 1) {
+                        slot.classList.add('multiple-tasks');
+                        slot.setAttribute('data-count', tasks.length);
+                    }
+                    
+                    // Hover tooltip
+                    slot.addEventListener('mouseenter', (e) => {
+                        showTaskTooltip(e, tasks);
+                    });
+                    slot.addEventListener('mouseleave', hideTooltip);
+                    
+                    // Click to select
+                    slot.addEventListener('click', () => {
+                        state.selectedVm = vm;
+                        updateVmDetails();
+                    });
+                }
+                
+                slots.appendChild(slot);
+            });
+            
+            row.appendChild(slots);
+            rows.appendChild(row);
+        });
+        
+        timeline.appendChild(rows);
+        
+        // Add current time indicator
+        const currentTimeOffset = (now - startTime) / range.ms;
+        if (currentTimeOffset >= 0 && currentTimeOffset <= 1) {
+            const indicator = document.createElement('div');
+            indicator.className = 'current-time-indicator';
+            indicator.style.left = `${currentTimeOffset * 100}%`;
+            timeline.appendChild(indicator);
+        }
+        
+        return timeline;
+    }
+
+    // Matrix view - shows VM backup health at a glance
+    function createMatrixView() {
+        const matrix = document.createElement('div');
+        matrix.className = 'matrix-view';
+        
+        const instance = state.pbsData[state.selectedInstance];
+        if (!instance) return matrix;
+        
+        // Calculate VM health metrics
+        const vmMetrics = calculateVmMetrics(instance);
+        
+        // Sort VMs by health score
+        const sortedVms = Array.from(vmMetrics.entries())
+            .sort((a, b) => a[1].healthScore - b[1].healthScore);
+        
+        // Create grid
+        const grid = document.createElement('div');
+        grid.className = 'vm-grid';
+        
+        sortedVms.forEach(([vm, metrics]) => {
+            const cell = document.createElement('div');
+            cell.className = 'vm-cell';
+            cell.classList.add(`health-${getHealthLevel(metrics.healthScore)}`);
+            
+            // Background gradient based on success rate
+            const gradient = `linear-gradient(135deg, 
+                ${getHealthColor(metrics.successRate)} 0%, 
+                ${getHealthColor(metrics.successRate * 0.8)} 100%)`;
+            cell.style.background = gradient;
+            
+            cell.innerHTML = `
+                <div class="vm-name">${vm}</div>
+                <div class="vm-stats">
+                    <div class="stat">
+                        <span class="value">${metrics.successRate}%</span>
+                        <span class="label">Success</span>
+                    </div>
+                    <div class="stat">
+                        <span class="value">${metrics.lastBackup}</span>
+                        <span class="label">Last Backup</span>
+                    </div>
                 </div>
-            ` : ''}
+                <div class="vm-mini-chart">
+                    ${createSparkline(metrics.recentHistory)}
+                </div>
+            `;
+            
+            // Hover effect
+            cell.addEventListener('mouseenter', () => {
+                cell.classList.add('hover');
+                showVmMetricsTooltip(cell, vm, metrics);
+            });
+            cell.addEventListener('mouseleave', () => {
+                cell.classList.remove('hover');
+                hideTooltip();
+            });
+            
+            // Click to view details
+            cell.addEventListener('click', () => {
+                state.selectedVm = vm;
+                updateVmDetails();
+            });
+            
+            grid.appendChild(cell);
+        });
+        
+        matrix.appendChild(grid);
+        return matrix;
+    }
+
+    // Flow view - shows backup job dependencies and patterns
+    function createFlowView() {
+        const flow = document.createElement('div');
+        flow.className = 'flow-view';
+        
+        const instance = state.pbsData[state.selectedInstance];
+        if (!instance) return flow;
+        
+        // Analyze backup patterns
+        const patterns = analyzeBackupPatterns(instance);
+        
+        // Create flow visualization
+        const canvas = document.createElement('canvas');
+        canvas.className = 'flow-canvas';
+        flow.appendChild(canvas);
+        
+        // Set canvas size
+        const rect = flow.getBoundingClientRect();
+        canvas.width = rect.width || 800;
+        canvas.height = 600;
+        
+        const ctx = canvas.getContext('2d');
+        
+        // Draw flow diagram
+        drawBackupFlow(ctx, patterns, canvas.width, canvas.height);
+        
+        // Add legend
+        const legend = document.createElement('div');
+        legend.className = 'flow-legend';
+        legend.innerHTML = `
+            <div class="legend-item">
+                <div class="legend-color" style="background: #3b82f6"></div>
+                <span>Backup Job</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #10b981"></div>
+                <span>Verification</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #f59e0b"></div>
+                <span>Running</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: #ef4444"></div>
+                <span>Failed</span>
+            </div>
+        `;
+        flow.appendChild(legend);
+        
+        return flow;
+    }
+
+    // Create insights panel
+    function createInsightsPanel() {
+        const panel = document.createElement('div');
+        panel.className = 'insights-panel';
+        
+        panel.innerHTML = `
+            <h3 class="panel-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                Insights & Recommendations
+            </h3>
         `;
         
-        return card;
+        const insightsList = document.createElement('div');
+        insightsList.className = 'insights-list';
+        
+        state.insights.forEach(insight => {
+            const item = document.createElement('div');
+            item.className = `insight-item priority-${insight.priority}`;
+            
+            item.innerHTML = `
+                <div class="insight-icon">${getInsightIcon(insight.type)}</div>
+                <div class="insight-content">
+                    <div class="insight-title">${insight.title}</div>
+                    <div class="insight-description">${insight.description}</div>
+                    ${insight.action ? `
+                        <button class="insight-action">${insight.action}</button>
+                    ` : ''}
+                </div>
+            `;
+            
+            insightsList.appendChild(item);
+        });
+        
+        panel.appendChild(insightsList);
+        return panel;
     }
 
-    // Calculate health metrics
-    function calculateHealthMetrics(instance) {
-        const cutoffTime = Date.now() - TIME_RANGES[state.selectedTimeRange];
-        const cutoffTimeSeconds = cutoffTime / 1000;
+    // Create VM details panel
+    function createVmDetailsPanel() {
+        const panel = document.createElement('div');
+        panel.className = 'vm-details-panel';
         
-        let totalTasks = 0;
-        let successfulTasks = 0;
-        let failedTasks = 0;
-        let activeTasks = 0;
-        let runningBackups = 0;
-        let runningVerify = 0;
+        if (!state.selectedVm) {
+            panel.innerHTML = `
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                        <line x1="9" y1="9" x2="15" y2="9"/>
+                        <line x1="9" y1="13" x2="15" y2="13"/>
+                        <line x1="9" y1="17" x2="13" y2="17"/>
+                    </svg>
+                    <p>Select a VM to view details</p>
+                </div>
+            `;
+            return panel;
+        }
         
-        // Count tasks
-        const taskTypes = ['backupTasks', 'verificationTasks', 'syncTasks', 'pruneTasks'];
-        taskTypes.forEach(taskType => {
-            if (instance[taskType] && instance[taskType].recentTasks) {
-                instance[taskType].recentTasks.forEach(task => {
-                    const taskTime = task.startTime || task.starttime || 0;
-                    if (taskTime >= cutoffTimeSeconds) {
-                        totalTasks++;
-                        
-                        if (!task.status || task.status.toLowerCase().includes('running')) {
-                            activeTasks++;
-                            if (taskType === 'backupTasks') runningBackups++;
-                            if (taskType === 'verificationTasks') runningVerify++;
-                        } else if (task.status === 'OK') {
-                            successfulTasks++;
-                        } else {
-                            failedTasks++;
-                        }
-                    }
+        const instance = state.pbsData[state.selectedInstance];
+        const vmData = getVmData(instance, state.selectedVm);
+        
+        panel.innerHTML = `
+            <div class="vm-header">
+                <h3>${state.selectedVm}</h3>
+                <button class="close-btn" onclick="PulseApp.ui.pbs2.clearSelection()">×</button>
+            </div>
+            
+            <div class="vm-metrics">
+                <div class="metric">
+                    <span class="metric-value">${vmData.totalBackups}</span>
+                    <span class="metric-label">Total Backups</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-value ${vmData.successRate < 95 ? 'warning' : ''}">${vmData.successRate}%</span>
+                    <span class="metric-label">Success Rate</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-value">${vmData.avgDuration}</span>
+                    <span class="metric-label">Avg Duration</span>
+                </div>
+            </div>
+            
+            <div class="vm-chart">
+                <h4>Backup History</h4>
+                <canvas id="vm-backup-chart" width="300" height="150"></canvas>
+            </div>
+            
+            <div class="vm-recent-tasks">
+                <h4>Recent Tasks</h4>
+                <div class="task-list">
+                    ${vmData.recentTasks.map(task => `
+                        <div class="task-item status-${getTaskStatus(task)}">
+                            <span class="task-type">${task.type}</span>
+                            <span class="task-time">${formatTaskTime(task)}</span>
+                            <span class="task-status">${getTaskStatusLabel(task)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+        
+        // Draw chart
+        setTimeout(() => {
+            const canvas = document.getElementById('vm-backup-chart');
+            if (canvas) {
+                drawVmBackupChart(canvas, vmData);
+            }
+        }, 100);
+        
+        return panel;
+    }
+
+    // Process data for insights
+    function processDataForInsights() {
+        state.insights = [];
+        const instance = state.pbsData[state.selectedInstance];
+        if (!instance) return;
+        
+        // Analyze patterns and generate insights
+        const vmMetrics = calculateVmMetrics(instance);
+        
+        // Check for VMs with poor success rates
+        vmMetrics.forEach((metrics, vm) => {
+            if (metrics.successRate < 90) {
+                state.insights.push({
+                    type: 'warning',
+                    priority: 'high',
+                    title: `${vm} has low backup success rate`,
+                    description: `Only ${metrics.successRate}% of backups succeeded in the last 7 days. Consider investigating the root cause.`,
+                    action: 'View Details'
                 });
             }
         });
         
-        const successRate = totalTasks > 0 ? Math.round((successfulTasks / totalTasks) * 100) : 100;
-        
-        // Determine overall status
-        let status = 'Healthy';
-        let statusColor = 'green';
-        let statusDetails = 'All systems operational';
-        
-        if (failedTasks > 0) {
-            if (successRate < 80) {
-                status = 'Critical';
-                statusColor = 'red';
-                statusDetails = 'Multiple failures detected';
-            } else if (successRate < 95) {
-                status = 'Warning';
-                statusColor = 'yellow';
-                statusDetails = 'Some tasks failing';
-            } else {
-                status = 'Healthy';
-                statusColor = 'green';
-                statusDetails = 'Minor issues detected';
-            }
-        }
-        
-        const failureDetails = failedTasks === 0 ? 'No failures' : 
-            failedTasks === 1 ? '1 task failed' : 
-            `${failedTasks} tasks failed`;
-        
-        return {
-            status,
-            statusColor,
-            statusDetails,
-            activeTasks,
-            runningBackups,
-            runningVerify,
-            totalTasks,
-            successfulTasks,
-            successRate,
-            recentFailures: failedTasks,
-            failureDetails
-        };
-    }
-
-    // Get active tasks
-    function getActiveTasks(instance) {
-        const tasks = [];
-        const taskTypes = ['backupTasks', 'verificationTasks', 'syncTasks', 'pruneTasks'];
-        
-        taskTypes.forEach(taskType => {
-            if (instance[taskType] && instance[taskType].recentTasks) {
-                instance[taskType].recentTasks.forEach(task => {
-                    if (!task.status || task.status.toLowerCase().includes('running')) {
-                        tasks.push({ ...task, taskType });
-                    }
+        // Check for VMs without recent backups
+        const now = Date.now() / 1000;
+        vmMetrics.forEach((metrics, vm) => {
+            if (metrics.lastBackupTime && (now - metrics.lastBackupTime) > 86400) {
+                const hours = Math.floor((now - metrics.lastBackupTime) / 3600);
+                state.insights.push({
+                    type: 'alert',
+                    priority: 'medium',
+                    title: `${vm} backup is overdue`,
+                    description: `Last backup was ${hours} hours ago. Expected backup frequency is 24 hours.`,
+                    action: 'Schedule Backup'
                 });
             }
         });
         
-        return tasks.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
-    }
-
-    // Get failed tasks
-    function getFailedTasks(instance) {
-        const tasks = [];
-        const cutoffTime = Date.now() - TIME_RANGES[state.selectedTimeRange];
-        const cutoffTimeSeconds = cutoffTime / 1000;
-        
-        const taskTypes = ['backupTasks', 'verificationTasks', 'syncTasks', 'pruneTasks'];
-        
-        taskTypes.forEach(taskType => {
-            if (instance[taskType] && instance[taskType].recentTasks) {
-                instance[taskType].recentTasks.forEach(task => {
-                    const taskTime = task.startTime || task.starttime || 0;
-                    if (taskTime >= cutoffTimeSeconds && task.status && task.status !== 'OK' && !task.status.toLowerCase().includes('running')) {
-                        tasks.push({ ...task, taskType });
-                    }
+        // Check for backup performance trends
+        const avgDurations = Array.from(vmMetrics.values()).map(m => m.avgDurationSeconds).filter(d => d > 0);
+        if (avgDurations.length > 0) {
+            const overallAvg = avgDurations.reduce((a, b) => a + b, 0) / avgDurations.length;
+            const slowVms = Array.from(vmMetrics.entries())
+                .filter(([_, m]) => m.avgDurationSeconds > overallAvg * 1.5)
+                .map(([vm, _]) => vm);
+            
+            if (slowVms.length > 0) {
+                state.insights.push({
+                    type: 'info',
+                    priority: 'low',
+                    title: 'Slow backup performance detected',
+                    description: `VMs ${slowVms.slice(0, 3).join(', ')} take 50% longer than average to backup. Consider optimization.`,
+                    action: 'Analyze'
                 });
             }
-        });
-        
-        return tasks.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
-    }
-
-    // Get all tasks
-    function getAllTasks(instance, filterType = 'all') {
-        const tasks = [];
-        const cutoffTime = Date.now() - TIME_RANGES[state.selectedTimeRange];
-        const cutoffTimeSeconds = cutoffTime / 1000;
-        
-        const taskTypeMap = {
-            backup: ['backupTasks'],
-            verify: ['verificationTasks'],
-            sync: ['syncTasks'],
-            prune: ['pruneTasks'],
-            all: ['backupTasks', 'verificationTasks', 'syncTasks', 'pruneTasks']
-        };
-        
-        const taskTypes = taskTypeMap[filterType] || taskTypeMap.all;
-        
-        taskTypes.forEach(taskType => {
-            if (instance[taskType] && instance[taskType].recentTasks) {
-                instance[taskType].recentTasks.forEach(task => {
-                    const taskTime = task.startTime || task.starttime || 0;
-                    if (taskTime >= cutoffTimeSeconds) {
-                        // Apply search filter
-                        if (state.searchQuery) {
-                            const target = parsePbsTaskTarget(task).toLowerCase();
-                            if (!target.includes(state.searchQuery)) {
-                                return;
-                            }
-                        }
-                        
-                        // Apply failure filter
-                        if (state.showOnlyFailures && (task.status === 'OK' || !task.status || task.status.toLowerCase().includes('running'))) {
-                            return;
-                        }
-                        
-                        tasks.push({ ...task, taskType });
-                    }
-                });
-            }
-        });
-        
-        return tasks.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
-    }
-
-    // Update filtered content
-    function updateFilteredContent() {
-        // Re-render task history with filters
-        const historyContent = document.querySelector('.task-history-content');
-        if (historyContent) {
-            const activeTab = document.querySelector('.task-type-tab.active');
-            const taskType = activeTab ? activeTab.dataset.type : 'all';
-            renderTaskHistory(historyContent, taskType);
         }
         
-        // Update failure section if needed
-        if (state.showOnlyFailures) {
-            const container = document.getElementById('pbs2-instances-container');
-            if (container) {
-                renderDashboard(container);
-            }
+        // Add positive insights
+        const perfectVms = Array.from(vmMetrics.entries())
+            .filter(([_, m]) => m.successRate === 100)
+            .map(([vm, _]) => vm);
+        
+        if (perfectVms.length > 0) {
+            state.insights.push({
+                type: 'success',
+                priority: 'low',
+                title: `${perfectVms.length} VMs with perfect backup record`,
+                description: `${perfectVms.slice(0, 5).join(', ')} have 100% success rate.`
+            });
         }
-    }
-
-    // Refresh dashboard
-    function refreshDashboard() {
-        const container = document.getElementById('pbs2-instances-container');
-        if (container) {
-            renderDashboard(container);
-        }
-    }
-
-    // Main update function - called by socket handler
-    function updatePbsInfo(pbsArray) {
-        console.log('[PBS2] Received update with data:', pbsArray);
-        state.pbsData = pbsArray || [];
-        refreshDashboard();
     }
 
     // Utility functions
-    function getTaskType(task) {
-        if (!task.upid) return 'Unknown';
-        const upidParts = task.upid.split(':');
-        if (upidParts.length < 2) return 'Unknown';
+    function parseVmFromTask(task) {
+        if (!task.upid) return null;
+        const parts = task.upid.split(':');
+        if (parts.length >= 3 && parts[2]) {
+            return parts[2].replace('vm/', 'VM ');
+        }
+        return null;
+    }
+
+    function getTaskStatus(task) {
+        if (!task.status) return 'running';
+        if (task.status === 'OK') return 'success';
+        return 'failed';
+    }
+
+    function formatTimeLabel(date, range) {
+        if (range === '1h' || range === '6h') {
+            return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        } else if (range === '24h') {
+            return date.toLocaleTimeString([], { hour: '2-digit' });
+        } else {
+            return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        }
+    }
+
+    function calculateVmMetrics(instance) {
+        const metrics = new Map();
+        const now = Date.now() / 1000;
+        const cutoff = now - (7 * 24 * 60 * 60); // 7 days
         
-        const typeMap = {
-            'backup': 'Backup',
-            'verify': 'Verify',
-            'sync': 'Sync',
-            'garbage_collection': 'GC',
-            'prune': 'Prune'
+        ['backupTasks', 'verificationTasks'].forEach(taskType => {
+            if (instance[taskType]?.recentTasks) {
+                instance[taskType].recentTasks.forEach(task => {
+                    const vm = parseVmFromTask(task);
+                    if (!vm || !task.startTime || task.startTime < cutoff) return;
+                    
+                    if (!metrics.has(vm)) {
+                        metrics.set(vm, {
+                            totalTasks: 0,
+                            successfulTasks: 0,
+                            failedTasks: 0,
+                            lastBackupTime: 0,
+                            totalDuration: 0,
+                            recentHistory: [],
+                            healthScore: 100
+                        });
+                    }
+                    
+                    const vmMetrics = metrics.get(vm);
+                    vmMetrics.totalTasks++;
+                    
+                    if (task.status === 'OK') {
+                        vmMetrics.successfulTasks++;
+                    } else if (task.status && task.status !== 'Running') {
+                        vmMetrics.failedTasks++;
+                    }
+                    
+                    if (taskType === 'backupTasks' && task.startTime > vmMetrics.lastBackupTime) {
+                        vmMetrics.lastBackupTime = task.startTime;
+                    }
+                    
+                    if (task.endTime && task.startTime) {
+                        vmMetrics.totalDuration += (task.endTime - task.startTime);
+                    }
+                    
+                    vmMetrics.recentHistory.push({
+                        time: task.startTime,
+                        success: task.status === 'OK'
+                    });
+                });
+            }
+        });
+        
+        // Calculate derived metrics
+        metrics.forEach((vmMetrics, vm) => {
+            vmMetrics.successRate = vmMetrics.totalTasks > 0 
+                ? Math.round((vmMetrics.successfulTasks / vmMetrics.totalTasks) * 100)
+                : 100;
+            
+            vmMetrics.avgDurationSeconds = vmMetrics.totalTasks > 0
+                ? Math.round(vmMetrics.totalDuration / vmMetrics.totalTasks)
+                : 0;
+            
+            vmMetrics.avgDuration = formatDuration(vmMetrics.avgDurationSeconds);
+            
+            vmMetrics.lastBackup = vmMetrics.lastBackupTime > 0
+                ? formatRelativeTime(now - vmMetrics.lastBackupTime)
+                : 'Never';
+            
+            // Calculate health score
+            let health = 100;
+            health -= (100 - vmMetrics.successRate) * 0.5; // Success rate weight
+            if (vmMetrics.lastBackupTime > 0) {
+                const hoursSinceBackup = (now - vmMetrics.lastBackupTime) / 3600;
+                if (hoursSinceBackup > 48) health -= 20;
+                else if (hoursSinceBackup > 24) health -= 10;
+            }
+            vmMetrics.healthScore = Math.max(0, Math.round(health));
+            
+            // Sort history by time
+            vmMetrics.recentHistory.sort((a, b) => a.time - b.time);
+        });
+        
+        return metrics;
+    }
+
+    function getHealthLevel(score) {
+        if (score >= 95) return 'excellent';
+        if (score >= 80) return 'good';
+        if (score >= 60) return 'warning';
+        return 'critical';
+    }
+
+    function getHealthColor(score) {
+        if (score >= 95) return '#10b981';
+        if (score >= 80) return '#3b82f6';
+        if (score >= 60) return '#f59e0b';
+        return '#ef4444';
+    }
+
+    function createSparkline(history) {
+        if (!history || history.length === 0) return '';
+        
+        const width = 100;
+        const height = 30;
+        const points = history.slice(-20).map((item, idx) => {
+            const x = (idx / (history.length - 1)) * width;
+            const y = item.success ? 5 : height - 5;
+            return `${x},${y}`;
+        }).join(' ');
+        
+        return `
+            <svg width="${width}" height="${height}" class="sparkline">
+                <polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2"/>
+            </svg>
+        `;
+    }
+
+    function formatDuration(seconds) {
+        if (seconds < 60) return `${seconds}s`;
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+        return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+    }
+
+    function formatRelativeTime(seconds) {
+        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+        if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+        return `${Math.floor(seconds / 86400)}d ago`;
+    }
+
+    function getInsightIcon(type) {
+        const icons = {
+            warning: '⚠️',
+            alert: '🔔',
+            info: 'ℹ️',
+            success: '✅'
         };
-        
-        return typeMap[upidParts[1]] || upidParts[1];
+        return icons[type] || '📌';
     }
 
-    function getTaskTypeColor(type) {
-        const colorMap = {
-            'Backup': 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300',
-            'Verify': 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300',
-            'Sync': 'bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300',
-            'GC': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300',
-            'Prune': 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300'
-        };
+    // Update functions
+    function updateMainVisualization() {
+        const container = document.querySelector('.pbs2-visualization');
+        if (!container) return;
         
-        return colorMap[type] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/50 dark:text-gray-300';
-    }
-
-    function parsePbsTaskTarget(task) {
-        if (!task || !task.upid) return 'Unknown';
+        container.innerHTML = '';
         
-        const upidParts = task.upid.split(':');
-        if (upidParts.length < 8) return 'Unknown';
-        
-        const targetId = upidParts[2];
-        
-        if (targetId.startsWith('vm/')) {
-            return targetId.replace('vm/', 'VM ');
+        switch (state.viewMode) {
+            case 'timeline':
+                container.appendChild(createTimelineView());
+                break;
+            case 'matrix':
+                container.appendChild(createMatrixView());
+                break;
+            case 'flow':
+                container.appendChild(createFlowView());
+                break;
         }
-        
-        return targetId || 'Unknown';
     }
 
-    function getPbsStatusBadge(status) {
-        if (!status) {
-            return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300">Running</span>';
-        }
+    function updateVmDetails() {
+        const panel = document.querySelector('.vm-details-panel');
+        if (!panel) return;
         
-        if (status === 'OK') {
-            return '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">Success</span>';
-        }
-        
-        return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">${status}</span>`;
+        const newPanel = createVmDetailsPanel();
+        panel.replaceWith(newPanel);
     }
 
-    function formatDuration(task) {
-        if (!task.endTime || !task.startTime) {
-            if (!task.status || task.status.toLowerCase().includes('running')) {
-                // Calculate running time
-                const start = task.startTime || task.starttime || 0;
-                if (start) {
-                    const duration = Math.floor(Date.now() / 1000 - start);
-                    return formatSeconds(duration);
+    // Main update function
+    function updatePbsInfo(pbsArray) {
+        console.log('[PBS2] Received update with data:', pbsArray);
+        state.pbsData = pbsArray || [];
+        
+        processDataForInsights();
+        
+        const container = document.getElementById('pbs2-instances-container');
+        if (container) {
+            render(container);
+        }
+    }
+
+    // Inject custom styles
+    function injectStyles() {
+        const styleId = 'pbs2-styles';
+        if (document.getElementById(styleId)) return;
+        
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            .pbs2-container {
+                height: 100%;
+                display: flex;
+                flex-direction: column;
+                background: var(--bg-primary);
+                color: var(--text-primary);
+                --bg-primary: #ffffff;
+                --bg-secondary: #f9fafb;
+                --bg-tertiary: #f3f4f6;
+                --text-primary: #111827;
+                --text-secondary: #6b7280;
+                --border-color: #e5e7eb;
+                --success-color: #10b981;
+                --warning-color: #f59e0b;
+                --error-color: #ef4444;
+                --info-color: #3b82f6;
+            }
+            
+            .dark .pbs2-container {
+                --bg-primary: #1f2937;
+                --bg-secondary: #111827;
+                --bg-tertiary: #374151;
+                --text-primary: #f9fafb;
+                --text-secondary: #9ca3af;
+                --border-color: #374151;
+            }
+            
+            .pbs2-dashboard {
+                display: grid;
+                grid-template-columns: 1fr 400px;
+                gap: 1rem;
+                height: calc(100vh - 200px);
+                padding: 1rem;
+            }
+            
+            .pbs2-main-view {
+                display: flex;
+                flex-direction: column;
+                background: var(--bg-secondary);
+                border-radius: 0.5rem;
+                overflow: hidden;
+            }
+            
+            .pbs2-controls {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 1rem;
+                background: var(--bg-primary);
+                border-bottom: 1px solid var(--border-color);
+            }
+            
+            .controls-left {
+                display: flex;
+                gap: 1rem;
+            }
+            
+            .view-switcher {
+                display: flex;
+                gap: 0.5rem;
+                background: var(--bg-tertiary);
+                padding: 0.25rem;
+                border-radius: 0.375rem;
+            }
+            
+            .view-btn {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem 1rem;
+                background: transparent;
+                border: none;
+                border-radius: 0.25rem;
+                color: var(--text-secondary);
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .view-btn:hover {
+                color: var(--text-primary);
+            }
+            
+            .view-btn.active {
+                background: var(--bg-primary);
+                color: var(--info-color);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            }
+            
+            .time-selector {
+                display: flex;
+                gap: 0.25rem;
+            }
+            
+            .time-btn {
+                padding: 0.5rem 1rem;
+                background: transparent;
+                border: 1px solid var(--border-color);
+                border-radius: 0.25rem;
+                color: var(--text-secondary);
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .time-btn:hover {
+                border-color: var(--info-color);
+                color: var(--info-color);
+            }
+            
+            .time-btn.active {
+                background: var(--info-color);
+                color: white;
+                border-color: var(--info-color);
+            }
+            
+            .live-indicator {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                color: var(--success-color);
+                font-size: 0.875rem;
+            }
+            
+            .pulse-dot {
+                width: 8px;
+                height: 8px;
+                background: var(--success-color);
+                border-radius: 50%;
+                animation: pulse 2s infinite;
+            }
+            
+            @keyframes pulse {
+                0%, 100% { opacity: 1; transform: scale(1); }
+                50% { opacity: 0.5; transform: scale(1.2); }
+            }
+            
+            .pbs2-visualization {
+                flex: 1;
+                overflow: auto;
+                padding: 1rem;
+            }
+            
+            /* Timeline View */
+            .timeline-view {
+                position: relative;
+                min-width: 800px;
+            }
+            
+            .timeline-header {
+                position: sticky;
+                top: 0;
+                background: var(--bg-secondary);
+                z-index: 10;
+                padding-bottom: 0.5rem;
+            }
+            
+            .time-labels {
+                display: flex;
+                margin-left: 120px;
+                position: relative;
+                height: 30px;
+            }
+            
+            .time-label {
+                flex: 1;
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+                text-align: center;
+            }
+            
+            .timeline-rows {
+                display: flex;
+                flex-direction: column;
+                gap: 0.25rem;
+            }
+            
+            .vm-row {
+                display: flex;
+                align-items: center;
+                min-height: 40px;
+            }
+            
+            .vm-label {
+                width: 120px;
+                padding-right: 1rem;
+                font-size: 0.875rem;
+                color: var(--text-primary);
+                text-overflow: ellipsis;
+                overflow: hidden;
+                white-space: nowrap;
+            }
+            
+            .timeline-slots {
+                flex: 1;
+                display: flex;
+                gap: 1px;
+                background: var(--border-color);
+                padding: 1px;
+                border-radius: 0.25rem;
+            }
+            
+            .time-slot {
+                flex: 1;
+                height: 36px;
+                background: var(--bg-primary);
+                border-radius: 0.125rem;
+                cursor: pointer;
+                transition: all 0.2s;
+                position: relative;
+            }
+            
+            .time-slot.status-success.type-backup {
+                background: var(--success-color);
+                opacity: 0.8;
+            }
+            
+            .time-slot.status-success.type-verify {
+                background: var(--info-color);
+                opacity: 0.8;
+            }
+            
+            .time-slot.status-failed {
+                background: var(--error-color);
+                opacity: 0.8;
+            }
+            
+            .time-slot.status-running {
+                background: var(--warning-color);
+                opacity: 0.8;
+                animation: pulse 2s infinite;
+            }
+            
+            .time-slot:hover {
+                opacity: 1;
+                transform: scale(1.05);
+                z-index: 5;
+            }
+            
+            .time-slot.multiple-tasks::after {
+                content: attr(data-count);
+                position: absolute;
+                top: 2px;
+                right: 2px;
+                font-size: 0.625rem;
+                background: rgba(0,0,0,0.5);
+                color: white;
+                padding: 0 4px;
+                border-radius: 2px;
+            }
+            
+            .current-time-indicator {
+                position: absolute;
+                top: 0;
+                bottom: 0;
+                width: 2px;
+                background: var(--error-color);
+                z-index: 15;
+                pointer-events: none;
+            }
+            
+            .current-time-indicator::before {
+                content: '';
+                position: absolute;
+                top: -4px;
+                left: -4px;
+                width: 10px;
+                height: 10px;
+                background: var(--error-color);
+                border-radius: 50%;
+            }
+            
+            /* Matrix View */
+            .matrix-view {
+                padding: 1rem;
+            }
+            
+            .vm-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                gap: 1rem;
+            }
+            
+            .vm-cell {
+                padding: 1.5rem;
+                border-radius: 0.5rem;
+                color: white;
+                cursor: pointer;
+                transition: all 0.3s;
+                position: relative;
+                overflow: hidden;
+            }
+            
+            .vm-cell:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            }
+            
+            .vm-name {
+                font-weight: 600;
+                margin-bottom: 0.5rem;
+            }
+            
+            .vm-stats {
+                display: flex;
+                gap: 1rem;
+                margin-bottom: 0.5rem;
+            }
+            
+            .stat {
+                display: flex;
+                flex-direction: column;
+            }
+            
+            .stat .value {
+                font-size: 1.25rem;
+                font-weight: 600;
+            }
+            
+            .stat .label {
+                font-size: 0.75rem;
+                opacity: 0.8;
+            }
+            
+            .vm-mini-chart {
+                margin-top: 0.5rem;
+                opacity: 0.8;
+            }
+            
+            /* Side Panel */
+            .pbs2-side-panel {
+                display: flex;
+                flex-direction: column;
+                gap: 1rem;
+            }
+            
+            .insights-panel,
+            .vm-details-panel {
+                background: var(--bg-secondary);
+                border-radius: 0.5rem;
+                padding: 1.5rem;
+            }
+            
+            .panel-title {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-size: 1rem;
+                font-weight: 600;
+                margin-bottom: 1rem;
+                color: var(--text-primary);
+            }
+            
+            .insights-list {
+                display: flex;
+                flex-direction: column;
+                gap: 0.75rem;
+            }
+            
+            .insight-item {
+                display: flex;
+                gap: 0.75rem;
+                padding: 0.75rem;
+                background: var(--bg-primary);
+                border-radius: 0.375rem;
+                border-left: 3px solid;
+                transition: all 0.2s;
+            }
+            
+            .insight-item:hover {
+                transform: translateX(2px);
+            }
+            
+            .insight-item.priority-high {
+                border-left-color: var(--error-color);
+            }
+            
+            .insight-item.priority-medium {
+                border-left-color: var(--warning-color);
+            }
+            
+            .insight-item.priority-low {
+                border-left-color: var(--info-color);
+            }
+            
+            .insight-icon {
+                font-size: 1.25rem;
+                flex-shrink: 0;
+            }
+            
+            .insight-content {
+                flex: 1;
+            }
+            
+            .insight-title {
+                font-weight: 500;
+                color: var(--text-primary);
+                margin-bottom: 0.25rem;
+            }
+            
+            .insight-description {
+                font-size: 0.875rem;
+                color: var(--text-secondary);
+                line-height: 1.5;
+            }
+            
+            .insight-action {
+                margin-top: 0.5rem;
+                padding: 0.25rem 0.75rem;
+                background: var(--info-color);
+                color: white;
+                border: none;
+                border-radius: 0.25rem;
+                font-size: 0.875rem;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            
+            .insight-action:hover {
+                background: var(--info-color);
+                opacity: 0.9;
+            }
+            
+            /* VM Details */
+            .vm-details-panel {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+            }
+            
+            .empty-state {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 3rem;
+                color: var(--text-secondary);
+                text-align: center;
+            }
+            
+            .empty-state svg {
+                margin-bottom: 1rem;
+                opacity: 0.3;
+            }
+            
+            .vm-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 1rem;
+            }
+            
+            .vm-header h3 {
+                font-size: 1.125rem;
+                font-weight: 600;
+                color: var(--text-primary);
+            }
+            
+            .close-btn {
+                width: 24px;
+                height: 24px;
+                background: none;
+                border: none;
+                color: var(--text-secondary);
+                cursor: pointer;
+                font-size: 1.25rem;
+                line-height: 1;
+                border-radius: 0.25rem;
+                transition: all 0.2s;
+            }
+            
+            .close-btn:hover {
+                background: var(--bg-tertiary);
+                color: var(--text-primary);
+            }
+            
+            .vm-metrics {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 0.75rem;
+                margin-bottom: 1.5rem;
+            }
+            
+            .metric {
+                text-align: center;
+                padding: 0.75rem;
+                background: var(--bg-primary);
+                border-radius: 0.375rem;
+            }
+            
+            .metric-value {
+                display: block;
+                font-size: 1.5rem;
+                font-weight: 600;
+                color: var(--text-primary);
+            }
+            
+            .metric-value.warning {
+                color: var(--warning-color);
+            }
+            
+            .metric-label {
+                display: block;
+                font-size: 0.75rem;
+                color: var(--text-secondary);
+                margin-top: 0.25rem;
+            }
+            
+            .vm-chart {
+                margin-bottom: 1.5rem;
+            }
+            
+            .vm-chart h4 {
+                font-size: 0.875rem;
+                font-weight: 500;
+                color: var(--text-secondary);
+                margin-bottom: 0.75rem;
+            }
+            
+            .vm-recent-tasks h4 {
+                font-size: 0.875rem;
+                font-weight: 500;
+                color: var(--text-secondary);
+                margin-bottom: 0.75rem;
+            }
+            
+            .task-list {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .task-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.5rem;
+                background: var(--bg-primary);
+                border-radius: 0.25rem;
+                font-size: 0.875rem;
+            }
+            
+            .task-type {
+                font-weight: 500;
+                color: var(--text-primary);
+            }
+            
+            .task-time {
+                color: var(--text-secondary);
+            }
+            
+            .task-status {
+                padding: 0.125rem 0.5rem;
+                border-radius: 0.25rem;
+                font-size: 0.75rem;
+                font-weight: 500;
+            }
+            
+            .status-success .task-status {
+                background: var(--success-color);
+                color: white;
+            }
+            
+            .status-failed .task-status {
+                background: var(--error-color);
+                color: white;
+            }
+            
+            .status-running .task-status {
+                background: var(--warning-color);
+                color: white;
+            }
+            
+            /* Tooltips */
+            .pbs2-tooltip {
+                position: fixed;
+                background: var(--bg-primary);
+                border: 1px solid var(--border-color);
+                border-radius: 0.375rem;
+                padding: 0.75rem;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                z-index: 1000;
+                pointer-events: none;
+                max-width: 300px;
+            }
+            
+            .pbs2-tooltip .tooltip-title {
+                font-weight: 500;
+                margin-bottom: 0.5rem;
+                color: var(--text-primary);
+            }
+            
+            .pbs2-tooltip .tooltip-content {
+                font-size: 0.875rem;
+                color: var(--text-secondary);
+            }
+            
+            /* Alerts Banner */
+            .alerts-banner {
+                background: var(--error-color);
+                color: white;
+                padding: 0.75rem 1rem;
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                border-radius: 0.5rem;
+                margin-bottom: 1rem;
+            }
+            
+            .alerts-banner svg {
+                flex-shrink: 0;
+            }
+            
+            .alerts-content {
+                flex: 1;
+            }
+            
+            /* Responsive */
+            @media (max-width: 1200px) {
+                .pbs2-dashboard {
+                    grid-template-columns: 1fr;
+                }
+                
+                .pbs2-side-panel {
+                    flex-direction: row;
+                }
+                
+                .insights-panel,
+                .vm-details-panel {
+                    flex: 1;
                 }
             }
-            return 'N/A';
+        `;
+        
+        document.head.appendChild(style);
+    }
+
+    // Helper functions for empty implementations
+    function renderEmptyState(container) {
+        container.innerHTML = `
+            <div class="empty-state" style="height: 100%; display: flex; align-items: center; justify-content: center;">
+                <div style="text-align: center; color: var(--text-secondary);">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" style="margin: 0 auto 1rem;">
+                        <path d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
+                    </svg>
+                    <h3 style="font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem;">No PBS Servers Connected</h3>
+                    <p style="color: var(--text-secondary);">Configure Proxmox Backup Server integration to see backup status.</p>
+                </div>
+            </div>
+        `;
+    }
+
+    function getCriticalAlerts() {
+        const alerts = [];
+        const instance = state.pbsData[state.selectedInstance];
+        if (!instance) return alerts;
+        
+        // Check for recent failures
+        let recentFailures = 0;
+        ['backupTasks', 'verificationTasks'].forEach(taskType => {
+            if (instance[taskType]?.recentTasks) {
+                instance[taskType].recentTasks.forEach(task => {
+                    if (task.status && task.status !== 'OK' && task.status !== 'Running') {
+                        const age = (Date.now() / 1000) - (task.startTime || 0);
+                        if (age < 3600) { // Last hour
+                            recentFailures++;
+                        }
+                    }
+                });
+            }
+        });
+        
+        if (recentFailures > 0) {
+            alerts.push({
+                type: 'error',
+                message: `${recentFailures} backup failures in the last hour`
+            });
         }
         
-        const duration = task.endTime - task.startTime;
-        return formatSeconds(duration);
+        return alerts;
     }
 
-    function formatSeconds(seconds) {
-        if (seconds < 60) return `${seconds}s`;
-        if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+    function createAlertsBanner(alerts) {
+        const banner = document.createElement('div');
+        banner.className = 'alerts-banner';
         
-        const hours = Math.floor(seconds / 3600);
-        const minutes = Math.floor((seconds % 3600) / 60);
-        return `${hours}h ${minutes}m`;
+        banner.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <div class="alerts-content">
+                ${alerts.map(a => a.message).join(' • ')}
+            </div>
+        `;
+        
+        return banner;
     }
 
-    function formatBytes(bytes) {
-        if (bytes === 0) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    function showTaskTooltip(event, tasks) {
+        hideTooltip();
+        
+        const tooltip = document.createElement('div');
+        tooltip.className = 'pbs2-tooltip';
+        
+        const content = tasks.map(task => {
+            const vm = parseVmFromTask(task);
+            const status = getTaskStatus(task);
+            const time = task.startTime ? new Date(task.startTime * 1000).toLocaleTimeString() : 'Unknown';
+            return `
+                <div style="margin-bottom: 0.5rem;">
+                    <div class="tooltip-title">${vm} - ${task.type}</div>
+                    <div class="tooltip-content">
+                        Status: ${status}<br>
+                        Started: ${time}
+                        ${task.endTime ? `<br>Duration: ${formatDuration(task.endTime - task.startTime)}` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        tooltip.innerHTML = content;
+        document.body.appendChild(tooltip);
+        
+        // Position tooltip
+        const rect = event.target.getBoundingClientRect();
+        tooltip.style.left = `${rect.left}px`;
+        tooltip.style.top = `${rect.bottom + 5}px`;
     }
 
-    function getUsageColor(percent) {
-        if (percent >= 90) return 'text-red-600 dark:text-red-400';
-        if (percent >= 75) return 'text-yellow-600 dark:text-yellow-400';
-        return 'text-green-600 dark:text-green-400';
+    function showVmMetricsTooltip(element, vm, metrics) {
+        hideTooltip();
+        
+        const tooltip = document.createElement('div');
+        tooltip.className = 'pbs2-tooltip';
+        
+        tooltip.innerHTML = `
+            <div class="tooltip-title">${vm}</div>
+            <div class="tooltip-content">
+                Total Tasks: ${metrics.totalTasks}<br>
+                Successful: ${metrics.successfulTasks}<br>
+                Failed: ${metrics.failedTasks}<br>
+                Health Score: ${metrics.healthScore}/100
+            </div>
+        `;
+        
+        document.body.appendChild(tooltip);
+        
+        // Position tooltip
+        const rect = element.getBoundingClientRect();
+        tooltip.style.left = `${rect.left}px`;
+        tooltip.style.top = `${rect.bottom + 5}px`;
     }
 
-    function getUsageBarColor(percent) {
-        if (percent >= 90) return 'bg-red-600 dark:bg-red-400';
-        if (percent >= 75) return 'bg-yellow-600 dark:bg-yellow-400';
-        return 'bg-green-600 dark:bg-green-400';
+    function hideTooltip() {
+        const tooltip = document.querySelector('.pbs2-tooltip');
+        if (tooltip) {
+            tooltip.remove();
+        }
+    }
+
+    function analyzeBackupPatterns(instance) {
+        // Simplified pattern analysis
+        const patterns = {
+            nodes: [],
+            links: []
+        };
+        
+        // Create nodes for each VM
+        const vms = new Set();
+        ['backupTasks'].forEach(taskType => {
+            if (instance[taskType]?.recentTasks) {
+                instance[taskType].recentTasks.forEach(task => {
+                    const vm = parseVmFromTask(task);
+                    if (vm) vms.add(vm);
+                });
+            }
+        });
+        
+        Array.from(vms).forEach((vm, idx) => {
+            patterns.nodes.push({
+                id: vm,
+                label: vm,
+                x: Math.cos(idx * 2 * Math.PI / vms.size) * 200 + 400,
+                y: Math.sin(idx * 2 * Math.PI / vms.size) * 200 + 300
+            });
+        });
+        
+        return patterns;
+    }
+
+    function drawBackupFlow(ctx, patterns, width, height) {
+        ctx.clearRect(0, 0, width, height);
+        
+        // Draw nodes
+        patterns.nodes.forEach(node => {
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, 30, 0, 2 * Math.PI);
+            ctx.fillStyle = '#3b82f6';
+            ctx.fill();
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(node.label, node.x, node.y);
+        });
+    }
+
+    function getVmData(instance, vm) {
+        const tasks = [];
+        let totalDuration = 0;
+        let successCount = 0;
+        
+        ['backupTasks', 'verificationTasks'].forEach(taskType => {
+            if (instance[taskType]?.recentTasks) {
+                instance[taskType].recentTasks.forEach(task => {
+                    if (parseVmFromTask(task) === vm) {
+                        tasks.push({
+                            ...task,
+                            type: taskType === 'backupTasks' ? 'Backup' : 'Verify'
+                        });
+                        
+                        if (task.status === 'OK') successCount++;
+                        if (task.endTime && task.startTime) {
+                            totalDuration += (task.endTime - task.startTime);
+                        }
+                    }
+                });
+            }
+        });
+        
+        tasks.sort((a, b) => (b.startTime || 0) - (a.startTime || 0));
+        
+        return {
+            totalBackups: tasks.length,
+            successRate: tasks.length > 0 ? Math.round((successCount / tasks.length) * 100) : 0,
+            avgDuration: tasks.length > 0 ? formatDuration(Math.round(totalDuration / tasks.length)) : 'N/A',
+            recentTasks: tasks.slice(0, 10),
+            allTasks: tasks
+        };
+    }
+
+    function drawVmBackupChart(canvas, vmData) {
+        const ctx = canvas.getContext('2d');
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        ctx.clearRect(0, 0, width, height);
+        
+        // Simple success rate bar chart
+        const tasks = vmData.allTasks.slice(0, 20).reverse();
+        const barWidth = width / tasks.length;
+        
+        tasks.forEach((task, idx) => {
+            const barHeight = height * 0.8;
+            const x = idx * barWidth;
+            const y = height - barHeight;
+            
+            ctx.fillStyle = task.status === 'OK' ? '#10b981' : '#ef4444';
+            ctx.fillRect(x + 1, y, barWidth - 2, barHeight);
+        });
+    }
+
+    function formatTaskTime(task) {
+        if (!task.startTime) return 'Unknown';
+        return new Date(task.startTime * 1000).toLocaleString();
+    }
+
+    function getTaskStatusLabel(task) {
+        if (!task.status) return 'Running';
+        return task.status;
+    }
+
+    function clearSelection() {
+        state.selectedVm = null;
+        updateVmDetails();
     }
 
     // Public API
     return {
         init,
-        updatePbsInfo
+        updatePbsInfo,
+        clearSelection
     };
 })();
