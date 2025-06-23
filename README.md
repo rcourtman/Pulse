@@ -1027,4 +1027,3 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 - **Port issues:** Try different ports (587 for TLS, 465 for SSL, 25 for unencrypted)
 - **Firewall:** Ensure outbound SMTP traffic is allowed
 - **Authentication:** Double-check username/password, some servers require full email address
-# Trigger RC release
