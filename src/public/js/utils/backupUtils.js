@@ -45,10 +45,17 @@ PulseApp.utils.backup = (() => {
     
     // Format date to compact string (e.g., "Jan 15")
     function formatCompactDate(dateStr) {
-        const date = new Date(dateStr);
-        const month = date.toLocaleDateString('en-US', { month: 'short' });
-        const day = date.getDate();
-        return `${month} ${day}`;
+        // Parse YYYY-MM-DD format explicitly to avoid timezone issues
+        const parts = dateStr.split('-');
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // JavaScript months are 0-based
+        const day = parseInt(parts[2], 10);
+        
+        // Create date in local timezone
+        const date = new Date(year, month, day);
+        
+        const monthName = date.toLocaleDateString('en-US', { month: 'short' });
+        return `${monthName} ${day}`;
     }
     
     // Get human-readable backup type label
