@@ -116,22 +116,35 @@ function processPbsTasks(allTasks) {
             return task.namespace;
         }
         
-        // PRIORITY 2: For synthetic backup runs, check if provided
-        if (task.pbsBackupRun && task.namespace !== undefined) {
-            return task.namespace;
-        }
-        
-        // PRIORITY 3: Extract from worker_id for raw PBS tasks
+        // PRIORITY 2: Extract from worker_id for raw PBS tasks
         const workerId = task.worker_id || task.id || '';
         
         // Try to extract namespace from worker_id patterns for regular PBS tasks
-        // Common PBS patterns: 
-        // - backup:ns=namespace:vm/101
-        // - backup:vm/101 (default namespace = 'root')
-        // - verify:ns=namespace:vm/101
+        // Pattern 1: Standard PBS format with ns= prefix
+        // Examples: backup:ns=namespace:vm/101, verify:ns=namespace:ct/100
         const nsMatch = workerId.match(/ns=([^:]+)/);
         if (nsMatch && nsMatch[1]) {
             return nsMatch[1];
+        }
+        
+        // Pattern 2: Alternative format where namespace is between datastore and type
+        // Examples: main:namespace:vm/101, datastore1:namespace:ct/100
+        // This handles cases where PBS uses datastore:namespace:type/id format
+        const parts = workerId.split(':');
+        if (parts.length >= 3) {
+            // Check if first part looks like a datastore name (alphanumeric, dash, underscore)
+            // and third part looks like a backup type (vm/ct followed by number)
+            const datastorePattern = /^[a-zA-Z0-9_-]+$/;
+            const typePattern = /^(vm|ct)\/\d+$/;
+            
+            if (datastorePattern.test(parts[0]) && typePattern.test(parts[2])) {
+                // The namespace is in the middle
+                const namespace = parts[1];
+                // Don't return empty string as namespace
+                if (namespace && namespace !== '') {
+                    return namespace;
+                }
+            }
         }
         
         // Default to 'root' namespace if no explicit namespace found
@@ -167,7 +180,7 @@ function processPbsTasks(allTasks) {
 
     const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
     
-    const getRecentTasksList = (taskList, detailedTaskFn, sortFn, count = 50) => {
+    const getRecentTasksList = (taskList, detailedTaskFn, sortFn, count = 500) => {
         if (!taskList) return [];
         const nowSec = Date.now() / 1000;
         const thirtyDays = 30 * 24 * 60 * 60;
@@ -182,7 +195,6 @@ function processPbsTasks(allTasks) {
             if (task.starttime == null) return true;
             return (nowSec - task.starttime) <= thirtyDays;
         });
-        
         return recent.map(detailedTaskFn).sort(sortFn).slice(0, count);
     };
 
@@ -191,7 +203,6 @@ function processPbsTasks(allTasks) {
     const recentSyncTasks = getRecentTasksList(taskResults.sync.list, createDetailedTask, sortTasksDesc);
     const recentPruneGcTasks = getRecentTasksList(taskResults.pruneGc.list, createDetailedTask, sortTasksDesc);
     
-
     // Helper function to create the summary object
     const createSummary = (category) => ({ 
         ok: category.ok,
@@ -236,7 +247,6 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
     allTasks.forEach(task => {
         const taskType = task.worker_type || task.type;
         const categoryKey = taskTypeMap[taskType];
-
 
         if (categoryKey) {
             const category = results[categoryKey];

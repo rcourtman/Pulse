@@ -1,0 +1,25 @@
+#!/bin/bash
+# Pre-push hook to warn about potentially problematic pushes
+
+protected_branch='develop'
+current_branch=$(git symbolic-ref HEAD | sed -e 's,.*/\(.*\),\1,')
+
+# Check if pushing to develop
+if [ "$current_branch" = "$protected_branch" ]; then
+    # Check if the last commit is a merge from main
+    last_commit_message=$(git log -1 --pretty=%B)
+    if [[ "$last_commit_message" == *"Merge branch 'main' into develop"* ]]; then
+        echo "⚠️  WARNING: You're about to push a merge from 'main' into 'develop'"
+        echo ""
+        echo "This might overwrite newer changes in develop with older code from main."
+        echo "Please verify this is intentional!"
+        echo ""
+        echo "Recent commits to be pushed:"
+        git log origin/develop..HEAD --oneline -10
+        echo ""
+        echo "Press Ctrl+C to cancel, or Enter to continue..."
+        read -r
+    fi
+fi
+
+exit 0

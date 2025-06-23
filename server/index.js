@@ -157,6 +157,14 @@ configApi.setupRoutes(app);
 const { setupThresholdRoutes } = require('./thresholdRoutes');
 setupThresholdRoutes(app);
 
+// Set up debug API routes
+// const debugRouter = require('./routes/debug');
+// app.use('/api/debug', debugRouter);
+
+// Set up new backup data API routes
+const backupDataRouter = require('./routes/backupData');
+app.use('/api/backup-data', backupDataRouter);
+
 
 // Set up update API routes
 const UpdateManager = require('./updateManager');
@@ -266,12 +274,31 @@ app.get('/api/test/mock-update.tar.gz', (req, res) => {
     });
 });
 
-// Health check endpoint
+// Health check endpoint - returns simple OK/NOT OK based on actual readiness
 app.get('/healthz', (req, res) => {
-    res.status(200).send('OK');
+    try {
+        const state = stateManager.getState();
+        const hasData = stateManager.hasData();
+        const clientsInitialized = Object.keys(global.pulseApiClients?.apiClients || {}).length > 0;
+        
+        // Service is healthy if:
+        // 1. API clients are initialized
+        // 2. We have some data (or using placeholder config)
+        const isHealthy = clientsInitialized && (hasData || state.isConfigPlaceholder);
+        
+        if (isHealthy) {
+            res.status(200).send('OK');
+        } else {
+            // 503 Service Unavailable - not ready yet
+            res.status(503).send('Service starting up');
+        }
+    } catch (error) {
+        console.error("Error in health check:", error);
+        res.status(503).send('Service unavailable');
+    }
 });
 
-// Enhanced health endpoint with detailed monitoring info
+// Detailed health endpoint with monitoring info
 app.get('/api/health', (req, res) => {
     try {
         const healthSummary = stateManager.getHealthSummary();
@@ -289,21 +316,367 @@ app.get('/api/health', (req, res) => {
     }
 });
 
-// Performance metrics endpoint
-app.get('/api/performance', (req, res) => {
+// Debug endpoint to check nodes data
+app.get('/api/debug/nodes', (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 50;
-        const performanceHistory = stateManager.getPerformanceHistory(limit);
-        const connectionHealth = stateManager.getConnectionHealth();
-        
+        const currentState = stateManager.getState();
+        const nodes = currentState.nodes || [];
         res.json({
-            history: performanceHistory,
-            connections: connectionHealth,
-            timestamp: Date.now()
+            nodeCount: nodes.length,
+            nodes: nodes.map(node => ({
+                node: node.node,
+                name: node.name,
+                displayName: node.displayName,
+                clusterIdentifier: node.clusterIdentifier,
+                endpointType: node.endpointType,
+                endpointId: node.endpointId,
+                status: node.status
+            }))
         });
     } catch (error) {
-        console.error("Error in /api/performance:", error);
-        res.status(500).json({ error: "Failed to fetch performance data" });
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Debug endpoint for namespace filter testing
+app.get('/api/debug/namespace-filter-test', (req, res) => {
+    const namespace = req.query.namespace || 'root';
+    const pbsData = stateManager.get('pbsData') || [];
+    const result = {
+        requestedNamespace: namespace,
+        pbsInstances: [],
+        totalSnapshotsBeforeFilter: 0,
+        totalSnapshotsAfterFilter: 0,
+        snapshotsByVMID: {}
+    };
+    
+    pbsData.forEach((pbs, index) => {
+        let instanceSnapshots = 0;
+        let instanceFilteredSnapshots = 0;
+        
+        if (pbs.datastores) {
+            pbs.datastores.forEach(ds => {
+                if (ds.snapshots) {
+                    ds.snapshots.forEach(snap => {
+                        instanceSnapshots++;
+                        const snapNamespace = snap.namespace || 'root';
+                        
+                        if (snapNamespace === namespace) {
+                            instanceFilteredSnapshots++;
+                            const vmid = snap['backup-id'];
+                            if (!result.snapshotsByVMID[vmid]) {
+                                result.snapshotsByVMID[vmid] = {
+                                    count: 0,
+                                    snapshots: []
+                                };
+                            }
+                            result.snapshotsByVMID[vmid].count++;
+                            result.snapshotsByVMID[vmid].snapshots.push({
+                                namespace: snap.namespace,
+                                type: snap['backup-type'],
+                                time: snap['backup-time'],
+                                owner: snap.owner
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        
+        result.pbsInstances.push({
+            name: pbs.pbsInstanceName,
+            totalSnapshots: instanceSnapshots,
+            filteredSnapshots: instanceFilteredSnapshots
+        });
+        result.totalSnapshotsBeforeFilter += instanceSnapshots;
+        result.totalSnapshotsAfterFilter += instanceFilteredSnapshots;
+    });
+    
+    res.json(result);
+});
+
+// Debug endpoint to test namespace filter
+app.get('/api/debug/test-namespace-filter', (req, res) => {
+    const namespace = req.query.namespace || 'root';
+    
+    // Get current state
+    const pbsData = stateManager.get('pbsData') || [];
+    const vms = stateManager.get('vms') || [];
+    const containers = stateManager.get('containers') || [];
+    
+    // Process the data as the frontend would
+    let pbsSnapshots = [];
+    pbsData.forEach(pbs => {
+        if (pbs.datastores) {
+            pbs.datastores.forEach(ds => {
+                if (ds.snapshots) {
+                    ds.snapshots.forEach(snap => {
+                        pbsSnapshots.push({
+                            ...snap,
+                            pbsInstanceName: pbs.pbsInstanceName,
+                            source: 'pbs',
+                            'backup-time': snap['backup-time'],
+                            backupVMID: snap['backup-id'],
+                            backupType: snap['backup-type'],
+                            namespace: snap.namespace || 'root'
+                        });
+                    });
+                }
+            });
+        }
+    });
+    
+    // Filter by namespace
+    const originalCount = pbsSnapshots.length;
+    if (namespace !== 'all') {
+        pbsSnapshots = pbsSnapshots.filter(snap => {
+            const snapNamespace = snap.namespace || 'root';
+            return snapNamespace === namespace;
+        });
+    }
+    
+    // Build snapshotsByGuest map
+    const snapshotsByGuest = new Map();
+    const allGuests = [...vms, ...containers];
+    
+    pbsSnapshots.forEach(snap => {
+        // Simulate the key building logic
+        const owner = snap.owner || '';
+        let endpointSuffix = '-unknown';
+        
+        if (owner && owner.includes('!')) {
+            const ownerToken = owner.split('!')[1].toLowerCase();
+            const matchingGuest = allGuests.find(g => {
+                if (!g.nodeDisplayName || !g.endpointId || g.endpointId === 'primary') return false;
+                const clusterName = g.nodeDisplayName.split(' - ')[0].toLowerCase();
+                return clusterName === ownerToken;
+            });
+            
+            if (matchingGuest) {
+                endpointSuffix = `-${matchingGuest.endpointId}`;
+            } else {
+                endpointSuffix = `-primary-${ownerToken}`;
+            }
+        }
+        
+        const snapNamespace = snap.namespace || 'root';
+        const key = `${snap.backupVMID}-${snap.backupType}-${snap.pbsInstanceName}-${snapNamespace}${endpointSuffix}`;
+        
+        if (!snapshotsByGuest.has(key)) {
+            snapshotsByGuest.set(key, []);
+        }
+        snapshotsByGuest.get(key).push(snap);
+    });
+    
+    // Show what keys were created
+    const keysByVMID = {};
+    Array.from(snapshotsByGuest.keys()).forEach(key => {
+        const vmid = key.split('-')[0];
+        if (!keysByVMID[vmid]) {
+            keysByVMID[vmid] = [];
+        }
+        keysByVMID[vmid].push({
+            key,
+            count: snapshotsByGuest.get(key).length
+        });
+    });
+    
+    res.json({
+        namespace,
+        originalCount,
+        filteredCount: pbsSnapshots.length,
+        snapshotKeys: Array.from(snapshotsByGuest.keys()),
+        keysByVMID,
+        sampleSnapshots: pbsSnapshots.slice(0, 5).map(s => ({
+            vmid: s.backupVMID,
+            type: s.backupType,
+            namespace: s.namespace,
+            owner: s.owner
+        }))
+    });
+});
+
+// Debug endpoint for PBS namespace data
+app.get('/api/debug/pbs-namespaces', (req, res) => {
+    try {
+        const currentState = stateManager.getState();
+        const pbsDataArray = currentState.pbs || [];
+        
+        const namespaceInfo = pbsDataArray.map(pbs => ({
+            name: pbs.pbsInstanceName,
+            datastores: (pbs.datastores || []).map(ds => ({
+                name: ds.name,
+                snapshots: (ds.snapshots || []).map(snap => ({
+                    id: snap['backup-id'],
+                    namespace: snap.namespace,
+                    type: snap['backup-type']
+                })).slice(0, 5) // First 5 snapshots only
+            }))
+        }));
+        
+        // Collect all unique namespaces
+        const allNamespaces = new Set();
+        pbsDataArray.forEach(pbs => {
+            (pbs.datastores || []).forEach(ds => {
+                (ds.snapshots || []).forEach(snap => {
+                    allNamespaces.add(snap.namespace || 'root');
+                });
+            });
+        });
+        
+        res.json({
+            namespaces: Array.from(allNamespaces).sort(),
+            pbsInstances: namespaceInfo,
+            summary: {
+                totalPbsInstances: pbsDataArray.length,
+                totalNamespaces: allNamespaces.size
+            }
+        });
+    } catch (error) {
+        console.error('[API] Error in PBS namespace debug endpoint:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Debug endpoint for snapshot timestamps
+app.get('/api/debug/snapshots', (req, res) => {
+    try {
+        const currentState = stateManager.getState();
+        const guestSnapshots = currentState.pveBackups?.guestSnapshots || [];
+        const now = Math.floor(Date.now() / 1000);
+        
+        const snapshotDebug = guestSnapshots.map(snap => {
+            const ageSeconds = now - snap.snaptime;
+            const ageHours = ageSeconds / 3600;
+            const ageDays = ageHours / 24;
+            
+            return {
+                vmid: snap.vmid,
+                name: snap.name,
+                node: snap.node,
+                type: snap.type,
+                snaptime: snap.snaptime,
+                originalSnaptime: snap.originalSnaptime,
+                timestampIssue: snap.timestampIssue,
+                date: new Date(snap.snaptime * 1000).toISOString(),
+                ageHours: ageHours.toFixed(2),
+                ageDays: ageDays.toFixed(2),
+                willShowAsJustNow: ageDays < 0.042,
+                currentTime: now,
+                currentDate: new Date().toISOString()
+            };
+        });
+        
+        // Sort by age (most recent first)
+        snapshotDebug.sort((a, b) => parseFloat(a.ageHours) - parseFloat(b.ageHours));
+        
+        const recentSnapshots = snapshotDebug.filter(s => s.willShowAsJustNow);
+        const summary = {
+            totalSnapshots: snapshotDebug.length,
+            recentSnapshots: recentSnapshots.length,
+            guestsWithRecentSnapshots: new Set(recentSnapshots.map(s => s.vmid)).size,
+            currentTime: now,
+            currentDate: new Date().toISOString()
+        };
+        
+        res.json({
+            summary,
+            recentSnapshots,
+            allSnapshots: snapshotDebug
+        });
+    } catch (error) {
+        console.error('[API] Error in snapshot debug endpoint:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Automated namespace test endpoint
+app.post('/api/debug/namespace-automated-test', (req, res) => {
+    try {
+        const debugData = req.body;
+        console.log('[AUTO DEBUG] Received automated test results');
+        
+        // Analyze the test results
+        const analysis = {
+            timestamp: new Date().toISOString(),
+            summary: {
+                totalTests: debugData.tests?.length || 0,
+                passed: debugData.tests?.filter(t => t.success).length || 0,
+                failed: debugData.tests?.filter(t => !t.success).length || 0
+            },
+            issues: []
+        };
+        
+        // Check for common issues
+        if (debugData.domState?.table?.rowCount === 0 && debugData.filterState?.namespace === 'root') {
+            analysis.issues.push({
+                type: 'NO_ROWS_IN_ROOT_NAMESPACE',
+                details: 'Root namespace selected but no rows displayed',
+                filterState: debugData.filterState,
+                tableState: debugData.domState.table
+            });
+        }
+        
+        // Check PBS data
+        if (debugData.backupData?.pbsAnalysis) {
+            const rootNamespaceData = [];
+            debugData.backupData.pbsAnalysis.forEach(pbs => {
+                pbs.datastores.forEach(ds => {
+                    if (ds.namespaces.includes('root')) {
+                        rootNamespaceData.push({
+                            pbsInstance: pbs.name,
+                            datastore: ds.name,
+                            snapshotsInRoot: ds.snapshotCount
+                        });
+                    }
+                });
+            });
+            analysis.rootNamespaceData = rootNamespaceData;
+        }
+        
+        // Extract key namespace logs
+        const namespaceLogs = debugData.consoleCapture?.filter(log => 
+            log.args.some(arg => 
+                typeof arg === 'string' && arg.includes('[DEBUG NAMESPACE]')
+            )
+        ) || [];
+        
+        analysis.keyLogs = namespaceLogs.slice(-20).map(log => ({
+            time: log.time,
+            message: log.args.join(' ')
+        }));
+        
+        // Check for specific patterns
+        const vmidsInNamespace = namespaceLogs.find(log => 
+            log.args.some(arg => arg.includes('vmidsInNamespace:'))
+        );
+        
+        if (vmidsInNamespace) {
+            analysis.vmidsFound = vmidsInNamespace.args.join(' ');
+        }
+        
+        // Save to file for inspection
+        const debugFilePath = path.join(__dirname, '../debug', 'namespace-test-results.json');
+        fs.writeFileSync(debugFilePath, JSON.stringify({
+            ...debugData,
+            analysis
+        }, null, 2));
+        
+        console.log('[AUTO DEBUG] Analysis complete:', analysis.summary);
+        console.log('[AUTO DEBUG] Issues found:', analysis.issues.length);
+        
+        res.json({
+            success: true,
+            analysis,
+            debugFile: debugFilePath
+        });
+        
+    } catch (error) {
+        console.error('[AUTO DEBUG] Error processing test results:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
     }
 });
 
@@ -311,7 +684,6 @@ app.get('/api/performance', (req, res) => {
 app.get('/api/alerts', (req, res) => {
     try {
         const filters = {
-            severity: req.query.severity,
             group: req.query.group,
             node: req.query.node,
             acknowledged: req.query.acknowledged === 'true' ? true : 
@@ -367,7 +739,6 @@ app.get('/api/alerts', (req, res) => {
 app.get('/api/alerts/active', (req, res) => {
     try {
         const filters = {
-            severity: req.query.severity,
             group: req.query.group,
             node: req.query.node,
             acknowledged: req.query.acknowledged === 'true' ? true : 
@@ -386,23 +757,6 @@ app.get('/api/alerts/active', (req, res) => {
     }
 });
 
-// Alert history endpoint with pagination and filtering
-app.get('/api/alerts/history', (req, res) => {
-    try {
-        const limit = parseInt(req.query.limit) || 100;
-        const filters = {
-            severity: req.query.severity,
-            group: req.query.group,
-            node: req.query.node
-        };
-        
-        const history = stateManager.alertManager.getAlertHistory(limit, filters);
-        res.json({ history, timestamp: Date.now() });
-    } catch (error) {
-        console.error("Error in /api/alerts/history:", error);
-        res.status(500).json({ error: "Failed to fetch alert history" });
-    }
-});
 
 // Alert acknowledgment endpoint
 app.post('/api/alerts/:alertId/acknowledge', (req, res) => {
@@ -457,56 +811,14 @@ app.get('/api/alerts/groups', (req, res) => {
 });
 
 
-// Enhanced alert metrics endpoint
-app.get('/api/alerts/metrics', (req, res) => {
-    try {
-        const stats = stateManager.alertManager.getEnhancedAlertStats();
-        res.json({
-            metrics: stats.metrics,
-            summary: {
-                active: stats.active,
-                acknowledged: stats.acknowledged,
-                suppressed: stats.suppressedRules
-            },
-            trends: {
-                last24Hours: stats.last24Hours,
-                lastHour: stats.lastHour
-            },
-            timestamp: Date.now()
-        });
-    } catch (error) {
-        console.error("Error in /api/alerts/metrics:", error);
-        res.status(500).json({ error: "Failed to fetch alert metrics" });
-    }
-});
 
 // Test email configuration
 app.post('/api/alerts/test-email', async (req, res) => {
     try {
         console.log('[Test Email] Sending test email...');
         
-        // Get email configuration from process.env (loaded by configLoader)
-        const config = {
-            ALERT_TO_EMAIL: process.env.ALERT_TO_EMAIL,
-            ALERT_FROM_EMAIL: process.env.ALERT_FROM_EMAIL,
-            SMTP_HOST: process.env.SMTP_HOST,
-            SMTP_PORT: process.env.SMTP_PORT,
-            SMTP_USER: process.env.SMTP_USER,
-            SMTP_SECURE: process.env.SMTP_SECURE
-        };
-        
-        console.log('[Test Email] Config loaded, ALERT_TO_EMAIL:', config.ALERT_TO_EMAIL);
-        
-        if (!config.ALERT_TO_EMAIL) {
-            return res.status(400).json({ success: false, error: 'No recipient email address configured' });
-        }
-        
-        if (!config.SMTP_HOST) {
-            return res.status(400).json({ success: false, error: 'SMTP server not configured' });
-        }
-        
-        // Use the alert manager to send a test email with the config
-        const testResult = await stateManager.alertManager.sendTestEmailWithConfig(config);
+        // Use the unified sendTestEmail method without custom config (uses existing transporter)
+        const testResult = await stateManager.alertManager.sendTestEmail();
         
         if (testResult.success) {
             console.log('[Test Email] Test email sent successfully');
@@ -590,7 +902,6 @@ app.post('/api/alerts/test', async (req, res) => {
                 type: 'lxc',
                 endpointId: 'primary'
             },
-            severity: 'warning',
             message: `Test notification for alert rule "${alertName}"`,
             triggeredAt: Date.now(),
             details: {
@@ -954,6 +1265,8 @@ app.post('/api/alerts/config', (req, res) => {
             type: 'per_guest_thresholds',
             globalThresholds: alertConfig.globalThresholds || {},
             guestThresholds: alertConfig.guestThresholds || {},
+            alertLogic: alertConfig.alertLogic || 'and',
+            duration: alertConfig.duration || 0,
             enabled: alertConfig.enabled !== false,
             notifications: alertConfig.notifications || {
                 dashboard: true,
@@ -973,6 +1286,8 @@ app.post('/api/alerts/config', (req, res) => {
             const success = stateManager.alertManager.updateRule('per-guest-alerts', {
                 globalThresholds: rule.globalThresholds,
                 guestThresholds: rule.guestThresholds,
+                alertLogic: rule.alertLogic,
+                duration: rule.duration,
                 notifications: rule.notifications,
                 emailCooldowns: rule.emailCooldowns,
                 webhookCooldowns: rule.webhookCooldowns,
@@ -1029,6 +1344,8 @@ app.get('/api/alerts/config', (req, res) => {
                     type: 'per_guest_thresholds',
                     globalThresholds: existingRule.globalThresholds || {},
                     guestThresholds: existingRule.guestThresholds || {},
+                    alertLogic: existingRule.alertLogic || 'and',
+                    duration: existingRule.duration || 0,
                     notifications: existingRule.notifications || {
                         dashboard: true,
                         email: false,
@@ -1048,6 +1365,8 @@ app.get('/api/alerts/config', (req, res) => {
                     type: 'per_guest_thresholds',
                     globalThresholds: {},
                     guestThresholds: {},
+                    alertLogic: 'and',
+                    duration: 0,
                     notifications: {
                         dashboard: true,
                         email: false,
@@ -1176,89 +1495,7 @@ app.get('/api/charts', async (req, res) => {
 });
 
 
-// Direct state inspection endpoint
-app.get('/api/diagnostics-state', (req, res) => {
-    try {
-        const state = stateManager.getState();
-        const summary = {
-            timestamp: new Date().toISOString(),
-            last_update: state.lastUpdate,
-            update_age_seconds: state.lastUpdate ? Math.floor((Date.now() - new Date(state.lastUpdate).getTime()) / 1000) : null,
-            guests_count: state.guests?.length || 0,
-            nodes_count: state.nodes?.length || 0,
-            pbs_count: state.pbs?.length || 0,
-            sample_guests: state.guests?.slice(0, 5).map(g => ({
-                vmid: g.vmid,
-                name: g.name,
-                type: g.type,
-                status: g.status
-            })) || [],
-            sample_backups: [],
-            errors: state.errors || []
-        };
-        
-        // Get sample backups
-        if (state.pbs && Array.isArray(state.pbs)) {
-            state.pbs.forEach(pbsInstance => {
-                if (pbsInstance.datastores) {
-                    pbsInstance.datastores.forEach(ds => {
-                        if (ds.snapshots && ds.snapshots.length > 0) {
-                            ds.snapshots.slice(0, 5).forEach(snap => {
-                                summary.sample_backups.push({
-                                    store: ds.store,
-                                    backup_id: snap['backup-id'],
-                                    backup_type: snap['backup-type'],
-                                    backup_time: new Date(snap['backup-time'] * 1000).toISOString()
-                                });
-                            });
-                        }
-                    });
-                }
-            });
-        }
-        
-        res.json(summary);
-    } catch (error) {
-        console.error("State inspection error:", error);
-        res.status(500).json({ error: error.message });
-    }
-});
 
-// Quick diagnostic check endpoint
-app.get('/api/diagnostics/check', async (req, res) => {
-    try {
-        // Use cached result if available and recent
-        const cacheKey = 'diagnosticCheck';
-        const cached = global.diagnosticCache?.[cacheKey];
-        if (cached && (Date.now() - cached.timestamp) < 60000) { // Cache for 1 minute
-            return res.json(cached.result);
-        }
-
-        // Run a quick check
-        delete require.cache[require.resolve('./diagnostics')];
-        const DiagnosticTool = require('./diagnostics');
-        const diagnosticTool = new DiagnosticTool(stateManager, metricsHistory, apiClients, pbsApiClients);
-        const report = await diagnosticTool.runDiagnostics();
-        
-        const hasIssues = report.recommendations && 
-            report.recommendations.some(r => r.severity === 'critical' || r.severity === 'warning');
-        
-        const result = {
-            hasIssues,
-            criticalCount: report.recommendations?.filter(r => r.severity === 'critical').length || 0,
-            warningCount: report.recommendations?.filter(r => r.severity === 'warning').length || 0
-        };
-        
-        // Cache the result
-        if (!global.diagnosticCache) global.diagnosticCache = {};
-        global.diagnosticCache[cacheKey] = { timestamp: Date.now(), result };
-        
-        res.json(result);
-    } catch (error) {
-        console.error("Error in diagnostic check:", error);
-        res.json({ hasIssues: false }); // Don't show icon on error
-    }
-});
 
 // Raw state endpoint - shows everything
 app.get('/api/raw-state', (req, res) => {
@@ -1319,101 +1556,30 @@ app.post('/api/test-email', async (req, res) => {
     try {
         const { host, port, user, pass, from, to, secure } = req.body;
         
-        if (!host || !port || !user || !pass || !from || !to) {
-            return res.status(400).json({
+        // Use the unified sendTestEmail method with custom config
+        const testResult = await stateManager.alertManager.sendTestEmail({
+            host, port, user, pass, from, to, secure
+        });
+        
+        if (testResult.success) {
+            console.log(`[EMAIL TEST] Test email sent successfully to: ${to}`);
+            res.json({
+                success: true,
+                message: 'Test email sent successfully!'
+            });
+        } else {
+            console.error('[EMAIL TEST] Failed to send test email:', testResult.error);
+            res.status(400).json({
                 success: false,
-                error: 'All email fields are required for testing'
+                error: testResult.error || 'Failed to send test email'
             });
         }
         
-        // Create a temporary transporter for testing
-        const nodemailer = require('nodemailer');
-        const testTransporter = nodemailer.createTransport({
-            host: host,
-            port: parseInt(port),
-            secure: secure === true, // true for 465, false for other ports
-            requireTLS: true, // Force TLS encryption
-            auth: {
-                user: user,
-                pass: pass
-            },
-            tls: {
-                // Do not fail on invalid certs for testing
-                rejectUnauthorized: false
-            }
-        });
-        
-        // Send test email
-        const testMailOptions = {
-            from: from,
-            to: to,
-            subject: '🧪 Pulse Email Test - Configuration Successful',
-            text: `
-This is a test email from your Pulse monitoring system.
-
-If you received this email, your SMTP configuration is working correctly!
-
-Configuration used:
-- SMTP Host: ${host}
-- SMTP Port: ${port}
-- Secure: ${secure ? 'Yes' : 'No'}
-- From: ${from}
-- To: ${to}
-
-You will now receive alert notifications when VMs/LXCs exceed their configured thresholds.
-
-Best regards,
-Pulse Monitoring System
-            `,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <div style="background: #059669; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-                        <h1 style="margin: 0; font-size: 24px;">🧪 Pulse Email Test</h1>
-                        <p style="margin: 5px 0 0 0; opacity: 0.9;">Configuration Successful!</p>
-                    </div>
-                    
-                    <div style="background: #f0fdf4; padding: 20px; border-left: 4px solid #059669;">
-                        <p style="margin: 0 0 15px 0; color: #065f46;">
-                            <strong>Congratulations!</strong> If you received this email, your SMTP configuration is working correctly.
-                        </p>
-                        
-                        <h3 style="color: #065f46; margin: 15px 0 10px 0;">Configuration Details:</h3>
-                        <ul style="color: #047857; margin: 0; padding-left: 20px;">
-                            <li><strong>SMTP Host:</strong> ${host}</li>
-                            <li><strong>SMTP Port:</strong> ${port}</li>
-                            <li><strong>Secure:</strong> ${secure ? 'Yes (SSL/TLS)' : 'No (STARTTLS)'}</li>
-                            <li><strong>From Address:</strong> ${from}</li>
-                            <li><strong>To Address:</strong> ${to}</li>
-                        </ul>
-                        
-                        <p style="margin: 15px 0 0 0; color: #065f46;">
-                            You will now receive alert notifications when VMs/LXCs exceed their configured thresholds.
-                        </p>
-                    </div>
-                    
-                    <div style="background: white; padding: 20px; border-radius: 0 0 8px 8px; border-top: 1px solid #d1fae5;">
-                        <p style="margin: 0; color: #6b7280; font-size: 12px; text-align: center;">
-                            This test email was sent by your Pulse monitoring system.
-                        </p>
-                    </div>
-                </div>
-            `
-        };
-        
-        await testTransporter.sendMail(testMailOptions);
-        testTransporter.close();
-        
-        console.log(`[EMAIL TEST] Test email sent successfully to: ${to}`);
-        res.json({
-            success: true,
-            message: 'Test email sent successfully!'
-        });
-        
     } catch (error) {
-        console.error('[EMAIL TEST] Failed to send test email:', error);
-        res.status(400).json({
+        console.error('[EMAIL TEST] Error sending test email:', error);
+        res.status(500).json({
             success: false,
-            error: error.message || 'Failed to send test email'
+            error: 'Internal server error while sending test email'
         });
     }
 });
@@ -1790,6 +1956,17 @@ stateManager.alertManager.on('alertAcknowledged', (alert) => {
     }
 });
 
+stateManager.alertManager.on('rulesRefreshed', () => {
+    if (io.engine.clientsCount > 0) {
+        try {
+            console.log('[Socket] Emitting rules refreshed event');
+            io.emit('alertRulesRefreshed');
+        } catch (error) {
+            console.error('[Socket] Failed to emit rules refreshed:', error);
+        }
+    }
+});
+
 // --- Global State Variables ---
 // These will hold the latest fetched data
 // let currentNodes = [];
@@ -1834,6 +2011,15 @@ async function runDiscoveryCycle() {
   }
     // Use imported fetchDiscoveryData
     const discoveryData = await fetchDiscoveryData(currentApiClients, currentPbsApiClients);
+    
+    // Debug: Log what we got from discovery
+    console.log(`[Discovery Cycle] Discovery data received:`, {
+        nodes: discoveryData.nodes ? discoveryData.nodes.length : 0,
+        vms: discoveryData.vms ? discoveryData.vms.length : 0,
+        containers: discoveryData.containers ? discoveryData.containers.length : 0,
+        pbs: discoveryData.pbs ? discoveryData.pbs.length : 0,
+        firstNode: discoveryData.nodes && discoveryData.nodes.length > 0 ? discoveryData.nodes[0] : null
+    });
     
     const duration = Date.now() - startTime;
     
@@ -2180,6 +2366,7 @@ async function startServer() {
         
         // Setup hot reload in development mode
         if (process.env.NODE_ENV === 'development' && chokidar) {
+          console.log('[Hot Reload] Development mode detected - initializing hot reload...');
           const watchPaths = [
             path.join(__dirname, '../src/public'),    // Frontend files
             path.join(__dirname, './'),                // Server files
@@ -2205,7 +2392,8 @@ async function startServer() {
             ignoreInitial: true // Don't trigger on initial scan
           });
           
-          devWatcher.on('change', () => {
+          devWatcher.on('change', (path) => {
+            console.log(`[Hot Reload] File changed: ${path}`);
             io.emit('hotReload'); // Notify clients to reload
           });
           

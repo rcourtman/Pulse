@@ -21,7 +21,6 @@ pids
 *.pid
 *.seed
 *.pid.lock
-data/acknowledgements.json
 data/alert-rules.json
 data/custom-thresholds.json
 data/active-alerts.json
@@ -55,7 +54,6 @@ src/public/output.css
 .DS_Store
 
 # Local Documentation (Not for Repo)
-RELEASE_PROCEDURE.md
 
 # Cursor IDE configuration/rules
 .cursor/ 
@@ -85,11 +83,8 @@ jspm_packages/
 /coverage/ 
 
 # Local configuration files
-RELEASE_CHECKLIST.md
-AI_WORKFLOW.md
-AI_WORKFLOW_SETUP.md
 CLAUDE.md
-ALERT_MANAGEMENT_REFACTOR_PLAN.md
+RELEASE_INSTRUCTIONS.md
 
 # Lockfiles
 # package-lock.json # Usually committed, but ignore if specified elsewhere
@@ -111,10 +106,7 @@ toggle-debug.html
 zen-mcp-server/
 
 # Temporary files
-CHANGELOG_TEMP.md
 commits.txt
-RELEASE_TRIGGER_*.md
-STABLE_RELEASE_TRIGGER.md
 
 # Server logs
 server.log

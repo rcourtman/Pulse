@@ -121,8 +121,16 @@ PulseApp.charts = (() => {
     const CHART_FETCH_INTERVAL = 5000; // More responsive: every 5 seconds
     
     // Processing cache to avoid redundant downsampling
-    let processedDataCache = new Map(); // Key: `${guestId}-${metric}-${chartType}`, Value: processed data
+    let processedDataCache = new Map(); // Key: `${guestId}-${metric}-${chartType}`, Value: { data, timestamp, hash }
     let lastProcessedTimestamp = 0;
+    
+    // Performance optimization: batch updates with requestAnimationFrame
+    let pendingChartUpdates = new Set();
+    let updateRAF = null;
+    
+    // Visibility tracking for charts
+    let visibleCharts = new Set();
+    let visibilityObserver = null;
 
     function formatValue(value, metric) {
         if (metric === 'cpu' || metric === 'memory' || metric === 'disk') {
@@ -145,7 +153,7 @@ PulseApp.charts = (() => {
         }
     }
 
-    function createOrUpdateChart(containerId, data, metric, chartType = 'mini') {
+    function createOrUpdateChart(containerId, data, metric, chartType = 'mini', guestId) {
         const container = document.getElementById(containerId);
         if (!container) {
             return null; // Container doesn't exist, skip silently
@@ -158,8 +166,8 @@ PulseApp.charts = (() => {
             return null;
         }
 
-        // Use smart downsampling
-        const chartData = processChartData(data, chartType);
+        // Use smart downsampling with caching
+        const chartData = processChartData(data, chartType, guestId, metric);
         
         // Get smart color based on data values
         const values = chartData.map(d => d.value);
@@ -193,11 +201,13 @@ PulseApp.charts = (() => {
             const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
             stop1.setAttribute('offset', '0%');
             stop1.setAttribute('class', 'gradient-start');
+            stop1.style.transition = 'stop-color 0.3s ease-out';
             
             const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
             stop2.setAttribute('offset', '100%');
             stop2.setAttribute('stop-opacity', '0.1');
             stop2.setAttribute('class', 'gradient-end');
+            stop2.style.transition = 'stop-color 0.3s ease-out';
             
             gradient.appendChild(stop1);
             gradient.appendChild(stop2);
@@ -212,6 +222,8 @@ PulseApp.charts = (() => {
             const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             area.setAttribute('fill', `url(#${gradientId})`);
             area.setAttribute('class', 'chart-area');
+            // Add smooth transitions for area changes
+            area.style.transition = 'd 0.3s ease-out';
             
             // Create line path
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -222,6 +234,8 @@ PulseApp.charts = (() => {
             path.setAttribute('stroke-linecap', 'round');
             path.setAttribute('stroke-linejoin', 'round');
             path.setAttribute('class', 'chart-line');
+            // Add smooth transitions for path and color changes
+            path.style.transition = 'd 0.3s ease-out, stroke 0.3s ease-out';
             
             chartGroup.appendChild(area);
             chartGroup.appendChild(path);
@@ -233,11 +247,8 @@ PulseApp.charts = (() => {
             container.innerHTML = '';
             container.appendChild(svg);
             
-            // Add transition after initial render
-            requestAnimationFrame(() => {
-                path.style.transition = 'all 0.2s ease-out';
-                area.style.transition = 'all 0.2s ease-out';
-            });
+            // Observe for visibility tracking
+            observeChartVisibility(container);
         }
 
         // Update the chart with new color
@@ -408,16 +419,9 @@ PulseApp.charts = (() => {
             overlay._maxValue = maxValue;
         }
 
-        // Update paths with smooth animation
-        if (isNewChart) {
-            path.setAttribute('d', lineData);
-            if (area) area.setAttribute('d', areaData);
-        } else {
-            requestAnimationFrame(() => {
-                path.setAttribute('d', lineData);
-                if (area) area.setAttribute('d', areaData);
-            });
-        }
+        // Update paths immediately to prevent blinking
+        path.setAttribute('d', lineData);
+        if (area) area.setAttribute('d', areaData);
     }
 
     function updateAxisLabels(svg, minValue, maxValue, config, metric) {
@@ -493,21 +497,68 @@ PulseApp.charts = (() => {
         metricsToRender.forEach(({ metric, type }) => {
             const chartId = `chart-${guestId}-${metric}`;
             const data = guestData[metric];
-            createOrUpdateChart(chartId, data, metric, type);
+            createOrUpdateChart(chartId, data, metric, type, guestId);
         });
     }
 
     function updateAllCharts() {
         if (!chartDataCache) return;
-
-        Object.keys(chartDataCache).forEach(guestId => {
-            // Check if any chart container for this guest exists in DOM
-            const hasVisibleCharts = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout']
-                .some(metric => document.getElementById(`chart-${guestId}-${metric}`));
-                
+        
+        // Batch updates using requestAnimationFrame immediately
+        scheduleChartUpdates();
+    }
+    
+    function scheduleChartUpdates() {
+        if (updateRAF) {
+            cancelAnimationFrame(updateRAF);
+        }
+        
+        updateRAF = requestAnimationFrame(() => {
+            performBatchedChartUpdates();
+            updateRAF = null;
+        });
+    }
+    
+    function performBatchedChartUpdates() {
+        if (!chartDataCache) return;
+        
+        const startTime = performance.now();
+        const maxUpdateTime = 16; // Target 60fps
+        let updatedCount = 0;
+        
+        // Prioritize visible charts
+        const guestIds = Object.keys(chartDataCache);
+        
+        for (const guestId of guestIds) {
+            // Check if we're over time budget
+            if (performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
+                // Schedule remaining updates for next frame
+                scheduleChartUpdates();
+                break;
+            }
+            
+            // Only update if chart is visible
+            const hasVisibleCharts = isGuestChartVisible(guestId);
+            
             if (hasVisibleCharts) {
                 renderGuestCharts(guestId);
+                updatedCount++;
             }
+        }
+    }
+    
+    function isGuestChartVisible(guestId) {
+        // First check if charts mode is active
+        const chartsToggle = document.getElementById('toggle-charts-checkbox');
+        if (!chartsToggle || !chartsToggle.checked) {
+            return false;
+        }
+        
+        // Check visibility set for more accurate tracking
+        const metrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+        return metrics.some(metric => {
+            const chartId = `chart-${guestId}-${metric}`;
+            return visibleCharts.has(chartId) || document.getElementById(chartId);
         });
     }
 
@@ -519,11 +570,6 @@ PulseApp.charts = (() => {
         }
     }
 
-    function clearGuestCharts(guestId) {
-        const metrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
-        metrics.forEach(metric => clearChart(guestId, metric));
-        chartCache.delete(guestId);
-    }
 
     let chartUpdateInterval = null;
 
@@ -531,6 +577,11 @@ PulseApp.charts = (() => {
         if (chartUpdateInterval) return;
         
         chartUpdateInterval = setInterval(async () => {
+            // Skip updates if document is hidden (tab not active)
+            if (document.hidden) {
+                return;
+            }
+            
             const data = await getChartData();
             if (data) {
                 updateAllCharts();
@@ -539,19 +590,34 @@ PulseApp.charts = (() => {
         
         // Initial fetch
         getChartData();
+        
+        // Handle visibility change to pause/resume updates
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && chartDataCache) {
+                // Tab became visible, update charts
+                updateAllCharts();
+            }
+        });
     }
 
-    function stopChartUpdates() {
-        if (chartUpdateInterval) {
-            clearInterval(chartUpdateInterval);
-            chartUpdateInterval = null;
-        }
-    }
 
     // Adaptive sampling: more points for changing data, fewer for stable sections
-    function processChartData(serverData, chartType = 'mini') {
+    function processChartData(serverData, chartType = 'mini', guestId, metric) {
         if (!serverData || serverData.length === 0) {
             return [];
+        }
+
+        // Generate cache key
+        const cacheKey = `${guestId}-${metric}-${chartType}`;
+        
+        // Quick hash of data for cache validation
+        const dataHash = generateDataHash(serverData);
+        
+        // Check cache first
+        const cached = processedDataCache.get(cacheKey);
+        if (cached && cached.hash === dataHash && (Date.now() - cached.timestamp < 30000)) {
+            // Use cached data if it's less than 30 seconds old and data hasn't changed
+            return cached.data;
         }
 
         let targetPoints = CHART_CONFIG.renderPoints;
@@ -562,14 +628,28 @@ PulseApp.charts = (() => {
             // Example: 1080p gets 40 points for usage charts, 24 points for I/O sparklines
         }
         
+        let processedData;
         if (serverData.length <= targetPoints) {
             // Use all available data if we have fewer points than target
-            return serverData;
+            processedData = serverData;
         } else {
             // Use adaptive sampling for optimal information density
-            const sampledData = adaptiveSample(serverData, targetPoints);
-            return sampledData;
+            processedData = adaptiveSample(serverData, targetPoints);
         }
+        
+        // Cache the processed data
+        processedDataCache.set(cacheKey, {
+            data: processedData,
+            timestamp: Date.now(),
+            hash: dataHash
+        });
+        
+        // Clean up old cache entries periodically
+        if (processedDataCache.size > 200) {
+            cleanupProcessedCache();
+        }
+        
+        return processedData;
     }
 
     // Adaptive sampling algorithm: more points where data changes, fewer where stable
@@ -614,7 +694,7 @@ PulseApp.charts = (() => {
     // Calculate importance score for each data point (optimized)
     function calculateImportanceScores(data) {
         const scores = new Array(data.length);
-        const windowSize = Math.max(3, Math.floor(data.length / 50)); // Adaptive window size
+        const windowSize = Math.min(5, Math.max(3, Math.floor(data.length / 50))); // Limit window size
         
         // Pre-calculate values array to avoid repeated property access
         const values = new Array(data.length);
@@ -622,47 +702,28 @@ PulseApp.charts = (() => {
             values[i] = data[i].value;
         }
         
+        // Simplified scoring for better performance
         for (let i = 0; i < data.length; i++) {
             let score = 0;
             
-            // 1. Rate of change importance (derivative)
+            // 1. Simple rate of change (no complex derivatives)
             if (i > 0 && i < data.length - 1) {
-                const prevValue = values[i - 1];
-                const currValue = values[i];
-                const nextValue = values[i + 1];
-                
-                // First derivative (rate of change)
-                const derivative = Math.abs(nextValue - prevValue) * 0.5;
-                
-                // Second derivative (acceleration/curvature)
-                const secondDerivative = Math.abs((nextValue - currValue) - (currValue - prevValue));
-                
-                score += derivative + secondDerivative * 2.0; // Weight curvature more
+                const change = Math.abs(values[i + 1] - values[i - 1]);
+                score += change;
             }
             
-            // 2. Local variance importance (optimized calculation)
-            const start = Math.max(0, i - windowSize);
-            const end = Math.min(data.length, i + windowSize + 1);
-            let sum = 0;
-            let count = end - start;
-            
-            for (let j = start; j < end; j++) {
-                sum += values[j];
+            // 2. Local extrema detection (peaks and valleys)
+            if (i > 0 && i < data.length - 1) {
+                const isPeak = values[i] > values[i - 1] && values[i] > values[i + 1];
+                const isValley = values[i] < values[i - 1] && values[i] < values[i + 1];
+                if (isPeak || isValley) {
+                    score += Math.abs(values[i] - values[i - 1]) + Math.abs(values[i] - values[i + 1]);
+                }
             }
-            const mean = sum / count;
             
-            let variance = 0;
-            for (let j = start; j < end; j++) {
-                const diff = values[j] - mean;
-                variance += diff * diff;
-            }
-            variance /= count;
-            
-            score += Math.sqrt(variance) * 0.5;
-            
-            // 3. Distance from neighbors (avoid clustering)
-            if (i > 0) {
-                score += Math.abs(values[i] - values[i - 1]) * 0.3;
+            // 3. Edge points get bonus
+            if (i === 0 || i === data.length - 1) {
+                score += 1000; // Ensure edges are always included
             }
             
             scores[i] = score;
@@ -671,58 +732,71 @@ PulseApp.charts = (() => {
         return scores;
     }
 
-    // Find critical points that should always be included
-    function findCriticalPoints(data) {
-        const critical = new Set();
+
+
+    // Helper function to generate quick hash of data for cache validation
+    function generateDataHash(data) {
+        if (!data || data.length === 0) return '0';
+        // Simple hash based on length, first, last, and middle values
+        const first = data[0]?.value || 0;
+        const last = data[data.length - 1]?.value || 0;
+        const middle = data[Math.floor(data.length / 2)]?.value || 0;
+        return `${data.length}-${first.toFixed(2)}-${middle.toFixed(2)}-${last.toFixed(2)}`;
+    }
+    
+    // Cleanup old cache entries
+    function cleanupProcessedCache() {
+        const now = Date.now();
+        const maxAge = 60000; // 1 minute
         
-        // Always include first and last points
-        critical.add(0);
-        critical.add(data.length - 1);
-        
-        // Find local extrema (peaks and valleys)
-        for (let i = 1; i < data.length - 1; i++) {
-            const prev = data[i - 1].value;
-            const curr = data[i].value;
-            const next = data[i + 1].value;
-            
-            // Local maximum
-            if (curr > prev && curr > next) {
-                critical.add(i);
-            }
-            // Local minimum  
-            else if (curr < prev && curr < next) {
-                critical.add(i);
-            }
-            // Significant inflection points
-            else if (Math.abs((next - curr) - (curr - prev)) > (getDataRange(data) * 0.05)) {
-                critical.add(i);
+        for (const [key, value] of processedDataCache.entries()) {
+            if (now - value.timestamp > maxAge) {
+                processedDataCache.delete(key);
             }
         }
+    }
+    
+    // Initialize visibility observer for better performance
+    function initVisibilityObserver() {
+        if (!window.IntersectionObserver) return;
         
-        return critical;
+        visibilityObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    visibleCharts.add(entry.target.id);
+                } else {
+                    visibleCharts.delete(entry.target.id);
+                }
+            });
+        }, {
+            root: null,
+            rootMargin: '50px', // Start rendering slightly before visible
+            threshold: 0.01
+        });
     }
-
-    // Helper function to get data range for threshold calculations
-    function getDataRange(data) {
-        const values = data.map(p => p.value);
-        return Math.max(...values) - Math.min(...values);
+    
+    // Observe chart container for visibility
+    function observeChartVisibility(container) {
+        if (visibilityObserver && container.id) {
+            visibilityObserver.observe(container);
+        }
     }
-
+    
+    // Initialize performance optimizations
+    initVisibilityObserver();
+    
     return {
         createUsageChartHTML,
         createSparklineHTML,
         renderGuestCharts,
         updateAllCharts,
-        clearGuestCharts,
         getChartData,
         startChartUpdates,
-        stopChartUpdates,
-        isDataAvailable: (guestId) => chartDataCache && chartDataCache[guestId],
-        getConfig: () => CHART_CONFIG,
         processChartData,
-        getCurrentRenderPoints: () => CHART_CONFIG.renderPoints,
         adaptiveSample,
         calculateImportanceScores,
-        findCriticalPoints
+        // Expose for testing
+        cleanupProcessedCache,
+        observeChartVisibility
     };
 })(); 

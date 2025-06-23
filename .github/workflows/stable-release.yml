@@ -3,10 +3,6 @@ name: Manual Stable Release
 on:
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to release (e.g., 3.29.0). Leave empty to auto-determine.'
-        required: false
-        type: string
       skip-validation:
         description: 'Skip validation checks (use with caution)'
         required: false
@@ -48,7 +44,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "🚀 Manual stable release triggered"
-          echo "📋 Requested version: ${{ github.event.inputs.version || 'auto-determine' }}"
           echo "⚡ Skip validation: ${{ github.event.inputs.skip-validation }}"
           
           # Check if we should skip validation
@@ -69,45 +64,34 @@ jobs:
           
           echo "✅ All validation checks passed"
 
-      - name: Determine version for release
+      - name: Read version from package.json
         id: determine-version
         run: |
-          # Check if version was manually provided
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "📌 Using manually specified version: ${{ github.event.inputs.version }}"
-            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-            echo "bump-type=manual" >> $GITHUB_OUTPUT
-            echo "reasoning=Manually specified version" >> $GITHUB_OUTPUT
-          else
-            echo "🤖 Auto-determining version based on commits..."
-            # Use our enhanced versionUtils to analyze commits
-            node -e "
-            const { analyzeCommitsForVersionBump } = require('./server/versionUtils');
-            const analysis = analyzeCommitsForVersionBump();
-            
-            console.log('📊 Version Analysis:');
-            console.log('Current stable version:', analysis.currentStableVersion);
-            console.log('Suggested version:', analysis.suggestedVersion);
-            console.log('Bump type:', analysis.bumpType);
-            console.log('Reasoning:', analysis.reasoning);
-            console.log('Total commits:', analysis.totalCommits);
-            
-            console.log('\\n📝 Commit breakdown:');
-            console.log('Breaking changes:', analysis.analysis.breaking.length);
-            console.log('Features:', analysis.analysis.features.length);
-            console.log('Fixes:', analysis.analysis.fixes.length);
-            console.log('Other:', analysis.analysis.other.length);
-            
-            // Set outputs for next job
-            const fs = require('fs');
-            const output = fs.readFileSync(process.env.GITHUB_OUTPUT, 'utf8');
-            fs.writeFileSync(process.env.GITHUB_OUTPUT, output + 
-              'version=' + analysis.suggestedVersion + '\\n' +
-              'bump-type=' + analysis.bumpType + '\\n' +
-              'reasoning=' + analysis.reasoning + '\\n'
-            );
+          # Read the version from package.json (should already be updated locally)
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Using version from package.json: $CURRENT_VERSION"
+          
+          # Analyze commits for changelog generation
+          node -e "
+          const { analyzeCommitsForVersionBump } = require('./server/versionUtils');
+          const analysis = analyzeCommitsForVersionBump();
+          
+          console.log('📊 Commit Analysis for Changelog:');
+          console.log('Total commits:', analysis.totalCommits);
+          console.log('Breaking changes:', analysis.analysis.breaking.length);
+          console.log('Features:', analysis.analysis.features.length);
+          console.log('Fixes:', analysis.analysis.fixes.length);
+          console.log('Other:', analysis.analysis.other.length);
+          
+          // Set outputs for changelog generation
+          const fs = require('fs');
+          const output = fs.readFileSync(process.env.GITHUB_OUTPUT, 'utf8');
+          fs.writeFileSync(process.env.GITHUB_OUTPUT, output + 
+            'bump-type=' + analysis.bumpType + '\\n' +
+            'reasoning=' + analysis.reasoning + '\\n'
+          );
           "
-          fi
 
   create-stable-release:
     needs: validate-and-prepare
@@ -165,8 +149,8 @@ jobs:
           echo "PREV_TAG=$PREV_TAG" >> $GITHUB_ENV
           echo "📊 Previous stable tag: $PREV_TAG"
           
-          # Update package.json to stable version
-          npm version $NEW_VERSION --no-git-tag-version
+          # Version should already be updated in package.json locally
+          echo "📦 Package.json version is already set to $NEW_VERSION"
           
           # Run tests to ensure everything works (continue on failure)
           echo "🧪 Running tests..."
@@ -186,43 +170,12 @@ jobs:
           echo "🎨 Building CSS..."
           npm run build:css || echo "⚠️ CSS build failed but continuing"
           
-          # Commit version bump
-          git add package.json package-lock.json
-          git commit -m "chore: release v$NEW_VERSION
+          # Create tag for the release
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION
 
           $REASONING
           
-          This stable release includes all changes from the develop branch.
-          
-          🤖 Generated by automated stable release workflow"
-          
-          # Create and push tag with conflict resolution
-          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
-          
-          # Pull and rebase before pushing to handle any concurrent changes
-          echo "🔄 Pulling latest changes before push..."
-          git fetch origin main
-          if ! git rebase origin/main; then
-            echo "⚠️ Rebase conflicts detected, attempting resolution..."
-            # For package.json conflicts, prefer our version (the release version)
-            git checkout --ours package.json package-lock.json 2>/dev/null || true
-            git add package.json package-lock.json 2>/dev/null || true
-            git rebase --continue 2>/dev/null || true
-          fi
-          
-          # Push with retry logic
-          echo "📤 Pushing to main..."
-          for i in {1..3}; do
-            if git push origin main; then
-              echo "✅ Successfully pushed to main"
-              break
-            else
-              echo "⚠️ Push failed (attempt $i/3), retrying..."
-              git fetch origin main
-              git rebase origin/main 2>/dev/null || true
-              sleep $((i * 2))
-            fi
-          done
+          This stable release includes all changes from the develop branch."
           
           echo "📤 Pushing tag..."
           # Check if tag already exists remotely
@@ -261,8 +214,11 @@ jobs:
           export REASONING="$REASONING"
           
           # Use the standalone script to avoid bash escaping issues
-          if [ -f scripts/generate-changelog.js ]; then
-            echo "🔧 Using standalone changelog script"
+          if [ -f scripts/generate-changelog-v2.js ]; then
+            echo "🔧 Using user-focused changelog script"
+            node scripts/generate-changelog-v2.js
+          elif [ -f scripts/generate-changelog.js ]; then
+            echo "🔧 Using legacy changelog script"
             node scripts/generate-changelog.js
           else
             echo "⚠️ Changelog script not found, creating simple changelog"

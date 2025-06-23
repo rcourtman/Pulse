@@ -97,6 +97,29 @@
         background-color: #3b82f6; /* Blue-500 */
     }
 
+    /* PBS namespace dropdown styling */
+    select optgroup {
+        font-weight: bold;
+        color: #6b7280; /* gray-500 */
+        background-color: #f3f4f6; /* gray-100 */
+        font-style: normal;
+        padding: 4px 8px;
+    }
+    .dark select optgroup {
+        color: #9ca3af; /* gray-400 */
+        background-color: #374151; /* gray-700 */
+    }
+    select optgroup option {
+        font-weight: normal;
+        padding-left: 16px;
+        color: #111827; /* gray-900 */
+        background-color: white;
+    }
+    .dark select optgroup option {
+        color: #f3f4f6; /* gray-100 */
+        background-color: #1f2937; /* gray-800 */
+    }
+
 
     /* Style for header when threshold is active */
     .threshold-active-header {
@@ -1213,14 +1236,28 @@
         </div>
       </div>
       
-      <div class="backups-filter flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
-          <div class="dashboard-filter-controls flex-grow flex items-center gap-2">
-            <input type="text" id="backups-search" placeholder="Search Name, ID, Node (use ',' for OR)" class="flex-grow min-w-[200px] max-w-full p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+      <div class="backups-filter mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+          <div class="filter-controls-wrapper flex flex-wrap items-center gap-2">
+            <input type="text" id="backups-search" placeholder="Search Name, ID, Node (use ',' for OR)" class="flex-1 min-w-[150px] max-w-full p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none" />
             <button id="reset-backups-filters-button" title="Reset Filters & Sort (Esc)" class="flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none transition-colors">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
             </button>
-          </div>
-          <div class="filter-toggles-wrapper flex items-center gap-3 sm:gap-4 flex-wrap">
+            <div class="h-4 w-px bg-gray-300 dark:bg-gray-600 hidden lg:block flex-shrink-0"></div>
+            <div class="flex items-center gap-1 flex-shrink-0">
+              <span class="text-xs text-gray-600 dark:text-gray-400 font-medium hidden lg:inline">Display:</span>
+              <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden flex-shrink-0">
+                <input type="radio" id="backups-group-grouped" name="backups-group-filter" value="grouped" class="hidden peer/grouped">
+                <label for="backups-group-grouped" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/grouped:bg-blue-100 dark:peer-checked/grouped:bg-blue-800/50 peer-checked/grouped:text-blue-700 dark:peer-checked/grouped:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><path d="M4 4h4v4H4zM10 4h4v4h-4zM16 4h4v4h-4zM4 10h4v4H4zM10 10h4v4h-4zM16 10h4v4h-4zM4 16h4v4H4zM10 16h4v4h-4zM16 16h4v4h-4z"/></svg>
+                  <span class="hidden md:inline">Grouped</span>
+                </label>
+                <input type="radio" id="backups-group-list" name="backups-group-filter" value="list" class="hidden peer/list">
+                <label for="backups-group-list" class="flex items-center justify-center gap-1 px-2 py-2 sm:py-0.5 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/list:bg-blue-100 dark:peer-checked/list:bg-blue-800/50 peer-checked/list:text-blue-700 dark:peer-checked/list:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none min-h-[44px] sm:min-h-[auto]">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline md:hidden"><line x1="8" x2="21" y1="6" y2="6"/><line x1="8" x2="21" y1="12" y2="12"/><line x1="8" x2="21" y1="18" y2="18"/><line x1="3" x2="3.01" y1="6" y2="6"/><line x1="3" x2="3.01" y1="12" y2="12"/><line x1="3" x2="3.01" y1="18" y2="18"/></svg>
+                  <span class="hidden md:inline">List</span>
+                </label>
+              </div>
+            </div>
               <div class="flex items-center gap-2">
                   <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                       <input type="radio" id="backups-filter-type-all" name="backups-type-filter" value="all" class="hidden peer/btype-all" checked>
@@ -1385,6 +1422,7 @@
           </button>
         </div>
       </div>
+      
     </div>
   </div>
 
@@ -1404,7 +1442,10 @@
   </script>
   <script src="/js/state.js" defer></script>
   <script src="/js/utils.js" defer></script>
+  <script src="/js/utils/backupUtils.js" defer></script>
   <script src="/js/utils/backupFilterManager.js" defer></script>
+  <script src="/js/utils/backupFilterPipeline.js" defer></script>
+  <script src="/js/utils/backupDataAggregator.js" defer></script>
   <script src="/js/modalManager.js" defer></script>
   <script src="/js/apiClient.js" defer></script>
   <script src="/js/theme.js" defer></script>

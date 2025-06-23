@@ -106,7 +106,6 @@ sudo ./install-pulse.sh
 - [Features](#-features)
 - [System Requirements](#-system-requirements)
 - [Updating Pulse](#-updating-pulse)
-- [Contributing](#-contributing)
 - [Privacy](#-privacy)
 - [License](#-license)
 - [Trademark Notice](#trademark-notice)
@@ -833,31 +832,9 @@ npm run start    # or your preferred restart method
 
 **Note:** 
 - The development setup only requires npm install in the root directory, not in a separate server directory.
-- The `develop` branch shows dynamic RC versions (e.g., "3.24.0-rc5") that auto-increment with each commit.
+- The `develop` branch contains development work and release candidates.
 - The `main` branch contains stable releases only.
 
-## 📝 Contributing
-
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md).
-
-### Development Workflow
-
-**Branch Strategy:**
-- `main` - Stable releases only (protected)
-- `develop` - Daily development work (default working branch)
-
-**Release Candidate (RC) Automation:**
-- Every commit to `develop` automatically creates an RC release
-- RC versions increment automatically: `v3.24.0-rc1`, `v3.24.0-rc2`, etc.
-- Docker images are built for both `amd64` and `arm64` architectures
-- Local development shows dynamic RC versions that update with each commit
-
-**Making Contributions:**
-1. Fork the repository
-2. Create a feature branch from `develop`
-3. Make your changes
-4. Test locally (version will show as RC automatically)
-5. Submit a pull request to `develop`
 
 ## 🔒 Privacy
 
