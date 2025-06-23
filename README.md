@@ -534,9 +534,9 @@ If monitoring PBS, create a token within the PBS interface.
     <details>
     <summary>Important: Storage Content Visibility (Click to Expand)</summary>
     
-    Due to Proxmox API limitations, viewing backup files in storage requires elevated permissions:
+    Due to Proxmox API limitations, viewing backup files in storage requires:
     - `PVEAuditor` alone is NOT sufficient to list storage contents via API
-    - You must grant `PVEDatastoreAdmin` role which includes `Datastore.Allocate` permission
+    - You need the `Datastore.Allocate` permission (included in `PVEDatastoreAdmin` role)
     - This applies even for read-only access to backup listings
     
     To fix empty PVE backup listings:

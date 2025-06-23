@@ -295,11 +295,7 @@ class AlertManager extends EventEmitter {
                                 if (triggered) newlyTriggeredAlerts.push(triggered);
                             } else if (rule.type === 'per_guest_thresholds' && (rule.guestThresholds || rule.globalThresholds)) {
                                 // Handle per-guest threshold rules
-                                console.log(`[AlertManager] Processing per-guest threshold rule ${rule.id} for guest ${guest.name} (${guest.vmid})`);
                                 const triggeredAlerts = await this.evaluatePerGuestThresholdRule(rule, guest, metrics, timestamp);
-                                if (triggeredAlerts.length > 0) {
-                                    console.log(`[AlertManager] Per-guest rule ${rule.id} triggered ${triggeredAlerts.length} alerts for guest ${guest.name}`);
-                                }
                                 triggeredAlerts.forEach(triggered => newlyTriggeredAlerts.push(triggered));
                             } else {
                                 // Handle single-metric rules
@@ -3743,7 +3739,8 @@ Pulse Monitoring System`,
             // Load email configuration from config API
             const axios = require('axios');
             
-            const response = await axios.get('http://localhost:7655/api/config');
+            const port = process.env.PORT || 7655;
+            const response = await axios.get(`http://localhost:${port}/api/config`);
             const config = response.data;
             
             console.log('[AlertManager] Loading email config from API, ALERT_TO_EMAIL:', config.ALERT_TO_EMAIL);

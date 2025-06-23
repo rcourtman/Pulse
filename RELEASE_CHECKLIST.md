@@ -23,6 +23,7 @@ This checklist guides the release process for Pulse. When asked to create a rele
   - For stable releases: increment from last stable (e.g., v3.30.0 → v3.31.0)
   - For RC releases: increment RC number (e.g., v3.31.0-rc1 → v3.31.0-rc2)
   - For new RC series: start with -rc1 (e.g., v3.31.0 → v3.32.0-rc1)
+  - Note: If package.json shows a higher version (e.g., 3.31.1) but no stable release exists yet, release the stable version first (e.g., v3.31.0)
 
 ### 3. Update Version
 - [ ] Update version in `package.json` to match release version
@@ -32,9 +33,10 @@ This checklist guides the release process for Pulse. When asked to create a rele
 ### 4. Generate Changelog
 - [ ] Check last stable release: `git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1`
 - [ ] Count commits since last stable: `git rev-list --count <last-stable-tag>..HEAD`
+- [ ] Use `git log <last-stable-tag>..HEAD --oneline` to see all commits
 - [ ] Analyze ALL commits since last stable release
 - [ ] Filter for user-visible changes only (exclude dev-only changes)
-- [ ] Create/update `CHANGELOG.md` following this style:
+- [ ] Create `CHANGELOG.md` (not update - always create fresh) following this style:
   ```markdown
   ## 🧪 Release Candidate X  (or ## 🎉 Version X.X.X for stable)
   
@@ -71,9 +73,9 @@ This checklist guides the release process for Pulse. When asked to create a rele
 ### 5. Create Release Tarball
 - [ ] Ensure CHANGELOG.md exists (required by script)
 - [ ] Run `./scripts/create-release.sh`
-- [ ] Enter the version when prompted (should match package.json)
+- [ ] Enter the version when prompted (should match package.json) - just the version number without 'v' prefix
 - [ ] Verify tarball was created: `pulse-vX.X.X.tar.gz`
-- [ ] Check tarball size is reasonable (should be ~5-6MB)
+- [ ] Check tarball size is reasonable (should be ~5-6MB): `ls -lh pulse-vX.X.X.tar.gz`
 
 ## Release Steps
 
@@ -84,6 +86,7 @@ This checklist guides the release process for Pulse. When asked to create a rele
 ### 7. Build and Push Docker Images
 - [ ] Ensure Docker is logged in: `docker login`
 - [ ] Ensure buildx is available: `docker buildx ls`
+- [ ] If buildx shows 'inactive', create/start it: `docker buildx create --use`
 - [ ] Build multi-arch images:
   ```bash
   # For RC releases
@@ -100,7 +103,7 @@ This checklist guides the release process for Pulse. When asked to create a rele
     --push .
   ```
 - [ ] Verify images on Docker Hub: https://hub.docker.com/r/rcourtman/pulse/tags
-- [ ] Test pull works: `docker pull rcourtman/pulse:vX.X.X`
+- [ ] Test pull works: `docker pull rcourtman/pulse:vX.X.X` (optional - may fail if low on disk space, but push should have succeeded)
 
 ### 8. Create GitHub Release
 - [ ] For RC/beta releases:
@@ -123,6 +126,7 @@ This checklist guides the release process for Pulse. When asked to create a rele
 - [ ] Verify release was created as draft
 - [ ] The CHANGELOG.md should already include Docker info and link to UPDATE.md
 - [ ] Share the release URL with the user
+- [ ] To publish when ready: `gh release edit vX.X.X --draft=false`
 
 ## Post-Release Steps
 

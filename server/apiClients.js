@@ -57,7 +57,7 @@ function initializePveClients(endpoints) {
 
   endpoints.forEach(endpoint => {
     if (!endpoint.enabled) {
-      console.log(`INFO: Skipping disabled PVE endpoint: ${endpoint.name} (${endpoint.host})`);
+      console.log(`INFO: Skipping disabled PVE endpoint: ${endpoint.name} (${endpoint.host}`);
       return; // Skip disabled endpoints
     }
 
@@ -184,7 +184,7 @@ async function initializePbsClients(pbsConfigs) {
   const initPromises = pbsConfigs.map(async (config) => {
       // Skip disabled PBS configurations
       if (!config.enabled) {
-          console.log(`INFO: Skipping disabled PBS endpoint: ${config.name} (${config.host})`);
+          console.log(`INFO: Skipping disabled PBS endpoint: ${config.name} (${config.host}`);
           return;
       }
       
@@ -221,7 +221,6 @@ async function initializePbsClients(pbsConfigs) {
               // PBS has a bug where it ignores namespace parameter when Content-Type is set on GET requests
               pbsAxiosInstance.interceptors.request.use(request => {
                   if (request.method?.toLowerCase() === 'get') {
-                      console.log(`[PBS] Removing Content-Type header for GET request to ${request.url}`);
                       delete request.headers['Content-Type'];
                   }
                   return request;

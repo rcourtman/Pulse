@@ -709,17 +709,6 @@ PulseApp.ui.pbs = (() => {
             state.taskRows.set(task.upid, row);
         }
         
-        // Debug log for verification tasks
-        if (taskType === 'verify' && task.id && task.id.includes('000000DA')) {
-            console.log('[PBS Debug] Verification task:', {
-                upid: task.upid,
-                id: task.id,
-                guestId: task.guestId,
-                guestType: task.guestType,
-                guest: task.guest,
-                type: task.type
-            });
-        }
         
         // Target cell
         const targetCell = document.createElement('td');
@@ -764,7 +753,6 @@ PulseApp.ui.pbs = (() => {
 
     // Main update function - called by socket handler
     function updatePbsInfo(pbsArray) {
-        console.log('[PBS] Received update with data:', pbsArray);
         state.pbsData = pbsArray || [];
         
         const container = document.getElementById('pbs-instances-container');
