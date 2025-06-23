@@ -214,8 +214,11 @@ jobs:
           export REASONING="Release candidate for testing"
           
           # Generate detailed changelog using the same script as stable releases
-          if [ -f scripts/generate-changelog.js ]; then
-            echo "🔧 Using changelog script for detailed RC changelog"
+          if [ -f scripts/generate-changelog-v2.js ]; then
+            echo "🔧 Using user-focused changelog script"
+            node scripts/generate-changelog-v2.js
+          elif [ -f scripts/generate-changelog.js ]; then
+            echo "🔧 Using legacy changelog script"
             node scripts/generate-changelog.js
             
             # Extract just the "What's Changed" section for the release body
