@@ -235,9 +235,6 @@ PulseApp.socketHandler = (() => {
                     updateStorageTab(data);
                     break;
                 case 'pbs':
-                    updatePbsTab(data);
-                    break;
-                case 'pbs2':
                     updatePbs2Tab(data);
                     break;
                 case 'backups':
@@ -317,111 +314,11 @@ PulseApp.socketHandler = (() => {
         }
     }
 
-    function updatePbs2Tab(data) {
-        try {
-            if (PulseApp.ui && PulseApp.ui.pbs2 && data.pbs) {
-                PulseApp.ui.pbs2.updatePbsInfo(data.pbs);
-            }
-        } catch (error) {
-            console.error('[Socket] Error updating PBS2 tab:', error);
-        }
-    }
 
     function updatePbsTab(data) {
         try {
-            // Check if mobile view
-            const isMobile = window.innerWidth < 768;
-            // Capture scroll positions of various containers before updates
-            const pbsTab = document.getElementById('pbsTab');
-            const pbsInstancesContainer = document.getElementById('pbs-instances-container');
-            const pbsTableContainer = document.querySelector('#pbsTab .table-container');
-            const pbsTaskTableContainer = document.querySelector('#pbs-tasks-table-container');
-            const mobileContainers = document.querySelectorAll('.mobile-single-instance, .mobile-pbs-accordion, .mobile-layout');
-            
-            // Store all scroll positions
-            const scrollPositions = new Map();
-            
-            // Capture main tab scroll
-            if (pbsTab) {
-                scrollPositions.set(pbsTab, {
-                    top: pbsTab.scrollTop,
-                    left: pbsTab.scrollLeft
-                });
-            }
-            
-            // Capture instances container scroll
-            if (pbsInstancesContainer) {
-                scrollPositions.set(pbsInstancesContainer, {
-                    top: pbsInstancesContainer.scrollTop,
-                    left: pbsInstancesContainer.scrollLeft
-                });
-            }
-            
-            // Capture table container scrolls
-            if (pbsTableContainer) {
-                scrollPositions.set(pbsTableContainer, {
-                    top: pbsTableContainer.scrollTop,
-                    left: pbsTableContainer.scrollLeft
-                });
-            }
-            
-            if (pbsTaskTableContainer) {
-                scrollPositions.set(pbsTaskTableContainer, {
-                    top: pbsTaskTableContainer.scrollTop,
-                    left: pbsTaskTableContainer.scrollLeft
-                });
-            }
-            
-            // Capture mobile container scrolls
-            mobileContainers.forEach((container, index) => {
-                scrollPositions.set(container, {
-                    top: container.scrollTop,
-                    left: container.scrollLeft
-                });
-            });
-            
-            // Also capture body scroll for mobile
-            if (isMobile) {
-                scrollPositions.set(document.body, {
-                    top: window.pageYOffset || document.documentElement.scrollTop,
-                    left: window.pageXOffset || document.documentElement.scrollLeft
-                });
-            }
-            
-            // Function to restore scroll positions
-            const restoreScroll = () => {
-                scrollPositions.forEach((position, element) => {
-                    if (position.top > 0 || position.left > 0) {
-                        if (element === document.body) {
-                            window.scrollTo(position.left, position.top);
-                        } else if (element && element.parentNode) {
-                            element.scrollTop = position.top;
-                            element.scrollLeft = position.left;
-                        }
-                    }
-                });
-            };
-            
-            // Check if the new PBS data structure keys exist in the received data
-            // data.pbs is the array of PBS instances
-            // data.allPbsTasks and data.aggregatedPbsTaskSummary are top-level in the state
-            if (PulseApp.ui && PulseApp.ui.pbs && data.pbs) { // Ensure data.pbs exists
-                // PulseApp.ui.pbs.updatePbsInfo expects the array of PBS instances.
-                // Task data (allPbsTasks, aggregatedPbsTaskSummary) is available in PulseApp.state if needed by UI components directly.
-                // For now, updatePbsInfo primarily works with the pbs array.
+            if (PulseApp.ui && PulseApp.ui.pbs && data.pbs) {
                 PulseApp.ui.pbs.updatePbsInfo(data.pbs);
-                
-                // Restore scroll positions with multiple timing strategies
-                setTimeout(restoreScroll, 0);
-                setTimeout(restoreScroll, 16);
-                setTimeout(restoreScroll, 50);
-                setTimeout(restoreScroll, 100);
-                requestAnimationFrame(restoreScroll);
-            } else {
-                // Optional: Log if critical data for PBS tab is missing
-                if (!data.pbs) {
-                    console.warn('[Socket - PBS Tab] PBS data (data.pbs) not found in received socket data.');
-                }
             }
         } catch (error) {
             console.error('[Socket] Error updating PBS tab:', error);
