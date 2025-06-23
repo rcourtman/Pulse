@@ -1,0 +1,148 @@
+name: Create RC Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'package.json'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    # Only run if package.json was changed and version contains -rc
+    if: contains(github.event.head_commit.message, 'package.json')
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if RC version
+        id: check-rc
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          if [[ "$VERSION" == *"-rc"* ]]; then
+            echo "is_rc=true" >> $GITHUB_OUTPUT
+            echo "🚀 RC version detected: $VERSION"
+          else
+            echo "is_rc=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Not an RC version: $VERSION"
+            exit 0
+          fi
+
+      - name: Setup Node.js
+        if: steps.check-rc.outputs.is_rc == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        if: steps.check-rc.outputs.is_rc == 'true'
+        run: npm ci
+
+      - name: Build CSS
+        if: steps.check-rc.outputs.is_rc == 'true'
+        run: npm run build:css
+
+      - name: Build release tarball
+        if: steps.check-rc.outputs.is_rc == 'true'
+        env:
+          VERSION: ${{ steps.check-rc.outputs.version }}
+        run: |
+          echo "📦 Building release tarball for v$VERSION..."
+          
+          # Create staging directory
+          RELEASE_DIR="pulse-v$VERSION"
+          mkdir -p "$RELEASE_DIR"
+          
+          # Copy files
+          rsync -av server/ "$RELEASE_DIR/server/" --exclude 'tests/'
+          mkdir -p "$RELEASE_DIR/src"
+          rsync -av src/public/ "$RELEASE_DIR/src/public/"
+          cp src/index.css "$RELEASE_DIR/src/" 2>/dev/null || true
+          cp src/tailwind.config.js "$RELEASE_DIR/src/" 2>/dev/null || true
+          cp src/postcss.config.js "$RELEASE_DIR/src/" 2>/dev/null || true
+          
+          # Copy root files
+          cp package.json package-lock.json README.md LICENSE "$RELEASE_DIR/"
+          
+          # Copy changelog if exists
+          if [ -f "CHANGELOG_v${VERSION}.md" ]; then
+            cp "CHANGELOG_v${VERSION}.md" "$RELEASE_DIR/CHANGELOG.md"
+          fi
+          
+          # Copy scripts
+          mkdir -p "$RELEASE_DIR/scripts/"
+          [ -f "scripts/install-pulse.sh" ] && cp scripts/install-pulse.sh "$RELEASE_DIR/scripts/"
+          
+          # Install production dependencies
+          (cd "$RELEASE_DIR" && npm install --omit=dev --ignore-scripts)
+          
+          # Create tarball
+          tar -czf "pulse-v$VERSION.tar.gz" "$RELEASE_DIR"
+          rm -rf "$RELEASE_DIR"
+          
+          echo "✅ Tarball created: pulse-v$VERSION.tar.gz"
+
+      - name: Set up Docker Buildx
+        if: steps.check-rc.outputs.is_rc == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: steps.check-rc.outputs.is_rc == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push Docker images
+        if: steps.check-rc.outputs.is_rc == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            rcourtman/pulse:v${{ steps.check-rc.outputs.version }}
+            rcourtman/pulse:rc
+
+      - name: Create GitHub Release
+        if: steps.check-rc.outputs.is_rc == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.check-rc.outputs.version }}
+        run: |
+          echo "📝 Creating DRAFT release..."
+          
+          # Prepare changelog
+          if [ -f "CHANGELOG_v${VERSION}.md" ]; then
+            CHANGELOG=$(cat "CHANGELOG_v${VERSION}.md")
+          else
+            CHANGELOG="Release v${VERSION}"
+          fi
+          
+          # Add Docker info
+          CHANGELOG="${CHANGELOG}
+
+## 🐳 Docker Images
+
+\`\`\`bash
+docker pull rcourtman/pulse:v${VERSION}
+docker pull rcourtman/pulse:rc
+\`\`\`"
+          
+          # Create release
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes "${CHANGELOG}" \
+            --target main \
+            --prerelease \
+            --draft \
+            "pulse-v${VERSION}.tar.gz"
+          
+          echo "✅ Draft release created!"
