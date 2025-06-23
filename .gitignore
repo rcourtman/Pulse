@@ -85,10 +85,8 @@ jspm_packages/
 /coverage/ 
 
 # Local configuration files
-RELEASE_CHECKLIST.md
 AI_WORKFLOW.md
 AI_WORKFLOW_SETUP.md
-CLAUDE.md
 ALERT_MANAGEMENT_REFACTOR_PLAN.md
 
 # Lockfiles
