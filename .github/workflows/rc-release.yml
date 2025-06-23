@@ -10,7 +10,7 @@ jobs:
   create-rc:
     runs-on: ubuntu-latest
     # Only run if PR is from develop branch
-    if: github.event.pull_request.head.ref == 'develop'
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'develop'
     steps:
       - uses: actions/checkout@v4
         with:
