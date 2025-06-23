@@ -7,21 +7,13 @@ PulseApp.alerts = (() => {
     let notificationContainer = null;
     let alertsInitialized = false;
     let alertDropdown = null;
-    let dropdownUpdateTimeout = null;
-    let alertStormMode = false;
-    let alertsReceivedTimestamps = [];
-    let toastRateLimitCount = 0;
-    let lastToastTime = 0;
-    let pendingAlertToasts = [];
 
     // Configuration - More subtle and less intrusive
     const MAX_NOTIFICATIONS = 3; // Reduced from 5
     const NOTIFICATION_TIMEOUT = 5000; // Reduced from 10 seconds to 5
     const ACKNOWLEDGED_CLEANUP_DELAY = 300000; // 5 minutes
-    const MAX_ACTIVE_ALERTS = 100; // Prevent memory exhaustion
-    const ALERT_STORM_THRESHOLD = 10; // Alerts per second to trigger storm mode
     const ALERT_COLORS = {
-        'active': 'bg-amber-500 border-amber-600 text-white',
+        'active': 'bg-red-500 border-red-600 text-white',
         'resolved': 'bg-green-500 border-green-600 text-white'
     };
 
@@ -31,10 +23,10 @@ PulseApp.alerts = (() => {
     };
 
     const GROUP_COLORS = {
-        'critical_alerts': '#f59e0b',
+        'critical_alerts': '#ef4444',
         'system_performance': '#f59e0b',
         'storage_alerts': '#8b5cf6',
-        'availability_alerts': '#f59e0b',
+        'availability_alerts': '#ef4444',
         'network_alerts': '#10b981',
         'custom': '#6b7280'
     };
@@ -127,16 +119,15 @@ PulseApp.alerts = (() => {
             // Create dropdown as a sibling, positioned relative to the header container
             alertDropdown = document.createElement('div');
             alertDropdown.id = 'alerts-dropdown';
-            alertDropdown.className = 'absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg hidden';
+            alertDropdown.className = 'absolute bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg overflow-hidden hidden';
             
             // More compact positioning for the dropdown
             alertDropdown.style.position = 'fixed';
             alertDropdown.style.zIndex = '1000';
             alertDropdown.style.top = '60px';
             alertDropdown.style.right = '20px';
-            alertDropdown.style.width = '420px';
-            alertDropdown.style.maxHeight = '500px';
-            alertDropdown.style.overflowY = 'auto';
+            alertDropdown.style.maxWidth = '320px';
+            alertDropdown.style.maxHeight = '400px';
             
             // Append dropdown to body for better positioning control
             document.body.appendChild(alertDropdown);
@@ -156,7 +147,6 @@ PulseApp.alerts = (() => {
                 window.socket.on('alert', handleNewAlert);
                 window.socket.on('alertResolved', handleResolvedAlert);
                 window.socket.on('alertAcknowledged', handleAcknowledgedAlert);
-                window.socket.on('alertRulesRefreshed', handleRulesRefreshed);
                 
                 // Handle reconnection - reload alert data when reconnected
                 window.socket.on('connect', () => {
@@ -200,11 +190,11 @@ PulseApp.alerts = (() => {
             const clickedIndicator = indicator.contains(e.target);
             const clickedDropdown = dropdown.contains(e.target);
             
-            // If clicking the indicator, toggle the dropdown
+            // If clicking the indicator, open alert management modal directly
             if (clickedIndicator && !clickedDropdown) {
                 e.preventDefault();
                 e.stopPropagation();
-                toggleDropdown();
+                openAlertManagementModal();
                 return;
             }
             
@@ -226,6 +216,14 @@ PulseApp.alerts = (() => {
         });
     }
 
+    function openAlertManagementModal() {
+        // Open the alert management modal directly on the "Alerts > Current Alerts" tab
+        if (PulseApp.ui && PulseApp.ui.alertManagementModal) {
+            PulseApp.ui.alertManagementModal.openModal();
+        } else {
+            console.error('Alert management modal not available');
+        }
+    }
 
     function toggleDropdown() {
         if (!alertDropdown) return;
@@ -234,57 +232,6 @@ PulseApp.alerts = (() => {
             openDropdown();
         } else {
             closeDropdown();
-        }
-    }
-    
-    // Process queued toast notifications
-    let toastProcessingTimeout = null;
-    function processToastQueue() {
-        if (!window.PulseApp || !window.PulseApp.ui || !window.PulseApp.ui.toast) {
-            return;
-        }
-        
-        // Don't process during alert storm
-        if (alertStormMode) {
-            pendingAlertToasts = []; // Clear queue during storm
-            return;
-        }
-        
-        const now = Date.now();
-        const timeSinceLastToast = now - lastToastTime;
-        
-        // If enough time has passed, show next toast
-        if (timeSinceLastToast >= 500 && pendingAlertToasts.length > 0) { // 500ms between toasts
-            // Group alerts that arrived close together
-            const recentAlerts = [];
-            const cutoffTime = now - 1000; // Group alerts from last second
-            
-            while (pendingAlertToasts.length > 0 && pendingAlertToasts[0].timestamp >= cutoffTime) {
-                recentAlerts.push(pendingAlertToasts.shift());
-            }
-            
-            if (recentAlerts.length === 1) {
-                // Single alert
-                window.PulseApp.ui.toast.warning(`Alert: ${recentAlerts[0].guest} - ${recentAlerts[0].message}`);
-            } else if (recentAlerts.length > 1) {
-                // Multiple alerts - show summary
-                const guestNames = [...new Set(recentAlerts.map(a => a.guest))];
-                if (guestNames.length <= 3) {
-                    window.PulseApp.ui.toast.warning(`Alerts: ${guestNames.join(', ')}`);
-                } else {
-                    window.PulseApp.ui.toast.warning(`${recentAlerts.length} alerts from ${guestNames.length} guests`);
-                }
-            }
-            
-            lastToastTime = now;
-        }
-        
-        // Schedule next processing if more alerts pending
-        if (pendingAlertToasts.length > 0 && !toastProcessingTimeout) {
-            toastProcessingTimeout = setTimeout(() => {
-                toastProcessingTimeout = null;
-                processToastQueue();
-            }, 500);
         }
     }
 
@@ -311,11 +258,6 @@ PulseApp.alerts = (() => {
 
     function updateDropdownContent() {
         if (!alertDropdown) return;
-        
-        // During alert storm, skip updates if too frequent
-        if (alertStormMode && dropdownUpdateTimeout) {
-            return;
-        }
 
         const unacknowledgedAlerts = activeAlerts.filter(a => !a.acknowledged);
         const acknowledgedAlerts = activeAlerts.filter(a => a.acknowledged);
@@ -332,6 +274,10 @@ PulseApp.alerts = (() => {
                         ${ALERT_ICONS.active}
                     </svg>
                     <p class="text-xs mb-3">No active alerts</p>
+                    <button onclick="PulseApp.alerts.hideAlertsDropdown(); if (PulseApp.ui && PulseApp.ui.alertManagementModal) { PulseApp.ui.alertManagementModal.openModal(); } else { console.error('Alert management modal not available'); }" 
+                            class="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded transition-colors">
+                        Manage Alerts
+                    </button>
                 </div>
             `;
             return;
@@ -353,8 +299,13 @@ PulseApp.alerts = (() => {
                         </button>
                     </div>
                 </div>
-                <div class="max-h-80 overflow-y-auto">
-                    ${unacknowledgedAlerts.map(alert => createCompactAlertCard(alert, false)).join('')}
+                <div class="max-h-64 overflow-y-auto">
+                    ${unacknowledgedAlerts.slice(0, 8).map(alert => createCompactAlertCard(alert, false)).join('')}
+                    ${unacknowledgedAlerts.length > 8 ? `
+                        <div class="p-2 text-center text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700">
+                            +${unacknowledgedAlerts.length - 8} more unacknowledged
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -391,6 +342,19 @@ PulseApp.alerts = (() => {
             `;
         }
 
+        // Add Manage Alerts button to the bottom
+        content += `
+            <div class="border-t border-gray-200 dark:border-gray-700 p-2">
+                <button onclick="PulseApp.alerts.hideAlertsDropdown(); if (PulseApp.ui && PulseApp.ui.alertManagementModal) { PulseApp.ui.alertManagementModal.openModal(); } else { console.error('Alert management modal not available'); }" 
+                        class="w-full px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Manage Alerts
+                </button>
+            </div>
+        `;
         
         alertDropdown.innerHTML = content;
 
@@ -404,18 +368,18 @@ PulseApp.alerts = (() => {
     }
 
     function createCompactAlertCard(alert, acknowledged = false) {
-        const alertColor = 'border-amber-400';
-        const alertBg = 'bg-amber-50 dark:bg-amber-900/10';
+        const alertColor = 'border-red-400';
+        const alertBg = 'bg-red-50 dark:bg-red-900/10';
         
         // If acknowledged, heavily grey out the entire card
         const cardClasses = acknowledged ? 
             'border-l-2 border-gray-300 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-800/30 p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0 opacity-60' :
-            `border-l-2 ${alertColor} ${alertBg} p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0`;
+            `border-l-2 ${severityColor} ${severityBg} p-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0`;
         
-        const duration = Math.max(0, Math.round((Date.now() - alert.triggeredAt) / 1000));
-        const durationStr = duration < 60 ? `${duration}s ago` : 
-                           duration < 3600 ? `${Math.round(duration/60)}m ago` : 
-                           `${Math.round(duration/3600)}h ago`;
+        const duration = Math.round((Date.now() - alert.triggeredAt) / 1000);
+        const durationStr = duration < 60 ? `${duration}s` : 
+                           duration < 3600 ? `${Math.round(duration/60)}m` : 
+                           `${Math.round(duration/3600)}h`;
         
         const icon = ALERT_ICONS.active;
         
@@ -443,9 +407,9 @@ PulseApp.alerts = (() => {
         }
         
         // Muted text classes for acknowledged alerts
-        const nameClass = acknowledged ? 'text-xs font-medium text-gray-500 dark:text-gray-500' : 'text-xs font-medium text-gray-900 dark:text-gray-100';
+        const nameClass = acknowledged ? 'text-xs font-medium text-gray-500 dark:text-gray-500 truncate' : 'text-xs font-medium text-gray-900 dark:text-gray-100 truncate';
         const valueClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500' : 'text-xs text-gray-500 dark:text-gray-400';
-        const ruleClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500' : 'text-xs text-gray-500 dark:text-gray-400';
+        const ruleClass = acknowledged ? 'text-xs text-gray-400 dark:text-gray-500 truncate' : 'text-xs text-gray-500 dark:text-gray-400 truncate';
         
         return `
             <div class="${cardClasses}">
@@ -463,87 +427,8 @@ PulseApp.alerts = (() => {
                             </span>
                             ${acknowledged ? '<span class="text-xs bg-green-500/70 text-white px-1 rounded opacity-70">✓</span>' : ''}
                         </div>
-                        <div class="${ruleClass}" style="white-space: normal; overflow: visible;">
-                            ${(() => {
-                                const parts = alert.message.split(': ');
-                                const metricsText = parts.slice(1).join(': ');
-                                const metrics = metricsText.split(', ');
-                                
-                                return metrics.map(metric => {
-                                    const trimmed = metric.trim();
-                                    // Parse metric like "CPU: 56% (≥20%)"
-                                    const percentMatch = trimmed.match(/^(.+?):\s*(\d+)%\s*\(≥(\d+)%\)$/);
-                                    
-                                    if (percentMatch) {
-                                        const [, name, current, threshold] = percentMatch;
-                                        const currentVal = parseInt(current);
-                                        const thresholdVal = parseInt(threshold);
-                                        
-                                        // Determine color based on how much it exceeds threshold
-                                        const excess = currentVal - thresholdVal;
-                                        let barColor = 'bg-red-500';
-                                        if (excess <= 5) barColor = 'bg-yellow-500';
-                                        if (excess > 20) barColor = 'bg-red-600';
-                                        
-                                        return `
-                                            <div class="mb-0.5">
-                                                <div class="flex justify-between text-xs mb-0.5">
-                                                    <span class="font-medium">${name}</span>
-                                                    <span>${currentVal}% / ${thresholdVal}%</span>
-                                                </div>
-                                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 relative">
-                                                    <div class="bg-gray-300 dark:bg-gray-600 h-2 rounded absolute top-0 left-0" style="width: ${Math.min(thresholdVal, 100)}%; z-index: 1;"></div>
-                                                    <div class="${barColor} h-2 rounded absolute top-0 left-0" style="width: ${Math.min(currentVal, 100)}%; z-index: 2;"></div>
-                                                    ${thresholdVal < 100 && thresholdVal > 0 ? `<div class="absolute top-0 bg-orange-400 h-2" style="left: ${thresholdVal}%; width: 2px; z-index: 3;"></div>` : ''}
-                                                </div>
-                                            </div>
-                                        `;
-                                    } 
-                                    
-                                    // Parse I/O metrics like "Disk Read: 2.5 MB/s (≥1 MB/s)" or "Network In: 831.67 GB/s (≥1 MB/s)"
-                                    const ioMatch = trimmed.match(/^(.+?):\s*([\d.]+)\s*([KMGT]?B\/s)\s*\(≥([\d.]+)\s*([KMGT]?B\/s)\)$/);
-                                    if (ioMatch) {
-                                        const [, name, current, currentUnit, threshold, thresholdUnit] = ioMatch;
-                                        const currentVal = parseFloat(current);
-                                        const thresholdVal = parseFloat(threshold);
-                                        
-                                        // Convert to same unit for comparison (MB/s as base)
-                                        const unitMultipliers = { 'B/s': 1/1048576, 'KB/s': 1/1024, 'MB/s': 1, 'GB/s': 1024, 'TB/s': 1048576 };
-                                        const currentMBps = currentVal * (unitMultipliers[currentUnit] || 1);
-                                        const thresholdMBps = thresholdVal * (unitMultipliers[thresholdUnit] || 1);
-                                        
-                                        // Calculate percentage for visual bar (cap at reasonable max for display)
-                                        const maxDisplayMBps = Math.max(thresholdMBps * 2, 10); // At least 10 MB/s or 2x threshold
-                                        const currentPercent = Math.min((currentMBps / maxDisplayMBps) * 100, 100);
-                                        const thresholdPercent = Math.min((thresholdMBps / maxDisplayMBps) * 100, 100);
-                                        
-                                        // Determine color based on how much it exceeds threshold
-                                        const excessRatio = currentMBps / thresholdMBps;
-                                        let barColor = 'bg-blue-500';
-                                        if (excessRatio > 1) barColor = 'bg-yellow-500';
-                                        if (excessRatio > 2) barColor = 'bg-orange-500';
-                                        if (excessRatio > 5) barColor = 'bg-red-500';
-                                        
-                                        return `
-                                            <div class="mb-0.5">
-                                                <div class="flex justify-between text-xs mb-0.5">
-                                                    <span class="font-medium">${name}</span>
-                                                    <span>${currentVal}${currentUnit} / ${thresholdVal}${thresholdUnit}</span>
-                                                </div>
-                                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded h-2 relative">
-                                                    <div class="bg-gray-300 dark:bg-gray-600 h-2 rounded absolute top-0 left-0" style="width: ${thresholdPercent}%; z-index: 1;"></div>
-                                                    <div class="${barColor} h-2 rounded absolute top-0 left-0" style="width: ${currentPercent}%; z-index: 2;"></div>
-                                                    ${thresholdPercent < 90 ? `<div class="absolute top-0 bg-gray-400 h-2" style="left: ${thresholdPercent}%; width: 1px; z-index: 3;"></div>` : ''}
-                                                </div>
-                                            </div>
-                                        `;
-                                    }
-                                    
-                                    // Fallback for other metrics
-                                    return `<div class="mb-1">${trimmed}</div>`;
-                                }).join('');
-                            })()}
-                            <div class="mt-1 text-xs text-gray-500">${durationStr}${acknowledged ? ' • acknowledged' : ''}</div>
+                        <div class="${ruleClass}">
+                            ${alert.ruleName} • ${durationStr}${acknowledged ? ' • acknowledged' : ''}
                         </div>
                     </div>
                     <div class="flex-shrink-0 space-x-1">
@@ -562,24 +447,6 @@ PulseApp.alerts = (() => {
     }
 
     function handleNewAlert(alert) {
-        // Detect alert storm
-        const now = Date.now();
-        alertsReceivedTimestamps.push(now);
-        // Keep only timestamps from last second
-        alertsReceivedTimestamps = alertsReceivedTimestamps.filter(ts => now - ts < 1000);
-        
-        if (alertsReceivedTimestamps.length >= ALERT_STORM_THRESHOLD) {
-            if (!alertStormMode) {
-                alertStormMode = true;
-                console.warn('[Alerts] Alert storm detected! Entering protective mode.');
-                if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.toast) {
-                    window.PulseApp.ui.toast.warning('High alert volume detected - notifications limited');
-                }
-            }
-        } else if (alertStormMode && alertsReceivedTimestamps.length < ALERT_STORM_THRESHOLD / 2) {
-            alertStormMode = false;
-            console.log('[Alerts] Alert storm subsided. Resuming normal operation.');
-        }
         
         const existingIndex = activeAlerts.findIndex(a => 
             a.ruleId === alert.ruleId && 
@@ -591,44 +458,13 @@ PulseApp.alerts = (() => {
             activeAlerts[existingIndex] = alert;
         } else {
             activeAlerts.unshift(alert);
-            
-            // Limit the size of activeAlerts array
-            if (activeAlerts.length > MAX_ACTIVE_ALERTS) {
-                // Remove oldest acknowledged alerts first, then oldest unacknowledged
-                const acknowledged = activeAlerts.filter(a => a.acknowledged);
-                const unacknowledged = activeAlerts.filter(a => !a.acknowledged);
-                
-                if (acknowledged.length > MAX_ACTIVE_ALERTS / 2) {
-                    // Keep only recent acknowledged alerts
-                    const recentAcknowledged = acknowledged.slice(0, MAX_ACTIVE_ALERTS / 2);
-                    activeAlerts = [...unacknowledged.slice(0, MAX_ACTIVE_ALERTS / 2), ...recentAcknowledged];
-                } else {
-                    activeAlerts = activeAlerts.slice(0, MAX_ACTIVE_ALERTS);
-                }
-            }
-            
-            // Queue toast notification
-            pendingAlertToasts.push({
-                guest: alert.guest.name,
-                message: alert.message,
-                timestamp: now
-            });
-            
-            // Process toast queue
-            processToastQueue();
         }
         
         updateHeaderIndicator();
         
-        // Debounced dropdown update
+        
         if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
-            if (dropdownUpdateTimeout) {
-                clearTimeout(dropdownUpdateTimeout);
-            }
-            dropdownUpdateTimeout = setTimeout(() => {
-                updateDropdownContent();
-                dropdownUpdateTimeout = null;
-            }, alertStormMode ? 500 : 100); // Longer delay during storm
+            updateDropdownContent();
         }
         
         document.dispatchEvent(new CustomEvent('pulseAlert', { detail: alert }));
@@ -644,10 +480,6 @@ PulseApp.alerts = (() => {
         
         updateHeaderIndicator();
         
-        // Show toast notification when alert is resolved
-        if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.toast) {
-            window.PulseApp.ui.toast.success(`Resolved: ${alert.guest.name} - ${alert.message}`);
-        }
         
         if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
             updateDropdownContent();
@@ -669,7 +501,7 @@ PulseApp.alerts = (() => {
         if (count === 0) {
             className = 'text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 cursor-pointer relative flex-shrink-0 transition-colors';
         } else {
-            className = 'text-xs px-1.5 py-0.5 rounded bg-amber-500 text-white cursor-pointer relative flex-shrink-0 transition-colors';
+            className = 'text-xs px-1.5 py-0.5 rounded bg-red-400 text-white cursor-pointer relative flex-shrink-0 transition-colors';
         }
         
         indicator.className = className;
@@ -685,26 +517,24 @@ PulseApp.alerts = (() => {
                         `${count} unacknowledged alert${count !== 1 ? 's' : ''} - Click to view`;
     }
 
-    function showNotification(alert, type = 'alert') {
-        // Ensure notification container exists
-        if (!notificationContainer) {
-            createNotificationContainer();
-        }
-        
+    function showNotification(alert, type = 'info') {
         const notification = document.createElement('div');
         notification.className = `pointer-events-auto transform transition-all duration-200 ease-out opacity-0 translate-y-2 scale-95`;
         
-        // Simple styling based on notification type
-        let colorClass, title;
-        if (type === 'resolved') {
-            colorClass = 'bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-200';
-            title = 'Resolved';
-        } else {
-            colorClass = 'bg-amber-50 border border-amber-200 text-amber-700 dark:bg-amber-900/20 dark:border-amber-700 dark:text-amber-200';
-            title = alert.message && alert.message.includes('acknowledged') ? 'Success' : 'Alert';
-        }
+        // More subtle styling with muted colors
+        const colorClasses = {
+            'critical': 'bg-red-50 border border-red-200 text-red-700 dark:bg-red-900/20 dark:border-red-700 dark:text-red-200',
+            'warning': 'bg-yellow-50 border border-yellow-200 text-yellow-700 dark:bg-yellow-900/20 dark:border-yellow-700 dark:text-yellow-200',
+            'info': 'bg-blue-50 border border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-700 dark:text-blue-200',
+            'resolved': 'bg-green-50 border border-green-200 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-200'
+        };
         
+        const colorClass = colorClasses[type] || colorClasses.info;
         const icon = ALERT_ICONS.active;
+        
+        const title = type === 'resolved' ? 'Resolved' : 
+                     type === 'info' ? (alert.message && alert.message.includes('acknowledged') ? 'Success' : 'Alert') :
+                     'Alert';
         
         const message = alert.message || `${alert.guest?.name || 'Unknown'}`;
         
@@ -1008,16 +838,6 @@ PulseApp.alerts = (() => {
         }
     }
     
-    function handleRulesRefreshed() {
-        // Trigger the alerts UI to reload its configuration
-        if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.alerts && window.PulseApp.ui.alerts.loadSavedConfiguration) {
-            window.PulseApp.ui.alerts.loadSavedConfiguration();
-        }
-        
-        // Also reload the alert data to get any new rules
-        loadInitialData();
-    }
-    
     // Cleanup function to prevent memory leaks
     function cleanup() {
         // Clear all cleanup timeouts
@@ -1026,32 +846,16 @@ PulseApp.alerts = (() => {
         }
         cleanupTimeouts.clear();
         
-        // Clear dropdown update timeout
-        if (dropdownUpdateTimeout) {
-            clearTimeout(dropdownUpdateTimeout);
-            dropdownUpdateTimeout = null;
-        }
-        
-        // Clear toast processing timeout
-        if (toastProcessingTimeout) {
-            clearTimeout(toastProcessingTimeout);
-            toastProcessingTimeout = null;
-        }
-        
-        // Clear pending toasts
-        pendingAlertToasts = [];
-        
         // Remove socket listeners if needed
         if (window.socket) {
             window.socket.off('alert', handleNewAlert);
             window.socket.off('alertResolved', handleResolvedAlert);
             window.socket.off('alertAcknowledged', handleAcknowledgedAlert);
-            window.socket.off('alertRulesRefreshed', handleRulesRefreshed);
         }
     }
 
     // Helper function for toast notifications
-    function showToastNotification(message, type = 'alert') {
+    function showToastNotification(message, type = 'info') {
         if (window.PulseApp && window.PulseApp.ui && window.PulseApp.ui.toastNotifications) {
             window.PulseApp.ui.toastNotifications.show(message, type);
         } else {

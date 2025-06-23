@@ -897,17 +897,14 @@ async function fetchPbsDatastoreSnapshots({ client, config }, storeName) {
                 const snapshotResponse = await client.get(`/admin/datastore/${storeName}/snapshots`, { params });
                 const snapshots = snapshotResponse.data?.data ?? [];
                 
-                
                 // Add namespace field to each snapshot
                 snapshots.forEach(snap => {
                     // Preserve namespace as-is (empty string for root)
                     snap.namespace = namespace || '';
                 });
                 
-                
                 allSnapshots.push(...snapshots);
                 console.log(`[DataFetcher] Found ${snapshots.length} snapshots in namespace '${namespace || 'root'}' for datastore ${storeName}`);
-                
             } catch (nsError) {
                 if (nsError.response?.status !== 404) {
                     console.warn(`WARN: [DataFetcher] Failed to fetch snapshots from namespace '${namespace}' in datastore ${storeName}: ${nsError.message}`);

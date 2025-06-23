@@ -1,3 +1,5 @@
+const axios = require('axios');
+const https = require('https');
 
 /**
  * Diagnostic function to check a specific PBS verification job
@@ -185,5 +187,6 @@ async function runVerificationDiagnostics(pbsInstance, failingTasks = []) {
 }
 
 module.exports = {
+    checkVerificationJob,
     runVerificationDiagnostics
 };
