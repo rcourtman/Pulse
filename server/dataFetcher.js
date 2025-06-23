@@ -188,9 +188,50 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
     )
   ]);
 
+  let finalVms = (vms.status === 'fulfilled' ? vms.value : []) || [];
+  let finalContainers = (containers.status === 'fulfilled' ? containers.value : []) || [];
+
+  // Fetch current status for accurate uptime for all VMs and containers
+  if (finalVms.length > 0 || finalContainers.length > 0) {
+    const uptimePromises = [];
+    
+    // Fetch current status for VMs
+    finalVms.forEach((vm, index) => {
+      uptimePromises.push(
+        apiClient.get(`/nodes/${nodeName}/qemu/${vm.vmid}/status/current`, { timeout: 2000 })
+          .then(response => {
+            if (response?.data?.data?.uptime !== undefined) {
+              finalVms[index].uptime = response.data.data.uptime;
+            }
+          })
+          .catch(() => {
+            // Silently ignore errors - keep original uptime
+          })
+      );
+    });
+    
+    // Fetch current status for containers
+    finalContainers.forEach((ct, index) => {
+      uptimePromises.push(
+        apiClient.get(`/nodes/${nodeName}/lxc/${ct.vmid}/status/current`, { timeout: 2000 })
+          .then(response => {
+            if (response?.data?.data?.uptime !== undefined) {
+              finalContainers[index].uptime = response.data.data.uptime;
+            }
+          })
+          .catch(() => {
+            // Silently ignore errors - keep original uptime
+          })
+      );
+    });
+    
+    // Wait for all uptime fetches to complete (with timeout)
+    await Promise.allSettled(uptimePromises);
+  }
+
   return {
-    vms: (vms.status === 'fulfilled' ? vms.value : []) || [],
-    containers: (containers.status === 'fulfilled' ? containers.value : []) || [],
+    vms: finalVms,
+    containers: finalContainers,
     nodeStatus: (nodeStatus.status === 'fulfilled' ? nodeStatus.value : {}) || {},
     storage: (storage.status === 'fulfilled' ? storage.value : []) || [],
   };
@@ -311,7 +352,6 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
         const guestPromises = nodes.map(node => {
             const isOffline = nodeStatusMap.get(node.node) === 'offline';
             if (isOffline) {
-                console.log(`[DataFetcher - ${endpointName}] Skipping data fetch for offline node: ${node.node}`);
                 return Promise.resolve({ skipped: true, reason: 'offline' });
             }
             return requestLimiter(() => fetchDataForNode(apiClientInstance, endpointId, node.node));
@@ -389,7 +429,7 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 if (result.status === 'rejected') {
                     console.error(`[DataFetcher - ${endpointName}-${correspondingNodeInfo.node}] Error fetching Node status: ${result.reason?.message || result.reason}`);
                 } else if (result.value?.skipped && result.value.reason === 'offline') {
-                    console.log(`[DataFetcher - ${endpointName}-${correspondingNodeInfo.node}] Node is offline, showing with offline status`);
+                    // Node is offline, showing with offline status
                 } else {
                     // console.warn(`[DataFetcher - ${endpointName}-${correspondingNodeInfo.node}] Unexpected result status: ${result.status}`);
                 }
@@ -491,7 +531,7 @@ function deduplicateClusterNodes(allNodes) {
 }
 
 /**
- * Deduplicates VMs based on node and VMID
+ * Deduplicates VMs based on VMID (since VMIDs are unique across a cluster)
  * @param {Array} allVms - Array of all VMs from all endpoints
  * @returns {Array} - Deduplicated array of VMs
  */
@@ -499,7 +539,8 @@ function deduplicateVmsByNode(allVms) {
     const vmMap = new Map();
     
     allVms.forEach(vm => {
-        const vmKey = `${vm.node}-${vm.vmid}`;
+        // In a cluster, VMIDs are unique across all nodes
+        const vmKey = vm.vmid.toString();
         const existingVm = vmMap.get(vmKey);
         
         if (!existingVm || vm.status === 'running') {
@@ -512,7 +553,7 @@ function deduplicateVmsByNode(allVms) {
 }
 
 /**
- * Deduplicates containers based on node and VMID
+ * Deduplicates containers based on VMID (since VMIDs are unique across a cluster)
  * @param {Array} allContainers - Array of all containers from all endpoints
  * @returns {Array} - Deduplicated array of containers
  */
@@ -520,7 +561,8 @@ function deduplicateContainersByNode(allContainers) {
     const containerMap = new Map();
     
     allContainers.forEach(container => {
-        const containerKey = `${container.node}-${container.vmid}`;
+        // In a cluster, VMIDs are unique across all nodes
+        const containerKey = container.vmid.toString();
         const existingContainer = containerMap.get(containerKey);
         
         if (!existingContainer || container.status === 'running') {
@@ -663,9 +705,11 @@ async function detectClusterMembership(currentApiClients) {
                     clusterGroups.set(membership.clusterId, []);
                 }
                 clusterGroups.get(membership.clusterId).push(membership);
+                console.log(`[DataFetcher] Endpoint ${membership.endpointId} detected as part of cluster '${membership.clusterId}' with ${membership.nodeCount} nodes`);
             } else {
                 // Standalone endpoints
                 standaloneEndpoints.push(membership);
+                console.log(`[DataFetcher] Endpoint ${membership.endpointId} detected as standalone node`);
             }
         }
     });
@@ -683,6 +727,8 @@ async function detectClusterMembership(currentApiClients) {
                 if (!a.error && b.error) return -1;
                 return a.endpointId.localeCompare(b.endpointId);
             });
+            
+            console.log(`[DataFetcher] Cluster '${clusterId}' has ${endpoints.length} configured endpoints. Using ${endpoints[0].endpointId} as primary, others as backup.`);
         }
         
         prioritizedGroups.push({
@@ -779,11 +825,11 @@ async function fetchPveDiscoveryData(currentApiClients) {
     });
 
 
-    // No need for complex deduplication since we only fetch from one endpoint per cluster
+    // Apply deduplication as a safety measure (in case cluster detection fails)
     return { 
-        nodes: allNodes, 
-        vms: allVms, 
-        containers: allContainers 
+        nodes: deduplicateClusterNodes(allNodes), 
+        vms: deduplicateVmsByNode(allVms), 
+        containers: deduplicateContainersByNode(allContainers) 
     };
 }
 
@@ -906,7 +952,6 @@ async function fetchPbsDatastoreSnapshots({ client, config }, storeName) {
                 
                 
                 allSnapshots.push(...snapshots);
-                console.log(`[DataFetcher] Found ${snapshots.length} snapshots in namespace '${namespace || 'root'}' for datastore ${storeName}`);
                 
             } catch (nsError) {
                 if (nsError.response?.status !== 404) {
@@ -975,17 +1020,10 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                         const groupsParams = {
                             ns: namespace || ''
                         };
-                        console.log(`[DataFetcher] Fetching groups from namespace '${namespace}'`);
-                        
                         const groupsResponse = await client.get(`/admin/datastore/${datastore.name}/groups`, {
                             params: groupsParams
                         });
                         const groups = groupsResponse.data?.data || [];
-                        console.log(`[DataFetcher] Found ${groups.length} groups in namespace '${namespace}'`);
-                        
-                        if (groups.length > 0) {
-                            console.log(`[DataFetcher] Found ${groups.length} backup groups in namespace '${namespace}' for datastore ${datastore.name}`);
-                        }
                 
                         // Process each group in this namespace
                         for (const group of groups) {
@@ -1068,19 +1106,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             
             console.log(`[DataFetcher] Created ${backupRunsByUniqueKey.size} unique backup runs from PBS snapshots for ${config.name}`);
             
-            // Debug: Log backup runs with their namespaces
-            const backupRuns = Array.from(backupRunsByUniqueKey.values());
-            console.log(`[DataFetcher] DEBUG: Backup runs by namespace:`);
-            const runsByNamespace = {};
-            backupRuns.forEach(run => {
-                const ns = run.namespace || 'undefined';
-                if (!runsByNamespace[ns]) runsByNamespace[ns] = 0;
-                runsByNamespace[ns]++;
-            });
-            Object.entries(runsByNamespace).forEach(([ns, count]) => {
-                console.log(`[DataFetcher] DEBUG:   ${ns}: ${count} backup runs`);
-            });
-            
         } catch (datastoreError) {
             console.error(`ERROR: [DataFetcher] Could not fetch datastore backup history: ${datastoreError.message}`);
             return { tasks: null, error: true };
@@ -1133,8 +1158,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             // Enhance synthetic backup runs with real task details when available
             const backupRuns = Array.from(backupRunsByUniqueKey.values());
             
-            console.log(`[DataFetcher] DEBUG: Found ${realBackupTasksMap.size} real backup tasks to potentially enhance synthetic runs`);
-            
             // Track used UPIDs to prevent enhancement duplicates
             const usedUPIDs = new Set();
             
@@ -1166,18 +1189,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                     // Keep synthetic run as-is for historical data or if UPID already used
                     return run;
                 }
-            });
-            
-            // Debug: Log final enhanced backup runs with their namespaces
-            console.log(`[DataFetcher] DEBUG: Enhanced backup runs by namespace:`);
-            const enhancedRunsByNamespace = {};
-            enhancedBackupRuns.forEach(run => {
-                const ns = run.namespace || 'undefined';
-                if (!enhancedRunsByNamespace[ns]) enhancedRunsByNamespace[ns] = 0;
-                enhancedRunsByNamespace[ns]++;
-            });
-            Object.entries(enhancedRunsByNamespace).forEach(([ns, count]) => {
-                console.log(`[DataFetcher] DEBUG:   ${ns}: ${count} enhanced backup runs`);
             });
             
             // Add individual guest failure tasks from real backup tasks that didn't match synthetic runs
@@ -1482,7 +1493,7 @@ async function fetchStorageBackups(apiClient, endpointId, nodeName, storage, isS
     } catch (error) {
         // Storage might not support backups or might be inaccessible
         if (error.response?.status === 403) {
-            console.error(`[DataFetcher - ${endpointId}-${nodeName}] Permission denied (403) accessing storage ${storage}. Token needs 'Datastore.Audit' or 'Datastore.AllocateSpace' permission.`);
+            console.error(`[DataFetcher - ${endpointId}-${nodeName}] Permission denied (403) accessing storage ${storage}. Token needs 'Datastore.Allocate' permission.`);
         } else if (error.response?.status !== 501) { // 501 = not implemented
             console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Error fetching backups from storage ${storage}: ${error.message} (Status: ${error.response?.status})`);
         }
