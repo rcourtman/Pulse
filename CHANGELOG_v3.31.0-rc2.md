@@ -1,45 +1,34 @@
-# v3.31.0-rc2 Release Notes
+## v3.31.0-rc2 Release Candidate
 
-## 🎉 Major Features
+This release candidate includes significant improvements to the release process and workflow automation.
 
-### 🚨 Alert System
-- **Real-time Alerts**: Get notified when VMs or containers exceed resource thresholds
-- **Multiple Notification Channels**: Send alerts to Discord, Slack, Teams, Telegram, and email
-- **Per-Guest Thresholds**: Set custom alert limits for individual VMs and containers
-- **Alert History**: View complete timeline of when alerts triggered and resolved
-- **Smart Suppression**: Prevent alert spam with configurable quiet periods
+### 🚀 Release Process Improvements
 
-### 📊 Backup Improvements
-- **PBS Namespace Support**: View and filter backups by namespace
-- **Backup Health Dashboard**: See backup status for all guests at a glance
-- **Group by Node**: Organize backup view by physical host
-- **Flexible Display**: Toggle between grouped and list views
-- **Enhanced Search**: Better filtering for finding specific backups
+- **Automated Draft Releases**: PRs merged from develop to main now automatically create draft releases with Docker images and tarballs
+- **Enhanced Release Documentation**: Comprehensive release instructions now ensure consistent, safe release practices
+- **Changelog System**: Flexible changelog generation supporting both automated and manual creation
+- **Version Management**: Improved version tracking and validation throughout the release pipeline
 
-### 🎨 Interface Enhancements
-- **Faster Performance**: Smoother scrolling for large VM lists
-- **Better Accessibility**: Improved color contrast for better readability
-- **Mobile Improvements**: Enhanced touch scrolling and responsive tables
-- **Loading Indicators**: Clear feedback while data loads
+### 📦 Build & Deployment
 
-## 🐛 Bug Fixes
+- **Multi-arch Docker Support**: Automated builds for linux/amd64 and linux/arm64
+- **Release Tarballs**: Automatic creation of release archives with production dependencies
+- **Draft-First Approach**: All releases are created as drafts, requiring manual review before publishing
 
-- Fixed flickering charts when switching between views
-- Resolved backup filter layout issues
-- Fixed incorrect time displays in PBS backup listings
-- Corrected backup counts in health summary
-- Fixed UI state loss when hot reloading during development
+### 🔧 Developer Experience
 
-## 📦 Update Instructions
+- **Simplified Workflows**: Streamlined release process with clear documentation
+- **PR Templates**: Added templates to guide consistent pull request creation
+- **Cleanup**: Removed obsolete files and configurations from the repository
 
-For detailed update instructions for all installation methods, see:
-**https://github.com/rcourtman/Pulse/blob/main/docs/UPDATING.md**
+### Update Instructions
 
-Quick update options:
-- **Web Interface**: Settings → System → Check for Updates
-- **Script**: `./install-pulse.sh --update`
-- **Docker**: `docker pull rcourtman/pulse:v3.33.0-rc2`
+**For existing installations:**
+- Web Interface: Settings → System → Check for Updates
+- Script: `./install.sh --update`
+- Docker: `docker pull rcourtman/pulse:rc`
+
+**Note**: This is a release candidate. Please test thoroughly before using in production.
 
 ---
-
-*This is a release candidate. Please test thoroughly before using in production.*
+*This release includes all changes from v3.31.0-rc1 plus the improvements listed above.*
