@@ -180,7 +180,7 @@ function processPbsTasks(allTasks) {
 
     const sortTasksDesc = (a, b) => (b.startTime || 0) - (a.startTime || 0);
     
-    const getRecentTasksList = (taskList, detailedTaskFn, sortFn, count = 50) => {
+    const getRecentTasksList = (taskList, detailedTaskFn, sortFn, count = 500) => {
         if (!taskList) return [];
         const nowSec = Date.now() / 1000;
         const thirtyDays = 30 * 24 * 60 * 60;
@@ -195,7 +195,6 @@ function processPbsTasks(allTasks) {
             if (task.starttime == null) return true;
             return (nowSec - task.starttime) <= thirtyDays;
         });
-        
         return recent.map(detailedTaskFn).sort(sortFn).slice(0, count);
     };
 
@@ -248,7 +247,6 @@ function categorizeAndCountTasks(allTasks, taskTypeMap) {
     allTasks.forEach(task => {
         const taskType = task.worker_type || task.type;
         const categoryKey = taskTypeMap[taskType];
-
 
         if (categoryKey) {
             const category = results[categoryKey];

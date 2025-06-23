@@ -1014,52 +1014,39 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                     return snapshot['backup-time'] >= thirtyDaysAgo;
                                 });
                         
-                        // Group snapshots by day to represent daily backup job runs
-                        const snapshotsByDay = new Map();
+                        // Create a backup task for each snapshot (not grouped by day)
                         recentSnapshots.forEach(snapshot => {
                             const backupDate = new Date(snapshot['backup-time'] * 1000);
                             const dayKey = backupDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+                            const timeKey = backupDate.toISOString(); // Full timestamp for uniqueness
                             
-                            if (!snapshotsByDay.has(dayKey)) {
-                                snapshotsByDay.set(dayKey, []);
-                            }
-                            snapshotsByDay.get(dayKey).push(snapshot);
-                        });
-                        
-                        // Convert daily snapshot groups to backup job runs
-                        snapshotsByDay.forEach((daySnapshots, dayKey) => {
-                            // Use the latest snapshot of the day as the representative backup run
-                            const latestSnapshot = daySnapshots.reduce((latest, current) => {
-                                return current['backup-time'] > latest['backup-time'] ? current : latest;
-                            });
+                            // Create a unique key for each snapshot to ensure all backups are shown
+                            const uniqueKey = `${timeKey}:${datastore.name}:${namespace}:${snapshot['backup-type']}:${snapshot['backup-id']}`;
                             
-                            // Create a comprehensive unique key including namespace to avoid collisions
-                            const uniqueKey = `${dayKey}:${datastore.name}:${namespace}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}`;
-                            
-                            // Only create one backup run per unique key
+                            // Create a backup task for each snapshot
                             if (!backupRunsByUniqueKey.has(uniqueKey)) {
                                 // Create a backup job run entry
                                 const backupRun = {
                                     type: 'backup',
                                     status: 'OK', // PBS snapshots that exist are successful
-                                    starttime: latestSnapshot['backup-time'],
-                                    endtime: latestSnapshot['backup-time'] + 60,
+                                    starttime: snapshot['backup-time'],
+                                    endtime: snapshot['backup-time'] + 60,
                                     node: nodeName,
-                                    guest: `${latestSnapshot['backup-type']}/${latestSnapshot['backup-id']}`,
-                                    guestType: latestSnapshot['backup-type'],
-                                    guestId: latestSnapshot['backup-id'],
-                                    id: `BACKUP-RUN:${datastore.name}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}:${dayKey}`,
-                                    upid: `BACKUP-RUN:${datastore.name}:${latestSnapshot['backup-type']}:${latestSnapshot['backup-id']}:${dayKey}`,
-                                    comment: latestSnapshot.comment || '',
-                                    size: latestSnapshot.size || 0,
-                                    owner: latestSnapshot.owner || 'unknown',
+                                    guest: `${snapshot['backup-type']}/${snapshot['backup-id']}`,
+                                    guestType: snapshot['backup-type'],
+                                    guestId: snapshot['backup-id'],
+                                    id: `BACKUP-RUN:${datastore.name}:${snapshot['backup-type']}:${snapshot['backup-id']}:${timeKey}`,
+                                    upid: `BACKUP-RUN:${datastore.name}:${snapshot['backup-type']}:${snapshot['backup-id']}:${timeKey}`,
+                                    comment: snapshot.comment || '',
+                                    size: snapshot.size || 0,
+                                    owner: snapshot.owner || 'unknown',
                                     datastore: datastore.name,
-                                    verification: latestSnapshot.verification || null,
+                                    verification: snapshot.verification || null,
                                     // Additional PBS-specific fields
                                     pbsBackupRun: true,
                                     backupDate: dayKey,
-                                    snapshotCount: daySnapshots.length,
-                                    protected: latestSnapshot.protected || false,
+                                    snapshotCount: 1, // Each snapshot is now its own task
+                                    protected: snapshot.protected || false,
                                     namespace: namespace || 'root'
                                 };
                                 
