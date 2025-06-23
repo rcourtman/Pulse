@@ -190,7 +190,11 @@ PulseApp.ui.calendarHeatmap = (() => {
                                  todayCell.classList.contains('bg-orange-500') || 
                                  todayCell.classList.contains('bg-yellow-500'))) {
                     // Auto-click today's cell if it has backup data
-                    todayCell.click();
+                    onDateSelectCallback({
+                        date: todayCell.dataset.date,
+                        count: todayCell.dataset.count,
+                        level: todayCell.dataset.level
+                    }, true);
                 }
             }, 100);
         }
@@ -486,8 +490,23 @@ PulseApp.ui.calendarHeatmap = (() => {
                         });
                     }
                     
-                    // Removed debug logs
-                    
+                    // Filter by backup type
+                    const currentFilterType = getCurrentFilterType();
+                    if (currentFilterType !== 'all' && filteredGuests.length > 0) {
+                        filteredGuests = filteredGuests.filter(guest => {
+                            const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
+                            switch (currentFilterType) {
+                                case 'pbs':
+                                    return types.includes('pbsSnapshots');
+                                case 'pve':
+                                    return types.includes('pveBackups');
+                                case 'snapshots':
+                                    return types.includes('vmSnapshots');
+                                default:
+                                    return true;
+                            }
+                        });
+                    }
                     
                     // Check for duplicates by unique key
                     const uniqueKeyCounts = {};
@@ -513,20 +532,41 @@ PulseApp.ui.calendarHeatmap = (() => {
                             pveCount: 0,
                             snapshotCount: 0,
                             failureCount: dayData.hasFailures ? 1 : 0
+                        },
+                        filterInfo: {
+                            backupType: getCurrentFilterType()
                         }
                     };
                     
                     // Count backup types from filtered guests
                     if (filteredGuests.length > 0) {
+                        // Only count the currently filtered type
+                        const currentFilterType = getCurrentFilterType();
                         filteredGuests.forEach(guest => {
                             const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
-                            if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
-                            if (types.includes('pveBackups')) callbackData.stats.pveCount++;
-                            if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                            if (currentFilterType === 'all') {
+                                // Count all types when no filter is applied
+                                if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                                if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                                if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                            } else {
+                                // Only count the filtered type
+                                switch (currentFilterType) {
+                                    case 'pbs':
+                                        if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                                        break;
+                                    case 'pve':
+                                        if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                                        break;
+                                    case 'snapshots':
+                                        if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                                        break;
+                                }
+                            }
                         });
                     }
                     
-                    onDateSelectCallback(callbackData);
+                    onDateSelectCallback(callbackData, true);
                 } else if (onDateSelectCallback) {
                     // Empty day callback
                     onDateSelectCallback({
@@ -1926,18 +1966,38 @@ PulseApp.ui.calendarHeatmap = (() => {
                             pveCount: 0,
                             snapshotCount: 0,
                             failureCount: dayData.hasFailures ? 1 : 0
+                        },
+                        filterInfo: {
+                            backupType: currentFilterType
                         }
                     };
                     
                     // Count backup types from filtered guests
+                    // Only count the currently filtered type to match the displayed backups
                     filteredGuests.forEach(guest => {
                         const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
-                        if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
-                        if (types.includes('pveBackups')) callbackData.stats.pveCount++;
-                        if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                        if (currentFilterType === 'all') {
+                            // Count all types when no filter is applied
+                            if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                            if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                            if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                        } else {
+                            // Only count the filtered type
+                            switch (currentFilterType) {
+                                case 'pbs':
+                                    if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                                    break;
+                                case 'pve':
+                                    if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                                    break;
+                                case 'snapshots':
+                                    if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
+                                    break;
+                            }
+                        }
                     });
                     
-                    onDateSelectCallback(callbackData);
+                    onDateSelectCallback(callbackData, true);
                 }
             }
         });
@@ -2115,6 +2175,12 @@ PulseApp.ui.calendarHeatmap = (() => {
             window._calendarDebugLogged = false;
             window._monthDataDebugLogged = false;
             window._namespaceFilterLogged = false;
+        },
+        hasSelectedDate: () => {
+            return currentSelectedDate !== null;
+        },
+        getSelectedDate: () => {
+            return currentSelectedDate;
         }
     };
 })();
