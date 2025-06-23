@@ -175,18 +175,25 @@ jobs:
         if: steps.check.outputs.create_release == 'true'
         id: release_body
         run: |
-          echo "Generating release body with detailed changelog..."
+          echo "Generating release body..."
           
-          # Get the PR body
+          # Get the PR body for context
           PR_BODY=$(gh pr view ${{ github.event.pull_request.number }} --json body -q .body)
           
-          # Start building the release body
-          cat > release_body.md << 'HEADER'
-          ## 🧪 Release Candidate v${{ steps.read_version.outputs.version }}
-          
-          This is a release candidate for testing. Please report any issues you find.
-          
-          HEADER
+          # Check if PR body contains a changelog section
+          if echo "$PR_BODY" | grep -q "## Changelog"; then
+            echo "📝 Using changelog from PR body"
+            # Extract everything after ## Changelog
+            echo "$PR_BODY" | sed -n '/## Changelog/,$p' | tail -n +2 > release_body.md
+          else
+            echo "📝 Generating changelog automatically"
+            # Start building the release body
+            cat > release_body.md << 'HEADER'
+## 🧪 Release Candidate v${{ steps.read_version.outputs.version }}
+
+This is a release candidate for testing. Please report any issues you find.
+
+HEADER
           
           # Generate detailed changelog using the same logic as stable releases
           echo "📝 Generating detailed changelog from commits..."
