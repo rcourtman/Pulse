@@ -141,4 +141,3 @@ tailwind.config.js
 data/*.json
 !data/*.json.template
 !data/*.json.example
-debug-archive/
