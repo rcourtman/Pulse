@@ -24,105 +24,30 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
-      - name: Analyze version for RC release
-        id: analyze
-        run: |
-          # Use the same version analysis logic as stable releases
-          node -e "
-            const { analyzeCommitsForVersionBump } = require('./server/versionUtils');
-            const analysis = analyzeCommitsForVersionBump();
-            
-            console.log('📊 RC Version Analysis:');
-            console.log('Current stable version:', analysis.currentStableVersion);
-            console.log('Suggested next version:', analysis.suggestedVersion);
-            console.log('Bump type:', analysis.bumpType);
-            console.log('Total commits:', analysis.totalCommits);
-            
-            // Set base version for RC releases
-            const fs = require('fs');
-            const output = fs.readFileSync(process.env.GITHUB_OUTPUT, 'utf8');
-            fs.writeFileSync(process.env.GITHUB_OUTPUT, output + 
-              'base_version=' + analysis.suggestedVersion + '\\n' +
-              'current_stable=' + analysis.currentStableVersion + '\\n' +
-              'reasoning=' + analysis.reasoning + '\\n'
-            );
-          "
           
       - name: Check if RC release needed
         id: check
         run: |
-          # Use analyzed base version instead of package.json
-          BASE_VERSION="${{ steps.analyze.outputs.base_version }}"
+          # Get the current version from package.json
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
           
-          # Get the latest RC tag for this base version
-          LATEST_RC=$(git tag -l "v${BASE_VERSION}-rc*" | sort -V | tail -n1)
-          
-          if [ -z "$LATEST_RC" ]; then
-            echo "rc_number=1" >> $GITHUB_OUTPUT
-            echo "create_release=true" >> $GITHUB_OUTPUT
-            echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+          # Check if current version is already tagged
+          if git tag -l "v$CURRENT_VERSION" | grep -q "v$CURRENT_VERSION"; then
+            echo "⚠️ Version v$CURRENT_VERSION is already tagged. No release needed."
+            echo "create_release=false" >> $GITHUB_OUTPUT
           else
-            # Extract RC number and increment
-            RC_NUM=$(echo $LATEST_RC | grep -o 'rc[0-9]*' | grep -o '[0-9]*')
-            NEXT_RC=$((RC_NUM + 1))
-            
-            # Check if there are new commits since last RC
-            COMMITS_SINCE=$(git rev-list --count $LATEST_RC..HEAD)
-            if [ "$COMMITS_SINCE" -gt 0 ]; then
-              echo "rc_number=$NEXT_RC" >> $GITHUB_OUTPUT
-              echo "create_release=true" >> $GITHUB_OUTPUT
-              echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
-            else
-              echo "create_release=false" >> $GITHUB_OUTPUT
-            fi
+            echo "✅ Version v$CURRENT_VERSION is not yet tagged. Creating release."
+            echo "create_release=true" >> $GITHUB_OUTPUT
           fi
           
-      - name: Update package.json with RC version
+      - name: Read version from package.json
         if: steps.check.outputs.create_release == 'true'
+        id: read_version
         run: |
-          NEW_VERSION="${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}"
-          echo "Updating package.json version to: $NEW_VERSION"
-          
-          # Update package.json version
-          node -e "
-            const fs = require('fs');
-            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-            pkg.version = '$NEW_VERSION';
-            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
-          "
-          
-          # Configure git
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          # Commit the version change with conflict resolution
-          git add package.json
-          git commit -m "chore: bump version to $NEW_VERSION for RC release"
-          
-          # Pull and rebase before pushing to handle any concurrent changes
-          echo "🔄 Pulling latest changes before push..."
-          git fetch origin develop
-          if ! git rebase origin/develop; then
-            echo "⚠️ Rebase conflicts detected, attempting resolution..."
-            # For package.json conflicts, prefer our version (the RC version)
-            git checkout --ours package.json 2>/dev/null || true
-            git add package.json 2>/dev/null || true
-            git rebase --continue 2>/dev/null || true
-          fi
-          
-          # Push with retry logic
-          echo "📤 Pushing to develop..."
-          for i in {1..3}; do
-            if git push origin develop; then
-              echo "✅ Successfully pushed to develop"
-              break
-            else
-              echo "⚠️ Push failed (attempt $i/3), retrying..."
-              git fetch origin develop
-              git rebase origin/develop 2>/dev/null || true
-              sleep $((i * 2))
-            fi
-          done
+          # Read the version that was already set locally
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Using version from package.json: $CURRENT_VERSION"
           
       - name: Set up Docker Buildx
         if: steps.check.outputs.create_release == 'true'
@@ -143,7 +68,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            rcourtman/pulse:v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
+            rcourtman/pulse:v${{ steps.read_version.outputs.version }}
             rcourtman/pulse:rc
           
       - name: Set up Node.js
@@ -167,7 +92,7 @@ jobs:
           echo "📦 Building RC release tarball..."
           
           # Create staging directory for proper release structure
-          RC_VERSION="${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}"
+          RC_VERSION="${{ steps.read_version.outputs.version }}"
           RELEASE_DIR_NAME="pulse-v$RC_VERSION"
           STAGING_PARENT_DIR="pulse-rc-staging"
           STAGING_FULL_PATH="$STAGING_PARENT_DIR/$RELEASE_DIR_NAME"
@@ -257,7 +182,7 @@ jobs:
           
           # Start building the release body
           cat > release_body.md << 'HEADER'
-          ## 🧪 Release Candidate ${{ steps.check.outputs.rc_number }}
+          ## 🧪 Release Candidate v${{ steps.read_version.outputs.version }}
           
           This is a release candidate for testing. Please report any issues you find.
           
@@ -284,7 +209,7 @@ jobs:
           
           # Export variables for the changelog script
           export PREV_TAG="$PREV_TAG"
-          export NEW_VERSION="${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}"
+          export NEW_VERSION="${{ steps.read_version.outputs.version }}"
           export BUMP_TYPE="rc"
           export REASONING="Release candidate for testing"
           
@@ -341,13 +266,13 @@ jobs:
           ```bash
           # Update to this specific RC version
           cd /opt/pulse/scripts
-          ./install-pulse.sh --update --version v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
+          ./install-pulse.sh --update --version v${{ steps.read_version.outputs.version }}
           ```
           
           #### 🐳 **Docker Update**
           ```bash
           # Pull this specific RC version
-          docker pull rcourtman/pulse:v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
+          docker pull rcourtman/pulse:v${{ steps.read_version.outputs.version }}
           
           # Or use the rolling RC tag (always latest RC)
           docker pull rcourtman/pulse:rc
@@ -365,14 +290,14 @@ jobs:
           #### **Automated Installer**
           ```bash
           # Install this specific RC version
-          curl -sL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh | bash -s -- --version v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
+          curl -sL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh | bash -s -- --version v${{ steps.read_version.outputs.version }}
           ```
           
           #### **Manual Download**
           ```bash
-          wget https://github.com/rcourtman/Pulse/releases/download/v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}/pulse-v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}.tar.gz
-          tar -xzf pulse-v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}.tar.gz
-          cd pulse-v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
+          wget https://github.com/rcourtman/Pulse/releases/download/v${{ steps.read_version.outputs.version }}/pulse-v${{ steps.read_version.outputs.version }}.tar.gz
+          tar -xzf pulse-v${{ steps.read_version.outputs.version }}.tar.gz
+          cd pulse-v${{ steps.read_version.outputs.version }}
           npm install --production
           npm start
           ```
@@ -393,12 +318,12 @@ jobs:
         if: steps.check.outputs.create_release == 'true'
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
-          name: v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}
+          tag_name: v${{ steps.read_version.outputs.version }}
+          name: v${{ steps.read_version.outputs.version }}
           draft: true
           prerelease: true
           generate_release_notes: false
-          files: pulse-v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }}.tar.gz
+          files: pulse-v${{ steps.read_version.outputs.version }}.tar.gz
           body_path: release_body.md
             
       - name: Auto-merge PR to main
@@ -413,7 +338,7 @@ jobs:
           
           # Merge the PR
           gh pr merge ${{ github.event.pull_request.number }} --merge --admin \
-            --subject "Auto-merge: RC v${{ steps.check.outputs.base_version }}-rc${{ steps.check.outputs.rc_number }} ready" \
+            --subject "Auto-merge: RC v${{ steps.read_version.outputs.version }} ready" \
             --body "Automatically merged after successful RC release creation"
           
           echo "✅ PR successfully merged to main"
