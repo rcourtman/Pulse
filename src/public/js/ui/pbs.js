@@ -2586,7 +2586,7 @@ _updateDateRangeDescription();
         });
         const updateEnd = performance.now();
         
-        console.log(`[PBS] _updatePbsContentForNamespace COMPLETE for: ${newNamespace} in ${(updateEnd - startTime).toFixed(2)}ms at ${new Date().toISOString()}`);
+        // Removed debug log
     }
     
     // Removed old heavy update functions - now using pre-rendered DOM fragments
@@ -2660,7 +2660,7 @@ _updateDateRangeDescription();
             tab.dataset.namespace = namespace;
             
             tab.addEventListener('click', (e) => {
-                console.log(`[PBS] Namespace click start: ${namespace} at ${new Date().toISOString()}`);
+                // Removed debug log
                 // Don't do anything if already selected
                 if (namespace === selectedNamespace) return;
                 
@@ -2697,7 +2697,7 @@ _updateDateRangeDescription();
                 }
                 
                 // Update immediately by re-rendering the PBS tab
-                console.log(`[PBS] Starting namespace update: ${namespace} at ${new Date().toISOString()}`);
+                // Removed debug log
                 const pbsData = PulseApp.state.get('pbsDataArray');
                 if (pbsData) {
                     // Find the main container and re-render
@@ -2713,7 +2713,7 @@ _updateDateRangeDescription();
                         }
                     }
                 }
-                console.log(`[PBS] Finished namespace update: ${namespace} at ${new Date().toISOString()}`);
+                // Removed debug log
                 
                 // Done
             });
@@ -2844,7 +2844,7 @@ _updateDateRangeDescription();
     function _preProcessAllNamespaceData(pbsArray) {
         // Skip if we're switching namespaces
         if (isNamespaceSwitching) {
-            console.log('[PBS] Skipping pre-processing during namespace switch');
+            // Removed debug log
             return;
         }
         
@@ -2880,7 +2880,7 @@ _updateDateRangeDescription();
         });
         
         const endTime = performance.now();
-        console.log(`[PBS] Pre-processed ${allNamespaces.length} namespaces with DOM fragments in ${(endTime - startTime).toFixed(2)}ms`);
+        // Removed debug log
     }
     
     function updatePbsInfo(pbsArray) {
@@ -2906,7 +2906,7 @@ _updateDateRangeDescription();
         
         // Skip full update if we're just switching namespaces
         if (isNamespaceSwitching) {
-            console.log('[PBS] Skipping full update during namespace switch');
+            // Removed debug log
             return;
         }
         
