@@ -3319,7 +3319,8 @@ PulseApp.ui.backups = (() => {
                                 backups: guestsOnDate,
                                 stats: dateData.stats, // Use original stats (unique guest count)
                                 isCalendarFiltered: true,
-                                namespaceFilter: namespaceFilter
+                                namespaceFilter: namespaceFilter,
+                                filterInfo: dateData.filterInfo // Pass through filterInfo
                             } : {
                                 // Use rebuilt data for specific namespace filter
                                 date: selectedDate,
@@ -3332,7 +3333,8 @@ PulseApp.ui.backups = (() => {
                                     failureCount: 0
                                 },
                                 isCalendarFiltered: true,
-                                namespaceFilter: namespaceFilter
+                                namespaceFilter: namespaceFilter,
+                                filterInfo: dateData.filterInfo // Pass through filterInfo
                             };
 
                             // Update immediately with instant flag
@@ -3356,11 +3358,17 @@ PulseApp.ui.backups = (() => {
                             const dataToUse = hasActiveFilters ? filteredBackupStatus : 
                                              (namespaceFilter !== 'all' ? namespaceFilteredStatus : unfilteredBackupStatusByGuest);
                             
-                            if (dataToUse.length > 0) {
-                                const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);
-                                PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, !isUserAction || instant);
+                            // Double-check that no date is selected in the calendar before updating with multi-date view
+                            const calendarHasSelection = PulseApp.ui.calendarHeatmap && PulseApp.ui.calendarHeatmap.hasSelectedDate && PulseApp.ui.calendarHeatmap.hasSelectedDate();
+                            
+                            if (!calendarHasSelection) {
+                                if (dataToUse.length > 0) {
+                                    const multiDateData = _prepareMultiDateDetailData(dataToUse, extendedBackupData);
+                                    PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, !isUserAction || instant);
+                                } else {
+                                    PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, null, !isUserAction || instant);
+                                }
                             } else {
-                                PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, null, !isUserAction || instant);
                             }
                         }
                     }
