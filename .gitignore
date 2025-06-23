@@ -21,7 +21,6 @@ pids
 *.pid
 *.seed
 *.pid.lock
-data/acknowledgements.json
 data/alert-rules.json
 data/custom-thresholds.json
 data/active-alerts.json
