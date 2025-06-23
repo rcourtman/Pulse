@@ -56,6 +56,8 @@ src/public/output.css
 
 # Local Documentation (Not for Repo)
 RELEASE_PROCEDURE.md
+RELEASE_CHECKLIST.md
+CLAUDE.md
 
 # Cursor IDE configuration/rules
 .cursor/ 
