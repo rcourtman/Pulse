@@ -1840,21 +1840,6 @@ PulseApp.ui.backups = (() => {
                     if (ownerParts.length > 1) {
                         const ownerToken = ownerParts[1].toLowerCase();
                         
-                        // Special handling for VMID 102 - be very strict
-                        if (guest.vmid === 102) {
-                            // Windows11 should only accept homelab token
-                            if (guest.name.toLowerCase().includes('windows') && 
-                                (ownerToken === 'pi' || ownerToken === 'pimox')) {
-                                
-                                return false;
-                            }
-                            // pi-docker should only accept pi/pimox tokens
-                            if (guest.name.toLowerCase().includes('docker') && 
-                                ownerToken !== 'pi' && ownerToken !== 'pimox') {
-                                
-                                return false;
-                            }
-                        }
                     }
                 }
                 

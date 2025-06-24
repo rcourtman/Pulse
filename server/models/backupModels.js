@@ -75,8 +75,8 @@ class PBSBackup {
         
         // For secondary endpoint guests
         if (guestEndpoint === 'secondary') {
-            // In our case, 'pimox' owner token should match secondary endpoint
-            return endpointHint === 'pimox';
+            // Check if owner token matches the endpoint ID
+            return endpointHint === 'secondary';
         }
         
         // For other endpoints, check if owner token matches endpoint ID

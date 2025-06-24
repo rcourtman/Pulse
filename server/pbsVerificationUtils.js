@@ -15,8 +15,8 @@ async function analyzeVerificationHealth(pbsClient, datastoreName) {
     try {
         const { client } = pbsClient;
         
-        // Get all snapshots from all namespaces
-        const namespacesToQuery = ['', 'pimox']; // Add more as needed
+        // Get all snapshots from root namespace
+        const namespacesToQuery = ['']; // Start with root namespace
         let allSnapshots = [];
         
         for (const namespace of namespacesToQuery) {

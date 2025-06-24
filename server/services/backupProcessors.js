@@ -88,18 +88,6 @@ class PBSBackupProcessor {
         const displayNamespace = lookupNamespace || 'root';
         console.log(`[PBSProcessor] getBackupsByNamespace: requested='${namespace}', lookup='${lookupNamespace}', display='${displayNamespace}', found ${backupsInNamespace.length} backups`);
         
-        // If specific namespace requested, log details
-        if (normalizedNamespace === 'pimox') {
-            console.log(`[PBSProcessor] Details for 'pimox' namespace:`);
-            if (backupsInNamespace.length === 0) {
-                console.log(`[PBSProcessor]   - No backups found in 'pimox' namespace`);
-                console.log(`[PBSProcessor]   - Available namespaces: ${Array.from(this.backupsByNamespace.keys()).join(', ')}`);
-            } else {
-                backupsInNamespace.forEach(backup => {
-                    console.log(`[PBSProcessor]   - ${backup.backupType}/${backup.backupId} owner: ${backup.owner} ownerToken: ${backup.ownerToken}`);
-                });
-            }
-        }
         
         return backupsInNamespace;
     }
@@ -279,9 +267,6 @@ class GuestProcessor {
             const guestNamespaces = guest.getNamespaces();
             const hasNamespace = guestNamespaces.includes(lookupNamespace);
             
-            if (lookupNamespace === 'pimox' && guestNamespaces.length > 0) {
-                console.log(`[GuestProcessor]   - Guest ${guest.compositeKey} has namespaces: [${guestNamespaces.join(', ')}] - matches: ${hasNamespace}`);
-            }
             
             return hasNamespace;
         });
@@ -357,28 +342,6 @@ class BackupProcessingCoordinator {
             filteredGuests = this.guestProcessor.filterGuestsByNamespace(namespaceFilter);
             console.log(`[Coordinator] Filtered to ${filteredGuests.length} guests in namespace '${namespaceFilter}'`);
             
-            // For debugging pimox namespace
-            if (namespaceFilter === 'pimox' && filteredGuests.length === 0) {
-                console.log(`[Coordinator] WARNING: No guests found for 'pimox' namespace!`);
-                
-                // Check if any PBS backups exist in pimox namespace
-                const pimoxBackups = this.pbsProcessor.getBackupsByNamespace('pimox');
-                console.log(`[Coordinator] PBS backups in 'pimox' namespace: ${pimoxBackups.length}`);
-                
-                if (pimoxBackups.length > 0) {
-                    console.log(`[Coordinator] Sample pimox backups:`);
-                    pimoxBackups.slice(0, 5).forEach(backup => {
-                        console.log(`[Coordinator]   - ${backup.backupType}/${backup.backupId} owner: ${backup.owner} ownerToken: ${backup.ownerToken}`);
-                        
-                        // Check if any guest matches this VMID
-                        const matchingGuests = allGuests.filter(g => String(g.vmid) === String(backup.backupId));
-                        console.log(`[Coordinator]     -> Found ${matchingGuests.length} guests with VMID ${backup.backupId}`);
-                        matchingGuests.forEach(g => {
-                            console.log(`[Coordinator]        - ${g.compositeKey} (endpointId: ${g.endpointId})`);
-                        });
-                    });
-                }
-            }
         }
         
         // 4. Return processed data
