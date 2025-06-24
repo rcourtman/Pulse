@@ -11,7 +11,7 @@ var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-8}"
 var_os="${var_os:-ubuntu}"
-var_version="${var_version:-22.04}"
+var_version="${var_version:-24.04}"
 var_unprivileged="${var_unprivileged:-1}"
 
 header_info "$APP"
@@ -20,19 +20,19 @@ color
 catch_errors
 
 function update_script() {
-     header_info
-     check_container_storage
-     check_container_resources
-     if [[ ! -d /usr/lib/jellyfin ]]; then
-          msg_error "No ${APP} Installation Found!"
-          exit
-     fi
-     msg_info "Updating ${APP} LXC"
-     $STD apt-get update
-     $STD apt-get -y upgrade
-     $STD apt-get -y --with-new-pkgs upgrade jellyfin jellyfin-server
-     msg_ok "Updated ${APP} LXC"
-     exit
+  header_info
+  check_container_storage
+  check_container_resources
+  if [[ ! -d /usr/lib/jellyfin ]]; then
+    msg_error "No ${APP} Installation Found!"
+    exit
+  fi
+  msg_info "Updating ${APP} LXC"
+  $STD apt-get update
+  $STD apt-get -y upgrade
+  $STD apt-get -y --with-new-pkgs upgrade jellyfin jellyfin-server
+  msg_ok "Updated ${APP} LXC"
+  exit
 }
 
 start
