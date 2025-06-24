@@ -1681,10 +1681,9 @@ PulseApp.ui.dashboard = (() => {
             mainContainer.classList.add('charts-mode');
             if (label) label.title = 'Toggle Metrics View';
             
-            // Show time range dropdown
-            if (timeRangeContainer) {
-                timeRangeContainer.classList.remove('hidden');
-                timeRangeContainer.classList.add('flex');
+            // Show charts controls
+            if (PulseApp.ui.chartsControls) {
+                PulseApp.ui.chartsControls.showChartsControls();
             }
             
             // Turn off thresholds toggle and hide its elements
@@ -1715,11 +1714,46 @@ PulseApp.ui.dashboard = (() => {
                 }
             }
             
-            // Immediately render charts when switching to charts mode
+            // Check if we're coming from alerts mode which modifies the DOM
+            const wasInAlertsMode = document.querySelector('[data-original-content]');
+            
+            if (wasInAlertsMode) {
+                // Coming from alerts mode - restore original content and clear charts
+                const mainTable = document.getElementById('main-table');
+                if (mainTable) {
+                    const modifiedCells = mainTable.querySelectorAll('[data-original-content]');
+                    modifiedCells.forEach(cell => {
+                        cell.innerHTML = cell.dataset.originalContent;
+                        delete cell.dataset.originalContent;
+                    });
+                    
+                    // Clear all chart containers to force recreation
+                    mainTable.querySelectorAll('.usage-chart-container, .sparkline-container').forEach(container => {
+                        container.innerHTML = '';
+                    });
+                }
+                
+                // Now hide text and show charts
+                document.querySelectorAll('.metric-text').forEach(el => el.style.display = 'none');
+                document.querySelectorAll('.metric-chart').forEach(el => el.style.display = 'block');
+            } else {
+                // Just need to show charts - much faster
+                document.querySelectorAll('.metric-text').forEach(el => el.style.display = 'none');
+                document.querySelectorAll('.metric-chart').forEach(el => el.style.display = 'block');
+            }
+            
+            // Start fetching chart data if needed and update charts
             if (PulseApp.charts) {
-                requestAnimationFrame(() => {
-                    PulseApp.charts.updateAllCharts();
-                });
+                // First try to update with existing data
+                PulseApp.charts.updateAllCharts(true);
+                
+                // Then fetch fresh data if needed
+                if (PulseApp.charts.getChartData) {
+                    PulseApp.charts.getChartData().then(() => {
+                        // Update again with fresh data
+                        PulseApp.charts.updateAllCharts(true);
+                    });
+                }
             }
             
             // Refresh node summary cards to show charts
@@ -1734,11 +1768,18 @@ PulseApp.ui.dashboard = (() => {
             mainContainer.classList.remove('charts-mode');
             if (label) label.title = 'Toggle Charts View';
             
-            // Hide time range dropdown
-            if (timeRangeContainer) {
-                timeRangeContainer.classList.add('hidden');
-                timeRangeContainer.classList.remove('flex');
+            // Hide charts controls
+            if (PulseApp.ui.chartsControls) {
+                PulseApp.ui.chartsControls.hideChartsControls();
             }
+            
+            // Remove inline styles to let CSS classes take over
+            document.querySelectorAll('.metric-text').forEach(el => {
+                el.style.display = '';  // Remove inline style
+            });
+            document.querySelectorAll('.metric-chart').forEach(el => {
+                el.style.display = '';  // Remove inline style
+            });
             
             // Refresh node summary cards to hide charts
             if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {

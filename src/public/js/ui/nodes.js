@@ -163,8 +163,8 @@ PulseApp.ui.nodes = (() => {
                 // Set up alert-specific events (save only on release, not during drag)
                 slider.addEventListener('input', (event) => {
                     const value = event.target.value;
-                    // Update during drag but don't save
-                    PulseApp.ui.alerts.updateNodeThreshold(nodeId, metricType, value, false);
+                    // Update during drag including UI updates
+                    PulseApp.ui.alerts.updateNodeThreshold(nodeId, metricType, value, true);
                     PulseApp.tooltips.updateSliderTooltip(event.target);
                 });
                 

@@ -209,6 +209,13 @@ PulseApp.charts = (() => {
         let svg = container.querySelector('svg');
         let isNewChart = !svg;
         
+        // Force recreation if coming from alerts mode (check if overlay is missing)
+        if (svg && !svg.querySelector('.chart-overlay')) {
+            container.innerHTML = '';
+            svg = null;
+            isNewChart = true;
+        }
+        
         if (!svg) {
             // Create new SVG with proper sizing
             svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -640,11 +647,30 @@ PulseApp.charts = (() => {
         });
     }
 
-    function updateAllCharts() {
-        if (!chartDataCache) return;
+    function updateAllCharts(immediate = false) {
+        // If no chart data yet, show placeholders
+        if (!chartDataCache) {
+            showChartPlaceholders();
+            return;
+        }
         
-        // Batch updates using requestAnimationFrame immediately
-        scheduleChartUpdates();
+        if (immediate) {
+            // Fast path for mode switching - render all charts immediately
+            performBatchedChartUpdates(true);
+        } else {
+            // Normal path - batch updates using requestAnimationFrame
+            scheduleChartUpdates();
+        }
+    }
+    
+    function showChartPlaceholders() {
+        // Show loading placeholders in all visible chart containers
+        document.querySelectorAll('.usage-chart-container, .sparkline-container').forEach(container => {
+            if (container.offsetParent !== null && !container.querySelector('svg')) {
+                // Container is visible but has no chart yet
+                container.innerHTML = '<div class="w-full h-full bg-gray-200 dark:bg-gray-700 animate-pulse rounded"></div>';
+            }
+        });
     }
     
     function scheduleChartUpdates() {
@@ -658,11 +684,11 @@ PulseApp.charts = (() => {
         });
     }
     
-    function performBatchedChartUpdates() {
+    function performBatchedChartUpdates(immediate = false) {
         if (!chartDataCache && !nodeChartDataCache) return;
         
         const startTime = performance.now();
-        const maxUpdateTime = 16; // Target 60fps
+        const maxUpdateTime = immediate ? Infinity : 16; // No time limit in immediate mode
         let updatedCount = 0;
         
         // Update guest charts
@@ -670,8 +696,8 @@ PulseApp.charts = (() => {
             const guestIds = Object.keys(chartDataCache);
             
             for (const guestId of guestIds) {
-                // Check if we're over time budget
-                if (performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
+                // Check if we're over time budget (skip in immediate mode)
+                if (!immediate && performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
                     // Schedule remaining updates for next frame
                     scheduleChartUpdates();
                     return;
@@ -692,8 +718,8 @@ PulseApp.charts = (() => {
             const nodeIds = Object.keys(nodeChartDataCache);
             
             for (const nodeId of nodeIds) {
-                // Check if we're over time budget
-                if (performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
+                // Check if we're over time budget (skip in immediate mode)
+                if (!immediate && performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
                     // Schedule remaining updates for next frame
                     scheduleChartUpdates();
                     break;

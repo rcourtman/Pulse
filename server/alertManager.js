@@ -193,6 +193,9 @@ class AlertManager extends EventEmitter {
             const timestamp = Date.now();
             const newlyTriggeredAlerts = [];
             
+            // Get the per-guest threshold rule to access notification settings
+            const perGuestRule = this.alertRules.get('per-guest-alerts');
+            
             nodes.forEach(node => {
                 try {
                     const nodeId = node.node;
@@ -237,7 +240,16 @@ class AlertManager extends EventEmitter {
                                     triggeredAt: timestamp,
                                     state: 'active',
                                     severity: currentValue > threshold + 10 ? 'critical' : 'warning',
-                                    message: `Node ${node.displayName || node.node} ${metric} usage (${currentValue.toFixed(1)}%) exceeds threshold (${threshold}%)`
+                                    message: `Node ${node.displayName || node.node}: ${metric.toUpperCase()}: ${currentValue.toFixed(0)}% (≥${threshold}%)`,
+                                    notificationChannels: ['dashboard'], // Will be updated by sendNotifications based on rule
+                                    rule: {
+                                        id: 'per_guest_thresholds',
+                                        name: `Node ${metric} threshold`,
+                                        type: 'node_threshold',
+                                        group: 'node_alerts',
+                                        autoResolve: perGuestRule?.autoResolve ?? true,
+                                        notifications: perGuestRule?.notifications || { dashboard: true, email: false, webhook: false }
+                                    }
                                 };
                                 
                                 this.activeAlerts.set(alertKey, alert);
@@ -258,10 +270,10 @@ class AlertManager extends EventEmitter {
                 }
             });
             
-            // Emit newly triggered alerts
-            newlyTriggeredAlerts.forEach(alert => {
-                this.emit('alert', alert);
-            });
+            // Trigger newly created alerts (handles notifications)
+            for (const alert of newlyTriggeredAlerts) {
+                await this.triggerAlert(alert);
+            }
             
         } catch (error) {
             console.error('[AlertManager] Error in checkNodeMetrics:', error);
@@ -708,7 +720,8 @@ class AlertManager extends EventEmitter {
         // Create a unique key for cooldown tracking per rule, guest, and metric
         const ruleId = alert.rule?.id || 'unknown';
         const guestId = `${alert.guest?.endpointId || 'unknown'}-${alert.guest?.node || 'unknown'}-${alert.guest?.vmid || 'unknown'}`;
-        const metric = alert.rule?.metric || 'unknown';
+        // Use alert.metric directly (for per-guest and node alerts) or fall back to rule.metric
+        const metric = alert.metric || alert.rule?.metric || 'unknown';
         return `${ruleId}-${guestId}-${metric}`;
     }
     
@@ -716,7 +729,8 @@ class AlertManager extends EventEmitter {
         // Create a unique key for cooldown tracking per rule, guest, and metric
         const ruleId = alert.rule?.id || 'unknown';
         const guestId = `${alert.guest?.endpointId || 'unknown'}-${alert.guest?.node || 'unknown'}-${alert.guest?.vmid || 'unknown'}`;
-        const metric = alert.rule?.metric || 'unknown';
+        // Use alert.metric directly (for per-guest and node alerts) or fall back to rule.metric
+        const metric = alert.metric || alert.rule?.metric || 'unknown';
         return `${ruleId}-${guestId}-${metric}`;
     }
 
@@ -1037,13 +1051,6 @@ class AlertManager extends EventEmitter {
                 description: String(alert.rule?.description || ''),
                 group: String(alert.rule?.group || 'unknown'),
                 tags: Array.isArray(alert.rule?.tags) ? alert.rule.tags.map(t => String(t)) : [],
-                guest: {
-                    name: String(alert.guest?.name || 'Unknown'),
-                    vmid: String(alert.guest?.vmid || 'unknown'),
-                    node: String(alert.guest?.node || 'unknown'),
-                    type: String(alert.guest?.type || 'unknown'),
-                    endpointId: String(alert.guest?.endpointId || 'unknown')
-                },
                 metric: String(alert.metric || alert.rule?.metric || (alert.rule?.type === 'compound_threshold' ? 'compound' : 'unknown')),
                 threshold: Number(alert.threshold || alert.effectiveThreshold || alert.rule?.threshold || 0),
                 currentValue: alert.currentValue != null ? Number(alert.currentValue) : null,
@@ -1052,7 +1059,6 @@ class AlertManager extends EventEmitter {
                 acknowledged: Boolean(alert.acknowledged),
                 acknowledgedBy: alert.acknowledgedBy ? String(alert.acknowledgedBy) : null,
                 acknowledgedAt: alert.acknowledgedAt ? Number(alert.acknowledgedAt) : null,
-                message: String(alert.message || this.generateAlertMessage(alert)),
                 type: String(alert.rule?.type || 'single_metric'),
                 thresholds: Array.isArray(alert.rule?.thresholds) ? 
                     alert.rule.thresholds.map(t => ({
@@ -1065,6 +1071,28 @@ class AlertManager extends EventEmitter {
                 notificationChannels: Array.isArray(this.notificationStatus?.get(alert.id)?.channels) ? 
                     this.notificationStatus.get(alert.id).channels.map(c => String(c)) : []
             };
+            
+            // Handle node alerts differently - they don't have guest property
+            if (alert.type === 'node_threshold') {
+                safeAlert.guest = {
+                    name: String(alert.nodeName || alert.nodeId || 'Unknown Node'),
+                    vmid: 'node',
+                    node: String(alert.nodeId || 'unknown'),
+                    type: 'node',
+                    endpointId: String(alert.nodeId || 'unknown')
+                };
+                safeAlert.message = String(alert.message || `Node ${alert.nodeName || alert.nodeId} ${alert.metric} alert`);
+            } else {
+                // Regular guest alerts
+                safeAlert.guest = {
+                    name: String(alert.guest?.name || 'Unknown'),
+                    vmid: String(alert.guest?.vmid || 'unknown'),
+                    node: String(alert.guest?.node || 'unknown'),
+                    type: String(alert.guest?.type || 'unknown'),
+                    endpointId: String(alert.guest?.endpointId || 'unknown')
+                };
+                safeAlert.message = String(alert.message || this.generateAlertMessage(alert));
+            }
             
             return safeAlert;
         } catch (serializationError) {
@@ -2671,7 +2699,8 @@ class AlertManager extends EventEmitter {
             // Restore alerts to the activeAlerts Map
             Object.entries(persistedAlerts).forEach(([key, alert]) => {
                 // Validate the alert has required fields
-                if (alert.id && alert.rule && alert.guest) {
+                // Node alerts have nodeId instead of guest
+                if (alert.id && alert.rule && (alert.guest || alert.nodeId)) {
                     this.activeAlerts.set(key, alert);
                     
                     // If this alert is acknowledged, also add it to acknowledgedAlerts
@@ -2704,24 +2733,45 @@ class AlertManager extends EventEmitter {
             const alertsToSave = {};
             for (const [key, alert] of this.activeAlerts) {
                 // Only save essential data, not circular references
-                alertsToSave[key] = {
-                    id: alert.id,
-                    rule: this.createSafeRuleCopy(alert.rule),
-                    guest: this.createSafeGuestCopy(alert.guest),
-                    startTime: alert.startTime,
-                    lastUpdate: alert.lastUpdate,
-                    triggeredAt: alert.triggeredAt,
-                    currentValue: alert.currentValue,
-                    effectiveThreshold: alert.effectiveThreshold,
-                    state: alert.state,
-                    acknowledged: alert.acknowledged,
-                    acknowledgedBy: alert.acknowledgedBy,
-                    acknowledgedAt: alert.acknowledgedAt,
-                    acknowledgeNote: alert.acknowledgeNote,
-                    emailSent: alert.emailSent,
-                    webhookSent: alert.webhookSent,
-                    incidentType: alert.incidentType
-                };
+                // Handle both guest alerts and node alerts
+                if (alert.type === 'node_threshold') {
+                    // Node alert
+                    alertsToSave[key] = {
+                        id: alert.id,
+                        type: alert.type,
+                        rule: this.createSafeRuleCopy(alert.rule),
+                        nodeId: alert.nodeId,
+                        nodeName: alert.nodeName,
+                        metric: alert.metric,
+                        threshold: alert.threshold,
+                        currentValue: alert.currentValue,
+                        triggeredAt: alert.triggeredAt,
+                        state: alert.state,
+                        severity: alert.severity,
+                        message: alert.message,
+                        notificationChannels: alert.notificationChannels
+                    };
+                } else {
+                    // Guest alert
+                    alertsToSave[key] = {
+                        id: alert.id,
+                        rule: this.createSafeRuleCopy(alert.rule),
+                        guest: this.createSafeGuestCopy(alert.guest),
+                        startTime: alert.startTime,
+                        lastUpdate: alert.lastUpdate,
+                        triggeredAt: alert.triggeredAt,
+                        currentValue: alert.currentValue,
+                        effectiveThreshold: alert.effectiveThreshold,
+                        state: alert.state,
+                        acknowledged: alert.acknowledged,
+                        acknowledgedBy: alert.acknowledgedBy,
+                        acknowledgedAt: alert.acknowledgedAt,
+                        acknowledgeNote: alert.acknowledgeNote,
+                        emailSent: alert.emailSent,
+                        webhookSent: alert.webhookSent,
+                        incidentType: alert.incidentType
+                    };
+                }
             }
             
             await fs.writeFile(
@@ -3124,7 +3174,7 @@ class AlertManager extends EventEmitter {
 
         // Get the current value and effective threshold for this alert
         const currentValue = alert.currentValue;
-        const effectiveThreshold = alert.effectiveThreshold || alert.rule.threshold;
+        const effectiveThreshold = alert.effectiveThreshold || alert.threshold || alert.rule.threshold;
         
         // Format values for display - handle both single values and compound objects
         let valueDisplay, thresholdDisplay, metricDisplay;
@@ -3176,11 +3226,13 @@ class AlertManager extends EventEmitter {
             }
         } else {
             // Format single metric values
-            console.log(`[AlertManager] Formatting non-bundled alert email - rule type: ${alert.rule?.type}, metric: ${alert.rule?.metric}`);
-            const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.rule.metric);
+            console.log(`[AlertManager] Formatting non-bundled alert email - rule type: ${alert.rule?.type}, metric: ${alert.rule?.metric}, alert.metric: ${alert.metric}`);
+            // Use alert.metric if available (for node alerts), otherwise fall back to alert.rule.metric
+            const metric = alert.metric || alert.rule.metric;
+            const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
             valueDisplay = isPercentageMetric ? `${Math.round(currentValue || 0)}%` : (currentValue || 'N/A');
             thresholdDisplay = isPercentageMetric ? `${effectiveThreshold || 0}%` : (effectiveThreshold || 'N/A');
-            metricDisplay = alert.rule.metric ? alert.rule.metric.toUpperCase() : 'N/A';
+            metricDisplay = metric ? metric.toUpperCase() : 'N/A';
         }
 
         // Get email configuration
@@ -3194,6 +3246,40 @@ class AlertManager extends EventEmitter {
         
         console.log(`[AlertManager] Final email values - metricDisplay: "${metricDisplay}", valueDisplay: "${valueDisplay}", thresholdDisplay: "${thresholdDisplay}"`);
         
+        // Handle node vs guest alert data
+        let alertData;
+        if (alert.type === 'node_threshold') {
+            alertData = {
+                type: 'triggered',
+                description: alert.rule.description,
+                guestName: alert.nodeName || alert.nodeId || 'Unknown Node',
+                guestType: 'NODE',
+                guestId: 'N/A',
+                node: alert.nodeId,
+                metric: metricDisplay,
+                currentValue: valueDisplay,
+                threshold: thresholdDisplay,
+                metrics: metricsArray, // For bundled alerts
+                status: 'active',
+                timestamp: this.getValidTimestamp(alert)
+            };
+        } else {
+            alertData = {
+                type: 'triggered',
+                description: alert.rule.description,
+                guestName: alert.guest.name,
+                guestType: alert.guest.type,
+                guestId: alert.guest.vmid,
+                node: alert.guest.node,
+                metric: metricDisplay,
+                currentValue: valueDisplay,
+                threshold: thresholdDisplay,
+                metrics: metricsArray, // For bundled alerts
+                status: alert.guest.status,
+                timestamp: this.getValidTimestamp(alert)
+            };
+        }
+        
         // Use the unified template
         const html = this.generateEmailTemplate({
             type: 'alert',
@@ -3204,24 +3290,30 @@ class AlertManager extends EventEmitter {
                 toEmail: toEmailAddresses,
                 smtpHost: smtpHost,
                 smtpPort: smtpPort,
-                alert: {
-                    type: 'triggered',
-                    description: alert.rule.description,
-                    guestName: alert.guest.name,
-                    guestType: alert.guest.type,
-                    guestId: alert.guest.vmid,
-                    node: alert.guest.node,
-                    metric: metricDisplay,
-                    currentValue: valueDisplay,
-                    threshold: thresholdDisplay,
-                    metrics: metricsArray, // For bundled alerts
-                    status: alert.guest.status,
-                    timestamp: this.getValidTimestamp(alert)
-                }
+                alert: alertData
             }
         });
 
-        const text = `
+        let text;
+        if (alert.type === 'node_threshold') {
+            text = `
+PULSE ALERT: ${alert.rule.name}
+
+Alert Details
+Node:          ${alert.nodeName || alert.nodeId || 'Unknown Node'}
+Type:          NODE
+Metric:        ${metricDisplay}
+Current Value: ${valueDisplay}
+Threshold:     ${thresholdDisplay}
+Time:          ${new Date(this.getValidTimestamp(alert)).toLocaleString()}
+
+${alert.rule.description || 'Alert triggered for the specified conditions'}
+
+---
+This alert was generated by Pulse monitoring system.
+        `;
+        } else {
+            text = `
 PULSE ALERT: ${alert.rule.name}
 
 Alert Details
@@ -3238,6 +3330,7 @@ ${alert.rule.description || 'Alert triggered for the specified conditions'}
 ---
 This alert was generated by Pulse monitoring system.
         `;
+        }
 
         const mailOptions = {
             from: this.emailConfig?.from || process.env.ALERT_FROM_EMAIL || 'alerts@pulse-monitoring.local',
@@ -3264,10 +3357,12 @@ This alert was generated by Pulse monitoring system.
         
         // Get the current value and effective threshold for this alert
         const currentValue = alert.currentValue;
-        const effectiveThreshold = alert.effectiveThreshold || alert.rule.threshold;
+        const effectiveThreshold = alert.effectiveThreshold || alert.threshold || alert.rule.threshold;
         
         // Format values for display (only add % for percentage metrics)
-        const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.rule.metric);
+        // Use alert.metric if available (for node alerts), otherwise fall back to alert.rule.metric
+        const metric = alert.metric || alert.rule.metric;
+        const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
         const formattedValue = typeof currentValue === 'number' ? 
             (isPercentageMetric ? Math.round(currentValue) : currentValue) : (currentValue || 'N/A');
         const formattedThreshold = typeof effectiveThreshold === 'number' ? 
@@ -3307,7 +3402,7 @@ This alert was generated by Pulse monitoring system.
                     },
                     {
                         name: 'Metric',
-                        value: alert.rule.metric.toUpperCase(),
+                        value: metric.toUpperCase(),
                         inline: true
                     },
                     {
@@ -3335,8 +3430,8 @@ This alert was generated by Pulse monitoring system.
                     color: 'danger',
                     fields: [
                         {
-                            title: 'VM/LXC',
-                            value: `${alert.guest.name} (${alert.guest.type} ${alert.guest.vmid})`,
+                            title: alert.type === 'node_threshold' ? 'Node' : 'VM/LXC',
+                            value: alert.type === 'node_threshold' ? guestInfo.name : `${guestInfo.name} (${guestInfo.type} ${guestInfo.vmid})`,
                             short: true
                         },
                         {
@@ -3348,7 +3443,7 @@ This alert was generated by Pulse monitoring system.
                             title: 'Metric',
                             value: alert.rule.type === 'compound_threshold' ? 
                                 `Compound Rule: ${valueDisplay}` : 
-                                `${alert.rule.metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
+                                `${metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
                             short: false
                         }
                     ],
@@ -3365,7 +3460,7 @@ This alert was generated by Pulse monitoring system.
                     rule: {
                         name: alert.rule.name,
                         description: alert.rule.description,
-                        metric: alert.rule.metric
+                        metric: metric
                     },
                     guest: {
                         name: alert.guest.name,
@@ -3412,15 +3507,15 @@ This alert was generated by Pulse monitoring system.
                     color: 'danger',
                     fields: [
                         {
-                            title: 'VM/LXC',
-                            value: `${alert.guest.name} (${alert.guest.type} ${alert.guest.vmid})`,
+                            title: alert.type === 'node_threshold' ? 'Node' : 'VM/LXC',
+                            value: alert.type === 'node_threshold' ? guestInfo.name : `${guestInfo.name} (${guestInfo.type} ${guestInfo.vmid})`,
                             short: true
                         },
                         {
                             title: 'Metric',
                             value: alert.rule.type === 'compound_threshold' ? 
                                 `Compound Rule: ${valueDisplay}` : 
-                                `${alert.rule.metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
+                                `${metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})`,
                             short: false
                         }
                     ],

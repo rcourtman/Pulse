@@ -456,7 +456,7 @@ PulseApp.alerts = (() => {
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center space-x-1">
                             <span class="${nameClass}">
-                                ${alert.guest.name}
+                                ${alert.guest.type === 'node' ? `Node: ${alert.guest.name}` : alert.guest.name}
                             </span>
                             <span class="${valueClass}">
                                 ${currentValueDisplay}
@@ -771,59 +771,83 @@ PulseApp.alerts = (() => {
         
         acknowledgeInProgress.add(alertId);
         
-        try {
-            // Update button immediately to show loading state
-            const buttons = document.querySelectorAll(`button[data-alert-id="${alertId}"]`);
-            buttons.forEach(btn => {
-                btn.disabled = true;
-                btn.classList.add('opacity-50', 'cursor-not-allowed');
-                btn.innerHTML = '<span class="inline-block animate-spin">⟳</span>';
-            });
+        // Optimistically update the UI immediately
+        const alertIndex = activeAlerts.findIndex(a => a.id === alertId);
+        if (alertIndex >= 0) {
+            // Store original state in case we need to rollback
+            const originalState = {
+                acknowledged: activeAlerts[alertIndex].acknowledged,
+                acknowledgedAt: activeAlerts[alertIndex].acknowledgedAt
+            };
             
-            const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: 'web-user', note: 'Acknowledged via web interface' })
-            });
+            // Update local state immediately
+            activeAlerts[alertIndex].acknowledged = true;
+            activeAlerts[alertIndex].acknowledgedAt = Date.now();
             
+            // Update UI immediately
+            updateHeaderIndicator();
+            if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+                updateDropdownContent();
+            }
             
-            if (response.ok) {
-                const result = await response.json().catch(() => ({}));
+            // Schedule cleanup
+            scheduleAcknowledgedCleanup(alertId);
+            
+            try {
+                // Send to server in background
+                const response = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: 'web-user', note: 'Acknowledged via web interface' })
+                });
                 
-                // Find and update the alert in local array
-                const alertIndex = activeAlerts.findIndex(a => a.id === alertId);
+                if (!response.ok) {
+                    // Rollback on failure
+                    activeAlerts[alertIndex].acknowledged = originalState.acknowledged;
+                    activeAlerts[alertIndex].acknowledgedAt = originalState.acknowledgedAt;
+                    
+                    // Cancel cleanup
+                    if (acknowledgedCleanupTimers.has(alertId)) {
+                        clearTimeout(acknowledgedCleanupTimers.get(alertId));
+                        acknowledgedCleanupTimers.delete(alertId);
+                    }
+                    
+                    // Update UI to reflect rollback
+                    updateHeaderIndicator();
+                    if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
+                        updateDropdownContent();
+                    }
+                    
+                    const errorText = await response.text().catch(() => 'Unknown error');
+                    console.error('[Alerts] Acknowledge failed with status:', response.status, errorText);
+                    showToastNotification(`Failed to acknowledge alert`, 'error');
+                }
+            } catch (error) {
+                console.error('[Alerts] Failed to acknowledge alert:', error);
+                
+                // Rollback on network error
                 if (alertIndex >= 0) {
-                    activeAlerts[alertIndex].acknowledged = true;
-                    activeAlerts[alertIndex].acknowledgedAt = Date.now();
+                    activeAlerts[alertIndex].acknowledged = originalState.acknowledged;
+                    activeAlerts[alertIndex].acknowledgedAt = originalState.acknowledgedAt;
                     
-                    // Schedule cleanup of this acknowledged alert after 5 minutes
-                    scheduleAcknowledgedCleanup(alertId);
+                    // Cancel cleanup
+                    if (acknowledgedCleanupTimers.has(alertId)) {
+                        clearTimeout(acknowledgedCleanupTimers.get(alertId));
+                        acknowledgedCleanupTimers.delete(alertId);
+                    }
                     
+                    // Update UI
                     updateHeaderIndicator();
                     if (alertDropdown && !alertDropdown.classList.contains('hidden')) {
                         updateDropdownContent();
                     }
                 }
-            } else {
-                const errorText = await response.text().catch(() => 'Unknown error');
-                console.error('[Alerts] Acknowledge failed with status:', response.status, errorText);
-                throw new Error(`Server responded with status ${response.status}: ${errorText}`);
+                
+                showToastNotification(`Failed to acknowledge alert`, 'error');
             }
-        } catch (error) {
-            console.error('[Alerts] Failed to acknowledge alert:', error);
-            // Show user feedback for acknowledgment failures
-            showToastNotification(`Failed to acknowledge alert: ${error.message}`, 'error');
-            
-            // Restore button state on error
-            const buttons = document.querySelectorAll(`button[data-alert-id="${alertId}"]`);
-            buttons.forEach(btn => {
-                btn.disabled = false;
-                btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                btn.innerHTML = '✓';
-            });
-        } finally {
-            acknowledgeInProgress.delete(alertId);
         }
+        
+        acknowledgeInProgress.delete(alertId);
     }
 
     // Track cleanup timeouts to prevent memory leaks
