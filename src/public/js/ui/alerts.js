@@ -1139,6 +1139,8 @@ PulseApp.ui.alerts = (() => {
         
         // Apply final row styling after transformation
         updateRowStylingOnly();
+        
+        // No need for special fixes - the table structure remains intact
     }
 
     function transformMetricCell(row, metricType, guestId, config) {

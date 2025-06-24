@@ -613,14 +613,21 @@
     }
     
     /* Fix sticky cell background in threshold row */
-    #threshold-slider-row td.sticky.left-0,
-    #global-alert-thresholds-row td.sticky.left-0 {
+    #threshold-slider-row td.sticky.left-0 {
         background-color: rgb(239, 246, 255) !important; /* Solid blue-50 */
         opacity: 1 !important; /* Always fully opaque */
     }
-    .dark #threshold-slider-row td.sticky.left-0,
-    .dark #global-alert-thresholds-row td.sticky.left-0 {
+    .dark #threshold-slider-row td.sticky.left-0 {
         background-color: rgb(23, 37, 84) !important; /* Solid dark blue */
+        opacity: 1 !important;
+    }
+    /* Global alert row should have white background */
+    #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(255, 255, 255) !important; /* white */
+        opacity: 1 !important;
+    }
+    .dark #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(31, 41, 55) !important; /* gray-800 */
         opacity: 1 !important;
     }
     
@@ -745,43 +752,42 @@
     
     
     /* Special rows need their specific colors - solid backgrounds */
-    #threshold-slider-row td.sticky.left-0,
-    #global-alert-thresholds-row td.sticky.left-0 {
+    #threshold-slider-row td.sticky.left-0 {
         background-color: rgb(239, 246, 255) !important; /* blue-50 */
     }
-    
-    .dark #threshold-slider-row td.sticky.left-0,
-    .dark #global-alert-thresholds-row td.sticky.left-0 {
+    .dark #threshold-slider-row td.sticky.left-0 {
         background-color: rgb(30, 41, 66) !important; /* blue-900 solid */
     }
     
-    /* Subtle glow animation for global thresholds row */
-    @keyframes subtle-glow {
-        0%, 100% {
-            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1), 
-                        0 4px 6px -2px rgba(59, 130, 246, 0.05),
-                        inset 0 0 0 2px rgba(96, 165, 250, 0.3);
-        }
-        50% {
-            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2), 
-                        0 4px 6px -2px rgba(59, 130, 246, 0.1),
-                        inset 0 0 0 2px rgba(96, 165, 250, 0.5);
-        }
+    /* Global alert row has white background */
+    #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(255, 255, 255) !important; /* white */
+    }
+    .dark #global-alert-thresholds-row td.sticky.left-0 {
+        background-color: rgb(31, 41, 55) !important; /* gray-800 */
     }
     
-    #global-alert-thresholds-row {
-        animation: subtle-glow 3s ease-in-out infinite;
-        position: relative;
+    /* Fix sticky column jitter in alerts mode by ensuring cells maintain consistent dimensions */
+    .alerts-mode #main-table td {
+        height: 32px; /* Fixed height to prevent vertical shifts */
+        padding-top: 0.25rem;
+        padding-bottom: 0.25rem;
+        vertical-align: middle;
     }
     
-    /* Enhanced label styling for the defaults row */
-    #global-alert-thresholds-row .text-red-600,
-    #global-alert-thresholds-row .text-red-400 {
-        font-weight: 700;
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
-        font-size: 0.7rem;
-        opacity: 1 !important;
+    /* Remove any transforms or will-change from inputs that might cause layer issues */
+    .alerts-mode input[type="range"],
+    .alerts-mode select {
+        transform: none !important;
+        will-change: auto !important;
+    }
+    
+    /* Force sticky column to its own layer in alerts mode */
+    .alerts-mode .sticky.left-0 {
+        transform: translateZ(0);
+        -webkit-transform: translateZ(0);
+        backface-visibility: hidden;
+        -webkit-backface-visibility: hidden;
     }
     
   </style>
@@ -1060,8 +1066,8 @@
                   </td>
                 </tr>
                 <!-- Global Alert Thresholds Row -->
-                <tr id="global-alert-thresholds-row" class="hidden bg-blue-50 dark:bg-blue-900/20">
-                  <td class="sticky left-0 z-10 py-1 px-2 align-middle">
+                <tr id="global-alert-thresholds-row" class="hidden bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-600">
+                  <td class="sticky left-0 z-10 py-1 px-2 align-middle bg-white dark:bg-gray-800">
                     <div class="flex flex-col gap-1">
                       <div class="flex items-center justify-between">
                         <span class="text-xs text-blue-700 dark:text-blue-300 font-semibold">GLOBAL</span>
