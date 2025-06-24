@@ -154,10 +154,17 @@ PulseApp.charts = (() => {
         const diffMinutes = Math.floor(diffMs / 60000);
         const diffSeconds = Math.floor((diffMs % 60000) / 1000);
         
-        // Always show time, even if 0 seconds
-        if (diffMinutes > 0) {
+        // Format based on duration
+        if (diffMinutes >= 60) {
+            // Show hours and minutes (no seconds)
+            const hours = Math.floor(diffMinutes / 60);
+            const minutes = diffMinutes % 60;
+            return `${hours}h ${minutes}m ago`;
+        } else if (diffMinutes > 0) {
+            // Show minutes and seconds
             return `${diffMinutes}m ${diffSeconds}s ago`;
         } else {
+            // Show only seconds
             return `${diffSeconds}s ago`;
         }
     }
