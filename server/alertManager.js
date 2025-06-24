@@ -808,6 +808,9 @@ class AlertManager extends EventEmitter {
             const cooldownInfo = this.emailCooldowns.get(cooldownKey);
             const now = Date.now();
             
+            console.log(`[AlertManager] Email cooldown check for key: ${cooldownKey}`);
+            console.log(`[AlertManager] Current cooldown info:`, cooldownInfo);
+            
             // Use per-guest cooldown config if available, otherwise fall back to default
             const cooldownConfig = this.perGuestCooldownConfig || this.emailCooldownConfig;
             
@@ -862,12 +865,14 @@ class AlertManager extends EventEmitter {
                         const oneDayAgo = now - 86400000;
                         const recentHistory = emailHistory.filter(timestamp => timestamp > oneDayAgo);
                         
-                        this.emailCooldowns.set(cooldownKey, {
+                        const cooldownData = {
                             lastSent: now,
                             cooldownUntil: now + (cooldownConfig.defaultCooldownMinutes * 60000),
                             emailHistory: recentHistory,
                             debounceStarted: cooldownInfo?.debounceStarted || now
-                        });
+                        };
+                        this.emailCooldowns.set(cooldownKey, cooldownData);
+                        console.log(`[AlertManager] Email cooldown set for key: ${cooldownKey}, cooldown until: ${new Date(cooldownData.cooldownUntil).toISOString()}`);
                         
                         statusUpdate.emailSent = true;
                         statusUpdate.channels.push('email');
