@@ -3,29 +3,68 @@ PulseApp.ui = PulseApp.ui || {};
 PulseApp.ui.nodes = (() => {
     let currentNodesData = null; // Store current nodes data for resize handling
 
-    function _createNodeCpuBarHtml(node) {
+    function _createNodeCpuBarHtml(node, includeChart = false) {
         const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
         const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
         const cpuTooltipText = `${cpuPercent.toFixed(1)}%${node.maxcpu && node.maxcpu > 0 ? ` (${(node.cpu * node.maxcpu).toFixed(1)}/${node.maxcpu} cores)` : ''}`;
-        return PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass, `${cpuPercent.toFixed(0)}%`);
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass, `${cpuPercent.toFixed(0)}%`);
+        
+        if (!includeChart) {
+            return progressBar;
+        }
+        
+        // Create both text and chart versions like dashboard does
+        const nodeId = `node-${node.node}`;
+        const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(nodeId, 'cpu') : '';
+        
+        return `
+            <div class="metric-text">${progressBar}</div>
+            <div class="metric-chart">${chartHtml}</div>
+        `;
     }
 
-    function _createNodeMemoryBarHtml(node) {
+    function _createNodeMemoryBarHtml(node, includeChart = false) {
         const memUsed = node.mem || 0;
         const memTotal = node.maxmem || 0;
         const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
         const memColorClass = PulseApp.utils.getUsageColor(memPercent, 'memory');
         const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
-        return PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass, `${memPercent.toFixed(0)}%`);
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass, `${memPercent.toFixed(0)}%`);
+        
+        if (!includeChart) {
+            return progressBar;
+        }
+        
+        // Create both text and chart versions like dashboard does
+        const nodeId = `node-${node.node}`;
+        const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(nodeId, 'memory') : '';
+        
+        return `
+            <div class="metric-text">${progressBar}</div>
+            <div class="metric-chart">${chartHtml}</div>
+        `;
     }
 
-    function _createNodeDiskBarHtml(node) {
+    function _createNodeDiskBarHtml(node, includeChart = false) {
         const diskUsed = node.disk || 0;
         const diskTotal = node.maxdisk || 0;
         const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0;
         const diskColorClass = PulseApp.utils.getUsageColor(diskPercent, 'disk');
         const diskTooltipText = `${PulseApp.utils.formatBytes(diskUsed)} / ${PulseApp.utils.formatBytes(diskTotal)} (${diskPercent.toFixed(1)}%)`;
-        return PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass, `${diskPercent.toFixed(0)}%`);
+        const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass, `${diskPercent.toFixed(0)}%`);
+        
+        if (!includeChart) {
+            return progressBar;
+        }
+        
+        // Create both text and chart versions like dashboard does
+        const nodeId = `node-${node.node}`;
+        const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(nodeId, 'disk') : '';
+        
+        return `
+            <div class="metric-text">${progressBar}</div>
+            <div class="metric-chart">${chartHtml}</div>
+        `;
     }
 
     // Create a dedicated function for rendering a single node row
@@ -39,9 +78,9 @@ PulseApp.ui.nodes = (() => {
             ? 'bg-green-500 dark:bg-green-400'
             : 'bg-red-500 dark:bg-red-400';
 
-        const cpuBarHTML = _createNodeCpuBarHtml(node);
-        const memoryBarHTML = _createNodeMemoryBarHtml(node);
-        const diskBarHTML = _createNodeDiskBarHtml(node);
+        const cpuBarHTML = _createNodeCpuBarHtml(node, false);
+        const memoryBarHTML = _createNodeMemoryBarHtml(node, false);
+        const diskBarHTML = _createNodeDiskBarHtml(node, false);
 
         const uptimeFormatted = PulseApp.utils.formatUptime(node.uptime || 0);
         let normalizedLoadFormatted = 'N/A';
@@ -80,9 +119,14 @@ PulseApp.ui.nodes = (() => {
         const statusColor = isOnline ? 'bg-green-500' : 'bg-red-500';
         const statusDotColor = isOnline ? 'text-green-500' : 'text-red-500';
 
-        const cpuBarHTML = _createNodeCpuBarHtml(node);
-        const memoryBarHTML = _createNodeMemoryBarHtml(node);
-        const diskBarHTML = _createNodeDiskBarHtml(node);
+        // Check if charts mode is active
+        const isChartsMode = document.getElementById('toggle-charts-checkbox')?.checked || false;
+        const mainContainer = document.getElementById('main');
+        const chartsEnabled = isChartsMode && mainContainer && mainContainer.classList.contains('charts-mode');
+
+        const cpuBarHTML = _createNodeCpuBarHtml(node, chartsEnabled);
+        const memoryBarHTML = _createNodeMemoryBarHtml(node, chartsEnabled);
+        const diskBarHTML = _createNodeDiskBarHtml(node, chartsEnabled);
         const uptimeFormatted = PulseApp.utils.formatUptime(node.uptime || 0);
 
         let normalizedLoadFormatted = 'N/A';
@@ -164,14 +208,14 @@ PulseApp.ui.nodes = (() => {
         const currentScrollLeft = scrollableContainer.scrollLeft || 0;
         const currentScrollTop = scrollableContainer.scrollTop || 0;
         
+        // Sort nodes by name for consistent order in summary cards
+        const sortedNodes = [...nodes].sort((a, b) => (a.node || '').localeCompare(b.node || ''));
+        
         PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
             container.innerHTML = ''; // Clear previous content
 
         const numNodes = nodes.length;
         const isMobile = window.innerWidth < 640; // sm breakpoint
-
-        // Sort nodes by name for consistent order in summary cards
-        const sortedNodes = [...nodes].sort((a, b) => (a.node || '').localeCompare(b.node || ''));
 
         if (isMobile) {
             // Stack cards vertically on mobile with condensed layout
@@ -216,6 +260,15 @@ PulseApp.ui.nodes = (() => {
             container.appendChild(gridDiv);
         }
         }); // End of preserveScrollPosition
+        
+        // Update node charts if in charts mode
+        const mainContainer = document.getElementById('main');
+        if (PulseApp.charts && mainContainer && mainContainer.classList.contains('charts-mode')) {
+            // Use requestAnimationFrame to ensure DOM is fully updated
+            requestAnimationFrame(() => {
+                updateNodeCharts(sortedNodes);
+            });
+        }
         
         // Additional scroll position restoration for both axes
         if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
@@ -374,10 +427,22 @@ PulseApp.ui.nodes = (() => {
         }
     }
 
+    function updateNodeCharts(nodes) {
+        if (!nodes || !PulseApp.charts) return;
+        
+        // Simply trigger the chart render for each node
+        // The charts module will handle fetching and rendering the actual data
+        nodes.forEach(node => {
+            const nodeId = `node-${node.node}`;
+            PulseApp.charts.renderNodeCharts(nodeId);
+        });
+    }
+
     return {
         init,
         cleanup,
         updateNodesTable,
-        updateNodeSummaryCards
+        updateNodeSummaryCards,
+        updateNodeCharts
     };
 })();
