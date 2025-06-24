@@ -291,7 +291,9 @@ PulseApp.ui.alerts = (() => {
             }
             
             // Apply initial dimming to global row if using defaults
-            updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
+            const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
+            const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
+            updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
             
             // Update notification status when showing alerts mode
             updateNotificationStatus();
@@ -558,7 +560,9 @@ PulseApp.ui.alerts = (() => {
         updateRowStylingOnly();
         
         // Update reset button state when global thresholds change
-        updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
+        const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
+        const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
+        updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
         
         // Update save message
         updateAlertSaveMessage();
@@ -782,8 +786,9 @@ PulseApp.ui.alerts = (() => {
             row.removeAttribute('data-alert-mixed');
         });
         
-        // Update reset button visibility based on whether there are any custom values
-        updateResetButtonVisibility(hasAnyCustomValues);
+        // Update reset button visibility based on whether there are any custom values (guest or node)
+        const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
+        updateResetButtonVisibility(hasAnyCustomValues || hasCustomNodes);
         
         // Update alerts count badge
         updateAlertsCountBadge();
@@ -871,7 +876,7 @@ PulseApp.ui.alerts = (() => {
         const resetButton = document.getElementById('reset-global-thresholds');
         const globalThresholdsRow = document.getElementById('global-alert-thresholds-row');
         
-        // Check if global thresholds have been changed from defaults
+        // Check if global guest thresholds have been changed from defaults
         const defaultThresholds = {
             cpu: 80,
             memory: 85,
@@ -886,6 +891,17 @@ PulseApp.ui.alerts = (() => {
             globalThresholds[key] != defaultThresholds[key] // Use != for loose comparison
         );
         
+        // Check if global node thresholds have been changed from defaults
+        const defaultNodeThresholds = {
+            cpu: 90,
+            memory: 95,
+            disk: 95
+        };
+        
+        const hasNodeGlobalChanges = Object.keys(defaultNodeThresholds).some(key => 
+            globalNodeThresholds[key] != defaultNodeThresholds[key]
+        );
+        
         // Global row should never be dimmed - it's the master control
         if (globalThresholdsRow) {
             globalThresholdsRow.style.opacity = '';
@@ -893,8 +909,8 @@ PulseApp.ui.alerts = (() => {
         }
         
         if (resetButton) {
-            // Enable button if there are either custom guest values OR global changes
-            if (hasCustomValues || hasGlobalChanges) {
+            // Enable button if there are custom values OR any global changes
+            if (hasCustomValues || hasGlobalChanges || hasNodeGlobalChanges) {
                 resetButton.classList.remove('opacity-50', 'cursor-not-allowed');
                 resetButton.disabled = false;
             } else {
@@ -1078,8 +1094,8 @@ PulseApp.ui.alerts = (() => {
         // Clear any tooltip positioning issues that might have occurred during reset
         PulseApp.tooltips.hideSliderTooltipImmediately();
         
-        // Update reset button and global row dimming after reset
-        updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
+        // Update reset button - should be disabled after reset since everything is cleared
+        updateResetButtonVisibility(false);
         
         // Update save message
         updateAlertSaveMessage();
@@ -1239,6 +1255,15 @@ PulseApp.ui.alerts = (() => {
             cell.innerHTML = cell.dataset.originalContent;
             delete cell.dataset.originalContent;
         });
+        
+        // Force update charts if charts mode is active
+        const chartsToggle = document.getElementById('toggle-charts-checkbox');
+        if (chartsToggle && chartsToggle.checked && PulseApp.charts) {
+            // Give DOM time to settle then update charts
+            requestAnimationFrame(() => {
+                PulseApp.charts.updateAllCharts();
+            });
+        }
     }
 
     function updateGuestThreshold(guestId, metricType, value, shouldSave = true) {
@@ -1274,7 +1299,9 @@ PulseApp.ui.alerts = (() => {
         updateRowStylingOnly();
         
         // Update reset button state when guest thresholds change
-        updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
+        const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
+        const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
+        updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
         
         // Update save message
         updateAlertSaveMessage();
@@ -1324,6 +1351,12 @@ PulseApp.ui.alerts = (() => {
             enabled: true,
             lastUpdated: new Date().toISOString()
         };
+        
+        console.log('[saveAlertConfig] Saving alert config:', alertConfig);
+        console.log('[saveAlertConfig] Node thresholds:', {
+            globalNodeThresholds: alertConfig.globalNodeThresholds,
+            nodeThresholds: alertConfig.nodeThresholds
+        });
         
         try {
             const response = await fetch('/api/alerts/config', {
@@ -1489,7 +1522,9 @@ PulseApp.ui.alerts = (() => {
                 console.log('Alert configuration loaded successfully');
                 
                 // Update reset button state and global row dimming after loading configuration
-                updateResetButtonVisibility(Object.keys(guestAlertThresholds).length > 0);
+                const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
+            const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
+            updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
                 
                 // Update styling if in alerts mode
                 if (isAlertsMode) {
@@ -1877,30 +1912,39 @@ PulseApp.ui.alerts = (() => {
             nodeAlertThresholds[nodeId] = {};
         }
         
-        // Convert value to number
-        const numValue = parseFloat(value);
+        // Check if value matches global value (handle both string and numeric comparisons)
+        const globalValue = globalNodeThresholds[metricType] || '';
+        const isMatchingGlobal = value === globalValue || 
+                                 value == globalValue || 
+                                 (value === '' && globalValue === '');
         
-        // Check if this is the same as the global node default
-        const globalDefault = globalNodeThresholds[metricType];
-        if (globalDefault !== undefined && numValue === parseFloat(globalDefault)) {
-            // Remove the individual setting to use global default
+        if (isMatchingGlobal || value === '') {
+            // Remove threshold if it matches global or is explicitly empty
             delete nodeAlertThresholds[nodeId][metricType];
             
-            // If no thresholds left for this node, remove the node entry
+            // Remove node object if no thresholds left
             if (Object.keys(nodeAlertThresholds[nodeId]).length === 0) {
                 delete nodeAlertThresholds[nodeId];
             }
         } else {
-            // Set the individual threshold
-            nodeAlertThresholds[nodeId][metricType] = numValue;
+            // Store individual threshold
+            nodeAlertThresholds[nodeId][metricType] = value;
         }
         
         // Update node card dimming
         updateNodeCardStyling(nodeId);
         
         if (shouldUpdate) {
-            updateAlertSaveMessage();
-            updateAlertsCountBadge();
+            // Use a slight delay to ensure this happens after any other updates
+            setTimeout(() => {
+                updateAlertSaveMessage();
+                updateAlertsCountBadge();
+                // Check if we have any custom thresholds (guest or node) to update reset button
+                const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
+                const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
+                console.log('[updateNodeThreshold] Updating reset button visibility:', { hasCustomGuests, hasCustomNodes, nodeAlertThresholds });
+                updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
+            }, 50);
         }
     }
     

@@ -1751,6 +1751,18 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
         const backupTasks = await fetchPveBackupTasks(apiClient, endpointId, nodeName);
         allBackupTasks.push(...backupTasks);
         
+        // DEBUG: Log storage information for troubleshooting
+        console.log(`[PVE Backup Debug - ${endpointId}-${nodeName}] Storage check: has storage=${!!node.storage}, is array=${Array.isArray(node.storage)}, count=${node.storage?.length || 0}`);
+        if (node.storage && node.storage.length > 0) {
+            console.log(`[PVE Backup Debug - ${endpointId}-${nodeName}] All storages:`, node.storage.map(s => ({
+                name: s.storage,
+                type: s.type,
+                content: s.content,
+                shared: s.shared,
+                enabled: s.enabled
+            })));
+        }
+        
         // Fetch backups from each storage on this node
         if (node.storage && Array.isArray(node.storage)) {
             // Filter out PBS storages to prevent double-counting PBS backups
@@ -1759,6 +1771,8 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
             );
             const pbsStorages = allBackupStorages.filter(storage => storage.type === 'pbs');
             const backupStorages = allBackupStorages.filter(storage => storage.type !== 'pbs');
+            
+            console.log(`[PVE Backup Debug - ${endpointId}-${nodeName}] Backup-capable storages: total=${allBackupStorages.length}, PBS=${pbsStorages.length}, non-PBS=${backupStorages.length}`);
             
             if (pbsStorages.length > 0) {
                 console.log(`[DataFetcher - ${endpointId}-${nodeName}] Excluding ${pbsStorages.length} PBS storage(s) from PVE backup collection: ${pbsStorages.map(s => s.storage).join(', ')}`);
