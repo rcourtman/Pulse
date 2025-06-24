@@ -114,8 +114,8 @@ class MetricsHistory {
             Math.abs(dataPoint.mem - lastDataPoint.mem) < 0.001 &&
             dataPoint.disk === lastDataPoint.disk &&
             !rates) {
-            // Update timestamp of last data point instead of adding new one
-            lastDataPoint.timestamp = timestamp;
+            // Skip storing this data point since values haven't changed
+            // Note: We do NOT update the timestamp of the last point to preserve accurate time history
         } else {
             guestHistory.dataPoints.push(dataPoint);
             guestHistory.lastDataPoint = { ...dataPoint }; // Store full copy for comparison
@@ -221,8 +221,8 @@ class MetricsHistory {
             nodeHistory.dataPoints.push(dataPoint);
             nodeHistory.lastDataPoint = { ...dataPoint }; // Store full copy for comparison
         } else {
-            // Update timestamp of last data point instead of adding new one
-            lastDataPoint.timestamp = timestamp;
+            // Skip storing this data point since values haven't changed
+            // Note: We do NOT update the timestamp of the last point to preserve accurate time history
         }
     }
 
