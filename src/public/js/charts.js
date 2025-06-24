@@ -289,6 +289,7 @@ PulseApp.charts = (() => {
             const minValue = overlay._minValue;
             const maxValue = overlay._maxValue;
             
+            
             if (!currentData || currentData.length === 0) return;
             
             const rect = svg.getBoundingClientRect();
@@ -385,6 +386,7 @@ PulseApp.charts = (() => {
         overlay._metric = metric;
         overlay._config = config;
         
+        
         // Remove the touch indicator - charts are discoverable enough without it
     }
 
@@ -454,6 +456,7 @@ PulseApp.charts = (() => {
             overlay._config = config;
             overlay._minValue = minValue;
             overlay._maxValue = maxValue;
+            
         }
 
         // Update paths immediately to prevent blinking
@@ -488,13 +491,14 @@ PulseApp.charts = (() => {
             
             // Clear the processed data cache when fetching new data with different time range
             processedDataCache.clear();
-            console.log(`[Charts] Fetching data for ${timeRange} minute range, cache cleared`);
             
             const response = await fetch(`/api/charts?range=${timeRange}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             const data = await response.json();
+            
+            
             chartDataCache = data.data;
             nodeChartDataCache = data.nodeData || {};
             lastChartFetch = Date.now();

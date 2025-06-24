@@ -755,6 +755,39 @@
         background-color: rgb(30, 41, 66) !important; /* blue-900 solid */
     }
     
+    /* Subtle glow animation for global thresholds row */
+    @keyframes subtle-glow {
+        0%, 100% {
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.1), 
+                        0 4px 6px -2px rgba(59, 130, 246, 0.05),
+                        inset 0 0 0 2px rgba(96, 165, 250, 0.3);
+        }
+        50% {
+            box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.2), 
+                        0 4px 6px -2px rgba(59, 130, 246, 0.1),
+                        inset 0 0 0 2px rgba(96, 165, 250, 0.5);
+        }
+    }
+    
+    #global-alert-thresholds-row {
+        animation: subtle-glow 3s ease-in-out infinite;
+        position: relative;
+    }
+    
+    /* Enhanced label styling for the defaults row */
+    #global-alert-thresholds-row .text-blue-700 {
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        font-size: 0.7rem;
+    }
+    
+    /* Add icon before "Defaults" text */
+    #global-alert-thresholds-row .text-blue-700::before {
+        content: "🎯 ";
+        margin-right: 0.25rem;
+    }
+    
   </style>
 </head>
 <body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-2 font-sans">
@@ -1031,7 +1064,7 @@
                   </td>
                 </tr>
                 <!-- Global Alert Thresholds Row -->
-                <tr id="global-alert-thresholds-row" class="hidden bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-600">
+                <tr id="global-alert-thresholds-row" class="hidden bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-600 ring-2 ring-blue-400/30 dark:ring-blue-400/20 shadow-lg shadow-blue-500/10">
                   <td class="sticky left-0 z-10 py-1 px-2 align-middle">
                     <div class="flex flex-col gap-1">
                       <div class="flex items-center justify-between">
