@@ -1,15 +1,10 @@
 #!/bin/bash
-set -e # Exit immediately if a command exits with a non-zero status.
+set -e
 
-# This script creates a release tarball for Pulse
-# Note: COPYFILE_DISABLE=1 is used when creating the tarball to prevent
-# macOS extended attributes from being included, which would cause
-# "Ignoring unknown extended header keyword" warnings on extraction
+# This script creates an optimized release tarball for Pulse
 
 # --- Configuration ---
-# Attempt to get version from package.json
 PACKAGE_VERSION=$(node -p "require('./package.json').version")
-# Suggest a release version by stripping common pre-release suffixes like -dev.X or -alpha.X etc.
 SUGGESTED_RELEASE_VERSION=$(echo "$PACKAGE_VERSION" | sed -E 's/-(dev|alpha|beta|rc|pre)[-.0-9]*$//')
 
 # --- User Input for Version ---
@@ -28,15 +23,15 @@ fi
 echo "Creating release for version: v$RELEASE_VERSION"
 
 # --- Definitions ---
-APP_NAME="pulse" # Or derive from package.json if preferred
+APP_NAME="pulse"
 RELEASE_DIR_NAME="${APP_NAME}-v${RELEASE_VERSION}"
-STAGING_PARENT_DIR="pulse-release-staging" # Temporary parent for the release content
-STAGING_FULL_PATH="$STAGING_PARENT_DIR/$RELEASE_DIR_NAME"
+STAGING_DIR=".release-staging"
+STAGING_FULL_PATH="$STAGING_DIR/$RELEASE_DIR_NAME"
 TARBALL_NAME="${RELEASE_DIR_NAME}.tar.gz"
 
 # --- Cleanup Previous Attempts ---
 echo "Cleaning up previous attempts..."
-rm -rf "$STAGING_PARENT_DIR"
+rm -rf "$STAGING_DIR"
 rm -f "$TARBALL_NAME"
 mkdir -p "$STAGING_FULL_PATH"
 
@@ -48,128 +43,129 @@ if [ ! -f "src/public/output.css" ]; then
     exit 1
 fi
 
-# --- Strip Extended Attributes First ---
-echo "Stripping macOS extended attributes from source files..."
-find . -type f \( -name "*.js" -o -name "*.json" -o -name "*.md" -o -name "*.css" -o -name "*.html" -o -name "*.sh" \) -exec xattr -c {} \; 2>/dev/null || true
+# --- Create optimized file list ---
+echo "Creating release structure..."
 
-# --- Copy Application Files ---
-echo "Copying application files to $STAGING_FULL_PATH..."
+# Create directories
+mkdir -p "$STAGING_FULL_PATH"/{server,src/public,scripts}
 
-# Server files (excluding tests)
-echo "Copying server files..."
-COPYFILE_DISABLE=1 rsync -av --progress server/ "$STAGING_FULL_PATH/server/" --exclude 'tests/'
+# Copy essential files only
+echo "Copying essential files..."
 
-# Source files (including built CSS, Tailwind config, and public assets)
-echo "Copying source files..."
-mkdir -p "$STAGING_FULL_PATH/src" # Ensure parent directory exists
-COPYFILE_DISABLE=1 rsync -av --progress src/public/ "$STAGING_FULL_PATH/src/public/"
+# Server files (exclude tests and development files)
+rsync -a --progress \
+  --exclude='*.test.js' \
+  --exclude='*.spec.js' \
+  --exclude='tests/' \
+  --exclude='__tests__/' \
+  --exclude='.eslintrc*' \
+  server/ "$STAGING_FULL_PATH/server/"
 
-# Copy CSS build files and config
-COPYFILE_DISABLE=1 cp src/index.css "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/index.css not found"
-COPYFILE_DISABLE=1 cp src/tailwind.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/tailwind.config.js not found"
-COPYFILE_DISABLE=1 cp src/postcss.config.js "$STAGING_FULL_PATH/src/" 2>/dev/null || echo "Warning: src/postcss.config.js not found"
+# Built CSS and public assets only
+rsync -a --progress src/public/ "$STAGING_FULL_PATH/src/public/"
 
-# Root files
-echo "Copying root files..."
-COPYFILE_DISABLE=1 cp package.json "$STAGING_FULL_PATH/"
-COPYFILE_DISABLE=1 cp package-lock.json "$STAGING_FULL_PATH/"
-COPYFILE_DISABLE=1 cp README.md "$STAGING_FULL_PATH/"
-COPYFILE_DISABLE=1 cp LICENSE "$STAGING_FULL_PATH/"
-COPYFILE_DISABLE=1 cp CHANGELOG.md "$STAGING_FULL_PATH/"
-# .env.example no longer needed - configuration is now done via web interface
+# Root files (only what's needed for production)
+cp package.json package-lock.json "$STAGING_FULL_PATH/"
+[ -f LICENSE ] && cp LICENSE "$STAGING_FULL_PATH/"
+[ -f README.md ] && cp README.md "$STAGING_FULL_PATH/"
+[ -f CHANGELOG.md ] && cp CHANGELOG.md "$STAGING_FULL_PATH/"
 
-# Scripts (e.g., install-pulse.sh, if intended for end-user)
-if [ -d "scripts" ]; then
-  echo "Copying scripts..."
-  mkdir -p "$STAGING_FULL_PATH/scripts/"
-  if [ -f "scripts/install-pulse.sh" ]; then
-    COPYFILE_DISABLE=1 cp scripts/install-pulse.sh "$STAGING_FULL_PATH/scripts/"
-  fi
-  # Add other scripts if they are part of the release
-fi
-
-# Docs
-if [ -d "docs" ]; then
-  echo "Copying docs..."
-  COPYFILE_DISABLE=1 rsync -av --progress docs/ "$STAGING_FULL_PATH/docs/"
-fi
+# Install script only
+[ -f scripts/install-pulse.sh ] && cp scripts/install-pulse.sh "$STAGING_FULL_PATH/scripts/"
 
 # --- Install Production Dependencies ---
-echo "Installing production dependencies in $STAGING_FULL_PATH..."
-(cd "$STAGING_FULL_PATH" && npm install --omit=dev --ignore-scripts)
-# --ignore-scripts prevents any package's own postinstall scripts from running during this build phase.
-# If your production dependencies have essential postinstall scripts, you might remove --ignore-scripts.
+echo "Installing production dependencies..."
+cd "$STAGING_FULL_PATH"
+npm ci --omit=dev --no-audit --no-fund
+cd - > /dev/null
+
+# --- Remove unnecessary files from node_modules ---
+echo "Optimizing node_modules..."
+find "$STAGING_FULL_PATH/node_modules" \( \
+  -name "*.md" -o \
+  -name "*.markdown" -o \
+  -name "*.yml" -o \
+  -name "*.yaml" -o \
+  -name ".npmignore" -o \
+  -name ".gitignore" -o \
+  -name ".eslintrc*" -o \
+  -name ".prettierrc*" -o \
+  -name "*.test.js" -o \
+  -name "*.spec.js" -o \
+  -name "test" -o \
+  -name "tests" -o \
+  -name "__tests__" -o \
+  -name "example" -o \
+  -name "examples" -o \
+  -name ".github" -o \
+  -name ".vscode" \
+\) -type f -delete 2>/dev/null || true
+
+find "$STAGING_FULL_PATH/node_modules" \( \
+  -name "test" -o \
+  -name "tests" -o \
+  -name "__tests__" -o \
+  -name "example" -o \
+  -name "examples" -o \
+  -name ".github" -o \
+  -name "docs" \
+\) -type d -exec rm -rf {} + 2>/dev/null || true
 
 # --- Verify Essential Files ---
-echo "Verifying essential files for tarball installation..."
+echo "Verifying essential files..."
 MISSING_FILES=""
 [ ! -f "$STAGING_FULL_PATH/package.json" ] && MISSING_FILES="$MISSING_FILES package.json"
-# .env.example no longer required - web-based configuration
 [ ! -f "$STAGING_FULL_PATH/server/index.js" ] && MISSING_FILES="$MISSING_FILES server/index.js"
 [ ! -f "$STAGING_FULL_PATH/src/public/output.css" ] && MISSING_FILES="$MISSING_FILES src/public/output.css"
 [ ! -d "$STAGING_FULL_PATH/node_modules" ] && MISSING_FILES="$MISSING_FILES node_modules/"
 
 if [ -n "$MISSING_FILES" ]; then
-    echo "Error: Missing essential files for tarball installation:$MISSING_FILES"
-    echo "The install script expects these files to be present in the tarball."
+    echo "Error: Missing essential files:$MISSING_FILES"
     exit 1
 fi
-echo "✅ All essential files verified for tarball installation."
-
-# --- Final Extended Attributes Cleanup ---
-echo "Final cleanup: Stripping extended attributes from staging directory..."
-find "$STAGING_PARENT_DIR" -type f -exec xattr -c {} \; 2>/dev/null || true
+echo "✅ All essential files verified."
 
 # --- Create Tarball ---
 echo "Creating tarball: $TARBALL_NAME..."
 
-# Detect and use GNU tar if available (preferred on macOS to avoid extended attributes)
+# Strip extended attributes on macOS
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    find "$STAGING_DIR" -type f -exec xattr -c {} \; 2>/dev/null || true
+fi
+
+# Use GNU tar if available
 TAR_CMD="tar"
 if command -v gtar &> /dev/null; then
     TAR_CMD="gtar"
-    echo "Using GNU tar to avoid macOS extended attributes"
-elif tar --version 2>&1 | grep -q "GNU tar"; then
-    TAR_CMD="tar"
-    echo "Using GNU tar"
-else
-    TAR_CMD="tar"
-    echo "Using system tar with COPYFILE_DISABLE=1"
 fi
 
-# Go into the parent of the directory to be tarred to avoid leading paths in tarball
-if [ "$TAR_CMD" = "gtar" ]; then
-    # GNU tar doesn't need COPYFILE_DISABLE and handles extended attributes properly
-    (cd "$STAGING_PARENT_DIR" && "$TAR_CMD" -czf "../$TARBALL_NAME" "$RELEASE_DIR_NAME")
-else
-    # BSD tar (macOS) needs COPYFILE_DISABLE=1 to prevent extended attributes
-    (cd "$STAGING_PARENT_DIR" && COPYFILE_DISABLE=1 "$TAR_CMD" -czf "../$TARBALL_NAME" "$RELEASE_DIR_NAME")
-fi
+# Create tarball with consistent permissions
+(cd "$STAGING_DIR" && COPYFILE_DISABLE=1 "$TAR_CMD" \
+  --owner=0 --group=0 \
+  --mode='u+rwX,go+rX,go-w' \
+  -czf "../$TARBALL_NAME" "$RELEASE_DIR_NAME")
+
+# --- Calculate sizes ---
+STAGING_SIZE=$(du -sh "$STAGING_FULL_PATH" | cut -f1)
+TARBALL_SIZE=$(du -sh "$TARBALL_NAME" | cut -f1)
 
 # --- Cleanup ---
-echo "Cleaning up staging directory ($STAGING_PARENT_DIR)..."
-rm -rf "$STAGING_PARENT_DIR"
+echo "Cleaning up staging directory..."
+rm -rf "$STAGING_DIR"
 
 echo ""
-echo "----------------------------------------------------"
-echo "Release tarball created: $TARBALL_NAME"
-echo "----------------------------------------------------"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "✅ Release tarball created: $TARBALL_NAME"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "📊 Size information:"
+echo "   • Uncompressed: $STAGING_SIZE"
+echo "   • Compressed: $TARBALL_SIZE"
+echo ""
 echo "📦 This tarball includes:"
 echo "   ✅ Pre-built CSS assets"
-echo "   ✅ Production npm dependencies"
-echo "   ✅ All server and client files"
-echo "   ✅ Installation scripts"
+echo "   ✅ Production npm dependencies (optimized)"
+echo "   ✅ Server files (no tests/dev files)"
+echo "   ✅ Installation script"
 echo ""
-echo "🚀 Installation options:"
-echo "1. RECOMMENDED: Use the install script (faster, automated):"
-echo "   curl -sLO https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse.sh"
-echo "   chmod +x install-pulse.sh"
-echo "   sudo ./install-pulse.sh"
-echo "   (The script will automatically use this tarball for faster installation)"
-echo ""
-echo "2. Manual installation:"
-echo "   - Copy $TARBALL_NAME to target server"
-echo "   - Extract: tar -xzf $TARBALL_NAME"
-echo "   - Navigate: cd $RELEASE_DIR_NAME"
-echo "   - Start: npm start"
-echo "   - Configure via web interface at http://localhost:7655"
-echo "----------------------------------------------------"
+echo "🚀 Ready for GitHub release upload"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
