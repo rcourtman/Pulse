@@ -235,7 +235,7 @@ PulseApp.socketHandler = (() => {
                     updateStorageTab(data);
                     break;
                 case 'pbs':
-                    updatePbs2Tab(data);
+                    updatePbsTab(data);
                     break;
                 case 'backups':
                     updateBackupsTab(data);
