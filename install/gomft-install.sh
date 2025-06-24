@@ -19,7 +19,8 @@ $STD apt-get install -y \
   rclone \
   tzdata \
   ca-certificates \
-  build-essential
+  build-essential \
+  git
 msg_ok "Installed Dependencies"
 
 setup_go
