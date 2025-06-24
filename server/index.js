@@ -1480,11 +1480,13 @@ app.get('/api/charts', async (req, res) => {
             };
         });
         
-        const chartData = metricsHistory.getAllGuestChartData(guestInfoMap);
+        const guestChartData = metricsHistory.getAllGuestChartData(guestInfoMap);
+        const nodeChartData = metricsHistory.getAllNodeChartData();
         const stats = metricsHistory.getStats();
         
         res.json({
-            data: chartData,
+            data: guestChartData,
+            nodeData: nodeChartData,
             stats: stats,
             timestamp: Date.now()
         });
@@ -2027,6 +2029,16 @@ async function runDiscoveryCycle() {
     stateManager.updateDiscoveryData(discoveryData, duration, errors);
     // No need to store in global vars anymore
 
+    // Add node metrics to history
+    if (discoveryData.nodes && discoveryData.nodes.length > 0) {
+        discoveryData.nodes.forEach(node => {
+            if (node && node.node) {
+                const nodeId = `node-${node.node}`;
+                metricsHistory.addNodeMetricData(nodeId, node);
+            }
+        });
+    }
+
     // ... (logging summary) ...
     const updatedState = stateManager.getState(); // Get the fully updated state
     console.log(`[Discovery Cycle] Updated state. Nodes: ${updatedState.nodes.length}, VMs: ${updatedState.vms.length}, CTs: ${updatedState.containers.length}, PBS: ${updatedState.pbs.length}`);
@@ -2107,6 +2119,52 @@ async function runMetricCycle() {
                    const guestId = `${metricData.endpointId}-${metricData.node}-${metricData.id}`;
                    metricsHistory.addMetricData(guestId, metricData.current);
                    
+               }
+           });
+           
+           // Also update node metrics during metrics cycle for consistent data collection frequency
+           // Build a map of unique nodes from running guests
+           const nodesByEndpoint = new Map();
+           [...runningVms, ...runningContainers].forEach(guest => {
+               if (!guest.endpointId || !guest.node) return;
+               
+               if (!nodesByEndpoint.has(guest.endpointId)) {
+                   nodesByEndpoint.set(guest.endpointId, new Set());
+               }
+               nodesByEndpoint.get(guest.endpointId).add(guest.node);
+           });
+           
+           // Fetch fresh node status for each unique node that has running guests
+           const nodeStatusPromises = [];
+           
+           for (const [endpointId, nodes] of nodesByEndpoint) {
+               if (!currentApiClients[endpointId]) continue;
+               const { client: apiClientInstance } = currentApiClients[endpointId];
+               
+               for (const nodeName of nodes) {
+                   nodeStatusPromises.push(
+                       apiClientInstance.get(`/nodes/${nodeName}/status`)
+                           .then(response => ({
+                               endpointId,
+                               node: nodeName,
+                               data: response.data.data
+                           }))
+                           .catch(err => {
+                               console.error(`[Metrics] Failed to fetch node status for ${nodeName}:`, err.message);
+                               return null;
+                           })
+                   );
+               }
+           }
+           
+           // Fetch all node statuses in parallel
+           const nodeStatuses = await Promise.all(nodeStatusPromises);
+           
+           // Add fresh node metrics to history
+           nodeStatuses.forEach(nodeStatus => {
+               if (nodeStatus && nodeStatus.data) {
+                   const nodeId = `node-${nodeStatus.node}`;
+                   metricsHistory.addNodeMetricData(nodeId, nodeStatus.data);
                }
            });
            

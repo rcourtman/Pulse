@@ -104,9 +104,10 @@ PulseApp.charts = (() => {
             CHART_CONFIG.renderPoints = newOptimalPoints;
             // Clear cache and force refresh
             chartDataCache = null;
+            nodeChartDataCache = null;
             chartCache.clear();
             // Trigger chart refresh if needed
-            if (chartDataCache) {
+            if (chartDataCache || nodeChartDataCache) {
                 updateAllCharts();
             }
         }
@@ -117,6 +118,7 @@ PulseApp.charts = (() => {
 
     let chartCache = new Map();
     let chartDataCache = null;
+    let nodeChartDataCache = null;
     let lastChartFetch = 0;
     const CHART_FETCH_INTERVAL = 5000; // More responsive: every 5 seconds
     
@@ -451,8 +453,9 @@ PulseApp.charts = (() => {
             }
             const data = await response.json();
             chartDataCache = data.data;
+            nodeChartDataCache = data.nodeData || {};
             lastChartFetch = Date.now();
-            return data.data;
+            return { guestData: data.data, nodeData: data.nodeData || {} };
         } catch (error) {
             console.error('Failed to fetch chart data:', error);
             return null;
@@ -467,7 +470,7 @@ PulseApp.charts = (() => {
         if (shouldFetchChartData()) {
             return await fetchChartData();
         }
-        return chartDataCache;
+        return { guestData: chartDataCache, nodeData: nodeChartDataCache };
     }
 
     function renderGuestCharts(guestId) {
@@ -501,6 +504,23 @@ PulseApp.charts = (() => {
         });
     }
 
+    function renderNodeCharts(nodeId) {
+        if (!nodeChartDataCache || !nodeChartDataCache[nodeId]) {
+            return;
+        }
+
+        const nodeData = nodeChartDataCache[nodeId];
+        
+        // Check which charts exist in DOM for this node
+        ['cpu', 'memory', 'disk'].forEach(metric => {
+            const chartId = `chart-${nodeId}-${metric}`;
+            if (document.getElementById(chartId)) {
+                const data = nodeData[metric];
+                createOrUpdateChart(chartId, data, metric, 'mini', nodeId);
+            }
+        });
+    }
+
     function updateAllCharts() {
         if (!chartDataCache) return;
         
@@ -520,29 +540,53 @@ PulseApp.charts = (() => {
     }
     
     function performBatchedChartUpdates() {
-        if (!chartDataCache) return;
+        if (!chartDataCache && !nodeChartDataCache) return;
         
         const startTime = performance.now();
         const maxUpdateTime = 16; // Target 60fps
         let updatedCount = 0;
         
-        // Prioritize visible charts
-        const guestIds = Object.keys(chartDataCache);
-        
-        for (const guestId of guestIds) {
-            // Check if we're over time budget
-            if (performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
-                // Schedule remaining updates for next frame
-                scheduleChartUpdates();
-                break;
+        // Update guest charts
+        if (chartDataCache) {
+            const guestIds = Object.keys(chartDataCache);
+            
+            for (const guestId of guestIds) {
+                // Check if we're over time budget
+                if (performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
+                    // Schedule remaining updates for next frame
+                    scheduleChartUpdates();
+                    return;
+                }
+                
+                // Only update if chart is visible
+                const hasVisibleCharts = isGuestChartVisible(guestId);
+                
+                if (hasVisibleCharts) {
+                    renderGuestCharts(guestId);
+                    updatedCount++;
+                }
             }
+        }
+        
+        // Update node charts
+        if (nodeChartDataCache) {
+            const nodeIds = Object.keys(nodeChartDataCache);
             
-            // Only update if chart is visible
-            const hasVisibleCharts = isGuestChartVisible(guestId);
-            
-            if (hasVisibleCharts) {
-                renderGuestCharts(guestId);
-                updatedCount++;
+            for (const nodeId of nodeIds) {
+                // Check if we're over time budget
+                if (performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
+                    // Schedule remaining updates for next frame
+                    scheduleChartUpdates();
+                    break;
+                }
+                
+                // Only update if chart is visible
+                const hasVisibleCharts = isNodeChartVisible(nodeId);
+                
+                if (hasVisibleCharts) {
+                    renderNodeCharts(nodeId);
+                    updatedCount++;
+                }
             }
         }
     }
@@ -558,6 +602,21 @@ PulseApp.charts = (() => {
         const metrics = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
         return metrics.some(metric => {
             const chartId = `chart-${guestId}-${metric}`;
+            return visibleCharts.has(chartId) || document.getElementById(chartId);
+        });
+    }
+    
+    function isNodeChartVisible(nodeId) {
+        // First check if charts mode is active
+        const chartsToggle = document.getElementById('toggle-charts-checkbox');
+        if (!chartsToggle || !chartsToggle.checked) {
+            return false;
+        }
+        
+        // Check visibility set for more accurate tracking
+        const metrics = ['cpu', 'memory', 'disk'];
+        return metrics.some(metric => {
+            const chartId = `chart-${nodeId}-${metric}`;
             return visibleCharts.has(chartId) || document.getElementById(chartId);
         });
     }
@@ -789,12 +848,14 @@ PulseApp.charts = (() => {
         createUsageChartHTML,
         createSparklineHTML,
         renderGuestCharts,
+        renderNodeCharts,
         updateAllCharts,
         getChartData,
         startChartUpdates,
         processChartData,
         adaptiveSample,
         calculateImportanceScores,
+        createOrUpdateChart,
         // Expose for testing
         cleanupProcessedCache,
         observeChartVisibility

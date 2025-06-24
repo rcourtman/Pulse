@@ -5,6 +5,7 @@ const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Clean up every 5 minutes
 class MetricsHistory {
     constructor() {
         this.guestMetrics = new Map(); // guestId -> { dataPoints: CircularBuffer, lastCleanup: timestamp }
+        this.nodeMetrics = new Map(); // nodeId -> { dataPoints: CircularBuffer, lastCleanup: timestamp }
         this.startCleanupTimer();
     }
 
@@ -141,6 +142,129 @@ class MetricsHistory {
         return valueDiff / timeDiffSeconds;
     }
 
+    addNodeMetricData(nodeId, nodeData) {
+        const timestamp = Date.now();
+        
+        if (!this.nodeMetrics.has(nodeId)) {
+            this.nodeMetrics.set(nodeId, {
+                dataPoints: this.createCircularBuffer(MAX_DATA_POINTS),
+                lastDataPoint: null // For compression
+            });
+        }
+
+        const nodeHistory = this.nodeMetrics.get(nodeId);
+
+        // Compress data by only storing changed values
+        const lastDataPoint = nodeHistory.lastDataPoint;
+        // Handle different data structures from discovery vs status endpoint
+        let memUsed = 0, memTotal = 0, diskUsed = 0, diskTotal = 0;
+        
+        if (typeof nodeData?.memory === 'object' && nodeData.memory !== null) {
+            // From /nodes/{node}/status endpoint - memory field
+            memUsed = nodeData.memory.used || 0;
+            memTotal = nodeData.memory.total || 0;
+        } else if (typeof nodeData?.mem === 'object' && nodeData.mem !== null) {
+            // Alternative structure - mem field
+            memUsed = nodeData.mem.used || 0;
+            memTotal = nodeData.mem.total || 0;
+        } else {
+            // From discovery endpoint
+            memUsed = nodeData?.mem || 0;
+            memTotal = nodeData?.maxmem || 0;
+        }
+        
+        if (typeof nodeData?.rootfs === 'object' && nodeData.rootfs !== null) {
+            // From /nodes/{node}/status endpoint
+            diskUsed = nodeData.rootfs.used || 0;
+            diskTotal = nodeData.rootfs.total || 0;
+        } else if (typeof nodeData?.disk === 'object' && nodeData.disk !== null) {
+            // Alternative structure
+            diskUsed = nodeData.disk.used || 0;
+            diskTotal = nodeData.disk.total || 0;
+        } else {
+            // From discovery endpoint
+            diskUsed = nodeData?.disk || 0;
+            diskTotal = nodeData?.maxdisk || 0;
+        }
+        
+        const dataPoint = {
+            timestamp,
+            cpu: nodeData?.cpu || 0,
+            mem: memUsed,
+            disk: diskUsed,
+            maxmem: memTotal,
+            maxdisk: diskTotal
+        };
+        
+
+        // If maxmem or maxdisk are 0, try to use values from last data point
+        if (dataPoint.maxmem === 0 && lastDataPoint && lastDataPoint.maxmem > 0) {
+            dataPoint.maxmem = lastDataPoint.maxmem;
+        }
+        if (dataPoint.maxdisk === 0 && lastDataPoint && lastDataPoint.maxdisk > 0) {
+            dataPoint.maxdisk = lastDataPoint.maxdisk;
+        }
+        
+        // Don't store if values haven't changed significantly
+        // For CPU: within 0.1% (since it's already a percentage)
+        // For memory/disk: within 0.1% of the total capacity
+        const cpuChanged = !lastDataPoint || Math.abs(dataPoint.cpu - lastDataPoint.cpu) >= 0.001;
+        const memChanged = !lastDataPoint || 
+            (dataPoint.maxmem > 0 && Math.abs(dataPoint.mem - lastDataPoint.mem) / dataPoint.maxmem >= 0.001);
+        const diskChanged = !lastDataPoint || 
+            (dataPoint.maxdisk > 0 && Math.abs(dataPoint.disk - lastDataPoint.disk) / dataPoint.maxdisk >= 0.001);
+        
+        
+        if (cpuChanged || memChanged || diskChanged) {
+            nodeHistory.dataPoints.push(dataPoint);
+            nodeHistory.lastDataPoint = { ...dataPoint }; // Store full copy for comparison
+        } else {
+            // Update timestamp of last data point instead of adding new one
+            lastDataPoint.timestamp = timestamp;
+        }
+    }
+
+    getNodeChartData(nodeId, metric) {
+        if (!this.nodeMetrics.has(nodeId)) {
+            return [];
+        }
+
+        const nodeHistory = this.nodeMetrics.get(nodeId);
+        const cutoffTime = Date.now() - HISTORY_RETENTION_MS;
+        
+        const dataPoints = nodeHistory.dataPoints.filter(point => point && point.timestamp >= cutoffTime);
+        
+        return dataPoints
+            .map(point => {
+                return {
+                    timestamp: point.timestamp,
+                    value: this.getNodeMetricValue(point, metric)
+                };
+            })
+            .filter(point => point.value !== null && point.value !== undefined);
+    }
+
+    getNodeMetricValue(dataPoint, metric) {
+        switch (metric) {
+            case 'cpu':
+                return dataPoint.cpu * 100; // Convert to percentage
+            case 'memory':
+                // Calculate percentage
+                if (dataPoint.maxmem && dataPoint.maxmem > 0) {
+                    return (dataPoint.mem / dataPoint.maxmem) * 100;
+                }
+                return null;
+            case 'disk':
+                // Calculate percentage
+                if (dataPoint.maxdisk && dataPoint.maxdisk > 0) {
+                    return (dataPoint.disk / dataPoint.maxdisk) * 100;
+                }
+                return null;
+            default:
+                return dataPoint[metric];
+        }
+    }
+
     getChartData(guestId, metric) {
         if (!this.guestMetrics.has(guestId)) {
             return [];
@@ -253,6 +377,37 @@ class MetricsHistory {
         return result;
     }
 
+    getAllNodeChartData() {
+        const result = {};
+        const cutoffTime = Date.now() - HISTORY_RETENTION_MS;
+
+        for (const [nodeId, nodeHistory] of this.nodeMetrics) {
+            const validDataPoints = nodeHistory.dataPoints
+                .filter(point => point && point.timestamp >= cutoffTime);
+
+            if (validDataPoints.length > 0) {
+                result[nodeId] = {
+                    cpu: this.extractNodeMetricSeries(validDataPoints, 'cpu'),
+                    memory: this.extractNodeMetricSeries(validDataPoints, 'memory'),
+                    disk: this.extractNodeMetricSeries(validDataPoints, 'disk')
+                };
+            }
+        }
+
+        return result;
+    }
+
+    extractNodeMetricSeries(dataPoints, metric) {
+        return dataPoints
+            .map(point => {
+                return {
+                    timestamp: point.timestamp,
+                    value: this.getNodeMetricValue(point, metric)
+                };
+            })
+            .filter(point => point.value !== null && point.value !== undefined);
+    }
+
     extractMetricSeriesWithContext(dataPoints, metric, guestInfo = null) {
         // Reconstruct full data points from compressed storage
         let lastCompletePoint = null;
@@ -290,6 +445,7 @@ class MetricsHistory {
         setInterval(() => {
             const cutoffTime = Date.now() - HISTORY_RETENTION_MS;
             
+            // Cleanup guest metrics
             for (const [guestId, guestHistory] of this.guestMetrics) {
                 this.cleanupOldData(guestHistory);
                 
@@ -299,6 +455,19 @@ class MetricsHistory {
                 );
                 if (recentData.length === 0) {
                     this.guestMetrics.delete(guestId);
+                }
+            }
+            
+            // Cleanup node metrics
+            for (const [nodeId, nodeHistory] of this.nodeMetrics) {
+                this.cleanupOldData(nodeHistory);
+                
+                // Remove nodes with no recent data
+                const recentData = nodeHistory.dataPoints.filter(
+                    point => point && point.timestamp >= cutoffTime
+                );
+                if (recentData.length === 0) {
+                    this.nodeMetrics.delete(nodeId);
                 }
             }
         }, CLEANUP_INTERVAL_MS);
@@ -311,8 +480,11 @@ class MetricsHistory {
     getStats() {
         return {
             totalGuests: this.guestMetrics.size,
+            totalNodes: this.nodeMetrics.size,
             totalDataPoints: Array.from(this.guestMetrics.values())
-                .reduce((sum, guest) => sum + guest.dataPoints.length, 0),
+                .reduce((sum, guest) => sum + guest.dataPoints.length, 0) +
+                Array.from(this.nodeMetrics.values())
+                .reduce((sum, node) => sum + node.dataPoints.length, 0),
             estimatedMemoryUsage: this.estimateMemoryUsage()
         };
     }
@@ -320,12 +492,23 @@ class MetricsHistory {
     estimateMemoryUsage() {
         // Rough estimation of memory usage in bytes
         let totalBytes = 0;
+        
+        // Guest metrics
         for (const [guestId, guestHistory] of this.guestMetrics) {
             // Estimate ~100 bytes per data point (compressed)
             totalBytes += guestHistory.dataPoints.length * 100;
             // Add overhead for maps and structures
             totalBytes += 1024;
         }
+        
+        // Node metrics
+        for (const [nodeId, nodeHistory] of this.nodeMetrics) {
+            // Estimate ~80 bytes per data point (less data than guests)
+            totalBytes += nodeHistory.dataPoints.length * 80;
+            // Add overhead for maps and structures
+            totalBytes += 1024;
+        }
+        
         return totalBytes;
     }
 }

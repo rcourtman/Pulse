@@ -1691,10 +1691,26 @@ PulseApp.ui.dashboard = (() => {
                     PulseApp.charts.updateAllCharts();
                 });
             }
+            
+            // Refresh node summary cards to show charts
+            if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {
+                const nodesData = PulseApp.state.get('nodesData');
+                if (nodesData) {
+                    PulseApp.ui.nodes.updateNodeSummaryCards(nodesData);
+                }
+            }
         } else {
             // Switch to metrics mode
             mainContainer.classList.remove('charts-mode');
             if (label) label.title = 'Toggle Charts View';
+            
+            // Refresh node summary cards to hide charts
+            if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {
+                const nodesData = PulseApp.state.get('nodesData');
+                if (nodesData) {
+                    PulseApp.ui.nodes.updateNodeSummaryCards(nodesData);
+                }
+            }
         }
     }
 
