@@ -1619,8 +1619,25 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
+    let globalNodeUIInitialized = false;
+    
     function updateGlobalNodeThresholdUI() {
-        console.log('[DEBUG] updateGlobalNodeThresholdUI called');
+        console.log('[DEBUG] updateGlobalNodeThresholdUI called, initialized:', globalNodeUIInitialized);
+        
+        // If UI is already initialized, just update values instead of recreating
+        if (globalNodeUIInitialized) {
+            const cpuSlider = document.getElementById('global-node-alert-cpu');
+            const memorySlider = document.getElementById('global-node-alert-memory');
+            const diskSlider = document.getElementById('global-node-alert-disk');
+            
+            if (cpuSlider) cpuSlider.value = globalNodeThresholds.cpu || 90;
+            if (memorySlider) memorySlider.value = globalNodeThresholds.memory || 95;
+            if (diskSlider) diskSlider.value = globalNodeThresholds.disk || 95;
+            
+            console.log('[DEBUG] Updated existing sliders with new values');
+            return;
+        }
+        
         // Populate the node threshold cells
         const cpuCell = document.getElementById('global-node-cpu-cell');
         const memoryCell = document.getElementById('global-node-memory-cell');
@@ -1628,31 +1645,145 @@ PulseApp.ui.alerts = (() => {
         
         console.log('[DEBUG] Found cells:', { cpuCell: !!cpuCell, memoryCell: !!memoryCell, diskCell: !!diskCell });
         
+        // Set up event delegation on parent container first
+        const parentContainer = cpuCell?.parentElement?.parentElement;
+        if (parentContainer && !parentContainer._nodeEventsDelegated) {
+            console.log('[DEBUG] Setting up event delegation on parent container:', parentContainer);
+            
+            // Test with capturing phase to catch events before they might be stopped
+            parentContainer.addEventListener('input', (e) => {
+                console.log('[DEBUG] ANY input event captured:', e.target.tagName, e.target.id);
+                if (e.target.id === 'global-node-alert-cpu' || 
+                    e.target.id === 'global-node-alert-memory' || 
+                    e.target.id === 'global-node-alert-disk') {
+                    console.log('[DEBUG] Delegated input event:', e.target.id, 'value:', e.target.value);
+                    const metricType = e.target.id.replace('global-node-alert-', '');
+                    globalNodeThresholds[metricType] = e.target.value;
+                    updateAllNodeCardsStyling();
+                    PulseApp.tooltips.updateSliderTooltip(e.target);
+                }
+            }, true); // Use capturing phase
+            
+            parentContainer.addEventListener('change', (e) => {
+                console.log('[DEBUG] ANY change event captured:', e.target.tagName, e.target.id);
+                if (e.target.id === 'global-node-alert-cpu' || 
+                    e.target.id === 'global-node-alert-memory' || 
+                    e.target.id === 'global-node-alert-disk') {
+                    console.log('[DEBUG] Delegated change event:', e.target.id, 'value:', e.target.value);
+                    const metricType = e.target.id.replace('global-node-alert-', '');
+                    updateNodeInputValues(metricType, e.target.value, true);
+                }
+            }, true); // Use capturing phase
+            
+            // Also add click handler to test if ANY events work
+            parentContainer.addEventListener('click', (e) => {
+                console.log('[DEBUG] Click event on:', e.target.tagName, e.target.id);
+            }, true);
+            
+            parentContainer._nodeEventsDelegated = true;
+        }
+        
         if (cpuCell) {
             const sliderId = 'global-node-alert-cpu';
             const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(sliderId, 0, 100, 5, globalNodeThresholds.cpu || 90);
             cpuCell.innerHTML = sliderHtml;
+            
+            // Add event listeners directly after creating the element
+            setTimeout(() => {
+                const slider = document.getElementById(sliderId);
+                if (slider) {
+                    slider.oninput = function(e) {
+                        console.log('[DEBUG] CPU oninput:', e.target.value);
+                        globalNodeThresholds.cpu = e.target.value;
+                        updateAllNodeCardsStyling();
+                        PulseApp.tooltips.updateSliderTooltip(e.target);
+                    };
+                    slider.onchange = function(e) {
+                        console.log('[DEBUG] CPU onchange:', e.target.value);
+                        updateNodeInputValues('cpu', e.target.value, true);
+                    };
+                }
+            }, 0);
         }
         
         if (memoryCell) {
             const sliderId = 'global-node-alert-memory';
             const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(sliderId, 0, 100, 5, globalNodeThresholds.memory || 95);
             memoryCell.innerHTML = sliderHtml;
+            
+            // Add event listeners directly after creating the element
+            setTimeout(() => {
+                const slider = document.getElementById(sliderId);
+                if (slider) {
+                    slider.oninput = function(e) {
+                        console.log('[DEBUG] Memory oninput:', e.target.value);
+                        globalNodeThresholds.memory = e.target.value;
+                        updateAllNodeCardsStyling();
+                        PulseApp.tooltips.updateSliderTooltip(e.target);
+                    };
+                    slider.onchange = function(e) {
+                        console.log('[DEBUG] Memory onchange:', e.target.value);
+                        updateNodeInputValues('memory', e.target.value, true);
+                    };
+                }
+            }, 0);
         }
         
         if (diskCell) {
             const sliderId = 'global-node-alert-disk';
             const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(sliderId, 0, 100, 5, globalNodeThresholds.disk || 95);
             diskCell.innerHTML = sliderHtml;
+            
+            // Add event listeners directly after creating the element
+            setTimeout(() => {
+                const slider = document.getElementById(sliderId);
+                if (slider) {
+                    slider.oninput = function(e) {
+                        console.log('[DEBUG] Disk oninput:', e.target.value);
+                        globalNodeThresholds.disk = e.target.value;
+                        updateAllNodeCardsStyling();
+                        PulseApp.tooltips.updateSliderTooltip(e.target);
+                    };
+                    slider.onchange = function(e) {
+                        console.log('[DEBUG] Disk onchange:', e.target.value);
+                        updateNodeInputValues('disk', e.target.value, true);
+                    };
+                }
+            }, 0);
         }
         
-        // Setup event listeners
-        setupGlobalNodeThresholdEventListeners();
+        globalNodeUIInitialized = true;
+        
+        // TEST: Add a button to manually test if we can update values
+        if (!document.getElementById('test-node-sliders-btn')) {
+            const testBtn = document.createElement('button');
+            testBtn.id = 'test-node-sliders-btn';
+            testBtn.textContent = 'TEST NODE SLIDERS';
+            testBtn.className = 'ml-2 text-xs bg-red-500 text-white px-2 py-1 rounded';
+            testBtn.onclick = () => {
+                console.log('[DEBUG] Test button clicked');
+                const cpu = document.getElementById('global-node-alert-cpu');
+                const mem = document.getElementById('global-node-alert-memory');
+                const disk = document.getElementById('global-node-alert-disk');
+                console.log('[DEBUG] Found sliders:', { cpu: !!cpu, mem: !!mem, disk: !!disk });
+                if (cpu) {
+                    console.log('[DEBUG] CPU slider value before:', cpu.value);
+                    cpu.value = 50;
+                    console.log('[DEBUG] CPU slider value after:', cpu.value);
+                    updateNodeInputValues('cpu', 50, true);
+                }
+            };
+            const container = document.querySelector('h4.text-sm.font-medium.text-gray-700.dark\\:text-gray-300');
+            if (container && container.textContent.includes('Default Node Alert Thresholds')) {
+                container.appendChild(testBtn);
+            }
+        }
         
         // Setup reset button
         const resetButton = document.getElementById('reset-global-node-thresholds');
-        if (resetButton) {
+        if (resetButton && !resetButton._hasClickHandler) {
             resetButton.addEventListener('click', resetGlobalNodeThresholds);
+            resetButton._hasClickHandler = true;
         }
     }
     
@@ -1686,24 +1817,42 @@ PulseApp.ui.alerts = (() => {
         if (!sliderElement) return;
         
         console.log('[DEBUG] setupNodeAlertSliderEvents for', metricType);
+        console.log('[DEBUG] Slider element:', sliderElement);
+        console.log('[DEBUG] Slider ID:', sliderElement.id);
+        
+        // Test if we can add ANY event listener
+        sliderElement.addEventListener('click', () => {
+            console.log('[DEBUG] CLICK event on', metricType, 'slider!');
+        });
         
         // Lightweight updates during drag (styling only, like guest sliders)
-        sliderElement.addEventListener('input', (event) => {
+        const inputHandler = (event) => {
             console.log('[DEBUG] Node', metricType, 'input event, value:', event.target.value);
             const value = event.target.value;
             globalNodeThresholds[metricType] = value; // Update state immediately
             updateAllNodeCardsStyling(); // Fast styling-only update
             PulseApp.tooltips.updateSliderTooltip(event.target);
-        });
+        };
         
         // Full update on release (input values)
-        sliderElement.addEventListener('change', (event) => {
+        const changeHandler = (event) => {
             console.log('[DEBUG] Node', metricType, 'change event, value:', event.target.value);
             const value = event.target.value;
             updateNodeInputValues(metricType, value, true); // Update input values on release, skip tooltips
-        });
+        };
+        
+        sliderElement.addEventListener('input', inputHandler);
+        sliderElement.addEventListener('change', changeHandler);
+        
+        // Store handlers for debugging
+        sliderElement._inputHandler = inputHandler;
+        sliderElement._changeHandler = changeHandler;
+        
+        // Log all event listeners on this element
+        console.log('[DEBUG] Event listeners attached. Testing with getEventListeners in console...');
         
         sliderElement.addEventListener('mousedown', (event) => {
+            console.log('[DEBUG] Mousedown on', metricType);
             PulseApp.tooltips.updateSliderTooltip(event.target);
         });
         
@@ -1713,12 +1862,17 @@ PulseApp.ui.alerts = (() => {
     }
     
     function resetGlobalNodeThresholds() {
+        console.log('[DEBUG] resetGlobalNodeThresholds called');
+        
         // Reset to default values
         globalNodeThresholds = {
             cpu: 90,
             memory: 95,
             disk: 95
         };
+        
+        // Reset the initialization flag to force recreation
+        globalNodeUIInitialized = false;
         
         // Update UI
         updateGlobalNodeThresholdUI();
@@ -1802,10 +1956,46 @@ PulseApp.ui.alerts = (() => {
         
         console.log(`[DEBUG] updateNodeInputValues called: metric=${metricType}, value=${newValue}`);
         
-        // Find all node sliders for this metric
-        const nodeSliders = document.querySelectorAll(`.node-alert-slider[data-metric="${metricType}"] input[type="range"]`);
+        // Debug: Let's see what selectors might work
+        console.log('[DEBUG] Testing different selectors:');
+        console.log('1. .node-alert-slider elements:', document.querySelectorAll('.node-alert-slider').length);
+        console.log('2. [data-metric] elements:', document.querySelectorAll('[data-metric]').length);
+        console.log('3. input[type="range"] elements:', document.querySelectorAll('input[type="range"]').length);
+        console.log('4. #node-summary-cards-container:', document.getElementById('node-summary-cards-container'));
         
-        console.log(`[DEBUG] Found ${nodeSliders.length} node sliders for ${metricType}`);
+        // Try a broader search first
+        const allNodeContainers = document.querySelectorAll('.node-alert-slider');
+        console.log(`[DEBUG] Found ${allNodeContainers.length} node-alert-slider containers`);
+        
+        allNodeContainers.forEach(container => {
+            const metric = container.getAttribute('data-metric');
+            const nodeId = container.getAttribute('data-node-id');
+            console.log(`[DEBUG] Container: metric=${metric}, nodeId=${nodeId}`);
+            
+            if (metric === metricType) {
+                const input = container.querySelector('input[type="range"]');
+                console.log(`[DEBUG] Found input for ${nodeId}:`, input);
+                
+                if (input && nodeId) {
+                    // Only update sliders for nodes that don't have individual thresholds
+                    const nodeThresholds = nodeAlertThresholds[nodeId] || {};
+                    const hasIndividualForThisMetric = nodeThresholds[metricType] !== undefined;
+                    
+                    if (!hasIndividualForThisMetric) {
+                        console.log(`[DEBUG] Updating ${nodeId} slider from ${input.value} to ${newValue}`);
+                        input.value = newValue;
+                        
+                        if (!skipTooltips) {
+                            PulseApp.tooltips.updateSliderTooltip(input);
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Original approach for comparison
+        const nodeSliders = document.querySelectorAll(`.node-alert-slider[data-metric="${metricType}"] input[type="range"]`);
+        console.log(`[DEBUG] Original selector found ${nodeSliders.length} node sliders for ${metricType}`);
         
         nodeSliders.forEach(slider => {
             const sliderContainer = slider.closest('.node-alert-slider');

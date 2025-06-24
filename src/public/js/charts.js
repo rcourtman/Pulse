@@ -486,6 +486,10 @@ PulseApp.charts = (() => {
             const timeRangeSelect = document.getElementById('time-range-select');
             const timeRange = timeRangeSelect ? timeRangeSelect.value : '60';
             
+            // Clear the processed data cache when fetching new data with different time range
+            processedDataCache.clear();
+            console.log(`[Charts] Fetching data for ${timeRange} minute range, cache cleared`);
+            
             const response = await fetch(`/api/charts?range=${timeRange}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
