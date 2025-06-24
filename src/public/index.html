@@ -244,11 +244,30 @@
     
     .alerts-mode .alert-threshold-input {
         display: block;
-        padding: 4px;
+        padding: 0;
+    }
+    
+    /* Remove gaps and padding from flex containers in alerts mode */
+    .alerts-mode .alert-threshold-input .flex {
+        gap: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* Ensure metric cells maintain same height in alerts mode */
+    .alerts-mode .usage-col,
+    .alerts-mode .net-disk-col {
+        padding-top: 0.25rem !important;
+        padding-bottom: 0.25rem !important;
     }
     
     .alert-threshold-input {
         display: none;
+    }
+    
+    /* Disable sticky positioning in alerts mode to fix Chrome jittering bug */
+    .alerts-mode .sticky {
+        position: relative !important;
+        left: auto !important;
     }
     
     /* Alert threshold slider styling */
@@ -894,24 +913,21 @@
                   </label>
                 </div>
               </div>
-              <!-- Time Range Dropdown for Charts Mode -->
-              <div id="time-range-dropdown-container" class="hidden items-center gap-2 flex-shrink-0">
-                <span class="text-xs text-gray-600 dark:text-gray-400 font-medium hidden sm:inline">Range:</span>
-                <select id="time-range-select" class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
-                  <option value="1">Last 1 minute</option>
-                  <option value="5">Last 5 minutes</option>
-                  <option value="15">Last 15 minutes</option>
-                  <option value="30">Last 30 minutes</option>
-                  <option value="60" selected>Last 1 hour</option>
-                  <option value="120">Last 2 hours</option>
-                  <option value="240">Last 4 hours</option>
-                  <option value="480">Last 8 hours</option>
-                  <option value="720">Last 12 hours</option>
-                  <option value="1440">Last 24 hours</option>
-                  <option value="2880">Last 2 days</option>
-                  <option value="10080">Last 7 days</option>
-                </select>
-              </div>
+              <!-- Hidden select element to maintain compatibility -->
+              <select id="time-range-select" class="hidden">
+                <option value="1">Last 1 minute</option>
+                <option value="5">Last 5 minutes</option>
+                <option value="15">Last 15 minutes</option>
+                <option value="30">Last 30 minutes</option>
+                <option value="60" selected>Last 1 hour</option>
+                <option value="120">Last 2 hours</option>
+                <option value="240">Last 4 hours</option>
+                <option value="480">Last 8 hours</option>
+                <option value="720">Last 12 hours</option>
+                <option value="1440">Last 24 hours</option>
+                <option value="2880">Last 2 days</option>
+                <option value="10080">Last 7 days</option>
+              </select>
               <div class="h-4 w-px bg-gray-300 dark:bg-gray-600 hidden lg:block flex-shrink-0"></div>
               <div class="flex items-center gap-1 flex-shrink-0">
                 <span class="text-xs text-gray-600 dark:text-gray-400 font-medium hidden lg:inline">Display:</span>
@@ -1001,13 +1017,15 @@
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netin" style="width: 95px;">Net In</th>
                   <th class="sticky top-0 bg-gray-100 dark:bg-gray-700 z-10 sortable p-1 px-2" data-sort="netout" style="width: 95px;">Net Out</th>
                 </tr>
-                <tr id="threshold-slider-row" class="hidden bg-blue-50 dark:bg-blue-900/20">
-                  <td class="sticky left-0 z-10 py-1 px-2 align-middle">
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs text-blue-700 dark:text-blue-300">Filters</span>
-                      <button id="reset-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
-                        Reset
-                      </button>
+                <tr id="threshold-slider-row" class="hidden bg-white dark:bg-gray-800 border-b border-gray-300 dark:border-gray-600">
+                  <td class="sticky left-0 z-10 py-1 px-2 align-middle bg-white dark:bg-gray-800">
+                    <div class="flex flex-col gap-1">
+                      <div class="flex items-center justify-between">
+                        <span class="text-xs text-blue-700 dark:text-blue-300 font-semibold">FILTERS</span>
+                        <button id="reset-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
+                          Reset
+                        </button>
+                      </div>
                     </div>
                   </td>
                   <td class="py-1 px-2 align-middle">-</td>
@@ -1098,15 +1116,55 @@
           </div>
 
           <!-- Threshold Filter Settings -->
-          <div id="threshold-filter-controls" class="hidden mt-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
+          <div id="threshold-filter-controls" class="hidden mt-3 px-4 py-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
             <div class="flex items-center justify-between">
-              <div class="flex items-center gap-4">
-                <span class="text-xs text-blue-700 dark:text-blue-300 font-medium">Threshold Settings</span>
+              <div class="flex items-center gap-6">
+                <span class="text-sm text-blue-700 dark:text-blue-300 font-semibold">Threshold Settings</span>
                 <label class="inline-flex items-center gap-2 cursor-pointer" title="Hide guests that don't meet thresholds instead of dimming">
                   <span class="text-xs text-blue-700 dark:text-blue-300">Hide non-matching:</span>
                   <input type="checkbox" id="threshold-hide-mode" class="sr-only peer">
                   <div class="relative w-9 h-5 bg-gray-200 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
                 </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- Charts Mode Controls -->
+          <div id="charts-mode-controls" class="hidden mt-3 px-4 py-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-md">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-6">
+                <span class="text-sm text-blue-700 dark:text-blue-300 font-semibold">Chart Settings</span>
+                <div class="flex items-center gap-3">
+                  <span class="text-xs text-blue-700 dark:text-blue-300">Time Range:</span>
+                  <div class="segmented-control inline-flex border border-blue-300 dark:border-blue-600 rounded overflow-hidden">
+                    <input type="radio" id="time-5m" name="time-range" value="5" class="hidden peer/5m">
+                    <label for="time-5m" data-time-range="5" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/5m:bg-blue-100 dark:peer-checked/5m:bg-blue-800/50 peer-checked/5m:text-blue-700 dark:peer-checked/5m:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">5m</label>
+                    
+                    <input type="radio" id="time-15m" name="time-range" value="15" class="hidden peer/15m">
+                    <label for="time-15m" data-time-range="15" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/15m:bg-blue-100 dark:peer-checked/15m:bg-blue-800/50 peer-checked/15m:text-blue-700 dark:peer-checked/15m:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">15m</label>
+                    
+                    <input type="radio" id="time-30m" name="time-range" value="30" class="hidden peer/30m">
+                    <label for="time-30m" data-time-range="30" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/30m:bg-blue-100 dark:peer-checked/30m:bg-blue-800/50 peer-checked/30m:text-blue-700 dark:peer-checked/30m:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">30m</label>
+                    
+                    <input type="radio" id="time-1h" name="time-range" value="60" class="hidden peer/1h" checked>
+                    <label for="time-1h" data-time-range="60" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/1h:bg-blue-100 dark:peer-checked/1h:bg-blue-800/50 peer-checked/1h:text-blue-700 dark:peer-checked/1h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">1h</label>
+                    
+                    <input type="radio" id="time-4h" name="time-range" value="240" class="hidden peer/4h">
+                    <label for="time-4h" data-time-range="240" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/4h:bg-blue-100 dark:peer-checked/4h:bg-blue-800/50 peer-checked/4h:text-blue-700 dark:peer-checked/4h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">4h</label>
+                    
+                    <input type="radio" id="time-12h" name="time-range" value="720" class="hidden peer/12h">
+                    <label for="time-12h" data-time-range="720" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/12h:bg-blue-100 dark:peer-checked/12h:bg-blue-800/50 peer-checked/12h:text-blue-700 dark:peer-checked/12h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">12h</label>
+                    
+                    <input type="radio" id="time-24h" name="time-range" value="1440" class="hidden peer/24h">
+                    <label for="time-24h" data-time-range="1440" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/24h:bg-blue-100 dark:peer-checked/24h:bg-blue-800/50 peer-checked/24h:text-blue-700 dark:peer-checked/24h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">24h</label>
+                    
+                    <input type="radio" id="time-7d" name="time-range" value="10080" class="hidden peer/7d">
+                    <label for="time-7d" data-time-range="10080" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/7d:bg-blue-100 dark:peer-checked/7d:bg-blue-800/50 peer-checked/7d:text-blue-700 dark:peer-checked/7d:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">7d</label>
+                  </div>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-blue-600 dark:text-blue-400">
+                  <span>Charts update every 2 seconds</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1222,30 +1280,6 @@
                     <button id="test-webhook-alert" class="w-full px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors" title="Send a test webhook notification">
                       Test Webhook
                     </button>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Global Node Thresholds Section -->
-              <div class="mt-4 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg">
-                <div class="flex items-center justify-between mb-3">
-                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Default Node Alert Thresholds</h4>
-                  <button id="reset-global-node-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-2 py-1 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
-                    Reset to Defaults
-                  </button>
-                </div>
-                <div class="grid grid-cols-3 gap-4">
-                  <div>
-                    <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">CPU</label>
-                    <div id="global-node-cpu-cell"></div>
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">Memory</label>
-                    <div id="global-node-memory-cell"></div>
-                  </div>
-                  <div>
-                    <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">Disk</label>
-                    <div id="global-node-disk-cell"></div>
                   </div>
                 </div>
               </div>
@@ -1547,6 +1581,7 @@
   <script src="/js/ui/backup-detail-card.js" defer></script>
   <script src="/js/ui/backups.js" defer></script>
   <script src="/js/ui/settings.js" defer></script>
+  <script src="/js/ui/chartsControls.js" defer></script>
   <script src="/js/alertsHandler.js" defer></script>
   <script src="/js/hotReload.js" defer></script>
   <script src="/js/main.js" defer></script>

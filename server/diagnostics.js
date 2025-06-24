@@ -701,6 +701,36 @@ class DiagnosticTool {
                 }
             };
 
+            // Add storage diagnostics
+            if (state.nodes && Array.isArray(state.nodes)) {
+                info.storageDebug = {
+                    nodeCount: state.nodes.length,
+                    storageByNode: []
+                };
+                
+                state.nodes.forEach(node => {
+                    const nodeStorage = {
+                        node: node.node,
+                        endpointId: node.endpointId,
+                        storageCount: node.storage?.length || 0,
+                        storages: []
+                    };
+                    
+                    if (node.storage && Array.isArray(node.storage)) {
+                        nodeStorage.storages = node.storage.map(s => ({
+                            name: s.storage,
+                            type: s.type,
+                            content: s.content,
+                            shared: s.shared,
+                            enabled: s.enabled,
+                            hasBackupContent: s.content?.includes('backup') || false
+                        }));
+                    }
+                    
+                    info.storageDebug.storageByNode.push(nodeStorage);
+                });
+            }
+            
             // Count PBS backups and get samples
             if (state.pbs && Array.isArray(state.pbs)) {
                 state.pbs.forEach((pbsInstance, idx) => {
@@ -1035,6 +1065,36 @@ class DiagnosticTool {
             const totalPveBackups = (report.state.pveBackups.backupTasks || 0) + 
                                   (report.state.pveBackups.storageBackups || 0);
             const totalPveSnapshots = report.state.pveBackups.guestSnapshots || 0;
+            
+            // Check for storage discovery issues
+            if (report.state.pveBackups.backupTasks > 0 && report.state.pveBackups.storageBackups === 0) {
+                // We have backup tasks but no storage backups found
+                let storageIssue = false;
+                let hasBackupStorage = false;
+                
+                if (report.state.storageDebug && report.state.storageDebug.storageByNode) {
+                    report.state.storageDebug.storageByNode.forEach(nodeInfo => {
+                        const backupStorages = nodeInfo.storages.filter(s => s.hasBackupContent && s.type !== 'pbs');
+                        if (backupStorages.length > 0) {
+                            hasBackupStorage = true;
+                        }
+                    });
+                }
+                
+                if (hasBackupStorage) {
+                    report.recommendations.push({
+                        severity: 'warning',
+                        category: 'Storage Access',
+                        message: `Found ${report.state.pveBackups.backupTasks} backup tasks but 0 storage backups. This suggests backup files exist but cannot be read. Check that the Pulse API user has 'Datastore.Audit' or 'Datastore.AllocateSpace' permissions on your backup storage.`
+                    });
+                } else {
+                    report.recommendations.push({
+                        severity: 'info',
+                        category: 'Storage Configuration',
+                        message: `Found ${report.state.pveBackups.backupTasks} backup tasks but no non-PBS storage configured for backups. If you're using PBS exclusively, this is normal. Otherwise, check your storage configuration.`
+                    });
+                }
+            }
             
             // If no PBS configured but PVE backups exist, that's fine
             if ((!report.state.pbs || report.state.pbs.instances === 0) && totalPveBackups > 0) {

@@ -1249,6 +1249,12 @@ app.post('/api/alerts/config', (req, res) => {
     try {
         const alertConfig = req.body;
         
+        console.log('[API] Received alert config:', JSON.stringify(alertConfig, null, 2));
+        console.log('[API] Node thresholds in request:', {
+            globalNodeThresholds: alertConfig.globalNodeThresholds,
+            nodeThresholds: alertConfig.nodeThresholds
+        });
+        
         // Validate the alert configuration
         if (!alertConfig || typeof alertConfig !== 'object') {
             return res.status(400).json({ 
@@ -1265,6 +1271,8 @@ app.post('/api/alerts/config', (req, res) => {
             type: 'per_guest_thresholds',
             globalThresholds: alertConfig.globalThresholds || {},
             guestThresholds: alertConfig.guestThresholds || {},
+            globalNodeThresholds: alertConfig.globalNodeThresholds || {},
+            nodeThresholds: alertConfig.nodeThresholds || {},
             alertLogic: alertConfig.alertLogic || 'and',
             duration: alertConfig.duration || 0,
             enabled: alertConfig.enabled !== false,
@@ -1286,6 +1294,8 @@ app.post('/api/alerts/config', (req, res) => {
             const success = stateManager.alertManager.updateRule('per-guest-alerts', {
                 globalThresholds: rule.globalThresholds,
                 guestThresholds: rule.guestThresholds,
+                globalNodeThresholds: rule.globalNodeThresholds,
+                nodeThresholds: rule.nodeThresholds,
                 alertLogic: rule.alertLogic,
                 duration: rule.duration,
                 notifications: rule.notifications,
