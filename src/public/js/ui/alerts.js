@@ -8,6 +8,8 @@ PulseApp.ui.alerts = (() => {
     let isAlertsMode = false;
     let guestAlertThresholds = {}; // Store per-guest thresholds
     let globalThresholds = {}; // Store global default thresholds
+    let nodeAlertThresholds = {}; // Store per-node thresholds
+    let globalNodeThresholds = {}; // Store global default node thresholds
     let alertLogic = 'or'; // Fixed to OR logic (dropdown removed)
     let alertDuration = 0; // Track alert duration in milliseconds (default instant for testing)
     let autoResolve = true; // Track whether alerts should auto-resolve
@@ -317,6 +319,12 @@ PulseApp.ui.alerts = (() => {
             // This will also apply the correct row styling via updateRowStylingOnly()
             transformTableToAlertsMode();
             
+            // Update node summary cards to show alert sliders
+            if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {
+                const nodesData = PulseApp.state?.get('nodesData') || [];
+                PulseApp.ui.nodes.updateNodeSummaryCards(nodesData);
+            }
+            
         } else {
             // Don't show the main threshold row - let the threshold module control its visibility
             
@@ -336,6 +344,12 @@ PulseApp.ui.alerts = (() => {
             
             // Clear only alert-specific row styling
             clearAllAlertStyling();
+            
+            // Update node summary cards to remove alert sliders
+            if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {
+                const nodesData = PulseApp.state?.get('nodesData') || [];
+                PulseApp.ui.nodes.updateNodeSummaryCards(nodesData);
+            }
             
             // Hide alerts count badge
             updateAlertsCountBadge();
@@ -357,6 +371,13 @@ PulseApp.ui.alerts = (() => {
             diskwrite: '',
             netin: '',
             netout: ''
+        };
+        
+        // Set default global node thresholds (higher than guest defaults)
+        globalNodeThresholds = {
+            cpu: 90,
+            memory: 95,
+            disk: 95
         };
         
         // Populate the table cells - exactly like threshold row
@@ -523,6 +544,9 @@ PulseApp.ui.alerts = (() => {
             resetButton.classList.add('opacity-50', 'cursor-not-allowed');
             resetButton.disabled = true;
         }
+        
+        // Initialize global node thresholds UI
+        updateGlobalNodeThresholdUI();
     }
 
     // Lightweight update function matching threshold system pattern
@@ -566,6 +590,56 @@ PulseApp.ui.alerts = (() => {
                 row.removeAttribute('data-alert-dimmed');
             }
         });
+    }
+
+    // Check if a node would trigger alerts based on current threshold settings
+    function checkNodeWouldTriggerAlerts(nodeId, nodeThresholds) {
+        // Get node data from the state
+        const nodesData = PulseApp.state.get('nodesData') || [];
+        const node = nodesData.find(n => n.node === nodeId);
+        if (!node) return false;
+        
+        // Only check online nodes for alerts
+        if (!node.uptime || node.uptime <= 0) return false;
+        
+        // Check each metric type
+        const metricsToCheck = ['cpu', 'memory', 'disk'];
+        
+        for (const metricType of metricsToCheck) {
+            // Get the effective threshold for this node/metric
+            let thresholdValue;
+            if (nodeThresholds[metricType] !== undefined) {
+                // Node has individual threshold
+                thresholdValue = nodeThresholds[metricType];
+            } else {
+                // Use global node threshold
+                thresholdValue = globalNodeThresholds[metricType];
+            }
+            
+            // Skip if no threshold is set for this metric
+            if (thresholdValue === undefined || thresholdValue === null || thresholdValue === '') continue;
+            
+            // Get current value and check against threshold
+            let currentValue = 0;
+            let hasValue = false;
+            
+            if (metricType === 'cpu' && node.cpu !== undefined) {
+                currentValue = node.cpu * 100; // Convert to percentage
+                hasValue = true;
+            } else if (metricType === 'memory' && node.mem !== undefined && node.maxmem) {
+                currentValue = (node.mem / node.maxmem) * 100;
+                hasValue = true;
+            } else if (metricType === 'disk' && node.disk !== undefined && node.maxdisk) {
+                currentValue = (node.disk / node.maxdisk) * 100;
+                hasValue = true;
+            }
+            
+            if (hasValue && currentValue > thresholdValue) {
+                return true; // Would trigger alert
+            }
+        }
+        
+        return false;
     }
 
     // Check if a guest would trigger alerts based on current threshold settings
@@ -727,11 +801,17 @@ PulseApp.ui.alerts = (() => {
         }
         
         // Count guests with custom alert settings
-        const customCount = Object.keys(guestAlertThresholds).length;
+        const guestCustomCount = Object.keys(guestAlertThresholds).length;
+        
+        // Count nodes with custom alert settings
+        const nodeCustomCount = Object.keys(nodeAlertThresholds).length;
+        
+        // Total custom count
+        const totalCustomCount = guestCustomCount + nodeCustomCount;
         
         // Update badge
-        alertsBadge.textContent = customCount;
-        if (customCount > 0) {
+        alertsBadge.textContent = totalCustomCount;
+        if (totalCustomCount > 0) {
             alertsBadge.classList.remove('hidden');
         } else {
             alertsBadge.classList.add('hidden');
@@ -743,19 +823,39 @@ PulseApp.ui.alerts = (() => {
         if (!saveMessage || !isAlertsMode) return;
         
         // Count how many guests would trigger alerts
-        let triggerCount = 0;
+        let guestTriggerCount = 0;
         const dashboardData = PulseApp.state?.get('dashboardData') || [];
         
         dashboardData.forEach(guest => {
             const guestThresholds = guestAlertThresholds[guest.id] || {};
             if (checkGuestWouldTriggerAlerts(guest.id, guestThresholds)) {
-                triggerCount++;
+                guestTriggerCount++;
+            }
+        });
+        
+        // Count how many nodes would trigger alerts
+        let nodeTriggerCount = 0;
+        const nodesData = PulseApp.state?.get('nodesData') || [];
+        
+        nodesData.forEach(node => {
+            const nodeThresholds = nodeAlertThresholds[node.node] || {};
+            if (checkNodeWouldTriggerAlerts(node.node, nodeThresholds)) {
+                nodeTriggerCount++;
             }
         });
         
         // Update message
-        if (triggerCount > 0) {
-            saveMessage.textContent = `${triggerCount} alert${triggerCount !== 1 ? 's' : ''} will trigger`;
+        const totalTriggerCount = guestTriggerCount + nodeTriggerCount;
+        if (totalTriggerCount > 0) {
+            let message = '';
+            if (guestTriggerCount > 0 && nodeTriggerCount > 0) {
+                message = `${guestTriggerCount} guest & ${nodeTriggerCount} node alert${totalTriggerCount !== 1 ? 's' : ''} will trigger`;
+            } else if (guestTriggerCount > 0) {
+                message = `${guestTriggerCount} guest alert${guestTriggerCount !== 1 ? 's' : ''} will trigger`;
+            } else {
+                message = `${nodeTriggerCount} node alert${nodeTriggerCount !== 1 ? 's' : ''} will trigger`;
+            }
+            saveMessage.textContent = message;
             saveMessage.classList.remove('text-green-600', 'dark:text-green-400');
             saveMessage.classList.add('text-amber-600', 'dark:text-amber-400');
         } else {
@@ -937,6 +1037,19 @@ PulseApp.ui.alerts = (() => {
         // Clear all individual guest thresholds
         guestAlertThresholds = {};
         
+        // Clear all individual node thresholds
+        nodeAlertThresholds = {};
+        
+        // Reset global node thresholds to defaults
+        globalNodeThresholds = {
+            cpu: 90,
+            memory: 95,
+            disk: 95
+        };
+        
+        // Update global node threshold UI
+        updateGlobalNodeThresholdUI();
+        
         // Update all guest rows smoothly
         if (isAlertsMode) {
             // First update input values to match global thresholds (skip tooltips during reset)
@@ -946,6 +1059,15 @@ PulseApp.ui.alerts = (() => {
             
             // Then update row styling with new thresholds (no flash since inputs are already updated)
             updateRowStylingOnly();
+            
+            // Update all node cards to reflect reset
+            updateAllNodeCardsStyling();
+            
+            // Update node summary cards to refresh sliders
+            if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {
+                const nodesData = PulseApp.state?.get('nodesData') || [];
+                PulseApp.ui.nodes.updateNodeSummaryCards(nodesData);
+            }
         }
         
         // Clear any tooltip positioning issues that might have occurred during reset
@@ -1172,6 +1294,8 @@ PulseApp.ui.alerts = (() => {
             type: 'per_guest_thresholds',
             globalThresholds: globalThresholds,
             guestThresholds: guestAlertThresholds,
+            globalNodeThresholds: globalNodeThresholds,
+            nodeThresholds: nodeAlertThresholds,
             alertLogic: alertLogic,
             duration: alertDuration,
             autoResolve: autoResolve,
@@ -1275,6 +1399,16 @@ PulseApp.ui.alerts = (() => {
                 // Load guest thresholds
                 if (config.guestThresholds) {
                     guestAlertThresholds = config.guestThresholds;
+                }
+                
+                // Load global node thresholds
+                if (config.globalNodeThresholds) {
+                    globalNodeThresholds = { ...globalNodeThresholds, ...config.globalNodeThresholds };
+                }
+                
+                // Load node thresholds
+                if (config.nodeThresholds) {
+                    nodeAlertThresholds = config.nodeThresholds;
                 }
                 
                 // Alert logic is now fixed to OR (dropdown removed)
@@ -1485,14 +1619,213 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
+    function updateGlobalNodeThresholdUI() {
+        // Populate the node threshold cells
+        const cpuCell = document.getElementById('global-node-cpu-cell');
+        const memoryCell = document.getElementById('global-node-memory-cell');
+        const diskCell = document.getElementById('global-node-disk-cell');
+        
+        if (cpuCell) {
+            const sliderId = 'global-node-alert-cpu';
+            const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(sliderId, 0, 100, 5, globalNodeThresholds.cpu || 90);
+            cpuCell.innerHTML = sliderHtml;
+            
+            // Setup event listener
+            const cpuSlider = document.getElementById(sliderId);
+            if (cpuSlider) {
+                cpuSlider.addEventListener('input', (e) => {
+                    updateGlobalNodeThreshold('cpu', e.target.value, false);
+                    PulseApp.tooltips.updateSliderTooltip(e.target);
+                });
+                cpuSlider.addEventListener('change', (e) => {
+                    updateGlobalNodeThreshold('cpu', e.target.value, true);
+                    PulseApp.tooltips.updateSliderTooltip(e.target);
+                });
+            }
+        }
+        
+        if (memoryCell) {
+            const sliderId = 'global-node-alert-memory';
+            const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(sliderId, 0, 100, 5, globalNodeThresholds.memory || 95);
+            memoryCell.innerHTML = sliderHtml;
+            
+            // Setup event listener
+            const memorySlider = document.getElementById(sliderId);
+            if (memorySlider) {
+                memorySlider.addEventListener('input', (e) => {
+                    updateGlobalNodeThreshold('memory', e.target.value, false);
+                    PulseApp.tooltips.updateSliderTooltip(e.target);
+                });
+                memorySlider.addEventListener('change', (e) => {
+                    updateGlobalNodeThreshold('memory', e.target.value, true);
+                    PulseApp.tooltips.updateSliderTooltip(e.target);
+                });
+            }
+        }
+        
+        if (diskCell) {
+            const sliderId = 'global-node-alert-disk';
+            const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(sliderId, 0, 100, 5, globalNodeThresholds.disk || 95);
+            diskCell.innerHTML = sliderHtml;
+            
+            // Setup event listener
+            const diskSlider = document.getElementById(sliderId);
+            if (diskSlider) {
+                diskSlider.addEventListener('input', (e) => {
+                    updateGlobalNodeThreshold('disk', e.target.value, false);
+                    PulseApp.tooltips.updateSliderTooltip(e.target);
+                });
+                diskSlider.addEventListener('change', (e) => {
+                    updateGlobalNodeThreshold('disk', e.target.value, true);
+                    PulseApp.tooltips.updateSliderTooltip(e.target);
+                });
+            }
+        }
+        
+        // Setup reset button
+        const resetButton = document.getElementById('reset-global-node-thresholds');
+        if (resetButton) {
+            resetButton.addEventListener('click', resetGlobalNodeThresholds);
+        }
+    }
+    
+    function resetGlobalNodeThresholds() {
+        // Reset to default values
+        globalNodeThresholds = {
+            cpu: 90,
+            memory: 95,
+            disk: 95
+        };
+        
+        // Update UI
+        updateGlobalNodeThresholdUI();
+        
+        // Update save message
+        updateAlertSaveMessage();
+    }
+
+    // Node threshold management functions
+    function updateNodeThreshold(nodeId, metricType, value, shouldUpdate = true) {
+        if (!nodeAlertThresholds[nodeId]) {
+            nodeAlertThresholds[nodeId] = {};
+        }
+        
+        // Convert value to number
+        const numValue = parseFloat(value);
+        
+        // Check if this is the same as the global node default
+        const globalDefault = globalNodeThresholds[metricType];
+        if (globalDefault !== undefined && numValue === parseFloat(globalDefault)) {
+            // Remove the individual setting to use global default
+            delete nodeAlertThresholds[nodeId][metricType];
+            
+            // If no thresholds left for this node, remove the node entry
+            if (Object.keys(nodeAlertThresholds[nodeId]).length === 0) {
+                delete nodeAlertThresholds[nodeId];
+            }
+        } else {
+            // Set the individual threshold
+            nodeAlertThresholds[nodeId][metricType] = numValue;
+        }
+        
+        // Update node card dimming
+        updateNodeCardStyling(nodeId);
+        
+        if (shouldUpdate) {
+            updateAlertSaveMessage();
+            updateAlertsCountBadge();
+        }
+    }
+    
+    function updateNodeCardStyling(nodeId) {
+        // Find the node card element
+        const nodeCard = document.querySelector(`[data-node-id="${nodeId}"]`);
+        if (!nodeCard) return;
+        
+        // Check if node has any custom settings
+        const hasCustomSettings = nodeAlertThresholds[nodeId] && Object.keys(nodeAlertThresholds[nodeId]).length > 0;
+        
+        // Update opacity using inline styles
+        if (hasCustomSettings) {
+            nodeCard.style.opacity = '1';
+            nodeCard.style.transition = 'opacity 0.1s ease-out';
+            nodeCard.setAttribute('data-alert-dimmed', 'false');
+        } else {
+            nodeCard.style.opacity = '0.4';
+            nodeCard.style.transition = 'opacity 0.1s ease-out';
+            nodeCard.setAttribute('data-alert-dimmed', 'true');
+        }
+    }
+    
+    function updateGlobalNodeThreshold(metricType, newValue, shouldSave = true) {
+        console.log('[updateGlobalNodeThreshold] Called with:', { metricType, newValue, shouldSave });
+        globalNodeThresholds[metricType] = newValue;
+        
+        // Update node slider values for nodes using global defaults
+        console.log('[updateGlobalNodeThreshold] Calling updateNodeInputValues...');
+        updateNodeInputValues(metricType, newValue);
+        
+        // Update all node card styling since global defaults changed
+        updateAllNodeCardsStyling();
+        
+        // Update save message
+        updateAlertSaveMessage();
+    }
+    
+    function updateNodeInputValues(metricType, newValue, skipTooltips = false) {
+        if (!isAlertsMode) return;
+        
+        // Use setTimeout with a longer delay to ensure node cards are rendered
+        setTimeout(() => {
+            // Find all node sliders for this metric
+            const nodeSliders = document.querySelectorAll(`.node-alert-slider[data-metric="${metricType}"] input[type="range"]`);
+            
+            nodeSliders.forEach(slider => {
+                const sliderContainer = slider.closest('.node-alert-slider');
+                const nodeId = sliderContainer?.getAttribute('data-node-id');
+                
+                if (nodeId) {
+                    // Only update sliders for nodes that don't have individual thresholds for this metric
+                    const nodeThresholds = nodeAlertThresholds[nodeId] || {};
+                    const hasIndividualForThisMetric = nodeThresholds[metricType] !== undefined;
+                    
+                    if (!hasIndividualForThisMetric) {
+                        slider.value = newValue;
+                        
+                        // Update tooltip for sliders (skip during reset operations)
+                        if (!skipTooltips) {
+                            PulseApp.tooltips.updateSliderTooltip(slider);
+                        }
+                    }
+                }
+            });
+        }, 100); // Delay to ensure DOM updates are complete
+    }
+    
+    function updateAllNodeCardsStyling() {
+        // Update styling for all node cards
+        const nodeCards = document.querySelectorAll('[data-node-id]');
+        nodeCards.forEach(card => {
+            const nodeId = card.getAttribute('data-node-id');
+            if (nodeId) {
+                updateNodeCardStyling(nodeId);
+            }
+        });
+    }
+
     // Public API
     return {
         init,
         isAlertsMode: () => isAlertsMode,
         getGuestThresholds: () => guestAlertThresholds,
         getGlobalThresholds: () => globalThresholds,
+        getNodeThresholds: () => nodeAlertThresholds,
+        getGlobalNodeThresholds: () => globalNodeThresholds,
         clearAllAlerts: clearAllAlerts,
         updateGuestThreshold: updateGuestThreshold,
+        updateNodeThreshold: updateNodeThreshold,
+        updateGlobalNodeThreshold: updateGlobalNodeThreshold,
+        updateNodeInputValues: updateNodeInputValues, // Added for debugging
         updateRowStylingOnly: updateRowStylingOnly,
         getActiveAlertsForGuest: getActiveAlertsForGuest,
         loadSavedConfiguration: loadSavedConfiguration,

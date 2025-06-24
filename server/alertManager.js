@@ -186,6 +186,88 @@ class AlertManager extends EventEmitter {
     }
 
     // Enhanced alert checking with custom conditions
+    async checkNodeMetrics(nodes, nodeThresholds, globalNodeThresholds) {
+        try {
+            if (!nodeThresholds && !globalNodeThresholds) return;
+            
+            const timestamp = Date.now();
+            const newlyTriggeredAlerts = [];
+            
+            nodes.forEach(node => {
+                try {
+                    const nodeId = node.node;
+                    if (!nodeId) return;
+                    
+                    // Get thresholds for this node
+                    const nodeSpecificThresholds = nodeThresholds?.[nodeId] || {};
+                    
+                    // Check each metric
+                    ['cpu', 'memory', 'disk'].forEach(metric => {
+                        const threshold = nodeSpecificThresholds[metric] !== undefined 
+                            ? nodeSpecificThresholds[metric] 
+                            : globalNodeThresholds?.[metric];
+                            
+                        if (threshold === undefined || threshold === '') return;
+                        
+                        let currentValue = 0;
+                        if (metric === 'cpu' && node.cpu !== undefined) {
+                            currentValue = node.cpu * 100; // Convert to percentage
+                        } else if (metric === 'memory' && node.mem !== undefined && node.maxmem) {
+                            currentValue = (node.mem / node.maxmem) * 100;
+                        } else if (metric === 'disk' && node.disk !== undefined && node.maxdisk) {
+                            currentValue = (node.disk / node.maxdisk) * 100;
+                        } else {
+                            return; // Skip if metric not available
+                        }
+                        
+                        const alertKey = `node_${nodeId}_${metric}`;
+                        const existingAlert = this.activeAlerts.get(alertKey);
+                        
+                        if (currentValue > threshold) {
+                            if (!existingAlert) {
+                                // Create new alert
+                                const alert = {
+                                    id: `${alertKey}_${timestamp}`,
+                                    type: 'node_threshold',
+                                    nodeId: nodeId,
+                                    nodeName: node.displayName || node.node,
+                                    metric: metric,
+                                    threshold: threshold,
+                                    currentValue: currentValue,
+                                    triggeredAt: timestamp,
+                                    state: 'active',
+                                    severity: currentValue > threshold + 10 ? 'critical' : 'warning',
+                                    message: `Node ${node.displayName || node.node} ${metric} usage (${currentValue.toFixed(1)}%) exceeds threshold (${threshold}%)`
+                                };
+                                
+                                this.activeAlerts.set(alertKey, alert);
+                                newlyTriggeredAlerts.push(alert);
+                                console.log(`[AlertManager] Node alert triggered: ${alert.message}`);
+                            }
+                        } else if (existingAlert && existingAlert.type === 'node_threshold') {
+                            // Resolve existing alert if value dropped below threshold
+                            existingAlert.state = 'resolved';
+                            existingAlert.resolvedAt = timestamp;
+                            this.emit('alertResolved', existingAlert);
+                            this.activeAlerts.delete(alertKey);
+                            console.log(`[AlertManager] Node alert resolved: ${existingAlert.message}`);
+                        }
+                    });
+                } catch (nodeError) {
+                    console.error(`[AlertManager] Error processing node ${node.node}:`, nodeError);
+                }
+            });
+            
+            // Emit newly triggered alerts
+            newlyTriggeredAlerts.forEach(alert => {
+                this.emit('alert', alert);
+            });
+            
+        } catch (error) {
+            console.error('[AlertManager] Error in checkNodeMetrics:', error);
+        }
+    }
+
     async checkMetrics(guests, metrics) {
         // Check if alerts are globally disabled
         if (process.env.ALERTS_ENABLED === 'false') {
