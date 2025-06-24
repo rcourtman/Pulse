@@ -1530,7 +1530,7 @@ PulseApp.ui.dashboard = (() => {
         const netOutFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeedWithStyling(guest.netout, 0) : '-';
 
         // Create I/O cells with both text and chart versions
-        const guestId = guest.id;
+        const guestId = guest.uniqueId;
         
         let diskReadCell, diskWriteCell, netInCell, netOutCell;
         

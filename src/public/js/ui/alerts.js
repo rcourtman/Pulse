@@ -453,25 +453,26 @@ PulseApp.ui.alerts = (() => {
         setupGlobalThresholdEventListeners();
     }
 
-    // Optimized event setup: lightweight during drag, full update on release
+    // Optimized event setup: update everything during drag for consistency
     function setupAlertSliderEvents(sliderElement, metricType) {
         if (!sliderElement) return;
         
-        // Lightweight updates during drag (styling only, like threshold system)
+        // Full updates during drag (like node sliders)
         sliderElement.addEventListener('input', (event) => {
             const value = event.target.value;
             globalThresholds[metricType] = value; // Update state immediately
             globalNodeThresholds[metricType] = value; // Also update node thresholds
             updateRowStylingOnly(); // Fast styling-only update
             updateAllNodeCardsStyling(); // Update node styling too
+            // Don't update guest or node input values during drag - only on release
             PulseApp.tooltips.updateSliderTooltip(event.target);
         });
         
-        // Full update on release (input values)
+        // Also update on release for consistency
         sliderElement.addEventListener('change', (event) => {
             const value = event.target.value;
             updateGuestInputValues(metricType, value, true); // Update guest input values
-            updateNodeInputValues(metricType, value, true); // Also update node input values
+            updateNodeInputValues(metricType, value, true); // Update node input values on release only
             // Changes will be saved when user clicks save button
         });
         
@@ -1207,6 +1208,13 @@ PulseApp.ui.alerts = (() => {
                 slider.addEventListener('input', (event) => {
                     const value = event.target.value;
                     updateGuestThreshold(guestId, metricType, value, true); // Save immediately
+                    PulseApp.tooltips.updateSliderTooltip(event.target);
+                });
+                
+                // Also add change event for consistency with node sliders
+                slider.addEventListener('change', (event) => {
+                    const value = event.target.value;
+                    updateGuestThreshold(guestId, metricType, value, true); // Save on release too
                     PulseApp.tooltips.updateSliderTooltip(event.target);
                 });
                 

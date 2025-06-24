@@ -383,8 +383,14 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 // For standalone nodes, use the configured name
                 nodeDisplayName = config.name;
             } else if (endpointType === 'cluster' && nodes.length > 1 && config.name) {
-                // For multi-node clusters, prefix with configured name
-                nodeDisplayName = `${config.name} - ${correspondingNodeInfo.node}`;
+                // For multi-node clusters, check if configured name matches node name (case-insensitive)
+                if (config.name.toLowerCase() === correspondingNodeInfo.node.toLowerCase()) {
+                    // If they match, just use the configured name to avoid duplication
+                    nodeDisplayName = config.name;
+                } else {
+                    // Otherwise, prefix with configured name
+                    nodeDisplayName = `${config.name} - ${correspondingNodeInfo.node}`;
+                }
             }
             
             // Check cluster status first for offline nodes
