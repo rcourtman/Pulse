@@ -886,15 +886,10 @@ PulseApp.ui.alerts = (() => {
             globalThresholds[key] != defaultThresholds[key] // Use != for loose comparison
         );
         
-        // Update global row dimming based on whether values are customized
+        // Global row should never be dimmed - it's the master control
         if (globalThresholdsRow) {
-            if (hasGlobalChanges) {
-                globalThresholdsRow.style.opacity = '';
-                globalThresholdsRow.style.transition = '';
-            } else {
-                globalThresholdsRow.style.opacity = '0.4';
-                globalThresholdsRow.style.transition = 'opacity 0.1s ease-out';
-            }
+            globalThresholdsRow.style.opacity = '';
+            globalThresholdsRow.style.transition = '';
         }
         
         if (resetButton) {
