@@ -146,6 +146,19 @@ PulseApp.charts = (() => {
         const now = Date.now();
         const diffMs = now - timestamp;
         
+        // Debug for 1-minute range
+        const timeRangeSelect = document.getElementById('time-range-select');
+        if (timeRangeSelect && timeRangeSelect.value === '1' && firstTimeAgoCall) {
+            console.log('[getTimeAgo] First few calls:', {
+                timestamp,
+                now,
+                diffMs,
+                diffSeconds: Math.floor(diffMs / 1000)
+            });
+            timeAgoCallCount++;
+            if (timeAgoCallCount > 5) firstTimeAgoCall = false;
+        }
+        
         // Handle edge cases - for future timestamps, show as 0s ago
         if (diffMs < 0) {
             return '0s ago';
@@ -168,6 +181,9 @@ PulseApp.charts = (() => {
             return `${diffSeconds}s ago`;
         }
     }
+    
+    let firstTimeAgoCall = true;
+    let timeAgoCallCount = 0;
 
     function createOrUpdateChart(containerId, data, metric, chartType = 'mini', guestId) {
         const container = document.getElementById(containerId);
@@ -367,10 +383,10 @@ PulseApp.charts = (() => {
                     path.setAttribute('stroke', originalColor);
                 }
             }
-            // Remove hover indicator
-            const hoverDot = svg.querySelector('.hover-indicator');
-            if (hoverDot) {
-                hoverDot.remove();
+            // Clear hover indicator group
+            const hoverGroup = svg.querySelector('.hover-indicator-group');
+            if (hoverGroup) {
+                hoverGroup.innerHTML = '';
             }
             if (PulseApp.tooltips) {
                 PulseApp.tooltips.hideTooltip();
@@ -397,9 +413,18 @@ PulseApp.charts = (() => {
         const area = chartGroup?.querySelector('.chart-area');
         if (!path || !chartData || chartData.length < 2) return;
 
-        // Update colors
+        // Update colors - but preserve hover state
         if (color) {
-            path.setAttribute('stroke', color);
+            // Check if we're currently hovering (original color is stored)
+            const isHovering = path.hasAttribute('data-original-color');
+            
+            if (isHovering) {
+                // Update the stored original color but don't change the current stroke
+                path.setAttribute('data-original-color', color);
+            } else {
+                // Not hovering, update the stroke directly
+                path.setAttribute('stroke', color);
+            }
             
             // Update gradient colors
             const gradientStart = svg.querySelector('.gradient-start');
@@ -493,12 +518,58 @@ PulseApp.charts = (() => {
             // Clear the processed data cache when fetching new data with different time range
             processedDataCache.clear();
             
+            // Reset debug flags
+            firstTimeAgoCall = true;
+            timeAgoCallCount = 0;
+            
             const response = await fetch(`/api/charts?range=${timeRange}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             const data = await response.json();
             
+            // Calculate time offset between server and browser
+            const serverTime = data.timestamp || Date.now();
+            const browserTime = Date.now();
+            const timeOffset = browserTime - serverTime;
+            
+            // Only log significant time offsets (more than 10 minutes)
+            if (Math.abs(timeOffset) > 600000) {
+                console.warn('[fetchChartData] Large time offset detected:', {
+                    serverTime,
+                    browserTime,
+                    offset: timeOffset,
+                    offsetSeconds: Math.round(timeOffset / 1000)
+                });
+            }
+            
+            // Adjust all timestamps in the data to compensate for time offset
+            if (data.data) {
+                for (const guestId in data.data) {
+                    for (const metric in data.data[guestId]) {
+                        if (Array.isArray(data.data[guestId][metric])) {
+                            data.data[guestId][metric] = data.data[guestId][metric].map(point => ({
+                                ...point,
+                                timestamp: point.timestamp + timeOffset
+                            }));
+                        }
+                    }
+                }
+            }
+            
+            // Adjust node data timestamps
+            if (data.nodeData) {
+                for (const nodeId in data.nodeData) {
+                    for (const metric in data.nodeData[nodeId]) {
+                        if (Array.isArray(data.nodeData[nodeId][metric])) {
+                            data.nodeData[nodeId][metric] = data.nodeData[nodeId][metric].map(point => ({
+                                ...point,
+                                timestamp: point.timestamp + timeOffset
+                            }));
+                        }
+                    }
+                }
+            }
             
             chartDataCache = data.data;
             nodeChartDataCache = data.nodeData || {};
@@ -727,6 +798,7 @@ PulseApp.charts = (() => {
             // Use cached data if it's less than 30 seconds old and data hasn't changed
             return cached.data;
         }
+        
 
         let targetPoints = CHART_CONFIG.renderPoints;
         
@@ -894,21 +966,18 @@ PulseApp.charts = (() => {
     
     // Helper function to update hover indicator
     function updateHoverIndicator(svg, index, point, data, config, minValue, maxValue) {
-        // Remove existing hover indicator
-        let hoverDot = svg.querySelector('.hover-indicator');
-        if (!hoverDot) {
-            // Create new hover dot
-            hoverDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            hoverDot.setAttribute('class', 'hover-indicator');
-            hoverDot.setAttribute('r', '3');
-            hoverDot.setAttribute('fill', '#ffffff');
-            hoverDot.setAttribute('stroke', '#000000');
-            hoverDot.setAttribute('stroke-width', '1.5');
-            hoverDot.style.pointerEvents = 'none';
-            svg.appendChild(hoverDot);
+        // Create a separate group for the hover indicator to maintain aspect ratio
+        let hoverGroup = svg.querySelector('.hover-indicator-group');
+        if (!hoverGroup) {
+            hoverGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            hoverGroup.setAttribute('class', 'hover-indicator-group');
+            svg.appendChild(hoverGroup);
         }
         
-        // Calculate position
+        // Clear existing indicators
+        hoverGroup.innerHTML = '';
+        
+        // Calculate position in SVG coordinates
         const chartAreaWidth = config.width - 2 * config.padding;
         const chartAreaHeight = config.height - 2 * config.padding;
         const xScale = chartAreaWidth / Math.max(1, data.length - 1);
@@ -918,13 +987,35 @@ PulseApp.charts = (() => {
         const x = config.padding + index * xScale;
         const y = config.height - config.padding - (valueRange > 0 ? (point.value - minValue) * yScale : chartAreaHeight / 2);
         
+        // Get the actual rendered size of the SVG to calculate proper circle size
+        const svgRect = svg.getBoundingClientRect();
+        const aspectRatioX = svgRect.width / config.width;
+        const aspectRatioY = svgRect.height / config.height;
+        
+        // Create ellipse instead of circle to compensate for stretching
+        const hoverDot = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+        hoverDot.setAttribute('class', 'hover-indicator');
+        
+        // Adjust radii based on aspect ratio to maintain circular appearance
+        const baseRadius = 2; // Smaller circle
+        const rx = aspectRatioY > aspectRatioX ? baseRadius : baseRadius * (aspectRatioY / aspectRatioX);
+        const ry = aspectRatioX > aspectRatioY ? baseRadius : baseRadius * (aspectRatioX / aspectRatioY);
+        
+        hoverDot.setAttribute('rx', rx);
+        hoverDot.setAttribute('ry', ry);
         hoverDot.setAttribute('cx', x);
         hoverDot.setAttribute('cy', y);
+        hoverDot.setAttribute('fill', '#ffffff');
+        hoverDot.setAttribute('stroke', '#000000');
+        hoverDot.setAttribute('stroke-width', '1.5');
+        hoverDot.style.pointerEvents = 'none';
         
         // Update stroke color based on theme
         const isDarkMode = document.documentElement.classList.contains('dark');
         hoverDot.setAttribute('stroke', isDarkMode ? '#ffffff' : '#000000');
         hoverDot.setAttribute('fill', isDarkMode ? '#000000' : '#ffffff');
+        
+        hoverGroup.appendChild(hoverDot);
     }
     
     // Initialize performance optimizations
