@@ -489,14 +489,20 @@ PulseApp.charts = (() => {
         updateAxisLabels(svg, minValue, maxValue, config, metric);
 
         // Update hover interaction data with min/max info
-        const overlay = svg.querySelector('.chart-overlay');
+        let overlay = svg.querySelector('.chart-overlay');
+        if (!overlay) {
+            // Recreate overlay if missing (can happen after time range changes)
+            addHoverInteraction(svg, chartData, metric, config);
+            overlay = svg.querySelector('.chart-overlay');
+        }
         if (overlay) {
             overlay._chartData = chartData.slice();
             overlay._metric = metric;
             overlay._config = config;
             overlay._minValue = minValue;
             overlay._maxValue = maxValue;
-            
+            // Ensure overlay is interactive after data update
+            overlay.style.pointerEvents = 'all';
         }
 
         // Update paths immediately to prevent blinking
