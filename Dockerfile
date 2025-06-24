@@ -1,27 +1,24 @@
+# ---- Dependencies Stage ----
+FROM node:20-alpine AS deps
+WORKDIR /usr/src/app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
 # ---- Builder Stage ----
 FROM node:20-alpine AS builder
 
 WORKDIR /usr/src/app
 
-# Install necessary build tools (if any, e.g., python, make for some native deps)
-# RUN apk add --no-cache ...
-
-# Copy only necessary package files first
+# Copy package files and install ALL dependencies
 COPY package*.json ./
-
-# Install ALL dependencies (including dev needed for build)
-# Using npm ci for faster, more reliable builds in CI/CD
 RUN npm ci
 
-# Copy the rest of the application code
-# Important: Copy . before running build commands
-COPY . .
+# Copy only the files needed for building
+COPY src/ ./src/
+COPY server/ ./server/
 
 # Build the production CSS
 RUN npm run build:css
-
-# Prune devDependencies after build
-RUN npm prune --production
 
 # ---- Runner Stage ----
 FROM node:20-alpine
@@ -31,24 +28,21 @@ WORKDIR /usr/src/app
 # Use existing node user (uid:gid 1000:1000) instead of system service accounts
 # The node:18-alpine image already has a 'node' user with uid:gid 1000:1000
 
-# Copy necessary files from builder stage
-# Copy node_modules first (can be large)
-COPY --from=builder /usr/src/app/node_modules ./node_modules
-# Copy built assets
-COPY --from=builder /usr/src/app/src/public ./src/public
-# Copy server code
-COPY --from=builder /usr/src/app/server ./server
-# Copy root package.json needed for npm start and potentially other metadata
-COPY --from=builder /usr/src/app/package.json ./
-# Optionally copy other root files if needed by the application (e.g., .env.example, README)
-# COPY --from=builder /usr/src/app/.env.example ./
+# Copy production dependencies from deps stage
+COPY --from=deps --chown=node:node /usr/src/app/node_modules ./node_modules
+
+# Copy built assets from builder
+COPY --from=builder --chown=node:node /usr/src/app/src/public ./src/public
+
+# Copy server code and package.json
+COPY --chown=node:node server/ ./server/
+COPY --chown=node:node package.json ./
 
 # Create config directory for persistent volume mount and data directory
 RUN mkdir -p /usr/src/app/config /usr/src/app/data
 
-# Ensure correct ownership of application files
-# Use /usr/src/app to cover everything copied
-RUN chown -R node:node /usr/src/app
+# Ensure correct ownership of directories
+RUN chown -R node:node /usr/src/app/config /usr/src/app/data
 
 # Switch to non-root user
 USER node

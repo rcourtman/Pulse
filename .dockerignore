@@ -36,12 +36,11 @@ Thumbs.db
 .gitignore
 
 # Documentation
-README.md
-CHANGELOG.md
+*.md
 docs/
 
 # Scripts not needed in production
-scripts/take-screenshots.js
+scripts/
 playwright.config.js
 
 # Temporary files
@@ -63,7 +62,14 @@ config/
 # Development configs
 .eslintrc*
 .prettierrc*
-tailwind.config.js
+postcss.config.js
+
+# Docker files
+Dockerfile*
+docker-compose*
+
+# CI/CD
+.github/
 
 # Package lock files - KEEP package-lock.json for npm ci
 # package-lock.json
