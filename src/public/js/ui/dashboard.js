@@ -1530,7 +1530,7 @@ PulseApp.ui.dashboard = (() => {
         const netOutFormatted = guest.status === STATUS_RUNNING ? PulseApp.utils.formatSpeedWithStyling(guest.netout, 0) : '-';
 
         // Create I/O cells with both text and chart versions
-        const guestId = guest.uniqueId;
+        const guestId = guest.id;
         
         let diskReadCell, diskWriteCell, netInCell, netOutCell;
         
@@ -1744,16 +1744,19 @@ PulseApp.ui.dashboard = (() => {
             
             // Start fetching chart data if needed and update charts
             if (PulseApp.charts) {
-                // First try to update with existing data
-                PulseApp.charts.updateAllCharts(true);
-                
-                // Then fetch fresh data if needed
-                if (PulseApp.charts.getChartData) {
-                    PulseApp.charts.getChartData().then(() => {
-                        // Update again with fresh data
-                        PulseApp.charts.updateAllCharts(true);
-                    });
-                }
+                // Small delay to ensure DOM is ready after mode switch
+                setTimeout(() => {
+                    // First try to update with existing data
+                    PulseApp.charts.updateAllCharts(true);
+                    
+                    // Then fetch fresh data if needed
+                    if (PulseApp.charts.getChartData) {
+                        PulseApp.charts.getChartData().then(() => {
+                            // Update again with fresh data
+                            PulseApp.charts.updateAllCharts(true);
+                        });
+                    }
+                }, 50); // 50ms delay to ensure DOM updates are complete
             }
             
             // Refresh node summary cards to show charts
