@@ -581,11 +581,20 @@ PulseApp.alerts = (() => {
             console.log('[Alerts] Alert storm subsided. Resuming normal operation.');
         }
         
-        const existingIndex = activeAlerts.findIndex(a => 
-            a.ruleId === alert.ruleId && 
-            a.guest.vmid === alert.guest.vmid && 
-            a.guest.node === alert.guest.node
-        );
+        // For bundled alerts, check by guest only (not rule ID) to prevent duplicates
+        const existingIndex = activeAlerts.findIndex(a => {
+            if (alert.rule?.type === 'guest_bundled' || a.rule?.type === 'guest_bundled') {
+                // For bundled alerts, match by guest only
+                return a.guest.vmid === alert.guest.vmid && 
+                       a.guest.node === alert.guest.node &&
+                       a.guest.endpointId === alert.guest.endpointId;
+            } else {
+                // For other alerts, match by rule and guest
+                return a.ruleId === alert.ruleId && 
+                       a.guest.vmid === alert.guest.vmid && 
+                       a.guest.node === alert.guest.node;
+            }
+        });
         
         if (existingIndex >= 0) {
             activeAlerts[existingIndex] = alert;

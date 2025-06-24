@@ -103,11 +103,12 @@ class DiagnosticTool {
             hasIssues: report.recommendations.some(r => r.severity === 'critical' || r.severity === 'warning'),
             criticalIssues: report.recommendations.filter(r => r.severity === 'critical').length,
             warnings: report.recommendations.filter(r => r.severity === 'warning').length,
+            info: report.recommendations.filter(r => r.severity === 'info').length,
             isTimingIssue: report.state.loadTimeout || (report.state.serverUptime < 60 && (!report.state.guests || report.state.guests.total === 0))
         };
 
-        // Return unsanitized report - sanitization will be done client-side for copy/download
-        return report;
+        // Return sanitized report by default for privacy
+        return this.sanitizeReport(report);
     }
 
     sanitizeReport(report) {
@@ -146,10 +147,22 @@ class DiagnosticTool {
         // Sanitize permissions section
         if (sanitized.permissions) {
             if (sanitized.permissions.proxmox) {
-                sanitized.permissions.proxmox = sanitized.permissions.proxmox.map(perm => ({
+                sanitized.permissions.proxmox = sanitized.permissions.proxmox.map((perm, permIndex) => ({
                     ...perm,
                     host: this.sanitizeUrl(perm.host),
                     name: this.sanitizeUrl(perm.name),
+                    // Sanitize storage details if present
+                    storageBackupAccess: perm.storageBackupAccess ? {
+                        ...perm.storageBackupAccess,
+                        storageDetails: perm.storageBackupAccess.storageDetails ? 
+                            perm.storageBackupAccess.storageDetails.map((storage, idx) => ({
+                                node: `node-${idx + 1}`,
+                                storage: `storage-${permIndex + 1}-${idx + 1}`,
+                                type: storage.type,
+                                accessible: storage.accessible,
+                                backupCount: storage.backupCount
+                            })) : []
+                    } : perm.storageBackupAccess,
                     // Keep diagnostic info but sanitize error messages
                     errors: perm.errors ? perm.errors.map(err => this.sanitizeErrorMessage(err)) : []
                 }));
@@ -167,7 +180,15 @@ class DiagnosticTool {
                     // Keep namespace test results
                     canListNamespaces: perm.canListNamespaces,
                     discoveredNamespaces: perm.discoveredNamespaces ? perm.discoveredNamespaces.length : 0,
-                    namespaceAccess: perm.namespaceAccess || {},
+                    // Sanitize namespace names but keep structure
+                    namespaceAccess: perm.namespaceAccess ? Object.keys(perm.namespaceAccess).reduce((acc, ns, nsIdx) => {
+                        const sanitizedNs = ns === 'root' ? 'root' : `namespace-${nsIdx}`;
+                        acc[sanitizedNs] = {
+                            ...perm.namespaceAccess[ns],
+                            namespace: sanitizedNs
+                        };
+                        return acc;
+                    }, {}) : {},
                     // Keep diagnostic info but sanitize error messages
                     errors: perm.errors ? perm.errors.map(err => this.sanitizeErrorMessage(err)) : []
                 }));
@@ -202,6 +223,19 @@ class DiagnosticTool {
                     }))
                 }));
             }
+        }
+        
+        // Sanitize PBS namespace info if present
+        if (sanitized.state && sanitized.state.pbs && sanitized.state.pbs.namespaceInfo) {
+            const sanitizedNamespaceInfo = {};
+            Object.keys(sanitized.state.pbs.namespaceInfo).forEach((ns, idx) => {
+                const sanitizedNs = ns === 'root' ? 'root' : `namespace-${idx}`;
+                sanitizedNamespaceInfo[sanitizedNs] = {
+                    ...sanitized.state.pbs.namespaceInfo[ns],
+                    instances: sanitized.state.pbs.namespaceInfo[ns].instances || []
+                };
+            });
+            sanitized.state.pbs.namespaceInfo = sanitizedNamespaceInfo;
         }
         
         // Sanitize recommendations
@@ -243,7 +277,13 @@ class DiagnosticTool {
             .replace(/https?:\/\/[^\/\s:]+(?::\d+)?/g, '[HOSTNAME]')
             .replace(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/g, '[HOSTNAME]')
             .replace(/"[^"]*\.lan[^"]*"/g, '"[HOSTNAME]"')
-            .replace(/"[^"]*\.local[^"]*"/g, '"[HOSTNAME]"');
+            .replace(/"[^"]*\.local[^"]*"/g, '"[HOSTNAME]"')
+            // Sanitize namespace names in recommendations (but keep 'root')
+            .replace(/namespaces?: ([a-zA-Z0-9-_]+(?:, [a-zA-Z0-9-_]+)*)/g, (match, namespaces) => {
+                const nsList = namespaces.split(', ');
+                const sanitizedList = nsList.map(ns => ns === 'root' ? 'root' : '[namespace]');
+                return match.replace(namespaces, sanitizedList.join(', '));
+            });
             
         return sanitized;
     }
