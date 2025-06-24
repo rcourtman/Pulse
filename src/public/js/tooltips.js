@@ -57,6 +57,11 @@ PulseApp.tooltips = (() => {
     }
 
     function handleMouseOut(event) {
+        // Don't hide programmatic tooltips (like chart tooltips)
+        if (tooltipElement && tooltipElement.getAttribute('data-programmatic') === 'true') {
+            return;
+        }
+        
         const target = event.target.closest('[data-tooltip], .metric-tooltip-trigger, .storage-tooltip-trigger, .truncate');
         if (!target) return;
         
@@ -191,18 +196,29 @@ PulseApp.tooltips = (() => {
     }
 
     function showTooltip(event, content) {
-        if (!tooltipElement) return;
+        if (!tooltipElement) {
+            console.error('[Tooltip] tooltipElement is null');
+            return;
+        }
+        
+        // Mark as programmatic tooltip to prevent global handlers from interfering
+        tooltipElement.setAttribute('data-programmatic', 'true');
         
         tooltipElement.innerHTML = content;
         positionTooltip(event);
         tooltipElement.classList.remove('hidden', 'opacity-0');
         tooltipElement.classList.add('opacity-100');
+        
+        // Force display to ensure it's visible
+        tooltipElement.style.display = 'block';
     }
 
     function hideTooltip() {
         if (tooltipElement) {
             tooltipElement.classList.add('hidden', 'opacity-0');
             tooltipElement.classList.remove('opacity-100');
+            tooltipElement.style.display = 'none';
+            tooltipElement.removeAttribute('data-programmatic');
         }
     }
 
