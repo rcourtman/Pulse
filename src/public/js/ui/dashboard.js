@@ -232,6 +232,12 @@ PulseApp.ui.dashboard = (() => {
             chartsToggleCheckbox.addEventListener('change', toggleChartsMode);
         }
         
+        // Time range dropdown event listener
+        const timeRangeSelect = document.getElementById('time-range-select');
+        if (timeRangeSelect) {
+            timeRangeSelect.addEventListener('change', handleTimeRangeChange);
+        }
+        
         // Initialize mobile scroll indicators
         if (window.innerWidth < 768) {
             _initMobileScrollIndicators();
@@ -1647,15 +1653,39 @@ PulseApp.ui.dashboard = (() => {
         guestMetricDragSnapshot = {};
     }
 
+    function handleTimeRangeChange() {
+        const timeRangeSelect = document.getElementById('time-range-select');
+        if (!timeRangeSelect) return;
+        
+        const selectedMinutes = parseInt(timeRangeSelect.value);
+        console.log(`[Dashboard] Time range changed to: ${selectedMinutes} minutes`);
+        
+        // Update the chart data with new time range
+        if (PulseApp.charts) {
+            // Force a fresh fetch with the new time range
+            PulseApp.charts.fetchChartData().then(() => {
+                // Update all charts with the new data
+                PulseApp.charts.updateAllCharts();
+            });
+        }
+    }
+
     function toggleChartsMode() {
         const mainContainer = document.getElementById('main');
         const checkbox = document.getElementById('toggle-charts-checkbox');
         const label = checkbox ? checkbox.parentElement : null;
+        const timeRangeContainer = document.getElementById('time-range-dropdown-container');
         
         if (checkbox && checkbox.checked) {
             // Switch to charts mode  
             mainContainer.classList.add('charts-mode');
             if (label) label.title = 'Toggle Metrics View';
+            
+            // Show time range dropdown
+            if (timeRangeContainer) {
+                timeRangeContainer.classList.remove('hidden');
+                timeRangeContainer.classList.add('flex');
+            }
             
             // Turn off thresholds toggle and hide its elements
             const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
@@ -1703,6 +1733,12 @@ PulseApp.ui.dashboard = (() => {
             // Switch to metrics mode
             mainContainer.classList.remove('charts-mode');
             if (label) label.title = 'Toggle Charts View';
+            
+            // Hide time range dropdown
+            if (timeRangeContainer) {
+                timeRangeContainer.classList.add('hidden');
+                timeRangeContainer.classList.remove('flex');
+            }
             
             // Refresh node summary cards to hide charts
             if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {

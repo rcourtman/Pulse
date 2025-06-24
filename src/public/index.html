@@ -395,6 +395,7 @@
         touch-action: manipulation;
     }
 
+
     .mobile-task-card,
     .mobile-datastore-card,
     .mobile-task-detail-card {
@@ -858,6 +859,24 @@
                   </label>
                 </div>
               </div>
+              <!-- Time Range Dropdown for Charts Mode -->
+              <div id="time-range-dropdown-container" class="hidden items-center gap-2 flex-shrink-0">
+                <span class="text-xs text-gray-600 dark:text-gray-400 font-medium hidden sm:inline">Range:</span>
+                <select id="time-range-select" class="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                  <option value="1">Last 1 minute</option>
+                  <option value="5">Last 5 minutes</option>
+                  <option value="15">Last 15 minutes</option>
+                  <option value="30">Last 30 minutes</option>
+                  <option value="60" selected>Last 1 hour</option>
+                  <option value="120">Last 2 hours</option>
+                  <option value="240">Last 4 hours</option>
+                  <option value="480">Last 8 hours</option>
+                  <option value="720">Last 12 hours</option>
+                  <option value="1440">Last 24 hours</option>
+                  <option value="2880">Last 2 days</option>
+                  <option value="10080">Last 7 days</option>
+                </select>
+              </div>
               <div class="h-4 w-px bg-gray-300 dark:bg-gray-600 hidden lg:block flex-shrink-0"></div>
               <div class="flex items-center gap-1 flex-shrink-0">
                 <span class="text-xs text-gray-600 dark:text-gray-400 font-medium hidden lg:inline">Display:</span>
@@ -912,6 +931,7 @@
               </div>
             </div>
           </div>
+
 
           <div class="table-container overflow-x-auto mb-2 border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar relative">
             <!-- Mobile scroll hint -->
@@ -1167,6 +1187,30 @@
                     <button id="test-webhook-alert" class="w-full px-3 py-1.5 text-xs bg-gray-600 hover:bg-gray-700 text-white rounded transition-colors" title="Send a test webhook notification">
                       Test Webhook
                     </button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Global Node Thresholds Section -->
+              <div class="mt-4 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <div class="flex items-center justify-between mb-3">
+                  <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">Default Node Alert Thresholds</h4>
+                  <button id="reset-global-node-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-2 py-1 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
+                    Reset to Defaults
+                  </button>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                  <div>
+                    <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">CPU</label>
+                    <div id="global-node-cpu-cell"></div>
+                  </div>
+                  <div>
+                    <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">Memory</label>
+                    <div id="global-node-memory-cell"></div>
+                  </div>
+                  <div>
+                    <label class="text-xs text-gray-600 dark:text-gray-400 block mb-1">Disk</label>
+                    <div id="global-node-disk-cell"></div>
                   </div>
                 </div>
               </div>

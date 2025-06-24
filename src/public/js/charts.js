@@ -145,9 +145,16 @@ PulseApp.charts = (() => {
     function getTimeAgo(timestamp) {
         const now = Date.now();
         const diffMs = now - timestamp;
+        
+        // Handle edge cases - for future timestamps, show as 0s ago
+        if (diffMs < 0) {
+            return '0s ago';
+        }
+        
         const diffMinutes = Math.floor(diffMs / 60000);
         const diffSeconds = Math.floor((diffMs % 60000) / 1000);
         
+        // Always show time, even if 0 seconds
         if (diffMinutes > 0) {
             return `${diffMinutes}m ${diffSeconds}s ago`;
         } else {
@@ -280,32 +287,48 @@ PulseApp.charts = (() => {
             const rect = svg.getBoundingClientRect();
             const x = (clientX - rect.left) * (currentConfig.width / rect.width);
             
-            // Find closest data point with full width (no label space)
+            // Find closest data point based on visual position
             const chartAreaWidth = currentConfig.width - 2 * currentConfig.padding;
             const relativeX = Math.max(0, Math.min(chartAreaWidth, x - currentConfig.padding));
-            const normalizedX = relativeX / chartAreaWidth; // 0 to 1
-            const dataIndex = Math.max(0, Math.min(currentData.length - 1, Math.round(normalizedX * (currentData.length - 1))));
             
-            if (dataIndex >= 0 && dataIndex < currentData.length && currentData[dataIndex]) {
-                const point = currentData[dataIndex];
-                if (point && typeof point.value === 'number' && point.timestamp) {
-                    const value = formatValue(point.value, currentMetric);
-                    const timeAgo = getTimeAgo(point.timestamp);
-                    
-                    // Enhanced tooltip with range information
-                    let tooltipContent = `${value}<br><small>${timeAgo}</small>`;
-                    
-                    if (typeof minValue === 'number' && typeof maxValue === 'number') {
-                        const minFormatted = formatValue(minValue, currentMetric);
-                        const maxFormatted = formatValue(maxValue, currentMetric);
-                        tooltipContent += `<br><small>Range: ${minFormatted} - ${maxFormatted}</small>`;
-                    }
-                    
-                    // Show enhanced tooltip with proper event object
-                    if (PulseApp.tooltips) {
-                        PulseApp.tooltips.showTooltip(event, tooltipContent);
-                    }
+            // Since points are evenly spaced visually, we can use index-based lookup
+            // but we need to account for the fact that the chart spreads points evenly
+            const xScale = chartAreaWidth / Math.max(1, currentData.length - 1);
+            
+            // Find the closest point by comparing x positions
+            let closestIndex = 0;
+            let closestDistance = Infinity;
+            
+            for (let i = 0; i < currentData.length; i++) {
+                const pointX = i * xScale;
+                const distance = Math.abs(pointX - relativeX);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = i;
                 }
+            }
+            
+            const point = currentData[closestIndex];
+            if (point && typeof point.value === 'number' && point.timestamp) {
+                const value = formatValue(point.value, currentMetric);
+                const timeAgo = getTimeAgo(point.timestamp);
+                
+                // Enhanced tooltip with range information
+                let tooltipContent = `${value}<br><small>${timeAgo}</small>`;
+                
+                if (typeof minValue === 'number' && typeof maxValue === 'number') {
+                    const minFormatted = formatValue(minValue, currentMetric);
+                    const maxFormatted = formatValue(maxValue, currentMetric);
+                    tooltipContent += `<br><small>Range: ${minFormatted} - ${maxFormatted}</small>`;
+                }
+                
+                // Show enhanced tooltip with proper event object
+                if (PulseApp.tooltips) {
+                    PulseApp.tooltips.showTooltip(event, tooltipContent);
+                }
+                
+                // Update hover indicator position
+                updateHoverIndicator(svg, closestIndex, point, currentData, currentConfig, minValue, maxValue);
             }
         }
 
@@ -334,6 +357,11 @@ PulseApp.charts = (() => {
                 if (originalColor) {
                     path.setAttribute('stroke', originalColor);
                 }
+            }
+            // Remove hover indicator
+            const hoverDot = svg.querySelector('.hover-indicator');
+            if (hoverDot) {
+                hoverDot.remove();
             }
             if (PulseApp.tooltips) {
                 PulseApp.tooltips.hideTooltip();
@@ -447,7 +475,11 @@ PulseApp.charts = (() => {
 
     async function fetchChartData() {
         try {
-            const response = await fetch('/api/charts');
+            // Get current time range from dropdown
+            const timeRangeSelect = document.getElementById('time-range-select');
+            const timeRange = timeRangeSelect ? timeRangeSelect.value : '60';
+            
+            const response = await fetch(`/api/charts?range=${timeRange}`);
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
@@ -841,6 +873,41 @@ PulseApp.charts = (() => {
         }
     }
     
+    // Helper function to update hover indicator
+    function updateHoverIndicator(svg, index, point, data, config, minValue, maxValue) {
+        // Remove existing hover indicator
+        let hoverDot = svg.querySelector('.hover-indicator');
+        if (!hoverDot) {
+            // Create new hover dot
+            hoverDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            hoverDot.setAttribute('class', 'hover-indicator');
+            hoverDot.setAttribute('r', '3');
+            hoverDot.setAttribute('fill', '#ffffff');
+            hoverDot.setAttribute('stroke', '#000000');
+            hoverDot.setAttribute('stroke-width', '1.5');
+            hoverDot.style.pointerEvents = 'none';
+            svg.appendChild(hoverDot);
+        }
+        
+        // Calculate position
+        const chartAreaWidth = config.width - 2 * config.padding;
+        const chartAreaHeight = config.height - 2 * config.padding;
+        const xScale = chartAreaWidth / Math.max(1, data.length - 1);
+        const valueRange = maxValue - minValue;
+        const yScale = valueRange > 0 ? chartAreaHeight / valueRange : 0;
+        
+        const x = config.padding + index * xScale;
+        const y = config.height - config.padding - (valueRange > 0 ? (point.value - minValue) * yScale : chartAreaHeight / 2);
+        
+        hoverDot.setAttribute('cx', x);
+        hoverDot.setAttribute('cy', y);
+        
+        // Update stroke color based on theme
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        hoverDot.setAttribute('stroke', isDarkMode ? '#ffffff' : '#000000');
+        hoverDot.setAttribute('fill', isDarkMode ? '#000000' : '#ffffff');
+    }
+    
     // Initialize performance optimizations
     initVisibilityObserver();
     
@@ -851,6 +918,7 @@ PulseApp.charts = (() => {
         renderNodeCharts,
         updateAllCharts,
         getChartData,
+        fetchChartData,
         startChartUpdates,
         processChartData,
         adaptiveSample,

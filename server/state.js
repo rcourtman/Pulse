@@ -317,6 +317,12 @@ async function checkAlertsForMetrics() {
   try {
     const allGuests = [...state.vms, ...state.containers];
     await alertManager.checkMetrics(allGuests, state.metrics);
+    
+    // Also check node alerts if we have per-guest threshold rule with node thresholds
+    const perGuestRule = alertManager.getRules().find(r => r.type === 'per_guest_thresholds' && r.enabled);
+    if (perGuestRule && (perGuestRule.nodeThresholds || perGuestRule.globalNodeThresholds)) {
+      await alertManager.checkNodeMetrics(state.nodes, perGuestRule.nodeThresholds, perGuestRule.globalNodeThresholds);
+    }
   } catch (error) {
     console.error('[State Manager] Error checking alerts:', error);
   }

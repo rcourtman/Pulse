@@ -1466,6 +1466,9 @@ app.get('/api/storage', async (req, res) => {
 // Chart data API endpoint
 app.get('/api/charts', async (req, res) => {
     try {
+        // Get time range from query parameter (default to 60 minutes)
+        const timeRangeMinutes = parseInt(req.query.range) || 60;
+        
         // Get current guest info for context
         const currentState = stateManager.getState();
         const guestInfoMap = {};
@@ -1480,8 +1483,8 @@ app.get('/api/charts', async (req, res) => {
             };
         });
         
-        const guestChartData = metricsHistory.getAllGuestChartData(guestInfoMap);
-        const nodeChartData = metricsHistory.getAllNodeChartData();
+        const guestChartData = metricsHistory.getAllGuestChartData(guestInfoMap, timeRangeMinutes);
+        const nodeChartData = metricsHistory.getAllNodeChartData(timeRangeMinutes);
         const stats = metricsHistory.getStats();
         
         res.json({
