@@ -197,36 +197,47 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
     
     // Fetch current status for VMs
     finalVms.forEach((vm, index) => {
-      uptimePromises.push(
-        apiClient.get(`/nodes/${nodeName}/qemu/${vm.vmid}/status/current`, { timeout: 2000 })
-          .then(response => {
-            if (response?.data?.data?.uptime !== undefined) {
-              finalVms[index].uptime = response.data.data.uptime;
-            }
-          })
-          .catch(() => {
-            // Silently ignore errors - keep original uptime
-          })
-      );
+      // Only fetch uptime for running VMs
+      if (vm.status === 'running') {
+        uptimePromises.push(
+          apiClient.get(`/nodes/${nodeName}/qemu/${vm.vmid}/status/current`, { timeout: 2000 })
+            .then(response => {
+              if (response?.data?.data?.uptime !== undefined) {
+                finalVms[index].uptime = response.data.data.uptime;
+              }
+            })
+            .catch((error) => {
+              console.warn(`[DataFetcher] Failed to fetch uptime for VM ${vm.vmid}: ${error.message}`);
+              // Keep original uptime
+            })
+        );
+      }
     });
     
     // Fetch current status for containers
     finalContainers.forEach((ct, index) => {
-      uptimePromises.push(
-        apiClient.get(`/nodes/${nodeName}/lxc/${ct.vmid}/status/current`, { timeout: 2000 })
-          .then(response => {
-            if (response?.data?.data?.uptime !== undefined) {
-              finalContainers[index].uptime = response.data.data.uptime;
-            }
-          })
-          .catch(() => {
-            // Silently ignore errors - keep original uptime
-          })
-      );
+      // Only fetch uptime for running containers
+      if (ct.status === 'running') {
+        uptimePromises.push(
+          apiClient.get(`/nodes/${nodeName}/lxc/${ct.vmid}/status/current`, { timeout: 2000 })
+            .then(response => {
+              if (response?.data?.data?.uptime !== undefined) {
+                finalContainers[index].uptime = response.data.data.uptime;
+              }
+            })
+            .catch((error) => {
+              console.warn(`[DataFetcher] Failed to fetch uptime for container ${ct.vmid}: ${error.message}`);
+              // Keep original uptime
+            })
+        );
+      }
     });
     
     // Wait for all uptime fetches to complete (with timeout)
-    await Promise.allSettled(uptimePromises);
+    if (uptimePromises.length > 0) {
+      console.log(`[DataFetcher] Fetching accurate uptime for ${uptimePromises.length} running guests...`);
+      await Promise.allSettled(uptimePromises);
+    }
   }
 
   return {

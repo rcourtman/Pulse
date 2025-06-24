@@ -112,6 +112,39 @@ function getState() {
   };
 }
 
+function updateGuestUptimeFromMetrics(metrics) {
+  // Update uptime for VMs and containers based on metrics data
+  if (!metrics || metrics.length === 0) return;
+  
+  metrics.forEach(metric => {
+    if (metric.current && metric.current.uptime !== undefined) {
+      // Find and update VM
+      const vmIndex = state.vms.findIndex(vm => 
+        vm.vmid === metric.id && 
+        vm.node === metric.node && 
+        vm.endpointId === metric.endpointId
+      );
+      
+      if (vmIndex !== -1) {
+        state.vms[vmIndex].uptime = metric.current.uptime;
+        console.log(`[State Manager] Updated VM ${metric.id} uptime to ${metric.current.uptime} seconds`);
+      } else {
+        // Try containers
+        const ctIndex = state.containers.findIndex(ct => 
+          ct.vmid === metric.id && 
+          ct.node === metric.node && 
+          ct.endpointId === metric.endpointId
+        );
+        
+        if (ctIndex !== -1) {
+          state.containers[ctIndex].uptime = metric.current.uptime;
+          console.log(`[State Manager] Updated container ${metric.id} uptime to ${metric.current.uptime} seconds`);
+        }
+      }
+    }
+  });
+}
+
 function updateDiscoveryData({ nodes, vms, containers, pbs, pveBackups, allPbsTasks, aggregatedPbsTaskSummary }, duration = 0, errors = []) {
   const startTime = Date.now();
   
@@ -173,6 +206,9 @@ function updateMetricsData(metrics, duration = 0, errors = []) {
   
   try {
     state.metrics = metrics || [];
+    
+    // Update uptime for VMs and containers from metrics data
+    updateGuestUptimeFromMetrics(metrics);
     
     // Update performance metrics
     state.performance.lastMetricsTime = startTime;
