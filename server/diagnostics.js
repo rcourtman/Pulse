@@ -185,6 +185,23 @@ class DiagnosticTool {
             if (sanitized.state.pbs && sanitized.state.pbs.sampleBackupIds) {
                 sanitized.state.pbs.sampleBackupIds = sanitized.state.pbs.sampleBackupIds.map((id, index) => `backup-${index + 1}`);
             }
+            
+            // Sanitize storage debug information
+            if (sanitized.state.storageDebug && sanitized.state.storageDebug.storageByNode) {
+                sanitized.state.storageDebug.storageByNode = sanitized.state.storageDebug.storageByNode.map((nodeInfo, nodeIndex) => ({
+                    node: `node-${nodeIndex + 1}`,
+                    endpointId: nodeInfo.endpointId === 'primary' ? 'primary' : 'secondary',
+                    storageCount: nodeInfo.storageCount,
+                    storages: nodeInfo.storages.map((storage, storageIndex) => ({
+                        name: `storage-${nodeIndex + 1}-${storageIndex + 1}`,
+                        type: storage.type,
+                        content: storage.content,
+                        shared: storage.shared,
+                        enabled: storage.enabled,
+                        hasBackupContent: storage.hasBackupContent
+                    }))
+                }));
+            }
         }
         
         // Sanitize recommendations
