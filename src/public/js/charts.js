@@ -318,6 +318,7 @@ PulseApp.charts = (() => {
             
             const point = currentData[closestIndex];
             if (point && typeof point.value === 'number' && point.timestamp) {
+                
                 const value = formatValue(point.value, currentMetric);
                 const timeAgo = getTimeAgo(point.timestamp);
                 
@@ -713,6 +714,7 @@ PulseApp.charts = (() => {
             return [];
         }
 
+
         // Generate cache key
         const cacheKey = `${guestId}-${metric}-${chartType}`;
         
@@ -742,6 +744,7 @@ PulseApp.charts = (() => {
             // Use adaptive sampling for optimal information density
             processedData = adaptiveSample(serverData, targetPoints);
         }
+        
         
         // Cache the processed data
         processedDataCache.set(cacheKey, {
@@ -794,6 +797,7 @@ PulseApp.charts = (() => {
         const sortedIndices = Array.from(selectedIndices).sort((a, b) => a - b);
         const result = sortedIndices.map(i => data[i]);
         
+        
         return result;
     }
 
@@ -843,11 +847,11 @@ PulseApp.charts = (() => {
     // Helper function to generate quick hash of data for cache validation
     function generateDataHash(data) {
         if (!data || data.length === 0) return '0';
-        // Simple hash based on length, first, last, and middle values
-        const first = data[0]?.value || 0;
-        const last = data[data.length - 1]?.value || 0;
-        const middle = data[Math.floor(data.length / 2)]?.value || 0;
-        return `${data.length}-${first.toFixed(2)}-${middle.toFixed(2)}-${last.toFixed(2)}`;
+        // Include timestamps in hash to detect when data has been updated
+        const first = data[0];
+        const last = data[data.length - 1];
+        const middle = data[Math.floor(data.length / 2)];
+        return `${data.length}-${first?.timestamp || 0}-${last?.timestamp || 0}-${first?.value?.toFixed(2) || 0}-${last?.value?.toFixed(2) || 0}`;
     }
     
     // Cleanup old cache entries

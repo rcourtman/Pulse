@@ -775,17 +775,13 @@
     }
     
     /* Enhanced label styling for the defaults row */
-    #global-alert-thresholds-row .text-blue-700 {
-        font-weight: 600;
+    #global-alert-thresholds-row .text-red-600,
+    #global-alert-thresholds-row .text-red-400 {
+        font-weight: 700;
         letter-spacing: 0.05em;
         text-transform: uppercase;
         font-size: 0.7rem;
-    }
-    
-    /* Add icon before "Defaults" text */
-    #global-alert-thresholds-row .text-blue-700::before {
-        content: "🎯 ";
-        margin-right: 0.25rem;
+        opacity: 1 !important;
     }
     
   </style>
@@ -1064,11 +1060,11 @@
                   </td>
                 </tr>
                 <!-- Global Alert Thresholds Row -->
-                <tr id="global-alert-thresholds-row" class="hidden bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-600 ring-2 ring-blue-400/30 dark:ring-blue-400/20 shadow-lg shadow-blue-500/10">
+                <tr id="global-alert-thresholds-row" class="hidden bg-blue-50 dark:bg-blue-900/20 border-2 border-red-500 dark:border-red-400">
                   <td class="sticky left-0 z-10 py-1 px-2 align-middle">
                     <div class="flex flex-col gap-1">
                       <div class="flex items-center justify-between">
-                        <span class="text-xs text-blue-700 dark:text-blue-300">Defaults</span>
+                        <span class="text-xs text-red-600 dark:text-red-400 font-semibold">GLOBAL</span>
                         <button id="reset-global-thresholds" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 px-1 py-0.5 border border-blue-300 dark:border-blue-600 rounded hover:bg-blue-100 dark:hover:bg-blue-800/20">
                           Reset
                         </button>
