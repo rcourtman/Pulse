@@ -32,7 +32,12 @@ curl -fsSL "https://github.com/StarFleetCPTN/GoMFT/archive/refs/tags/v${RELEASE}
 tar -xzf "$temp_file"
 mv GoMFT-"${RELEASE}"/ /opt/gomft
 cd /opt/gomft
-$STD go install github.com/a-h/templ/cmd/templ@latest
+TEMPL_VERSION="$(awk '/github.com\/a-h\/templ/{print $2}' go.mod)"
+$STD go install github.com/a-h/templ/cmd/templ@v${TEMPL_VERSION}
+cp /opt/gomft/components/file_metadata/search/file_metadata_search_content.templ{,.bak}
+sed -i -e '/<div id="search-results">/a \    @{' \
+  -e '/^        }$/a \    }' \
+  /opt/gomft/components/file_metadata/search/file_metadata_search_content.templ
 $STD "$HOME"/go/bin/templ generate
 $STD go build -o gomft main.go
 chmod +x /opt/gomft/gomft
