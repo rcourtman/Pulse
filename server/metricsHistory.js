@@ -1,6 +1,7 @@
-const HISTORY_RETENTION_MS = 60 * 60 * 1000; // 1 hour
-const MAX_DATA_POINTS = 1800; // 2-second intervals for 1 hour (3600/2 = 1800)
-const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Clean up every 5 minutes
+const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MAX_DATA_POINTS = 50400; // Store data every 2 seconds for 7 days would be too much (302,400), 
+                                // so we'll store every ~12 seconds on average (7*24*60*5 = 50,400)
+const CLEANUP_INTERVAL_MS = 30 * 60 * 1000; // Clean up every 30 minutes
 
 class MetricsHistory {
     constructor() {
@@ -39,6 +40,7 @@ class MetricsHistory {
             }
         };
     }
+
 
     addMetricData(guestId, currentMetrics) {
         const timestamp = Date.now();
@@ -352,9 +354,10 @@ class MetricsHistory {
         }
     }
 
-    getAllGuestChartData(guestInfoMap = null) {
+    getAllGuestChartData(guestInfoMap = null, timeRangeMinutes = 60) {
         const result = {};
-        const cutoffTime = Date.now() - HISTORY_RETENTION_MS;
+        const timeRangeMs = timeRangeMinutes * 60 * 1000;
+        const cutoffTime = Date.now() - timeRangeMs;
 
         for (const [guestId, guestHistory] of this.guestMetrics) {
             const validDataPoints = guestHistory.dataPoints
@@ -377,9 +380,10 @@ class MetricsHistory {
         return result;
     }
 
-    getAllNodeChartData() {
+    getAllNodeChartData(timeRangeMinutes = 60) {
         const result = {};
-        const cutoffTime = Date.now() - HISTORY_RETENTION_MS;
+        const timeRangeMs = timeRangeMinutes * 60 * 1000;
+        const cutoffTime = Date.now() - timeRangeMs;
 
         for (const [nodeId, nodeHistory] of this.nodeMetrics) {
             const validDataPoints = nodeHistory.dataPoints
@@ -478,13 +482,19 @@ class MetricsHistory {
     }
 
     getStats() {
+        const guestDataPoints = Array.from(this.guestMetrics.values())
+            .reduce((sum, guest) => sum + guest.dataPoints.length, 0);
+        const nodeDataPoints = Array.from(this.nodeMetrics.values())
+            .reduce((sum, node) => sum + node.dataPoints.length, 0);
+            
         return {
             totalGuests: this.guestMetrics.size,
             totalNodes: this.nodeMetrics.size,
-            totalDataPoints: Array.from(this.guestMetrics.values())
-                .reduce((sum, guest) => sum + guest.dataPoints.length, 0) +
-                Array.from(this.nodeMetrics.values())
-                .reduce((sum, node) => sum + node.dataPoints.length, 0),
+            totalDataPoints: guestDataPoints + nodeDataPoints,
+            guestDataPoints,
+            nodeDataPoints,
+            maxDataPointsPerEntity: MAX_DATA_POINTS,
+            retentionDays: HISTORY_RETENTION_MS / (24 * 60 * 60 * 1000),
             estimatedMemoryUsage: this.estimateMemoryUsage()
         };
     }
