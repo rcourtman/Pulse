@@ -34,7 +34,7 @@ tar -xzf "$temp_file"
 mv GoMFT-"${RELEASE}"/ /opt/gomft
 cd /opt/gomft
 TEMPL_VERSION="$(awk '/github.com\/a-h\/templ/{print $2}' go.mod)"
-$STD go install github.com/a-h/templ/cmd/templ@v${TEMPL_VERSION}
+$STD go install github.com/a-h/templ/cmd/templ@${TEMPL_VERSION}
 cp /opt/gomft/components/file_metadata/search/file_metadata_search_content.templ{,.bak}
 sed -i -e '/<div id="search-results">/a \    @{' \
   -e '/^        }$/a \    }' \
