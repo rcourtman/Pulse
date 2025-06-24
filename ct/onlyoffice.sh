@@ -5,7 +5,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
 # Source: https://www.onlyoffice.com/
 
-APP="ONLYOFFICE Docs"
+APP="ONLYOFFICE"
 var_tags="${var_tags:-word;excel;powerpoint;pdf}"
 var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
