@@ -381,6 +381,10 @@ PulseApp.ui.pbs = (() => {
         subtitle.textContent = 'Task counts reflect the selected time range filter above';
         section.appendChild(subtitle);
         
+        // Add table container with overflow-x-auto for mobile scrolling
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'overflow-x-auto';
+        
         const table = document.createElement('table');
         table.className = 'min-w-full text-sm';
         
@@ -407,7 +411,8 @@ PulseApp.ui.pbs = (() => {
         });
         
         table.appendChild(tbody);
-        section.appendChild(table);
+        tableContainer.appendChild(table);
+        section.appendChild(tableContainer);
         
         // Store reference
         const namespace = state.selectedNamespaceByInstance.get(instanceIndex) || 'root';
@@ -1202,6 +1207,10 @@ PulseApp.ui.pbs = (() => {
         heading.textContent = 'Server Status';
         section.appendChild(heading);
         
+        // Add table container with overflow-x-auto for mobile scrolling
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'overflow-x-auto';
+        
         const table = document.createElement('table');
         table.className = 'min-w-full text-sm';
         
@@ -1275,7 +1284,8 @@ PulseApp.ui.pbs = (() => {
         
         tbody.appendChild(row);
         table.appendChild(tbody);
-        section.appendChild(table);
+        tableContainer.appendChild(table);
+        section.appendChild(tableContainer);
         
         return section;
     }
