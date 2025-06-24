@@ -459,14 +459,17 @@ PulseApp.ui.alerts = (() => {
         sliderElement.addEventListener('input', (event) => {
             const value = event.target.value;
             globalThresholds[metricType] = value; // Update state immediately
+            globalNodeThresholds[metricType] = value; // Also update node thresholds
             updateRowStylingOnly(); // Fast styling-only update
+            updateAllNodeCardsStyling(); // Update node styling too
             PulseApp.tooltips.updateSliderTooltip(event.target);
         });
         
         // Full update on release (input values)
         sliderElement.addEventListener('change', (event) => {
             const value = event.target.value;
-            updateGuestInputValues(metricType, value, true); // Update input values on release, skip tooltips
+            updateGuestInputValues(metricType, value, true); // Update guest input values
+            updateNodeInputValues(metricType, value, true); // Also update node input values
             // Changes will be saved when user clicks save button
         });
         
@@ -545,8 +548,6 @@ PulseApp.ui.alerts = (() => {
             resetButton.disabled = true;
         }
         
-        // Initialize global node thresholds UI
-        updateGlobalNodeThresholdUI();
     }
 
     // Lightweight update function matching threshold system pattern
@@ -998,6 +999,10 @@ PulseApp.ui.alerts = (() => {
         // Store old values for smooth updates
         const oldThresholds = { ...globalThresholds };
         
+        // Clear all individual thresholds
+        guestAlertThresholds = {};
+        nodeAlertThresholds = {};
+        
         // Reset to defaults
         globalThresholds = {
             cpu: 80,
@@ -1007,6 +1012,13 @@ PulseApp.ui.alerts = (() => {
             diskwrite: '',
             netin: '',
             netout: ''
+        };
+        
+        // Reset node thresholds to match
+        globalNodeThresholds = {
+            cpu: 80,
+            memory: 85,
+            disk: 90
         };
         
         // Update the UI controls
@@ -1047,8 +1059,6 @@ PulseApp.ui.alerts = (() => {
             disk: 95
         };
         
-        // Update global node threshold UI
-        updateGlobalNodeThresholdUI();
         
         // Update all guest rows smoothly
         if (isAlertsMode) {
@@ -1619,24 +1629,9 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
-    let globalNodeUIInitialized = false;
-    
     function updateGlobalNodeThresholdUI() {
-        console.log('[DEBUG] updateGlobalNodeThresholdUI called, initialized:', globalNodeUIInitialized);
-        
-        // If UI is already initialized, just update values instead of recreating
-        if (globalNodeUIInitialized) {
-            const cpuSlider = document.getElementById('global-node-alert-cpu');
-            const memorySlider = document.getElementById('global-node-alert-memory');
-            const diskSlider = document.getElementById('global-node-alert-disk');
-            
-            if (cpuSlider) cpuSlider.value = globalNodeThresholds.cpu || 90;
-            if (memorySlider) memorySlider.value = globalNodeThresholds.memory || 95;
-            if (diskSlider) diskSlider.value = globalNodeThresholds.disk || 95;
-            
-            console.log('[DEBUG] Updated existing sliders with new values');
-            return;
-        }
+        // This function is no longer needed since we're using the main global sliders
+        return;
         
         // Populate the node threshold cells
         const cpuCell = document.getElementById('global-node-cpu-cell');
@@ -1862,8 +1857,6 @@ PulseApp.ui.alerts = (() => {
     }
     
     function resetGlobalNodeThresholds() {
-        console.log('[DEBUG] resetGlobalNodeThresholds called');
-        
         // Reset to default values
         globalNodeThresholds = {
             cpu: 90,
@@ -1935,12 +1928,10 @@ PulseApp.ui.alerts = (() => {
     }
     
     function updateGlobalNodeThreshold(metricType, newValue, shouldUpdateInputs = false) {
-        console.log(`[DEBUG] updateGlobalNodeThreshold called: metric=${metricType}, value=${newValue}, shouldUpdateInputs=${shouldUpdateInputs}`);
         globalNodeThresholds[metricType] = newValue;
         
         // Only update input values when specifically requested (on change event)
         if (shouldUpdateInputs) {
-            console.log('[DEBUG] Calling updateNodeInputValues...');
             updateNodeInputValues(metricType, newValue);
         }
         
@@ -1954,64 +1945,21 @@ PulseApp.ui.alerts = (() => {
     function updateNodeInputValues(metricType, newValue, skipTooltips = false) {
         if (!isAlertsMode) return;
         
-        console.log(`[DEBUG] updateNodeInputValues called: metric=${metricType}, value=${newValue}`);
         
         // Debug: Let's see what selectors might work
-        console.log('[DEBUG] Testing different selectors:');
-        console.log('1. .node-alert-slider elements:', document.querySelectorAll('.node-alert-slider').length);
-        console.log('2. [data-metric] elements:', document.querySelectorAll('[data-metric]').length);
-        console.log('3. input[type="range"] elements:', document.querySelectorAll('input[type="range"]').length);
-        console.log('4. #node-summary-cards-container:', document.getElementById('node-summary-cards-container'));
-        
-        // Try a broader search first
-        const allNodeContainers = document.querySelectorAll('.node-alert-slider');
-        console.log(`[DEBUG] Found ${allNodeContainers.length} node-alert-slider containers`);
-        
-        allNodeContainers.forEach(container => {
-            const metric = container.getAttribute('data-metric');
-            const nodeId = container.getAttribute('data-node-id');
-            console.log(`[DEBUG] Container: metric=${metric}, nodeId=${nodeId}`);
-            
-            if (metric === metricType) {
-                const input = container.querySelector('input[type="range"]');
-                console.log(`[DEBUG] Found input for ${nodeId}:`, input);
-                
-                if (input && nodeId) {
-                    // Only update sliders for nodes that don't have individual thresholds
-                    const nodeThresholds = nodeAlertThresholds[nodeId] || {};
-                    const hasIndividualForThisMetric = nodeThresholds[metricType] !== undefined;
-                    
-                    if (!hasIndividualForThisMetric) {
-                        console.log(`[DEBUG] Updating ${nodeId} slider from ${input.value} to ${newValue}`);
-                        input.value = newValue;
-                        
-                        if (!skipTooltips) {
-                            PulseApp.tooltips.updateSliderTooltip(input);
-                        }
-                    }
-                }
-            }
-        });
-        
-        // Original approach for comparison
+        // Find all node sliders for this metric
         const nodeSliders = document.querySelectorAll(`.node-alert-slider[data-metric="${metricType}"] input[type="range"]`);
-        console.log(`[DEBUG] Original selector found ${nodeSliders.length} node sliders for ${metricType}`);
         
         nodeSliders.forEach(slider => {
             const sliderContainer = slider.closest('.node-alert-slider');
             const nodeId = sliderContainer?.getAttribute('data-node-id');
-            
-            console.log(`[DEBUG] Processing node ${nodeId}`);
             
             if (nodeId) {
                 // Only update sliders for nodes that don't have individual thresholds for this metric
                 const nodeThresholds = nodeAlertThresholds[nodeId] || {};
                 const hasIndividualForThisMetric = nodeThresholds[metricType] !== undefined;
                 
-                console.log(`[DEBUG] Node ${nodeId} has individual threshold: ${hasIndividualForThisMetric}`);
-                
                 if (!hasIndividualForThisMetric) {
-                    console.log(`[DEBUG] Updating node ${nodeId} slider from ${slider.value} to ${newValue}`);
                     slider.value = newValue;
                     
                     // Update tooltip for sliders (skip during reset operations)
