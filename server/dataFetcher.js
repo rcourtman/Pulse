@@ -539,8 +539,9 @@ function deduplicateVmsByNode(allVms) {
     const vmMap = new Map();
     
     allVms.forEach(vm => {
-        // In a cluster, VMIDs are unique across all nodes
-        const vmKey = vm.vmid.toString();
+        // Use endpointId + vmid as key to handle separate Proxmox instances
+        // In a cluster, VMIDs are unique, but across separate instances they may collide
+        const vmKey = `${vm.endpointId}-${vm.vmid}`;
         const existingVm = vmMap.get(vmKey);
         
         if (!existingVm || vm.status === 'running') {
@@ -561,8 +562,9 @@ function deduplicateContainersByNode(allContainers) {
     const containerMap = new Map();
     
     allContainers.forEach(container => {
-        // In a cluster, VMIDs are unique across all nodes
-        const containerKey = container.vmid.toString();
+        // Use endpointId + vmid as key to handle separate Proxmox instances
+        // In a cluster, VMIDs are unique, but across separate instances they may collide
+        const containerKey = `${container.endpointId}-${container.vmid}`;
         const existingContainer = containerMap.get(containerKey);
         
         if (!existingContainer || container.status === 'running') {
