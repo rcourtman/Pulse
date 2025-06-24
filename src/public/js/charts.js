@@ -296,6 +296,12 @@ PulseApp.charts = (() => {
     }
 
     function addHoverInteraction(svg, chartData, metric, config) {
+        // Remove any existing overlay to prevent duplicates
+        const existingOverlay = svg.querySelector('.chart-overlay');
+        if (existingOverlay) {
+            existingOverlay.remove();
+        }
+        
         // Create invisible overlay for mouse detection
         const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         overlay.setAttribute('width', config.width);
@@ -303,6 +309,7 @@ PulseApp.charts = (() => {
         overlay.setAttribute('fill', 'transparent');
         overlay.setAttribute('class', 'chart-overlay');
         overlay.style.cursor = 'crosshair';
+        overlay.style.pointerEvents = 'all'; // Ensure overlay can receive events
 
         // Shared function to show tooltip
         function showTooltipForPosition(event, clientX, clientY) {

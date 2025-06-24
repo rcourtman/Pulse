@@ -191,8 +191,8 @@ PulseApp.alerts = (() => {
             
             if (!indicator || !dropdown) return;
             
-            // Only handle clicks related to alerts - ignore PBS tab interactions
-            if (e.target.closest('.pbs-tab, .pbs-content, .pbs-section')) {
+            // Only handle clicks related to alerts - ignore PBS tab interactions and chart interactions
+            if (e.target.closest('.pbs-tab, .pbs-content, .pbs-section, .mini-chart, .chart-overlay')) {
                 return;
             }
             
