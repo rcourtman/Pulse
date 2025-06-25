@@ -642,6 +642,22 @@ PulseApp.utils = (() => {
         return selectHtml;
     }
     
+    // Helper for showing empty state messages in tables
+    function showEmptyState(container, message, columns = 1, additionalClasses = '') {
+        const html = `
+            <tr>
+                <td colspan="${columns}" class="text-center py-8 text-gray-500 dark:text-gray-400 ${additionalClasses}">
+                    ${message}
+                </td>
+            </tr>
+        `;
+        
+        if (container instanceof HTMLElement) {
+            container.innerHTML = html;
+        }
+        return html;
+    }
+    
     // Helper for updating guest I/O metric cells
     function updateGuestIOMetric(cell, guest, metricName, isAlertsMode) {
         if (isAlertsMode) {
@@ -663,6 +679,123 @@ PulseApp.utils = (() => {
                     formatted;
             }
         }
+    }
+    
+    // DOM Cache utility class
+    class DOMCache {
+        constructor() {
+            this.cache = new Map();
+            this.observers = new Map();
+        }
+
+        get(selector, forceRefresh = false) {
+            if (!forceRefresh && this.cache.has(selector)) {
+                const element = this.cache.get(selector);
+                if (document.contains(element)) {
+                    return element;
+                }
+                this.cache.delete(selector);
+            }
+
+            const element = document.querySelector(selector);
+            if (element) {
+                this.cache.set(selector, element);
+            }
+            return element;
+        }
+
+        getAll(selector, forceRefresh = false) {
+            const key = `all:${selector}`;
+            if (!forceRefresh && this.cache.has(key)) {
+                const elements = this.cache.get(key);
+                if (elements.length > 0 && document.contains(elements[0])) {
+                    return elements;
+                }
+                this.cache.delete(key);
+            }
+
+            const elements = Array.from(document.querySelectorAll(selector));
+            this.cache.set(key, elements);
+            return elements;
+        }
+
+        set(key, element) {
+            if (element && document.contains(element)) {
+                this.cache.set(key, element);
+            }
+        }
+
+        clear(selector = null) {
+            if (selector) {
+                this.cache.delete(selector);
+                this.cache.delete(`all:${selector}`);
+            } else {
+                this.cache.clear();
+            }
+        }
+
+        invalidate() {
+            // Remove entries for elements no longer in DOM
+            for (const [key, value] of this.cache.entries()) {
+                if (key.startsWith('all:')) {
+                    if (!value.length || !document.contains(value[0])) {
+                        this.cache.delete(key);
+                    }
+                } else if (!document.contains(value)) {
+                    this.cache.delete(key);
+                }
+            }
+        }
+    }
+    
+    // API error handling helper
+    function handleApiError(error, context, options = {}) {
+        const {
+            showAlert = true,
+            logError = true,
+            fallbackMessage = 'An error occurred. Please try again.',
+            module = 'API'
+        } = options;
+        
+        // Extract error message
+        let errorMessage = fallbackMessage;
+        if (error.response && error.response.data && error.response.data.message) {
+            errorMessage = error.response.data.message;
+        } else if (error.message) {
+            errorMessage = error.message;
+        } else if (typeof error === 'string') {
+            errorMessage = error;
+        }
+        
+        // Log error if enabled
+        if (logError) {
+            console.error(`[${module}] ${context}:`, error);
+        }
+        
+        // Show alert if enabled
+        if (showAlert && typeof PulseApp !== 'undefined' && PulseApp.ui && PulseApp.ui.common && PulseApp.ui.common.showError) {
+            PulseApp.ui.common.showError(`${context}: ${errorMessage}`);
+        }
+        
+        return {
+            message: errorMessage,
+            originalError: error,
+            context: context
+        };
+    }
+    
+    // Event listener setup for dynamic content
+    function setupDynamicListeners(container, configs) {
+        if (!container || !configs) return;
+        
+        configs.forEach(({selector, event, handler, options = false}) => {
+            const elements = container.querySelectorAll(selector);
+            elements.forEach(el => {
+                // Remove any existing listener to avoid duplicates
+                el.removeEventListener(event, handler, options);
+                el.addEventListener(event, handler, options);
+            });
+        });
     }
     
     // Simple logger utility
@@ -797,11 +930,15 @@ PulseApp.utils = (() => {
         // Metric display helpers
         createMetricBarHtml,
         updateGuestIOMetric,
+        showEmptyState,
         // Alert control helpers
         createAlertSliderHtml,
         createAlertDropdownHtml,
         // Utilities
+        DOMCache,
         createLogger,
+        handleApiError,
+        setupDynamicListeners,
         SafeParse,
         // Constants
         IO_ALERT_OPTIONS,
