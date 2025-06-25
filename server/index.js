@@ -19,6 +19,10 @@ const stateManager = require('./state');
 // Import metrics history system
 const metricsHistory = require('./metricsHistory');
 
+// Import metrics persistence
+const MetricsPersistence = require('./metricsPersistence');
+const metricsPersistence = new MetricsPersistence();
+
 // Import diagnostic tool
 const DiagnosticTool = require('./diagnostics');
 
@@ -309,6 +313,22 @@ app.get('/api/health', (req, res) => {
             hasData: stateManager.hasData(),
             clientsInitialized: Object.keys(global.pulseApiClients?.apiClients || {}).length > 0
         };
+        
+        // Add persistence stats
+        healthSummary.persistence = {
+            enabled: true,
+            lastSnapshot: global.lastSnapshotStats ? {
+                timestamp: global.lastSnapshotStats.timestamp,
+                ageSeconds: Math.floor((Date.now() - global.lastSnapshotStats.timestamp) / 1000),
+                guests: global.lastSnapshotStats.guests,
+                nodes: global.lastSnapshotStats.nodes,
+                totalDataPoints: global.lastSnapshotStats.totalDataPoints,
+                sizeKB: Math.round(global.lastSnapshotStats.sizeBytes / 1024 * 10) / 10
+            } : null,
+            metricsRestored: global.metricsRestored || null,
+            historyStats: metricsHistory.getStats()
+        };
+        
         res.json(healthSummary);
     } catch (error) {
         console.error("Error in /api/health:", error);
@@ -2389,6 +2409,128 @@ function setupEnvFileWatcher() {
 
 // --- Start the server ---
 async function startServer() {
+    // Load persisted metrics before starting
+    try {
+        const loadResult = await metricsPersistence.loadSnapshot(metricsHistory);
+        if (loadResult) {
+            console.log(`[MetricsPersistence] Restored ${loadResult.totalPoints} data points from ${loadResult.ageHours.toFixed(1)} hours ago`);
+            // Also log to the health endpoint for visibility
+            global.metricsRestored = {
+                points: loadResult.totalPoints,
+                ageHours: loadResult.ageHours,
+                timestamp: new Date().toISOString()
+            };
+        } else {
+            console.log('[MetricsPersistence] No snapshot found or snapshot too old');
+        }
+    } catch (error) {
+        console.error('[MetricsPersistence] Failed to load persisted metrics:', error.message);
+    }
+
+    // Set up intelligent snapshot saving
+    // More frequent saves initially, then back off
+    const snapshotSchedule = [
+        { delay: 30 * 1000, interval: 30 * 1000 },      // First 2 min: every 30s
+        { delay: 2 * 60 * 1000, interval: 60 * 1000 },  // 2-5 min: every 60s
+        { delay: 5 * 60 * 1000, interval: 2 * 60 * 1000 } // After 5 min: every 2 min
+    ];
+    
+    let currentScheduleIndex = 0;
+    let snapshotInterval;
+    
+    let scheduleTransitionTimeout = null;
+    
+    const scheduleSnapshot = () => {
+        // Clear any pending transition timeout to prevent race conditions
+        if (scheduleTransitionTimeout) {
+            clearTimeout(scheduleTransitionTimeout);
+            scheduleTransitionTimeout = null;
+        }
+        
+        if (currentScheduleIndex < snapshotSchedule.length) {
+            const schedule = snapshotSchedule[currentScheduleIndex];
+            
+            // Clear existing interval if any
+            if (snapshotInterval) {
+                clearInterval(snapshotInterval);
+                snapshotInterval = null;
+            }
+            
+            // Save snapshot function with error tracking and exponential backoff
+            const saveSnapshotWithTracking = async () => {
+                // Check if we should skip due to exponential backoff
+                if (global.snapshotErrorCount > 0) {
+                    const backoffDelay = Math.min(
+                        schedule.interval * Math.pow(2, global.snapshotErrorCount - 1),
+                        300000 // Max 5 minutes backoff
+                    );
+                    const timeSinceLastError = Date.now() - (global.lastSnapshotError || 0);
+                    
+                    if (timeSinceLastError < backoffDelay) {
+                        // Still in backoff period, skip this save
+                        return;
+                    }
+                }
+                
+                try {
+                    const stats = await metricsPersistence.saveSnapshot(metricsHistory);
+                    // Store last snapshot info globally for health endpoint
+                    global.lastSnapshotStats = {
+                        ...stats,
+                        timestamp: Date.now()
+                    };
+                    // Reset error count on success
+                    global.snapshotErrorCount = 0;
+                    global.lastSnapshotError = null;
+                } catch (error) {
+                    console.error(`[MetricsPersistence] Failed to save snapshot (attempt ${global.snapshotErrorCount + 1}):`, error.message);
+                    // Track errors for exponential backoff
+                    global.snapshotErrorCount = (global.snapshotErrorCount || 0) + 1;
+                    global.lastSnapshotError = Date.now();
+                    
+                    // Log warning if errors persist
+                    if (global.snapshotErrorCount >= 5) {
+                        console.error('[MetricsPersistence] Snapshot saves failing repeatedly. Check disk space and permissions.');
+                    }
+                }
+            };
+            
+            // Set new interval
+            snapshotInterval = setInterval(saveSnapshotWithTracking, schedule.interval);
+            
+            // Also save immediately when transitioning to a new schedule
+            if (currentScheduleIndex > 0) {
+                saveSnapshotWithTracking();
+            }
+            
+            // Schedule next transition
+            currentScheduleIndex++;
+            if (currentScheduleIndex < snapshotSchedule.length) {
+                const nextSchedule = snapshotSchedule[currentScheduleIndex];
+                const transitionDelay = nextSchedule.delay - schedule.delay;
+                scheduleTransitionTimeout = setTimeout(scheduleSnapshot, transitionDelay);
+            }
+        }
+    };
+    
+    // Start snapshot scheduling
+    scheduleTransitionTimeout = setTimeout(scheduleSnapshot, snapshotSchedule[0].delay);
+
+    // Save snapshot on graceful shutdown
+    const gracefulShutdown = async (signal) => {
+        console.log(`\nReceived ${signal}, saving metrics snapshot before exit...`);
+        try {
+            await metricsPersistence.saveSnapshot(metricsHistory);
+            console.log('[MetricsPersistence] Final snapshot saved');
+        } catch (error) {
+            console.error('[MetricsPersistence] Failed to save final snapshot:', error.message);
+        }
+        process.exit(0);
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
     // Only initialize API clients if we have endpoints configured
     if (endpoints.length > 0 || pbsConfigs.length > 0) {
         try {
@@ -2457,7 +2599,10 @@ async function startServer() {
               /alert-rules\.json$/, // ignore alert rules runtime data
               /custom-thresholds\.json$/, // ignore custom thresholds runtime data
               /active-alerts\.json$/, // ignore active alerts runtime data
-              /notification-history\.json$/ // ignore notification history runtime data
+              /notification-history\.json$/, // ignore notification history runtime data
+              /metrics-snapshot\.json\.gz$/, // ignore metrics persistence snapshots
+              /\.metrics-snapshot\.tmp\.gz$/, // ignore metrics persistence temp files
+              /\.locks\// // ignore lock files directory
             ],
             persistent: true,
             ignoreInitial: true // Don't trigger on initial scan

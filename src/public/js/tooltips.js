@@ -33,6 +33,11 @@ PulseApp.tooltips = (() => {
     }
 
     function handleMouseOver(event) {
+        // Don't handle if programmatic tooltip is active
+        if (tooltipElement && tooltipElement.getAttribute('data-programmatic') === 'true') {
+            return;
+        }
+        
         const target = event.target.closest('[data-tooltip], .metric-tooltip-trigger, .storage-tooltip-trigger, .truncate');
         if (target) {
             let tooltipText = target.getAttribute('data-tooltip');
@@ -91,12 +96,12 @@ PulseApp.tooltips = (() => {
         if (!tooltipElement) return;
         const offsetX = 10;
         const offsetY = 15;
+        
+        // Update only position, don't touch other styles
         tooltipElement.style.left = `${event.pageX + offsetX}px`;
         tooltipElement.style.top = `${event.pageY + offsetY}px`;
-        // Ensure tooltip is positioned correctly
-        tooltipElement.style.position = 'absolute';
-        tooltipElement.style.transform = '';
-        tooltipElement.style.zIndex = '50';
+        tooltipElement.style.position = 'fixed';
+        tooltipElement.style.zIndex = '9999';
     }
 
     function updateSliderTooltip(sliderElement) {
@@ -208,15 +213,19 @@ PulseApp.tooltips = (() => {
         // Mark as programmatic tooltip to prevent global handlers from interfering
         tooltipElement.setAttribute('data-programmatic', 'true');
         
-        tooltipElement.innerHTML = content;
-        positionTooltip(event);
+        // Remove hiding classes FIRST
         tooltipElement.classList.remove('hidden', 'opacity-0');
         tooltipElement.classList.add('opacity-100');
         
-        // Force display to ensure it's visible and remove any inline display style
-        tooltipElement.style.display = '';
+        // Force visibility
+        tooltipElement.style.display = 'block';
         tooltipElement.style.visibility = 'visible';
         tooltipElement.style.opacity = '1';
+        
+        // Set content and position AFTER making visible
+        tooltipElement.innerHTML = content;
+        positionTooltip(event);
+        
     }
 
     function hideTooltip() {
@@ -230,6 +239,7 @@ PulseApp.tooltips = (() => {
             tooltipElement.removeAttribute('data-programmatic');
         }
     }
+
 
     return {
         init,

@@ -4,6 +4,9 @@ const path = require('path');
 const nodemailer = require('nodemailer');
 const axios = require('axios');
 const customThresholdManager = require('./customThresholds');
+const WebhookBatcher = require('./webhookBatcher');
+const alertPatches = require('./alertManagerPatches');
+const DebounceHandler = require('./debounceHandler');
 
 class AlertManager extends EventEmitter {
     constructor() {
@@ -44,6 +47,41 @@ class AlertManager extends EventEmitter {
         
         this.perGuestCooldownConfig = null; // Will be loaded from per-guest threshold rule if present
         
+        // Email batching
+        this.emailBatchEnabled = process.env.EMAIL_BATCH_ENABLED === 'true';
+        this.emailBatchWindowMs = parseInt(process.env.EMAIL_BATCH_WINDOW_MS) || 30000; // 30 seconds
+        this.emailQueue = [];
+        this.emailBatchTimeout = null;
+        
+        // Initialize webhook batcher
+        this.webhookBatcher = new WebhookBatcher({
+            batchWindowMs: parseInt(process.env.WEBHOOK_BATCH_WINDOW_MS) || 5000,
+            summaryThreshold: parseInt(process.env.WEBHOOK_SUMMARY_THRESHOLD) || 3,
+            priorityDelay: parseInt(process.env.WEBHOOK_PRIORITY_DELAY) || 2000,
+            normalDelay: parseInt(process.env.WEBHOOK_ANNOUNCEMENT_DELAY) || 10000
+        });
+        
+        // Handle webhook batching events
+        this.webhookBatcher.on('send', async (alert, webhookUrl) => {
+            await this.sendDirectWebhookNotification(alert);
+        });
+        
+        this.webhookBatcher.on('sent', (alertId) => {
+            // Update notification status
+            const status = this.notificationStatus.get(alertId) || {};
+            status.webhookSent = true;
+            this.notificationStatus.set(alertId, status);
+            
+            // Also update the alert object itself
+            for (const [key, alert] of this.activeAlerts) {
+                if (alert.id === alertId) {
+                    alert.webhookSent = true;
+                    this.saveActiveAlerts();
+                    break;
+                }
+            }
+        });
+        
         this.maxHistorySize = 1000; // Limit history to prevent memory issues
         this.alertRulesFile = path.join(__dirname, '../data/alert-rules.json');
         this.activeAlertsFile = path.join(__dirname, '../data/active-alerts.json');
@@ -68,6 +106,13 @@ class AlertManager extends EventEmitter {
         this.emailTransporter = null;
         this.emailConfig = null;
         this.initializeEmailTransporter();
+        
+        // Apply patches for improved reliability
+        alertPatches.applyPatches.call(this);
+        
+        // Initialize debounce handler
+        this.debounceHandler = new DebounceHandler(this);
+        this.debounceHandler.start();
         
         // Cleanup timer for resolved alerts and expired cooldowns
         this.cleanupInterval = setInterval(() => {
@@ -738,9 +783,25 @@ class AlertManager extends EventEmitter {
 
     async sendNotifications(alert) {
         // Check if we've already sent notifications for this alert
+        // Check both the notification status map and the alert's own flags
         const existingStatus = this.notificationStatus.get(alert.id);
-        if (existingStatus && (existingStatus.emailSent || existingStatus.webhookSent)) {
-            console.log(`[AlertManager] Skipping notifications for alert ${alert.id} - already sent (email: ${existingStatus.emailSent}, webhook: ${existingStatus.webhookSent})`);
+        const alertHasEmailSent = alert.emailSent === true;
+        const alertHasWebhookSent = alert.webhookSent === true;
+        
+        // Debug logging for bundled alerts
+        if (alert.metric === 'bundled') {
+            console.log(`[AlertManager] sendNotifications for bundled alert ${alert.id}:`, {
+                ruleType: alert.rule?.type,
+                notifications: alert.rule?.notifications,
+                existingStatus,
+                alertHasEmailSent,
+                alertHasWebhookSent
+            });
+        }
+        
+        if ((existingStatus && (existingStatus.emailSent || existingStatus.webhookSent)) || 
+            (alertHasEmailSent || alertHasWebhookSent)) {
+            console.log(`[AlertManager] Skipping notifications for alert ${alert.id} - already sent (map: email=${existingStatus?.emailSent}, webhook=${existingStatus?.webhookSent}, alert: email=${alertHasEmailSent}, webhook=${alertHasWebhookSent})`);
             return;
         }
         
@@ -774,6 +835,7 @@ class AlertManager extends EventEmitter {
         // Global webhook acts as master switch - if disabled, never send webhooks  
         if (!globalWebhookEnabled) {
             sendWebhook = false;
+            console.log(`[AlertManager] Webhook disabled globally - sendWebhook set to false`);
         } else {
             // Global webhook is enabled - check individual rule preferences
             // Check both old format (sendWebhook) and new format (notifications.webhook)
@@ -786,6 +848,7 @@ class AlertManager extends EventEmitter {
                 }
             }
             sendWebhook = ruleWebhookEnabled && process.env.WEBHOOK_URL;
+            console.log(`[AlertManager] Webhook check - globalEnabled: ${globalWebhookEnabled}, ruleEnabled: ${ruleWebhookEnabled}, hasURL: ${!!process.env.WEBHOOK_URL}, sendWebhook: ${sendWebhook}`);
         }
         
         // Initialize notification status tracking for this alert
@@ -812,7 +875,21 @@ class AlertManager extends EventEmitter {
             console.log(`[AlertManager] Current cooldown info:`, cooldownInfo);
             
             // Use per-guest cooldown config if available, otherwise fall back to default
-            const cooldownConfig = this.perGuestCooldownConfig || this.emailCooldownConfig;
+            let cooldownConfig = this.perGuestCooldownConfig || this.emailCooldownConfig;
+            
+            // Map cooldownMinutes to defaultCooldownMinutes if needed
+            if (cooldownConfig.cooldownMinutes !== undefined && cooldownConfig.defaultCooldownMinutes === undefined) {
+                cooldownConfig = {
+                    defaultCooldownMinutes: cooldownConfig.cooldownMinutes,
+                    debounceDelayMinutes: cooldownConfig.debounceMinutes || 2,
+                    maxEmailsPerHour: cooldownConfig.maxEmailsPerHour || 4
+                };
+            }
+            
+            // Ensure cooldownConfig has valid values
+            if (!cooldownConfig.defaultCooldownMinutes || isNaN(cooldownConfig.defaultCooldownMinutes)) {
+                cooldownConfig.defaultCooldownMinutes = 15; // Fallback to 15 minutes
+            }
             
             if (cooldownInfo && now < cooldownInfo.cooldownUntil) {
                 const remainingMinutes = Math.ceil((cooldownInfo.cooldownUntil - now) / 60000);
@@ -855,8 +932,15 @@ class AlertManager extends EventEmitter {
                 if (!statusUpdate.emailDebounced && !statusUpdate.emailRateLimited) {
                     console.log(`[AlertManager] Sending email notification for alert ${alert.id}`);
                     try {
-                        await this.sendDirectEmailNotification(alert);
-                        console.log(`[AlertManager] Email notification sent successfully for alert ${alert.id}`);
+                        if (this.emailBatchEnabled) {
+                            // Add to email queue for batching
+                            this.queueEmailNotification(alert);
+                            console.log(`[AlertManager] Email queued for alert ${alert.id}`);
+                        } else {
+                            // Send immediately
+                            await this.sendDirectEmailNotification(alert);
+                            console.log(`[AlertManager] Email notification sent successfully for alert ${alert.id}`);
+                        }
                         
                         // Update cooldown tracking
                         const emailHistory = cooldownInfo?.emailHistory || [];
@@ -896,7 +980,24 @@ class AlertManager extends EventEmitter {
             const now = Date.now();
             
             // Use per-guest cooldown config if available, otherwise fall back to default
-            const cooldownConfig = this.perGuestCooldownConfig?.webhook || this.webhookCooldownConfig;
+            let cooldownConfig = this.perGuestCooldownConfig?.webhook || this.webhookCooldownConfig;
+            
+            // Map cooldownMinutes to defaultCooldownMinutes if needed
+            if (cooldownConfig.cooldownMinutes !== undefined && cooldownConfig.defaultCooldownMinutes === undefined) {
+                cooldownConfig = {
+                    defaultCooldownMinutes: cooldownConfig.cooldownMinutes,
+                    debounceDelayMinutes: cooldownConfig.debounceMinutes || 1,
+                    maxCallsPerHour: cooldownConfig.maxCallsPerHour || 10
+                };
+            }
+            
+            // Ensure cooldownConfig has valid values
+            if (!cooldownConfig.defaultCooldownMinutes || isNaN(cooldownConfig.defaultCooldownMinutes)) {
+                cooldownConfig.defaultCooldownMinutes = 5; // Fallback to 5 minutes for webhooks
+            }
+            if (!cooldownConfig.debounceDelayMinutes || isNaN(cooldownConfig.debounceDelayMinutes)) {
+                cooldownConfig.debounceDelayMinutes = 1; // Fallback to 1 minute
+            }
             
             console.log(`[AlertManager] Webhook cooldown config:`, cooldownConfig);
             console.log(`[AlertManager] Cooldown info for ${cooldownKey}:`, cooldownInfo);
@@ -939,10 +1040,13 @@ class AlertManager extends EventEmitter {
                 
                 // Only send webhook if not debounced or rate limited
                 if (!statusUpdate.webhookDebounced && !statusUpdate.webhookRateLimited) {
-                    console.log(`[AlertManager] Sending webhook notification for alert ${alert.id}`);
+                    console.log(`[AlertManager] Queueing webhook notification for alert ${alert.id}`);
                     try {
-                        await this.sendDirectWebhookNotification(alert);
-                        console.log(`[AlertManager] Webhook notification sent successfully for alert ${alert.id}`);
+                        // Use webhook batcher for intelligent batching
+                        const webhookUrl = process.env.WEBHOOK_URL;
+                        await this.webhookBatcher.queueAlert(alert, webhookUrl);
+                        
+                        // Note: The actual sending and status update is handled by the batcher
                         
                         // Update cooldown tracking
                         const callHistory = cooldownInfo?.callHistory || [];
@@ -970,6 +1074,17 @@ class AlertManager extends EventEmitter {
         
         // Only update notification status after actual delivery attempts
         this.notificationStatus.set(alertId, statusUpdate);
+        
+        // Also update the alert object itself with notification status
+        if (statusUpdate.emailSent) {
+            alert.emailSent = true;
+        }
+        if (statusUpdate.webhookSent) {
+            alert.webhookSent = true;
+        }
+        
+        // Save the updated alerts to persist the notification status
+        this.saveActiveAlerts();
         
         // Emit event for external handlers (use safe subset of alert data)
         this.emit('notification', { 
@@ -1442,7 +1557,17 @@ class AlertManager extends EventEmitter {
             // Add to history
             this.addToHistory(alertInfo);
             
-            // Send notifications
+            // Send notifications with properly formatted alert info
+            // For node alerts, ensure guest property is set
+            if (alert.type === 'node_threshold' && !alert.guest) {
+                alert.guest = {
+                    name: alert.nodeName || alert.nodeId || 'Unknown Node',
+                    vmid: 'node',
+                    node: alert.nodeId || 'unknown',
+                    type: 'node',
+                    endpointId: alert.nodeId || 'unknown'
+                };
+            }
             await this.sendNotifications(alert);
             
             // Save active alerts and notification history to disk
@@ -3152,6 +3277,71 @@ class AlertManager extends EventEmitter {
                     </p>
                 </div>
             `;
+        } else if (type === 'summary') {
+            // Summary alert content for multiple alerts
+            const { alertsByType, alertsByNode, totalCount } = data;
+            
+            content = `
+                <!-- Summary Banner -->
+                <div style="background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px 16px; margin-bottom: 24px;">
+                    <p style="margin: 0; color: #374151; font-size: 14px;">
+                        <strong>🚨 Multiple Alerts:</strong> ${totalCount} alerts triggered simultaneously
+                    </p>
+                </div>
+                
+                <!-- Alerts by Type -->
+                <div style="margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Alerts by Metric</h3>
+                    <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px;">
+                        ${Object.entries(alertsByType).map(([metric, items]) => `
+                            <div style="margin-bottom: 16px;">
+                                <div style="font-weight: 600; color: #111827; margin-bottom: 8px; text-transform: uppercase;">
+                                    ${metric} (${items.length} alert${items.length > 1 ? 's' : ''})
+                                </div>
+                                <div style="border-left: 3px solid #e5e7eb; padding-left: 12px;">
+                                    ${items.map(item => {
+                                        const value = typeof item.value === 'number' ? Math.round(item.value) : item.value;
+                                        const threshold = typeof item.threshold === 'number' ? Math.round(item.threshold) : item.threshold;
+                                        return `
+                                            <div style="font-size: 13px; padding: 4px 0; color: #6b7280;">
+                                                <span style="font-weight: 500; color: #374151;">${item.guest}:</span>
+                                                <span style="font-family: monospace;">${value}%</span>
+                                                <span style="color: #9ca3af;">(threshold: ${threshold}%)</span>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <!-- Alerts by Node -->
+                <div style="margin-bottom: 24px;">
+                    <h3 style="margin: 0 0 12px 0; font-size: 14px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em;">Distribution by Node</h3>
+                    <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">
+                            ${Object.entries(alertsByNode).map(([node, count]) => `
+                                <div style="background: white; border: 1px solid #e5e7eb; border-radius: 4px; padding: 8px 12px; text-align: center;">
+                                    <div style="font-weight: 600; color: #111827; font-size: 20px;">${count}</div>
+                                    <div style="font-size: 12px; color: #6b7280; margin-top: 2px;">${node}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Required -->
+                <div style="background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 6px; padding: 16px; color: white;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <div style="width: 6px; height: 6px; background: #fbbf24; border-radius: 50%;"></div>
+                        <span style="font-weight: 600;">Action Required</span>
+                    </div>
+                    <p style="margin: 0; opacity: 0.9; font-size: 14px;">
+                        Multiple systems are experiencing issues. Please review the alerts in your Pulse dashboard for detailed information and take appropriate action.
+                    </p>
+                </div>
+            `;
         }
         
         // Combine all parts
@@ -3349,280 +3539,15 @@ This alert was generated by Pulse monitoring system.
         await this.emailTransporter.sendMail(mailOptions);
         console.log(`[EMAIL] Alert sent to: ${recipients.join(', ')}`);
     }
-
-    /**
-     * Send webhook notification using environment configuration
-     */
-    async sendDirectWebhookNotification(alert) {
-        const webhookUrl = process.env.WEBHOOK_URL;
-        if (!webhookUrl) {
-            throw new Error('Webhook URL not configured (WEBHOOK_URL)');
-        }
-
-        const validTimestamp = this.getValidTimestamp(alert);
-        
-        // Ensure we have valid alert data
-        if (!alert) {
-            throw new Error('Invalid alert object');
-        }
-        
-        // Get guest/node info - handle all alert types
-        const guestInfo = alert.guest || {};
-        const isNodeAlert = alert.type === 'node_threshold' || guestInfo.vmid === 'node';
-        
-        // Get the current value and effective threshold for this alert
-        const currentValue = alert.currentValue;
-        const effectiveThreshold = alert.effectiveThreshold || alert.threshold || alert.rule?.threshold || 0;
-        
-        // Format values for display (only add % for percentage metrics)
-        // Use alert.metric if available (for node alerts), otherwise fall back to alert.rule.metric
-        const metric = alert.metric || alert.rule?.metric || 'unknown';
-        const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
-        
-        // Handle bundled alerts which may have complex or null values
-        let valueDisplay = 'Multiple metrics';
-        let thresholdDisplay = 'Various';
-        
-        if (alert.type === 'guest_bundled' && alert.tags) {
-            // For bundled alerts, show the tags/metrics involved
-            valueDisplay = alert.tags.filter(t => t !== 'bundled').join(', ').toUpperCase() || 'Multiple';
-            thresholdDisplay = 'See details';
-        } else if (currentValue !== null && currentValue !== undefined) {
-            const formattedValue = typeof currentValue === 'number' ? 
-                (isPercentageMetric ? Math.round(currentValue) : currentValue) : currentValue;
-            const formattedThreshold = typeof effectiveThreshold === 'number' ? 
-                effectiveThreshold : (effectiveThreshold || 'N/A');
-            
-            valueDisplay = isPercentageMetric && typeof formattedValue === 'number' ? `${formattedValue}%` : String(formattedValue);
-            thresholdDisplay = isPercentageMetric && typeof formattedThreshold === 'number' ? `${formattedThreshold}%` : String(formattedThreshold);
-        }
-        
-        // Detect webhook type based on URL
-        const isDiscord = webhookUrl.includes('discord.com/api/webhooks') || webhookUrl.includes('discordapp.com/api/webhooks');
-        const isSlack = webhookUrl.includes('slack.com/') || webhookUrl.includes('hooks.slack.com');
-        
-        let payload;
-        
-        if (isDiscord) {
-            // Discord-specific format
-            payload = {
-                embeds: [{
-                title: `🚨 ${alert.rule?.name || alert.ruleName || 'Alert'}`,
-                description: alert.rule?.description || alert.description || 'System alert triggered',
-                color: 15158332, // Red
-                fields: [
-                    {
-                        name: isNodeAlert ? 'Node' : 'VM/LXC',
-                        value: isNodeAlert ? guestInfo.name : `${guestInfo.name} (${guestInfo.type} ${guestInfo.vmid})`,
-                        inline: true
-                    },
-                    {
-                        name: 'Location',
-                        value: guestInfo.node || 'unknown',
-                        inline: true
-                    },
-                    {
-                        name: 'Status',
-                        value: guestInfo.status || 'active',
-                        inline: true
-                    },
-                    {
-                        name: 'Metric',
-                        value: metric !== 'unknown' ? metric.toUpperCase() : 'Multiple',
-                        inline: true
-                    },
-                    {
-                        name: 'Current Value',
-                        value: valueDisplay,
-                        inline: true
-                    },
-                    {
-                        name: 'Threshold',
-                        value: thresholdDisplay,
-                        inline: true
-                    }
-                ],
-                footer: {
-                    text: 'Pulse Monitoring System'
-                },
-                timestamp: new Date(validTimestamp).toISOString()
-                }]
-            };
-        } else if (isSlack) {
-            // Slack-specific format
-            payload = {
-                text: `🚨 *${alert.rule?.name || alert.ruleName || 'Alert'}*`,
-                attachments: [{
-                    color: 'danger',
-                    fields: [
-                        {
-                            title: isNodeAlert ? 'Node' : 'VM/LXC',
-                            value: isNodeAlert ? guestInfo.name : `${guestInfo.name} (${guestInfo.type} ${guestInfo.vmid})`,
-                            short: true
-                        },
-                        {
-                            title: 'Location',
-                            value: guestInfo.node || 'unknown',
-                            short: true
-                        },
-                        {
-                            title: 'Metric',
-                            value: alert.rule?.type === 'compound_threshold' ? 
-                                `Compound Rule: ${valueDisplay}` : 
-                                metric !== 'unknown' ? `${metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})` : 
-                                `Alert: ${valueDisplay}`,
-                            short: false
-                        }
-                    ],
-                    footer: 'Pulse Monitoring',
-                    ts: Math.floor(validTimestamp / 1000)
-                }]
-            };
-        } else {
-            // Generic webhook format with all fields (backward compatibility)
-            payload = {
-                timestamp: new Date(validTimestamp).toISOString(),
-                alert: {
-                    id: alert.id,
-                    rule: {
-                        name: alert.rule?.name || alert.ruleName || 'Unknown Rule',
-                        description: alert.rule?.description || alert.description || '',
-                        metric: metric
-                    },
-                    guest: {
-                        name: guestInfo.name || 'Unknown',
-                        id: guestInfo.vmid || 'unknown',
-                        type: guestInfo.type || 'unknown',
-                        node: guestInfo.node || 'unknown',
-                        status: guestInfo.status || 'unknown'
-                    },
-                    value: valueDisplay,
-                    threshold: thresholdDisplay,
-                    emoji: '🚨'
-                },
-                // Include both formats for generic webhooks
-                embeds: [{
-                    title: `🚨 ${alert.rule.name}`,
-                    description: alert.rule.description,
-                    color: 15158332, // Red color for all alerts
-                    fields: [
-                        {
-                            name: isNodeAlert ? 'Node' : 'VM/LXC',
-                            value: isNodeAlert ? guestInfo.name : `${guestInfo.name} (${guestInfo.type} ${guestInfo.vmid})`,
-                            inline: true
-                        },
-                        {
-                            name: 'Location',
-                            value: guestInfo.node || 'unknown',
-                            inline: true
-                        },
-                        {
-                            name: 'Metric',
-                            value: alert.rule?.type === 'compound_threshold' ? 
-                                `Compound Rule: ${valueDisplay}` : 
-                                alert.rule?.metric ? `${alert.rule.metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})` : 
-                                `Alert: ${valueDisplay}`,
-                            inline: true
-                        }
-                    ],
-                    footer: {
-                        text: 'Pulse Monitoring System'
-                    },
-                    timestamp: new Date(validTimestamp).toISOString()
-                }],
-                text: `🚨 *${alert.rule?.name || alert.ruleName || 'Alert'}*`,
-                attachments: [{
-                    color: 'danger',
-                    fields: [
-                        {
-                            title: isNodeAlert ? 'Node' : 'VM/LXC',
-                            value: isNodeAlert ? guestInfo.name : `${guestInfo.name} (${guestInfo.type} ${guestInfo.vmid})`,
-                            short: true
-                        },
-                        {
-                            title: 'Metric',
-                            value: alert.rule?.type === 'compound_threshold' ? 
-                                `Compound Rule: ${valueDisplay}` : 
-                                metric !== 'unknown' ? `${metric.toUpperCase()}: ${valueDisplay} (threshold: ${thresholdDisplay})` : 
-                                `Alert: ${valueDisplay}`,
-                            short: false
-                        }
-                    ],
-                    footer: 'Pulse Monitoring',
-                    ts: Math.floor(validTimestamp / 1000)
-                }]
-            };
-        }
-
-        // Set appropriate headers
-        const headers = {
-            'Content-Type': 'application/json',
-            'User-Agent': 'Pulse-Monitoring/1.0'
-        };
-
-        const maxRetries = 3;
-        let lastError;
-        
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-            try {
-                const response = await axios.post(webhookUrl, payload, {
-                    headers,
-                    timeout: 10000, // 10 second timeout
-                    maxRedirects: 3
-                });
-
-                console.log(`[WEBHOOK] Alert sent to: ${webhookUrl} (${response.status}) - attempt ${attempt}`);
-                console.log(`[WEBHOOK] Response headers:`, response.headers);
-                if (response.data) {
-                    console.log(`[WEBHOOK] Response body:`, typeof response.data === 'string' ? response.data.substring(0, 200) : response.data);
-                }
-                return; // Success, exit retry loop
-                
-            } catch (error) {
-                lastError = error;
-                console.warn(`[WEBHOOK] Attempt ${attempt}/${maxRetries} failed for ${webhookUrl}:`, error.message);
-                
-                if (error.response) {
-                    console.error(`[WEBHOOK] Error response status: ${error.response.status}`);
-                    console.error(`[WEBHOOK] Error response data:`, error.response.data);
-                    console.error(`[WEBHOOK] Error response headers:`, error.response.headers);
-                } else if (error.request) {
-                    console.error(`[WEBHOOK] No response received. Request details:`, {
-                        method: error.request.method,
-                        path: error.request.path,
-                        headers: error.request.getHeaders ? error.request.getHeaders() : 'N/A'
-                    });
-                } else {
-                    console.error(`[WEBHOOK] Error details:`, error);
-                }
-                
-                // Don't retry on 4xx client errors (likely permanent)
-                if (error.response && error.response.status >= 400 && error.response.status < 500) {
-                    console.error(`[WEBHOOK] Permanent client error ${error.response.status}, not retrying`);
-                    break;
-                }
-                
-                // Wait before retry (exponential backoff)
-                if (attempt < maxRetries) {
-                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Max 5s delay
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            }
-        }
-        
-        // All retries failed, throw final error
-        if (lastError.response) {
-            throw new Error(`Webhook failed after ${maxRetries} attempts: ${lastError.response.status} ${lastError.response.statusText}`);
-        } else if (lastError.request) {
-            throw new Error(`Webhook failed after ${maxRetries} attempts: No response from ${webhookUrl}`);
-        } else {
-            throw new Error(`Webhook failed after ${maxRetries} attempts: ${lastError.message}`);
-        }
-    }
-
-    destroy() {
+    
+    cleanup() {
         if (this.cleanupInterval) {
             clearInterval(this.cleanupInterval);
+        }
+        
+        // Stop debounce handler
+        if (this.debounceHandler) {
+            this.debounceHandler.stop();
         }
         
         // Stop watching alert rules file
@@ -3640,6 +3565,142 @@ This alert was generated by Pulse monitoring system.
         if (this.emailTransporter) {
             this.emailTransporter.close();
         }
+    }
+
+    /**
+     * Queue email notification for batching
+     */
+    queueEmailNotification(alert) {
+        this.emailQueue.push(alert);
+        console.log(`[AlertManager] Email queued for alert ${alert.id}. Queue size: ${this.emailQueue.length}`);
+        
+        // Start or reset batch timer
+        if (this.emailBatchTimeout) {
+            clearTimeout(this.emailBatchTimeout);
+        }
+        
+        this.emailBatchTimeout = setTimeout(() => {
+            this.sendBatchedEmails();
+        }, this.emailBatchWindowMs);
+    }
+    
+    /**
+     * Send batched email notifications
+     */
+    async sendBatchedEmails() {
+        if (this.emailQueue.length === 0) return;
+        
+        console.log(`[AlertManager] Sending batched email for ${this.emailQueue.length} alerts`);
+        
+        try {
+            if (this.emailQueue.length === 1) {
+                // Single alert - send normally
+                await this.sendDirectEmailNotification(this.emailQueue[0]);
+            } else {
+                // Multiple alerts - send summary email
+                await this.sendSummaryEmail(this.emailQueue);
+            }
+            
+            // Clear queue
+            this.emailQueue = [];
+            this.emailBatchTimeout = null;
+        } catch (error) {
+            console.error('[AlertManager] Error sending batched emails:', error);
+            // Clear queue even on error to prevent infinite retries
+            this.emailQueue = [];
+            this.emailBatchTimeout = null;
+        }
+    }
+    
+    /**
+     * Send summary email for multiple alerts
+     */
+    async sendSummaryEmail(alerts) {
+        if (!this.emailTransporter) {
+            throw new Error('Email transporter not configured');
+        }
+        
+        const toEmail = this.emailConfig?.to || process.env.ALERT_TO_EMAIL;
+        const recipients = toEmail ? toEmail.split(',') : [];
+        if (!recipients || recipients.length === 0) {
+            throw new Error('No email recipients configured');
+        }
+        
+        // Group alerts by type
+        const alertsByType = {};
+        const alertsByNode = {};
+        
+        alerts.forEach(alert => {
+            // Group by metric type
+            if (alert.metric === 'bundled' && alert.exceededMetrics) {
+                alert.exceededMetrics.forEach(m => {
+                    const metric = m.metricType || 'unknown';
+                    if (!alertsByType[metric]) alertsByType[metric] = [];
+                    alertsByType[metric].push({
+                        guest: alert.guest.name,
+                        value: m.currentValue,
+                        threshold: m.threshold
+                    });
+                });
+            } else {
+                const metric = alert.metric || alert.rule?.metric || 'unknown';
+                if (!alertsByType[metric]) alertsByType[metric] = [];
+                alertsByType[metric].push({
+                    guest: alert.guest?.name || 'Unknown',
+                    value: alert.currentValue || alert.value,
+                    threshold: alert.threshold || alert.rule?.threshold
+                });
+            }
+            
+            // Group by node
+            const node = alert.guest?.node || 'unknown';
+            if (!alertsByNode[node]) alertsByNode[node] = 0;
+            alertsByNode[node]++;
+        });
+        
+        // Create summary text
+        let summaryText = `PULSE ALERT SUMMARY: ${alerts.length} alerts triggered\n\n`;
+        
+        Object.entries(alertsByType).forEach(([metric, items]) => {
+            summaryText += `${metric.toUpperCase()} ALERTS (${items.length}):\n`;
+            items.forEach(item => {
+                const value = typeof item.value === 'number' ? Math.round(item.value) : item.value;
+                const threshold = typeof item.threshold === 'number' ? Math.round(item.threshold) : item.threshold;
+                summaryText += `  - ${item.guest}: ${value}% (threshold: ${threshold}%)\n`;
+            });
+            summaryText += '\n';
+        });
+        
+        summaryText += 'BY NODE:\n';
+        Object.entries(alertsByNode).forEach(([node, count]) => {
+            summaryText += `  - ${node}: ${count} alert${count > 1 ? 's' : ''}\n`;
+        });
+        
+        // Create HTML version with the email template
+        const html = this.generateEmailTemplate({
+            type: 'summary',
+            data: {
+                title: `Alert Summary: ${alerts.length} alerts`,
+                subtitle: 'Multiple alerts triggered',
+                fromEmail: this.emailConfig?.from || process.env.ALERT_FROM_EMAIL,
+                toEmail: recipients.join(', '),
+                alerts: alerts,
+                alertsByType: alertsByType,
+                alertsByNode: alertsByNode,
+                totalCount: alerts.length
+            }
+        });
+        
+        const mailOptions = {
+            from: this.emailConfig?.from || process.env.ALERT_FROM_EMAIL || 'alerts@pulse-monitoring.local',
+            to: recipients.join(', '),
+            subject: `🚨 Pulse Alert Summary: ${alerts.length} alerts`,
+            text: summaryText,
+            html: html
+        };
+        
+        await this.emailTransporter.sendMail(mailOptions);
+        console.log(`[EMAIL] Summary alert sent to: ${recipients.join(', ')}`);
     }
 
     async sendTestEmail(customConfig = null) {
@@ -4068,6 +4129,147 @@ Pulse Monitoring System`,
         }
     }
 
+    async sendDirectWebhookNotification(alert) {
+        try {
+            const webhookUrl = process.env.WEBHOOK_URL;
+            if (!webhookUrl) {
+                throw new Error('No webhook URL configured');
+            }
+            
+            console.log(`[AlertManager] Sending direct webhook for alert ${alert.id} - ${alert.rule?.name}`);
+            
+            // Detect webhook type based on URL
+            const isDiscord = webhookUrl.includes('discord.com/api/webhooks') || webhookUrl.includes('discordapp.com/api/webhooks');
+            const isSlack = webhookUrl.includes('slack.com/') || webhookUrl.includes('hooks.slack.com');
+            
+            let payload;
+            
+            if (isDiscord) {
+                // Discord-specific format
+                const color = alert.type === 'summary' ? 0xFF4500 : // Orange for summary
+                            alert.priority === 'critical' ? 0xFF0000 : // Red for critical
+                            alert.priority === 'high' ? 0xFFA500 : // Orange for high
+                            0xFFFF00; // Yellow for normal
+                
+                const fields = [];
+                
+                if (alert.type === 'summary') {
+                    // Summary alert fields
+                    fields.push(
+                        { name: 'Total Alerts', value: alert.summary.total.toString(), inline: true },
+                        { name: 'Critical', value: alert.summary.critical.toString(), inline: true }
+                    );
+                    
+                    // Add breakdown by type
+                    for (const [type, count] of Object.entries(alert.summary.byType)) {
+                        if (count > 0) {
+                            fields.push({
+                                name: type.toUpperCase(),
+                                value: `${count} alert${count > 1 ? 's' : ''}`,
+                                inline: true
+                            });
+                        }
+                    }
+                } else {
+                    // Regular alert fields
+                    fields.push(
+                        { name: 'VM/Container', value: `${alert.guest.name} (${alert.guest.vmid})`, inline: true },
+                        { name: 'Node', value: alert.guest.node, inline: true },
+                        { name: 'Type', value: alert.guest.type.toUpperCase(), inline: true }
+                    );
+                    
+                    if (alert.metric && alert.currentValue !== undefined) {
+                        fields.push({
+                            name: 'Metric',
+                            value: `${alert.metric.toUpperCase()}: ${alert.currentValue}`,
+                            inline: true
+                        });
+                    }
+                    
+                    if (alert.exceededMetrics && alert.exceededMetrics.length > 0) {
+                        const metricsText = alert.exceededMetrics.map(m => 
+                            `${m.metricType.toUpperCase()}: ${m.currentValue}%`
+                        ).join('\n');
+                        fields.push({
+                            name: 'Exceeded Metrics',
+                            value: metricsText,
+                            inline: false
+                        });
+                    }
+                }
+                
+                payload = {
+                    embeds: [{
+                        title: alert.type === 'summary' ? '🚨 Multiple Alerts Summary' : `🚨 ${alert.rule.name}`,
+                        description: alert.type === 'summary' ? 
+                            `${alert.summary.total} alerts triggered simultaneously` :
+                            alert.rule.description || alert.message,
+                        color: color,
+                        fields: fields,
+                        footer: {
+                            text: 'Pulse Alert System'
+                        },
+                        timestamp: new Date().toISOString()
+                    }]
+                };
+            } else if (isSlack) {
+                // Slack-specific format
+                const color = alert.type === 'summary' ? 'warning' :
+                            alert.priority === 'critical' ? 'danger' :
+                            alert.priority === 'high' ? 'warning' : '#FFFF00';
+                
+                const fields = [];
+                
+                if (alert.type === 'summary') {
+                    fields.push(
+                        { title: 'Total Alerts', value: alert.summary.total.toString(), short: true },
+                        { title: 'Critical', value: alert.summary.critical.toString(), short: true }
+                    );
+                } else {
+                    fields.push(
+                        { title: 'VM/Container', value: `${alert.guest.name} (${alert.guest.vmid})`, short: true },
+                        { title: 'Node', value: alert.guest.node, short: true }
+                    );
+                }
+                
+                payload = {
+                    text: alert.type === 'summary' ? '🚨 *Multiple Alerts Summary*' : `🚨 *${alert.rule.name}*`,
+                    attachments: [{
+                        color: color,
+                        title: alert.type === 'summary' ? 'Alert Summary' : alert.rule.name,
+                        text: alert.type === 'summary' ?
+                            `${alert.summary.total} alerts triggered simultaneously` :
+                            alert.rule.description || alert.message,
+                        fields: fields,
+                        footer: 'Pulse Alert System',
+                        ts: Math.floor(Date.now() / 1000)
+                    }]
+                };
+            } else {
+                // Generic webhook format (including Home Assistant)
+                payload = {
+                    timestamp: new Date().toISOString(),
+                    alert: alert
+                };
+            }
+            
+            const response = await axios.post(webhookUrl, payload, {
+                timeout: 10000,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Pulse-Alert-System/1.0'
+                }
+            });
+            
+            console.log(`[AlertManager] Webhook sent successfully for alert ${alert.id} (${response.status})`);
+            return { success: true };
+            
+        } catch (error) {
+            console.error(`[AlertManager] Failed to send webhook for alert ${alert.id}:`, error.message);
+            throw error;
+        }
+    }
+
     async loadEmailConfig() {
         try {
             // Load email configuration from config API
@@ -4237,6 +4439,10 @@ Pulse Monitoring System`,
      * Evaluate all metrics for a guest and create one bundled alert
      */
     async evaluateGuestBundledAlerts(guest, globalThresholds, guestThresholds, timestamp, guestMetrics = null, alertDuration = 0) {
+        // Get the threshold rule configuration
+        const thresholdConfig = Array.from(this.alertRules.values()).find(rule => rule.type === 'per_guest_thresholds');
+        console.log(`[AlertManager] Bundled alerts - thresholdConfig found: ${!!thresholdConfig}, notifications: ${JSON.stringify(thresholdConfig?.notifications)}`);
+        
         // Get threshold for this guest
         const guestKey = `${guest.endpointId || 'unknown'}-${guest.node}-${guest.vmid}`;
         const guestSpecificThresholds = guestThresholds[guestKey] || {};
@@ -4267,6 +4473,9 @@ Pulse Monitoring System`,
             
             if (!existingAlert) {
                 // Create new bundled alert in pending state
+                const notificationSettings = thresholdConfig?.notifications || { dashboard: true, email: true, webhook: true };
+                console.log(`[AlertManager] Creating bundled alert with notifications:`, notificationSettings);
+                
                 const newAlert = {
                     id: this.generateAlertId(),
                     rule: {
@@ -4277,7 +4486,8 @@ Pulse Monitoring System`,
                         tags: ['bundled', ...exceededMetrics.map(m => m.metricType)],
                         type: 'guest_bundled',
                         autoResolve: true,
-                        duration: alertDuration
+                        duration: alertDuration,
+                        notifications: notificationSettings
                     },
                     guest: this.createSafeGuestCopy(guest),
                     metric: 'bundled',

@@ -18,6 +18,10 @@ class MetricsHistory {
             head: 0,
             maxSize: maxSize,
             push(item) {
+                // Clear old reference to prevent memory leak
+                if (this.size === this.maxSize) {
+                    this.buffer[this.head] = null;
+                }
                 this.buffer[this.head] = item;
                 this.head = (this.head + 1) % this.maxSize;
                 if (this.size < this.maxSize) this.size++;
@@ -48,8 +52,7 @@ class MetricsHistory {
         if (!this.guestMetrics.has(guestId)) {
             this.guestMetrics.set(guestId, {
                 dataPoints: this.createCircularBuffer(MAX_DATA_POINTS),
-                lastValues: null, // For rate calculation
-                lastDataPoint: null // For compression
+                lastValues: null // For rate calculation
             });
         }
 
@@ -70,36 +73,25 @@ class MetricsHistory {
             }
         }
 
-        // Compress data by only storing changed values for cumulative metrics
-        const lastDataPoint = guestHistory.lastDataPoint;
+        // Always store all values to avoid compression artifacts
+        // This ensures accurate rate calculations and data reconstruction
         const dataPoint = {
             timestamp,
             cpu: currentMetrics?.cpu || 0,
             mem: currentMetrics?.mem || 0,
-            disk: currentMetrics?.disk || 0
+            disk: currentMetrics?.disk || 0,
+            // Always store cumulative values for accurate rate calculations
+            diskread: currentMetrics?.diskread || 0,
+            diskwrite: currentMetrics?.diskwrite || 0,
+            netin: currentMetrics?.netin || 0,
+            netout: currentMetrics?.netout || 0
         };
         
-        // Only store cumulative values if they changed (saves memory)
-        if (!lastDataPoint || lastDataPoint.diskread !== (currentMetrics?.diskread || 0)) {
-            dataPoint.diskread = currentMetrics?.diskread || 0;
-        }
-        if (!lastDataPoint || lastDataPoint.diskwrite !== (currentMetrics?.diskwrite || 0)) {
-            dataPoint.diskwrite = currentMetrics?.diskwrite || 0;
-        }
-        if (!lastDataPoint || lastDataPoint.netin !== (currentMetrics?.netin || 0)) {
-            dataPoint.netin = currentMetrics?.netin || 0;
-        }
-        if (!lastDataPoint || lastDataPoint.netout !== (currentMetrics?.netout || 0)) {
-            dataPoint.netout = currentMetrics?.netout || 0;
-        }
-        
-        // Guest memory if available and changed
-        if (currentMetrics?.guest_mem_actual_used_bytes !== undefined && 
-            (!lastDataPoint || lastDataPoint.guest_mem_actual_used_bytes !== currentMetrics.guest_mem_actual_used_bytes)) {
+        // Guest memory if available
+        if (currentMetrics?.guest_mem_actual_used_bytes !== undefined) {
             dataPoint.guest_mem_actual_used_bytes = currentMetrics.guest_mem_actual_used_bytes;
         }
-        if (currentMetrics?.guest_mem_total_bytes !== undefined && 
-            (!lastDataPoint || lastDataPoint.guest_mem_total_bytes !== currentMetrics.guest_mem_total_bytes)) {
+        if (currentMetrics?.guest_mem_total_bytes !== undefined) {
             dataPoint.guest_mem_total_bytes = currentMetrics.guest_mem_total_bytes;
         }
         
@@ -108,18 +100,8 @@ class MetricsHistory {
             Object.assign(dataPoint, rates);
         }
 
-        // Don't store if values haven't changed significantly (within 0.1% for CPU/mem)
-        if (lastDataPoint && 
-            Math.abs(dataPoint.cpu - lastDataPoint.cpu) < 0.001 &&
-            Math.abs(dataPoint.mem - lastDataPoint.mem) < 0.001 &&
-            dataPoint.disk === lastDataPoint.disk &&
-            !rates) {
-            // Skip storing this data point since values haven't changed
-            // Note: We do NOT update the timestamp of the last point to preserve accurate time history
-        } else {
-            guestHistory.dataPoints.push(dataPoint);
-            guestHistory.lastDataPoint = { ...dataPoint }; // Store full copy for comparison
-        }
+        // Always store the data point - let persistence layer handle downsampling
+        guestHistory.dataPoints.push(dataPoint);
         
         // Update last values for next rate calculation
         guestHistory.lastValues = {
@@ -136,12 +118,47 @@ class MetricsHistory {
             return null;
         }
         
-        const valueDiff = currentValue - previousValue;
-        if (valueDiff < 0 || timeDiffSeconds <= 0) {
-            return null; // Reset or invalid data
+        // Detect counter resets (current < previous)
+        // This can happen when:
+        // 1. VM restarts and counters reset to 0
+        // 2. Counter overflow (very rare)
+        // 3. Proxmox API reset
+        if (currentValue < previousValue) {
+            // Counter reset detected
+            // For now, return null to avoid negative rates
+            // In the future, we could estimate rate if we knew the max counter value
+            return null;
         }
         
-        return valueDiff / timeDiffSeconds;
+        const valueDiff = currentValue - previousValue;
+        if (timeDiffSeconds <= 0) {
+            return null; // Invalid time difference
+        }
+        
+        // Detect unrealistic time gaps (> 5 minutes) that indicate a restart or data gap
+        // This prevents huge spikes when cumulative values jump after a restart
+        if (timeDiffSeconds > 300) {
+            return null; // Gap too large, don't calculate rate
+        }
+        
+        // Calculate the rate
+        const rate = valueDiff / timeDiffSeconds;
+        
+        // Smart anomaly detection instead of hard limits
+        // Check if this is the first rate calculation after a gap
+        const isFirstAfterGap = timeDiffSeconds > 10; // Normal interval is 2 seconds
+        
+        if (isFirstAfterGap) {
+            // After a gap, we can't trust the rate calculation
+            // The cumulative values might have increased significantly during downtime
+            // Only accept if the rate is reasonable for the time period
+            const reasonableRate = valueDiff / Math.min(timeDiffSeconds, 10); // Assume at most 10 seconds of activity
+            return reasonableRate;
+        }
+        
+        // For continuous monitoring (no gaps), allow any rate
+        // Real hardware can achieve very high speeds
+        return rate;
     }
 
     addNodeMetricData(nodeId, nodeData) {
@@ -149,15 +166,12 @@ class MetricsHistory {
         
         if (!this.nodeMetrics.has(nodeId)) {
             this.nodeMetrics.set(nodeId, {
-                dataPoints: this.createCircularBuffer(MAX_DATA_POINTS),
-                lastDataPoint: null // For compression
+                dataPoints: this.createCircularBuffer(MAX_DATA_POINTS)
             });
         }
 
         const nodeHistory = this.nodeMetrics.get(nodeId);
 
-        // Compress data by only storing changed values
-        const lastDataPoint = nodeHistory.lastDataPoint;
         // Handle different data structures from discovery vs status endpoint
         let memUsed = 0, memTotal = 0, diskUsed = 0, diskTotal = 0;
         
@@ -189,6 +203,7 @@ class MetricsHistory {
             diskTotal = nodeData?.maxdisk || 0;
         }
         
+        // Always store all values - let persistence layer handle downsampling
         const dataPoint = {
             timestamp,
             cpu: nodeData?.cpu || 0,
@@ -198,32 +213,8 @@ class MetricsHistory {
             maxdisk: diskTotal
         };
         
-
-        // If maxmem or maxdisk are 0, try to use values from last data point
-        if (dataPoint.maxmem === 0 && lastDataPoint && lastDataPoint.maxmem > 0) {
-            dataPoint.maxmem = lastDataPoint.maxmem;
-        }
-        if (dataPoint.maxdisk === 0 && lastDataPoint && lastDataPoint.maxdisk > 0) {
-            dataPoint.maxdisk = lastDataPoint.maxdisk;
-        }
-        
-        // Don't store if values haven't changed significantly
-        // For CPU: within 0.1% (since it's already a percentage)
-        // For memory/disk: within 0.1% of the total capacity
-        const cpuChanged = !lastDataPoint || Math.abs(dataPoint.cpu - lastDataPoint.cpu) >= 0.001;
-        const memChanged = !lastDataPoint || 
-            (dataPoint.maxmem > 0 && Math.abs(dataPoint.mem - lastDataPoint.mem) / dataPoint.maxmem >= 0.001);
-        const diskChanged = !lastDataPoint || 
-            (dataPoint.maxdisk > 0 && Math.abs(dataPoint.disk - lastDataPoint.disk) / dataPoint.maxdisk >= 0.001);
-        
-        
-        if (cpuChanged || memChanged || diskChanged) {
-            nodeHistory.dataPoints.push(dataPoint);
-            nodeHistory.lastDataPoint = { ...dataPoint }; // Store full copy for comparison
-        } else {
-            // Skip storing this data point since values haven't changed
-            // Note: We do NOT update the timestamp of the last point to preserve accurate time history
-        }
+        // Always store the data point
+        nodeHistory.dataPoints.push(dataPoint);
     }
 
     getNodeChartData(nodeId, metric) {
@@ -310,13 +301,30 @@ class MetricsHistory {
                 }
                 return null; // Will need total memory from guest info for percentage
             case 'diskread':
-                return dataPoint.diskReadRate;
+                // Only filter truly impossible rates (>50GB/s)
+                const diskReadRate = dataPoint.diskReadRate;
+                if (diskReadRate && diskReadRate > 50 * 1024 * 1024 * 1024) {
+                    return null;
+                }
+                return diskReadRate;
             case 'diskwrite':
-                return dataPoint.diskWriteRate;
+                const diskWriteRate = dataPoint.diskWriteRate;
+                if (diskWriteRate && diskWriteRate > 50 * 1024 * 1024 * 1024) {
+                    return null;
+                }
+                return diskWriteRate;
             case 'netin':
-                return dataPoint.netInRate;
+                const netInRate = dataPoint.netInRate;
+                if (netInRate && netInRate > 50 * 1024 * 1024 * 1024) {
+                    return null;
+                }
+                return netInRate;
             case 'netout':
-                return dataPoint.netOutRate;
+                const netOutRate = dataPoint.netOutRate;
+                if (netOutRate && netOutRate > 50 * 1024 * 1024 * 1024) {
+                    return null;
+                }
+                return netOutRate;
             default:
                 return dataPoint[metric];
         }
@@ -342,13 +350,30 @@ class MetricsHistory {
                 }
                 return null;
             case 'diskread':
-                return dataPoint.diskReadRate;
+                // Only filter truly impossible rates (>50GB/s)
+                const diskReadRate = dataPoint.diskReadRate;
+                if (diskReadRate && diskReadRate > 50 * 1024 * 1024 * 1024) {
+                    return null;
+                }
+                return diskReadRate;
             case 'diskwrite':
-                return dataPoint.diskWriteRate;
+                const diskWriteRate = dataPoint.diskWriteRate;
+                if (diskWriteRate && diskWriteRate > 50 * 1024 * 1024 * 1024) {
+                    return null;
+                }
+                return diskWriteRate;
             case 'netin':
-                return dataPoint.netInRate;
+                const netInRate = dataPoint.netInRate;
+                if (netInRate && netInRate > 50 * 1024 * 1024 * 1024) {
+                    return null;
+                }
+                return netInRate;
             case 'netout':
-                return dataPoint.netOutRate;
+                const netOutRate = dataPoint.netOutRate;
+                if (netOutRate && netOutRate > 50 * 1024 * 1024 * 1024) {
+                    return null;
+                }
+                return netOutRate;
             default:
                 return dataPoint[metric];
         }
@@ -553,6 +578,124 @@ class MetricsHistory {
         }
         
         return totalBytes;
+    }
+
+    // Export methods for persistence
+    exportGuestMetrics(timeRangeMinutes = null) {
+        const result = {};
+        const cutoffTime = timeRangeMinutes ? Date.now() - (timeRangeMinutes * 60 * 1000) : 0;
+
+        for (const [guestId, guestHistory] of this.guestMetrics) {
+            const dataPoints = guestHistory.dataPoints
+                .toArray()
+                .filter(point => point && point.timestamp >= cutoffTime);
+            
+            if (dataPoints.length > 0) {
+                result[guestId] = dataPoints;
+            }
+        }
+
+        return result;
+    }
+
+    exportNodeMetrics(timeRangeMinutes = null) {
+        const result = {};
+        const cutoffTime = timeRangeMinutes ? Date.now() - (timeRangeMinutes * 60 * 1000) : 0;
+
+        for (const [nodeId, nodeHistory] of this.nodeMetrics) {
+            const dataPoints = nodeHistory.dataPoints
+                .toArray()
+                .filter(point => point && point.timestamp >= cutoffTime);
+            
+            if (dataPoints.length > 0) {
+                result[nodeId] = dataPoints;
+            }
+        }
+
+        return result;
+    }
+
+    // Import methods for persistence
+    importGuestMetrics(guestId, dataPoints) {
+        if (!dataPoints || dataPoints.length === 0) return;
+
+        if (!this.guestMetrics.has(guestId)) {
+            this.guestMetrics.set(guestId, {
+                dataPoints: this.createCircularBuffer(MAX_DATA_POINTS),
+                lastValues: null
+            });
+        }
+
+        const guestHistory = this.guestMetrics.get(guestId);
+        
+        // Sort by timestamp and add to buffer
+        const sortedPoints = dataPoints.sort((a, b) => a.timestamp - b.timestamp);
+        for (const point of sortedPoints) {
+            // Skip if point is too old
+            if (Date.now() - point.timestamp > HISTORY_RETENTION_MS) continue;
+            
+            // Sanitize imported rate values only if they're impossibly high
+            // 50 GB/s is beyond any current hardware capability
+            const impossibleRate = 50 * 1024 * 1024 * 1024;
+            
+            if (point.diskReadRate && point.diskReadRate > impossibleRate) {
+                point.diskReadRate = null;
+            }
+            if (point.diskWriteRate && point.diskWriteRate > impossibleRate) {
+                point.diskWriteRate = null;
+            }
+            if (point.netInRate && point.netInRate > impossibleRate) {
+                point.netInRate = null;
+            }
+            if (point.netOutRate && point.netOutRate > impossibleRate) {
+                point.netOutRate = null;
+            }
+            
+            guestHistory.dataPoints.push(point);
+        }
+
+        // Set lastValues for rate calculations
+        // Only set if the last point is recent enough (< 5 minutes old)
+        // This prevents rate spikes after restarts with old data
+        if (sortedPoints.length > 0) {
+            const lastPoint = sortedPoints[sortedPoints.length - 1];
+            const age = Date.now() - lastPoint.timestamp;
+            
+            if (age < 5 * 60 * 1000) {
+                // Recent data - safe to use for rate calculations
+                guestHistory.lastValues = {
+                    timestamp: lastPoint.timestamp,
+                    diskread: lastPoint.diskread || 0,
+                    diskwrite: lastPoint.diskwrite || 0,
+                    netin: lastPoint.netin || 0,
+                    netout: lastPoint.netout || 0
+                };
+            } else {
+                // Old data - don't use for rate calculations
+                guestHistory.lastValues = null;
+            }
+        }
+    }
+
+    importNodeMetrics(nodeId, dataPoints) {
+        if (!dataPoints || dataPoints.length === 0) return;
+
+        if (!this.nodeMetrics.has(nodeId)) {
+            this.nodeMetrics.set(nodeId, {
+                dataPoints: this.createCircularBuffer(MAX_DATA_POINTS)
+            });
+        }
+
+        const nodeHistory = this.nodeMetrics.get(nodeId);
+        
+        // Sort by timestamp and add to buffer
+        const sortedPoints = dataPoints.sort((a, b) => a.timestamp - b.timestamp);
+        for (const point of sortedPoints) {
+            // Skip if point is too old
+            if (Date.now() - point.timestamp > HISTORY_RETENTION_MS) continue;
+            
+            nodeHistory.dataPoints.push(point);
+        }
     }
 }
 

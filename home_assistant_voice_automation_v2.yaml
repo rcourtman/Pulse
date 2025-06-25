@@ -1,0 +1,138 @@
+alias: Announce Pulse VM Alerts (Enhanced)
+description: Announces VM alerts with batching and priority support
+triggers:
+  - trigger: webhook
+    allowed_methods:
+      - POST
+      - PUT
+    local_only: true
+    webhook_id: "-pulse-vm-alerts-voice-announce"
+conditions:
+  # Only announce actual alerts, not test alerts
+  - condition: template
+    value_template: "{{ trigger.json.alert.rule.name != 'Test Alert' }}"
+actions:
+  # Check if this is a summary alert
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.json.alert.type == 'summary' }}"
+        sequence:
+          # Handle summary alert
+          - target:
+              entity_id: light.home_assistant_voice_090a60_led_ring
+            data:
+              brightness: 255
+              rgb_color:
+                - 255
+                - 165
+                - 0  # Orange for multiple alerts
+            action: light.turn_on
+          
+          # Announce summary
+          - target:
+              entity_id: assist_satellite.home_assistant_voice_090a60_assist_satellite
+            data:
+              message: >
+                {% set summary = trigger.json.alert.summary %}
+                {% set critical_count = summary.critical | default(0) %}
+                {% set total = summary.total | default(0) %}
+                
+                {% if critical_count > 0 %}
+                  Attention: {{ total }} alerts detected, including {{ critical_count }} critical.
+                {% else %}
+                  Multiple alerts: {{ total }} systems need attention.
+                {% endif %}
+                
+                {% for type, count in summary.byType.items() %}
+                  {% if count > 0 and type != 'bundled' %}
+                    {{ count }} {{ type }} alert{{ 's' if count > 1 else '' }}.
+                  {% endif %}
+                {% endfor %}
+                
+                Check your dashboard for details.
+            action: assist_satellite.announce
+          
+          # Keep LED orange for longer
+          - delay:
+              seconds: 10
+          
+    default:
+      # Handle individual alert
+      - variables:
+          alert: "{{ trigger.json.alert }}"
+          priority: >
+            {% set value = alert.currentValue | default(alert.value) | default(0) %}
+            {% set metric = alert.metric | default(alert.rule.metric) | default('unknown') %}
+            {% if alert.guest.status in ['stopped', 'error'] %}critical
+            {% elif metric in ['cpu', 'memory', 'disk'] and value | float > 95 %}critical
+            {% elif value | float > 90 %}high
+            {% else %}normal{% endif %}
+      
+      - target:
+          entity_id: light.home_assistant_voice_090a60_led_ring
+        data:
+          brightness: 255
+          rgb_color: >
+            {% if priority == 'critical' %}
+              [255, 0, 0]  # Red for critical
+            {% elif priority == 'high' %}
+              [255, 165, 0]  # Orange for high
+            {% else %}
+              [255, 255, 0]  # Yellow for normal
+            {% endif %}
+        action: light.turn_on
+      
+      # Announce the alert
+      - target:
+          entity_id: assist_satellite.home_assistant_voice_090a60_assist_satellite
+        data:
+          message: >
+            {% set vm_name = alert.guest.name | default('Unknown VM') %}
+            {% set node_location = alert.guest.node | default('unknown location') %}
+            {% set metric = (alert.rule.metric | default(alert.metric) | default('unknown')) | upper %}
+            {% set value = alert.value | default('N/A') %}
+            {% set threshold = alert.threshold | default('N/A') %}
+            
+            {% if priority == 'critical' %}
+              Critical alert: 
+            {% elif priority == 'high' %}
+              Warning: 
+            {% else %}
+              Alert: 
+            {% endif %}
+            
+            {% if alert.guest.type == 'node' %}
+              Node {{ vm_name }} has high {{ metric }} usage at {{ value }}
+            {% elif metric in ['CPU', 'MEMORY', 'DISK'] %}
+              {{ vm_name }} on {{ node_location }} has high {{ metric }} usage at {{ value }}
+            {% elif metric == 'DOWN' %}
+              {{ vm_name }} on {{ node_location }} is currently down and not responding
+            {% elif 'bundled' in alert.tags | default([]) %}
+              {{ vm_name }} on {{ node_location }} has multiple issues
+            {% else %}
+              {{ vm_name }} on {{ node_location }} triggered {{ alert.rule.name | default('an alert') }}
+            {% endif %}
+        action: assist_satellite.announce
+      
+      # Wait based on priority
+      - delay:
+          seconds: >
+            {% if priority == 'critical' %}3
+            {% elif priority == 'high' %}5
+            {% else %}7{% endif %}
+      
+  # Return LED to normal
+  - target:
+      entity_id: light.home_assistant_voice_090a60_led_ring
+    data:
+      brightness: 100
+      rgb_color:
+        - 0
+        - 0
+        - 255
+    action: light.turn_on
+
+mode: queued
+max: 10
+max_exceeded: silent
