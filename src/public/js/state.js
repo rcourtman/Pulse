@@ -1,7 +1,8 @@
 PulseApp.state = (() => {
-    const savedSortState = JSON.parse(localStorage.getItem('pulseSortState')) || {};
-    const savedFilterState = JSON.parse(localStorage.getItem('pulseFilterState')) || {};
-    const savedThresholdState = JSON.parse(localStorage.getItem('pulseThresholdState')) || {};
+    const storage = PulseApp.utils.StorageHelper;
+    const savedSortState = storage.get('pulseSortState', {});
+    const savedFilterState = storage.get('pulseFilterState', {});
+    const savedThresholdState = storage.get('pulseThresholdState', {});
 
     let internalState = {
         nodesData: [],
@@ -115,8 +116,8 @@ PulseApp.state = (() => {
             backupsFilterGuestType: internalState.backupsFilterGuestType,
             thresholdHideMode: internalState.thresholdHideMode
         };
-        localStorage.setItem('pulseFilterState', JSON.stringify(stateToSave));
-        localStorage.setItem('pulseThresholdState', JSON.stringify(internalState.thresholdState));
+        storage.set('pulseFilterState', stateToSave);
+        storage.set('pulseThresholdState', internalState.thresholdState);
     }
 
     function saveSortState() {
@@ -124,7 +125,7 @@ PulseApp.state = (() => {
             main: internalState.sortState.main,
             backups: internalState.sortState.backups
         };
-        localStorage.setItem('pulseSortState', JSON.stringify(stateToSave));
+        storage.set('pulseSortState', stateToSave);
     }
 
     // Utility function to create hash of data for change detection
