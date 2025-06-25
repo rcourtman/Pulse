@@ -134,34 +134,54 @@ export default function CommandMenu() {
         <CommandInput placeholder="Search for a script..." />
         <CommandList>
           <CommandEmpty>{isLoading ? "Loading..." : "No scripts found."}</CommandEmpty>
-          {links.map((category) => (
-            <CommandGroup key={`category:${category.name}`} heading={category.name}>
-              {category.scripts.map((script) => (
-                <CommandItem
-                  key={`script:${script.slug}`}
-                  value={`${script.slug}-${script.name}`}
-                  onSelect={() => {
-                    setOpen(false);
-                    router.push(`/scripts?id=${script.slug}`);
-                  }}
-                >
-                  <div className="flex gap-2" onClick={() => setOpen(false)}>
-                    <Image
-                      src={script.logo || `/${basePath}/logo.png`}
-                      onError={(e) => ((e.currentTarget as HTMLImageElement).src = `/${basePath}/logo.png`)}
-                      unoptimized
-                      width={16}
-                      height={16}
-                      alt=""
-                      className="h-5 w-5"
-                    />
-                    <span>{script.name}</span>
-                    <span>{formattedBadge(script.type)}</span>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          ))}
+          {(() => {
+            // Track seen scripts globally to avoid duplicates across all categories
+            const globalSeenScripts = new Set<string>();
+            
+            return links.map((category) => {
+              const uniqueScripts = category.scripts.filter((script) => {
+                if (globalSeenScripts.has(script.slug)) {
+                  return false;
+                }
+                globalSeenScripts.add(script.slug);
+                return true;
+              });
+
+              // Only render category if it has unique scripts
+              if (uniqueScripts.length === 0) {
+                return null;
+              }
+
+              return (
+                <CommandGroup key={`category:${category.name}`} heading={category.name}>
+                  {uniqueScripts.map((script) => (
+                    <CommandItem
+                      key={`script:${script.slug}`}
+                      value={`${script.slug}-${script.name}`}
+                      onSelect={() => {
+                        setOpen(false);
+                        router.push(`/scripts?id=${script.slug}`);
+                      }}
+                    >
+                      <div className="flex gap-2" onClick={() => setOpen(false)}>
+                        <Image
+                          src={script.logo || `/${basePath}/logo.png`}
+                          onError={(e) => ((e.currentTarget as HTMLImageElement).src = `/${basePath}/logo.png`)}
+                          unoptimized
+                          width={16}
+                          height={16}
+                          alt=""
+                          className="h-5 w-5"
+                        />
+                        <span>{script.name}</span>
+                        <span>{formattedBadge(script.type)}</span>
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              );
+            });
+          })()}
         </CommandList>
       </CommandDialog>
     </>
