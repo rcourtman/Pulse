@@ -1538,3 +1538,73 @@ function setup_yq() {
     msg_error "yq installation incomplete or version mismatch"
   fi
 }
+
+# ------------------------------------------------------------------------------
+# Installs ImageMagick 7 from source (Debian/Ubuntu only).
+#
+# Description:
+#   - Downloads the latest ImageMagick source tarball
+#   - Builds and installs ImageMagick to /usr/local
+#   - Configures dynamic linker (ldconfig)
+#
+# Notes:
+#   - Requires: build-essential, libtool, libjpeg-dev, libpng-dev, etc.
+# ------------------------------------------------------------------------------
+function setup_imagemagick() {
+  local TMP_DIR
+  TMP_DIR=$(mktemp -d)
+  local VERSION=""
+  local BINARY_PATH="/usr/local/bin/magick"
+
+  if command -v magick &>/dev/null; then
+    VERSION=$(magick -version | awk '/^Version/ {print $3}')
+    msg_ok "ImageMagick already installed ($VERSION)"
+    return 0
+  fi
+
+  msg_info "Setup ImageMagick (Patience)"
+  $STD apt-get update
+  $STD apt-get install -y \
+    build-essential \
+    libtool \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libwebp-dev \
+    libheif-dev \
+    libde265-dev \
+    libopenjp2-7-dev \
+    libxml2-dev \
+    liblcms2-dev \
+    libfreetype6-dev \
+    libraw-dev \
+    libfftw3-dev \
+    liblqr-1-0-dev \
+    libgsl-dev \
+    pkg-config \
+    ghostscript
+
+  curl -fsSL https://imagemagick.org/archive/ImageMagick.tar.gz -o "$TMP_DIR/ImageMagick.tar.gz"
+  tar -xzf "$TMP_DIR/ImageMagick.tar.gz" -C "$TMP_DIR"
+  cd "$TMP_DIR"/ImageMagick-* || {
+    msg_error "Source extraction failed"
+    rm -rf "$TMP_DIR"
+    return 1
+  }
+
+  ./configure --disable-static >/dev/null
+  $STD make
+  $STD make install
+  $STD ldconfig /usr/local/lib
+
+  if [[ ! -x "$BINARY_PATH" ]]; then
+    msg_error "ImageMagick installation failed"
+    rm -rf "$TMP_DIR"
+    return 1
+  fi
+
+  VERSION=$("$BINARY_PATH" -version | awk '/^Version/ {print $3}')
+  rm -rf "$TMP_DIR"
+  ensure_usr_local_bin_persist
+  msg_ok "Setup ImageMagick $VERSION"
+}
