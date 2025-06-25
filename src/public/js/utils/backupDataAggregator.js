@@ -9,11 +9,10 @@ PulseApp.utils.backupDataAggregator = (() => {
         
         backupEntries.forEach(entry => {
             entry.backups.forEach(backup => {
-                const timestamp = backup.timestamp || backup['backup-time'] || backup.ctime || backup.snaptime;
+                const timestamp = PulseApp.utils.getBackupTimestamp(backup);
                 if (!timestamp) return;
                 
-                const date = new Date(timestamp * 1000);
-                const dateKey = date.toISOString().split('T')[0]; // YYYY-MM-DD
+                const dateKey = PulseApp.utils.toDateKey(timestamp);
                 
                 if (!dateMap.has(dateKey)) {
                     dateMap.set(dateKey, {
@@ -62,11 +61,10 @@ PulseApp.utils.backupDataAggregator = (() => {
         
         backupEntries.forEach(entry => {
             const hasBackupOnDate = entry.backups.some(backup => {
-                const timestamp = backup.timestamp || backup['backup-time'] || backup.ctime || backup.snaptime;
+                const timestamp = PulseApp.utils.getBackupTimestamp(backup);
                 if (!timestamp) return false;
                 
-                const date = new Date(timestamp * 1000);
-                const backupDateStr = date.toISOString().split('T')[0];
+                const backupDateStr = PulseApp.utils.toDateKey(timestamp);
                 return backupDateStr === dateStr;
             });
             
@@ -151,7 +149,7 @@ PulseApp.utils.backupDataAggregator = (() => {
             
             // Count backups by time period
             entry.backups.forEach(backup => {
-                const timestamp = backup.timestamp || backup['backup-time'] || backup.ctime || backup.snaptime;
+                const timestamp = PulseApp.utils.getBackupTimestamp(backup);
                 if (timestamp) {
                     stats.totalBackups++;
                     if (timestamp >= today) stats.backupsToday++;

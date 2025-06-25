@@ -59,7 +59,7 @@ PulseApp.utils.backupFilterPipeline = (() => {
             else if (backup.source === 'snapshot') this.snapshotCount++;
             
             // Update times
-            const timestamp = backup.timestamp || backup['backup-time'] || backup.ctime || backup.snaptime;
+            const timestamp = PulseApp.utils.getBackupTimestamp(backup);
             if (timestamp) {
                 if (!this.latestBackupTime || timestamp > this.latestBackupTime) {
                     this.latestBackupTime = timestamp;
