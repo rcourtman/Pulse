@@ -2060,9 +2060,15 @@ PulseApp.ui.alerts = (() => {
             
             // Get the node name (handling both plain text and links)
             const linkElement = nodeNameElement.querySelector('a');
-            const nodeName = linkElement ? linkElement.textContent : nodeNameElement.textContent;
+            let nodeName = linkElement ? linkElement.textContent : nodeNameElement.textContent;
             console.log('[DEBUG] Processing node header for:', nodeName);
             if (!nodeName) return;
+            
+            // Extract just the node name if it contains cluster info (e.g., "homelab - delly" -> "delly")
+            if (nodeName.includes(' - ')) {
+                nodeName = nodeName.split(' - ').pop().trim();
+                console.log('[DEBUG] Extracted node name:', nodeName);
+            }
             
             // Store original content if not already stored
             if (!header.dataset.originalContent) {
@@ -2092,7 +2098,10 @@ PulseApp.ui.alerts = (() => {
     function transformNodeHeaderToAlertMode(headerRow, nodeName) {
         // Get node data to check if online
         const nodesData = PulseApp.state?.get('nodesData') || [];
+        console.log('[DEBUG] Available nodes:', nodesData.map(n => n.node));
+        console.log('[DEBUG] Looking for node:', nodeName);
         const node = nodesData.find(n => n.node === nodeName);
+        console.log('[DEBUG] Found node:', node ? 'yes' : 'no', 'isOnline:', node && node.uptime > 0);
         const isOnline = node && node.uptime > 0;
         
         if (!isOnline) {
