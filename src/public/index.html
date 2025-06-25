@@ -219,8 +219,10 @@
     }
     
     .alerts-mode .alert-threshold-input {
-        display: block;
+        display: flex !important;
         padding: 0;
+        height: 24px;
+        align-items: center;
     }
     
     /* Remove gaps and padding from flex containers in alerts mode */
@@ -229,11 +231,19 @@
         padding: 0 !important;
     }
     
-    /* Ensure metric cells maintain same height in alerts mode */
-    .alerts-mode .usage-col,
-    .alerts-mode .net-disk-col {
-        padding-top: 0.25rem !important;
-        padding-bottom: 0.25rem !important;
+    /* Keep alerts mode cells same size as progress bars */
+    .alerts-mode td[data-original-content] {
+        padding: 0.25rem 0.5rem !important; /* Match p-1 px-2 */
+    }
+    
+    .alerts-mode .alert-threshold-input {
+        height: 14px; /* Match h-3.5 progress bar height */
+        overflow: hidden;
+    }
+    
+    .alerts-mode .alert-threshold-input .flex {
+        height: 14px !important;
+        align-items: center !important;
     }
     
     .alert-threshold-input {
@@ -246,6 +256,11 @@
         left: auto !important;
     }
     
+    /* Disable transitions when switching modes to prevent height jumping */
+    .switching-modes * {
+        transition: none !important;
+    }
+    
     /* Alert threshold slider styling */
     .alert-threshold-slider {
         -webkit-appearance: none;
@@ -256,8 +271,8 @@
     
     .alert-threshold-slider::-webkit-slider-track {
         background: #e5e7eb;
-        height: 8px;
-        border-radius: 4px;
+        height: 4px;
+        border-radius: 2px;
     }
     
     .dark .alert-threshold-slider::-webkit-slider-track {
@@ -267,13 +282,14 @@
     .alert-threshold-slider::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
-        height: 16px;
-        width: 16px;
+        height: 12px;
+        width: 12px;
         border-radius: 50%;
         background: #3b82f6;
-        border: 2px solid #ffffff;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        border: 1px solid #ffffff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
         cursor: pointer;
+        margin-top: -4px; /* Center on 4px track */
     }
     
     .dark .alert-threshold-slider::-webkit-slider-thumb {
@@ -282,8 +298,8 @@
     
     .alert-threshold-slider::-moz-range-track {
         background: #e5e7eb;
-        height: 8px;
-        border-radius: 4px;
+        height: 4px;
+        border-radius: 2px;
         border: none;
     }
     
@@ -292,14 +308,13 @@
     }
     
     .alert-threshold-slider::-moz-range-thumb {
-        height: 16px;
-        width: 16px;
+        height: 12px;
+        width: 12px;
         border-radius: 50%;
         background: #3b82f6;
-        border: 2px solid #ffffff;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        border: 1px solid #ffffff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
         cursor: pointer;
-        border: none;
     }
     
     .dark .alert-threshold-slider::-moz-range-thumb {
