@@ -3782,38 +3782,166 @@ Pulse Monitoring System`,
                 return { success: false, error: 'No webhook URL configured' };
             }
             
-            // Create a test alert object
-            const testAlert = {
-                id: 'test-' + Date.now(),
-                rule: {
-                    id: 'test-rule',
-                    name: 'Test Alert',
-                    description: 'This is a test webhook notification'
-                },
-                guest: {
-                    name: 'Test VM',
-                    vmid: '999',
-                    node: 'test-node',
-                    type: 'qemu',
-                    endpointId: 'test-endpoint'
-                },
-                metric: 'test',
-                threshold: 0,
-                currentValue: 100,
-                triggeredAt: Date.now(),
-                duration: 0,
-                message: 'This is a test webhook from Pulse monitoring system',
-                type: 'test'
-            };
+            // Detect webhook type based on URL
+            const isDiscord = webhookUrl.includes('discord.com/api/webhooks') || webhookUrl.includes('discordapp.com/api/webhooks');
+            const isSlack = webhookUrl.includes('slack.com/') || webhookUrl.includes('hooks.slack.com');
+            
+            let testPayload;
+            
+            if (isDiscord) {
+                // Discord-specific format
+                testPayload = {
+                    embeds: [{
+                        title: '🧪 Alert System Test',
+                        description: 'This is a test alert from Pulse monitoring system',
+                        color: 3447003, // Blue
+                        fields: [
+                            {
+                                name: 'Alert Rule',
+                                value: 'Test Alert',
+                                inline: true
+                            },
+                            {
+                                name: 'VM/Container',
+                                value: 'Test VM (999)',
+                                inline: true
+                            },
+                            {
+                                name: 'Node',
+                                value: 'test-node',
+                                inline: true
+                            },
+                            {
+                                name: 'Status',
+                                value: '✅ Alert system is working',
+                                inline: false
+                            }
+                        ],
+                        footer: {
+                            text: 'Pulse Alert System'
+                        },
+                        timestamp: new Date().toISOString()
+                    }]
+                };
+            } else if (isSlack) {
+                // Slack-specific format
+                testPayload = {
+                    text: '🧪 *Alert System Test*',
+                    attachments: [{
+                        color: 'good',
+                        title: 'Test Alert',
+                        text: 'This is a test alert from Pulse monitoring system',
+                        fields: [
+                            {
+                                title: 'VM/Container',
+                                value: 'Test VM (999)',
+                                short: true
+                            },
+                            {
+                                title: 'Node',
+                                value: 'test-node',
+                                short: true
+                            },
+                            {
+                                title: 'Status',
+                                value: '✅ Alert system is working',
+                                short: false
+                            }
+                        ],
+                        footer: 'Pulse Alert System',
+                        ts: Math.floor(Date.now() / 1000)
+                    }]
+                };
+            } else {
+                // Generic webhook format with multiple structures for compatibility
+                // This works with Teams, Home Assistant, IFTTT, Zapier, n8n, and other services
+                const testAlert = {
+                    id: 'test-' + Date.now(),
+                    rule: {
+                        name: 'Test Alert',
+                        description: 'This is a test webhook notification',
+                        severity: 'info',
+                        metric: 'test'
+                    },
+                    guest: {
+                        name: 'Test VM',
+                        id: '999',
+                        vmid: '999',
+                        type: 'qemu',
+                        node: 'test-node',
+                        status: 'running'
+                    },
+                    value: 75,
+                    threshold: 80,
+                    emoji: '🧪'
+                };
+                
+                testPayload = {
+                    timestamp: new Date().toISOString(),
+                    alert: testAlert,
+                    // Include Discord-style embeds for compatibility with services that support it
+                    embeds: [{
+                        title: '🧪 Alert System Test',
+                        description: 'This is a test alert from Pulse monitoring system',
+                        color: 3447003, // Blue
+                        fields: [
+                            {
+                                name: 'Alert Rule',
+                                value: 'Test Alert',
+                                inline: true
+                            },
+                            {
+                                name: 'VM/Container',
+                                value: 'Test VM (999)',
+                                inline: true
+                            },
+                            {
+                                name: 'Node',
+                                value: 'test-node',
+                                inline: true
+                            },
+                            {
+                                name: 'Status',
+                                value: '✅ Alert system is working',
+                                inline: false
+                            }
+                        ],
+                        footer: {
+                            text: 'Pulse Alert System'
+                        },
+                        timestamp: new Date().toISOString()
+                    }],
+                    // Include Slack-style format for compatibility
+                    text: '🧪 *Alert System Test*',
+                    attachments: [{
+                        color: 'good',
+                        title: 'Test Alert',
+                        text: 'This is a test alert from Pulse monitoring system',
+                        fields: [
+                            {
+                                title: 'VM/Container',
+                                value: 'Test VM (999)',
+                                short: true
+                            },
+                            {
+                                title: 'Node',
+                                value: 'test-node',
+                                short: true
+                            },
+                            {
+                                title: 'Status',
+                                value: '✅ Alert system is working',
+                                short: false
+                            }
+                        ],
+                        footer: 'Pulse Alert System',
+                        ts: Math.floor(Date.now() / 1000)
+                    }]
+                };
+            }
             
             // Send webhook without cooldown checks
-            const response = await axios.post(webhookUrl, {
-                event: 'test',
-                timestamp: new Date().toISOString(),
-                hostname: require('os').hostname(),
-                alert: testAlert,
-                message: 'Pulse Alert System - Test Webhook'
-            }, {
+            const response = await axios.post(webhookUrl, testPayload, {
                 timeout: 10000,
                 headers: {
                     'Content-Type': 'application/json',
