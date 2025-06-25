@@ -2131,26 +2131,27 @@ PulseApp.ui.alerts = (() => {
             `node-alert-${nodeName}-disk`, 0, 100, 5, diskValue
         );
         
+        // Preserve the node header background styling by adding cells with proper classes
         headerRow.innerHTML = `
-            <td class="py-1 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300" colspan="4">
+            <td class="py-1 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/80" colspan="4">
                 ${nodeNameHtml}
             </td>
-            <td class="py-1 px-2">
+            <td class="py-1 px-2 bg-gray-100 dark:bg-gray-700/80">
                 <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="cpu">
                     ${cpuSliderHtml}
                 </div>
             </td>
-            <td class="py-1 px-2">
+            <td class="py-1 px-2 bg-gray-100 dark:bg-gray-700/80">
                 <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="memory">
                     ${memorySliderHtml}
                 </div>
             </td>
-            <td class="py-1 px-2">
+            <td class="py-1 px-2 bg-gray-100 dark:bg-gray-700/80">
                 <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="disk">
                     ${diskSliderHtml}
                 </div>
             </td>
-            <td colspan="4"></td>
+            <td class="bg-gray-100 dark:bg-gray-700/80" colspan="4"></td>
         `;
         
         // Setup event handlers for sliders
