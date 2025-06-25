@@ -642,6 +642,78 @@ PulseApp.utils = (() => {
         return selectHtml;
     }
     
+    // Helper for updating guest I/O metric cells
+    function updateGuestIOMetric(cell, guest, metricName, isAlertsMode) {
+        if (isAlertsMode) {
+            const existingSelect = cell.querySelector('select');
+            if (!existingSelect) {
+                cell.innerHTML = createAlertDropdownHtml(guest.id, 'guest', metricName, IO_ALERT_OPTIONS);
+                // Alert event listeners should be set up by the caller
+            }
+        } else {
+            const formatted = formatSpeedWithStyling(guest[metricName], 0);
+            const chartContainer = cell.querySelector(`#chart-${guest.id}-${metricName}`);
+            const metricText = cell.querySelector('.metric-text');
+            
+            if (chartContainer && metricText) {
+                metricText.innerHTML = formatted;
+            } else {
+                cell.innerHTML = PulseApp.charts ? 
+                    `<div class="metric-text">${formatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.id, metricName)}</div>` :
+                    formatted;
+            }
+        }
+    }
+    
+    // Simple logger utility
+    const createLogger = (module) => ({
+        log: (message, ...args) => console.log(`[${module}] ${message}`, ...args),
+        warn: (message, ...args) => console.warn(`[${module}] ${message}`, ...args),
+        error: (message, ...args) => console.error(`[${module}] ${message}`, ...args),
+        debug: (message, ...args) => console.debug(`[${module}] ${message}`, ...args)
+    });
+    
+    // Safe number parsing utilities
+    const SafeParse = {
+        int(value, defaultValue = 0) {
+            const parsed = parseInt(value, 10);
+            return isNaN(parsed) ? defaultValue : parsed;
+        },
+        
+        float(value, defaultValue = 0) {
+            const parsed = parseFloat(value);
+            return isNaN(parsed) ? defaultValue : parsed;
+        },
+        
+        percentage(value, min = 0, max = 100) {
+            const parsed = this.float(value, min);
+            return Math.max(min, Math.min(max, parsed));
+        },
+        
+        bytes(value, defaultValue = 0) {
+            // Handle string representations like "1MB", "1GB"
+            if (typeof value === 'string') {
+                const match = value.match(/^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB)?$/i);
+                if (match) {
+                    const num = parseFloat(match[1]);
+                    const unit = (match[2] || 'B').toUpperCase();
+                    const multipliers = { B: 1, KB: 1024, MB: 1024*1024, GB: 1024*1024*1024, TB: 1024*1024*1024*1024 };
+                    return num * (multipliers[unit] || 1);
+                }
+            }
+            return this.float(value, defaultValue);
+        }
+    };
+    
+    // Common constants for alert thresholds
+    const IO_ALERT_OPTIONS = [
+        { value: '', label: 'No alert' },
+        { value: '1048576', label: '> 1 MB/s' },
+        { value: '10485760', label: '> 10 MB/s' },
+        { value: '52428800', label: '> 50 MB/s' },
+        { value: '104857600', label: '> 100 MB/s' }
+    ];
+    
     // Common CSS class constants for consistency
     const CSS_CLASSES = {
         // Text colors with dark mode variants
@@ -724,10 +796,15 @@ PulseApp.utils = (() => {
         formatThresholdValue,
         // Metric display helpers
         createMetricBarHtml,
+        updateGuestIOMetric,
         // Alert control helpers
         createAlertSliderHtml,
         createAlertDropdownHtml,
-        // CSS class constants
+        // Utilities
+        createLogger,
+        SafeParse,
+        // Constants
+        IO_ALERT_OPTIONS,
         CSS_CLASSES
     };
 })(); // Test hot reload

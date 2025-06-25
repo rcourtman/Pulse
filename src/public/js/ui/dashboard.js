@@ -852,158 +852,31 @@ PulseApp.ui.dashboard = (() => {
                 // Disk Read (cell 7)
                 const diskReadCell = cells[7];
                 let newDiskReadHTML;
-                if (isAlertsMode) {
-                    // Check if we already have a select element
-                    const existingSelect = diskReadCell.querySelector('select');
-                    if (!existingSelect) {
-                        // Create new dropdown
-                        newDiskReadHTML = _createAlertDropdownHtml(guest.id, 'diskread', [
-                            { value: '', label: 'No alert' },
-                            { value: '1048576', label: '> 1 MB/s' },
-                            { value: '10485760', label: '> 10 MB/s' },
-                            { value: '52428800', label: '> 50 MB/s' },
-                            { value: '104857600', label: '> 100 MB/s' }
-                        ]);
-                        diskReadCell.innerHTML = newDiskReadHTML;
-                        // Re-setup event listeners for the new dropdown
-                        _setupAlertEventListeners(diskReadCell);
-                    }
-                    // If select exists, leave it alone - don't recreate
-                } else {
-                    const diskReadFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskread, 0);
-                    
-                    // Check if we already have the chart structure
-                    const existingChartContainer = diskReadCell.querySelector(`#chart-${guest.id}-diskread`);
-                    const existingMetricText = diskReadCell.querySelector('.metric-text');
-                    
-                    if (existingChartContainer && existingMetricText) {
-                        // Update only the metric text, preserve the chart container
-                        existingMetricText.innerHTML = diskReadFormatted;
-                    } else {
-                        // Create the initial structure
-                        newDiskReadHTML = PulseApp.charts ? 
-                            `<div class="metric-text">${diskReadFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.id, 'diskread')}</div>` :
-                            diskReadFormatted;
-                        diskReadCell.innerHTML = newDiskReadHTML;
-                    }
+                PulseApp.utils.updateGuestIOMetric(diskReadCell, guest, 'diskread', isAlertsMode);
+                if (isAlertsMode && !diskReadCell.querySelector('select')) {
+                    _setupAlertEventListeners(diskReadCell);
                 }
 
                 // Disk Write (cell 8)
                 const diskWriteCell = cells[8];
-                let newDiskWriteHTML;
-                if (isAlertsMode) {
-                    // Check if we already have a select element
-                    const existingSelect = diskWriteCell.querySelector('select');
-                    if (!existingSelect) {
-                        // Create new dropdown
-                        newDiskWriteHTML = _createAlertDropdownHtml(guest.id, 'diskwrite', [
-                            { value: '', label: 'No alert' },
-                            { value: '1048576', label: '> 1 MB/s' },
-                            { value: '10485760', label: '> 10 MB/s' },
-                            { value: '52428800', label: '> 50 MB/s' },
-                            { value: '104857600', label: '> 100 MB/s' }
-                        ]);
-                        diskWriteCell.innerHTML = newDiskWriteHTML;
-                        // Re-setup event listeners for the new dropdown
-                        _setupAlertEventListeners(diskWriteCell);
-                    }
-                    // If select exists, leave it alone - don't recreate
-                } else {
-                    const diskWriteFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskwrite, 0);
-                    
-                    // Check if we already have the chart structure
-                    const existingChartContainer = diskWriteCell.querySelector(`#chart-${guest.id}-diskwrite`);
-                    const existingMetricText = diskWriteCell.querySelector('.metric-text');
-                    
-                    if (existingChartContainer && existingMetricText) {
-                        // Update only the metric text, preserve the chart container
-                        existingMetricText.innerHTML = diskWriteFormatted;
-                    } else {
-                        // Create the initial structure
-                        newDiskWriteHTML = PulseApp.charts ? 
-                            `<div class="metric-text">${diskWriteFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.id, 'diskwrite')}</div>` :
-                            diskWriteFormatted;
-                        diskWriteCell.innerHTML = newDiskWriteHTML;
-                    }
+                PulseApp.utils.updateGuestIOMetric(diskWriteCell, guest, 'diskwrite', isAlertsMode);
+                if (isAlertsMode && !diskWriteCell.querySelector('select')) {
+                    _setupAlertEventListeners(diskWriteCell);
                 }
 
                 // Net In (cell 9)
                 const netInCell = cells[9];
-                let newNetInHTML;
-                if (isAlertsMode) {
-                    // Check if we already have a select element
-                    const existingSelect = netInCell.querySelector('select');
-                    if (!existingSelect) {
-                        // Create new dropdown
-                        newNetInHTML = _createAlertDropdownHtml(guest.id, 'netin', [
-                            { value: '', label: 'No alert' },
-                            { value: '1048576', label: '> 1 MB/s' },
-                            { value: '10485760', label: '> 10 MB/s' },
-                            { value: '52428800', label: '> 50 MB/s' },
-                            { value: '104857600', label: '> 100 MB/s' }
-                        ]);
-                        netInCell.innerHTML = newNetInHTML;
-                        // Re-setup event listeners for the new dropdown
-                        _setupAlertEventListeners(netInCell);
-                    }
-                    // If select exists, leave it alone - don't recreate
-                } else {
-                    const netInFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netin, 0);
-                    
-                    // Check if we already have the chart structure
-                    const existingChartContainer = netInCell.querySelector(`#chart-${guest.id}-netin`);
-                    const existingMetricText = netInCell.querySelector('.metric-text');
-                    
-                    if (existingChartContainer && existingMetricText) {
-                        // Update only the metric text, preserve the chart container
-                        existingMetricText.innerHTML = netInFormatted;
-                    } else {
-                        // Create the initial structure
-                        newNetInHTML = PulseApp.charts ? 
-                            `<div class="metric-text">${netInFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.id, 'netin')}</div>` :
-                            netInFormatted;
-                        netInCell.innerHTML = newNetInHTML;
-                    }
+                PulseApp.utils.updateGuestIOMetric(netInCell, guest, 'netin', isAlertsMode);
+                if (isAlertsMode && !netInCell.querySelector('select')) {
+                    _setupAlertEventListeners(netInCell);
                 }
 
                 // Net Out (cell 10)
                 if (cells[10]) {
                     const netOutCell = cells[10];
-                    let newNetOutHTML;
-                    if (isAlertsMode) {
-                        // Check if we already have a select element
-                        const existingSelect = netOutCell.querySelector('select');
-                        if (!existingSelect) {
-                            // Create new dropdown
-                            newNetOutHTML = _createAlertDropdownHtml(guest.id, 'netout', [
-                                { value: '', label: 'No alert' },
-                                { value: '1048576', label: '> 1 MB/s' },
-                                { value: '10485760', label: '> 10 MB/s' },
-                                { value: '52428800', label: '> 50 MB/s' },
-                                { value: '104857600', label: '> 100 MB/s' }
-                            ]);
-                            netOutCell.innerHTML = newNetOutHTML;
-                            // Re-setup event listeners for the new dropdown
-                            _setupAlertEventListeners(netOutCell);
-                        }
-                        // If select exists, leave it alone - don't recreate
-                    } else {
-                        const netOutFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netout, 0);
-                        
-                        // Check if we already have the chart structure
-                        const existingChartContainer = netOutCell.querySelector(`#chart-${guest.id}-netout`);
-                        const existingMetricText = netOutCell.querySelector('.metric-text');
-                        
-                        if (existingChartContainer && existingMetricText) {
-                            // Update only the metric text, preserve the chart container
-                            existingMetricText.innerHTML = netOutFormatted;
-                        } else {
-                            // Create the initial structure
-                            newNetOutHTML = PulseApp.charts ? 
-                                `<div class="metric-text">${netOutFormatted}</div><div class="metric-chart">${PulseApp.charts.createSparklineHTML(guest.id, 'netout')}</div>` :
-                                netOutFormatted;
-                            netOutCell.innerHTML = newNetOutHTML;
-                        }
+                    PulseApp.utils.updateGuestIOMetric(netOutCell, guest, 'netout', isAlertsMode);
+                    if (isAlertsMode && !netOutCell.querySelector('select')) {
+                        _setupAlertEventListeners(netOutCell);
                     }
                 }
             } else {
@@ -1016,13 +889,7 @@ PulseApp.ui.dashboard = (() => {
                             if (!existingSelect) {
                                 // Create new dropdown
                                 const metricMap = { 7: 'diskread', 8: 'diskwrite', 9: 'netin', 10: 'netout' };
-                                const newHTML = _createAlertDropdownHtml(guest.id, metricMap[index], [
-                                    { value: '', label: 'No alert' },
-                                    { value: '1048576', label: '> 1 MB/s' },
-                                    { value: '10485760', label: '> 10 MB/s' },
-                                    { value: '52428800', label: '> 50 MB/s' },
-                                    { value: '104857600', label: '> 100 MB/s' }
-                                ]);
+                                const newHTML = _createAlertDropdownHtml(guest.id, metricMap[index], PulseApp.utils.IO_ALERT_OPTIONS);
                                 cells[index].innerHTML = newHTML;
                                 // Re-setup event listeners for the new dropdown
                                 _setupAlertEventListeners(cells[index]);
