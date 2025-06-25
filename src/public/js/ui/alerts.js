@@ -1378,11 +1378,10 @@ PulseApp.ui.alerts = (() => {
             if (response.ok && result.success) {
                 PulseApp.ui.toast?.success('Alert configuration saved');
                 
-                // Return to main dashboard view
-                if (alertsToggle && alertsToggle.checked) {
-                    alertsToggle.checked = false;
-                    handleAlertsToggle();
-                }
+                // Refresh the page to reset all state cleanly
+                setTimeout(() => {
+                    window.location.reload();
+                }, 500); // Small delay to let the toast message show
             } else {
                 PulseApp.ui.toast?.error('Failed to save alert configuration');
                 console.warn('Failed to save alert configuration:', result.error);
