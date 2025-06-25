@@ -381,13 +381,7 @@ PulseApp.ui.alerts = (() => {
         }
         
         // Create dropdowns for I/O metrics
-        const ioOptions = [
-            { value: '', label: 'No alert' },
-            { value: '1048576', label: '> 1 MB/s' },
-            { value: '10485760', label: '> 10 MB/s' },
-            { value: '52428800', label: '> 50 MB/s' },
-            { value: '104857600', label: '> 100 MB/s' }
-        ];
+        const ioOptions = PulseApp.utils.IO_ALERT_OPTIONS;
         
         const diskreadCell = document.getElementById('global-diskread-cell');
         const diskwriteCell = document.getElementById('global-diskwrite-cell');
@@ -975,18 +969,10 @@ PulseApp.ui.alerts = (() => {
             transformMetricCell(row, 'memory', guestId, { type: 'slider', min: 0, max: 100, step: 5 });
             transformMetricCell(row, 'disk', guestId, { type: 'slider', min: 0, max: 100, step: 5 });
             
-            const ioOptions = [
-                { value: '', label: 'No alert' },
-                { value: '1048576', label: '> 1 MB/s' },
-                { value: '10485760', label: '> 10 MB/s' },
-                { value: '52428800', label: '> 50 MB/s' },
-                { value: '104857600', label: '> 100 MB/s' }
-            ];
-            
-            transformMetricCell(row, 'netin', guestId, { type: 'select', options: ioOptions });
-            transformMetricCell(row, 'netout', guestId, { type: 'select', options: ioOptions });
-            transformMetricCell(row, 'diskread', guestId, { type: 'select', options: ioOptions });
-            transformMetricCell(row, 'diskwrite', guestId, { type: 'select', options: ioOptions });
+            transformMetricCell(row, 'netin', guestId, { type: 'select', options: PulseApp.utils.IO_ALERT_OPTIONS });
+            transformMetricCell(row, 'netout', guestId, { type: 'select', options: PulseApp.utils.IO_ALERT_OPTIONS });
+            transformMetricCell(row, 'diskread', guestId, { type: 'select', options: PulseApp.utils.IO_ALERT_OPTIONS });
+            transformMetricCell(row, 'diskwrite', guestId, { type: 'select', options: PulseApp.utils.IO_ALERT_OPTIONS });
         });
         
         // Apply final row styling after transformation
