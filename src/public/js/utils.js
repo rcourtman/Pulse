@@ -748,55 +748,6 @@ PulseApp.utils = (() => {
         }
     }
     
-    // API error handling helper
-    function handleApiError(error, context, options = {}) {
-        const {
-            showAlert = true,
-            logError = true,
-            fallbackMessage = 'An error occurred. Please try again.',
-            module = 'API'
-        } = options;
-        
-        // Extract error message
-        let errorMessage = fallbackMessage;
-        if (error.response && error.response.data && error.response.data.message) {
-            errorMessage = error.response.data.message;
-        } else if (error.message) {
-            errorMessage = error.message;
-        } else if (typeof error === 'string') {
-            errorMessage = error;
-        }
-        
-        // Log error if enabled
-        if (logError) {
-            console.error(`[${module}] ${context}:`, error);
-        }
-        
-        // Show alert if enabled
-        if (showAlert && typeof PulseApp !== 'undefined' && PulseApp.ui && PulseApp.ui.common && PulseApp.ui.common.showError) {
-            PulseApp.ui.common.showError(`${context}: ${errorMessage}`);
-        }
-        
-        return {
-            message: errorMessage,
-            originalError: error,
-            context: context
-        };
-    }
-    
-    // Event listener setup for dynamic content
-    function setupDynamicListeners(container, configs) {
-        if (!container || !configs) return;
-        
-        configs.forEach(({selector, event, handler, options = false}) => {
-            const elements = container.querySelectorAll(selector);
-            elements.forEach(el => {
-                // Remove any existing listener to avoid duplicates
-                el.removeEventListener(event, handler, options);
-                el.addEventListener(event, handler, options);
-            });
-        });
-    }
     
     // Storage helper for localStorage/sessionStorage
     const StorageHelper = {
@@ -885,157 +836,6 @@ PulseApp.utils = (() => {
         }
     };
     
-    // Timer Manager for setTimeout/setInterval
-    class TimerManager {
-        constructor() {
-            this.timers = new Map();
-        }
-        
-        setTimeout(key, callback, delay) {
-            this.clear(key);
-            const id = setTimeout(() => {
-                this.timers.delete(key);
-                callback();
-            }, delay);
-            this.timers.set(key, { type: 'timeout', id });
-            return key;
-        }
-        
-        setInterval(key, callback, interval) {
-            this.clear(key);
-            const id = setInterval(callback, interval);
-            this.timers.set(key, { type: 'interval', id });
-            return key;
-        }
-        
-        clear(key) {
-            const timer = this.timers.get(key);
-            if (timer) {
-                if (timer.type === 'timeout') {
-                    clearTimeout(timer.id);
-                } else {
-                    clearInterval(timer.id);
-                }
-                this.timers.delete(key);
-            }
-        }
-        
-        clearAll() {
-            this.timers.forEach((timer, key) => this.clear(key));
-        }
-        
-        has(key) {
-            return this.timers.has(key);
-        }
-    }
-    
-    // DOM class manipulation utilities
-    const DOMClasses = {
-        add(element, ...classes) {
-            if (!element || !element.classList) return false;
-            element.classList.add(...classes);
-            return true;
-        },
-        
-        remove(element, ...classes) {
-            if (!element || !element.classList) return false;
-            element.classList.remove(...classes);
-            return true;
-        },
-        
-        toggle(element, className, force) {
-            if (!element || !element.classList) return false;
-            return element.classList.toggle(className, force);
-        },
-        
-        replace(element, oldClass, newClass) {
-            if (!element || !element.classList) return false;
-            element.classList.remove(oldClass);
-            element.classList.add(newClass);
-            return true;
-        },
-        
-        has(element, className) {
-            if (!element || !element.classList) return false;
-            return element.classList.contains(className);
-        },
-        
-        setConditional(element, className, condition) {
-            if (!element || !element.classList) return false;
-            if (condition) {
-                element.classList.add(className);
-            } else {
-                element.classList.remove(className);
-            }
-            return true;
-        },
-        
-        // Add classes to multiple elements
-        addToAll(selector, ...classes) {
-            const elements = typeof selector === 'string' 
-                ? document.querySelectorAll(selector) 
-                : selector;
-            elements.forEach(el => this.add(el, ...classes));
-        },
-        
-        // Remove classes from multiple elements
-        removeFromAll(selector, ...classes) {
-            const elements = typeof selector === 'string' 
-                ? document.querySelectorAll(selector) 
-                : selector;
-            elements.forEach(el => this.remove(el, ...classes));
-        }
-    };
-    
-    // Event handler utilities
-    const Events = {
-        on(selector, event, handler, options) {
-            const element = typeof selector === 'string' 
-                ? document.querySelector(selector) 
-                : selector;
-            if (element) {
-                element.addEventListener(event, handler, options);
-                // Return cleanup function
-                return () => element.removeEventListener(event, handler, options);
-            }
-            return () => {}; // no-op cleanup function
-        },
-        
-        onAll(selector, event, handler, options) {
-            const elements = typeof selector === 'string'
-                ? document.querySelectorAll(selector)
-                : selector;
-            const cleanups = [];
-            elements.forEach(el => {
-                el.addEventListener(event, handler, options);
-                cleanups.push(() => el.removeEventListener(event, handler, options));
-            });
-            // Return cleanup function that removes all listeners
-            return () => cleanups.forEach(cleanup => cleanup());
-        },
-        
-        once(selector, event, handler, options) {
-            return this.on(selector, event, handler, { ...options, once: true });
-        },
-        
-        delegate(parentSelector, childSelector, event, handler) {
-            return this.on(parentSelector, event, (e) => {
-                const target = e.target.closest(childSelector);
-                if (target && e.currentTarget.contains(target)) {
-                    handler.call(target, e);
-                }
-            });
-        },
-        
-        ready(handler) {
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', handler, { once: true });
-            } else {
-                handler();
-            }
-        }
-    };
-    
     // Simple logger utility
     const createLogger = (module) => ({
         log: (message, ...args) => console.log(`[${module}] ${message}`, ...args),
@@ -1044,37 +844,6 @@ PulseApp.utils = (() => {
         debug: (message, ...args) => console.debug(`[${module}] ${message}`, ...args)
     });
     
-    // Safe number parsing utilities
-    const SafeParse = {
-        int(value, defaultValue = 0) {
-            const parsed = parseInt(value, 10);
-            return isNaN(parsed) ? defaultValue : parsed;
-        },
-        
-        float(value, defaultValue = 0) {
-            const parsed = parseFloat(value);
-            return isNaN(parsed) ? defaultValue : parsed;
-        },
-        
-        percentage(value, min = 0, max = 100) {
-            const parsed = this.float(value, min);
-            return Math.max(min, Math.min(max, parsed));
-        },
-        
-        bytes(value, defaultValue = 0) {
-            // Handle string representations like "1MB", "1GB"
-            if (typeof value === 'string') {
-                const match = value.match(/^(\d+(?:\.\d+)?)\s*(B|KB|MB|GB|TB)?$/i);
-                if (match) {
-                    const num = parseFloat(match[1]);
-                    const unit = (match[2] || 'B').toUpperCase();
-                    const multipliers = { B: 1, KB: 1024, MB: 1024*1024, GB: 1024*1024*1024, TB: 1024*1024*1024*1024 };
-                    return num * (multipliers[unit] || 1);
-                }
-            }
-            return this.float(value, defaultValue);
-        }
-    };
     
     // Common constants for alert thresholds
     const IO_ALERT_OPTIONS = [
@@ -1174,14 +943,8 @@ PulseApp.utils = (() => {
         createAlertDropdownHtml,
         // Utilities
         DOMCache,
-        DOMClasses,
-        Events,
         StorageHelper,
-        TimerManager,
         createLogger,
-        handleApiError,
-        setupDynamicListeners,
-        SafeParse,
         // Constants
         IO_ALERT_OPTIONS,
         CSS_CLASSES
