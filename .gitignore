@@ -148,6 +148,7 @@ tailwind.config.js
 
 # Runtime data files (ensure all JSON files in data/ are ignored except templates)
 data/*.json
+data/metrics-snapshot.json.gz
 !data/*.json.template
 !data/*.json.example
 debug-archive/
