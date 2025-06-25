@@ -71,6 +71,7 @@ PulseApp.ui.nodes = (() => {
     function createNodeRow(node) {
         const row = document.createElement('tr');
         row.className = 'transition-all duration-150 ease-out hover:bg-gray-100 dark:hover:bg-gray-700 hover:shadow-md hover:-translate-y-px';
+        row.setAttribute('data-node-id', node.node); // Add node ID for alert styling
 
         const isOnline = node && node.uptime > 0;
         const statusText = isOnline ? 'online' : (node.status || 'unknown');
@@ -78,9 +79,21 @@ PulseApp.ui.nodes = (() => {
             ? 'bg-green-500 dark:bg-green-400'
             : 'bg-red-500 dark:bg-red-400';
 
-        const cpuBarHTML = _createNodeCpuBarHtml(node, false);
-        const memoryBarHTML = _createNodeMemoryBarHtml(node, false);
-        const diskBarHTML = _createNodeDiskBarHtml(node, false);
+        // Check if we're in alerts mode
+        const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
+
+        // Create content based on mode
+        let cpuContent, memoryContent, diskContent;
+        if (isAlertsMode && isOnline) {
+            // Don't create sliders here - let the alerts module transform them
+            cpuContent = _createNodeCpuBarHtml(node, false);
+            memoryContent = _createNodeMemoryBarHtml(node, false);
+            diskContent = _createNodeDiskBarHtml(node, false);
+        } else {
+            cpuContent = _createNodeCpuBarHtml(node, false);
+            memoryContent = _createNodeMemoryBarHtml(node, false);
+            diskContent = _createNodeDiskBarHtml(node, false);
+        }
 
         const uptimeFormatted = PulseApp.utils.formatUptime(node.uptime || 0);
         let normalizedLoadFormatted = 'N/A';
@@ -104,9 +117,9 @@ PulseApp.ui.nodes = (() => {
               </span>
             </td>
             <td class="p-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis max-w-0 text-gray-900 dark:text-gray-100" title="${node.displayName || node.node || 'N/A'}">${node.displayName || node.node || 'N/A'}</td>
-            <td class="p-1 px-2 min-w-[200px]">${cpuBarHTML}</td>
-            <td class="p-1 px-2 min-w-[200px]">${memoryBarHTML}</td>
-            <td class="p-1 px-2 min-w-[200px]">${diskBarHTML}</td>
+            <td class="p-1 px-2 min-w-[200px]">${cpuContent}</td>
+            <td class="p-1 px-2 min-w-[200px]">${memoryContent}</td>
+            <td class="p-1 px-2 min-w-[200px]">${diskContent}</td>
             <td class="p-1 px-2 whitespace-nowrap">${uptimeFormatted}</td>
             <td class="p-1 px-2 whitespace-nowrap">${normalizedLoadFormatted}</td>
         `;
@@ -199,10 +212,10 @@ PulseApp.ui.nodes = (() => {
         // Apply dimming if no custom settings in alert mode
         const shouldDim = isAlertsMode && !hasCustomSettings;
 
-        // Create progress bars or alert sliders based on mode
+        // Create progress bars - sliders are now shown in the table
         let cpuBarHTML, memoryBarHTML, diskBarHTML;
         
-        if (isAlertsMode) {
+        if (false) { // Disabled - sliders now shown in table
             // In alert mode, show sliders instead of progress bars
             cpuBarHTML = _createNodeAlertSliderHtml(nodeId, 'cpu', { min: 0, max: 100, step: 5 });
             memoryBarHTML = _createNodeAlertSliderHtml(nodeId, 'memory', { min: 0, max: 100, step: 5 });
