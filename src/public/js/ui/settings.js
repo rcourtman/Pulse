@@ -1,6 +1,7 @@
 PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.settings = (() => {
+    const logger = PulseApp.utils.createLogger('Settings');
     let currentConfig = {};
     let isInitialized = false;
     let activeTab = 'proxmox';
@@ -1948,7 +1949,7 @@ PulseApp.ui.settings = (() => {
             }
             
         } catch (error) {
-            console.error('[Settings] Error fetching version changes:', error);
+            logger.error('Error fetching version changes:', error);
             changesLoading.classList.add('hidden');
             changesError.textContent = `Could not load changes: ${error.message}`;
             changesError.classList.remove('hidden');
@@ -2111,7 +2112,7 @@ PulseApp.ui.settings = (() => {
     async function applyUpdate() {
         
         if (!latestReleaseData || !latestReleaseData.assets || latestReleaseData.assets.length === 0) {
-            console.error('[Settings] No release data or assets:', { latestReleaseData, hasAssets: !!latestReleaseData?.assets, assetCount: latestReleaseData?.assets?.length });
+            logger.error('No release data or assets:', { latestReleaseData, hasAssets: !!latestReleaseData?.assets, assetCount: latestReleaseData?.assets?.length });
             showMessage('No update information available. Please check for updates first.', 'error');
             return;
         }
@@ -3689,7 +3690,7 @@ PulseApp.ui.settings = (() => {
         const testButton = document.getElementById('test-webhook-btn');
         
         if (!testButton) {
-            console.error('[Settings] Test button not found');
+            logger.error('Test button not found');
             return;
         }
         
@@ -3736,7 +3737,7 @@ PulseApp.ui.settings = (() => {
                 showMessage(`❌ Webhook test failed: ${response.error}`, 'error');
             }
         } catch (error) {
-            console.error('[Settings] Test webhook error:', error);
+            logger.error('Test webhook error:', error);
             PulseApp.apiClient.handleError(error, 'Test webhook', showMessage);
         } finally {
             testButton.disabled = false;
