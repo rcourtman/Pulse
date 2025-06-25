@@ -362,8 +362,10 @@ PulseApp.charts = (() => {
                 }
                 
                 // Show enhanced tooltip with proper event object
-                if (PulseApp.tooltips) {
+                if (PulseApp.tooltips && PulseApp.tooltips.showTooltip) {
                     PulseApp.tooltips.showTooltip(event, tooltipContent);
+                } else {
+                    console.warn('[Charts] PulseApp.tooltips not available');
                 }
                 
                 // Update hover indicator position
@@ -402,7 +404,7 @@ PulseApp.charts = (() => {
             if (hoverGroup) {
                 hoverGroup.innerHTML = '';
             }
-            if (PulseApp.tooltips) {
+            if (PulseApp.tooltips && PulseApp.tooltips.hideTooltip) {
                 PulseApp.tooltips.hideTooltip();
             }
         });
