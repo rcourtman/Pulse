@@ -20,18 +20,24 @@ color
 catch_errors
 
 function update_script() {
-    header_info
-    check_container_storage
-    check_container_resources
-    if [[ ! -f /etc/apt/trusted.gpg.d/php.gpg ]]; then
-        msg_error "No ${APP} Installation Found!"
-        exit
-    fi
-    msg_info "Updating $APP LXC"
-    $STD apt-get update
-    $STD apt-get -y upgrade
-    msg_ok "Updated $APP LXC"
+  header_info
+  check_container_storage
+  check_container_resources
+  if [[ ! -f /etc/apt/trusted.gpg.d/php.gpg ]]; then
+    msg_error "No ${APP} Installation Found!"
     exit
+  fi
+  msg_info "Updating OS"
+  $STD apt-get update
+  $STD apt-get -y upgrade
+  msg_ok "Updated OS"
+
+  msg_info "Updating $APP LXC"
+  $STD yunohost tools update
+  $STD yunohost tools upgrade system
+  $STD yunohost tools upgrade apps
+  msg_ok "Updated $APP LXC"
+  exit
 }
 
 start
