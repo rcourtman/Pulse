@@ -98,8 +98,8 @@ PulseApp.tooltips = (() => {
         const offsetY = 15;
         
         // Update only position, don't touch other styles
-        tooltipElement.style.left = `${event.pageX + offsetX}px`;
-        tooltipElement.style.top = `${event.pageY + offsetY}px`;
+        tooltipElement.style.left = `${event.clientX + offsetX}px`;
+        tooltipElement.style.top = `${event.clientY + offsetY}px`;
         tooltipElement.style.position = 'fixed';
         tooltipElement.style.zIndex = '9999';
     }
