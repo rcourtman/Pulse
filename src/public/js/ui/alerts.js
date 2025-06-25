@@ -2097,7 +2097,23 @@ PulseApp.ui.alerts = (() => {
     function transformNodeHeaderToAlertMode(headerRow, nodeName) {
         // Get node data to check if online
         const nodesData = PulseApp.state?.get('nodesData') || [];
-        const node = nodesData.find(n => n.node === nodeName);
+        
+        // Find node by matching node name or display name
+        let node = nodesData.find(n => n.node === nodeName || n.displayName === nodeName);
+        
+        // If not found, try to find by checking which node the guests belong to
+        if (!node) {
+            const dashboardData = PulseApp.state?.get('dashboardData') || [];
+            const guestWithThisNode = dashboardData.find(g => g.node === nodeName);
+            if (guestWithThisNode && guestWithThisNode.endpoint) {
+                // Find the node that matches this endpoint
+                node = nodesData.find(n => {
+                    // Match by endpoint name or by node name in case they differ
+                    return dashboardData.some(g => g.node === nodeName && g.endpoint === n.node);
+                });
+            }
+        }
+        
         const isOnline = node && node.uptime > 0;
         
         if (!isOnline) {
@@ -2127,9 +2143,10 @@ PulseApp.ui.alerts = (() => {
             `node-alert-${nodeName}-disk`, 0, 100, 5, diskValue
         );
         
-        // Keep the row classes intact - the row already has the background styling
+        // Important: The row has node-header class with bg-gray-100 dark:bg-gray-700/80
+        // We need to ensure this styling is visible by not overriding with cell backgrounds
         headerRow.innerHTML = `
-            <td class="py-1 px-2 text-left font-medium text-xs sm:text-sm" colspan="4">
+            <td class="py-1 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300" colspan="4">
                 ${nodeNameHtml}
             </td>
             <td class="py-1 px-2">
