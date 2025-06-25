@@ -524,6 +524,124 @@ PulseApp.utils = (() => {
         }
     }
     
+    // Unified metric display helpers
+    function createMetricBarHtml(entity, entityType, metricType, includeChart = false) {
+        // Get metric value and configuration based on type
+        let value, maxValue, tooltipExtra, displayValue;
+        
+        switch (metricType) {
+            case 'cpu':
+                value = entity.cpu ? (entity.cpu * 100) : 0;
+                maxValue = entity.maxcpu;
+                tooltipExtra = maxValue && maxValue > 0 ? ` (${(entity.cpu * maxValue).toFixed(1)}/${maxValue} cores)` : '';
+                displayValue = `${value.toFixed(0)}%`;
+                break;
+            case 'memory':
+                const memUsage = entity.mem && entity.maxmem ? (entity.mem / entity.maxmem * 100) : 0;
+                value = memUsage;
+                tooltipExtra = entity.mem && entity.maxmem ? ` (${formatBytes(entity.mem)}/${formatBytes(entity.maxmem)})` : '';
+                displayValue = `${value.toFixed(0)}%`;
+                break;
+            case 'disk':
+                const diskUsage = entity.disk && entity.maxdisk ? (entity.disk / entity.maxdisk * 100) : 0;
+                value = diskUsage;
+                tooltipExtra = entity.disk && entity.maxdisk ? ` (${formatBytes(entity.disk)}/${formatBytes(entity.maxdisk)})` : '';
+                displayValue = `${value.toFixed(0)}%`;
+                break;
+            default:
+                value = 0;
+                tooltipExtra = '';
+                displayValue = '0%';
+        }
+        
+        const colorClass = getUsageColor(value, metricType);
+        const tooltipText = `${value.toFixed(1)}%${tooltipExtra}`;
+        const progressBar = createProgressTextBarHTML(value, tooltipText, colorClass, displayValue);
+        
+        if (!includeChart) {
+            return progressBar;
+        }
+        
+        // Create both text and chart versions
+        const entityId = entityType === 'node' ? `node-${entity.node}` : entity.vmid || entity.id;
+        const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(entityId, metricType) : '';
+        
+        return `
+            <div class="metric-text">${progressBar}</div>
+            <div class="metric-chart">${chartHtml}</div>
+        `;
+    }
+    
+    // Alert threshold control helpers
+    function createAlertSliderHtml(entityId, entityType, metricType, config) {
+        // entityType can be 'guest', 'node', etc.
+        const thresholds = {
+            guest: PulseApp.ui.alerts?.getGuestThresholds?.() || {},
+            node: PulseApp.ui.alerts?.getNodeThresholds?.() || {},
+            global: PulseApp.ui.alerts?.getGlobalThresholds?.() || {}
+        };
+        
+        // Determine current value based on entity type
+        let currentValue = config.min;
+        let isUsingGlobal = false;
+        
+        if (entityType === 'guest' && thresholds.guest[entityId] && thresholds.guest[entityId][metricType] !== undefined) {
+            currentValue = thresholds.guest[entityId][metricType];
+        } else if (entityType === 'node' && thresholds.node[entityId] && thresholds.node[entityId][metricType] !== undefined) {
+            currentValue = thresholds.node[entityId][metricType];
+        } else if (thresholds.global[metricType] !== undefined && thresholds.global[metricType] !== '') {
+            currentValue = thresholds.global[metricType];
+            isUsingGlobal = true;
+        }
+        
+        const sliderId = `alert-slider-${entityId}-${metricType}`;
+        const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
+            sliderId, 
+            config.min, 
+            config.max, 
+            config.step, 
+            currentValue
+        );
+        
+        const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
+        const dataAttrs = `data-${entityType}-id="${entityId}" data-metric="${metricType}"`;
+        
+        return `
+            <div class="${containerClass} flex items-center" ${dataAttrs}>
+                ${sliderHtml}
+            </div>
+        `;
+    }
+    
+    function createAlertDropdownHtml(entityId, entityType, metricType, options) {
+        const thresholds = {
+            guest: PulseApp.ui.alerts?.getGuestThresholds?.() || {},
+            node: PulseApp.ui.alerts?.getNodeThresholds?.() || {},
+            global: PulseApp.ui.alerts?.getGlobalThresholds?.() || {}
+        };
+        
+        let currentValue = '';
+        let isUsingGlobal = false;
+        
+        if (entityType === 'guest' && thresholds.guest[entityId] && thresholds.guest[entityId][metricType] !== undefined) {
+            currentValue = thresholds.guest[entityId][metricType];
+        } else if (entityType === 'node' && thresholds.node[entityId] && thresholds.node[entityId][metricType] !== undefined) {
+            currentValue = thresholds.node[entityId][metricType];
+        } else if (thresholds.global[metricType] !== undefined) {
+            currentValue = thresholds.global[metricType];
+            isUsingGlobal = true;
+        }
+        
+        const selectId = `alert-select-${entityId}-${metricType}`;
+        const selectHtml = PulseApp.ui.thresholds.createThresholdSelectHtml(
+            selectId, 
+            options, 
+            currentValue
+        );
+        
+        return selectHtml;
+    }
+    
     // Common CSS class constants for consistency
     const CSS_CLASSES = {
         // Text colors with dark mode variants
@@ -604,6 +722,11 @@ PulseApp.utils = (() => {
         // Threshold utilities
         getReadableThresholdName,
         formatThresholdValue,
+        // Metric display helpers
+        createMetricBarHtml,
+        // Alert control helpers
+        createAlertSliderHtml,
+        createAlertDropdownHtml,
         // CSS class constants
         CSS_CLASSES
     };

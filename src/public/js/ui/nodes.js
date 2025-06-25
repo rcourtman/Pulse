@@ -4,67 +4,15 @@ PulseApp.ui.nodes = (() => {
     let currentNodesData = null; // Store current nodes data for resize handling
 
     function _createNodeCpuBarHtml(node, includeChart = false) {
-        const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
-        const cpuColorClass = PulseApp.utils.getUsageColor(cpuPercent, 'cpu');
-        const cpuTooltipText = `${cpuPercent.toFixed(1)}%${node.maxcpu && node.maxcpu > 0 ? ` (${(node.cpu * node.maxcpu).toFixed(1)}/${node.maxcpu} cores)` : ''}`;
-        const progressBar = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass, `${cpuPercent.toFixed(0)}%`);
-        
-        if (!includeChart) {
-            return progressBar;
-        }
-        
-        // Create both text and chart versions like dashboard does
-        const nodeId = `node-${node.node}`;
-        const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(nodeId, 'cpu') : '';
-        
-        return `
-            <div class="metric-text">${progressBar}</div>
-            <div class="metric-chart">${chartHtml}</div>
-        `;
+        return PulseApp.utils.createMetricBarHtml(node, 'node', 'cpu', includeChart);
     }
 
     function _createNodeMemoryBarHtml(node, includeChart = false) {
-        const memUsed = node.mem || 0;
-        const memTotal = node.maxmem || 0;
-        const memPercent = (memUsed && memTotal > 0) ? (memUsed / memTotal * 100) : 0;
-        const memColorClass = PulseApp.utils.getUsageColor(memPercent, 'memory');
-        const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent.toFixed(1)}%)`;
-        const progressBar = PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass, `${memPercent.toFixed(0)}%`);
-        
-        if (!includeChart) {
-            return progressBar;
-        }
-        
-        // Create both text and chart versions like dashboard does
-        const nodeId = `node-${node.node}`;
-        const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(nodeId, 'memory') : '';
-        
-        return `
-            <div class="metric-text">${progressBar}</div>
-            <div class="metric-chart">${chartHtml}</div>
-        `;
+        return PulseApp.utils.createMetricBarHtml(node, 'node', 'memory', includeChart);
     }
 
     function _createNodeDiskBarHtml(node, includeChart = false) {
-        const diskUsed = node.disk || 0;
-        const diskTotal = node.maxdisk || 0;
-        const diskPercent = (diskUsed && diskTotal > 0) ? (diskUsed / diskTotal * 100) : 0;
-        const diskColorClass = PulseApp.utils.getUsageColor(diskPercent, 'disk');
-        const diskTooltipText = `${PulseApp.utils.formatBytes(diskUsed)} / ${PulseApp.utils.formatBytes(diskTotal)} (${diskPercent.toFixed(1)}%)`;
-        const progressBar = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskTooltipText, diskColorClass, `${diskPercent.toFixed(0)}%`);
-        
-        if (!includeChart) {
-            return progressBar;
-        }
-        
-        // Create both text and chart versions like dashboard does
-        const nodeId = `node-${node.node}`;
-        const chartHtml = PulseApp.charts ? PulseApp.charts.createUsageChartHTML(nodeId, 'disk') : '';
-        
-        return `
-            <div class="metric-text">${progressBar}</div>
-            <div class="metric-chart">${chartHtml}</div>
-        `;
+        return PulseApp.utils.createMetricBarHtml(node, 'node', 'disk', includeChart);
     }
 
     // Create a dedicated function for rendering a single node row
