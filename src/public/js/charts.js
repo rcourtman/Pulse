@@ -364,8 +364,6 @@ PulseApp.charts = (() => {
                 // Show enhanced tooltip with proper event object
                 if (PulseApp.tooltips && PulseApp.tooltips.showTooltip) {
                     PulseApp.tooltips.showTooltip(event, tooltipContent);
-                } else {
-                    console.warn('[Charts] PulseApp.tooltips not available');
                 }
                 
                 // Update hover indicator position
@@ -419,6 +417,7 @@ PulseApp.charts = (() => {
         overlay._metric = metric;
         overlay._config = config;
         
+        // Remove verbose overlay logging
         
         // Remove the touch indicator - charts are discoverable enough without it
     }
