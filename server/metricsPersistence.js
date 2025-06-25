@@ -12,22 +12,6 @@ class MetricsPersistence {
         this.snapshotFile = path.join(dataPath, 'metrics-snapshot.json.gz');
         this.tempFile = path.join(dataPath, '.metrics-snapshot.tmp.gz');
         this.maxRetentionHours = 7 * 24; // Keep 7 days of data to match memory retention
-        // Minimum points to ensure charts look good at all zoom levels
-        // Based on actual chart sizes: mini (118px) and sparkline (66px)
-        this.minPointsPerView = {
-            '1m': 30,    // 1 minute view (every 2 seconds)
-            '5m': 30,    // 5 minute view (every 10 seconds)
-            '15m': 45,   // 15 minute view (every 20 seconds)
-            '30m': 60,   // 30 minute view (every 30 seconds)
-            '1h': 60,    // 1 hour view (every minute)
-            '2h': 60,    // 2 hour view (every 2 minutes)
-            '4h': 60,    // 4 hour view (every 4 minutes)
-            '8h': 60,    // 8 hour view (every 8 minutes)
-            '12h': 60,   // 12 hour view (every 12 minutes)
-            '24h': 72,   // 24 hour view (every 20 minutes)
-            '2d': 72,    // 2 day view (every 40 minutes)
-            '7d': 84     // 7 day view (every 2 hours)
-        };
     }
 
     async saveSnapshot(metricsHistory) {
@@ -118,7 +102,15 @@ class MetricsPersistence {
             }
 
             // Check age of snapshot
-            const ageHours = (Date.now() - snapshot.timestamp) / (1000 * 60 * 60);
+            const now = Date.now();
+            const ageMs = now - snapshot.timestamp;
+            const ageHours = ageMs / (1000 * 60 * 60);
+            
+            // Log snapshot details for debugging
+            console.log(`[MetricsPersistence] Snapshot timestamp: ${new Date(snapshot.timestamp).toISOString()}`);
+            console.log(`[MetricsPersistence] Current time: ${new Date(now).toISOString()}`);
+            console.log(`[MetricsPersistence] Age: ${ageMs}ms (${ageHours.toFixed(2)} hours)`);
+            
             if (ageHours > this.maxRetentionHours * 2) {
                 console.log(`[MetricsPersistence] Snapshot too old (${ageHours.toFixed(1)} hours), discarding`);
                 return null;
@@ -193,23 +185,23 @@ class MetricsPersistence {
             const hasSignificantChange = this.hasSignificantChange(point, lastStoredPoint);
             
             // Gradual resolution decay based on age
-            // Goal: ~60 points visible in any time window
+            // UPDATED: Preserve more data points, especially for recent data
             let interval;
             
-            // Define resolution stages to ensure minimum points for each view
+            // Define resolution stages with higher density for better chart resolution
             const resolutionStages = [
-                { maxAge: 1 * 60 * 1000, interval: 2 * 1000 },         // 0-1 min: 2s (30 points)
-                { maxAge: 5 * 60 * 1000, interval: 10 * 1000 },        // 1-5 min: 10s (30 points)
-                { maxAge: 15 * 60 * 1000, interval: 20 * 1000 },       // 5-15 min: 20s (45 points)
-                { maxAge: 30 * 60 * 1000, interval: 30 * 1000 },       // 15-30 min: 30s (60 points)
-                { maxAge: 60 * 60 * 1000, interval: 60 * 1000 },       // 30-60 min: 1m (60 points)
-                { maxAge: 2 * 60 * 60 * 1000, interval: 2 * 60 * 1000 },    // 1-2h: 2m (60 points)
-                { maxAge: 4 * 60 * 60 * 1000, interval: 4 * 60 * 1000 },    // 2-4h: 4m (60 points)
-                { maxAge: 8 * 60 * 60 * 1000, interval: 8 * 60 * 1000 },    // 4-8h: 8m (60 points)
-                { maxAge: 12 * 60 * 60 * 1000, interval: 12 * 60 * 1000 },  // 8-12h: 12m (60 points)
-                { maxAge: 24 * 60 * 60 * 1000, interval: 20 * 60 * 1000 },  // 12-24h: 20m (72 points)
-                { maxAge: 2 * 24 * 60 * 60 * 1000, interval: 40 * 60 * 1000 },   // 1-2d: 40m (72 points)
-                { maxAge: 7 * 24 * 60 * 60 * 1000, interval: 2 * 60 * 60 * 1000 } // 2-7d: 2h (84 points)
+                { maxAge: 5 * 60 * 1000, interval: 2 * 1000 },         // 0-5 min: 2s (150 points)
+                { maxAge: 15 * 60 * 1000, interval: 4 * 1000 },        // 5-15 min: 4s (150 points)
+                { maxAge: 30 * 60 * 1000, interval: 6 * 1000 },        // 15-30 min: 6s (150 points)
+                { maxAge: 60 * 60 * 1000, interval: 10 * 1000 },       // 30-60 min: 10s (180 points)
+                { maxAge: 2 * 60 * 60 * 1000, interval: 20 * 1000 },   // 1-2h: 20s (180 points)
+                { maxAge: 4 * 60 * 60 * 1000, interval: 30 * 1000 },   // 2-4h: 30s (240 points)
+                { maxAge: 8 * 60 * 60 * 1000, interval: 60 * 1000 },   // 4-8h: 1m (240 points)
+                { maxAge: 12 * 60 * 60 * 1000, interval: 90 * 1000 },  // 8-12h: 1.5m (160 points)
+                { maxAge: 24 * 60 * 60 * 1000, interval: 3 * 60 * 1000 },   // 12-24h: 3m (240 points)
+                { maxAge: 2 * 24 * 60 * 60 * 1000, interval: 5 * 60 * 1000 },   // 1-2d: 5m (288 points)
+                { maxAge: 3 * 24 * 60 * 60 * 1000, interval: 10 * 60 * 1000 },  // 2-3d: 10m (144 points)
+                { maxAge: 7 * 24 * 60 * 60 * 1000, interval: 30 * 60 * 1000 }   // 3-7d: 30m (224 points)
             ];
             
             // Find appropriate interval based on age
@@ -251,6 +243,7 @@ class MetricsPersistence {
             }
         }
 
+        console.log(`[MetricsPersistence] Downsampled ${dataPoints.length} points to ${downsampled.length} points`);
         return downsampled;
     }
 

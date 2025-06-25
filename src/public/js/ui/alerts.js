@@ -8,11 +8,10 @@ PulseApp.ui.alerts = (() => {
     let isAlertsMode = false;
     let guestAlertThresholds = {}; // Store per-guest thresholds
     let globalThresholds = {}; // Store global default thresholds
-    let nodeAlertThresholds = {}; // Store per-node thresholds
-    let globalNodeThresholds = {}; // Store global default node thresholds
     let alertLogic = 'or'; // Fixed to OR logic (dropdown removed)
     let alertDuration = 0; // Track alert duration in milliseconds (default instant for testing)
     let autoResolve = true; // Track whether alerts should auto-resolve
+    let isSliderDragging = false; // Track if any slider is being dragged
 
     function init() {
         // Check if we should show success message after page reload
@@ -54,6 +53,14 @@ PulseApp.ui.alerts = (() => {
         if (autoResolveToggle && autoResolve !== undefined) {
             autoResolveToggle.checked = autoResolve;
         }
+        
+        // Add global mouse/touch up handlers to clear dragging state
+        document.addEventListener('mouseup', () => {
+            isSliderDragging = false;
+        });
+        document.addEventListener('touchend', () => {
+            isSliderDragging = false;
+        });
     }
 
     function setupEventListeners() {
@@ -172,20 +179,20 @@ PulseApp.ui.alerts = (() => {
     
     function handleAlertDurationChange(event) {
         alertDuration = parseInt(event.target.value);
-        console.log(`Alert duration changed to: ${alertDuration}ms`);
         
         // Changes will be saved when user clicks save button
     }
 
-    async function handleEmailToggle(event) {
+    async function handleNotificationToggle(event, type) {
         const enabled = event.target.checked;
+        const isEmail = type === 'email';
         
-        // Show/hide email cooldown settings
-        const cooldownSettings = document.getElementById('email-cooldown-settings');
+        // Show/hide cooldown settings
+        const cooldownSettingsId = isEmail ? 'email-cooldown-settings' : 'webhook-cooldown-settings';
+        const cooldownSettings = document.getElementById(cooldownSettingsId);
         if (cooldownSettings) {
             cooldownSettings.style.display = enabled ? 'block' : 'none';
         }
-        
         
         try {
             // Get current config
@@ -195,10 +202,11 @@ PulseApp.ui.alerts = (() => {
             }
             const configData = await configResponse.json();
             
-            // Update only ALERT_EMAIL_ENABLED
+            // Update the appropriate config field
+            const configField = isEmail ? 'ALERT_EMAIL_ENABLED' : 'ALERT_WEBHOOK_ENABLED';
             const updatedConfig = {
                 ...configData,
-                ALERT_EMAIL_ENABLED: enabled
+                [configField]: enabled
             };
             
             // Save updated config
@@ -214,64 +222,27 @@ PulseApp.ui.alerts = (() => {
                 throw new Error('Failed to save config');
             }
             
-            PulseApp.ui.toast?.success(`Alert emails ${enabled ? 'enabled' : 'disabled'}`);
+            const typeLabel = isEmail ? 'emails' : 'webhooks';
+            PulseApp.ui.toast?.success(`Alert ${typeLabel} ${enabled ? 'enabled' : 'disabled'}`);
         } catch (error) {
-            console.error('Failed to toggle alert emails:', error);
-            PulseApp.ui.toast?.error('Failed to update email setting');
+            const typeLabel = isEmail ? 'email' : 'webhook';
+            console.error(`Failed to toggle alert ${typeLabel}s:`, error);
+            PulseApp.ui.toast?.error(`Failed to update ${typeLabel} setting`);
             // Revert toggle on error
             event.target.checked = !enabled;
         }
     }
 
-    async function handleWebhookToggle(event) {
-        const enabled = event.target.checked;
-        
-        // Show/hide webhook cooldown settings
-        const cooldownSettings = document.getElementById('webhook-cooldown-settings');
-        if (cooldownSettings) {
-            cooldownSettings.style.display = enabled ? 'block' : 'none';
-        }
-        
-        
-        try {
-            // Get current config
-            const configResponse = await fetch('/api/config');
-            if (!configResponse.ok) {
-                throw new Error('Failed to get current config');
-            }
-            const configData = await configResponse.json();
-            
-            // Update only ALERT_WEBHOOK_ENABLED
-            const updatedConfig = {
-                ...configData,
-                ALERT_WEBHOOK_ENABLED: enabled
-            };
-            
-            // Save updated config
-            const saveResponse = await fetch('/api/config', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatedConfig)
-            });
-            
-            const saveResult = await saveResponse.json();
-            
-            if (!saveResult.success) {
-                throw new Error('Failed to save config');
-            }
-            
-            PulseApp.ui.toast?.success(`Alert webhooks ${enabled ? 'enabled' : 'disabled'}`);
-        } catch (error) {
-            console.error('Failed to toggle alert webhooks:', error);
-            PulseApp.ui.toast?.error('Failed to update webhook setting');
-            // Revert toggle on error
-            event.target.checked = !enabled;
-        }
+    function handleEmailToggle(event) {
+        return handleNotificationToggle(event, 'email');
+    }
+
+    function handleWebhookToggle(event) {
+        return handleNotificationToggle(event, 'webhook');
     }
     
     function handleAutoResolveToggle(event) {
         autoResolve = event.target.checked;
-        console.log(`Alert auto-resolve ${autoResolve ? 'enabled' : 'disabled'}`);
         
         // Changes will be saved when user clicks save button
     }
@@ -300,8 +271,7 @@ PulseApp.ui.alerts = (() => {
             
             // Apply initial dimming to global row if using defaults
             const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
-            const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
-            updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
+            updateResetButtonVisibility(hasCustomGuests);
             
             // Update notification status when showing alerts mode
             updateNotificationStatus();
@@ -329,15 +299,6 @@ PulseApp.ui.alerts = (() => {
             // This will also apply the correct row styling via updateRowStylingOnly()
             transformTableToAlertsMode();
             
-            // Transform node table to show threshold inputs
-            transformNodeTableToAlertsMode();
-            
-            // Update node summary cards (no longer show sliders there)
-            if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {
-                const nodesData = PulseApp.state?.get('nodesData') || [];
-                PulseApp.ui.nodes.updateNodeSummaryCards(nodesData);
-            }
-            
         } else {
             // Don't show the main threshold row - let the threshold module control its visibility
             
@@ -354,9 +315,6 @@ PulseApp.ui.alerts = (() => {
             
             // Restore normal table view
             restoreNormalTableMode();
-            
-            // Restore normal node table view
-            restoreNormalNodeTableMode();
             
             // Clear only alert-specific row styling
             clearAllAlertStyling();
@@ -378,23 +336,20 @@ PulseApp.ui.alerts = (() => {
     function initializeGlobalThresholds() {
         if (!globalAlertThresholds) return;
         
-        // Set default global threshold values
-        globalThresholds = {
-            cpu: 80,
-            memory: 85,
-            disk: 90,
-            diskread: '',
-            diskwrite: '',
-            netin: '',
-            netout: ''
-        };
+        // Only set defaults if not already initialized
+        if (!globalThresholds || Object.keys(globalThresholds).length === 0) {
+            // Set default global threshold values
+            globalThresholds = {
+                cpu: 80,
+                memory: 85,
+                disk: 90,
+                diskread: '',
+                diskwrite: '',
+                netin: '',
+                netout: ''
+            };
+        }
         
-        // Set default global node thresholds (higher than guest defaults)
-        globalNodeThresholds = {
-            cpu: 90,
-            memory: 95,
-            disk: 95
-        };
         
         // Populate the table cells - exactly like threshold row
         const cpuCell = document.getElementById('global-cpu-cell');
@@ -467,30 +422,39 @@ PulseApp.ui.alerts = (() => {
         setupGlobalThresholdEventListeners();
     }
 
-    // Optimized event setup: update everything during drag for consistency
+    // Optimized event setup: only update tooltip during drag, defer all DOM updates until release
     function setupAlertSliderEvents(sliderElement, metricType) {
         if (!sliderElement) return;
         
-        // Full updates during drag (like node sliders)
+        // Only update tooltip during drag, don't update any DOM
         sliderElement.addEventListener('input', (event) => {
-            const value = event.target.value;
-            globalThresholds[metricType] = value; // Update state immediately
-            globalNodeThresholds[metricType] = value; // Also update node thresholds
-            updateRowStylingOnly(); // Fast styling-only update
-            updateAllNodeCardsStyling(); // Update node styling too
-            // Don't update guest or node input values during drag - only on release
             PulseApp.tooltips.updateSliderTooltip(event.target);
         });
         
-        // Also update on release for consistency
+        // Update everything on release
         sliderElement.addEventListener('change', (event) => {
+            isSliderDragging = false; // Clear dragging state
             const value = event.target.value;
-            updateGuestInputValues(metricType, value, true); // Update guest input values
-            updateNodeInputValues(metricType, value, true); // Update node input values on release only
+            globalThresholds[metricType] = value; // Update state
+            
+            // Update the slider's own styling based on whether it's default or custom
+            const defaultValue = metricType === 'cpu' ? 80 : metricType === 'memory' ? 85 : metricType === 'disk' ? 90 : '';
+            if (value != defaultValue && value !== '') {
+                sliderElement.classList.add('custom-threshold');
+            } else {
+                sliderElement.classList.remove('custom-threshold');
+            }
+            
+            // Update guest input values
+            updateGuestInputValues(metricType, value, true);
+            // Update row styling
+            updateRowStylingOnly();
+            PulseApp.tooltips.updateSliderTooltip(event.target);
             // Changes will be saved when user clicks save button
         });
         
         sliderElement.addEventListener('mousedown', (event) => {
+            isSliderDragging = true; // Set dragging state
             PulseApp.tooltips.updateSliderTooltip(event.target);
             if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
                 PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
@@ -498,6 +462,7 @@ PulseApp.ui.alerts = (() => {
         });
         
         sliderElement.addEventListener('touchstart', (event) => {
+            isSliderDragging = true; // Set dragging state
             PulseApp.tooltips.updateSliderTooltip(event.target);
             if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
                 PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
@@ -513,14 +478,26 @@ PulseApp.ui.alerts = (() => {
         
         if (cpuSlider) {
             setupAlertSliderEvents(cpuSlider, 'cpu');
+            // Set initial styling based on whether it's default or custom
+            if (globalThresholds.cpu !== 80) {
+                cpuSlider.classList.add('custom-threshold');
+            }
         }
         
         if (memorySlider) {
             setupAlertSliderEvents(memorySlider, 'memory');
+            // Set initial styling based on whether it's default or custom
+            if (globalThresholds.memory !== 85) {
+                memorySlider.classList.add('custom-threshold');
+            }
         }
         
         if (diskSlider) {
             setupAlertSliderEvents(diskSlider, 'disk');
+            // Set initial styling based on whether it's default or custom
+            if (globalThresholds.disk !== 90) {
+                diskSlider.classList.add('custom-threshold');
+            }
         }
         
         // Setup dropdowns
@@ -571,13 +548,24 @@ PulseApp.ui.alerts = (() => {
     function updateGlobalThreshold(metricType, newValue, shouldSave = true) {
         globalThresholds[metricType] = newValue;
         
+        // Update the global slider styling based on whether it's default or custom
+        const globalSlider = document.getElementById(`global-alert-${metricType}`);
+        if (globalSlider) {
+            const defaultValue = metricType === 'cpu' ? 80 : metricType === 'memory' ? 85 : metricType === 'disk' ? 90 : '';
+            // Use != for type-coercing comparison since slider values are strings
+            if (newValue != defaultValue && newValue !== '') {
+                globalSlider.classList.add('custom-threshold');
+            } else {
+                globalSlider.classList.remove('custom-threshold');
+            }
+        }
+        
         // Fast path: only update styling, not input values (like threshold system)
         updateRowStylingOnly();
         
         // Update reset button state when global thresholds change
         const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
-        const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
-        updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
+        updateResetButtonVisibility(hasCustomGuests);
         
         // Update save message
         updateAlertSaveMessage();
@@ -585,82 +573,12 @@ PulseApp.ui.alerts = (() => {
         // Changes will be saved when user clicks save button
     }
 
-    // Lightweight styling-only update (matches threshold system approach)
+    // This function is no longer needed - redirecting to main styling update
     function updateAlertRowStylingOnly() {
-        if (!isAlertsMode) return;
-        
-        const tableBody = mainTable.querySelector('tbody');
-        if (!tableBody) return;
-        
-        const rows = tableBody.querySelectorAll('tr[data-id]');
-        
-        rows.forEach(row => {
-            const guestId = row.getAttribute('data-id');
-            const guestThresholds = guestAlertThresholds[guestId] || {};
-            const hasAnyIndividualSettings = Object.keys(guestThresholds).length > 0;
-            
-            // Simple opacity styling only (no input value updates during drag)
-            if (!hasAnyIndividualSettings) {
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-            } else {
-                row.style.opacity = '1';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.removeAttribute('data-alert-dimmed');
-            }
-        });
+        updateRowStylingOnly();
     }
 
     // Check if a node would trigger alerts based on current threshold settings
-    function checkNodeWouldTriggerAlerts(nodeId, nodeThresholds) {
-        // Get node data from the state
-        const nodesData = PulseApp.state.get('nodesData') || [];
-        const node = nodesData.find(n => n.node === nodeId);
-        if (!node) return false;
-        
-        // Only check online nodes for alerts
-        if (!node.uptime || node.uptime <= 0) return false;
-        
-        // Check each metric type
-        const metricsToCheck = ['cpu', 'memory', 'disk'];
-        
-        for (const metricType of metricsToCheck) {
-            // Get the effective threshold for this node/metric
-            let thresholdValue;
-            if (nodeThresholds[metricType] !== undefined) {
-                // Node has individual threshold
-                thresholdValue = nodeThresholds[metricType];
-            } else {
-                // Use global node threshold
-                thresholdValue = globalNodeThresholds[metricType];
-            }
-            
-            // Skip if no threshold is set for this metric
-            if (thresholdValue === undefined || thresholdValue === null || thresholdValue === '') continue;
-            
-            // Get current value and check against threshold
-            let currentValue = 0;
-            let hasValue = false;
-            
-            if (metricType === 'cpu' && node.cpu !== undefined) {
-                currentValue = node.cpu * 100; // Convert to percentage
-                hasValue = true;
-            } else if (metricType === 'memory' && node.mem !== undefined && node.maxmem) {
-                currentValue = (node.mem / node.maxmem) * 100;
-                hasValue = true;
-            } else if (metricType === 'disk' && node.disk !== undefined && node.maxdisk) {
-                currentValue = (node.disk / node.maxdisk) * 100;
-                hasValue = true;
-            }
-            
-            if (hasValue && currentValue > thresholdValue) {
-                return true; // Would trigger alert
-            }
-        }
-        
-        return false;
-    }
 
     // Check if a guest would trigger alerts based on current threshold settings
     function checkGuestWouldTriggerAlerts(guestId, guestThresholds) {
@@ -757,7 +675,7 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
-    // Standalone row styling update with granular cell dimming
+    // Update slider styling to indicate custom vs global thresholds
     function updateRowStylingOnly() {
         if (!isAlertsMode) return;
         
@@ -776,34 +694,39 @@ PulseApp.ui.alerts = (() => {
                 hasAnyCustomValues = true;
             }
             
-            // New behavior: Light up rows that have custom alert settings
-            if (hasIndividualSettings) {
-                // Light up rows with custom settings
-                row.style.opacity = '';
-                row.style.transition = '';
-                row.removeAttribute('data-alert-dimmed');
-            } else {
-                // Dim rows using only default settings
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-            }
-            
-            // Clear any cell-level styling
-            const cells = row.querySelectorAll('td');
-            cells.forEach(cell => {
-                cell.style.opacity = '';
-                cell.style.transition = '';
-                cell.removeAttribute('data-alert-custom');
+            // Update slider styling for each metric
+            const metricTypes = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
+            metricTypes.forEach(metricType => {
+                const hasCustomThreshold = guestThresholds[metricType] !== undefined;
+                
+                // Check if global threshold is custom (not default)
+                let globalIsCustom = false;
+                if (metricType === 'cpu' || metricType === 'memory' || metricType === 'disk') {
+                    const defaultValue = metricType === 'cpu' ? 80 : metricType === 'memory' ? 85 : 90;
+                    // Use != for type coercion since values might be strings
+                    globalIsCustom = globalThresholds[metricType] != defaultValue;
+                } else {
+                    // For I/O metrics, any non-empty value is custom
+                    globalIsCustom = globalThresholds[metricType] !== '' && globalThresholds[metricType] !== undefined;
+                }
+                
+                const sliderContainer = row.querySelector(`[data-guest-id="${guestId}"][data-metric="${metricType}"]`);
+                if (sliderContainer) {
+                    const slider = sliderContainer.querySelector('input[type="range"]');
+                    if (slider) {
+                        // Slider is blue if it has a custom value OR if it's using a custom global value
+                        if (hasCustomThreshold || (!hasCustomThreshold && globalIsCustom)) {
+                            slider.classList.add('custom-threshold');
+                        } else {
+                            slider.classList.remove('custom-threshold');
+                        }
+                    }
+                }
             });
-            
-            // Remove mixed row attributes (no longer used)
-            row.removeAttribute('data-alert-mixed');
         });
         
-        // Update reset button visibility based on whether there are any custom values (guest or node)
-        const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
-        updateResetButtonVisibility(hasAnyCustomValues || hasCustomNodes);
+        // Update reset button visibility based on whether there are any custom values
+        updateResetButtonVisibility(hasAnyCustomValues);
         
         // Update alerts count badge
         updateAlertsCountBadge();
@@ -822,17 +745,11 @@ PulseApp.ui.alerts = (() => {
         }
         
         // Count guests with custom alert settings
-        const guestCustomCount = Object.keys(guestAlertThresholds).length;
-        
-        // Count nodes with custom alert settings
-        const nodeCustomCount = Object.keys(nodeAlertThresholds).length;
-        
-        // Total custom count
-        const totalCustomCount = guestCustomCount + nodeCustomCount;
+        const customCount = Object.keys(guestAlertThresholds).length;
         
         // Update badge
-        alertsBadge.textContent = totalCustomCount;
-        if (totalCustomCount > 0) {
+        alertsBadge.textContent = customCount;
+        if (customCount > 0) {
             alertsBadge.classList.remove('hidden');
         } else {
             alertsBadge.classList.add('hidden');
@@ -854,28 +771,11 @@ PulseApp.ui.alerts = (() => {
             }
         });
         
-        // Count how many nodes would trigger alerts
-        let nodeTriggerCount = 0;
-        const nodesData = PulseApp.state?.get('nodesData') || [];
-        
-        nodesData.forEach(node => {
-            const nodeThresholds = nodeAlertThresholds[node.node] || {};
-            if (checkNodeWouldTriggerAlerts(node.node, nodeThresholds)) {
-                nodeTriggerCount++;
-            }
-        });
         
         // Update message
-        const totalTriggerCount = guestTriggerCount + nodeTriggerCount;
-        if (totalTriggerCount > 0) {
+        if (guestTriggerCount > 0) {
             let message = '';
-            if (guestTriggerCount > 0 && nodeTriggerCount > 0) {
-                message = `${guestTriggerCount} guest & ${nodeTriggerCount} node alert${totalTriggerCount !== 1 ? 's' : ''} will trigger`;
-            } else if (guestTriggerCount > 0) {
-                message = `${guestTriggerCount} guest alert${guestTriggerCount !== 1 ? 's' : ''} will trigger`;
-            } else {
-                message = `${nodeTriggerCount} node alert${nodeTriggerCount !== 1 ? 's' : ''} will trigger`;
-            }
+            message = `${guestTriggerCount} guest alert${guestTriggerCount !== 1 ? 's' : ''} will trigger`;
             saveMessage.textContent = message;
             saveMessage.classList.remove('text-green-600', 'dark:text-green-400');
             saveMessage.classList.add('text-amber-600', 'dark:text-amber-400');
@@ -906,17 +806,6 @@ PulseApp.ui.alerts = (() => {
             globalThresholds[key] != defaultThresholds[key] // Use != for loose comparison
         );
         
-        // Check if global node thresholds have been changed from defaults
-        const defaultNodeThresholds = {
-            cpu: 90,
-            memory: 95,
-            disk: 95
-        };
-        
-        const hasNodeGlobalChanges = Object.keys(defaultNodeThresholds).some(key => 
-            globalNodeThresholds[key] != defaultNodeThresholds[key]
-        );
-        
         // Global row should never be dimmed - it's the master control
         if (globalThresholdsRow) {
             globalThresholdsRow.style.opacity = '';
@@ -925,7 +814,7 @@ PulseApp.ui.alerts = (() => {
         
         if (resetButton) {
             // Enable button if there are custom values OR any global changes
-            if (hasCustomValues || hasGlobalChanges || hasNodeGlobalChanges) {
+            if (hasCustomValues || hasGlobalChanges) {
                 resetButton.classList.remove('opacity-50', 'cursor-not-allowed');
                 resetButton.disabled = false;
             } else {
@@ -991,34 +880,8 @@ PulseApp.ui.alerts = (() => {
     }
     
     function applyAlertDimmingFast() {
-        const tableBody = mainTable.querySelector('tbody');
-        if (!tableBody) return;
-        
-        const rows = tableBody.querySelectorAll('tr[data-id]');
-        
-        // Single pass: apply dimming based on custom settings
-        rows.forEach(row => {
-            const guestId = row.getAttribute('data-id');
-            const guestThresholds = guestAlertThresholds[guestId] || {};
-            const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
-            
-            // Remove threshold attributes
-            row.removeAttribute('data-dimmed');
-            row.style.transition = '';
-            
-            // New behavior: Light up rows that have custom alert settings
-            if (hasIndividualSettings) {
-                // Light up rows with custom settings
-                row.style.opacity = '';
-                row.style.transition = '';
-                row.removeAttribute('data-alert-dimmed');
-            } else {
-                // Dim rows using only default settings
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-            }
-        });
+        // This function is no longer needed as we're using slider styling instead of row dimming
+        updateRowStylingOnly();
     }
 
     function resetGlobalThresholds() {
@@ -1027,7 +890,6 @@ PulseApp.ui.alerts = (() => {
         
         // Clear all individual thresholds
         guestAlertThresholds = {};
-        nodeAlertThresholds = {};
         
         // Reset to defaults
         globalThresholds = {
@@ -1038,13 +900,6 @@ PulseApp.ui.alerts = (() => {
             diskwrite: '',
             netin: '',
             netout: ''
-        };
-        
-        // Reset node thresholds to match
-        globalNodeThresholds = {
-            cpu: 80,
-            memory: 85,
-            disk: 90
         };
         
         // Update the UI controls
@@ -1058,12 +913,15 @@ PulseApp.ui.alerts = (() => {
         
         if (cpuSlider) {
             cpuSlider.value = globalThresholds.cpu;
+            cpuSlider.classList.remove('custom-threshold');
         }
         if (memorySlider) {
             memorySlider.value = globalThresholds.memory;
+            memorySlider.classList.remove('custom-threshold');
         }
         if (diskSlider) {
             diskSlider.value = globalThresholds.disk;
+            diskSlider.classList.remove('custom-threshold');
             // Hide any lingering tooltip that might have been triggered
             PulseApp.tooltips.hideSliderTooltipImmediately();
         }
@@ -1071,20 +929,6 @@ PulseApp.ui.alerts = (() => {
         if (diskwriteSelect) diskwriteSelect.value = globalThresholds.diskwrite;
         if (netinSelect) netinSelect.value = globalThresholds.netin;
         if (netoutSelect) netoutSelect.value = globalThresholds.netout;
-        
-        // Clear all individual guest thresholds
-        guestAlertThresholds = {};
-        
-        // Clear all individual node thresholds
-        nodeAlertThresholds = {};
-        
-        // Reset global node thresholds to defaults
-        globalNodeThresholds = {
-            cpu: 90,
-            memory: 95,
-            disk: 95
-        };
-        
         
         // Update all guest rows smoothly
         if (isAlertsMode) {
@@ -1095,15 +939,6 @@ PulseApp.ui.alerts = (() => {
             
             // Then update row styling with new thresholds (no flash since inputs are already updated)
             updateRowStylingOnly();
-            
-            // Update all node cards to reflect reset
-            updateAllNodeCardsStyling();
-            
-            // Update node summary cards to refresh sliders
-            if (PulseApp.ui.nodes && PulseApp.ui.nodes.updateNodeSummaryCards) {
-                const nodesData = PulseApp.state?.get('nodesData') || [];
-                PulseApp.ui.nodes.updateNodeSummaryCards(nodesData);
-            }
         }
         
         // Clear any tooltip positioning issues that might have occurred during reset
@@ -1122,27 +957,13 @@ PulseApp.ui.alerts = (() => {
         // Get all guest rows
         const guestRows = mainTable.querySelectorAll('tbody tr[data-id]');
         
-        // First pass: Apply immediate dimming to prevent flash
+        // First pass: Clean up any previous styling
         guestRows.forEach(row => {
-            const guestId = row.getAttribute('data-id');
-            const guestThresholds = guestAlertThresholds[guestId] || {};
-            const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
-            
             // Remove any threshold-specific attributes
             row.removeAttribute('data-dimmed');
-            
-            // New behavior: Light up rows that have custom alert settings
-            if (hasIndividualSettings) {
-                // Light up rows with custom settings
-                row.style.opacity = '';
-                row.style.transition = '';
-                row.removeAttribute('data-alert-dimmed');
-            } else {
-                // Dim rows using only default settings
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-            }
+            row.removeAttribute('data-alert-dimmed');
+            row.style.opacity = '';
+            row.style.transition = '';
         });
         
         // Second pass: Transform cells
@@ -1218,17 +1039,21 @@ PulseApp.ui.alerts = (() => {
             // Setup custom alert events using threshold system pattern
             const slider = cell.querySelector('input[type="range"]');
             if (slider) {
-                // Update everything immediately during drag (like threshold system)
+                // Apply custom-threshold class if this guest has a custom value for this metric
+                const hasCustomValue = guestAlertThresholds[guestId] && guestAlertThresholds[guestId][metricType] !== undefined;
+                if (hasCustomValue) {
+                    slider.classList.add('custom-threshold');
+                }
+                
+                // Only update tooltip during drag, defer all updates until release
                 slider.addEventListener('input', (event) => {
-                    const value = event.target.value;
-                    updateGuestThreshold(guestId, metricType, value, true); // Save immediately
                     PulseApp.tooltips.updateSliderTooltip(event.target);
                 });
                 
-                // Also add change event for consistency with node sliders
+                // Update everything on release
                 slider.addEventListener('change', (event) => {
                     const value = event.target.value;
-                    updateGuestThreshold(guestId, metricType, value, true); // Save on release too
+                    updateGuestThreshold(guestId, metricType, value, true);
                     PulseApp.tooltips.updateSliderTooltip(event.target);
                 });
                 
@@ -1322,8 +1147,7 @@ PulseApp.ui.alerts = (() => {
         
         // Update reset button state when guest thresholds change
         const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
-        const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
-        updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
+        updateResetButtonVisibility(hasCustomGuests);
         
         // Update save message
         updateAlertSaveMessage();
@@ -1350,8 +1174,6 @@ PulseApp.ui.alerts = (() => {
             type: 'per_guest_thresholds',
             globalThresholds: globalThresholds,
             guestThresholds: guestAlertThresholds,
-            globalNodeThresholds: globalNodeThresholds,
-            nodeThresholds: nodeAlertThresholds,
             alertLogic: alertLogic,
             duration: alertDuration,
             autoResolve: autoResolve,
@@ -1374,11 +1196,6 @@ PulseApp.ui.alerts = (() => {
             lastUpdated: new Date().toISOString()
         };
         
-        console.log('[saveAlertConfig] Saving alert config:', alertConfig);
-        console.log('[saveAlertConfig] Node thresholds:', {
-            globalNodeThresholds: alertConfig.globalNodeThresholds,
-            nodeThresholds: alertConfig.nodeThresholds
-        });
         
         try {
             const response = await fetch('/api/alerts/config', {
@@ -1440,12 +1257,24 @@ PulseApp.ui.alerts = (() => {
                     
                     if (cpuSlider && globalThresholds.cpu) {
                         cpuSlider.value = globalThresholds.cpu;
+                        // Apply custom styling if not default (use != for type coercion)
+                        if (globalThresholds.cpu != 80) {
+                            cpuSlider.classList.add('custom-threshold');
+                        }
                     }
                     if (memorySlider && globalThresholds.memory) {
                         memorySlider.value = globalThresholds.memory;
+                        // Apply custom styling if not default (use != for type coercion)
+                        if (globalThresholds.memory != 85) {
+                            memorySlider.classList.add('custom-threshold');
+                        }
                     }
                     if (diskSlider && globalThresholds.disk) {
                         diskSlider.value = globalThresholds.disk;
+                        // Apply custom styling if not default (use != for type coercion)
+                        if (globalThresholds.disk != 90) {
+                            diskSlider.classList.add('custom-threshold');
+                        }
                     }
                     
                     // Hide any tooltips that might have been triggered during value setting
@@ -1459,16 +1288,6 @@ PulseApp.ui.alerts = (() => {
                 // Load guest thresholds
                 if (config.guestThresholds) {
                     guestAlertThresholds = config.guestThresholds;
-                }
-                
-                // Load global node thresholds
-                if (config.globalNodeThresholds) {
-                    globalNodeThresholds = { ...globalNodeThresholds, ...config.globalNodeThresholds };
-                }
-                
-                // Load node thresholds
-                if (config.nodeThresholds) {
-                    nodeAlertThresholds = config.nodeThresholds;
                 }
                 
                 // Alert logic is now fixed to OR (dropdown removed)
@@ -1539,12 +1358,10 @@ PulseApp.ui.alerts = (() => {
                     webhookCooldownSettings.style.display = webhookToggle.checked ? 'block' : 'none';
                 }
                 
-                console.log('Alert configuration loaded successfully');
                 
                 // Update reset button state and global row dimming after loading configuration
                 const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
-            const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
-            updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
+                updateResetButtonVisibility(hasCustomGuests);
                 
                 // Update styling if in alerts mode
                 if (isAlertsMode) {
@@ -1681,579 +1498,23 @@ PulseApp.ui.alerts = (() => {
         }
     }
 
-    function updateGlobalNodeThresholdUI() {
-        // This function is no longer needed since we're using the main global sliders
-        return;
-        
-        // Populate the node threshold cells
-        const cpuCell = document.getElementById('global-node-cpu-cell');
-        const memoryCell = document.getElementById('global-node-memory-cell');
-        const diskCell = document.getElementById('global-node-disk-cell');
-        
-        console.log('[DEBUG] Found cells:', { cpuCell: !!cpuCell, memoryCell: !!memoryCell, diskCell: !!diskCell });
-        
-        // Set up event delegation on parent container first
-        const parentContainer = cpuCell?.parentElement?.parentElement;
-        if (parentContainer && !parentContainer._nodeEventsDelegated) {
-            console.log('[DEBUG] Setting up event delegation on parent container:', parentContainer);
-            
-            // Test with capturing phase to catch events before they might be stopped
-            parentContainer.addEventListener('input', (e) => {
-                console.log('[DEBUG] ANY input event captured:', e.target.tagName, e.target.id);
-                if (e.target.id === 'global-node-alert-cpu' || 
-                    e.target.id === 'global-node-alert-memory' || 
-                    e.target.id === 'global-node-alert-disk') {
-                    console.log('[DEBUG] Delegated input event:', e.target.id, 'value:', e.target.value);
-                    const metricType = e.target.id.replace('global-node-alert-', '');
-                    globalNodeThresholds[metricType] = e.target.value;
-                    updateAllNodeCardsStyling();
-                    PulseApp.tooltips.updateSliderTooltip(e.target);
-                }
-            }, true); // Use capturing phase
-            
-            parentContainer.addEventListener('change', (e) => {
-                console.log('[DEBUG] ANY change event captured:', e.target.tagName, e.target.id);
-                if (e.target.id === 'global-node-alert-cpu' || 
-                    e.target.id === 'global-node-alert-memory' || 
-                    e.target.id === 'global-node-alert-disk') {
-                    console.log('[DEBUG] Delegated change event:', e.target.id, 'value:', e.target.value);
-                    const metricType = e.target.id.replace('global-node-alert-', '');
-                    updateNodeInputValues(metricType, e.target.value, true);
-                }
-            }, true); // Use capturing phase
-            
-            // Also add click handler to test if ANY events work
-            parentContainer.addEventListener('click', (e) => {
-                console.log('[DEBUG] Click event on:', e.target.tagName, e.target.id);
-            }, true);
-            
-            parentContainer._nodeEventsDelegated = true;
-        }
-        
-        if (cpuCell) {
-            const sliderId = 'global-node-alert-cpu';
-            const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(sliderId, 0, 100, 5, globalNodeThresholds.cpu || 90);
-            cpuCell.innerHTML = sliderHtml;
-            
-            // Add event listeners directly after creating the element
-            setTimeout(() => {
-                const slider = document.getElementById(sliderId);
-                if (slider) {
-                    slider.oninput = function(e) {
-                        console.log('[DEBUG] CPU oninput:', e.target.value);
-                        globalNodeThresholds.cpu = e.target.value;
-                        updateAllNodeCardsStyling();
-                        PulseApp.tooltips.updateSliderTooltip(e.target);
-                    };
-                    slider.onchange = function(e) {
-                        console.log('[DEBUG] CPU onchange:', e.target.value);
-                        updateNodeInputValues('cpu', e.target.value, true);
-                    };
-                }
-            }, 0);
-        }
-        
-        if (memoryCell) {
-            const sliderId = 'global-node-alert-memory';
-            const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(sliderId, 0, 100, 5, globalNodeThresholds.memory || 95);
-            memoryCell.innerHTML = sliderHtml;
-            
-            // Add event listeners directly after creating the element
-            setTimeout(() => {
-                const slider = document.getElementById(sliderId);
-                if (slider) {
-                    slider.oninput = function(e) {
-                        console.log('[DEBUG] Memory oninput:', e.target.value);
-                        globalNodeThresholds.memory = e.target.value;
-                        updateAllNodeCardsStyling();
-                        PulseApp.tooltips.updateSliderTooltip(e.target);
-                    };
-                    slider.onchange = function(e) {
-                        console.log('[DEBUG] Memory onchange:', e.target.value);
-                        updateNodeInputValues('memory', e.target.value, true);
-                    };
-                }
-            }, 0);
-        }
-        
-        if (diskCell) {
-            const sliderId = 'global-node-alert-disk';
-            const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(sliderId, 0, 100, 5, globalNodeThresholds.disk || 95);
-            diskCell.innerHTML = sliderHtml;
-            
-            // Add event listeners directly after creating the element
-            setTimeout(() => {
-                const slider = document.getElementById(sliderId);
-                if (slider) {
-                    slider.oninput = function(e) {
-                        console.log('[DEBUG] Disk oninput:', e.target.value);
-                        globalNodeThresholds.disk = e.target.value;
-                        updateAllNodeCardsStyling();
-                        PulseApp.tooltips.updateSliderTooltip(e.target);
-                    };
-                    slider.onchange = function(e) {
-                        console.log('[DEBUG] Disk onchange:', e.target.value);
-                        updateNodeInputValues('disk', e.target.value, true);
-                    };
-                }
-            }, 0);
-        }
-        
-        globalNodeUIInitialized = true;
-        
-        // TEST: Add a button to manually test if we can update values
-        if (!document.getElementById('test-node-sliders-btn')) {
-            const testBtn = document.createElement('button');
-            testBtn.id = 'test-node-sliders-btn';
-            testBtn.textContent = 'TEST NODE SLIDERS';
-            testBtn.className = 'ml-2 text-xs bg-red-500 text-white px-2 py-1 rounded';
-            testBtn.onclick = () => {
-                console.log('[DEBUG] Test button clicked');
-                const cpu = document.getElementById('global-node-alert-cpu');
-                const mem = document.getElementById('global-node-alert-memory');
-                const disk = document.getElementById('global-node-alert-disk');
-                console.log('[DEBUG] Found sliders:', { cpu: !!cpu, mem: !!mem, disk: !!disk });
-                if (cpu) {
-                    console.log('[DEBUG] CPU slider value before:', cpu.value);
-                    cpu.value = 50;
-                    console.log('[DEBUG] CPU slider value after:', cpu.value);
-                    updateNodeInputValues('cpu', 50, true);
-                }
-            };
-            const container = document.querySelector('h4.text-sm.font-medium.text-gray-700.dark\\:text-gray-300');
-            if (container && container.textContent.includes('Default Node Alert Thresholds')) {
-                container.appendChild(testBtn);
-            }
-        }
-        
-        // Setup reset button
-        const resetButton = document.getElementById('reset-global-node-thresholds');
-        if (resetButton && !resetButton._hasClickHandler) {
-            resetButton.addEventListener('click', resetGlobalNodeThresholds);
-            resetButton._hasClickHandler = true;
-        }
-    }
-    
-    // Setup event listeners for global node threshold sliders (using same pattern as guest sliders)
-    function setupGlobalNodeThresholdEventListeners() {
-        console.log('[DEBUG] setupGlobalNodeThresholdEventListeners called');
-        
-        // Setup sliders using custom alert event handling (same as guest sliders)
-        const cpuSlider = document.getElementById('global-node-alert-cpu');
-        const memorySlider = document.getElementById('global-node-alert-memory');
-        const diskSlider = document.getElementById('global-node-alert-disk');
-        
-        if (cpuSlider) {
-            console.log('[DEBUG] Setting up node CPU slider');
-            setupNodeAlertSliderEvents(cpuSlider, 'cpu');
-        }
-        
-        if (memorySlider) {
-            console.log('[DEBUG] Setting up node Memory slider');
-            setupNodeAlertSliderEvents(memorySlider, 'memory');
-        }
-        
-        if (diskSlider) {
-            console.log('[DEBUG] Setting up node Disk slider');
-            setupNodeAlertSliderEvents(diskSlider, 'disk');
-        }
-    }
-    
-    // Node-specific alert slider event setup (similar to setupAlertSliderEvents but for nodes)
-    function setupNodeAlertSliderEvents(sliderElement, metricType) {
-        if (!sliderElement) return;
-        
-        console.log('[DEBUG] setupNodeAlertSliderEvents for', metricType);
-        console.log('[DEBUG] Slider element:', sliderElement);
-        console.log('[DEBUG] Slider ID:', sliderElement.id);
-        
-        // Test if we can add ANY event listener
-        sliderElement.addEventListener('click', () => {
-            console.log('[DEBUG] CLICK event on', metricType, 'slider!');
-        });
-        
-        // Lightweight updates during drag (styling only, like guest sliders)
-        const inputHandler = (event) => {
-            console.log('[DEBUG] Node', metricType, 'input event, value:', event.target.value);
-            const value = event.target.value;
-            globalNodeThresholds[metricType] = value; // Update state immediately
-            updateAllNodeCardsStyling(); // Fast styling-only update
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-        };
-        
-        // Full update on release (input values)
-        const changeHandler = (event) => {
-            console.log('[DEBUG] Node', metricType, 'change event, value:', event.target.value);
-            const value = event.target.value;
-            updateNodeInputValues(metricType, value, true); // Update input values on release, skip tooltips
-        };
-        
-        sliderElement.addEventListener('input', inputHandler);
-        sliderElement.addEventListener('change', changeHandler);
-        
-        // Store handlers for debugging
-        sliderElement._inputHandler = inputHandler;
-        sliderElement._changeHandler = changeHandler;
-        
-        // Log all event listeners on this element
-        console.log('[DEBUG] Event listeners attached. Testing with getEventListeners in console...');
-        
-        sliderElement.addEventListener('mousedown', (event) => {
-            console.log('[DEBUG] Mousedown on', metricType);
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-        });
-        
-        sliderElement.addEventListener('touchstart', (event) => {
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-        }, { passive: true });
-    }
-    
-    function resetGlobalNodeThresholds() {
-        // Reset to default values
-        globalNodeThresholds = {
-            cpu: 90,
-            memory: 95,
-            disk: 95
-        };
-        
-        // Reset the initialization flag to force recreation
-        globalNodeUIInitialized = false;
-        
-        // Update UI
-        updateGlobalNodeThresholdUI();
-        
-        // Update save message
-        updateAlertSaveMessage();
-    }
 
-    // Node threshold management functions
-    function updateNodeThreshold(nodeId, metricType, value, shouldUpdate = true) {
-        if (!nodeAlertThresholds[nodeId]) {
-            nodeAlertThresholds[nodeId] = {};
-        }
-        
-        // Check if value matches global value (handle both string and numeric comparisons)
-        const globalValue = globalNodeThresholds[metricType] || '';
-        const isMatchingGlobal = value === globalValue || 
-                                 value == globalValue || 
-                                 (value === '' && globalValue === '');
-        
-        if (isMatchingGlobal || value === '') {
-            // Remove threshold if it matches global or is explicitly empty
-            delete nodeAlertThresholds[nodeId][metricType];
-            
-            // Remove node object if no thresholds left
-            if (Object.keys(nodeAlertThresholds[nodeId]).length === 0) {
-                delete nodeAlertThresholds[nodeId];
-            }
-        } else {
-            // Store individual threshold
-            nodeAlertThresholds[nodeId][metricType] = value;
-        }
-        
-        // Update node card dimming
-        updateNodeCardStyling(nodeId);
-        
-        if (shouldUpdate) {
-            // Use a slight delay to ensure this happens after any other updates
-            setTimeout(() => {
-                updateAlertSaveMessage();
-                updateAlertsCountBadge();
-                // Check if we have any custom thresholds (guest or node) to update reset button
-                const hasCustomGuests = Object.keys(guestAlertThresholds).length > 0;
-                const hasCustomNodes = Object.keys(nodeAlertThresholds).length > 0;
-                console.log('[updateNodeThreshold] Updating reset button visibility:', { hasCustomGuests, hasCustomNodes, nodeAlertThresholds });
-                updateResetButtonVisibility(hasCustomGuests || hasCustomNodes);
-            }, 50);
-        }
-    }
-    
-    function updateNodeCardStyling(nodeId) {
-        // Find the node card element
-        const nodeCard = document.querySelector(`[data-node-id="${nodeId}"]`);
-        if (!nodeCard) return;
-        
-        // Check if node has any custom settings
-        const hasCustomSettings = nodeAlertThresholds[nodeId] && Object.keys(nodeAlertThresholds[nodeId]).length > 0;
-        
-        // Update opacity using inline styles
-        if (hasCustomSettings) {
-            nodeCard.style.opacity = '1';
-            nodeCard.style.transition = 'opacity 0.1s ease-out';
-            nodeCard.setAttribute('data-alert-dimmed', 'false');
-        } else {
-            nodeCard.style.opacity = '0.4';
-            nodeCard.style.transition = 'opacity 0.1s ease-out';
-            nodeCard.setAttribute('data-alert-dimmed', 'true');
-        }
-    }
-    
-    function updateGlobalNodeThreshold(metricType, newValue, shouldUpdateInputs = false) {
-        globalNodeThresholds[metricType] = newValue;
-        
-        // Only update input values when specifically requested (on change event)
-        if (shouldUpdateInputs) {
-            updateNodeInputValues(metricType, newValue);
-        }
-        
-        // Always update node card styling since global defaults changed
-        updateAllNodeCardsStyling();
-        
-        // Update save message
-        updateAlertSaveMessage();
-    }
-    
-    function updateNodeInputValues(metricType, newValue, skipTooltips = false) {
-        if (!isAlertsMode) return;
-        
-        
-        // Debug: Let's see what selectors might work
-        // Find all node sliders for this metric
-        const nodeSliders = document.querySelectorAll(`.node-alert-slider[data-metric="${metricType}"] input[type="range"]`);
-        
-        nodeSliders.forEach(slider => {
-            const sliderContainer = slider.closest('.node-alert-slider');
-            const nodeId = sliderContainer?.getAttribute('data-node-id');
-            
-            if (nodeId) {
-                // Only update sliders for nodes that don't have individual thresholds for this metric
-                const nodeThresholds = nodeAlertThresholds[nodeId] || {};
-                const hasIndividualForThisMetric = nodeThresholds[metricType] !== undefined;
-                
-                if (!hasIndividualForThisMetric) {
-                    slider.value = newValue;
-                    
-                    // Update tooltip for sliders (skip during reset operations)
-                    if (!skipTooltips) {
-                        PulseApp.tooltips.updateSliderTooltip(slider);
-                    }
-                }
-            }
-        });
-    }
-    
-    function updateAllNodeCardsStyling() {
-        // Update styling for all node cards
-        const nodeCards = document.querySelectorAll('[data-node-id]');
-        nodeCards.forEach(card => {
-            const nodeId = card.getAttribute('data-node-id');
-            if (nodeId) {
-                updateNodeCardStyling(nodeId);
-            }
-        });
-    }
 
-    function transformNodeTableToAlertsMode() {
-        // Transform node header rows in the main table when Group by Node is enabled
-        const mainTable = document.getElementById('main-table');
-        if (!mainTable) return;
-        
-        const nodeHeaders = mainTable.querySelectorAll('tr.node-header');
-        nodeHeaders.forEach(header => {
-            // Extract node name from the header
-            const nodeNameElement = header.querySelector('td');
-            if (!nodeNameElement) return;
-            
-            // Get the node name (handling both plain text and links)
-            const linkElement = nodeNameElement.querySelector('a');
-            let nodeName = linkElement ? linkElement.textContent : nodeNameElement.textContent;
-            if (!nodeName) return;
-            
-            // Extract just the node name if it contains cluster info (e.g., "homelab - delly" -> "delly")
-            if (nodeName.includes(' - ')) {
-                nodeName = nodeName.split(' - ').pop().trim();
-            }
-            
-            // Store original content if not already stored
-            if (!header.dataset.originalContent) {
-                header.dataset.originalContent = header.innerHTML;
-            }
-            
-            // Check if this node has custom settings
-            const hasCustomSettings = nodeAlertThresholds[nodeName] && Object.keys(nodeAlertThresholds[nodeName]).length > 0;
-            
-            // Store original classes if not already stored
-            if (!header.dataset.originalClasses) {
-                header.dataset.originalClasses = header.className;
-            }
-            
-            // ENSURE the row keeps its background classes
-            if (!header.classList.contains('bg-gray-100')) {
-                header.className = 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs';
-            }
-            
-            // Apply dimming
-            if (hasCustomSettings) {
-                header.style.opacity = '';
-                header.removeAttribute('data-alert-dimmed');
-            } else {
-                header.style.opacity = '0.4';
-                header.setAttribute('data-alert-dimmed', 'true');
-            }
-            
-            // Transform the header to show sliders
-            transformNodeHeaderToAlertMode(header, nodeName);
-        });
-        
-        // Also update node card styling
-        updateAllNodeCardsStyling();
-    }
-    
-    function transformNodeHeaderToAlertMode(headerRow, nodeName) {
-        // Get node data to check if online
-        const nodesData = PulseApp.state?.get('nodesData') || [];
-        
-        // Find node by matching node name or display name
-        let node = nodesData.find(n => n.node === nodeName || n.displayName === nodeName);
-        
-        // If not found, try to find by checking which node the guests belong to
-        if (!node) {
-            const dashboardData = PulseApp.state?.get('dashboardData') || [];
-            const guestWithThisNode = dashboardData.find(g => g.node === nodeName);
-            if (guestWithThisNode && guestWithThisNode.endpoint) {
-                // Find the node that matches this endpoint
-                node = nodesData.find(n => {
-                    // Match by endpoint name or by node name in case they differ
-                    return dashboardData.some(g => g.node === nodeName && g.endpoint === n.node);
-                });
-            }
-        }
-        
-        const isOnline = node && node.uptime > 0;
-        
-        if (!isOnline) {
-            // Don't show sliders for offline nodes
-            return;
-        }
-        
-        // Create new row content with node name and sliders
-        const hostUrl = PulseApp.utils.getHostUrl(nodeName);
-        let nodeNameHtml = nodeName;
-        if (hostUrl) {
-            nodeNameHtml = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${nodeName} web interface">${nodeName}</a>`;
-        }
-        
-        // Create sliders for CPU, Memory, Disk
-        const cpuValue = (nodeAlertThresholds[nodeName] && nodeAlertThresholds[nodeName].cpu) || globalNodeThresholds.cpu || 90;
-        const memoryValue = (nodeAlertThresholds[nodeName] && nodeAlertThresholds[nodeName].memory) || globalNodeThresholds.memory || 95;
-        const diskValue = (nodeAlertThresholds[nodeName] && nodeAlertThresholds[nodeName].disk) || globalNodeThresholds.disk || 95;
-        
-        const cpuSliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
-            `node-alert-${nodeName}-cpu`, 0, 100, 5, cpuValue
-        );
-        const memorySliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
-            `node-alert-${nodeName}-memory`, 0, 100, 5, memoryValue
-        );
-        const diskSliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
-            `node-alert-${nodeName}-disk`, 0, 100, 5, diskValue
-        );
-        
-        // Important: The row has node-header class with bg-gray-100 dark:bg-gray-700/80
-        // We need to ensure this styling is visible by not overriding with cell backgrounds
-        headerRow.innerHTML = `
-            <td class="py-1 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300" colspan="4">
-                ${nodeNameHtml}
-            </td>
-            <td class="py-1 px-2">
-                <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="cpu">
-                    ${cpuSliderHtml}
-                </div>
-            </td>
-            <td class="py-1 px-2">
-                <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="memory">
-                    ${memorySliderHtml}
-                </div>
-            </td>
-            <td class="py-1 px-2">
-                <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="disk">
-                    ${diskSliderHtml}
-                </div>
-            </td>
-            <td colspan="4"></td>
-        `;
-        
-        // Setup event handlers for sliders
-        setupNodeSliderEvents(headerRow, nodeName, 'cpu');
-        setupNodeSliderEvents(headerRow, nodeName, 'memory');
-        setupNodeSliderEvents(headerRow, nodeName, 'disk');
-    }
-    
-    function setupNodeSliderEvents(headerRow, nodeName, metricType) {
-        const slider = headerRow.querySelector(`#node-alert-${nodeName}-${metricType}`);
-        if (!slider) return;
-        
-        slider.addEventListener('input', (event) => {
-            const value = event.target.value;
-            updateNodeThreshold(nodeName, metricType, value, false);
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-        });
-        
-        slider.addEventListener('change', (event) => {
-            const value = event.target.value;
-            updateNodeThreshold(nodeName, metricType, value, true);
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-        });
-        
-        slider.addEventListener('mousedown', (event) => {
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-        });
-        
-        slider.addEventListener('touchstart', (event) => {
-            PulseApp.tooltips.updateSliderTooltip(event.target);
-        }, { passive: true });
-    }
-
-    function restoreNormalNodeTableMode() {
-        // Restore node header rows in the main table
-        const mainTable = document.getElementById('main-table');
-        if (!mainTable) return;
-        
-        const nodeHeaders = mainTable.querySelectorAll('tr.node-header');
-        nodeHeaders.forEach(header => {
-            // Restore original content if stored
-            if (header.dataset.originalContent) {
-                header.innerHTML = header.dataset.originalContent;
-                delete header.dataset.originalContent;
-            }
-            
-            // Restore original classes if stored
-            if (header.dataset.originalClasses) {
-                header.className = header.dataset.originalClasses;
-                delete header.dataset.originalClasses;
-            }
-            
-            // Clear styling
-            header.style.opacity = '';
-            header.removeAttribute('data-alert-dimmed');
-        });
-        
-        // Also clear node card styling
-        const nodeCards = document.querySelectorAll('[data-node-id]');
-        nodeCards.forEach(card => {
-            card.style.opacity = '';
-            card.style.transition = '';
-            card.removeAttribute('data-alert-dimmed');
-        });
-    }
 
     // Public API
     return {
         init,
         isAlertsMode: () => isAlertsMode,
+        isSliderDragging: () => isSliderDragging,
+        setSliderDragging: (dragging) => { isSliderDragging = dragging; },
         getGuestThresholds: () => guestAlertThresholds,
         getGlobalThresholds: () => globalThresholds,
-        getNodeThresholds: () => nodeAlertThresholds,
-        getGlobalNodeThresholds: () => globalNodeThresholds,
         clearAllAlerts: clearAllAlerts,
         updateGuestThreshold: updateGuestThreshold,
-        updateNodeThreshold: updateNodeThreshold,
-        updateGlobalNodeThreshold: updateGlobalNodeThreshold,
-        updateNodeInputValues: updateNodeInputValues,
         updateRowStylingOnly: updateRowStylingOnly,
         getActiveAlertsForGuest: getActiveAlertsForGuest,
         loadSavedConfiguration: loadSavedConfiguration,
         updateNotificationStatus: updateNotificationStatus,
-        checkGuestWouldTriggerAlerts: checkGuestWouldTriggerAlerts,
-        transformNodeTableToAlertsMode: transformNodeTableToAlertsMode
+        checkGuestWouldTriggerAlerts: checkGuestWouldTriggerAlerts
     };
 })();

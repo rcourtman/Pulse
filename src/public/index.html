@@ -71,31 +71,7 @@
       max-width: 100%;
     }
 
-    /* Custom Slider Thumb Styles */
-    input[type=range].custom-slider::-webkit-slider-thumb {
-      -webkit-appearance: none; /* Override default look */
-      appearance: none;
-      margin-top: 0; /* Track height and thumb height match */
-      background-color: #2563eb; /* Blue-600 */
-      height: 12px; /* Larger thumb */
-      width: 12px; /* Larger thumb */
-      border-radius: 50%;
-      cursor: pointer;
-    }
-    .dark input[type=range].custom-slider::-webkit-slider-thumb {
-        background-color: #3b82f6; /* Blue-500 */
-    }
-    input[type=range].custom-slider::-moz-range-thumb {
-      background-color: #2563eb; /* Blue-600 */
-      height: 12px; /* Larger thumb */
-      width: 12px; /* Larger thumb */
-      border-radius: 50%;
-      border: none; /* Reset border */
-      cursor: pointer;
-    }
-    .dark input[type=range].custom-slider::-moz-range-thumb {
-        background-color: #3b82f6; /* Blue-500 */
-    }
+    /* Custom Slider Thumb Styles - moved to src/index.css for better control */
 
     /* PBS namespace dropdown styling */
     select optgroup {
@@ -1138,28 +1114,28 @@
                   <span class="text-xs text-blue-700 dark:text-blue-300">Time Range:</span>
                   <div class="segmented-control inline-flex border border-blue-300 dark:border-blue-600 rounded overflow-hidden">
                     <input type="radio" id="time-5m" name="time-range" value="5" class="hidden peer/5m">
-                    <label for="time-5m" data-time-range="5" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/5m:bg-blue-100 dark:peer-checked/5m:bg-blue-800/50 peer-checked/5m:text-blue-700 dark:peer-checked/5m:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">5m</label>
+                    <label for="time-5m" data-time-range="5" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/5m:bg-gray-100 dark:peer-checked/5m:bg-gray-700 peer-checked/5m:text-blue-600 dark:peer-checked/5m:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">5m</label>
                     
                     <input type="radio" id="time-15m" name="time-range" value="15" class="hidden peer/15m">
-                    <label for="time-15m" data-time-range="15" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/15m:bg-blue-100 dark:peer-checked/15m:bg-blue-800/50 peer-checked/15m:text-blue-700 dark:peer-checked/15m:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">15m</label>
+                    <label for="time-15m" data-time-range="15" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/15m:bg-gray-100 dark:peer-checked/15m:bg-gray-700 peer-checked/15m:text-blue-600 dark:peer-checked/15m:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">15m</label>
                     
                     <input type="radio" id="time-30m" name="time-range" value="30" class="hidden peer/30m">
-                    <label for="time-30m" data-time-range="30" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/30m:bg-blue-100 dark:peer-checked/30m:bg-blue-800/50 peer-checked/30m:text-blue-700 dark:peer-checked/30m:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">30m</label>
+                    <label for="time-30m" data-time-range="30" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/30m:bg-gray-100 dark:peer-checked/30m:bg-gray-700 peer-checked/30m:text-blue-600 dark:peer-checked/30m:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">30m</label>
                     
                     <input type="radio" id="time-1h" name="time-range" value="60" class="hidden peer/1h" checked>
-                    <label for="time-1h" data-time-range="60" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/1h:bg-blue-100 dark:peer-checked/1h:bg-blue-800/50 peer-checked/1h:text-blue-700 dark:peer-checked/1h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">1h</label>
+                    <label for="time-1h" data-time-range="60" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/1h:bg-gray-100 dark:peer-checked/1h:bg-gray-700 peer-checked/1h:text-blue-600 dark:peer-checked/1h:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">1h</label>
                     
                     <input type="radio" id="time-4h" name="time-range" value="240" class="hidden peer/4h">
-                    <label for="time-4h" data-time-range="240" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/4h:bg-blue-100 dark:peer-checked/4h:bg-blue-800/50 peer-checked/4h:text-blue-700 dark:peer-checked/4h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">4h</label>
+                    <label for="time-4h" data-time-range="240" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/4h:bg-gray-100 dark:peer-checked/4h:bg-gray-700 peer-checked/4h:text-blue-600 dark:peer-checked/4h:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">4h</label>
                     
                     <input type="radio" id="time-12h" name="time-range" value="720" class="hidden peer/12h">
-                    <label for="time-12h" data-time-range="720" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/12h:bg-blue-100 dark:peer-checked/12h:bg-blue-800/50 peer-checked/12h:text-blue-700 dark:peer-checked/12h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">12h</label>
+                    <label for="time-12h" data-time-range="720" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/12h:bg-gray-100 dark:peer-checked/12h:bg-gray-700 peer-checked/12h:text-blue-600 dark:peer-checked/12h:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">12h</label>
                     
                     <input type="radio" id="time-24h" name="time-range" value="1440" class="hidden peer/24h">
-                    <label for="time-24h" data-time-range="1440" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/24h:bg-blue-100 dark:peer-checked/24h:bg-blue-800/50 peer-checked/24h:text-blue-700 dark:peer-checked/24h:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">24h</label>
+                    <label for="time-24h" data-time-range="1440" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/24h:bg-gray-100 dark:peer-checked/24h:bg-gray-700 peer-checked/24h:text-blue-600 dark:peer-checked/24h:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">24h</label>
                     
                     <input type="radio" id="time-7d" name="time-range" value="10080" class="hidden peer/7d">
-                    <label for="time-7d" data-time-range="10080" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/7d:bg-blue-100 dark:peer-checked/7d:bg-blue-800/50 peer-checked/7d:text-blue-700 dark:peer-checked/7d:text-blue-300 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">7d</label>
+                    <label for="time-7d" data-time-range="10080" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-blue-300 dark:border-blue-600 peer-checked/7d:bg-gray-100 dark:peer-checked/7d:bg-gray-700 peer-checked/7d:text-blue-600 dark:peer-checked/7d:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">7d</label>
                   </div>
                 </div>
                 <div class="flex items-center gap-3 text-xs text-blue-600 dark:text-blue-400">

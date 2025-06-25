@@ -2413,11 +2413,25 @@ async function startServer() {
     try {
         const loadResult = await metricsPersistence.loadSnapshot(metricsHistory);
         if (loadResult) {
-            console.log(`[MetricsPersistence] Restored ${loadResult.totalPoints} data points from ${loadResult.ageHours.toFixed(1)} hours ago`);
+            // Calculate more detailed age information
+            const ageMinutes = loadResult.ageHours * 60;
+            let ageString;
+            
+            if (ageMinutes < 1) {
+                ageString = `${Math.round(ageMinutes * 60)} seconds ago`;
+            } else if (ageMinutes < 60) {
+                ageString = `${ageMinutes.toFixed(1)} minutes ago`;
+            } else {
+                ageString = `${loadResult.ageHours.toFixed(1)} hours ago`;
+            }
+            
+            console.log(`[MetricsPersistence] Restored ${loadResult.totalPoints} data points from ${ageString}`);
             // Also log to the health endpoint for visibility
             global.metricsRestored = {
                 points: loadResult.totalPoints,
                 ageHours: loadResult.ageHours,
+                ageMinutes: ageMinutes,
+                ageString: ageString,
                 timestamp: new Date().toISOString()
             };
         } else {

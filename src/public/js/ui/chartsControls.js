@@ -74,7 +74,7 @@ PulseApp.ui.chartsControls = (() => {
         // First, remove active styling from all labels
         document.querySelectorAll('label[data-time-range]').forEach(label => {
             // Remove all possible active classes
-            label.classList.remove('bg-blue-100', 'text-blue-700', 'text-blue-300');
+            label.classList.remove('bg-blue-100', 'text-blue-700', 'text-blue-300', 'bg-gray-100', 'text-blue-600', 'bg-gray-700', 'text-blue-400', 'bg-blue-900');
             // Also remove the dark mode blue background (opacity classes are tricky)
             label.className = label.className.replace(/bg-blue-800\/\d+/g, '');
             
@@ -95,14 +95,13 @@ PulseApp.ui.chartsControls = (() => {
             if (label) {
                 label.classList.remove('bg-white', 'bg-gray-800');
                 if (isDarkMode) {
-                    // For dark mode, we'll use a solid color since opacity classes are complex
-                    label.classList.add('bg-blue-900', 'text-blue-300');
+                    // For dark mode, use a more subtle background
+                    label.classList.add('bg-gray-700', 'text-blue-400');
                 } else {
-                    label.classList.add('bg-blue-100', 'text-blue-700');
+                    label.classList.add('bg-gray-100', 'text-blue-600');
                 }
             }
             
-            console.log(`[ChartsControls] Updated time range radio to: ${timeRange}`);
         } else {
             console.warn(`[ChartsControls] Could not find radio button for time range: ${timeRange}`);
         }
