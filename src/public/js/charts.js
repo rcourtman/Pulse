@@ -548,6 +548,11 @@ PulseApp.charts = (() => {
             }
             const data = await response.json();
             
+            // Update time range availability based on oldest data timestamp
+            if (data.stats && data.stats.oldestDataTimestamp) {
+                updateTimeRangeAvailability(data.stats.oldestDataTimestamp);
+            }
+            
             // Calculate time offset between server and browser
             const serverTime = data.timestamp || Date.now();
             const browserTime = Date.now();
@@ -1058,6 +1063,58 @@ PulseApp.charts = (() => {
     }
     
     // Initialize performance optimizations
+    function updateTimeRangeAvailability(oldestDataTimestamp) {
+        if (!oldestDataTimestamp) return;
+        
+        const now = Date.now();
+        const dataAgeMinutes = (now - oldestDataTimestamp) / (60 * 1000);
+        
+        // Time range options in minutes
+        const timeRanges = [
+            { value: '5', minutes: 5, label: '5m' },
+            { value: '15', minutes: 15, label: '15m' },
+            { value: '30', minutes: 30, label: '30m' },
+            { value: '60', minutes: 60, label: '1h' },
+            { value: '240', minutes: 240, label: '4h' },
+            { value: '720', minutes: 720, label: '12h' },
+            { value: '1440', minutes: 1440, label: '24h' },
+            { value: '10080', minutes: 10080, label: '7d' }
+        ];
+        
+        timeRanges.forEach(range => {
+            const radio = document.getElementById(`time-${range.label}`);
+            const label = document.querySelector(`label[for="time-${range.label}"]`);
+            
+            if (radio && label) {
+                const hasData = dataAgeMinutes >= range.minutes;
+                
+                if (!hasData) {
+                    // Disable the radio button and style the label
+                    radio.disabled = true;
+                    label.classList.add('opacity-50', 'cursor-not-allowed');
+                    label.classList.remove('cursor-pointer', 'hover:bg-gray-50', 'dark:hover:bg-gray-700');
+                    label.setAttribute('title', `No data available yet (need ${range.minutes} minutes of data)`);
+                } else {
+                    // Enable the radio button and restore normal styling
+                    radio.disabled = false;
+                    label.classList.remove('opacity-50', 'cursor-not-allowed');
+                    label.classList.add('cursor-pointer', 'hover:bg-gray-50', 'dark:hover:bg-gray-700');
+                    label.removeAttribute('title');
+                }
+            }
+        });
+        
+        // If current selection is disabled, switch to the smallest available range
+        const currentRadio = document.querySelector('input[name="time-range"]:checked');
+        if (currentRadio && currentRadio.disabled) {
+            const firstEnabledRadio = document.querySelector('input[name="time-range"]:not(:disabled)');
+            if (firstEnabledRadio) {
+                firstEnabledRadio.checked = true;
+                firstEnabledRadio.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
+    }
+
     initVisibilityObserver();
     
     return {
@@ -1073,6 +1130,7 @@ PulseApp.charts = (() => {
         adaptiveSample,
         calculateImportanceScores,
         createOrUpdateChart,
+        updateTimeRangeAvailability,
         // Expose for testing
         cleanupProcessedCache,
         observeChartVisibility

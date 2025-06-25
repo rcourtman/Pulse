@@ -1,0 +1,77 @@
+alias: Announce Pulse VM Alerts
+description: Announces VM alerts from Pulse monitoring with LED color changes
+triggers:
+  - trigger: webhook
+    allowed_methods:
+      - POST
+      - PUT
+    local_only: true
+    webhook_id: "-pulse-vm-alerts-voice-announce"
+conditions:
+  # Only announce actual alerts, not test alerts
+  - condition: template
+    value_template: "{{ trigger.json.alert.rule.name != 'Test Alert' }}"
+actions:
+  # Turn LED red for alert
+  - target:
+      entity_id: light.home_assistant_voice_090a60_led_ring
+    data:
+      brightness: 255
+      rgb_color:
+        - 255
+        - 0
+        - 0
+    action: light.turn_on
+  
+  # Announce the alert
+  - target:
+      entity_id: assist_satellite.home_assistant_voice_090a60_assist_satellite
+    data:
+      message: >
+        {% set alert = trigger.json.alert %}
+        {% set vm_name = alert.guest.name %}
+        {% set metric = alert.rule.metric | upper %}
+        {% set value = alert.value %}
+        {% set threshold = alert.threshold %}
+        
+        {% if metric in ['CPU', 'MEMORY', 'DISK'] %}
+          Alert: {{ vm_name }} has high {{ metric }} usage at {{ value }} percent, exceeding {{ threshold }} percent threshold
+        {% elif metric == 'DOWN' %}
+          Alert: {{ vm_name }} is currently down and not responding
+        {% else %}
+          Alert: {{ vm_name }} triggered {{ alert.rule.name }}
+        {% endif %}
+    action: assist_satellite.announce
+  
+  # Wait a moment
+  - delay:
+      seconds: 4
+  
+  # Turn LED orange for warning state
+  - target:
+      entity_id: light.home_assistant_voice_090a60_led_ring
+    data:
+      brightness: 150
+      rgb_color:
+        - 255
+        - 165
+        - 0
+    action: light.turn_on
+  
+  # Wait before returning to normal
+  - delay:
+      seconds: 10
+  
+  # Return LED to normal blue
+  - target:
+      entity_id: light.home_assistant_voice_090a60_led_ring
+    data:
+      brightness: 100
+      rgb_color:
+        - 0
+        - 0
+        - 255
+    action: light.turn_on
+
+mode: single
+max_exceeded: silent
