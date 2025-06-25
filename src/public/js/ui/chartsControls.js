@@ -76,6 +76,12 @@ PulseApp.ui.chartsControls = (() => {
             
             if (thresholdControls) thresholdControls.classList.add('hidden');
             if (alertControls) alertControls.classList.add('hidden');
+            
+            // Update time range availability when showing charts controls
+            if (PulseApp.charts && PulseApp.charts.fetchChartData) {
+                // Fetch fresh data to get the stats including oldest timestamp
+                PulseApp.charts.fetchChartData();
+            }
         }
     }
 

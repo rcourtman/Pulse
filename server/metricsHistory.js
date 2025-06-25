@@ -495,8 +495,41 @@ class MetricsHistory {
             nodeDataPoints,
             maxDataPointsPerEntity: MAX_DATA_POINTS,
             retentionDays: HISTORY_RETENTION_MS / (24 * 60 * 60 * 1000),
-            estimatedMemoryUsage: this.estimateMemoryUsage()
+            estimatedMemoryUsage: this.estimateMemoryUsage(),
+            oldestDataTimestamp: this.getOldestDataTimestamp()
         };
+    }
+
+    getOldestDataTimestamp() {
+        let oldestTimestamp = null;
+        
+        // Check guest metrics
+        for (const [guestId, guestHistory] of this.guestMetrics) {
+            const dataPoints = guestHistory.dataPoints.toArray();
+            if (dataPoints.length > 0) {
+                const firstPoint = dataPoints[0];
+                if (firstPoint && firstPoint.timestamp) {
+                    if (!oldestTimestamp || firstPoint.timestamp < oldestTimestamp) {
+                        oldestTimestamp = firstPoint.timestamp;
+                    }
+                }
+            }
+        }
+        
+        // Check node metrics
+        for (const [nodeId, nodeHistory] of this.nodeMetrics) {
+            const dataPoints = nodeHistory.dataPoints.toArray();
+            if (dataPoints.length > 0) {
+                const firstPoint = dataPoints[0];
+                if (firstPoint && firstPoint.timestamp) {
+                    if (!oldestTimestamp || firstPoint.timestamp < oldestTimestamp) {
+                        oldestTimestamp = firstPoint.timestamp;
+                    }
+                }
+            }
+        }
+        
+        return oldestTimestamp;
     }
 
     estimateMemoryUsage() {
