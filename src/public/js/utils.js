@@ -798,6 +798,244 @@ PulseApp.utils = (() => {
         });
     }
     
+    // Storage helper for localStorage/sessionStorage
+    const StorageHelper = {
+        // localStorage methods
+        get(key, defaultValue = null) {
+            try {
+                const item = localStorage.getItem(key);
+                return item ? JSON.parse(item) : defaultValue;
+            } catch (e) {
+                console.error(`Error reading ${key} from localStorage:`, e);
+                return defaultValue;
+            }
+        },
+        
+        set(key, value) {
+            try {
+                localStorage.setItem(key, JSON.stringify(value));
+                return true;
+            } catch (e) {
+                console.error(`Error writing ${key} to localStorage:`, e);
+                return false;
+            }
+        },
+        
+        remove(key) {
+            try {
+                localStorage.removeItem(key);
+                return true;
+            } catch (e) {
+                console.error(`Error removing ${key} from localStorage:`, e);
+                return false;
+            }
+        },
+        
+        clear() {
+            try {
+                localStorage.clear();
+                return true;
+            } catch (e) {
+                console.error('Error clearing localStorage:', e);
+                return false;
+            }
+        },
+        
+        // sessionStorage methods
+        session: {
+            get(key, defaultValue = null) {
+                try {
+                    const item = sessionStorage.getItem(key);
+                    return item ? JSON.parse(item) : defaultValue;
+                } catch (e) {
+                    console.error(`Error reading ${key} from sessionStorage:`, e);
+                    return defaultValue;
+                }
+            },
+            
+            set(key, value) {
+                try {
+                    sessionStorage.setItem(key, JSON.stringify(value));
+                    return true;
+                } catch (e) {
+                    console.error(`Error writing ${key} to sessionStorage:`, e);
+                    return false;
+                }
+            },
+            
+            remove(key) {
+                try {
+                    sessionStorage.removeItem(key);
+                    return true;
+                } catch (e) {
+                    console.error(`Error removing ${key} from sessionStorage:`, e);
+                    return false;
+                }
+            },
+            
+            clear() {
+                try {
+                    sessionStorage.clear();
+                    return true;
+                } catch (e) {
+                    console.error('Error clearing sessionStorage:', e);
+                    return false;
+                }
+            }
+        }
+    };
+    
+    // Timer Manager for setTimeout/setInterval
+    class TimerManager {
+        constructor() {
+            this.timers = new Map();
+        }
+        
+        setTimeout(key, callback, delay) {
+            this.clear(key);
+            const id = setTimeout(() => {
+                this.timers.delete(key);
+                callback();
+            }, delay);
+            this.timers.set(key, { type: 'timeout', id });
+            return key;
+        }
+        
+        setInterval(key, callback, interval) {
+            this.clear(key);
+            const id = setInterval(callback, interval);
+            this.timers.set(key, { type: 'interval', id });
+            return key;
+        }
+        
+        clear(key) {
+            const timer = this.timers.get(key);
+            if (timer) {
+                if (timer.type === 'timeout') {
+                    clearTimeout(timer.id);
+                } else {
+                    clearInterval(timer.id);
+                }
+                this.timers.delete(key);
+            }
+        }
+        
+        clearAll() {
+            this.timers.forEach((timer, key) => this.clear(key));
+        }
+        
+        has(key) {
+            return this.timers.has(key);
+        }
+    }
+    
+    // DOM class manipulation utilities
+    const DOMClasses = {
+        add(element, ...classes) {
+            if (!element || !element.classList) return false;
+            element.classList.add(...classes);
+            return true;
+        },
+        
+        remove(element, ...classes) {
+            if (!element || !element.classList) return false;
+            element.classList.remove(...classes);
+            return true;
+        },
+        
+        toggle(element, className, force) {
+            if (!element || !element.classList) return false;
+            return element.classList.toggle(className, force);
+        },
+        
+        replace(element, oldClass, newClass) {
+            if (!element || !element.classList) return false;
+            element.classList.remove(oldClass);
+            element.classList.add(newClass);
+            return true;
+        },
+        
+        has(element, className) {
+            if (!element || !element.classList) return false;
+            return element.classList.contains(className);
+        },
+        
+        setConditional(element, className, condition) {
+            if (!element || !element.classList) return false;
+            if (condition) {
+                element.classList.add(className);
+            } else {
+                element.classList.remove(className);
+            }
+            return true;
+        },
+        
+        // Add classes to multiple elements
+        addToAll(selector, ...classes) {
+            const elements = typeof selector === 'string' 
+                ? document.querySelectorAll(selector) 
+                : selector;
+            elements.forEach(el => this.add(el, ...classes));
+        },
+        
+        // Remove classes from multiple elements
+        removeFromAll(selector, ...classes) {
+            const elements = typeof selector === 'string' 
+                ? document.querySelectorAll(selector) 
+                : selector;
+            elements.forEach(el => this.remove(el, ...classes));
+        }
+    };
+    
+    // Event handler utilities
+    const Events = {
+        on(selector, event, handler, options) {
+            const element = typeof selector === 'string' 
+                ? document.querySelector(selector) 
+                : selector;
+            if (element) {
+                element.addEventListener(event, handler, options);
+                // Return cleanup function
+                return () => element.removeEventListener(event, handler, options);
+            }
+            return () => {}; // no-op cleanup function
+        },
+        
+        onAll(selector, event, handler, options) {
+            const elements = typeof selector === 'string'
+                ? document.querySelectorAll(selector)
+                : selector;
+            const cleanups = [];
+            elements.forEach(el => {
+                el.addEventListener(event, handler, options);
+                cleanups.push(() => el.removeEventListener(event, handler, options));
+            });
+            // Return cleanup function that removes all listeners
+            return () => cleanups.forEach(cleanup => cleanup());
+        },
+        
+        once(selector, event, handler, options) {
+            return this.on(selector, event, handler, { ...options, once: true });
+        },
+        
+        delegate(parentSelector, childSelector, event, handler) {
+            return this.on(parentSelector, event, (e) => {
+                const target = e.target.closest(childSelector);
+                if (target && e.currentTarget.contains(target)) {
+                    handler.call(target, e);
+                }
+            });
+        },
+        
+        ready(handler) {
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', handler, { once: true });
+            } else {
+                handler();
+            }
+        }
+    };
+    
     // Simple logger utility
     const createLogger = (module) => ({
         log: (message, ...args) => console.log(`[${module}] ${message}`, ...args),
@@ -936,6 +1174,10 @@ PulseApp.utils = (() => {
         createAlertDropdownHtml,
         // Utilities
         DOMCache,
+        DOMClasses,
+        Events,
+        StorageHelper,
+        TimerManager,
         createLogger,
         handleApiError,
         setupDynamicListeners,
