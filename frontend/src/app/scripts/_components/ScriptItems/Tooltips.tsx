@@ -34,14 +34,14 @@ export default function Tooltips({ item }: { item: Script }) {
       {item.privileged && (
         <TooltipBadge variant="warning" label="Privileged" content="This script will be run in a privileged LXC" />
       )}
-      {item.updateable && (
+      {(item.updateable || item.type !== "pve") && (
         <TooltipBadge
           variant="success"
           label="Updateable"
           content={`To Update ${item.name}, run the command below (or type update) in the LXC Console.`}
         />
       )}
-      {!item.updateable && <TooltipBadge variant="failure" label="Not Updateable" />}
+      {!item.updateable && item.type !== "pve" && <TooltipBadge variant="failure" label="Not Updateable" />}
     </div>
   );
 }
