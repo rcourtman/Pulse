@@ -212,10 +212,10 @@ PulseApp.ui.nodes = (() => {
         // Apply dimming if no custom settings in alert mode
         const shouldDim = isAlertsMode && !hasCustomSettings;
 
-        // Create progress bars - sliders are now shown in the table
+        // Create progress bars or alert sliders based on mode
         let cpuBarHTML, memoryBarHTML, diskBarHTML;
         
-        if (false) { // Disabled - sliders now shown in table
+        if (isAlertsMode && isOnline) {
             // In alert mode, show sliders instead of progress bars
             cpuBarHTML = _createNodeAlertSliderHtml(nodeId, 'cpu', { min: 0, max: 100, step: 5 });
             memoryBarHTML = _createNodeAlertSliderHtml(nodeId, 'memory', { min: 0, max: 100, step: 5 });

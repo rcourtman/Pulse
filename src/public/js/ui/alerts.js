@@ -2044,127 +2044,21 @@ PulseApp.ui.alerts = (() => {
     }
 
     function transformNodeTableToAlertsMode() {
-        // Get the nodes table
-        const nodesTable = document.getElementById('nodes-table');
-        if (!nodesTable) return;
-        
-        const nodeRows = nodesTable.querySelectorAll('tbody tr[data-node-id]');
-        
-        // First pass: Apply dimming based on custom settings
-        nodeRows.forEach(row => {
-            const nodeId = row.getAttribute('data-node-id');
-            const nodeThresholds = nodeAlertThresholds[nodeId] || {};
-            const hasIndividualSettings = Object.keys(nodeThresholds).length > 0;
-            
-            // Apply dimming
-            if (hasIndividualSettings) {
-                row.style.opacity = '';
-                row.style.transition = '';
-                row.removeAttribute('data-alert-dimmed');
-            } else {
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-            }
-        });
-        
-        // Second pass: Transform cells
-        nodeRows.forEach(row => {
-            const nodeId = row.getAttribute('data-node-id');
-            
-            // Transform metric cells (CPU at index 2, Memory at 3, Disk at 4)
-            transformNodeMetricCell(row, 'cpu', nodeId, { type: 'slider', min: 0, max: 100, step: 5 }, 2);
-            transformNodeMetricCell(row, 'memory', nodeId, { type: 'slider', min: 0, max: 100, step: 5 }, 3);
-            transformNodeMetricCell(row, 'disk', nodeId, { type: 'slider', min: 0, max: 100, step: 5 }, 4);
-        });
-        
-        // Update node card styling
+        // For the current UI, nodes are displayed as cards, not in a table
+        // The transformation happens in updateNodeSummaryCards when alerts mode is active
+        // Just update the styling here
         updateAllNodeCardsStyling();
     }
 
-    function transformNodeMetricCell(row, metricType, nodeId, config, columnIndex) {
-        const cells = row.querySelectorAll('td');
-        const cell = cells[columnIndex];
-        if (!cell) return;
-        
-        // Skip offline nodes - they should show N/A or status instead of sliders
-        const statusCell = cells[0];
-        if (statusCell && statusCell.textContent.toLowerCase().includes('offline')) {
-            return;
-        }
-        
-        // Skip if cell already has alert input
-        if (cell.querySelector('.node-alert-slider')) {
-            return;
-        }
-        
-        // Store original content
-        if (!cell.dataset.originalContent) {
-            cell.dataset.originalContent = cell.innerHTML;
-        }
-        
-        // Get current threshold value for this node/metric
-        const currentValue = (nodeAlertThresholds[nodeId] && nodeAlertThresholds[nodeId][metricType]) 
-            || globalNodeThresholds[metricType] || '';
-        
-        if (config.type === 'slider') {
-            // Create node alert slider
-            const sliderId = `node-alert-slider-${nodeId}-${metricType}`;
-            const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
-                sliderId, config.min, config.max, config.step, currentValue || config.min
-            );
-            
-            cell.innerHTML = `
-                <div class="node-alert-slider" data-node-id="${nodeId}" data-metric="${metricType}">
-                    ${sliderHtml}
-                </div>
-            `;
-            
-            // Setup event handlers
-            const slider = cell.querySelector('input[type="range"]');
-            if (slider) {
-                // Update during drag
-                slider.addEventListener('input', (event) => {
-                    const value = event.target.value;
-                    updateNodeThreshold(nodeId, metricType, value, false);
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                });
-                
-                // Save on release
-                slider.addEventListener('change', (event) => {
-                    const value = event.target.value;
-                    updateNodeThreshold(nodeId, metricType, value, true);
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                });
-                
-                slider.addEventListener('mousedown', (event) => {
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                });
-                
-                slider.addEventListener('touchstart', (event) => {
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                }, { passive: true });
-            }
-        }
-    }
-
     function restoreNormalNodeTableMode() {
-        const nodesTable = document.getElementById('nodes-table');
-        if (!nodesTable) return;
-        
-        // Restore original cell content
-        const modifiedCells = nodesTable.querySelectorAll('[data-original-content]');
-        modifiedCells.forEach(cell => {
-            cell.innerHTML = cell.dataset.originalContent;
-            delete cell.dataset.originalContent;
-        });
-        
-        // Clear row styling
-        const nodeRows = nodesTable.querySelectorAll('tbody tr[data-node-id]');
-        nodeRows.forEach(row => {
-            row.style.opacity = '';
-            row.style.transition = '';
-            row.removeAttribute('data-alert-dimmed');
+        // For the current UI, nodes are displayed as cards
+        // The restoration happens in updateNodeSummaryCards when alerts mode is inactive
+        // Just clear the styling here
+        const nodeCards = document.querySelectorAll('[data-node-id]');
+        nodeCards.forEach(card => {
+            card.style.opacity = '';
+            card.style.transition = '';
+            card.removeAttribute('data-alert-dimmed');
         });
     }
 
