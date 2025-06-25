@@ -1302,6 +1302,14 @@ PulseApp.ui.dashboard = (() => {
         }
 
         
+        // Transform node headers to alerts mode if needed
+        if (PulseApp.ui.alerts && PulseApp.ui.alerts.isAlertsMode() && groupByNode) {
+            // Use requestAnimationFrame to ensure node headers are rendered
+            requestAnimationFrame(() => {
+                PulseApp.ui.alerts.transformNodeTableToAlertsMode();
+            });
+        }
+        
         // Update charts immediately after table is rendered, but only if in charts mode
         const mainContainer = document.getElementById('main');
         if (PulseApp.charts && visibleCount > 0 && mainContainer && mainContainer.classList.contains('charts-mode')) {
