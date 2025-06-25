@@ -56,21 +56,32 @@ PulseApp.utils = (() => {
             </div>
         `;
     }
+    
+    // Extract timestamp from backup object (handles multiple formats)
+    function getBackupTimestamp(backup) {
+        return backup.timestamp || backup['backup-time'] || backup.ctime || backup.snaptime;
+    }
+    
+    // Convert date to ISO date string (YYYY-MM-DD)
+    function toDateKey(date) {
+        if (!date) return null;
+        const d = date instanceof Date ? date : new Date(date * 1000);
+        return d.toISOString().split('T')[0];
+    }
 
-    function formatBytes(bytes, decimals = 1, k = 1024) {
-        if (bytes === 0 || bytes === null || bytes === undefined) return '0 B';
+    function formatBytes(bytes, decimals = 1, k = 1024, compact = false) {
+        if (bytes === 0 || bytes === null || bytes === undefined) return compact ? '0B' : '0 B';
         const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
+        const sizes = compact 
+            ? ['B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y']
+            : ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB', 'ZiB', 'YiB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        const value = parseFloat((bytes / Math.pow(k, i)).toFixed(dm));
+        return compact ? `${value}${sizes[i]}` : `${value} ${sizes[i]}`;
     }
 
     function formatBytesCompact(bytes, decimals = 1, k = 1024) {
-        if (bytes === 0 || bytes === null || bytes === undefined) return '0B';
-        const dm = decimals < 0 ? 0 : decimals;
-        const sizes = ['B', 'K', 'M', 'G', 'T', 'P', 'E', 'Z', 'Y'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + sizes[i];
+        return formatBytes(bytes, decimals, k, true);
     }
 
     function formatSpeed(bytesPerSecond, decimals = 1) {
@@ -905,6 +916,8 @@ PulseApp.utils = (() => {
         sanitizeForId: (str) => str.replace(/[^a-zA-Z0-9-]/g, '-'),
         getUsageColor,
         createProgressTextBarHTML,
+        getBackupTimestamp,
+        toDateKey,
         formatBytes,
         formatBytesCompact,
         formatSpeed,
