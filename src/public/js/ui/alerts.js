@@ -2044,16 +2044,151 @@ PulseApp.ui.alerts = (() => {
     }
 
     function transformNodeTableToAlertsMode() {
-        // For the current UI, nodes are displayed as cards, not in a table
-        // The transformation happens in updateNodeSummaryCards when alerts mode is active
-        // Just update the styling here
+        // Transform node header rows in the main table when Group by Node is enabled
+        const mainTable = document.getElementById('main-table');
+        if (!mainTable) return;
+        
+        const nodeHeaders = mainTable.querySelectorAll('tr.node-header');
+        nodeHeaders.forEach(header => {
+            // Extract node name from the header
+            const nodeNameElement = header.querySelector('td');
+            if (!nodeNameElement) return;
+            
+            // Get the node name (handling both plain text and links)
+            const linkElement = nodeNameElement.querySelector('a');
+            const nodeName = linkElement ? linkElement.textContent : nodeNameElement.textContent;
+            if (!nodeName) return;
+            
+            // Store original content if not already stored
+            if (!header.dataset.originalContent) {
+                header.dataset.originalContent = header.innerHTML;
+            }
+            
+            // Check if this node has custom settings
+            const hasCustomSettings = nodeAlertThresholds[nodeName] && Object.keys(nodeAlertThresholds[nodeName]).length > 0;
+            
+            // Apply dimming
+            if (hasCustomSettings) {
+                header.style.opacity = '';
+                header.removeAttribute('data-alert-dimmed');
+            } else {
+                header.style.opacity = '0.4';
+                header.setAttribute('data-alert-dimmed', 'true');
+            }
+            
+            // Transform the header to show sliders
+            transformNodeHeaderToAlertMode(header, nodeName);
+        });
+        
+        // Also update node card styling
         updateAllNodeCardsStyling();
+    }
+    
+    function transformNodeHeaderToAlertMode(headerRow, nodeName) {
+        // Get node data to check if online
+        const nodesData = PulseApp.state?.get('nodesData') || [];
+        const node = nodesData.find(n => n.node === nodeName);
+        const isOnline = node && node.uptime > 0;
+        
+        if (!isOnline) {
+            // Don't show sliders for offline nodes
+            return;
+        }
+        
+        // Create new row content with node name and sliders
+        const hostUrl = PulseApp.utils.getHostUrl(nodeName);
+        let nodeNameHtml = nodeName;
+        if (hostUrl) {
+            nodeNameHtml = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150 cursor-pointer" title="Open ${nodeName} web interface">${nodeName}</a>`;
+        }
+        
+        // Create sliders for CPU, Memory, Disk
+        const cpuValue = (nodeAlertThresholds[nodeName] && nodeAlertThresholds[nodeName].cpu) || globalNodeThresholds.cpu || 90;
+        const memoryValue = (nodeAlertThresholds[nodeName] && nodeAlertThresholds[nodeName].memory) || globalNodeThresholds.memory || 95;
+        const diskValue = (nodeAlertThresholds[nodeName] && nodeAlertThresholds[nodeName].disk) || globalNodeThresholds.disk || 95;
+        
+        const cpuSliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
+            `node-alert-${nodeName}-cpu`, 0, 100, 5, cpuValue
+        );
+        const memorySliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
+            `node-alert-${nodeName}-memory`, 0, 100, 5, memoryValue
+        );
+        const diskSliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
+            `node-alert-${nodeName}-disk`, 0, 100, 5, diskValue
+        );
+        
+        headerRow.innerHTML = `
+            <td class="py-1 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300" colspan="4">
+                ${nodeNameHtml}
+            </td>
+            <td class="py-1 px-2">
+                <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="cpu">
+                    ${cpuSliderHtml}
+                </div>
+            </td>
+            <td class="py-1 px-2">
+                <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="memory">
+                    ${memorySliderHtml}
+                </div>
+            </td>
+            <td class="py-1 px-2">
+                <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="disk">
+                    ${diskSliderHtml}
+                </div>
+            </td>
+            <td colspan="4"></td>
+        `;
+        
+        // Setup event handlers for sliders
+        setupNodeSliderEvents(headerRow, nodeName, 'cpu');
+        setupNodeSliderEvents(headerRow, nodeName, 'memory');
+        setupNodeSliderEvents(headerRow, nodeName, 'disk');
+    }
+    
+    function setupNodeSliderEvents(headerRow, nodeName, metricType) {
+        const slider = headerRow.querySelector(`#node-alert-${nodeName}-${metricType}`);
+        if (!slider) return;
+        
+        slider.addEventListener('input', (event) => {
+            const value = event.target.value;
+            updateNodeThreshold(nodeName, metricType, value, false);
+            PulseApp.tooltips.updateSliderTooltip(event.target);
+        });
+        
+        slider.addEventListener('change', (event) => {
+            const value = event.target.value;
+            updateNodeThreshold(nodeName, metricType, value, true);
+            PulseApp.tooltips.updateSliderTooltip(event.target);
+        });
+        
+        slider.addEventListener('mousedown', (event) => {
+            PulseApp.tooltips.updateSliderTooltip(event.target);
+        });
+        
+        slider.addEventListener('touchstart', (event) => {
+            PulseApp.tooltips.updateSliderTooltip(event.target);
+        }, { passive: true });
     }
 
     function restoreNormalNodeTableMode() {
-        // For the current UI, nodes are displayed as cards
-        // The restoration happens in updateNodeSummaryCards when alerts mode is inactive
-        // Just clear the styling here
+        // Restore node header rows in the main table
+        const mainTable = document.getElementById('main-table');
+        if (!mainTable) return;
+        
+        const nodeHeaders = mainTable.querySelectorAll('tr.node-header');
+        nodeHeaders.forEach(header => {
+            // Restore original content if stored
+            if (header.dataset.originalContent) {
+                header.innerHTML = header.dataset.originalContent;
+                delete header.dataset.originalContent;
+            }
+            
+            // Clear styling
+            header.style.opacity = '';
+            header.removeAttribute('data-alert-dimmed');
+        });
+        
+        // Also clear node card styling
         const nodeCards = document.querySelectorAll('[data-node-id]');
         nodeCards.forEach(card => {
             card.style.opacity = '';
