@@ -2077,6 +2077,11 @@ PulseApp.ui.alerts = (() => {
                 header.dataset.originalClasses = header.className;
             }
             
+            // ENSURE the row keeps its background classes
+            if (!header.classList.contains('bg-gray-100')) {
+                header.className = 'node-header bg-gray-100 dark:bg-gray-700/80 font-semibold text-gray-700 dark:text-gray-300 text-xs';
+            }
+            
             // Apply dimming
             if (hasCustomSettings) {
                 header.style.opacity = '';
