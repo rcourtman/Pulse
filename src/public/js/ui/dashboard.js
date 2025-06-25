@@ -28,72 +28,11 @@ PulseApp.ui.dashboard = (() => {
 
     // Alert helper functions (defined early to be available everywhere)
     function _createAlertSliderHtml(guestId, metricType, config) {
-        // Get current threshold value for this guest/metric from alerts system
-        const guestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
-        const globalThresholds = PulseApp.ui.alerts?.getGlobalThresholds?.() || {};
-        
-        // Use individual guest threshold if set, otherwise use global threshold, otherwise use config min
-        let currentValue = config.min;
-        let isUsingGlobal = false;
-        
-        if (guestThresholds[guestId] && guestThresholds[guestId][metricType] !== undefined) {
-            // Guest has individual threshold set
-            currentValue = guestThresholds[guestId][metricType];
-        } else if (globalThresholds[metricType] !== undefined && globalThresholds[metricType] !== '') {
-            // Use global threshold as default
-            currentValue = globalThresholds[metricType];
-            isUsingGlobal = true;
-        }
-        
-        // Use the threshold system's helper function to create identical HTML
-        const sliderId = `alert-slider-${guestId}-${metricType}`;
-        const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
-            sliderId, 
-            config.min, 
-            config.max, 
-            config.step, 
-            currentValue
-        );
-        
-        // Add alert-specific data attributes to the container and visual indicator for global values
-        const globalIndicator = isUsingGlobal ? ' data-using-global="true"' : '';
-        const containerClass = isUsingGlobal ? 'alert-threshold-input using-global' : 'alert-threshold-input';
-        
-        return `
-            <div class="alert-threshold-input flex items-center" data-guest-id="${guestId}" data-metric="${metricType}">
-                ${sliderHtml}
-            </div>
-        `;
+        return PulseApp.utils.createAlertSliderHtml(guestId, 'guest', metricType, config);
     }
 
     function _createAlertDropdownHtml(guestId, metricType, options) {
-        // Get current threshold value for this guest/metric from alerts system
-        const guestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
-        const globalThresholds = PulseApp.ui.alerts?.getGlobalThresholds?.() || {};
-        
-        // Use individual guest threshold if set, otherwise use global threshold, otherwise use empty
-        let currentValue = '';
-        let isUsingGlobal = false;
-        
-        if (guestThresholds[guestId] && guestThresholds[guestId][metricType] !== undefined) {
-            // Guest has individual threshold set
-            currentValue = guestThresholds[guestId][metricType];
-        } else if (globalThresholds[metricType] !== undefined) {
-            // Use global threshold as default
-            currentValue = globalThresholds[metricType];
-            isUsingGlobal = true;
-        }
-        
-        // Use the threshold system's helper function to create identical HTML
-        const selectId = `alert-select-${guestId}-${metricType}`;
-        const selectHtml = PulseApp.ui.thresholds.createThresholdSelectHtml(
-            selectId, 
-            options, 
-            currentValue
-        );
-        
-        // Return just the select HTML without wrapper to match threshold styling
-        return selectHtml;
+        return PulseApp.utils.createAlertDropdownHtml(guestId, 'guest', metricType, options);
     }
 
     // Helper function to setup event listeners for alert sliders and dropdowns
