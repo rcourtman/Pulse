@@ -93,6 +93,10 @@ PulseApp.tooltips = (() => {
         const offsetY = 15;
         tooltipElement.style.left = `${event.pageX + offsetX}px`;
         tooltipElement.style.top = `${event.pageY + offsetY}px`;
+        // Ensure tooltip is positioned correctly
+        tooltipElement.style.position = 'absolute';
+        tooltipElement.style.transform = '';
+        tooltipElement.style.zIndex = '50';
     }
 
     function updateSliderTooltip(sliderElement) {
@@ -209,15 +213,20 @@ PulseApp.tooltips = (() => {
         tooltipElement.classList.remove('hidden', 'opacity-0');
         tooltipElement.classList.add('opacity-100');
         
-        // Force display to ensure it's visible
-        tooltipElement.style.display = 'block';
+        // Force display to ensure it's visible and remove any inline display style
+        tooltipElement.style.display = '';
+        tooltipElement.style.visibility = 'visible';
+        tooltipElement.style.opacity = '1';
     }
 
     function hideTooltip() {
         if (tooltipElement) {
             tooltipElement.classList.add('hidden', 'opacity-0');
             tooltipElement.classList.remove('opacity-100');
-            tooltipElement.style.display = 'none';
+            // Remove inline styles to let CSS classes handle visibility
+            tooltipElement.style.display = '';
+            tooltipElement.style.visibility = '';
+            tooltipElement.style.opacity = '';
             tooltipElement.removeAttribute('data-programmatic');
         }
     }
