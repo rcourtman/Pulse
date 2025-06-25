@@ -215,7 +215,7 @@ PulseApp.ui.nodes = (() => {
         // Create progress bars or alert sliders based on mode
         let cpuBarHTML, memoryBarHTML, diskBarHTML;
         
-        if (isAlertsMode && isOnline) {
+        if (false) { // Sliders are now shown in the node header rows in the table
             // In alert mode, show sliders instead of progress bars
             cpuBarHTML = _createNodeAlertSliderHtml(nodeId, 'cpu', { min: 0, max: 100, step: 5 });
             memoryBarHTML = _createNodeAlertSliderHtml(nodeId, 'memory', { min: 0, max: 100, step: 5 });
