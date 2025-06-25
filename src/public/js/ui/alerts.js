@@ -2046,13 +2046,9 @@ PulseApp.ui.alerts = (() => {
     function transformNodeTableToAlertsMode() {
         // Transform node header rows in the main table when Group by Node is enabled
         const mainTable = document.getElementById('main-table');
-        if (!mainTable) {
-            console.log('[DEBUG] transformNodeTableToAlertsMode: main-table not found');
-            return;
-        }
+        if (!mainTable) return;
         
         const nodeHeaders = mainTable.querySelectorAll('tr.node-header');
-        console.log('[DEBUG] Found node headers:', nodeHeaders.length);
         nodeHeaders.forEach(header => {
             // Extract node name from the header
             const nodeNameElement = header.querySelector('td');
@@ -2061,13 +2057,11 @@ PulseApp.ui.alerts = (() => {
             // Get the node name (handling both plain text and links)
             const linkElement = nodeNameElement.querySelector('a');
             let nodeName = linkElement ? linkElement.textContent : nodeNameElement.textContent;
-            console.log('[DEBUG] Processing node header for:', nodeName);
             if (!nodeName) return;
             
             // Extract just the node name if it contains cluster info (e.g., "homelab - delly" -> "delly")
             if (nodeName.includes(' - ')) {
                 nodeName = nodeName.split(' - ').pop().trim();
-                console.log('[DEBUG] Extracted node name:', nodeName);
             }
             
             // Store original content if not already stored
@@ -2077,6 +2071,11 @@ PulseApp.ui.alerts = (() => {
             
             // Check if this node has custom settings
             const hasCustomSettings = nodeAlertThresholds[nodeName] && Object.keys(nodeAlertThresholds[nodeName]).length > 0;
+            
+            // Store original classes if not already stored
+            if (!header.dataset.originalClasses) {
+                header.dataset.originalClasses = header.className;
+            }
             
             // Apply dimming
             if (hasCustomSettings) {
@@ -2098,10 +2097,7 @@ PulseApp.ui.alerts = (() => {
     function transformNodeHeaderToAlertMode(headerRow, nodeName) {
         // Get node data to check if online
         const nodesData = PulseApp.state?.get('nodesData') || [];
-        console.log('[DEBUG] Available nodes:', nodesData.map(n => n.node));
-        console.log('[DEBUG] Looking for node:', nodeName);
         const node = nodesData.find(n => n.node === nodeName);
-        console.log('[DEBUG] Found node:', node ? 'yes' : 'no', 'isOnline:', node && node.uptime > 0);
         const isOnline = node && node.uptime > 0;
         
         if (!isOnline) {
@@ -2131,27 +2127,27 @@ PulseApp.ui.alerts = (() => {
             `node-alert-${nodeName}-disk`, 0, 100, 5, diskValue
         );
         
-        // Preserve the node header background styling by adding cells with proper classes
+        // Keep the row classes intact - the row already has the background styling
         headerRow.innerHTML = `
-            <td class="py-1 px-2 text-left font-medium text-xs sm:text-sm text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700/80" colspan="4">
+            <td class="py-1 px-2 text-left font-medium text-xs sm:text-sm" colspan="4">
                 ${nodeNameHtml}
             </td>
-            <td class="py-1 px-2 bg-gray-100 dark:bg-gray-700/80">
+            <td class="py-1 px-2">
                 <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="cpu">
                     ${cpuSliderHtml}
                 </div>
             </td>
-            <td class="py-1 px-2 bg-gray-100 dark:bg-gray-700/80">
+            <td class="py-1 px-2">
                 <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="memory">
                     ${memorySliderHtml}
                 </div>
             </td>
-            <td class="py-1 px-2 bg-gray-100 dark:bg-gray-700/80">
+            <td class="py-1 px-2">
                 <div class="node-alert-slider" data-node-id="${nodeName}" data-metric="disk">
                     ${diskSliderHtml}
                 </div>
             </td>
-            <td class="bg-gray-100 dark:bg-gray-700/80" colspan="4"></td>
+            <td colspan="4"></td>
         `;
         
         // Setup event handlers for sliders
@@ -2196,6 +2192,12 @@ PulseApp.ui.alerts = (() => {
             if (header.dataset.originalContent) {
                 header.innerHTML = header.dataset.originalContent;
                 delete header.dataset.originalContent;
+            }
+            
+            // Restore original classes if stored
+            if (header.dataset.originalClasses) {
+                header.className = header.dataset.originalClasses;
+                delete header.dataset.originalClasses;
             }
             
             // Clear styling
