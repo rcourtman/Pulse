@@ -79,21 +79,15 @@ PulseApp.ui.nodes = (() => {
             ? 'bg-green-500 dark:bg-green-400'
             : 'bg-red-500 dark:bg-red-400';
 
-        // Check if we're in alerts mode
-        const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
-
-        // Create content based on mode
-        let cpuContent, memoryContent, diskContent;
-        if (isAlertsMode && isOnline) {
-            // Don't create sliders here - let the alerts module transform them
-            cpuContent = _createNodeCpuBarHtml(node, false);
-            memoryContent = _createNodeMemoryBarHtml(node, false);
-            diskContent = _createNodeDiskBarHtml(node, false);
-        } else {
-            cpuContent = _createNodeCpuBarHtml(node, false);
-            memoryContent = _createNodeMemoryBarHtml(node, false);
-            diskContent = _createNodeDiskBarHtml(node, false);
-        }
+        // Check if charts mode is active (same pattern as dashboard)
+        const isChartsMode = document.getElementById('toggle-charts-checkbox')?.checked || false;
+        const mainContainer = document.getElementById('main');
+        const chartsEnabled = isChartsMode && mainContainer && mainContainer.classList.contains('charts-mode');
+        
+        // Create content with charts when in charts mode
+        const cpuContent = _createNodeCpuBarHtml(node, chartsEnabled);
+        const memoryContent = _createNodeMemoryBarHtml(node, chartsEnabled);
+        const diskContent = _createNodeDiskBarHtml(node, chartsEnabled);
 
         const uptimeFormatted = PulseApp.utils.formatUptime(node.uptime || 0);
         let normalizedLoadFormatted = 'N/A';
@@ -126,69 +120,6 @@ PulseApp.ui.nodes = (() => {
         return row;
     }
 
-    // Helper function to create node alert slider HTML
-    function _createNodeAlertSliderHtml(nodeId, metricType, config) {
-        // Get current threshold value for this node/metric from alerts system
-        const nodeThresholds = PulseApp.ui.alerts?.getNodeThresholds?.() || {};
-        const globalNodeThresholds = PulseApp.ui.alerts?.getGlobalNodeThresholds?.() || {};
-        
-        // Use individual node threshold if set, otherwise use global node threshold, otherwise use config min
-        let currentValue = config.min;
-        let isUsingGlobal = false;
-        
-        if (nodeThresholds[nodeId] && nodeThresholds[nodeId][metricType] !== undefined) {
-            // Node has individual threshold set
-            currentValue = nodeThresholds[nodeId][metricType];
-        } else if (globalNodeThresholds[metricType] !== undefined && globalNodeThresholds[metricType] !== '') {
-            // Use global node threshold as default
-            currentValue = globalNodeThresholds[metricType];
-            isUsingGlobal = true;
-        } else {
-            // Default values for node alerts
-            currentValue = metricType === 'cpu' ? 90 : metricType === 'memory' ? 95 : 95; // Higher defaults for nodes
-        }
-        
-        // Use the threshold system's helper function to create identical HTML
-        const sliderId = `node-alert-slider-${nodeId}-${metricType}`;
-        const sliderHtml = PulseApp.ui.thresholds.createThresholdSliderHtml(
-            sliderId, 
-            config.min, 
-            config.max, 
-            config.step, 
-            currentValue
-        );
-        
-        return sliderHtml;
-    }
-    
-    // Helper function to setup event listeners for node alert sliders
-    function _setupNodeAlertEventListeners(container) {
-        if (!container) return;
-        
-        // Setup event listeners for all node alert sliders in this container
-        const nodeAlertSliders = container.querySelectorAll('.node-alert-slider input[type="range"]');
-        nodeAlertSliders.forEach(slider => {
-            const sliderContainer = slider.closest('.node-alert-slider');
-            const nodeId = sliderContainer?.getAttribute('data-node-id');
-            const metricType = sliderContainer?.getAttribute('data-metric');
-            
-            if (nodeId && metricType) {
-                // Set up alert-specific events (save only on release, not during drag)
-                slider.addEventListener('input', (event) => {
-                    const value = event.target.value;
-                    // Only update tooltip during drag, don't save
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                });
-                
-                slider.addEventListener('change', (event) => {
-                    const value = event.target.value;
-                    // Save on mouse release
-                    PulseApp.ui.alerts.updateNodeThreshold(nodeId, metricType, value, true);
-                    PulseApp.tooltips.updateSliderTooltip(event.target);
-                });
-            }
-        });
-    }
 
     function createNodeSummaryCard(node) {
         const isOnline = node && node.uptime > 0;
@@ -196,36 +127,10 @@ PulseApp.ui.nodes = (() => {
         const statusColor = isOnline ? 'bg-green-500' : 'bg-red-500';
         const statusDotColor = isOnline ? 'text-green-500' : 'text-red-500';
 
-        // Check if charts mode is active
-        const isChartsMode = document.getElementById('toggle-charts-checkbox')?.checked || false;
-        const mainContainer = document.getElementById('main');
-        const chartsEnabled = isChartsMode && mainContainer && mainContainer.classList.contains('charts-mode');
-        
-        // Check if alerts mode is active
-        const isAlertsMode = document.getElementById('toggle-alerts-checkbox')?.checked || false;
-        const nodeId = node.node || 'unknown';
-
-        // Check if this node has any custom alert settings
-        const nodeThresholds = PulseApp.ui.alerts?.getNodeThresholds?.() || {};
-        const hasCustomSettings = nodeThresholds[nodeId] && Object.keys(nodeThresholds[nodeId]).length > 0;
-        
-        // Apply dimming if no custom settings in alert mode
-        const shouldDim = isAlertsMode && !hasCustomSettings;
-
-        // Create progress bars or alert sliders based on mode
-        let cpuBarHTML, memoryBarHTML, diskBarHTML;
-        
-        if (false) { // Sliders are now shown in the node header rows in the table
-            // In alert mode, show sliders instead of progress bars
-            cpuBarHTML = _createNodeAlertSliderHtml(nodeId, 'cpu', { min: 0, max: 100, step: 5 });
-            memoryBarHTML = _createNodeAlertSliderHtml(nodeId, 'memory', { min: 0, max: 100, step: 5 });
-            diskBarHTML = _createNodeAlertSliderHtml(nodeId, 'disk', { min: 0, max: 100, step: 5 });
-        } else {
-            // Normal mode - show progress bars
-            cpuBarHTML = _createNodeCpuBarHtml(node, chartsEnabled);
-            memoryBarHTML = _createNodeMemoryBarHtml(node, chartsEnabled);
-            diskBarHTML = _createNodeDiskBarHtml(node, chartsEnabled);
-        }
+        // Node summary cards don't show charts - charts are shown in node group rows
+        const cpuBarHTML = _createNodeCpuBarHtml(node, false);
+        const memoryBarHTML = _createNodeMemoryBarHtml(node, false);
+        const diskBarHTML = _createNodeDiskBarHtml(node, false);
         const uptimeFormatted = PulseApp.utils.formatUptime(node.uptime || 0);
 
         let normalizedLoadFormatted = 'N/A';
@@ -239,17 +144,7 @@ PulseApp.ui.nodes = (() => {
 
         const card = document.createElement('div');
         card.className = 'bg-white dark:bg-gray-800 shadow-md rounded-lg p-2 border border-gray-200 dark:border-gray-700 flex flex-col gap-1';
-        
-        if (isAlertsMode) {
-            card.setAttribute('data-node-id', nodeId);
-            card.setAttribute('data-alert-dimmed', !hasCustomSettings);
-            
-            // Apply dimming using inline style for reliability
-            if (shouldDim) {
-                card.style.opacity = '0.4';
-                card.style.transition = 'opacity 0.1s ease-out';
-            }
-        }
+        // Node summary cards don't participate in alerts mode
 
         // Check if we can make the node name clickable
         const hostUrl = PulseApp.utils.getHostUrl(node.displayName || node.node);
@@ -268,15 +163,15 @@ PulseApp.ui.nodes = (() => {
                     <span class="text-xs capitalize text-gray-600 dark:text-gray-400">${statusText}</span>
                 </div>
             </div>
-            <div class="text-[11px] text-gray-600 dark:text-gray-400 ${isAlertsMode ? 'node-alert-slider' : ''}" ${isAlertsMode ? `data-node-id="${nodeId}" data-metric="cpu"` : ''}>
+            <div class="text-[11px] text-gray-600 dark:text-gray-400">
                 <span class="font-medium">CPU:</span>
                 ${cpuBarHTML}
             </div>
-            <div class="text-[11px] text-gray-600 dark:text-gray-400 ${isAlertsMode ? 'node-alert-slider' : ''}" ${isAlertsMode ? `data-node-id="${nodeId}" data-metric="memory"` : ''}>
+            <div class="text-[11px] text-gray-600 dark:text-gray-400">
                 <span class="font-medium">Mem:</span>
                 ${memoryBarHTML}
             </div>
-            <div class="text-[11px] text-gray-600 dark:text-gray-400 ${isAlertsMode ? 'node-alert-slider' : ''}" ${isAlertsMode ? `data-node-id="${nodeId}" data-metric="disk"` : ''}>
+            <div class="text-[11px] text-gray-600 dark:text-gray-400">
                 <span class="font-medium">Disk:</span>
                 ${diskBarHTML}
             </div>
@@ -285,13 +180,7 @@ PulseApp.ui.nodes = (() => {
                 <span>Load: ${normalizedLoadFormatted}</span>
             </div>
         `;
-        
-        // Set up event listeners for alert sliders if in alert mode
-        if (isAlertsMode) {
-            requestAnimationFrame(() => {
-                _setupNodeAlertEventListeners(card);
-            });
-        }
+        // Node summary cards no longer have alert mode interactions
         
         return card;
     }
@@ -327,8 +216,12 @@ PulseApp.ui.nodes = (() => {
         const currentScrollLeft = scrollableContainer.scrollLeft || 0;
         const currentScrollTop = scrollableContainer.scrollTop || 0;
         
-        // Sort nodes by name for consistent order in summary cards
-        const sortedNodes = [...nodes].sort((a, b) => (a.node || '').localeCompare(b.node || ''));
+        // Sort nodes by name - for now using alphabetical since these nodes don't have numbers
+        const sortedNodes = [...nodes].sort((a, b) => {
+            const aName = a.node || '';
+            const bName = b.node || '';
+            return aName.localeCompare(bName);
+        });
         
         PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
             container.innerHTML = ''; // Clear previous content
@@ -509,6 +402,15 @@ PulseApp.ui.nodes = (() => {
         }
         }); // End of preserveScrollPosition
         
+        // Update node charts if in charts mode
+        const mainContainer = document.getElementById('main');
+        if (PulseApp.charts && mainContainer && mainContainer.classList.contains('charts-mode')) {
+            // Use requestAnimationFrame to ensure DOM is fully updated
+            requestAnimationFrame(() => {
+                updateNodeCharts(nodes);
+            });
+        }
+        
         // Additional scroll position restoration for both axes
         if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
             requestAnimationFrame(() => {
@@ -562,6 +464,10 @@ PulseApp.ui.nodes = (() => {
         cleanup,
         updateNodesTable,
         updateNodeSummaryCards,
-        updateNodeCharts
+        updateNodeCharts,
+        // Expose the bar creation functions for use in dashboard
+        _createNodeCpuBarHtml,
+        _createNodeMemoryBarHtml,
+        _createNodeDiskBarHtml
     };
 })();

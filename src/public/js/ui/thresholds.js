@@ -53,7 +53,15 @@ PulseApp.ui.thresholds = (() => {
         for (const type in thresholdState) {
             if (sliders[type]) {
                 const sliderElement = sliders[type];
-                if (sliderElement) sliderElement.value = thresholdState[type].value;
+                if (sliderElement) {
+                    sliderElement.value = thresholdState[type].value;
+                    // Apply custom-threshold class if slider has a value > 0
+                    if (thresholdState[type].value > 0) {
+                        sliderElement.classList.add('custom-threshold');
+                    } else {
+                        sliderElement.classList.remove('custom-threshold');
+                    }
+                }
             } else if (thresholdSelects[type]) {
                 const selectElement = thresholdSelects[type];
                 if (selectElement) selectElement.value = thresholdState[type].value;
@@ -209,6 +217,14 @@ PulseApp.ui.thresholds = (() => {
     function updateThreshold(type, value, immediate = false) {
         PulseApp.state.setThresholdValue(type, value);
         updateThresholdIndicator();
+
+        // Update slider styling to show it has a custom value
+        const slider = sliders[type];
+        if (slider && value && value > 0) {
+            slider.classList.add('custom-threshold');
+        } else if (slider) {
+            slider.classList.remove('custom-threshold');
+        }
 
         // Always update dashboard immediately for live responsiveness
         updateDashboardFromThreshold();
@@ -569,6 +585,7 @@ PulseApp.ui.thresholds = (() => {
         for (const type in sliders) {
             if (sliders[type]) {
                 sliders[type].value = 0;
+                sliders[type].classList.remove('custom-threshold');
             }
         }
         for (const type in thresholdSelects) {

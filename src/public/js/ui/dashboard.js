@@ -110,9 +110,18 @@ PulseApp.ui.dashboard = (() => {
             if (guestId && metricType) {
                 // Set up alert-specific events (save only on release, not during drag)
                 slider.addEventListener('input', (event) => {
+                    // Only update tooltip during drag, don't update any DOM
+                    PulseApp.tooltips.updateSliderTooltip(event.target);
+                });
+                
+                // Save only on release
+                slider.addEventListener('change', (event) => {
+                    if (PulseApp.ui.alerts && PulseApp.ui.alerts.setSliderDragging) {
+                        PulseApp.ui.alerts.setSliderDragging(false);
+                    }
                     const value = event.target.value;
-                    // Update during drag but don't save
-                    PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, value, false);
+                    // Update threshold and remove global indicator
+                    PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, value, true);
                     PulseApp.tooltips.updateSliderTooltip(event.target);
                     
                     // Remove global indicator visual styling
@@ -120,13 +129,10 @@ PulseApp.ui.dashboard = (() => {
                     container.removeAttribute('data-using-global');
                 });
                 
-                // Save only on release
-                slider.addEventListener('change', (event) => {
-                    const value = event.target.value;
-                    PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, value, true);
-                });
-                
                 slider.addEventListener('mousedown', (event) => {
+                    if (PulseApp.ui.alerts && PulseApp.ui.alerts.setSliderDragging) {
+                        PulseApp.ui.alerts.setSliderDragging(true);
+                    }
                     PulseApp.tooltips.updateSliderTooltip(event.target);
                     if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
                         PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
@@ -134,6 +140,9 @@ PulseApp.ui.dashboard = (() => {
                 });
                 
                 slider.addEventListener('touchstart', (event) => {
+                    if (PulseApp.ui.alerts && PulseApp.ui.alerts.setSliderDragging) {
+                        PulseApp.ui.alerts.setSliderDragging(true);
+                    }
                     PulseApp.tooltips.updateSliderTooltip(event.target);
                     if (PulseApp.ui.dashboard && PulseApp.ui.dashboard.snapshotGuestMetricsForDrag) {
                         PulseApp.ui.dashboard.snapshotGuestMetricsForDrag();
@@ -719,58 +728,20 @@ PulseApp.ui.dashboard = (() => {
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
         
         if (isAlertsMode) {
-            // Apply alert-specific dimming with granular cell control
-            const allGuestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
-            const guestThresholds = allGuestThresholds[guest.id] || {};
-            const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
+            // Remove all dimming attributes when in alerts mode
+            row.style.opacity = '';
+            row.style.transition = '';
+            row.removeAttribute('data-alert-dimmed');
+            row.removeAttribute('data-dimmed');
+            row.removeAttribute('data-alert-mixed');
             
-            if (!hasIndividualSettings) {
-                // Using only global alert values - dim the whole row
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-                // Ensure threshold dimming attribute is removed
-                row.removeAttribute('data-dimmed');
-            } else {
-                // Has some individual settings - apply cell-specific dimming immediately
-                row.style.opacity = '';
-                row.style.transition = '';
-                row.removeAttribute('data-alert-dimmed');
-                row.setAttribute('data-alert-mixed', 'true'); // Mark as having mixed values
-                // Ensure threshold dimming attribute is removed
-                row.removeAttribute('data-dimmed');
-                
-                // Apply granular cell styling immediately to prevent flashing
-                const cells = row.querySelectorAll('td');
-                if (cells.length >= 11) {
-                    // Map metric types to cell indices
-                    const metricCells = {
-                        'cpu': cells[4], 'memory': cells[5], 'disk': cells[6],
-                        'diskread': cells[7], 'diskwrite': cells[8], 'netin': cells[9], 'netout': cells[10]
-                    };
-                    
-                    // Apply cell-specific opacity immediately
-                    Object.entries(metricCells).forEach(([metricType, cell]) => {
-                        if (!cell) return;
-                        const hasCustomValue = guestThresholds[metricType] !== undefined;
-                        cell.style.opacity = hasCustomValue ? '1' : '0.4';
-                        cell.style.transition = 'opacity 0.1s ease-out';
-                        if (hasCustomValue) {
-                            cell.setAttribute('data-alert-custom', 'true');
-                        } else {
-                            cell.removeAttribute('data-alert-custom');
-                        }
-                    });
-                    
-                    // Dim non-metric cells
-                    for (let i = 0; i < 4; i++) {
-                        if (cells[i]) {
-                            cells[i].style.opacity = '0.4';
-                            cells[i].style.transition = 'opacity 0.1s ease-out';
-                        }
-                    }
-                }
-            }
+            // Remove any cell-specific styling as well
+            const cells = row.querySelectorAll('td');
+            cells.forEach(cell => {
+                cell.style.opacity = '';
+                cell.style.transition = '';
+                cell.removeAttribute('data-alert-custom');
+            });
         } else if (guest.meetsThresholds === false && document.getElementById('toggle-thresholds-checkbox')?.checked) {
             // Apply threshold dimming (only when threshold mode is enabled)
             row.style.opacity = '0.4';
@@ -943,8 +914,10 @@ PulseApp.ui.dashboard = (() => {
                 const diskReadCell = cells[7];
                 let newDiskReadHTML;
                 if (isAlertsMode) {
-                    // Only regenerate if not already an alert control
-                    if (!diskReadCell.querySelector('.alert-threshold-input')) {
+                    // Check if we already have a select element
+                    const existingSelect = diskReadCell.querySelector('select');
+                    if (!existingSelect) {
+                        // Create new dropdown
                         newDiskReadHTML = _createAlertDropdownHtml(guest.id, 'diskread', [
                             { value: '', label: 'No alert' },
                             { value: '1048576', label: '> 1 MB/s' },
@@ -953,7 +926,10 @@ PulseApp.ui.dashboard = (() => {
                             { value: '104857600', label: '> 100 MB/s' }
                         ]);
                         diskReadCell.innerHTML = newDiskReadHTML;
+                        // Re-setup event listeners for the new dropdown
+                        _setupAlertEventListeners(diskReadCell);
                     }
+                    // If select exists, leave it alone - don't recreate
                 } else {
                     const diskReadFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskread, 0);
                     
@@ -977,8 +953,10 @@ PulseApp.ui.dashboard = (() => {
                 const diskWriteCell = cells[8];
                 let newDiskWriteHTML;
                 if (isAlertsMode) {
-                    // Only regenerate if not already an alert control
-                    if (!diskWriteCell.querySelector('.alert-threshold-input')) {
+                    // Check if we already have a select element
+                    const existingSelect = diskWriteCell.querySelector('select');
+                    if (!existingSelect) {
+                        // Create new dropdown
                         newDiskWriteHTML = _createAlertDropdownHtml(guest.id, 'diskwrite', [
                             { value: '', label: 'No alert' },
                             { value: '1048576', label: '> 1 MB/s' },
@@ -987,7 +965,10 @@ PulseApp.ui.dashboard = (() => {
                             { value: '104857600', label: '> 100 MB/s' }
                         ]);
                         diskWriteCell.innerHTML = newDiskWriteHTML;
+                        // Re-setup event listeners for the new dropdown
+                        _setupAlertEventListeners(diskWriteCell);
                     }
+                    // If select exists, leave it alone - don't recreate
                 } else {
                     const diskWriteFormatted = PulseApp.utils.formatSpeedWithStyling(guest.diskwrite, 0);
                     
@@ -1011,8 +992,10 @@ PulseApp.ui.dashboard = (() => {
                 const netInCell = cells[9];
                 let newNetInHTML;
                 if (isAlertsMode) {
-                    // Only regenerate if not already an alert control
-                    if (!netInCell.querySelector('.alert-threshold-input')) {
+                    // Check if we already have a select element
+                    const existingSelect = netInCell.querySelector('select');
+                    if (!existingSelect) {
+                        // Create new dropdown
                         newNetInHTML = _createAlertDropdownHtml(guest.id, 'netin', [
                             { value: '', label: 'No alert' },
                             { value: '1048576', label: '> 1 MB/s' },
@@ -1021,7 +1004,10 @@ PulseApp.ui.dashboard = (() => {
                             { value: '104857600', label: '> 100 MB/s' }
                         ]);
                         netInCell.innerHTML = newNetInHTML;
+                        // Re-setup event listeners for the new dropdown
+                        _setupAlertEventListeners(netInCell);
                     }
+                    // If select exists, leave it alone - don't recreate
                 } else {
                     const netInFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netin, 0);
                     
@@ -1046,8 +1032,10 @@ PulseApp.ui.dashboard = (() => {
                     const netOutCell = cells[10];
                     let newNetOutHTML;
                     if (isAlertsMode) {
-                        // Only regenerate if not already an alert control
-                        if (!netOutCell.querySelector('.alert-threshold-input')) {
+                        // Check if we already have a select element
+                        const existingSelect = netOutCell.querySelector('select');
+                        if (!existingSelect) {
+                            // Create new dropdown
                             newNetOutHTML = _createAlertDropdownHtml(guest.id, 'netout', [
                                 { value: '', label: 'No alert' },
                                 { value: '1048576', label: '> 1 MB/s' },
@@ -1056,7 +1044,10 @@ PulseApp.ui.dashboard = (() => {
                                 { value: '104857600', label: '> 100 MB/s' }
                             ]);
                             netOutCell.innerHTML = newNetOutHTML;
+                            // Re-setup event listeners for the new dropdown
+                            _setupAlertEventListeners(netOutCell);
                         }
+                        // If select exists, leave it alone - don't recreate
                     } else {
                         const netOutFormatted = PulseApp.utils.formatSpeedWithStyling(guest.netout, 0);
                         
@@ -1080,19 +1071,29 @@ PulseApp.ui.dashboard = (() => {
                 // Set I/O cells to '-' if not running, or show alert dropdowns if in alerts mode
                 [7, 8, 9, 10].forEach(index => {
                     if (cells[index]) {
-                        let newHTML = '-';
                         if (isAlertsMode) {
-                            const metricMap = { 7: 'diskread', 8: 'diskwrite', 9: 'netin', 10: 'netout' };
-                            newHTML = _createAlertDropdownHtml(guest.id, metricMap[index], [
-                                { value: '', label: 'No alert' },
-                                { value: '1048576', label: '> 1 MB/s' },
-                                { value: '10485760', label: '> 10 MB/s' },
-                                { value: '52428800', label: '> 50 MB/s' },
-                                { value: '104857600', label: '> 100 MB/s' }
-                            ]);
-                        }
-                        if (cells[index].innerHTML !== newHTML) {
-                            cells[index].innerHTML = newHTML;
+                            // Check if we already have a select element
+                            const existingSelect = cells[index].querySelector('select');
+                            if (!existingSelect) {
+                                // Create new dropdown
+                                const metricMap = { 7: 'diskread', 8: 'diskwrite', 9: 'netin', 10: 'netout' };
+                                const newHTML = _createAlertDropdownHtml(guest.id, metricMap[index], [
+                                    { value: '', label: 'No alert' },
+                                    { value: '1048576', label: '> 1 MB/s' },
+                                    { value: '10485760', label: '> 10 MB/s' },
+                                    { value: '52428800', label: '> 50 MB/s' },
+                                    { value: '104857600', label: '> 100 MB/s' }
+                                ]);
+                                cells[index].innerHTML = newHTML;
+                                // Re-setup event listeners for the new dropdown
+                                _setupAlertEventListeners(cells[index]);
+                            }
+                            // If select exists, leave it alone - don't recreate
+                        } else {
+                            // Not in alerts mode, show '-'
+                            if (cells[index].innerHTML !== '-') {
+                                cells[index].innerHTML = '-';
+                            }
                         }
                     }
                 });
@@ -1138,6 +1139,11 @@ PulseApp.ui.dashboard = (() => {
     let previousGroupByNode = null;
 
     function updateDashboardTable() {
+        // Skip updates if slider is being dragged
+        if (PulseApp.ui.alerts && PulseApp.ui.alerts.isSliderDragging && PulseApp.ui.alerts.isSliderDragging()) {
+            return;
+        }
+        
         // If elements aren't initialized yet, try to initialize them
         if (!tableBodyEl || !statusElementEl) {
             tableBodyEl = document.querySelector('#main-table tbody');
@@ -1248,6 +1254,7 @@ PulseApp.ui.dashboard = (() => {
                 }
             });
             previousGroupByNode = groupByNode;
+            
         } else {
             // Incremental update using DOM diffing with scroll preservation
             PulseApp.utils.preserveScrollPosition(scrollableContainer, () => {
@@ -1255,6 +1262,7 @@ PulseApp.ui.dashboard = (() => {
                 visibleCount = result.visibleCount;
                 visibleNodes = result.visibleNodes;
             });
+            
         }
 
         previousTableData = sortedData;
@@ -1301,14 +1309,6 @@ PulseApp.ui.dashboard = (() => {
             console.warn('[Dashboard] PulseApp.ui.common not available for updateSortUI');
         }
 
-        
-        // Transform node headers to alerts mode if needed
-        if (PulseApp.ui.alerts && PulseApp.ui.alerts.isAlertsMode() && groupByNode) {
-            // Use requestAnimationFrame to ensure node headers are rendered
-            requestAnimationFrame(() => {
-                PulseApp.ui.alerts.transformNodeTableToAlertsMode();
-            });
-        }
         
         // Update charts immediately after table is rendered, but only if in charts mode
         const mainContainer = document.getElementById('main');
@@ -1393,6 +1393,84 @@ PulseApp.ui.dashboard = (() => {
             <div class="metric-text">${progressBar}</div>
             <div class="metric-chart">${chartHtml}</div>
         `;
+    }
+
+    function _createNodeGroupDataRow(node) {
+        const row = document.createElement('tr');
+        row.className = 'node-header bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700';
+        row.setAttribute('data-node-id', node.node);
+        
+        const isOnline = node && node.uptime > 0;
+        const statusText = isOnline ? 'online' : (node.status || 'unknown');
+        const statusColor = isOnline ? 'text-green-500' : 'text-red-500';
+        
+        // Check if charts mode is active
+        const isChartsMode = document.getElementById('toggle-charts-checkbox')?.checked || false;
+        const mainContainer = document.getElementById('main');
+        const chartsEnabled = isChartsMode && mainContainer && mainContainer.classList.contains('charts-mode');
+        
+        // Calculate percentages
+        const cpuPercent = node.cpu ? (node.cpu * 100) : 0;
+        const memPercent = (node.mem && node.maxmem > 0) ? (node.mem / node.maxmem * 100) : 0;
+        const diskPercent = (node.disk && node.maxdisk > 0) ? (node.disk / node.maxdisk * 100) : 0;
+        
+        // Format values
+        const cpuText = `${cpuPercent.toFixed(0)}%`;
+        const memText = `${PulseApp.utils.formatBytes(node.mem || 0)} / ${PulseApp.utils.formatBytes(node.maxmem || 0)}`;
+        const diskText = `${PulseApp.utils.formatBytes(node.disk || 0)} / ${PulseApp.utils.formatBytes(node.maxdisk || 0)}`;
+        
+        // Create progress bars with optional charts
+        let cpuContent, memContent, diskContent;
+        
+        if (chartsEnabled && PulseApp.ui.nodes) {
+            // Use the same functions from nodes.js to create content with charts
+            cpuContent = PulseApp.ui.nodes._createNodeCpuBarHtml ? 
+                PulseApp.ui.nodes._createNodeCpuBarHtml(node, true) :
+                PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuText, PulseApp.utils.getUsageColor(cpuPercent, 'cpu'));
+            
+            memContent = PulseApp.ui.nodes._createNodeMemoryBarHtml ? 
+                PulseApp.ui.nodes._createNodeMemoryBarHtml(node, true) :
+                PulseApp.utils.createProgressTextBarHTML(memPercent, memText, PulseApp.utils.getUsageColor(memPercent, 'memory'));
+            
+            diskContent = PulseApp.ui.nodes._createNodeDiskBarHtml ? 
+                PulseApp.ui.nodes._createNodeDiskBarHtml(node, true) :
+                PulseApp.utils.createProgressTextBarHTML(diskPercent, diskText, PulseApp.utils.getUsageColor(diskPercent, 'disk'));
+        } else {
+            // Just progress bars without charts
+            cpuContent = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuText, PulseApp.utils.getUsageColor(cpuPercent, 'cpu'));
+            memContent = PulseApp.utils.createProgressTextBarHTML(memPercent, memText, PulseApp.utils.getUsageColor(memPercent, 'memory'));
+            diskContent = PulseApp.utils.createProgressTextBarHTML(diskPercent, diskText, PulseApp.utils.getUsageColor(diskPercent, 'disk'));
+        }
+        
+        // Check if we can make the node name clickable
+        const hostUrl = PulseApp.utils.getHostUrl(node.displayName || node.node);
+        let nodeNameContent = node.displayName || node.node || 'Unknown';
+        
+        if (hostUrl) {
+            nodeNameContent = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150" title="Open ${node.displayName || node.node} web interface">${node.displayName || node.node || 'Unknown'}</a>`;
+        }
+        
+        // Create cells for the node row - matching guest row column count (11)
+        row.innerHTML = `
+            <td class="sticky left-0 bg-gray-50 dark:bg-gray-800 z-10 py-1 px-2 font-medium text-gray-700 dark:text-gray-300">
+                <div class="flex items-center gap-2">
+                    <span class="h-2 w-2 rounded-full ${statusColor}"></span>
+                    ${nodeNameContent}
+                </div>
+            </td>
+            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">NODE</td>
+            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
+            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">${PulseApp.utils.formatUptime(node.uptime || 0)}</td>
+            <td class="py-1 px-2 min-w-[160px]">${cpuContent}</td>
+            <td class="py-1 px-2 min-w-[160px]">${memContent}</td>
+            <td class="py-1 px-2 min-w-[160px]">${diskContent}</td>
+            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
+            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
+            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
+            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
+        `;
+        
+        return row;
     }
 
     function _createDiskBarHtml(guest) {
@@ -1491,23 +1569,11 @@ PulseApp.ui.dashboard = (() => {
         const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
         
         if (isAlertsMode) {
-            // Apply alert-specific dimming based on whether guest has custom settings
-            const allGuestThresholds = PulseApp.ui.alerts?.getGuestThresholds?.() || {};
-            const guestThresholds = allGuestThresholds[guest.id] || {};
-            const hasIndividualSettings = Object.keys(guestThresholds).length > 0;
-            
-            // New behavior: Light up rows that have custom alert settings
-            if (hasIndividualSettings) {
-                // Light up rows with custom settings
-                row.style.opacity = '';
-                row.style.transition = '';
-                row.removeAttribute('data-alert-dimmed');
-            } else {
-                // Dim rows using only default settings
-                row.style.opacity = '0.4';
-                row.style.transition = 'opacity 0.1s ease-out';
-                row.setAttribute('data-alert-dimmed', 'true');
-            }
+            // Remove all dimming in alerts mode
+            row.style.opacity = '';
+            row.style.transition = '';
+            row.removeAttribute('data-alert-dimmed');
+            row.removeAttribute('data-dimmed');
         } else if (guest.meetsThresholds === false && document.getElementById('toggle-thresholds-checkbox')?.checked) {
             // Apply threshold dimming (only when threshold mode is enabled)
             row.style.opacity = '0.4';
@@ -1666,7 +1732,6 @@ PulseApp.ui.dashboard = (() => {
         if (!timeRangeSelect) return;
         
         const selectedMinutes = parseInt(timeRangeSelect.value);
-        console.log(`[Dashboard] Time range changed to: ${selectedMinutes} minutes`);
         
         // Update the chart data with new time range
         if (PulseApp.charts) {
@@ -1693,6 +1758,7 @@ PulseApp.ui.dashboard = (() => {
             if (PulseApp.ui.chartsControls) {
                 PulseApp.ui.chartsControls.showChartsControls();
             }
+            
             
             // Turn off thresholds toggle and hide its elements
             const thresholdsToggle = document.getElementById('toggle-thresholds-checkbox');
@@ -1778,6 +1844,7 @@ PulseApp.ui.dashboard = (() => {
             // Switch to metrics mode
             mainContainer.classList.remove('charts-mode');
             if (label) label.title = 'Toggle Charts View';
+            
             
             // Hide charts controls
             if (PulseApp.ui.chartsControls) {
@@ -1932,6 +1999,7 @@ PulseApp.ui.dashboard = (() => {
         return `${seconds}s`;
     }
     
+
     function formatAlertValue(value, metricType) {
         if (value === null || value === undefined) return 'N/A';
         
