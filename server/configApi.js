@@ -130,7 +130,12 @@ class ConfigApi {
             await this.writeEnvFile(existingConfig);
             
             // Reload configuration in the application
-            await this.reloadConfiguration();
+            // Make this asynchronous to prevent frontend freezing
+            setImmediate(() => {
+                this.reloadConfiguration().catch(error => {
+                    console.error('Error during async configuration reload:', error);
+                });
+            });
             
             return { success: true };
         } catch (error) {
@@ -767,14 +772,29 @@ class ConfigApi {
             stateManager.setConfigPlaceholderStatus(isConfigPlaceholder);
             stateManager.setEndpointConfigurations(endpoints, pbsConfigs);
             
-            // Reinitialize API clients
-            const { apiClients, pbsApiClients } = await initializeApiClients(endpoints, pbsConfigs);
-            
-            // Update global references
-            if (global.pulseApiClients) {
-                global.pulseApiClients.apiClients = apiClients;
-                global.pulseApiClients.pbsApiClients = pbsApiClients;
-            }
+            // Reinitialize API clients asynchronously
+            initializeApiClients(endpoints, pbsConfigs).then(({ apiClients, pbsApiClients }) => {
+                // Update global references
+                if (global.pulseApiClients) {
+                    global.pulseApiClients.apiClients = apiClients;
+                    global.pulseApiClients.pbsApiClients = pbsApiClients;
+                }
+                
+                console.log('API clients reinitialized after configuration reload');
+                
+                // Trigger a discovery cycle if we have any endpoints configured (PVE or PBS)
+                if (endpoints.length > 0 || pbsConfigs.length > 0) {
+                    console.log('Triggering discovery cycle after configuration reload...');
+                    // Import and call runDiscoveryCycle if available
+                    if (global.runDiscoveryCycle && typeof global.runDiscoveryCycle === 'function') {
+                        setTimeout(() => {
+                            global.runDiscoveryCycle();
+                        }, 2000); // Give time for API clients to be ready
+                    }
+                }
+            }).catch(error => {
+                console.error('Error reinitializing API clients:', error);
+            });
             
             // Update global config placeholder status
             if (global.pulseConfigStatus) {
@@ -786,36 +806,27 @@ class ConfigApi {
                 global.lastReloadTime = Date.now();
             }
             
-            // Refresh AlertManager rules and email configuration based on new environment variables
-            try {
-                const alertManager = stateManager.getAlertManager();
-                if (alertManager) {
-                    if (typeof alertManager.refreshRules === 'function') {
-                        await alertManager.refreshRules();
-                        console.log('Alert rules refreshed after configuration reload');
+            // Refresh AlertManager rules and email configuration asynchronously
+            setImmediate(async () => {
+                try {
+                    const alertManager = stateManager.getAlertManager();
+                    if (alertManager) {
+                        if (typeof alertManager.refreshRules === 'function') {
+                            await alertManager.refreshRules();
+                            console.log('Alert rules refreshed after configuration reload');
+                        }
+                        if (typeof alertManager.reloadEmailConfiguration === 'function') {
+                            await alertManager.reloadEmailConfiguration();
+                            console.log('Email configuration reloaded after configuration reload');
+                        }
+                    } else {
+                        console.warn('AlertManager not available');
                     }
-                    if (typeof alertManager.reloadEmailConfiguration === 'function') {
-                        await alertManager.reloadEmailConfiguration();
-                        console.log('Email configuration reloaded after configuration reload');
-                    }
-                } else {
-                    console.warn('AlertManager not available');
+                } catch (alertError) {
+                    console.error('Error refreshing AlertManager configuration:', alertError);
+                    // Don't fail the entire reload if alert refresh fails
                 }
-            } catch (alertError) {
-                console.error('Error refreshing AlertManager configuration:', alertError);
-                // Don't fail the entire reload if alert refresh fails
-            }
-            
-            // Trigger a discovery cycle if we have any endpoints configured (PVE or PBS)
-            if (endpoints.length > 0 || pbsConfigs.length > 0) {
-                console.log('Triggering discovery cycle after configuration reload...');
-                // Import and call runDiscoveryCycle if available
-                if (global.runDiscoveryCycle && typeof global.runDiscoveryCycle === 'function') {
-                    setTimeout(() => {
-                        global.runDiscoveryCycle();
-                    }, 1000); // Give a moment for everything to settle
-                }
-            }
+            });
             
             console.log('Configuration reloaded successfully');
             return true;
