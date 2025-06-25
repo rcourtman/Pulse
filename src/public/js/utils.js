@@ -193,14 +193,18 @@ PulseApp.utils = (() => {
         const effectiveDirection = direction || sortStates.direction;
 
         return [...data].sort((a, b) => {
-            let valA = a[column];
-            let valB = b[column];
+            // Map 'id' column to 'vmid' property for guest table
+            const propertyName = column === 'id' ? 'vmid' : column;
+            
+            let valA = a[propertyName];
+            let valB = b[propertyName];
 
             if (column === 'id' || column === 'vmid' || column === 'guestId') {
                 valA = parseInt(valA, 10);
                 valB = parseInt(valB, 10);
             }
              else if (column === 'name' || column === 'node' || column === 'guestName' || column === 'guestType' || column === 'pbsInstanceName' || column === 'datastoreName') {
+                
                 valA = String(valA || '').toLowerCase();
                 valB = String(valB || '').toLowerCase();
             }
