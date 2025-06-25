@@ -307,7 +307,7 @@ PulseApp.ui.nodes = (() => {
             tbody.innerHTML = '';
 
         if (!nodes || nodes.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-500 dark:text-gray-400">No nodes found or data unavailable</td></tr>';
+            PulseApp.utils.showEmptyState(tbody, 'No nodes found or data unavailable', 7, 'p-4');
             return;
         }
 
