@@ -20,8 +20,8 @@
       "script": "ct/docmost.sh",
       "resources": {
         "cpu": 3,
-        "ram": 3072,
-        "hdd": 7,
+        "ram": 4096,
+        "hdd": 8,
         "os": "debian",
         "version": "12"
       }
