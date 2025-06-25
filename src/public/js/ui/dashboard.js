@@ -1,5 +1,10 @@
 PulseApp.ui = PulseApp.ui || {};
 
+// Create logger instance for dashboard
+const logger = PulseApp.utils.createLogger('Dashboard');
+// Create DOM cache instance
+const domCache = new PulseApp.utils.DOMCache();
+
 const FILTER_ALL = 'all';
 const FILTER_VM = 'vm';
 const FILTER_LXC = 'lxc';
@@ -147,9 +152,9 @@ PulseApp.ui.dashboard = (() => {
     function init() {
         // Attempt to find elements, with fallback retry mechanism
         function findElements() {
-            searchInput = document.getElementById('dashboard-search');
-            tableBodyEl = document.querySelector('#main-table tbody');
-            statusElementEl = document.getElementById('dashboard-status-text');
+            searchInput = domCache.get('#dashboard-search');
+            tableBodyEl = domCache.get('#main-table tbody');
+            statusElementEl = domCache.get('#dashboard-status-text');
             
             return tableBodyEl && statusElementEl;
         }
@@ -160,8 +165,8 @@ PulseApp.ui.dashboard = (() => {
             // Retry after a short delay in case DOM is still loading
             setTimeout(() => {
                 if (!findElements()) {
-                    console.error('[Dashboard] Critical elements still not found after retry. Dashboard may not function properly.');
-                    console.error('[Dashboard] Missing elements:', {
+                    logger.error('Critical elements still not found after retry. Dashboard may not function properly.');
+                    logger.error('Missing elements:', {
                         tableBodyEl: !!tableBodyEl,
                         statusElementEl: !!statusElementEl
                     });
