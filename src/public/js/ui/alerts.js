@@ -2046,9 +2046,13 @@ PulseApp.ui.alerts = (() => {
     function transformNodeTableToAlertsMode() {
         // Transform node header rows in the main table when Group by Node is enabled
         const mainTable = document.getElementById('main-table');
-        if (!mainTable) return;
+        if (!mainTable) {
+            console.log('[DEBUG] transformNodeTableToAlertsMode: main-table not found');
+            return;
+        }
         
         const nodeHeaders = mainTable.querySelectorAll('tr.node-header');
+        console.log('[DEBUG] Found node headers:', nodeHeaders.length);
         nodeHeaders.forEach(header => {
             // Extract node name from the header
             const nodeNameElement = header.querySelector('td');
@@ -2057,6 +2061,7 @@ PulseApp.ui.alerts = (() => {
             // Get the node name (handling both plain text and links)
             const linkElement = nodeNameElement.querySelector('a');
             const nodeName = linkElement ? linkElement.textContent : nodeNameElement.textContent;
+            console.log('[DEBUG] Processing node header for:', nodeName);
             if (!nodeName) return;
             
             // Store original content if not already stored
@@ -2214,6 +2219,7 @@ PulseApp.ui.alerts = (() => {
         getActiveAlertsForGuest: getActiveAlertsForGuest,
         loadSavedConfiguration: loadSavedConfiguration,
         updateNotificationStatus: updateNotificationStatus,
-        checkGuestWouldTriggerAlerts: checkGuestWouldTriggerAlerts
+        checkGuestWouldTriggerAlerts: checkGuestWouldTriggerAlerts,
+        transformNodeTableToAlertsMode: transformNodeTableToAlertsMode
     };
 })();
