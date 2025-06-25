@@ -6,7 +6,7 @@
   ],
   "date_created": "2025-06-19",
   "type": "vm",
-  "updateable": false,
+  "updateable": true,
   "privileged": false,
   "interface_port": null,
   "documentation": null,
