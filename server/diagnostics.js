@@ -238,6 +238,26 @@ class DiagnosticTool {
             sanitized.state.pbs.namespaceInfo = sanitizedNamespaceInfo;
         }
         
+        // Sanitize namespace filtering debug info if present
+        if (sanitized.state && sanitized.state.namespaceFilteringDebug) {
+            if (sanitized.state.namespaceFilteringDebug.sharedNamespaces) {
+                sanitized.state.namespaceFilteringDebug.sharedNamespaces = 
+                    sanitized.state.namespaceFilteringDebug.sharedNamespaces.map((ns, idx) => ({
+                        namespace: ns.namespace === 'root' ? 'root' : `namespace-${idx}`,
+                        instances: ns.instances || [],
+                        totalBackups: ns.totalBackups,
+                        perInstanceCounts: ns.perInstanceCounts || {}
+                    }));
+            }
+            // Keep current filter values as they are (already sanitized if namespaces)
+            if (sanitized.state.namespaceFilteringDebug.currentFilters) {
+                const filters = sanitized.state.namespaceFilteringDebug.currentFilters;
+                if (filters.namespace && filters.namespace !== 'all' && filters.namespace !== 'root') {
+                    filters.namespace = 'namespace-filtered';
+                }
+            }
+        }
+        
         // Sanitize recommendations
         if (sanitized.recommendations) {
             sanitized.recommendations = sanitized.recommendations.map(rec => ({
@@ -788,15 +808,42 @@ class DiagnosticTool {
                 });
             }
             
+            // Add namespace filtering diagnostics
+            if (state.pbs && Array.isArray(state.pbs) && state.pbs.length > 1) {
+                info.namespaceFilteringDebug = {
+                    multiplePbsInstances: true,
+                    pbsInstanceCount: state.pbs.length,
+                    sharedNamespaces: [],
+                    currentFilters: {
+                        namespace: state.backupsFilterNamespace || 'all',
+                        pbsInstance: state.backupsFilterPbsInstance || 'all'
+                    }
+                };
+                
+                // Find namespaces that exist on multiple PBS instances
+                Object.entries(info.pbs.namespaceInfo || {}).forEach(([namespace, nsInfo]) => {
+                    if (nsInfo.instances && nsInfo.instances.length > 1) {
+                        info.namespaceFilteringDebug.sharedNamespaces.push({
+                            namespace: namespace,
+                            instances: nsInfo.instances,
+                            totalBackups: nsInfo.backupCount,
+                            perInstanceCounts: nsInfo.instanceBackupCounts || {}
+                        });
+                    }
+                });
+            }
+            
             // Count PBS backups and get samples
             if (state.pbs && Array.isArray(state.pbs)) {
                 state.pbs.forEach((pbsInstance, idx) => {
                     // Store instance details for matching in recommendations
                     const instanceDetail = {
                         name: pbsInstance.pbsInstanceName || `pbs-${idx}`,
+                        index: idx,
                         datastores: 0,
                         snapshots: 0,
-                        namespaces: new Set()
+                        namespaces: new Set(),
+                        namespaceBackupCounts: {} // Track backup count per namespace
                     };
                     
                     if (pbsInstance.datastores) {
@@ -819,15 +866,24 @@ class DiagnosticTool {
                                         const namespace = snap.ns || 'root';
                                         instanceDetail.namespaces.add(namespace);
                                         
+                                        // Track backup count per namespace for this instance
+                                        if (!instanceDetail.namespaceBackupCounts[namespace]) {
+                                            instanceDetail.namespaceBackupCounts[namespace] = 0;
+                                        }
+                                        instanceDetail.namespaceBackupCounts[namespace]++;
+                                        
                                         // Track global namespace info
                                         if (!info.pbs.namespaceInfo[namespace]) {
                                             info.pbs.namespaceInfo[namespace] = {
                                                 backupCount: 0,
-                                                instances: new Set()
+                                                instances: new Set(),
+                                                instanceBackupCounts: {} // Track per-instance counts
                                             };
                                         }
                                         info.pbs.namespaceInfo[namespace].backupCount++;
                                         info.pbs.namespaceInfo[namespace].instances.add(instanceDetail.name);
+                                        info.pbs.namespaceInfo[namespace].instanceBackupCounts[instanceDetail.name] = 
+                                            (info.pbs.namespaceInfo[namespace].instanceBackupCounts[instanceDetail.name] || 0) + 1;
                                     }
                                 });
                             }
@@ -1160,6 +1216,33 @@ class DiagnosticTool {
                     category: 'Backup Status',
                     message: `Found ${totalPveBackups} PVE backups and ${totalPveSnapshots} VM/CT snapshots. Note: PBS is not configured, showing only local PVE backups.`
                 });
+            }
+        }
+
+        // Check namespace filtering for multiple PBS instances
+        if (report.state && report.state.namespaceFilteringDebug) {
+            const debug = report.state.namespaceFilteringDebug;
+            if (debug.multiplePbsInstances && debug.sharedNamespaces.length > 0) {
+                report.recommendations.push({
+                    severity: 'info',
+                    category: 'PBS Namespace Filtering',
+                    message: `Multiple PBS instances detected (${debug.pbsInstanceCount}) with shared namespaces. Shared namespaces: ${debug.sharedNamespaces.map(ns => `${ns.namespace} (${ns.instances.join(', ')})`).join(', ')}. When filtering by namespace, backups from ALL PBS instances with that namespace will be shown.`
+                });
+                
+                // Add detailed namespace backup distribution info
+                if (debug.currentFilters.namespace !== 'all' && debug.currentFilters.namespace !== null) {
+                    const namespaceData = debug.sharedNamespaces.find(ns => ns.namespace === debug.currentFilters.namespace);
+                    if (namespaceData && namespaceData.instances.length > 1) {
+                        const breakdown = Object.entries(namespaceData.perInstanceCounts || {})
+                            .map(([instance, count]) => `${instance}: ${count}`)
+                            .join(', ');
+                        report.recommendations.push({
+                            severity: 'info',
+                            category: 'PBS Namespace Filter Active',
+                            message: `Currently filtering by namespace "${debug.currentFilters.namespace}" which exists on ${namespaceData.instances.length} PBS instances. Backup distribution: ${breakdown}. Total backups in this namespace: ${namespaceData.totalBackups}.`
+                        });
+                    }
+                }
             }
         }
 
