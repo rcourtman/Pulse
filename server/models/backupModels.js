@@ -193,6 +193,7 @@ class PVEBackup {
         this.endpointId = data.endpointId || 'primary';
         this.node = data.node;
         this.storage = data.storage;
+        this.storageShared = data.storageShared || false;
         this.volid = data.volid;
         this.ctime = data.ctime;
         this.size = data.size;
@@ -217,12 +218,21 @@ class PVEBackup {
     }
     
     /**
-     * PVE backups are directly tied to nodes, so matching is simpler
+     * PVE backups matching
+     * Match backups to guests based on VMID and endpoint
      */
     matchesGuest(guest) {
-        return String(this.vmid) === String(guest.vmid) &&
-               this.endpointId === guest.endpointId &&
-               this.node === guest.node;
+        // Must match VMID
+        if (String(this.vmid) !== String(guest.vmid)) return false;
+        
+        // Must match endpoint (same PVE cluster/standalone node)
+        // This ensures backups from one cluster don't show for VMs with same ID on different clusters
+        return this.endpointId === guest.endpointId;
+        
+        // Node matching is not required because:
+        // 1. For shared storage, backups are accessible from any node in the cluster
+        // 2. For local storage, PVE will handle access restrictions when restore is attempted
+        // 3. Users want to see all backups for their VMs regardless of which node created them
     }
 }
 

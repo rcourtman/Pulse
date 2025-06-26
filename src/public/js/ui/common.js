@@ -206,7 +206,9 @@ PulseApp.ui.common = (() => {
                 const backupsTab = document.getElementById('backups');
                 
                 if (backupsTab && !backupsTab.classList.contains('hidden')) {
-                    PulseApp.ui.backups.resetBackupsView();
+                    if (PulseApp.ui.backups && PulseApp.ui.backups.resetBackupsView) {
+                        PulseApp.ui.backups.resetBackupsView();
+                    }
                 } else if (mainTab && !mainTab.classList.contains('hidden')) {
                     resetDashboardView();
                 }
@@ -354,7 +356,7 @@ PulseApp.ui.common = (() => {
                     PulseApp.ui.dashboard.updateDashboardTable();
                     break;
                 case 'backups':
-                    PulseApp.ui.backups.updateBackupsTab();
+                    PulseApp.ui.backups.updateBackupsTab(false, true); // sortOnly = true
                     break;
                 default:
                     console.error('Unknown table type for sorting update:', tableType);
