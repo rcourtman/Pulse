@@ -64,22 +64,16 @@ function setup_nodejs() {
       exit 1
     fi
 
-    # Update to latest npm
-    $STD npm install -g npm@latest || {
-      msg_error "Failed to update npm to latest version"
-      exit 1
-    }
-
     msg_ok "Setup Node.js ${NODE_VERSION}"
   fi
 
   export NODE_OPTIONS="--max-old-space-size=4096"
-  
-# Ensure valid working directory for npm (avoids uv_cwd error)
+
+  # Ensure valid working directory for npm (avoids uv_cwd error)
   if [[ ! -d /opt ]]; then
     mkdir -p /opt
   fi
-  cd /opt || {Add commentMore actions
+  cd /opt || {
     msg_error "Failed to set safe working directory before npm install"
     exit 1
   }
