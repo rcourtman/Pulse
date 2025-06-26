@@ -216,7 +216,6 @@ PulseApp.ui.settings = (() => {
         let host = proxmox?.host || config.PROXMOX_HOST || '';
         let port = proxmox?.port || config.PROXMOX_PORT || '';
         const tokenId = proxmox?.tokenId || config.PROXMOX_TOKEN_ID || '';
-        const nodeName = proxmox?.nodeName || config.PROXMOX_NODE_NAME || '';
         const enabled = proxmox?.enabled !== undefined ? proxmox.enabled : (config.PROXMOX_ENABLED !== 'false');
         
         // Clean the host value if it contains protocol or port, and extract port if needed
@@ -266,15 +265,6 @@ PulseApp.ui.settings = (() => {
                                placeholder="8006"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox VE web interface port</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Node Name
-                        </label>
-                        <input type="text" name="PROXMOX_NODE_NAME"
-                               value="${nodeName}"
-                               placeholder="Display name (optional)"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -339,7 +329,6 @@ PulseApp.ui.settings = (() => {
         let host = pbs?.host || config.PBS_HOST || '';
         let port = pbs?.port || config.PBS_PORT || '';
         const tokenId = pbs?.tokenId || config.PBS_TOKEN_ID || '';
-        const nodeName = pbs?.nodeName || config.PBS_NODE_NAME || '';
         
         // Clean the host value if it contains protocol or port, and extract port if needed
         if (host) {
@@ -386,15 +375,6 @@ PulseApp.ui.settings = (() => {
                                placeholder="8007"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox Backup Server web interface port</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Node Name
-                        </label>
-                        <input type="text" name="PBS_NODE_NAME"
-                               value="${nodeName}"
-                               placeholder="PBS internal hostname"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
@@ -1045,11 +1025,6 @@ PulseApp.ui.settings = (() => {
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox VE web interface port</p>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Node Name</label>
-                        <input type="text" name="PROXMOX_NODE_NAME_${index}" placeholder="PVE Server ${index}"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
                         <input type="text" name="PROXMOX_TOKEN_ID_${index}" placeholder="root@pam!token-name"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
@@ -1124,11 +1099,6 @@ PulseApp.ui.settings = (() => {
                         <input type="number" name="PBS_PORT_${index}" placeholder="8007"
                                class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Default Proxmox Backup Server web interface port</p>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Node Name</label>
-                        <input type="text" name="PBS_NODE_NAME_${index}" placeholder="PBS internal hostname"
-                               class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Token ID</label>
