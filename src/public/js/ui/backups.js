@@ -57,9 +57,9 @@ PulseApp.ui.backups = (() => {
     function _initDOMElements() {
         domElements.tableBody = document.getElementById('backups-overview-tbody');
         domElements.tableContainer = document.getElementById('backups-table-container');
-        domElements.noDataMsg = document.getElementById('no-backup-data-message');
-        domElements.loadingMsg = document.getElementById('backup-loading-message');
-        domElements.statusText = document.getElementById('backup-status-text');
+        domElements.noDataMsg = document.getElementById('backups-no-data-message');
+        domElements.loadingMsg = document.getElementById('backups-loading-message');
+        domElements.statusText = document.getElementById('backups-status-text');
         domElements.searchInput = document.getElementById('backups-search');
         domElements.resetButton = document.getElementById('reset-backups-filters-button');
         domElements.scrollableContainer = document.querySelector('#backups-table-container .overflow-x-auto');
@@ -858,6 +858,7 @@ PulseApp.ui.backups = (() => {
         
         // Clear the summary - information is already shown in table and summary card
         summaryElement.innerHTML = '';
+        summaryElement.classList.add('hidden');
     }
     
     // Update visualization section (calendar, etc)
