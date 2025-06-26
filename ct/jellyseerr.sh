@@ -70,6 +70,7 @@ function update_script() {
     systemctl stop jellyseerr
     rm -rf dist .next node_modules
     export CYPRESS_INSTALL_BINARY=0
+    cd /opt/jellyseer
     $STD pnpm install --frozen-lockfile
     export NODE_OPTIONS="--max-old-space-size=3072"
     $STD pnpm build
