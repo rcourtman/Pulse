@@ -439,7 +439,6 @@ To monitor PBS instances:
 -   `PBS_HOST`: URL of your PBS server (e.g., `https://192.168.1.11:8007`).
 -   `PBS_TOKEN_ID`: Your PBS API Token ID (e.g., `user@pbs!tokenid`). See [Creating a Proxmox Backup Server API Token](#creating-a-proxmox-backup-server-api-token).
 -   `PBS_TOKEN_SECRET`: Your PBS API Token Secret.
--   `PBS_NODE_NAME`: **Important!** The internal hostname of your PBS server (e.g., `pbs-server-01`). This is usually required for API token auth because the token might lack permission to auto-discover the node name. See details below.
 -   `PBS_ALLOW_SELF_SIGNED_CERTS`: Set to `true` for self-signed certificates. Defaults to `false`.
 -   `PBS_PORT`: PBS API port. Defaults to `8007`.
 
@@ -451,25 +450,7 @@ To monitor multiple PBS instances, add numbered variables, starting with `_2`:
 -   `PBS_HOST_3`, `PBS_TOKEN_ID_3`, `PBS_TOKEN_SECRET_3`
 -   ...and so on.
 
-Optional numbered variables also exist for additional PBS instances (e.g., `PBS_NODE_NAME_2`, `PBS_ALLOW_SELF_SIGNED_CERTS_2`, `PBS_PORT_2`). Each PBS instance, whether primary or additional, requires its respective `PBS_NODE_NAME` or `PBS_NODE_NAME_n` to be set if API token authentication is used and the token cannot automatically discover the node name.
-
-<details>
-<summary><strong>Why <code>PBS_NODE_NAME</code> (or <code>PBS_NODE_NAME_n</code>) is Required (Click to Expand)</strong></summary>
-
-Pulse needs to query task lists specific to the PBS node (e.g., `/api2/json/nodes/{nodeName}/tasks`). It attempts to discover this node name automatically by querying `/api2/json/nodes`. However, this endpoint is often restricted for API tokens (returning a 403 Forbidden error), even for tokens with high privileges, unless the `Sys.Audit` permission is granted on the root path (`/`).
-
-Therefore, **setting `PBS_NODE_NAME` in your `.env` file is the standard and recommended way** to ensure Pulse can correctly query task endpoints when using API token authentication. If it's not set and automatic discovery fails due to permissions, Pulse will be unable to fetch task data (backups, verifications, etc.).
-
-**How to find your PBS Node Name:**
-1.  **SSH:** Log into your PBS server via SSH and run `hostname`.
-2.  **UI:** Log into the PBS web interface. The hostname is typically displayed on the Dashboard under Server Status.
-
-Example: If your PBS connects via `https://minipc-pbs.lan:8007` but its internal hostname is `proxmox-backup-server`, set:
-```env
-PBS_HOST=https://minipc-pbs.lan:8007
-PBS_NODE_NAME=proxmox-backup-server
-```
-</details>
+Optional numbered variables also exist for additional PBS instances (e.g., `PBS_ALLOW_SELF_SIGNED_CERTS_2`, `PBS_PORT_2`).
 
 ### Creating a Proxmox API Token
 
@@ -516,11 +497,11 @@ If monitoring PBS, create a token within the PBS interface.
     *   Enter `Token Name` (e.g., "pulse").
     *   Leave `Privilege Separation` checked. Click `Add`.
     *   **Important:** Copy the `Secret` value immediately.
-4.  **Assign permissions (to User and Token):**
-    *   Go to `Configuration` → `Access Control` → `Permissions`.
-    *   **Add User Permission:** Click `Add` → `User Permission`. Path: `/`, User: `pulse-monitor@pbs`, Role: `Audit`, check `Propagate`. Click `Add`.
-    *   **Add API Token Permission:** Click `Add` → `API Token Permission`. Path: `/`, API Token: `pulse-monitor@pbs!pulse`, Role: `Audit`, check `Propagate`. Click `Add`.
-    *   *Note: The `Audit` role at root path (`/`) with `Propagate` is crucial for both user and token.*
+4.  **Assign permissions:**
+    *   For basic monitoring, the token needs minimal permissions. Any of these approaches work:
+    *   **Option 1 - Datastore-specific:** Grant `Datastore.Audit` on specific datastores you want to monitor
+    *   **Option 2 - Global audit:** Grant `Datastore.Audit` role at path `/` with `Propagate` 
+    *   **Note:** Pulse automatically discovers the PBS node configuration, so no special permissions are required
 5.  **Update `.env`:** Set `PBS_TOKEN_ID` (e.g., `pulse-monitor@pbs!pulse`) and `PBS_TOKEN_SECRET`.
 
 </details>
@@ -555,7 +536,10 @@ If monitoring PBS, create a token within the PBS interface.
     - `VM.Audit`
     </details>
     
--   **Proxmox Backup Server:** The `Audit` role assigned at path `/` with `Propagate` enabled is recommended.
+-   **Proxmox Backup Server:** Basic read permissions are sufficient. Either:
+    - `Datastore.Audit` on specific datastores you want to monitor
+    - `Datastore.Audit` at path `/` with `Propagate` for all datastores
+    - Note: Pulse automatically discovers PBS configuration - no special permissions needed
 
 ### Running from Release Tarball
 
