@@ -85,12 +85,136 @@ PulseApp.ui.backups = (() => {
         }
     }
     
+    // Calculate backup summary statistics
+    function calculateBackupSummary(backupStatusByGuest) {
+        let totalGuests = backupStatusByGuest.length;
+        let healthyCount = 0;
+        let warningCount = 0;
+        let errorCount = 0;
+        let noneCount = 0;
+        let totalPbsBackups = 0;
+        let totalPveBackups = 0;
+        let totalSnapshots = 0;
+
+        backupStatusByGuest.forEach(guest => {
+            switch (guest.backupHealthStatus) {
+                case 'ok':
+                case 'stale':
+                    healthyCount++;
+                    break;
+                case 'old':
+                    warningCount++;
+                    break;
+                case 'failed':
+                    errorCount++;
+                    break;
+                case 'none':
+                    noneCount++;
+                    break;
+            }
+            
+            totalPbsBackups += guest.pbsBackups || 0;
+            totalPveBackups += guest.pveBackups || 0;
+            totalSnapshots += guest.snapshotCount || 0;
+        });
+
+        return {
+            totalGuests,
+            healthyCount,
+            warningCount,
+            errorCount,
+            noneCount,
+            totalPbsBackups,
+            totalPveBackups,
+            totalSnapshots,
+            healthyPercent: totalGuests > 0 ? (healthyCount / totalGuests) * 100 : 0
+        };
+    }
+
+    // Render backup health summary
+    function _renderBackupHealthSummary(backupStatusByGuest) {
+        const summary = calculateBackupSummary(backupStatusByGuest);
+        
+        // Find or create summary container
+        let summaryContainer = document.getElementById('backup-health-summary');
+        if (!summaryContainer) {
+            const tableContainer = document.getElementById('backups-table-container');
+            if (!tableContainer) return;
+            
+            summaryContainer = document.createElement('div');
+            summaryContainer.id = 'backup-health-summary';
+            summaryContainer.className = 'mb-4';
+            tableContainer.parentNode.insertBefore(summaryContainer, tableContainer);
+        }
+        
+        // Build summary HTML
+        const summaryHTML = `
+            <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <!-- Health Status -->
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Backup Health</h4>
+                        <div class="flex items-center space-x-2">
+                            <div class="flex-1">
+                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5">
+                                    <div class="bg-green-600 h-2.5 rounded-full" style="width: ${summary.healthyPercent}%"></div>
+                                </div>
+                            </div>
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">${Math.round(summary.healthyPercent)}%</span>
+                        </div>
+                        <div class="mt-2 space-y-1 text-xs">
+                            ${summary.healthyCount > 0 ? `<div class="text-green-600 dark:text-green-400">● ${summary.healthyCount} healthy</div>` : ''}
+                            ${summary.warningCount > 0 ? `<div class="text-yellow-600 dark:text-yellow-400">● ${summary.warningCount} old</div>` : ''}
+                            ${summary.errorCount > 0 ? `<div class="text-red-600 dark:text-red-400">● ${summary.errorCount} failed</div>` : ''}
+                            ${summary.noneCount > 0 ? `<div class="text-gray-600 dark:text-gray-400">● ${summary.noneCount} no backups</div>` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Total Guests -->
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Total Guests</h4>
+                        <p class="text-2xl font-semibold text-gray-900 dark:text-gray-100">${summary.totalGuests}</p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">VMs and Containers</p>
+                    </div>
+                    
+                    <!-- Backup Types -->
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Backup Types</h4>
+                        <div class="space-y-1">
+                            ${summary.totalPbsBackups > 0 ? `<div class="text-xs text-gray-700 dark:text-gray-300">PBS: ${summary.totalPbsBackups}</div>` : ''}
+                            ${summary.totalPveBackups > 0 ? `<div class="text-xs text-gray-700 dark:text-gray-300">PVE: ${summary.totalPveBackups}</div>` : ''}
+                            ${summary.totalSnapshots > 0 ? `<div class="text-xs text-gray-700 dark:text-gray-300">Snapshots: ${summary.totalSnapshots}</div>` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Stats -->
+                    <div>
+                        <h4 class="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Coverage</h4>
+                        <div class="space-y-1">
+                            <div class="text-xs text-gray-700 dark:text-gray-300">
+                                <span class="font-medium">${summary.totalGuests - summary.noneCount}</span> guests protected
+                            </div>
+                            <div class="text-xs text-gray-700 dark:text-gray-300">
+                                <span class="font-medium">${summary.totalPbsBackups + summary.totalPveBackups + summary.totalSnapshots}</span> total backups
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        summaryContainer.innerHTML = summaryHTML;
+    }
+    
     // Render backups table from API data
     function _renderBackupsFromAPIData(apiData, tableContainer, tableBody, noDataMsg, statusTextElement, loadingMsg, scrollableContainer, currentScrollLeft, currentScrollTop) {
         const backupStatusByGuest = apiData.backupStatusByGuest || [];
         
         // Hide loading message and show table
         loadingMsg.classList.add('hidden');
+        
+        // Render backup health summary
+        _renderBackupHealthSummary(backupStatusByGuest);
         
         if (backupStatusByGuest.length === 0) {
             tableContainer.classList.add('hidden');
@@ -176,10 +300,10 @@ PulseApp.ui.backups = (() => {
                 // Create backup data structure for calendar
                 const backupData = {
                     pbsSnapshots: apiData.pbsSnapshots || [],
-                    pveBackups: [], // TODO: Add if needed
-                    vmSnapshots: [], // TODO: Add if needed
+                    pveBackups: apiData.pveBackups || [],
+                    vmSnapshots: apiData.vmSnapshots || [],
                     backupTasks: apiData.backupTasks || [],
-                    guestToValidatedSnapshots: new Map() // TODO: Build if needed
+                    guestToValidatedSnapshots: new Map()
                 };
                 
                 // Initialize detail card if needed
@@ -199,15 +323,111 @@ PulseApp.ui.backups = (() => {
                     if (!detailCardContainer || !PulseApp.ui.backupDetailCard) return;
                     
                     let detailCard = detailCardContainer.querySelector('.bg-white.dark\\:bg-gray-800');
-                    if (detailCard && selectedDate) {
-                        // Update detail card with selected date data
-                        // For now, just pass the raw data - the detail card component will handle filtering
-                        const dateData = {
-                            selectedDate,
-                            guests: backupStatusByGuest,
-                            backupData
-                        };
-                        PulseApp.ui.backupDetailCard.updateDetailCard(detailCard, dateData);
+                    if (detailCard) {
+                        if (selectedDate) {
+                            // Filter backups for the selected date
+                            const selectedDateObj = new Date(selectedDate);
+                            const dateBackups = [];
+                            const guestBackupMap = new Map();
+                            
+                            // Helper to add backup to guest
+                            const addBackupToGuest = (vmid, backupType) => {
+                                const key = vmid.toString();
+                                if (!guestBackupMap.has(key)) {
+                                    const guest = backupStatusByGuest.find(g => g.guestId == vmid);
+                                    if (guest) {
+                                        guestBackupMap.set(key, {
+                                            vmid: vmid,
+                                            name: guest.guestName,
+                                            type: guest.guestType,
+                                            node: guest.node,
+                                            backupCount: 0,
+                                            types: []
+                                        });
+                                    }
+                                }
+                                const guestData = guestBackupMap.get(key);
+                                if (guestData) {
+                                    guestData.backupCount++;
+                                    if (!guestData.types.includes(backupType)) {
+                                        guestData.types.push(backupType);
+                                    }
+                                }
+                            };
+                            
+                            // Process PBS snapshots
+                            if (backupData.pbsSnapshots) {
+                                backupData.pbsSnapshots.forEach(snapshot => {
+                                    const timestamp = snapshot['backup-time'];
+                                    if (timestamp) {
+                                        const backupDate = new Date(timestamp * 1000);
+                                        const backupDateKey = backupDate.toISOString().split('T')[0];
+                                        if (backupDateKey === selectedDate) {
+                                            const vmid = snapshot['backup-id'];
+                                            addBackupToGuest(vmid, 'pbsSnapshots');
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            // Process PVE backups
+                            if (backupData.pveBackups) {
+                                backupData.pveBackups.forEach(backup => {
+                                    const timestamp = backup['backup-time'] || backup.ctime;
+                                    if (timestamp) {
+                                        const backupDate = new Date(timestamp * 1000);
+                                        const backupDateKey = backupDate.toISOString().split('T')[0];
+                                        if (backupDateKey === selectedDate) {
+                                            const vmid = backup.vmid;
+                                            addBackupToGuest(vmid, 'pveBackups');
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            // Process VM snapshots
+                            if (backupData.vmSnapshots) {
+                                backupData.vmSnapshots.forEach(snapshot => {
+                                    const timestamp = snapshot['backup-time'] || snapshot.snaptime;
+                                    if (timestamp) {
+                                        const backupDate = new Date(timestamp * 1000);
+                                        const backupDateKey = backupDate.toISOString().split('T')[0];
+                                        if (backupDateKey === selectedDate) {
+                                            const vmid = snapshot.vmid;
+                                            addBackupToGuest(vmid, 'vmSnapshots');
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            // Convert map to array
+                            guestBackupMap.forEach(guest => {
+                                dateBackups.push(guest);
+                            });
+                            
+                            // Create date data for detail card
+                            const dateData = {
+                                date: selectedDate,
+                                backups: dateBackups,
+                                stats: {
+                                    totalGuests: dateBackups.length,
+                                    pbsCount: dateBackups.filter(b => b.types.includes('pbsSnapshots')).length,
+                                    pveCount: dateBackups.filter(b => b.types.includes('pveBackups')).length,
+                                    snapshotCount: dateBackups.filter(b => b.types.includes('vmSnapshots')).length
+                                },
+                                isCalendarFiltered: true
+                            };
+                            
+                            PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, dateData, instantUpdate);
+                        } else {
+                            // No date selected - show overview
+                            const multiDateData = {
+                                isMultiDate: true,
+                                backups: backupStatusByGuest,
+                                stats: calculateBackupSummary(backupStatusByGuest)
+                            };
+                            PulseApp.ui.backupDetailCard.updateBackupDetailCard(detailCard, multiDateData, instantUpdate);
+                        }
                     }
                 };
                 
