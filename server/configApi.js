@@ -152,7 +152,6 @@ class ConfigApi {
             existingConfig.PROXMOX_PORT = config.proxmox.port || '8006';
             existingConfig.PROXMOX_TOKEN_ID = config.proxmox.tokenId;
             
-            // Only update token secret if provided (allows keeping existing secret)
             if (config.proxmox.tokenSecret) {
                 existingConfig.PROXMOX_TOKEN_SECRET = config.proxmox.tokenSecret;
             }
@@ -261,7 +260,6 @@ class ConfigApi {
         
         // Only remove endpoints that exist in current config but not in new config
         // AND the new config contains at least one endpoint of the same type
-        // This prevents removing PBS endpoints when only adding PVE endpoints (and vice versa)
         if (newPveEndpoints.size > 0) {
             existingPveEndpoints.forEach(index => {
                 if (!newPveEndpoints.has(index)) {
@@ -780,7 +778,6 @@ class ConfigApi {
                 
                 console.log('API clients reinitialized after configuration reload');
                 
-                // Trigger a discovery cycle if we have any endpoints configured (PVE or PBS)
                 if (endpoints.length > 0 || pbsConfigs.length > 0) {
                     console.log('Triggering discovery cycle after configuration reload...');
                     // Import and call runDiscoveryCycle if available

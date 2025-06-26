@@ -43,7 +43,6 @@ PulseApp.utils.backup = (() => {
         return 'text-red-600 dark:text-red-400';
     }
     
-    // Format date to compact string (e.g., "Jan 15")
     function formatCompactDate(dateStr) {
         // Parse YYYY-MM-DD format explicitly to avoid timezone issues
         const parts = dateStr.split('-');

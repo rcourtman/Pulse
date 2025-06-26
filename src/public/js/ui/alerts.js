@@ -296,7 +296,6 @@ PulseApp.ui.alerts = (() => {
             document.body.classList.add('alerts-mode');
             
             // Transform table to show threshold inputs
-            // This will also apply the correct row styling via updateRowStylingOnly()
             transformTableToAlertsMode();
             
         } else {
@@ -531,7 +530,6 @@ PulseApp.ui.alerts = (() => {
                 resetGlobalThresholds();
             });
             
-            // Set initial state (disabled since no custom values initially)
             resetButton.classList.add('opacity-50', 'cursor-not-allowed');
             resetButton.disabled = true;
         }
@@ -554,7 +552,6 @@ PulseApp.ui.alerts = (() => {
             }
         }
         
-        // Fast path: only update styling, not input values (like threshold system)
         updateRowStylingOnly();
         
         // Update reset button state when global thresholds change
@@ -581,10 +578,8 @@ PulseApp.ui.alerts = (() => {
         const guest = dashboardData.find(g => g.id == guestId || g.vmid == guestId);
         if (!guest) return false;
         
-        // Only check running guests for alerts (stopped guests can't trigger metric alerts)
         if (guest.status !== 'running') return false;
         
-        // Check each metric type using selected logic (AND or OR)
         const metricsToCheck = ['cpu', 'memory', 'disk', 'diskread', 'diskwrite', 'netin', 'netout'];
         let hasAnyThresholds = false;
         let exceededThresholds = 0;
@@ -601,7 +596,6 @@ PulseApp.ui.alerts = (() => {
                 thresholdValue = globalThresholds[metricType];
             }
             
-            // Skip if no threshold is set for this metric (but 0 is a valid threshold)
             if (thresholdValue === undefined || thresholdValue === null || thresholdValue === '') continue;
             
             hasAnyThresholds = true;
@@ -693,7 +687,6 @@ PulseApp.ui.alerts = (() => {
             metricTypes.forEach(metricType => {
                 const hasCustomThreshold = guestThresholds[metricType] !== undefined;
                 
-                // Check if global threshold is custom (not default)
                 let globalIsCustom = false;
                 if (metricType === 'cpu' || metricType === 'memory' || metricType === 'disk') {
                     const defaultValue = metricType === 'cpu' ? 80 : metricType === 'memory' ? 85 : 90;
@@ -839,7 +832,6 @@ PulseApp.ui.alerts = (() => {
                 if (metricInput) {
                     metricInput.value = newValue;
                     
-                    // Update tooltip for sliders (skip during reset operations)
                     if (metricInput.type === 'range' && !skipTooltips) {
                         PulseApp.tooltips.updateSliderTooltip(metricInput);
                     }
@@ -926,12 +918,10 @@ PulseApp.ui.alerts = (() => {
         
         // Update all guest rows smoothly
         if (isAlertsMode) {
-            // First update input values to match global thresholds (skip tooltips during reset)
             for (const metricType in globalThresholds) {
                 updateGuestInputValues(metricType, globalThresholds[metricType], true);
             }
             
-            // Then update row styling with new thresholds (no flash since inputs are already updated)
             updateRowStylingOnly();
         }
         
@@ -1106,7 +1096,6 @@ PulseApp.ui.alerts = (() => {
             guestAlertThresholds[guestId] = {};
         }
         
-        // Check if value matches global value (handle both string and numeric comparisons)
         const globalValue = globalThresholds[metricType] || '';
         const isMatchingGlobal = value === globalValue || 
                                  value == globalValue || 
@@ -1243,21 +1232,18 @@ PulseApp.ui.alerts = (() => {
                     
                     if (cpuSlider && globalThresholds.cpu) {
                         cpuSlider.value = globalThresholds.cpu;
-                        // Apply custom styling if not default (use != for type coercion)
                         if (globalThresholds.cpu != 80) {
                             cpuSlider.classList.add('custom-threshold');
                         }
                     }
                     if (memorySlider && globalThresholds.memory) {
                         memorySlider.value = globalThresholds.memory;
-                        // Apply custom styling if not default (use != for type coercion)
                         if (globalThresholds.memory != 85) {
                             memorySlider.classList.add('custom-threshold');
                         }
                     }
                     if (diskSlider && globalThresholds.disk) {
                         diskSlider.value = globalThresholds.disk;
-                        // Apply custom styling if not default (use != for type coercion)
                         if (globalThresholds.disk != 90) {
                             diskSlider.classList.add('custom-threshold');
                         }
@@ -1276,7 +1262,6 @@ PulseApp.ui.alerts = (() => {
                     guestAlertThresholds = config.guestThresholds;
                 }
                 
-                // Alert logic is now fixed to OR (dropdown removed)
                 
                 // Load alert duration
                 if (config.duration !== undefined) {

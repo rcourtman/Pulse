@@ -89,7 +89,6 @@ PulseApp.utils.backupFilterPipeline = (() => {
         // Step 2: Apply filters in order of efficiency
         let filtered = entries;
         
-        // Filter by backup type first (most selective)
         if (backupType !== 'all') {
             filtered = filtered.filter(entry => {
                 switch (backupType) {
@@ -101,7 +100,6 @@ PulseApp.utils.backupFilterPipeline = (() => {
             });
         }
         
-        // Filter by namespace (already handled in processRawData for efficiency)
         
         // Filter by guest type
         if (guestType !== 'all') {
@@ -128,7 +126,6 @@ PulseApp.utils.backupFilterPipeline = (() => {
             filtered = filtered.filter(entry => entry.hasFailures || entry.recentFailures > 0);
         }
         
-        // Filter by search (last, as it's most expensive)
         if (search) {
             const searchTerms = search.toLowerCase().split(',').map(s => s.trim());
             filtered = filtered.filter(entry => {
@@ -192,7 +189,6 @@ PulseApp.utils.backupFilterPipeline = (() => {
                     });
                 }
                 
-                // Add PVE backups (namespace-agnostic)
                 if (pveBackups) {
                     pveBackups.forEach(backup => {
                         if (isBackupForGuest(backup, guest)) {
@@ -201,7 +197,6 @@ PulseApp.utils.backupFilterPipeline = (() => {
                     });
                 }
                 
-                // Add VM snapshots (namespace-agnostic)
                 if (vmSnapshots) {
                     vmSnapshots.forEach(snap => {
                         if (isSnapshotForGuest(snap, guest)) {

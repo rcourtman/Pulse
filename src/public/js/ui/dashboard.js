@@ -31,7 +31,6 @@ PulseApp.ui.dashboard = (() => {
     let virtualScroller = null;
     const VIRTUAL_SCROLL_THRESHOLD = 100; // Use virtual scrolling for >100 items
 
-    // Alert helper functions (defined early to be available everywhere)
     function _createAlertSliderHtml(guestId, metricType, config) {
         return PulseApp.utils.createAlertSliderHtml(guestId, 'guest', metricType, config);
     }
@@ -52,7 +51,6 @@ PulseApp.ui.dashboard = (() => {
             const metricType = container?.getAttribute('data-metric');
             
             if (guestId && metricType) {
-                // Set up alert-specific events (save only on release, not during drag)
                 slider.addEventListener('input', (event) => {
                     // Only update tooltip during drag, don't update any DOM
                     PulseApp.tooltips.updateSliderTooltip(event.target);
@@ -104,7 +102,6 @@ PulseApp.ui.dashboard = (() => {
             
             if (guestId && metricType) {
                 select.addEventListener('change', (e) => {
-                    // When user changes value, it becomes an individual threshold (no longer global)
                     PulseApp.ui.alerts.updateGuestThreshold(guestId, metricType, e.target.value);
                     
                     // Remove global indicator visual styling
@@ -200,7 +197,6 @@ PulseApp.ui.dashboard = (() => {
         _initTableFixedLine();
         
         // Resize listener for progress bar text updates - DISABLED
-        // window.addEventListener('resize', PulseApp.utils.updateProgressBarTextsDebounced);
 
         document.addEventListener('keydown', (event) => {
             // Handle Escape for resetting filters
@@ -220,7 +216,6 @@ PulseApp.ui.dashboard = (() => {
                 return;
             }
 
-            // 2. If a modal is active (e.g., snapshot-modal prevents background interaction)
             const snapshotModal = document.getElementById('snapshot-modal');
             if (snapshotModal && !snapshotModal.classList.contains('hidden')) {
                 return;
@@ -228,7 +223,6 @@ PulseApp.ui.dashboard = (() => {
             // Add similar checks for other modals if they exist and should block this behavior.
 
             if (searchInput) { // searchInput is the module-scoped variable
-                // For printable characters (letters, numbers, symbols, space)
                 // Check !event.ctrlKey && !event.metaKey to avoid conflict with browser/OS shortcuts.
                 if (event.key.length === 1 && !event.ctrlKey && !event.metaKey) {
                     if (document.activeElement !== searchInput) {
@@ -440,7 +434,6 @@ PulseApp.ui.dashboard = (() => {
         
         PulseApp.state.set('dashboardData', dashboardData);
         // Disabled dynamic width calculation to prevent column shifting
-        // _setDashboardColumnWidths(dashboardData);
     }
 
     function _filterDashboardData(dashboardData, searchInput, filterGuestType, filterStatus, thresholdState) {
@@ -541,7 +534,6 @@ PulseApp.ui.dashboard = (() => {
         let visibleCount = 0;
         let visibleNodes = new Set();
 
-        // Build maps of existing rows and node headers (optimized)
         const children = tableBody.children;
         for (let i = 0; i < children.length; i++) {
             const row = children[i];
@@ -557,7 +549,6 @@ PulseApp.ui.dashboard = (() => {
         }
 
         if (groupByNode) {
-            // Group data by node (optimized)
             const nodeGroups = {};
             for (let i = 0; i < sortedData.length; i++) {
                 const guest = sortedData[i];
@@ -687,7 +678,6 @@ PulseApp.ui.dashboard = (() => {
                 cell.removeAttribute('data-alert-custom');
             });
         } else if (guest.meetsThresholds === false && document.getElementById('toggle-thresholds-checkbox')?.checked) {
-            // Apply threshold dimming (only when threshold mode is enabled)
             row.style.opacity = '0.4';
             row.style.transition = 'opacity 0.2s ease-in-out';
             row.setAttribute('data-dimmed', 'true');
@@ -713,7 +703,6 @@ PulseApp.ui.dashboard = (() => {
             cells[0].className = newCell.className;
         }
         if (cells.length >= 10) {
-            // Cell order: name(0), type(1), id(2), uptime(3), cpu(4), memory(5), disk(6), diskread(7), diskwrite(8), netin(9), netout(10)
             
             // Update name (cell 0) with full HTML structure including indicators
             const thresholdIndicator = createThresholdIndicator(guest);
@@ -740,7 +729,6 @@ PulseApp.ui.dashboard = (() => {
                 cells[3].className = 'py-1 px-2 align-middle whitespace-nowrap overflow-hidden text-ellipsis';
             }
 
-            // Update uptime (cell 3)
             const uptimeCell = cells[3];
             let newUptimeHTML = '-';
             if (guest.status === STATUS_RUNNING) {
@@ -755,7 +743,6 @@ PulseApp.ui.dashboard = (() => {
                 uptimeCell.innerHTML = newUptimeHTML;
             }
 
-            // Update CPU (cell 4)
             const cpuCell = cells[4];
             const isAlertsMode = PulseApp.ui.alerts?.isAlertsMode?.() || false;
             if (isAlertsMode && cpuCell.querySelector('.alert-threshold-input')) {
@@ -785,7 +772,6 @@ PulseApp.ui.dashboard = (() => {
                 }
             }
 
-            // Update Memory (cell 5)
             const memCell = cells[5];
             if (isAlertsMode && memCell.querySelector('.alert-threshold-input')) {
                 // Skip update if already has alert control to preserve event listeners
@@ -814,7 +800,6 @@ PulseApp.ui.dashboard = (() => {
                 }
             }
 
-            // Update Disk (cell 6)
             const diskCell = cells[6];
             if (isAlertsMode && diskCell.querySelector('.alert-threshold-input')) {
                 // Skip update if already has alert control to preserve event listeners
@@ -854,7 +839,6 @@ PulseApp.ui.dashboard = (() => {
 
             // Update I/O cells (7-10) if running
             if (guest.status === STATUS_RUNNING) {
-                // Disk Read (cell 7)
                 const diskReadCell = cells[7];
                 let newDiskReadHTML;
                 PulseApp.utils.updateGuestIOMetric(diskReadCell, guest, 'diskread', isAlertsMode);
@@ -862,21 +846,18 @@ PulseApp.ui.dashboard = (() => {
                     _setupAlertEventListeners(diskReadCell);
                 }
 
-                // Disk Write (cell 8)
                 const diskWriteCell = cells[8];
                 PulseApp.utils.updateGuestIOMetric(diskWriteCell, guest, 'diskwrite', isAlertsMode);
                 if (isAlertsMode && !diskWriteCell.querySelector('select')) {
                     _setupAlertEventListeners(diskWriteCell);
                 }
 
-                // Net In (cell 9)
                 const netInCell = cells[9];
                 PulseApp.utils.updateGuestIOMetric(netInCell, guest, 'netin', isAlertsMode);
                 if (isAlertsMode && !netInCell.querySelector('select')) {
                     _setupAlertEventListeners(netInCell);
                 }
 
-                // Net Out (cell 10)
                 if (cells[10]) {
                     const netOutCell = cells[10];
                     PulseApp.utils.updateGuestIOMetric(netOutCell, guest, 'netout', isAlertsMode);
@@ -960,7 +941,6 @@ PulseApp.ui.dashboard = (() => {
             tableBodyEl = document.querySelector('#main-table tbody');
             statusElementEl = document.getElementById('dashboard-status-text');
             
-            // If still not found, silently return (not an error during initial load)
             if (!tableBodyEl || !statusElementEl) {
                 return;
             }
@@ -998,7 +978,6 @@ PulseApp.ui.dashboard = (() => {
         let visibleCount = 0;
         let visibleNodes = new Set();
 
-        // Check if we need a full rebuild (grouping mode changed or first render)
         const needsFullRebuild = previousGroupByNode !== groupByNode || previousTableData === null;
 
         // Destroy existing virtual scroller if switching modes or data size changes significantly
@@ -1131,9 +1110,6 @@ PulseApp.ui.dashboard = (() => {
         }
         
         // Update progress bar texts based on available width - DISABLED
-        // requestAnimationFrame(() => {
-        //     PulseApp.utils.updateProgressBarTexts();
-        // });
         
         // Additional scroll position restoration for both axes
         if (scrollableContainer && (currentScrollLeft > 0 || currentScrollTop > 0)) {
@@ -1261,7 +1237,6 @@ PulseApp.ui.dashboard = (() => {
             nodeNameContent = `<a href="${hostUrl}" target="_blank" rel="noopener noreferrer" class="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-150" title="Open ${node.displayName || node.node} web interface">${node.displayName || node.node || 'Unknown'}</a>`;
         }
         
-        // Create cells for the node row - matching guest row column count (11)
         row.innerHTML = `
             <td class="sticky left-0 bg-gray-50 dark:bg-gray-800 z-10 py-1 px-2 font-medium text-gray-700 dark:text-gray-300">
                 <div class="flex items-center gap-2">
@@ -1386,7 +1361,6 @@ PulseApp.ui.dashboard = (() => {
             row.removeAttribute('data-alert-dimmed');
             row.removeAttribute('data-dimmed');
         } else if (guest.meetsThresholds === false && document.getElementById('toggle-thresholds-checkbox')?.checked) {
-            // Apply threshold dimming (only when threshold mode is enabled)
             row.style.opacity = '0.4';
             row.style.transition = 'opacity 0.2s ease-in-out';
             row.setAttribute('data-dimmed', 'true');

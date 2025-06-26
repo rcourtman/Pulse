@@ -66,7 +66,6 @@ router.post('/apply', async (req, res) => {
                     io.emit('updateProgress', progress);
                 });
 
-                // Apply update (pass download URL for version extraction)
                 await updateManager.applyUpdate(updateFile, (progress) => {
                     io.emit('updateProgress', progress);
                 }, downloadUrl);

@@ -315,7 +315,6 @@ class AlertManager extends EventEmitter {
                 }
             });
             
-            // Trigger newly created alerts (handles notifications)
             for (const alert of newlyTriggeredAlerts) {
                 await this.triggerAlert(alert);
             }
@@ -342,7 +341,6 @@ class AlertManager extends EventEmitter {
                 if (guest && guest.name) {
                     const guestKey = `${guest.endpointId || 'unknown'}-${guest.node}-${guest.vmid}`;
                     
-                    // Find matching metrics data for this guest (which has calculated I/O rates)
                     const guestMetricsData = metrics.find(m => 
                         m.endpointId === guest.endpointId && 
                         m.node === guest.node && 
@@ -392,75 +390,6 @@ class AlertManager extends EventEmitter {
         
         // === OLD COMPLEX RULE SYSTEM BELOW (DISABLED) ===
         // TODO: Remove this code block after testing simplified system
-        /*
-        if (this.processingMetrics || this.reloadingRules) {
-            console.log('[AlertManager] Skipping metrics check - already processing or reloading rules');
-            return;
-        }
-        
-        this.processingMetrics = true;
-        const timestamp = Date.now();
-        const newlyTriggeredAlerts = [];
-        
-        try {
-            // Validate inputs
-            if (!Array.isArray(guests) || !Array.isArray(metrics)) {
-                console.warn('[AlertManager] Invalid guests or metrics data provided');
-                return;
-            }
-            
-            // Initialize guest states for transition detection
-            this.initializeGuestStates(guests);
-            
-            guests.forEach(guest => {
-                try {
-                    // Evaluate all alert rules (both single-metric and compound threshold rules)
-                    this.alertRules.forEach(rule => {
-                        try {
-                            if (!rule.enabled) return;
-                            
-                            // Check suppression, but allow status alerts for state transitions
-                            const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
-                            const guestStateKey = `${guest.endpointId}_${guest.node}_${guest.vmid}`;
-                            const previousState = this.guestStates.get(guestStateKey);
-                            const hasStateChanged = previousState && previousState !== guest.status;
-                            const isStatusTransition = rule.metric === 'status' && hasStateChanged;
-                            
-                            if (!isStatusTransition && this.isRuleSuppressed(rule.id, guest)) return;
-                            
-                            if (rule.type === 'compound_threshold' && rule.thresholds) {
-                                // Handle compound threshold rules
-                                const triggered = this.evaluateCompoundThresholdRule(rule, guest, metrics, alertKey, timestamp);
-                                if (triggered) newlyTriggeredAlerts.push(triggered);
-                            } else if (rule.type === 'per_guest_thresholds' && (rule.guestThresholds || rule.globalThresholds)) {
-                                // Handle per-guest threshold rules
-                                const triggeredAlerts = await this.evaluatePerGuestThresholdRule(rule, guest, metrics, timestamp);
-                                triggeredAlerts.forEach(triggered => newlyTriggeredAlerts.push(triggered));
-                            } else {
-                                // Handle single-metric rules
-                                const triggered = this.evaluateRule(rule, guest, metrics, alertKey, timestamp);
-                                if (triggered) newlyTriggeredAlerts.push(triggered);
-                            }
-                        } catch (ruleError) {
-                            console.error(`[AlertManager] Error evaluating rule ${rule.id}:`, ruleError);
-                        }
-                    });
-                } catch (guestError) {
-                    console.error(`[AlertManager] Error processing guest ${guest.vmid}:`, guestError);
-                }
-            });
-            
-            // Emit newly triggered alerts
-            newlyTriggeredAlerts.forEach(alert => {
-                this.emit('alert', alert);
-            });
-            
-        } catch (error) {
-            console.error('[AlertManager] Error in checkMetrics:', error);
-        } finally {
-            this.processingMetrics = false;
-        }
-        */
     }
 
     processMetrics(metricsData) {
@@ -526,7 +455,6 @@ class AlertManager extends EventEmitter {
                 m.id === guest.vmid
             );
 
-            // Get effective threshold (custom or global)
             const effectiveThreshold = this.getEffectiveThreshold(rule, guest);
 
             // Enhanced condition evaluation
@@ -598,7 +526,6 @@ class AlertManager extends EventEmitter {
                     existingAlert.lastUpdate = timestamp;
                     existingAlert.currentValue = currentValue;
                 } else if (existingAlert.state === 'active' && !existingAlert.acknowledged) {
-                    // Update existing active alert (only if not acknowledged)
                     existingAlert.lastUpdate = timestamp;
                     existingAlert.currentValue = currentValue;
                 }
@@ -651,7 +578,6 @@ class AlertManager extends EventEmitter {
         const { netin = 0, netout = 0 } = guestMetrics.current;
         const totalTraffic = netin + netout;
         
-        // Skip anomaly detection for very low traffic (likely idle systems)
         if (totalTraffic < 1024 * 1024) { // Less than 1 MB/s
             return false;
         }
@@ -682,7 +608,6 @@ class AlertManager extends EventEmitter {
         // Check for suspicious patterns
         const isSuspiciousVolume = totalTraffic > suspiciousThreshold;
         
-        // Check for highly asymmetric traffic (could indicate data exfiltration)
         const maxTraffic = Math.max(netin, netout);
         const minTraffic = Math.min(netin, netout);
         const asymmetryRatio = minTraffic > 0 ? maxTraffic / minTraffic : maxTraffic;
@@ -731,7 +656,6 @@ class AlertManager extends EventEmitter {
                 
                 this.emit('alertAcknowledged', alert);
                 
-                // Save active alerts (which now includes acknowledgements)
                 this.saveActiveAlerts();
                 
                 return true;
@@ -819,7 +743,6 @@ class AlertManager extends EventEmitter {
             console.log(`[AlertManager] Email disabled globally - sendEmail set to false`);
         } else {
             // Global email is enabled - check individual rule preferences and transporter
-            // Check both old format (sendEmail) and new format (notifications.email)
             let ruleEmailEnabled = true; // Default to true for system rules
             if (alert.rule) {
                 if (alert.rule.notifications && typeof alert.rule.notifications.email === 'boolean') {
@@ -838,7 +761,6 @@ class AlertManager extends EventEmitter {
             console.log(`[AlertManager] Webhook disabled globally - sendWebhook set to false`);
         } else {
             // Global webhook is enabled - check individual rule preferences
-            // Check both old format (sendWebhook) and new format (notifications.webhook)
             let ruleWebhookEnabled = false; // Default to false for webhooks
             if (alert.rule) {
                 if (alert.rule.notifications && typeof alert.rule.notifications.webhook === 'boolean') {
@@ -857,7 +779,6 @@ class AlertManager extends EventEmitter {
             this.notificationStatus = new Map();
         }
         
-        // Track what we're attempting to send (not yet successful)
         const statusUpdate = {
             emailSent: false,
             webhookSent: false,
@@ -919,7 +840,6 @@ class AlertManager extends EventEmitter {
                     }
                 }
                 
-                // Check rate limiting (emails per hour)
                 const oneHourAgo = now - 3600000;
                 const recentEmails = cooldownInfo?.emailHistory?.filter(timestamp => timestamp > oneHourAgo) || [];
                 if (recentEmails.length >= cooldownConfig.maxEmailsPerHour) {
@@ -1030,7 +950,6 @@ class AlertManager extends EventEmitter {
                     }
                 }
                 
-                // Check rate limiting (calls per hour)
                 const oneHourAgo = now - 3600000;
                 const recentCalls = cooldownInfo?.callHistory?.filter(timestamp => timestamp > oneHourAgo) || [];
                 if (recentCalls.length >= cooldownConfig.maxCallsPerHour) {
@@ -1086,7 +1005,6 @@ class AlertManager extends EventEmitter {
         // Save the updated alerts to persist the notification status
         this.saveActiveAlerts();
         
-        // Emit event for external handlers (use safe subset of alert data)
         this.emit('notification', { 
             alertId: alert.id, 
             ruleId: alert.rule.id, 
@@ -1469,7 +1387,6 @@ class AlertManager extends EventEmitter {
         // Add current entry to history
         guestHistory.push(currentEntry);
         
-        // Keep only last 10 entries (enough for rate calculation)
         if (guestHistory.length > 10) {
             guestHistory.shift();
         }
@@ -1514,7 +1431,6 @@ class AlertManager extends EventEmitter {
     getMetricValue(metrics, metricName, guest) {
         switch (metricName) {
             case 'cpu':
-                // CPU values from Proxmox VE API are typically decimals (0.0-1.0)
                 // but in some processing they might already be converted to percentages
                 const cpuValue = metrics.cpu;
                 if (typeof cpuValue !== 'number' || isNaN(cpuValue)) {
@@ -1646,9 +1562,7 @@ class AlertManager extends EventEmitter {
             return `${rule.name} - Unknown guest - ${rule.type === 'compound_threshold' ? 'Compound threshold met' : 'Alert triggered'}`;
         }
         
-        // Handle per-guest threshold alerts first (different from compound threshold rules)
         if (rule.metric === 'combined_thresholds') {
-            // Use the detailed threshold info from rule name (already formatted)
             return `${guest.name || 'Unknown'} (${(guest.type || 'unknown').toUpperCase()} ${guest.vmid || 'N/A'}) on ${guest.node || 'Unknown'} - ${rule.name}`;
         }
         
@@ -2042,7 +1956,6 @@ class AlertManager extends EventEmitter {
                     
                     // Handle different rule types
                     if (rule.metric === 'status') {
-                        // Handle status-based rules (down alerts)
                         const effectiveThreshold = this.getEffectiveThreshold(rule, guest);
                         const isTriggered = this.evaluateCondition(guest.status, rule.condition, effectiveThreshold);
                         
@@ -2094,7 +2007,6 @@ class AlertManager extends EventEmitter {
         
         const metrics = currentState.metrics || [];
         
-        // Find metrics for this guest (metrics is an array, not an object)
         const guestMetrics = metrics.find(m => 
             m.endpointId === guest.endpointId &&
             m.node === guest.node &&
@@ -2120,7 +2032,6 @@ class AlertManager extends EventEmitter {
             }
         }
 
-        // Check if ALL threshold conditions are met (AND logic)
         const thresholdsMet = rule.thresholds.every(threshold => {
             const result = this.evaluateThresholdCondition(threshold, guestMetrics.current, guest);
             if (isDebugMode) {
@@ -2158,7 +2069,6 @@ class AlertManager extends EventEmitter {
     }
 
     evaluateCompoundThresholdRule(rule, guest, metrics, alertKey, timestamp) {
-        // Find metrics for this guest (metrics is an array, not an object)
         const guestMetrics = metrics.find(m => 
             m.endpointId === guest.endpointId &&
             m.node === guest.node &&
@@ -2166,7 +2076,6 @@ class AlertManager extends EventEmitter {
         );
         if (!guestMetrics || !guestMetrics.current) return;
 
-        // Check if ALL threshold conditions are met (AND logic)
         const thresholdsMet = rule.thresholds.every(threshold => {
             return this.evaluateThresholdCondition(threshold, guestMetrics.current, guest);
         });
@@ -2208,13 +2117,11 @@ class AlertManager extends EventEmitter {
                 existingAlert.lastUpdate = timestamp;
                 existingAlert.currentValue = this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest);
             } else if (existingAlert.state === 'active' && !existingAlert.acknowledged) {
-                // Update existing active alert (only if not acknowledged)
                 existingAlert.lastUpdate = timestamp;
                 existingAlert.currentValue = this.getCurrentThresholdValues(rule.thresholds, guestMetrics.current, guest);
             }
         } else {
             if (existingAlert && existingAlert.state === 'active' && !existingAlert.acknowledged) {
-                // Resolve alert (only if not acknowledged)
                 existingAlert.state = 'resolved';
                 existingAlert.resolvedAt = timestamp;
                 if (existingAlert.rule.autoResolve) {
@@ -2233,7 +2140,6 @@ class AlertManager extends EventEmitter {
         switch (threshold.metric) {
             case 'cpu':
                 metricValue = currentMetrics.cpu;
-                // CPU values from Proxmox might be in decimal format (0.0-1.0)
                 // Convert to percentage if needed
                 if (metricValue !== undefined && metricValue !== null && metricValue <= 1.0) {
                     metricValue = metricValue * 100;
@@ -2314,7 +2220,6 @@ class AlertManager extends EventEmitter {
         switch (threshold.metric) {
             case 'cpu': 
                 const cpuValue = currentMetrics.cpu || 0;
-                // CPU values from Proxmox might be in decimal format (0.0-1.0)
                 // Convert to percentage if needed
                 if (cpuValue <= 1.0) {
                     return Math.round(cpuValue * 100 * 10) / 10; // Round to 1 decimal place
@@ -2375,7 +2280,6 @@ class AlertManager extends EventEmitter {
         // Create a guest identifier for threshold lookup
         const guestId = `${guest.endpointId}-${guest.node}-${guest.vmid}`;
         
-        // Get the thresholds to check (guest-specific or global)
         const guestThresholds = rule.guestThresholds || {};
         const globalThresholds = rule.globalThresholds || {};
         const thresholdConfigForGuest = guestThresholds[guestId] || {};
@@ -2402,7 +2306,6 @@ class AlertManager extends EventEmitter {
                 effectiveThreshold = parseFloat(globalThresholds[metricType]);
             }
             
-            // Skip if no threshold is set for this metric (but 0 is a valid threshold)
             if (effectiveThreshold === null || isNaN(effectiveThreshold)) {
                 continue;
             }
@@ -2422,7 +2325,6 @@ class AlertManager extends EventEmitter {
             }
             
             
-            // Evaluate threshold condition (default to greater_than)
             const condition = rule.condition || 'greater_than';
             const isThresholdExceeded = this.evaluateCondition(currentValue, condition, effectiveThreshold);
             
@@ -2441,7 +2343,6 @@ class AlertManager extends EventEmitter {
             return triggeredAlerts;
         }
         
-        // Determine alert logic mode (default to 'and' for backward compatibility)
         const alertLogic = (rule.alertLogic || 'and').toLowerCase();
         
         // Check if alert conditions are met based on logic mode
@@ -2487,7 +2388,6 @@ class AlertManager extends EventEmitter {
         
         console.log(`[AlertManager] Guest ${guest.name}: Logic=${alertLogic.toUpperCase()}, Configured: [${configuredMetrics.join(', ')}], Exceeded: [${exceededMetrics.join(', ')}], Condition met: ${alertConditionMet}`);
         
-        // Create single alert key for this guest (not per-metric)
         const alertKey = `${rule.id}_${guest.endpointId}_${guest.node}_${guest.vmid}`;
         const existingAlert = this.activeAlerts.get(alertKey);
         
@@ -2656,13 +2556,11 @@ class AlertManager extends EventEmitter {
     // Deprecated: acknowledgements are now loaded from active alerts
     async loadAcknowledgements() {
         // This method is kept for backward compatibility but does nothing
-        // Acknowledgements are now loaded from activeAlerts in loadActiveAlerts()
     }
     
     // Deprecated: acknowledgements are now saved with active alerts
     async saveAcknowledgements() {
         // This method is kept for backward compatibility but does nothing
-        // Acknowledgements are now saved in saveActiveAlerts()
     }
     
     // Old saveAcknowledgements code removed - acknowledgements are now part of active alerts
@@ -3381,7 +3279,6 @@ class AlertManager extends EventEmitter {
         console.log(`[AlertManager] Checking conditions - metric === 'bundled': ${alert.metric === 'bundled'}, exceededMetrics truthy: ${!!alert.exceededMetrics}`);
         
         if (alert.metric === 'bundled' && alert.exceededMetrics) {
-            // Handle bundled alerts (per-guest threshold system)
             console.log(`[AlertManager] Formatting bundled alert email with ${alert.exceededMetrics.length} exceeded metrics`);
             console.log(`[AlertManager] Exceeded metrics:`, JSON.stringify(alert.exceededMetrics));
             metricsArray = alert.exceededMetrics.map(m => {
@@ -4246,7 +4143,6 @@ Pulse Monitoring System`,
                     }]
                 };
             } else {
-                // Generic webhook format (including Home Assistant)
                 payload = {
                     timestamp: new Date().toISOString(),
                     alert: alert
@@ -4405,7 +4301,6 @@ Pulse Monitoring System`,
         this.processingMetrics = true;
         
         try {
-            // Get current thresholds from the alert-rules.json (keeping existing config structure)
             const thresholdConfig = Array.from(this.alertRules.values()).find(rule => rule.type === 'per_guest_thresholds');
             if (!thresholdConfig) {
                 console.log('[AlertManager] No threshold configuration found');
@@ -4460,7 +4355,6 @@ Pulse Monitoring System`,
             }
         }
         
-        // Create unique alert key for this guest (one alert per guest)
         const alertKey = `${guest.endpointId || 'unknown'}_${guest.node}_${guest.vmid}_bundled`;
         const existingAlert = this.activeAlerts.get(alertKey);
         
@@ -4519,7 +4413,6 @@ Pulse Monitoring System`,
                     
                     console.log(`[AlertManager] Triggered bundled alert for ${guest.name} after ${elapsedTime}ms`);
                     
-                    // Trigger the alert (which handles notifications)
                     await this.triggerAlert(existingAlert);
                 } else {
                     // Update pending alert with current data
@@ -4651,7 +4544,6 @@ Pulse Monitoring System`,
             return;
         }
         
-        // Get current metric value directly from guest object (simplified approach)
         let currentValue = null;
         
         if (metricType === 'cpu') {

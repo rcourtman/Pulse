@@ -62,7 +62,6 @@ PulseApp.tooltips = (() => {
     }
 
     function handleMouseOut(event) {
-        // Don't hide programmatic tooltips (like chart tooltips)
         if (tooltipElement && tooltipElement.getAttribute('data-programmatic') === 'true') {
             return;
         }
@@ -150,15 +149,10 @@ PulseApp.tooltips = (() => {
 
         const posX = thumbX - (tooltipRect.width / 2);
         
-        // Check if slider is in table header (global alert sliders)
         const isInTableHeader = sliderElement.closest('thead') !== null;
         const isGlobalAlertSlider = sliderElement.id && sliderElement.id.startsWith('global-alert-');
         let posY;
         
-        // Debug logging (commented out)
-        // if (isGlobalAlertSlider) {
-        //     console.log('Global alert slider detected:', sliderElement.id, 'isInTableHeader:', isInTableHeader);
-        // }
         
         if (isInTableHeader || isGlobalAlertSlider) {
             // For sliders in table header or global alert sliders, position tooltip above the slider but with more space

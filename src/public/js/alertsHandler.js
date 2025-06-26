@@ -208,7 +208,6 @@ PulseApp.alerts = (() => {
                 return;
             }
             
-            // If clicking inside the dropdown, do nothing (let dropdown handle its own clicks)
             if (clickedDropdown) {
                 return;
             }
@@ -359,7 +358,6 @@ PulseApp.alerts = (() => {
             `;
         }
 
-        // Acknowledged alerts section (collapsed, greyed out)
         if (acknowledgedAlerts.length > 0) {
             const acknowledgedSection = `
                 <div class="border-t border-gray-200 dark:border-gray-700">
@@ -428,7 +426,6 @@ PulseApp.alerts = (() => {
             const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(alert.metric);
             currentValueDisplay = `${Math.round(alert.currentValue)}${isPercentageMetric ? '%' : ''}`;
         } else if (typeof alert.currentValue === 'object' && alert.currentValue !== null) {
-            // Handle compound threshold alerts (multiple metrics)
             const values = [];
             for (const [metric, value] of Object.entries(alert.currentValue)) {
                 const isPercentageMetric = ['cpu', 'memory', 'disk'].includes(metric);
@@ -507,12 +504,10 @@ PulseApp.alerts = (() => {
                                         const currentVal = parseFloat(current);
                                         const thresholdVal = parseFloat(threshold);
                                         
-                                        // Convert to same unit for comparison (MB/s as base)
                                         const unitMultipliers = { 'B/s': 1/1048576, 'KB/s': 1/1024, 'MB/s': 1, 'GB/s': 1024, 'TB/s': 1048576 };
                                         const currentMBps = currentVal * (unitMultipliers[currentUnit] || 1);
                                         const thresholdMBps = thresholdVal * (unitMultipliers[thresholdUnit] || 1);
                                         
-                                        // Calculate percentage for visual bar (cap at reasonable max for display)
                                         const maxDisplayMBps = Math.max(thresholdMBps * 2, 10); // At least 10 MB/s or 2x threshold
                                         const currentPercent = Math.min((currentMBps / maxDisplayMBps) * 100, 100);
                                         const thresholdPercent = Math.min((thresholdMBps / maxDisplayMBps) * 100, 100);
@@ -990,11 +985,8 @@ PulseApp.alerts = (() => {
             updateDropdownContent();
         }
         
-        // Only show notifications for errors - success is visual (alerts disappear/change)
         if (errorCount > 0) {
-            // showNotification({ 
             //     message: `${errorCount} alerts failed to acknowledge` 
-            // }, 'warning');
         }
         // No "success" notification needed - user can see alerts are acknowledged
     }

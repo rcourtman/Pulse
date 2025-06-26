@@ -107,10 +107,8 @@ function createApiClientInstance(baseURL, allowSelfSignedCerts, authInterceptor,
     }
   };
 
-  // If resilient client is requested and the host appears to be a hostname (not IP)
   if (useResilientClient) {
     const hostname = dnsResolver.extractHostname(baseURL);
-    // Check if it's likely a hostname (not an IP)
     if (hostname && !hostname.match(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/)) {
       console.log(`[ApiClients] Creating resilient client for hostname: ${hostname}`);
       return new ResilientApiClient(baseConfig, authInterceptor);
@@ -162,7 +160,6 @@ function pbsRetryConditionChecker(error) {
  */
 function createPbsAuthInterceptor(config) {
   return reqConfig => {
-    // Assumes config.tokenId and config.tokenSecret exist (checked during config load perhaps?)
     reqConfig.headers.Authorization = `PBSAPIToken=${config.tokenId}:${config.tokenSecret}`;
     return reqConfig;
   };

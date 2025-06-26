@@ -108,7 +108,6 @@ const sections = [
         await page.waitForTimeout(300);
 
         console.log('  Action: Clicking charts toggle label');
-        // Click the charts toggle label (checkbox is hidden, label wraps it)
         const chartsToggleLabel = page.locator('label:has(#toggle-charts-checkbox)');
         await chartsToggleLabel.waitFor({ state: 'visible', timeout: 10000 });
         await chartsToggleLabel.click();
@@ -135,7 +134,6 @@ const sections = [
             // Get the bounding box of the chart
             const box = await firstChart.boundingBox();
             if (box) {
-                // Move mouse to middle-right of the chart (where recent data points are)
                 const hoverX = box.x + (box.width * 0.8);
                 const hoverY = box.y + (box.height * 0.5);
                 
