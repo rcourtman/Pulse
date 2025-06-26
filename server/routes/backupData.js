@@ -41,9 +41,47 @@ router.get('/', async (req, res) => {
             filters
         );
         
+        // Add backup tasks and PBS tasks to the result
+        const backupTasks = [];
+        
+        // Add PBS backup tasks
+        pbsInstances.forEach(pbs => {
+            if (pbs.backupTasks?.recentTasks) {
+                pbs.backupTasks.recentTasks.forEach(task => {
+                    backupTasks.push({
+                        ...task,
+                        pbsInstanceName: pbs.pbsInstanceName || pbs.name,
+                        source: 'pbs'
+                    });
+                });
+            }
+        });
+        
+        // Add PVE backup tasks
+        if (pveBackupData?.backupTasks) {
+            pveBackupData.backupTasks.forEach(task => {
+                backupTasks.push({
+                    ...task,
+                    source: 'pve'
+                });
+            });
+        }
+        
         res.json({
             success: true,
-            data: result,
+            data: {
+                ...result,
+                backupTasks,
+                // Also include raw PBS data for calendar
+                pbsSnapshots: pbsInstances.flatMap(pbs => 
+                    (pbs.datastores || []).flatMap(ds => 
+                        (ds.snapshots || []).map(snap => ({
+                            ...snap,
+                            pbsInstanceName: pbs.pbsInstanceName || pbs.name
+                        }))
+                    )
+                )
+            },
             filters: filters,
             timestamp: new Date().toISOString()
         });

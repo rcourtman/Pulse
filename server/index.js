@@ -106,6 +106,16 @@ stateManager.init();
 const { createServer } = require('./server');
 const { app, server } = createServer();
 
+// State endpoint - returns current state data
+app.get('/api/state', (req, res) => {
+    try {
+        const currentState = stateManager.getState();
+        res.json(currentState);
+    } catch (error) {
+        console.error('[State API] Error getting state:', error);
+        res.status(500).json({ error: 'Failed to get state' });
+    }
+});
 
 // Version API endpoint
 app.get('/api/version', async (req, res) => {

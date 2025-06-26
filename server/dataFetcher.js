@@ -861,19 +861,42 @@ async function fetchPveDiscoveryData(currentApiClients) {
  * @returns {Promise<string>} - The detected node name or 'localhost' as fallback.
  */
 async function fetchPbsNodeName({ client, config }) {
+    // The /nodes endpoint doesn't work with API tokens (always returns 403)
+    // But we can discover the real node name by fetching a task and extracting it from the UPID
+    
     try {
-        const response = await client.get('/nodes');
-        if (response.data && response.data.data && response.data.data.length > 0 && response.data.data[0].node) {
-            const nodeName = response.data.data[0].node;
-            return nodeName;
-        } else {
-            console.warn(`WARN: [DataFetcher] Could not automatically detect PBS node name for ${config.name}. Response format unexpected.`); // Restored original warning
-            return 'localhost';
+        // Try to get any task - we just need one to extract the node name
+        const response = await client.get('/nodes/localhost/tasks', { 
+            params: { limit: 1 },
+            timeout: 5000 
+        });
+        
+        if (response.data && response.data.data && response.data.data.length > 0) {
+            const task = response.data.data[0];
+            
+            // Method 1: Use the node field if present
+            if (task.node) {
+                console.log(`[DataFetcher] Discovered PBS node name '${task.node}' from task data`);
+                return task.node;
+            }
+            
+            // Method 2: Extract from UPID (format: UPID:nodename:...)
+            if (task.upid) {
+                const nodeName = task.upid.split(':')[1];
+                if (nodeName) {
+                    console.log(`[DataFetcher] Discovered PBS node name '${nodeName}' from task UPID`);
+                    return nodeName;
+                }
+            }
         }
     } catch (error) {
-        console.error(`ERROR: [DataFetcher] Failed to fetch PBS nodes list for ${config.name}: ${error.message}`); // Restored original error
-        return 'localhost';
+        // If we can't get tasks, continue to fallback
+        console.log(`[DataFetcher] Could not fetch tasks to discover node name: ${error.message}`);
     }
+    
+    // Fallback: just use 'localhost' - PBS accepts any name for the endpoints we need
+    console.log(`[DataFetcher] Using fallback node name 'localhost' for ${config.name}`);
+    return 'localhost';
 }
 
 /**
@@ -1657,13 +1680,24 @@ async function fetchPbsData(currentPbsApiClients) {
                 return instanceData;
             }
             
-            const nodeName = pbsClient.config.nodeName || await fetchPbsNodeName(pbsClient);
-
-            if (nodeName && nodeName !== 'localhost' && !pbsClient.config.nodeName) {
-                 pbsClient.config.nodeName = nodeName; // Store detected name back
+            let nodeName = pbsClient.config.nodeName;
+            
+            // Try to fetch node name if not configured
+            if (!nodeName) {
+                try {
+                    nodeName = await fetchPbsNodeName(pbsClient);
+                    if (nodeName && nodeName !== 'localhost') {
+                        pbsClient.config.nodeName = nodeName; // Store detected name back
+                    }
+                } catch (nodeError) {
+                    // If node fetch fails (e.g., 403), use the hostname as fallback
+                    console.warn(`[DataFetcher - ${instanceName}] Could not fetch node name (likely missing Sys.Audit permission on /), using hostname as fallback`);
+                    nodeName = instanceName; // Use the PBS hostname/IP as node name
+                    pbsClient.config.nodeName = nodeName;
+                }
             }
 
-            if (nodeName && nodeName !== 'localhost') {
+            if (nodeName) {
                 const datastoresResult = await fetchPbsDatastoreData(pbsClient);
                 const snapshotFetchPromises = datastoresResult.map(async (ds) => {
                     ds.snapshots = await fetchPbsDatastoreSnapshots(pbsClient, ds.name);
@@ -1689,7 +1723,23 @@ async function fetchPbsData(currentPbsApiClients) {
                 
                 // Fetch PBS node status and version info only in non-test environments
                 if (process.env.NODE_ENV !== 'test') {
-                    instanceData.nodeStatus = await fetchPbsNodeStatus(pbsClient, nodeName);
+                    // Only try to fetch node status if we have a real node name (not an IP)
+                    if (nodeName && !nodeName.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+                        instanceData.nodeStatus = await fetchPbsNodeStatus(pbsClient, nodeName);
+                    } else {
+                        // For IP-based "node names", we can't get node status
+                        console.log(`[DataFetcher - ${instanceName}] Skipping node status fetch for IP-based node name: ${nodeName}`);
+                        instanceData.nodeStatus = {
+                            cpu: null,
+                            memory: { total: null, used: null, free: null },
+                            swap: { total: null, used: null, free: null },
+                            uptime: null,
+                            loadavg: null,
+                            rootfs: { total: null, used: null, avail: null },
+                            boot_info: null,
+                            kversion: null
+                        };
+                    }
                     instanceData.versionInfo = await fetchPbsVersionInfo(pbsClient);
                 }
                 

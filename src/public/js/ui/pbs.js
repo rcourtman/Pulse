@@ -40,6 +40,11 @@ PulseApp.ui.pbs = (() => {
         // Get initial data
         const pbsData = PulseApp.state?.get?.('pbsDataArray') || PulseApp.state?.pbs || [];
         console.log('[PBS] Initial PBS data:', pbsData);
+        console.log('[PBS] Data length:', pbsData.length);
+        if (pbsData.length > 0) {
+            console.log('[PBS] First instance:', pbsData[0]);
+            console.log('[PBS] Datastores:', pbsData[0].datastores);
+        }
         
         // Initialize with data
         state.pbsData = pbsData;
@@ -48,6 +53,7 @@ PulseApp.ui.pbs = (() => {
 
     // Render main structure
     function renderMainStructure(container) {
+        console.log('[PBS] renderMainStructure called with data:', state.pbsData);
         container.innerHTML = '';
         
         if (!state.pbsData || state.pbsData.length === 0) {
@@ -126,16 +132,25 @@ PulseApp.ui.pbs = (() => {
 
     // Render the currently active PBS instance
     function renderActiveInstance() {
+        console.log('[PBS] renderActiveInstance called');
         const contentArea = document.getElementById('pbs-content');
-        if (!contentArea) return;
+        if (!contentArea) {
+            console.log('[PBS] No content area found');
+            return;
+        }
         
         const instance = state.pbsData[state.activeInstanceIndex];
-        if (!instance) return;
+        console.log('[PBS] Active instance:', instance);
+        if (!instance) {
+            console.log('[PBS] No instance at index', state.activeInstanceIndex);
+            return;
+        }
         
         contentArea.innerHTML = '';
         
         // Get namespaces for this instance
         const namespaces = collectNamespaces(instance);
+        console.log('[PBS] Collected namespaces:', namespaces);
         
         // If multiple namespaces, show namespace tabs
         if (namespaces.length > 1) {
@@ -172,9 +187,21 @@ PulseApp.ui.pbs = (() => {
         
         // Check datastores for namespaces
         if (instance.datastores) {
+            console.log('[PBS] Checking datastores for namespaces:', instance.datastores);
             instance.datastores.forEach(ds => {
+                console.log('[PBS] Datastore:', ds.name, 'has namespaces?', ds.namespaces);
                 if (ds.namespaces) {
                     ds.namespaces.forEach(ns => namespaces.add(ns));
+                }
+                // Also check snapshots for namespaces
+                if (ds.snapshots) {
+                    console.log('[PBS] Found', ds.snapshots.length, 'snapshots in datastore', ds.name);
+                    ds.snapshots.forEach(snap => {
+                        if (snap.namespace !== undefined) {
+                            console.log('[PBS] Adding namespace:', snap.namespace || 'root');
+                            namespaces.add(snap.namespace || 'root');
+                        }
+                    });
                 }
             });
         }
@@ -236,6 +263,29 @@ PulseApp.ui.pbs = (() => {
         const container = document.createElement('div');
         container.className = 'space-y-4';
         
+        // Add info banner if node discovery failed
+        if (instance.nodeName && instance.nodeName.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+            const infoBanner = document.createElement('div');
+            infoBanner.className = 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4';
+            infoBanner.innerHTML = `
+                <div class="flex items-start gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <div>
+                        <div class="font-medium text-blue-900 dark:text-blue-100 mb-1">Limited PBS Integration</div>
+                        <div class="text-sm text-blue-800 dark:text-blue-200">
+                            Some features (server metrics, task history) are unavailable because PBS node discovery requires additional permissions. 
+                            Backup data and snapshots are fully functional.
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(infoBanner);
+        }
+        
         // Server status section
         const serverStatus = createServerStatusSection(instance, instanceIndex);
         container.appendChild(serverStatus);
@@ -243,6 +293,12 @@ PulseApp.ui.pbs = (() => {
         // Datastores section
         const datastoresSection = createDatastoresSection(instance, instanceIndex);
         container.appendChild(datastoresSection);
+        
+        // Add snapshots section
+        const snapshotsSection = createSnapshotsSection(instance, instanceIndex);
+        if (snapshotsSection) {
+            container.appendChild(snapshotsSection);
+        }
         
         // Task summary table
         const summaryTable = createTaskSummaryTable(instance, instanceIndex);
@@ -462,9 +518,17 @@ PulseApp.ui.pbs = (() => {
         else if (taskType === 'Prune/GC') taskData = instance.pruneTasks;
         
         if (!taskData || !taskData.recentTasks) {
-            row.cells[1].innerHTML = '<span class="text-gray-500">No tasks</span>';
-            row.cells[2].textContent = 'N/A';
-            row.cells[3].textContent = 'N/A';
+            // Check if this is due to missing node discovery
+            const isNodeDiscoveryIssue = instance.nodeName && instance.nodeName.match(/^\d+\.\d+\.\d+\.\d+$/);
+            if (isNodeDiscoveryIssue) {
+                row.cells[1].innerHTML = '<span class="text-gray-400" title="Task history requires PBS node discovery">Unavailable</span>';
+                row.cells[2].innerHTML = '<span class="text-gray-400">-</span>';
+                row.cells[3].innerHTML = '<span class="text-gray-400">-</span>';
+            } else {
+                row.cells[1].innerHTML = '<span class="text-gray-500">No tasks</span>';
+                row.cells[2].textContent = 'N/A';
+                row.cells[3].textContent = 'N/A';
+            }
             return;
         }
         
@@ -758,17 +822,23 @@ PulseApp.ui.pbs = (() => {
 
     // Main update function - called by socket handler
     function updatePbsInfo(pbsArray) {
+        console.log('[PBS] updatePbsInfo called with:', pbsArray);
         state.pbsData = pbsArray || [];
         
         const container = document.getElementById('pbs-instances-container');
-        if (!container) return;
+        if (!container) {
+            console.log('[PBS] Container not found in update');
+            return;
+        }
         
         // If no content yet, do initial render
         const contentArea = document.getElementById('pbs-content');
         if (!contentArea) {
+            console.log('[PBS] No content area, doing initial render');
             renderMainStructure(container);
         } else {
             // Incremental update
+            console.log('[PBS] Content exists, doing incremental update');
             updateExistingData();
         }
     }
@@ -1047,6 +1117,13 @@ PulseApp.ui.pbs = (() => {
     }
 
     // Utility functions
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
     function parsePbsTaskTarget(task) {
         if (!task) return 'Unknown';
         
@@ -1241,7 +1318,11 @@ PulseApp.ui.pbs = (() => {
         const nodeStatus = instance.nodeStatus || {};
         const uptimeCell = document.createElement('td');
         uptimeCell.className = 'py-2 px-4 text-gray-700 dark:text-gray-300';
-        uptimeCell.textContent = nodeStatus.uptime ? PulseApp.utils.formatUptime(nodeStatus.uptime) : '-';
+        if (nodeStatus.uptime) {
+            uptimeCell.textContent = PulseApp.utils.formatUptime(nodeStatus.uptime);
+        } else {
+            uptimeCell.innerHTML = '<span class="text-gray-400" title="Requires PBS node discovery">-</span>';
+        }
         row.appendChild(uptimeCell);
         
         // CPU
@@ -1253,7 +1334,7 @@ PulseApp.ui.pbs = (() => {
             const cpuTooltipText = `${cpuPercent}%`;
             cpuCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(cpuPercent, cpuTooltipText, cpuColorClass);
         } else {
-            cpuCell.textContent = '-';
+            cpuCell.innerHTML = '<span class="text-gray-400" title="Requires PBS node discovery">-</span>';
         }
         row.appendChild(cpuCell);
         
@@ -1268,7 +1349,7 @@ PulseApp.ui.pbs = (() => {
             const memTooltipText = `${PulseApp.utils.formatBytes(memUsed)} / ${PulseApp.utils.formatBytes(memTotal)} (${memPercent}%)`;
             memCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(memPercent, memTooltipText, memColorClass);
         } else {
-            memCell.textContent = '-';
+            memCell.innerHTML = '<span class="text-gray-400" title="Requires PBS node discovery">-</span>';
         }
         row.appendChild(memCell);
         
@@ -1278,7 +1359,7 @@ PulseApp.ui.pbs = (() => {
         if (nodeStatus.loadavg && Array.isArray(nodeStatus.loadavg) && nodeStatus.loadavg.length >= 1) {
             loadCell.textContent = nodeStatus.loadavg[0].toFixed(2);
         } else {
-            loadCell.textContent = '-';
+            loadCell.innerHTML = '<span class="text-gray-400" title="Requires PBS node discovery">-</span>';
         }
         row.appendChild(loadCell);
         
@@ -1290,6 +1371,100 @@ PulseApp.ui.pbs = (() => {
         return section;
     }
     
+    // Create snapshots section
+    function createSnapshotsSection(instance, instanceIndex) {
+        // Get current namespace
+        const namespace = state.selectedNamespaceByInstance.get(instanceIndex) || 'root';
+        
+        // Collect all snapshots from all datastores for this namespace
+        let snapshots = [];
+        if (instance.datastores) {
+            instance.datastores.forEach(ds => {
+                if (ds.snapshots) {
+                    const nsSnapshots = ds.snapshots.filter(snap => 
+                        (snap.namespace || '') === (namespace === 'root' ? '' : namespace)
+                    );
+                    snapshots = snapshots.concat(nsSnapshots.map(snap => ({
+                        ...snap,
+                        datastore: ds.name
+                    })));
+                }
+            });
+        }
+        
+        if (snapshots.length === 0) {
+            return null; // Don't show section if no snapshots
+        }
+        
+        const section = document.createElement('div');
+        section.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4';
+        
+        const heading = document.createElement('h4');
+        heading.className = 'text-md font-semibold mb-3 text-gray-700 dark:text-gray-300';
+        heading.textContent = `Backup Snapshots (${snapshots.length})`;
+        section.appendChild(heading);
+        
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'overflow-x-auto';
+        
+        const table = document.createElement('table');
+        table.className = 'min-w-full text-sm';
+        
+        const thead = document.createElement('thead');
+        thead.innerHTML = `
+            <tr class="text-xs font-medium text-left text-gray-600 uppercase dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                <th class="pb-2 pr-4">Guest</th>
+                <th class="pb-2 px-4">Time</th>
+                <th class="pb-2 px-4">Size</th>
+                <th class="pb-2 px-4">Owner</th>
+                <th class="pb-2 px-4">Datastore</th>
+                <th class="pb-2 px-4">Verified</th>
+            </tr>
+        `;
+        table.appendChild(thead);
+        
+        const tbody = document.createElement('tbody');
+        tbody.className = 'divide-y divide-gray-200 dark:divide-gray-700';
+        
+        // Sort snapshots by time (newest first)
+        snapshots.sort((a, b) => b['backup-time'] - a['backup-time']);
+        
+        // Show only recent snapshots (last 50)
+        const recentSnapshots = snapshots.slice(0, 50);
+        
+        recentSnapshots.forEach(snap => {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-gray-50 dark:hover:bg-gray-700/50';
+            
+            const guestId = snap['backup-id'];
+            const guestType = snap['backup-type'] === 'vm' ? 'VM' : 'CT';
+            const time = new Date(snap['backup-time'] * 1000);
+            const size = snap.size ? formatBytes(snap.size) : '-';
+            const verified = snap.verification ? '✓' : '-';
+            
+            row.innerHTML = `
+                <td class="py-2 pr-4">
+                    <span class="font-medium">${guestType} ${guestId}</span>
+                </td>
+                <td class="py-2 px-4 text-gray-600 dark:text-gray-400">
+                    ${time.toLocaleString()}
+                </td>
+                <td class="py-2 px-4">${size}</td>
+                <td class="py-2 px-4 text-gray-600 dark:text-gray-400">${snap.owner || '-'}</td>
+                <td class="py-2 px-4">${snap.datastore}</td>
+                <td class="py-2 px-4 text-center">${verified}</td>
+            `;
+            
+            tbody.appendChild(row);
+        });
+        
+        table.appendChild(tbody);
+        tableContainer.appendChild(table);
+        section.appendChild(tableContainer);
+        
+        return section;
+    }
+
     // Create datastores section
     function createDatastoresSection(instance, instanceIndex) {
         const section = document.createElement('div');

@@ -8,6 +8,9 @@
  * Represents a backup stored in Proxmox Backup Server
  */
 class PBSBackup {
+    // Static cached token mappings
+    static _cachedMappings = null;
+    
     constructor(data) {
         // Core identification
         this.type = 'pbs';
@@ -51,6 +54,88 @@ class PBSBackup {
     }
     
     /**
+     * Build token mappings from environment configuration
+     * This allows dynamic mapping based on actual PVE configuration
+     */
+    static buildTokenMappings() {
+        // Use cached mappings if available
+        if (PBSBackup._cachedMappings) {
+            return PBSBackup._cachedMappings;
+        }
+        
+        const mappings = {
+            'backup': [], // Will be populated with primary nodes
+            'homelab': [] // Common cluster name
+        };
+        
+        // Read environment variables to build mappings
+        const envKeys = Object.keys(process.env);
+        
+        // Process primary endpoint
+        const primaryNode = process.env.PROXMOX_NODE_NAME;
+        if (primaryNode) {
+            mappings['backup'].push(primaryNode.toLowerCase());
+            mappings['homelab'].push(primaryNode.toLowerCase());
+            // Also map the node name to itself
+            mappings[primaryNode.toLowerCase()] = [primaryNode.toLowerCase()];
+        }
+        
+        // Process additional endpoints
+        envKeys.forEach(key => {
+            const nodeMatch = key.match(/^PROXMOX_NODE_NAME_(\d+)$/);
+            if (nodeMatch) {
+                const nodeName = process.env[key];
+                if (nodeName) {
+                    const lowerNode = nodeName.toLowerCase();
+                    // Map the node name to itself
+                    mappings[lowerNode] = [lowerNode];
+                    
+                    // If it's not the primary, don't add to backup/homelab mappings
+                    if (nodeMatch[1] !== '1') {
+                        // Secondary nodes get their own mapping
+                    }
+                }
+            }
+        });
+        
+        // Add any hardcoded mappings based on common patterns
+        // These help when PBS tokens don't match node names exactly
+        if (mappings['homelab'] && mappings['homelab'].length > 0) {
+            // Add common variations for homelab cluster
+            mappings['homelab'].push('desktop', 'minipc', 'delly');
+            mappings['backup'].push('desktop', 'minipc', 'delly');
+        }
+        
+        // Add mapping for pimox token to pi node
+        if (!mappings['pimox']) {
+            mappings['pimox'] = [];
+        }
+        mappings['pimox'].push('pi');
+        
+        // Also ensure pi maps to itself
+        if (!mappings['pi']) {
+            mappings['pi'] = ['pi'];
+        }
+        
+        // Remove duplicates
+        Object.keys(mappings).forEach(key => {
+            mappings[key] = [...new Set(mappings[key])];
+        });
+        
+        // Cache the mappings
+        PBSBackup._cachedMappings = mappings;
+        
+        return mappings;
+    }
+    
+    /**
+     * Clear cached token mappings (useful if configuration changes)
+     */
+    static clearCachedMappings() {
+        PBSBackup._cachedMappings = null;
+    }
+    
+    /**
      * Check if this backup matches a specific guest
      */
     matchesGuest(guest) {
@@ -64,23 +149,34 @@ class PBSBackup {
         // Check endpoint/owner matching
         const endpointHint = this.getEndpointHint();
         const guestEndpoint = guest.endpointId;
+        const guestNode = guest.node.toLowerCase();
+        
+        // Get dynamic token mappings
+        const tokenMappings = PBSBackup.buildTokenMappings();
         
         // For primary endpoint guests (including when endpointId is not set)
         if (!guestEndpoint || guestEndpoint === 'primary') {
-            // Backup must have 'backup' token, 'homelab' (common cluster name), or match the specific node name
+            // Check if token maps to this node
+            if (tokenMappings[endpointHint] && tokenMappings[endpointHint].includes(guestNode)) {
+                return true;
+            }
+            // Direct match checks
             return endpointHint === 'primary' || endpointHint === 'backup' || 
-                   endpointHint === 'homelab' || // Common cluster/endpoint name
-                   endpointHint === guest.node.toLowerCase();
+                   endpointHint === guestNode;
         }
         
         // For secondary endpoint guests
         if (guestEndpoint === 'secondary') {
-            // Check if owner token matches the endpoint ID
+            // Check if token maps to this node
+            if (tokenMappings[endpointHint] && tokenMappings[endpointHint].includes(guestNode)) {
+                return true;
+            }
             return endpointHint === 'secondary';
         }
         
-        // For other endpoints, check if owner token matches endpoint ID
-        return endpointHint === guestEndpoint.toLowerCase();
+        // For other endpoints, check if owner token matches endpoint ID or node
+        return endpointHint === guestEndpoint.toLowerCase() || 
+               (tokenMappings[endpointHint] && tokenMappings[endpointHint].includes(guestNode));
     }
 }
 
