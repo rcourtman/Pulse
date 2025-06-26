@@ -2,8 +2,11 @@
 const express = require('express');
 const stateManager = require('../state');
 const metricsHistory = require('../metricsHistory');
+const { asyncHandler, sendErrorResponse } = require('../utils/errorHandler');
+const { createLogger } = require('../utils/logger');
 
 const router = express.Router();
+const logger = createLogger('HealthRoutes');
 
 // Health check endpoint - returns simple OK/NOT OK based on actual readiness
 router.get('/healthz', (req, res) => {
@@ -23,7 +26,7 @@ router.get('/healthz', (req, res) => {
             res.status(503).send('Service starting up');
         }
     } catch (error) {
-        console.error("Error in health check:", error);
+        logger.error('Health check failed:', error);
         res.status(503).send('Service unavailable');
     }
 });
@@ -57,8 +60,7 @@ router.get('/', (req, res) => {
         
         res.json(healthSummary);
     } catch (error) {
-        console.error("Error in /api/health:", error);
-        res.status(500).json({ error: "Failed to fetch health information" });
+        sendErrorResponse(res, error, 'HealthRoutes');
     }
 });
 
