@@ -466,40 +466,9 @@ PulseApp.ui.calendarHeatmap = (() => {
                 preservedSelectedDate = dateKey;
                 
                 if (onDateSelectCallback && dayData) {
-                    // Get the namespace filter
-                    const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
-                    
-                    // Removed debug logs
-                    
-                    // Filter guests based on filteredGuestIds if namespace filtering is active
+                    // When clicking on a date, show ALL backups for that date
+                    // Don't apply table filters to the date view
                     let filteredGuests = dayData.guests || [];
-                    if (namespaceFilter !== 'all' && capturedFilteredGuestIds && capturedFilteredGuestIds.length > 0) {
-                        // Convert to Set for O(1) lookup performance
-                        const filterSet = new Set(capturedFilteredGuestIds);
-                        
-                        filteredGuests = filteredGuests.filter(guest => {
-                            const uniqueKey = guest.uniqueKey || (guest.node ? `${guest.vmid}-${guest.node}` : guest.vmid.toString());
-                            return filterSet.has(uniqueKey) || filterSet.has(guest.vmid.toString());
-                        });
-                    }
-                    
-                    // Filter by backup type
-                    const currentFilterType = getCurrentFilterType();
-                    if (currentFilterType !== 'all' && filteredGuests.length > 0) {
-                        filteredGuests = filteredGuests.filter(guest => {
-                            const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
-                            switch (currentFilterType) {
-                                case 'pbs':
-                                    return types.includes('pbsSnapshots');
-                                case 'pve':
-                                    return types.includes('pveBackups');
-                                case 'snapshots':
-                                    return types.includes('vmSnapshots');
-                                default:
-                                    return true;
-                            }
-                        });
-                    }
                     
                     // Check for duplicates by unique key
                     const uniqueKeyCounts = {};
@@ -527,35 +496,18 @@ PulseApp.ui.calendarHeatmap = (() => {
                             failureCount: dayData.hasFailures ? 1 : 0
                         },
                         filterInfo: {
-                            backupType: getCurrentFilterType()
+                            backupType: 'all' // Always show all backup types for date view
                         }
                     };
                     
-                    // Count backup types from filtered guests
+                    // Count all backup types from guests
                     if (filteredGuests.length > 0) {
-                        // Only count the currently filtered type
-                        const currentFilterType = getCurrentFilterType();
                         filteredGuests.forEach(guest => {
                             const types = Array.isArray(guest.types) ? guest.types : Array.from(guest.types);
-                            if (currentFilterType === 'all') {
-                                // Count all types when no filter is applied
-                                if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
-                                if (types.includes('pveBackups')) callbackData.stats.pveCount++;
-                                if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
-                            } else {
-                                // Only count the filtered type
-                                switch (currentFilterType) {
-                                    case 'pbs':
-                                        if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
-                                        break;
-                                    case 'pve':
-                                        if (types.includes('pveBackups')) callbackData.stats.pveCount++;
-                                        break;
-                                    case 'snapshots':
-                                        if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
-                                        break;
-                                }
-                            }
+                            // Count all types for the selected date
+                            if (types.includes('pbsSnapshots')) callbackData.stats.pbsCount++;
+                            if (types.includes('pveBackups')) callbackData.stats.pveCount++;
+                            if (types.includes('vmSnapshots')) callbackData.stats.snapshotCount++;
                         });
                     }
                     

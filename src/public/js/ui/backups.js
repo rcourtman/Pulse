@@ -878,25 +878,16 @@ PulseApp.ui.backups = (() => {
                 return nodeIdentifier ? `${guest.guestId}-${nodeIdentifier}` : guest.guestId.toString();
             });
             
-            // Filter backup data to only include backups for filtered guests
-            const filteredGuestIds = new Set(filteredData.map(g => String(g.guestId)));
-            
+            // Pass ALL backup data to calendar so date clicks show all backups for that date
+            // The calendar will handle filtering internally based on current view
             const backupData = {
-                pbsSnapshots: (apiData.pbsSnapshots || []).filter(snap => 
-                    filteredGuestIds.has(String(snap['backup-id']))
-                ),
-                pveBackups: (apiData.pveBackups || []).filter(backup => 
-                    filteredGuestIds.has(String(backup.vmid))
-                ),
-                vmSnapshots: (apiData.vmSnapshots || []).filter(snapshot => 
-                    filteredGuestIds.has(String(snapshot.vmid))
-                ),
-                backupTasks: (apiData.backupTasks || []).filter(task => 
-                    task.vmid && filteredGuestIds.has(String(task.vmid))
-                ),
+                pbsSnapshots: apiData.pbsSnapshots || [],
+                pveBackups: apiData.pveBackups || [],
+                vmSnapshots: apiData.vmSnapshots || [],
+                backupTasks: apiData.backupTasks || [],
                 guestToValidatedSnapshots: new Map(),
-                // Pass the filtered guest data to calendar for proper name lookup
-                guests: backupsState.data.filtered
+                // Pass ALL guest data for proper name lookup
+                guests: apiData.backupStatusByGuest || []
             };
             
             const calendarHeatmap = PulseApp.ui.calendarHeatmap.createCalendarHeatmap(
