@@ -1,5 +1,4 @@
 PulseApp.charts = (() => {
-    // Screen-resolution-based points for visual quality (not time coverage)
     function getOptimalRenderPoints() {
         const screenWidth = window.screen.width;
         const pixelRatio = window.devicePixelRatio || 1;
@@ -70,7 +69,6 @@ PulseApp.charts = (() => {
                     return isDarkMode ? '#6b7280' : '#d1d5db';     // gray (no activity)
                 }
                 
-                // Convert to MB/s for consistent thresholds (assume values are in bytes/s)
                 const maxMBps = maxValue / (1024 * 1024);
                 const avgValue = values.reduce((sum, v) => sum + v, 0) / values.length;
                 const avgMBps = avgValue / (1024 * 1024);
@@ -95,7 +93,6 @@ PulseApp.charts = (() => {
         }
     };
 
-    // Update render points if screen resolution changes (e.g., moving between monitors)
     let currentRenderPoints = CHART_CONFIG.renderPoints;
     function checkResolutionChange() {
         const newOptimalPoints = getOptimalRenderPoints();
@@ -113,7 +110,6 @@ PulseApp.charts = (() => {
         }
     }
 
-    // Listen for resolution changes (moving between monitors, etc.)
     window.addEventListener('resize', checkResolutionChange);
 
     let chartCache = new Map();
@@ -169,7 +165,6 @@ PulseApp.charts = (() => {
         
         // Format based on duration
         if (diffMinutes >= 60) {
-            // Show hours and minutes (no seconds)
             const hours = Math.floor(diffMinutes / 60);
             const minutes = diffMinutes % 60;
             return `${hours}h ${minutes}m ago`;
@@ -209,7 +204,6 @@ PulseApp.charts = (() => {
         let svg = container.querySelector('svg');
         let isNewChart = !svg;
         
-        // Force recreation if coming from alerts mode (check if overlay is missing)
         if (svg && !svg.querySelector('.chart-overlay')) {
             container.innerHTML = '';
             svg = null;
@@ -236,7 +230,6 @@ PulseApp.charts = (() => {
             gradient.setAttribute('x2', '0%');
             gradient.setAttribute('y2', '100%');
             
-            // Gradient stops (will be updated with actual color)
             const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
             stop1.setAttribute('offset', '0%');
             stop1.setAttribute('class', 'gradient-start');
@@ -257,7 +250,6 @@ PulseApp.charts = (() => {
             const chartGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
             chartGroup.setAttribute('class', 'chart-group');
             
-            // Create filled area first (so it's behind the line)
             const area = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             area.setAttribute('fill', `url(#${gradientId})`);
             area.setAttribute('class', 'chart-area');
@@ -371,7 +363,6 @@ PulseApp.charts = (() => {
             }
         }
 
-        // Mouse events (desktop)
         overlay.addEventListener('mousemove', (event) => {
             showTooltipForPosition(event, event.clientX, event.clientY);
         });
@@ -430,7 +421,6 @@ PulseApp.charts = (() => {
 
         // Update colors - but preserve hover state
         if (color) {
-            // Check if we're currently hovering (original color is stored)
             const isHovering = path.hasAttribute('data-original-color');
             
             if (isHovering) {
@@ -456,7 +446,6 @@ PulseApp.charts = (() => {
         const maxValue = Math.max(...values);
         const valueRange = maxValue - minValue;
         
-        // Adjust for chart area (no label space needed anymore)
         const chartAreaWidth = config.width - 2 * config.padding;
         const chartAreaHeight = config.height - 2 * config.padding;
         
@@ -486,13 +475,11 @@ PulseApp.charts = (() => {
             }
         });
 
-        // Update or create axis labels (now empty function)
         updateAxisLabels(svg, minValue, maxValue, config, metric);
 
         // Update hover interaction data with min/max info
         let overlay = svg.querySelector('.chart-overlay');
         if (!overlay) {
-            // Recreate overlay if missing (can happen after time range changes)
             addHoverInteraction(svg, chartData, metric, config);
             overlay = svg.querySelector('.chart-overlay');
         }
@@ -559,7 +546,6 @@ PulseApp.charts = (() => {
             const browserTime = Date.now();
             const timeOffset = browserTime - serverTime;
             
-            // Only log significant time offsets (more than 10 minutes)
             if (Math.abs(timeOffset) > 600000) {
                 console.warn('[fetchChartData] Large time offset detected:', {
                     serverTime,
@@ -715,7 +701,6 @@ PulseApp.charts = (() => {
             const guestIds = Object.keys(chartDataCache);
             
             for (const guestId of guestIds) {
-                // Check if we're over time budget (skip in immediate mode)
                 if (!immediate && performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
                     // Schedule remaining updates for next frame
                     scheduleChartUpdates();
@@ -737,7 +722,6 @@ PulseApp.charts = (() => {
             const nodeIds = Object.keys(nodeChartDataCache);
             
             for (const nodeId of nodeIds) {
-                // Check if we're over time budget (skip in immediate mode)
                 if (!immediate && performance.now() - startTime > maxUpdateTime && updatedCount > 0) {
                     // Schedule remaining updates for next frame
                     scheduleChartUpdates();
@@ -800,7 +784,6 @@ PulseApp.charts = (() => {
         if (chartUpdateInterval) return;
         
         chartUpdateInterval = setInterval(async () => {
-            // Skip updates if document is hidden (tab not active)
             if (document.hidden) {
                 return;
             }
@@ -896,7 +879,6 @@ PulseApp.charts = (() => {
             return [data[0], data[data.length - 1]]; // Just start and end
         }
         
-        // Step 3: Find all candidates (excluding start/end)
         const candidates = [];
         for (let i = 1; i < data.length - 1; i++) {
             candidates.push({ index: i, importance: importance[i] });
@@ -918,7 +900,6 @@ PulseApp.charts = (() => {
         return result;
     }
 
-    // Calculate importance score for each data point (optimized)
     function calculateImportanceScores(data) {
         const scores = new Array(data.length);
         const windowSize = Math.min(5, Math.max(3, Math.floor(data.length / 50))); // Limit window size
@@ -933,13 +914,11 @@ PulseApp.charts = (() => {
         for (let i = 0; i < data.length; i++) {
             let score = 0;
             
-            // 1. Simple rate of change (no complex derivatives)
             if (i > 0 && i < data.length - 1) {
                 const change = Math.abs(values[i + 1] - values[i - 1]);
                 score += change;
             }
             
-            // 2. Local extrema detection (peaks and valleys)
             if (i > 0 && i < data.length - 1) {
                 const isPeak = values[i] > values[i - 1] && values[i] > values[i + 1];
                 const isValley = values[i] < values[i - 1] && values[i] < values[i + 1];

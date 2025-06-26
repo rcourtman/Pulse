@@ -40,7 +40,6 @@ PulseApp.ui.backupSummaryCards = (() => {
                         return itemEndpoint === guestEndpointId;
                     }
                     
-                    // If no node/endpoint info available, include it (fallback)
                     return true;
                 })
                 : backupData[type];
@@ -72,7 +71,6 @@ PulseApp.ui.backupSummaryCards = (() => {
             };
         }
 
-        // Calculate coverage (how many backups in each period)
         const oneDayAgo = now - 24 * 60 * 60 * 1000;
         const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
         const oneMonthAgo = now - 30 * 24 * 60 * 60 * 1000;

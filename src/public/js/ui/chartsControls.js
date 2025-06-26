@@ -75,7 +75,6 @@ PulseApp.ui.chartsControls = (() => {
         document.querySelectorAll('label[data-time-range]').forEach(label => {
             // Remove all possible active classes
             label.classList.remove('bg-blue-100', 'text-blue-700', 'text-blue-300', 'bg-gray-100', 'text-blue-600', 'bg-gray-700', 'text-blue-400', 'bg-blue-900');
-            // Also remove the dark mode blue background (opacity classes are tricky)
             label.className = label.className.replace(/bg-blue-800\/\d+/g, '');
             
             if (isDarkMode) {

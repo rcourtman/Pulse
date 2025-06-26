@@ -233,7 +233,6 @@ async function fetchDataForNode(apiClient, endpointId, nodeName) {
       }
     });
     
-    // Wait for all uptime fetches to complete (with timeout)
     if (uptimePromises.length > 0) {
       console.log(`[DataFetcher] Fetching accurate uptime for ${uptimePromises.length} running guests...`);
       await Promise.allSettled(uptimePromises);
@@ -327,7 +326,6 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
             return { nodes: [], vms: [], containers: [] };
         }
 
-        // Get node IP addresses and online status from cluster status (reuse the result we already have)
         const nodeIpMap = new Map();
         const nodeStatusMap = new Map(); // Track online/offline status from cluster
         if (clusterStatusResult.status === 'fulfilled' && clusterStatusResult.value.data?.data) {
@@ -338,7 +336,6 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                     if (item.ip) {
                         nodeIpMap.set(item.name, item.ip);
                     }
-                    // Check if node is online (1) or offline (0)
                     nodeStatusMap.set(item.name, item.online === 1 ? 'online' : 'offline');
                 }
             });
@@ -383,7 +380,6 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 // For standalone nodes, use the configured name
                 nodeDisplayName = config.name;
             } else if (endpointType === 'cluster' && nodes.length > 1 && config.name) {
-                // For multi-node clusters, check if configured name matches node name (case-insensitive)
                 if (config.name.toLowerCase() === correspondingNodeInfo.node.toLowerCase()) {
                     // If they match, just use the configured name to avoid duplication
                     nodeDisplayName = config.name;
@@ -448,7 +444,6 @@ async function fetchDataForPveEndpoint(endpointId, apiClientInstance, config) {
                 } else if (result.value?.skipped && result.value.reason === 'offline') {
                     // Node is offline, showing with offline status
                 } else {
-                    // console.warn(`[DataFetcher - ${endpointName}-${correspondingNodeInfo.node}] Unexpected result status: ${result.status}`);
                 }
                 processedNodes.push(finalNode); // Push node with defaults on failure or offline
             }
@@ -736,7 +731,6 @@ async function detectClusterMembership(currentApiClients) {
     // Prioritize endpoints within each cluster group
     const prioritizedGroups = [];
     
-    // Add cluster groups (with prioritization)
     clusterGroups.forEach((endpoints, clusterId) => {
         if (endpoints.length > 1) {
             
@@ -822,14 +816,12 @@ async function fetchPveDiscoveryData(currentApiClients) {
     // Detect cluster membership and prioritize endpoints
     const endpointGroups = await detectClusterMembership(currentApiClients);
 
-    // Fetch from each endpoint group (only one endpoint per cluster)
     const groupPromises = endpointGroups.map(group => 
         fetchFromEndpointGroup(group, currentApiClients)
     );
 
     const groupResults = await Promise.allSettled(groupPromises);
 
-    // Aggregate results from successful endpoint groups (no duplication since we only use one endpoint per cluster)
     groupResults.forEach((result, index) => {
         if (result.status === 'fulfilled' && result.value) {
             const data = result.value;
@@ -844,7 +836,6 @@ async function fetchPveDiscoveryData(currentApiClients) {
     });
 
 
-    // Apply deduplication as a safety measure (in case cluster detection fails)
     return { 
         nodes: deduplicateClusterNodes(allNodes), 
         vms: deduplicateVmsByNode(allVms), 
@@ -861,7 +852,6 @@ async function fetchPveDiscoveryData(currentApiClients) {
  * @returns {Promise<string>} - The detected node name or 'localhost' as fallback.
  */
 async function fetchPbsNodeName({ client, config }) {
-    // The /nodes endpoint doesn't work with API tokens (always returns 403)
     // But we can discover the real node name by fetching a task and extracting it from the UPID
     
     try {
@@ -880,7 +870,6 @@ async function fetchPbsNodeName({ client, config }) {
                 return task.node;
             }
             
-            // Method 2: Extract from UPID (format: UPID:nodename:...)
             if (task.upid) {
                 const nodeName = task.upid.split(':')[1];
                 if (nodeName) {
@@ -988,7 +977,6 @@ async function fetchPbsDatastoreSnapshots({ client, config }, storeName) {
                 
                 // Add namespace field to each snapshot
                 snapshots.forEach(snap => {
-                    // Preserve namespace as-is (empty string for root)
                     snap.namespace = namespace || '';
                 });
                 
@@ -1049,7 +1037,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             const datastores = datastoreResponse.data?.data || [];
             
             for (const datastore of datastores) {
-                // Get namespaces to query (auto-discovery or configured)
                 const namespacesToQuery = await getNamespacesToQuery(client, datastore.name, config);
                 
                 
@@ -1084,7 +1071,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                 
                                 // Add namespace field to each snapshot
                                 allSnapshots.forEach(snapshot => {
-                                    // Preserve namespace as-is (empty string for root)
                                     snapshot.namespace = namespace || '';
                                 });
                                 
@@ -1094,7 +1080,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                                     return snapshot['backup-time'] >= thirtyDaysAgo;
                                 });
                         
-                        // Create a backup task for each snapshot (not grouped by day)
                         recentSnapshots.forEach(snapshot => {
                             const backupDate = new Date(snapshot['backup-time'] * 1000);
                             const dayKey = backupDate.toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -1171,11 +1156,9 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
                 !((task.worker_type === 'backup' || task.type === 'backup') && task.worker_id)
             );
             
-            // Create a map of real backup tasks for enhancement (one per day/guest)
             const realBackupTasksMap = new Map();
             realBackupTasks.forEach(task => {
                 if (task.worker_id) {
-                    // Extract guest info from worker_id (format like "datastore:backup-type/backup-id")
                     const parts = task.worker_id.split(':');
                     if (parts.length >= 2) {
                         const guestPart = parts[1];
@@ -1237,7 +1220,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             // These represent failed backup attempts where no snapshot was created
             realBackupTasks.forEach(task => {
                 if (!usedUPIDs.has(task.upid) && task.status !== 'OK') {
-                    // Extract guest info from worker_id (format: "datastore:backup-type/backup-id")
                     if (task.worker_id) {
                         const parts = task.worker_id.split(':');
                         if (parts.length >= 2) {
@@ -1311,7 +1293,6 @@ async function fetchAllPbsTasksForProcessing({ client, config }, nodeName) {
             console.log(`[PBS Tasks] Found ${failedTasks.length} failed tasks for ${config.name}`);
         }
         
-        // console.log(`[DataFetcher] Final task count for ${config.name}: ${allBackupTasks.length} -> ${deduplicatedTasks.length} (removed ${allBackupTasks.length - deduplicatedTasks.length} duplicates)`); // Removed verbose log
         
         // Debug: Log namespace information in backup runs
         const namespaceCounts = {};
@@ -1424,7 +1405,6 @@ async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
                         isPbsTask = true;
                     }
                 } catch (error) {
-                    // If we can't check the log, assume it's a PVE backup (more common)
                     console.warn(`[DataFetcher - ${endpointId}-${nodeName}] Could not parse task log for ${task.upid}: ${error.message}`);
                     isPbsTask = false;
                 }
@@ -1449,7 +1429,6 @@ async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
                 let guestId = null;
                 let guestType = null;
                 
-                // Try to extract from task description (e.g., "vzdump VM 100")
                 const vmMatch = task.type?.match(/VM\s+(\d+)/i) || task.id?.match(/VM\s+(\d+)/i);
                 const ctMatch = task.type?.match(/CT\s+(\d+)/i) || task.id?.match(/CT\s+(\d+)/i);
                 
@@ -1504,14 +1483,12 @@ async function fetchPveBackupTasks(apiClient, endpointId, nodeName) {
  */
 async function fetchStorageBackups(apiClient, endpointId, nodeName, storage, isShared, node, config) {
     try {
-        // Skip PBS storage based on the storage name (PBS storages usually have 'pbs' in the name)
         // This is a safety check - PBS storages should already be filtered out at the node level
         if (storage.toLowerCase().includes('pbs')) {
             console.log(`[DataFetcher - ${endpointId}-${nodeName}] Skipping PBS storage '${storage}' for PVE backup collection (safety check)`);
             return [];
         }
         
-        // Use the provided API client (direct connection handling is done at higher level)
         const response = await apiClient.get(`/nodes/${nodeName}/storage/${storage}/content`, {
             params: { content: 'backup' }
         });
@@ -1602,7 +1579,6 @@ async function fetchGuestSnapshots(apiClient, endpointId, nodeName, vmid, type) 
                 const ageHours = (now - validatedSnaptime) / 3600;
                 const ageDays = ageHours / 24;
                 
-                // Log if snapshot appears very recent (will show as "Just now")
                 if (ageDays < 0.042) { // Less than 1 hour = "Just now" in UI
                     console.log(`[DataFetcher] RECENT SNAPSHOT ALERT: ${type} ${vmid} "${snap.name}" will show as "Just now" - age: ${ageHours.toFixed(2)}h, timestamp: ${validatedSnaptime}${timestampIssue ? ` (issue: ${timestampIssue})` : ''}`);
                 }
@@ -1650,7 +1626,6 @@ async function fetchPbsData(currentPbsApiClients) {
 
 
     if (pbsClientIds.length === 0) {
-        // console.log("[DataFetcher] No PBS instances configured or initialized.");
         return pbsDataResults;
     }
 
@@ -1723,7 +1698,6 @@ async function fetchPbsData(currentPbsApiClients) {
                 
                 // Fetch PBS node status and version info only in non-test environments
                 if (process.env.NODE_ENV !== 'test') {
-                    // Only try to fetch node status if we have a real node name (not an IP)
                     if (nodeName && !nodeName.match(/^\d+\.\d+\.\d+\.\d+$/)) {
                         instanceData.nodeStatus = await fetchPbsNodeStatus(pbsClient, nodeName);
                     } else {
@@ -1759,7 +1733,6 @@ async function fetchPbsData(currentPbsApiClients) {
                 instanceData.status = 'ok';
                 instanceData.nodeName = nodeName; // Ensure nodeName is set
             } else {
-                 // console.warn(`WARN: [DataFetcher - ${instanceName}] Node name '${nodeName}' is invalid or 'localhost'.`);
                  throw new Error(`Could not determine node name for PBS instance ${instanceName}`);
             }
         } catch (pbsError) {
@@ -1904,7 +1877,6 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
     // Wait for all promises to complete
     await Promise.allSettled([...nodeBackupPromises, ...guestSnapshotPromises]);
     
-    // Deduplicate storage backups (fixes shared storage counting same backup multiple times)
     const deduplicatedStorageBackups = deduplicateStorageBackups(allStorageBackups);
     
     return {
@@ -1922,9 +1894,7 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
  * @returns {Promise<Object>} - { nodes, vms, containers, pbs: pbsDataArray, pveBackups }
  */
 async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetchPbsDataInternal = fetchPbsData) {
-  // console.log("[DataFetcher] Starting full discovery cycle...");
   
-  // Fetch PVE discovery data first (needed for backup data)
   const pveResult = await fetchPveDiscoveryData(currentApiClients);
   
   // Now fetch PBS and PVE backup data in parallel
@@ -2000,12 +1970,10 @@ async function fetchDiscoveryData(currentApiClients, currentPbsApiClients, _fetc
  * @returns {Promise<Array>} - Array of metric data objects.
  */
 async function fetchMetricsData(runningVms, runningContainers, currentApiClients) {
-    // console.log(`[DataFetcher] Starting metrics fetch for ${runningVms.length} VMs, ${runningContainers.length} Containers...`);
     const allMetrics = [];
     const metricPromises = [];
     const guestsByEndpointNode = {};
 
-    // Group guests by endpointId and then by nodeName (existing logic)
     [...runningVms, ...runningContainers].forEach(guest => {
         const { endpointId, node, vmid, type, name, agent } = guest; // Added 'agent'
         if (!guestsByEndpointNode[endpointId]) {
@@ -2061,7 +2029,6 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                     return null;
                                 }
                                 
-                                // Fetch RRD data (still needed for historical graphs)
                                 const rrdDataResponse = await apiClientInstance.get(`/nodes/${nodeName}/${pathPrefix}/${vmid}/rrddata`, { 
                                     params: { timeframe: 'hour', cf: 'AVERAGE' } 
                                 });
@@ -2077,7 +2044,6 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                 }
                                 
                                 // Convert bulk data to match existing currentMetrics structure
-                                // Use individual status data for I/O counters if available (more accurate)
                                 const statusData = currentStatusResponse?.data?.data || {};
                                 let currentMetrics = {
                                     cpu: bulkVmData.cpu || 0,
@@ -2118,7 +2084,6 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
                                         
                                         let guestMemoryDetails = null;
                                         if (Array.isArray(agentMem) && agentMem.length > 0 && agentMem[0].hasOwnProperty('total') && agentMem[0].hasOwnProperty('free')) {
-                                            // If it's an array of memory info objects (less common for simple mem stats)
                                             guestMemoryDetails = agentMem[0];
                                         } else if (typeof agentMem === 'object' && agentMem !== null && agentMem.hasOwnProperty('total') && agentMem.hasOwnProperty('free')) {
                                             // If it's a direct object with memory stats
@@ -2203,7 +2168,6 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
 
                                 let currentMetrics = currentDataResponse?.data?.data || null;
 
-                                // QEMU Guest Agent Memory Fetch (same as above)
                                 if (type === 'qemu' && currentMetrics && currentMetrics.agent === 1 && guestAgentConfig && (typeof guestAgentConfig === 'string' && (guestAgentConfig.startsWith('1') || guestAgentConfig.includes('enabled=1')))) {
                                     try {
                                         const agentMemInfoResponse = await apiClientInstance.post(`/nodes/${nodeName}/qemu/${vmid}/agent/get-memory-block-info`, {});
@@ -2268,7 +2232,6 @@ async function fetchMetricsData(runningVms, runningContainers, currentApiClients
     // Wait for all metric fetch promises to settle
     const metricResults = await Promise.allSettled(metricPromises);
 
-    // Collect results (existing logic)
     metricResults.forEach(result => {
         if (result.status === 'fulfilled' && result.value) {
             allMetrics.push(result.value);
@@ -2425,7 +2388,6 @@ async function fetchVerificationDiagnostics(pbsClient, datastores = []) {
                 // Find verification jobs for this datastore
                 const datastoreJobs = verificationJobs.filter(job => job.datastore === datastoreName);
                 
-                // Check specific verification job status (focusing on the failing job mentioned)
                 const jobStatusChecks = await Promise.allSettled(
                     datastoreJobs.map(async (job) => {
                         const jobStatus = await checkVerificationJobStatus(pbsClient, job.id);
@@ -2563,7 +2525,6 @@ async function analyzeVerificationFailures(pbsClient, datastoreName, healthAnaly
                 .map(([reason, count]) => ({ reason, count }));
         }
         
-        // Check for stale verification references (due to retention policy)
         const { client } = pbsClient;
         try {
             // Get tasks to identify stale verification failures
@@ -2572,7 +2533,6 @@ async function analyzeVerificationFailures(pbsClient, datastoreName, healthAnaly
             });
             const verificationTasks = tasksResponse.data?.data || [];
             
-            // Count stale failures (older than 14 days with specific error patterns)
             const fourteenDaysAgo = (Date.now() / 1000) - (14 * 24 * 60 * 60);
             analysis.staleDueToRetention = verificationTasks.filter(task => {
                 const endTime = task.endtime || 0;
@@ -2875,10 +2835,8 @@ async function processBackupDataWithCoordinator(vms, containers, pbsInstances, p
             pbsNamespaces: namespaces,
             pbsNamespaceText: namespaces.length > 0 ? namespaces.join(', ') : '-',
             
-            // Backup health status (can be calculated based on latest backup time)
             backupHealthStatus: calculateBackupHealthStatus(latestBackupTime),
             
-            // Failure tracking (would need to be calculated from backup tasks)
             recentFailures: 0, // TODO: Calculate from backup tasks
             lastFailureTime: null,
             

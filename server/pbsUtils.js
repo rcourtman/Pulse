@@ -41,7 +41,6 @@ function isStaleTaskFailure(task) {
                      (guest && guest.includes('GC main'));
                      
     if (isGCTask && (status.includes('WARNINGS') || status.includes('ERROR WARNINGS'))) {
-        // Hide May 2025 GC warnings (known stale warnings)
         const mayStart = new Date('2025-05-01').getTime() / 1000;
         const mayEnd = new Date('2025-05-31').getTime() / 1000;
         const isFromMay2025 = endTime >= mayStart && endTime <= mayEnd;
@@ -96,7 +95,6 @@ function processPbsTasks(allTasks) {
 
     const taskResults = categorizeAndCountTasks(allTasks, taskTypeMap);
 
-    // Warn if unmapped task types found (useful for production troubleshooting)
     const unmappedTypes = new Set();
     allTasks.forEach(task => {
         const taskType = task.worker_type || task.type;
@@ -106,7 +104,6 @@ function processPbsTasks(allTasks) {
     });
     
     if (unmappedTypes.size > 0) {
-        // console.warn('WARN: [pbsUtils] Unmapped PBS task types found:', Array.from(unmappedTypes));
     }
 
     // Helper function to extract namespace from task data
@@ -132,8 +129,6 @@ function processPbsTasks(allTasks) {
         // This handles cases where PBS uses datastore:namespace:type/id format
         const parts = workerId.split(':');
         if (parts.length >= 3) {
-            // Check if first part looks like a datastore name (alphanumeric, dash, underscore)
-            // and third part looks like a backup type (vm/ct followed by number)
             const datastorePattern = /^[a-zA-Z0-9_-]+$/;
             const typePattern = /^(vm|ct)\/\d+$/;
             

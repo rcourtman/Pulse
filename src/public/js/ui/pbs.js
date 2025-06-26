@@ -649,7 +649,6 @@ PulseApp.ui.pbs = (() => {
         const section = document.createElement('div');
         section.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700';
         
-        // Header (now clickable for collapse/expand)
         const header = document.createElement('h4');
         header.className = 'text-md font-semibold p-3 border-b border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors';
         
@@ -1060,7 +1059,6 @@ PulseApp.ui.pbs = (() => {
         }
     }
     
-    // Apply all filters (search, status, time range)
     function applyFilters() {
         // Apply filters to all task rows
         state.taskRows.forEach((row, upid) => {
@@ -1426,10 +1424,8 @@ PulseApp.ui.pbs = (() => {
         const tbody = document.createElement('tbody');
         tbody.className = 'divide-y divide-gray-200 dark:divide-gray-700';
         
-        // Sort snapshots by time (newest first)
         snapshots.sort((a, b) => b['backup-time'] - a['backup-time']);
         
-        // Show only recent snapshots (last 50)
         const recentSnapshots = snapshots.slice(0, 50);
         
         recentSnapshots.forEach(snap => {

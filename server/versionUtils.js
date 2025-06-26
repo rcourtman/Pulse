@@ -121,7 +121,6 @@ function analyzeCommitsForVersionBump() {
         const packageJson = require('../package.json');
         const gitDir = path.join(__dirname, '..');
         
-        // Get the latest stable release tag (no RC/alpha/beta)
         let latestStableTag;
         try {
             latestStableTag = execSync('git tag -l "v*" | grep -v "rc\\|alpha\\|beta" | sort -V | tail -1', { 

@@ -57,7 +57,6 @@ PulseApp.ui.calendarHeatmap = (() => {
                 return taskEndpoint === guest.endpointId;
             }
             
-            // If no node/endpoint info available, include it (fallback)
             return true;
         });
     }
@@ -106,11 +105,9 @@ PulseApp.ui.calendarHeatmap = (() => {
         // Check if this unique key is in the filtered list
         if (filteredGuestIds.includes(uniqueKey)) return true;
         
-        // Also check for simple vmid match (backward compatibility for non-clustered environments)
         if (filteredGuestIds.includes(vmid.toString())) return true;
         
         // For cluster environments with namespace filtering: 
-        // Only allow cross-node matching if ALL filtered guest IDs are simple VMIDs (no node info)
         // This preserves namespace boundaries when namespace filtering is active
         const hasNodeBasedFiltering = filteredGuestIds.some(id => id.includes('-'));
         if (hasNodeBasedFiltering) {
@@ -122,7 +119,6 @@ PulseApp.ui.calendarHeatmap = (() => {
         // Fallback for non-namespace scenarios: check if any guest with the same VMID is in the filtered list
         // This handles cases where backups were made when the guest was on a different node
         const vmidMatch = filteredGuestIds.find(guestId => {
-            // Extract VMID from guest ID (format: "vmid-node")
             const extractedVmid = guestId.includes('-') ? guestId.split('-')[0] : guestId;
             return extractedVmid === vmid.toString();
         });
@@ -157,7 +153,6 @@ PulseApp.ui.calendarHeatmap = (() => {
         // Store the date selection callback
         onDateSelectCallback = onDateSelect;
         
-        // Set initial display month to current month (only if not already set)
         if (!currentDisplayMonth) {
             currentDisplayMonth = new Date();
             currentDisplayMonth.setDate(1); // Set to first of month
@@ -175,7 +170,6 @@ PulseApp.ui.calendarHeatmap = (() => {
         const legend = createLegend();
         container.appendChild(legend);
         
-        // Auto-select today's date if filtering to specific guest (only on user actions)
         if (guestId && isUserAction && !hasAutoSelectedToday) {
             hasAutoSelectedToday = true;
             setTimeout(() => {
@@ -199,7 +193,6 @@ PulseApp.ui.calendarHeatmap = (() => {
             }, 100);
         }
         
-        // Restore preserved selection on API updates (not user actions)
         if (!isUserAction && preservedSelectedDate) {
             setTimeout(() => {
                 const cellToSelect = container.querySelector(`[data-date="${preservedSelectedDate}"]`);
@@ -605,7 +598,6 @@ PulseApp.ui.calendarHeatmap = (() => {
         
         calendarContainer.appendChild(dayHeaders);
         
-        // Calendar grid (6 weeks x 7 days = 42 cells)
         const calendarGrid = document.createElement('div');
         calendarGrid.className = 'calendar-grid grid grid-cols-7 gap-1';
         
@@ -615,7 +607,6 @@ PulseApp.ui.calendarHeatmap = (() => {
         startDate.setDate(startDate.getDate() - firstDay.getDay()); // Go to start of week
         
         
-        // Create 42 cells (6 weeks)
         for (let i = 0; i < 42; i++) {
             const cellDate = new Date(startDate);
             cellDate.setDate(startDate.getDate() + i);
@@ -1264,7 +1255,6 @@ PulseApp.ui.calendarHeatmap = (() => {
             }
         });
         
-        // Group all backups by guest and date (no year restriction)
         const backupsByGuestAndDate = {};
         
         // Process all backup sources
@@ -1424,7 +1414,6 @@ PulseApp.ui.calendarHeatmap = (() => {
             monthsSet.add(monthKey);
         });
         
-        // Convert to sorted month objects (most recent first)
         const allMonths = Array.from(monthsSet).sort().reverse().map(monthKey => {
             const [year, month] = monthKey.split('-').map(Number);
             const firstDay = new Date(year, month, 1);
@@ -1578,7 +1567,6 @@ PulseApp.ui.calendarHeatmap = (() => {
                     };
                 }
                 
-                // Determine retention level (optional - for special highlighting)
                 let retentionLevel = null;
                 
                 if (daysSinceBackup <= 7 && dailyCount < 7) {
@@ -1617,7 +1605,6 @@ PulseApp.ui.calendarHeatmap = (() => {
                 // Use unique key for guest lookup, fall back to vmid if not found
                 const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
                 
-                // Check if this guest already exists in this retention level by vmid (not unique key)
                 const existingGuestIndex = yearData[dateKey].guestsByRetention[retentionLevel].findIndex(g => g.vmid === vmid);
                 
                 if (existingGuestIndex >= 0) {
@@ -2106,7 +2093,6 @@ PulseApp.ui.calendarHeatmap = (() => {
                         });
                     }
                     
-                    // Update detail card with latest data (instant to prevent flashing)
                     onDateSelectCallback(callbackData, true);
                 }
             }

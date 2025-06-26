@@ -236,7 +236,6 @@ PulseApp.ui.backups = (() => {
             return { targetPbsIndex: null, targetNamespace: 'all' };
         }
         
-        // Check if filter includes PBS instance prefix (format: "index:namespace")
         if (namespaceFilter.includes(':')) {
             const parts = namespaceFilter.split(':');
             return {
@@ -257,7 +256,6 @@ PulseApp.ui.backups = (() => {
         const { targetPbsIndex } = _parseNamespaceFilter(namespaceFilter);
         
         if (targetPbsIndex !== null) {
-            // Namespace filter includes specific PBS instance (e.g., "0:namespace")
             return pbsDataArray.filter((_, index) => index === targetPbsIndex);
         } else if (pbsInstanceFilterValue !== 'all') {
             // Separate PBS instance filter is active
@@ -544,7 +542,6 @@ PulseApp.ui.backups = (() => {
         const totalGuests = guestStatuses.length;
         const healthyPercent = totalGuests > 0 ? (healthyCount / totalGuests) * 100 : 0;
         
-        // Sort guests by backup health (worst first for visibility)
         const sortedGuests = [...guestStatuses].sort((a, b) => {
             const priority = { 'failed': 0, 'none': 1, 'old': 2, 'stale': 3, 'ok': 4 };
             return priority[a.backupHealthStatus] - priority[b.backupHealthStatus];
@@ -616,7 +613,6 @@ PulseApp.ui.backups = (() => {
         return 'vm';
     }
 
-    // REMOVED: _getInitialBackupData function (379 lines)
 
     function _determineGuestBackupStatus(guest, guestSnapshots, guestTasks, dayBoundaries, threeDaysAgo, sevenDaysAgo) {
         const guestId = String(guest.vmid);
@@ -687,7 +683,6 @@ PulseApp.ui.backups = (() => {
         let recentFailures = 0;
         let lastFailureTime = null;
         
-        // Get recent failure window (7 days)
         const now = Math.floor(Date.now() / 1000);
         const sevenDaysAgoForFailures = now - (7 * 24 * 60 * 60);
 
@@ -751,7 +746,6 @@ PulseApp.ui.backups = (() => {
                 });
             }
 
-            // Check for backup storage activity (snapshots/backups created)
             if (guestSnapshots) {
                 const snapshotsOnThisDay = guestSnapshots.filter(
                     snap => snap['backup-time'] >= day.start && snap['backup-time'] < day.end
@@ -768,7 +762,6 @@ PulseApp.ui.backups = (() => {
                 });
             }
 
-            // Check for VM/CT snapshots on this day (if we have that data)
             const pveBackups = PulseApp.state.get('pveBackups') || {};
             const allSnapshots = pveBackups.guestSnapshots || [];
             const guestDaySnapshots = allSnapshots.filter(snap => {
@@ -828,7 +821,6 @@ PulseApp.ui.backups = (() => {
                 const datastores = [...new Set(pbsSnapshots.map(s => s.datastoreName).filter(Boolean))];
                 
                 // Since we're now properly filtering by owner/endpoint, we only need to check
-                // if any snapshots have missing owner information
                 const ambiguousSnapshots = pbsSnapshots.filter(snap => {
                     const owner = snap.owner || '';
                     return !owner || !owner.includes('!');
@@ -1222,7 +1214,6 @@ PulseApp.ui.backups = (() => {
         
         if (!backupsTableBody || !calendarContainer) return;
         
-        // Get current filtered guest from state (persists across API updates)
         let currentFilteredGuest = PulseApp.state.get('currentFilteredGuest') || null;
         
         // Add click listeners to table rows
@@ -1237,7 +1228,6 @@ PulseApp.ui.backups = (() => {
             // Restore visual indication if this row was previously selected
             if (currentFilteredGuest === guestId) {
                 row.classList.add('bg-blue-50', 'dark:bg-blue-900/20');
-                // Re-apply calendar filter on restore (not a user action)
                 _filterCalendarToGuest(guestId, false);
             }
             
@@ -1384,7 +1374,6 @@ PulseApp.ui.backups = (() => {
     }
     
     function _resetCalendarFilter() {
-        // Re-render the calendar with all filtered guests (respecting table filters)
         const calendarContainer = document.getElementById('backup-calendar-heatmap');
         if (!calendarContainer || !PulseApp.ui.calendarHeatmap) return;
         
@@ -1428,10 +1417,8 @@ PulseApp.ui.backups = (() => {
             } else {
                 // Primary endpoint - check both node-specific and generic primary keys
                 if (guest.node) {
-                    // Check node-specific key first (for node-specific backups)
                     guestEndpointSuffixes.push(`-primary-${guest.node.toLowerCase()}`);
                 }
-                // Always also check generic primary key (for cluster-wide backups)
                 guestEndpointSuffixes.push('-primary');
             }
 
@@ -1477,7 +1464,6 @@ PulseApp.ui.backups = (() => {
                             return false;
                         }
                         
-                        // 2. Verify type matches (vm vs ct)
                         const expectedType = guest.type === 'qemu' ? 'vm' : 'ct';
                         if (snap.backupType !== expectedType) {
                             
@@ -1491,7 +1477,6 @@ PulseApp.ui.backups = (() => {
                             // For primary endpoints, check node name
                             if (guest.endpointId === 'primary' || !guest.endpointId) {
                                 // Skip node validation if the owner token was already determined to be non-node-specific
-                                // (i.e., the key was created with generic '-primary' suffix)
                                 // This is handled by the key matching logic above
                                 if (guest.node && ownerNode !== guest.node.toLowerCase() && 
                                     ownerNode !== 'primary' && ownerNode !== 'backup') {
@@ -1593,7 +1578,6 @@ PulseApp.ui.backups = (() => {
                         }
                     });
                     
-                    // Also check for unknown endpoint (backups without owner info)
                     const unknownKey = `${baseKey}-${pbsInstance.pbsInstanceName}-${namespace}-unknown`;
                     const unknownSnapshots = snapshotsByGuest.get(unknownKey) || [];
                     
@@ -1770,7 +1754,6 @@ PulseApp.ui.backups = (() => {
             });
         }
         
-        // Create raw backup data (unfiltered)
         const rawBackupData = {
             pbsSnapshots: pbsSnapshots,
             pveBackups: pveStorageBackups,
@@ -1977,7 +1960,6 @@ PulseApp.ui.backups = (() => {
                     return itemEndpoint === guest.endpointId;
                 }
                 
-                // If no node/endpoint info available, include it (fallback)
                 return true;
             });
             
@@ -2023,7 +2005,6 @@ PulseApp.ui.backups = (() => {
                     return taskEndpoint === guest.endpointId;
                 }
                 
-                // If no node/endpoint info available, include it (fallback)
                 return true;
             });
             
@@ -2108,7 +2089,6 @@ PulseApp.ui.backups = (() => {
                     cells.forEach(cell => {
                         cell.classList.add('bg-blue-50/50', 'dark:bg-blue-900/10');
                     });
-                    // Add a subtle left border to the second cell (ID column)
                     const idCell = row.querySelector('td:nth-child(2)');
                     if (idCell) {
                         idCell.classList.add('border-l-2', 'border-l-blue-400', 'dark:border-l-blue-500');
@@ -2506,7 +2486,6 @@ PulseApp.ui.backups = (() => {
                 
             }
             
-            // Check PBS snapshots (only if filter allows PBS backups)
             if ((backupTypeFilter === 'all' || backupTypeFilter === 'pbs') && backupData.pbsSnapshots) {
                 const pbsDates = {};
                 
@@ -2530,7 +2509,6 @@ PulseApp.ui.backups = (() => {
                         return;
                     }
                     
-                    // 2. Verify type matches (vm vs ct)
                     const snapType = snap.backupType || snap['backup-type'] || '';
                     const expectedType = guestStatus.guestType === 'VM' ? 'vm' : 'ct';
                     if (snapType !== expectedType) {
@@ -2565,7 +2543,6 @@ PulseApp.ui.backups = (() => {
                         
                     }
                     
-                    // Log successful validation for debugging (only for the guest being processed)
                     if ((snapId === '102' || snapId === 102) && String(snapId) === String(guestStatus.guestId)) {
                         
                     }
@@ -2599,7 +2576,6 @@ PulseApp.ui.backups = (() => {
                 });
             }
             
-            // Check PVE backups (only if filter allows PVE backups)
             if ((backupTypeFilter === 'all' || backupTypeFilter === 'pve') && backupData.pveBackups) {
                 const pveDates = {};
                 backupData.pveBackups.forEach(backup => {
@@ -2637,7 +2613,6 @@ PulseApp.ui.backups = (() => {
                 });
             }
             
-            // Check VM snapshots (only if filter allows snapshots)
             if ((backupTypeFilter === 'all' || backupTypeFilter === 'snapshots') && backupData.vmSnapshots) {
                 const snapDates = {};
                 backupData.vmSnapshots.forEach(snap => {
@@ -2736,7 +2711,6 @@ PulseApp.ui.backups = (() => {
                 if (guest.snapshotCount > 0) uniqueGuestsWithSnapshots.add(uniqueKey);
             } else {
                 // When filtering by specific type, count guests who have that type in their backup dates
-                // OR if they have no backup dates but have backups of that type (important for namespace filtering)
                 const hasFilteredBackupType = guest.backupDates && guest.backupDates.length > 0 ?
                     guest.backupDates.some(dateInfo => {
                         if (backupTypeFilter === 'pbs') return dateInfo.types.includes('pbsSnapshots');
