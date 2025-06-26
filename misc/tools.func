@@ -67,7 +67,6 @@ function setup_nodejs() {
     # Update to latest npm
     $STD npm install -g npm@latest || {
       msg_error "Failed to update npm to latest version"
-      exit 1
     }
     msg_ok "Setup Node.js ${NODE_VERSION}"
   fi
