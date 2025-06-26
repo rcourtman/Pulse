@@ -63,7 +63,6 @@ PulseApp.utils.BackupFilterManager = class BackupFilterManager {
             }
         }
 
-        // Check namespace filter (only for backup types that support it)
         if (filters.namespace && filters.namespace !== 'all' && this.supportsNamespaces(backupType)) {
             // Normalize namespace - root can be represented as null, undefined, '', or 'root'
             const backupNamespace = backup.namespace || 'root';

@@ -65,7 +65,6 @@ class UpdateManager {
      * @param {string} channelOverride - Optional channel override ('stable' or 'rc')
      */
     async checkForUpdates(channelOverride = null) {
-        // Get the current version using centralized logic (outside try block for error handling)
         const dynamicCurrentVersion = getCurrentVersion();
         
         // Use override channel if provided and valid, otherwise use config
@@ -563,7 +562,6 @@ class UpdateManager {
     async restartService() {
         console.log('[UpdateManager] Restarting pulse service...');
         
-        // Strategy 1: Try pkexec systemctl (most reliable with polkit)
         try {
             console.log('[UpdateManager] Attempting restart via pkexec...');
             await execAsync('pkexec systemctl restart pulse.service', { timeout: 10000 });
@@ -573,7 +571,6 @@ class UpdateManager {
             console.warn('[UpdateManager] pkexec restart failed:', error.message);
         }
         
-        // Strategy 2: Try direct systemctl (if polkit rules work)
         try {
             console.log('[UpdateManager] Attempting restart via systemctl...');
             await execAsync('systemctl restart pulse.service', { timeout: 10000 });

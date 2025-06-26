@@ -110,7 +110,6 @@ async function fallbackNamespaceDiscovery(client, datastoreName, config) {
                 discoveredNamespaces.add(group.ns);
             }
             
-            // Also check owner field for namespace hints (format: user@realm!token)
             if (group.owner && group.owner.includes('/')) {
                 const parts = group.owner.split('/');
                 if (parts.length > 1) {

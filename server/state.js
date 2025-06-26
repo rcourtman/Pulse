@@ -46,7 +46,6 @@ const state = {
   },
   
   // These were pbsInstances, allPbsTasks, aggregatedPbsTaskSummary.
-  // state.pbs now holds the primary list of PBS instances.
   // Task-related data might be part of each PBS instance object in state.pbs,
   // or handled separately if needed by the client for global views.
   allPbsTasks: [], 

@@ -190,7 +190,6 @@ module.exports = {
         const oneDayAgo = now - 86400000;
         const oneWeekAgo = now - 604800000;
         
-        // Clean up alert history (keep 1000 most recent)
         if (this.alertHistory.length > this.maxHistorySize) {
             this.alertHistory = this.alertHistory.slice(0, this.maxHistorySize);
         }

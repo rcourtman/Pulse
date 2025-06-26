@@ -14,7 +14,6 @@ router.get('/healthz', (req, res) => {
         
         // Service is healthy if:
         // 1. API clients are initialized
-        // 2. We have some data (or using placeholder config)
         const isHealthy = clientsInitialized && (hasData || state.isConfigPlaceholder);
         
         if (isHealthy) {

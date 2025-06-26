@@ -474,7 +474,6 @@ PulseApp.ui.storage = (() => {
             }
         });
         
-        // Sort by usage percentage (most full first)
         activeStorages.sort((a, b) => b.usagePercent - a.usagePercent);
         
         // Count warnings/critical

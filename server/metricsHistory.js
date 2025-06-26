@@ -1,6 +1,5 @@
 const HISTORY_RETENTION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MAX_DATA_POINTS = 50400; // Store data every 2 seconds for 7 days would be too much (302,400), 
-                                // so we'll store every ~12 seconds on average (7*24*60*5 = 50,400)
 const CLEANUP_INTERVAL_MS = 30 * 60 * 1000; // Clean up every 30 minutes
 
 class MetricsHistory {
@@ -118,10 +117,8 @@ class MetricsHistory {
             return null;
         }
         
-        // Detect counter resets (current < previous)
         // This can happen when:
         // 1. VM restarts and counters reset to 0
-        // 2. Counter overflow (very rare)
         // 3. Proxmox API reset
         if (currentValue < previousValue) {
             // Counter reset detected
@@ -301,7 +298,6 @@ class MetricsHistory {
                 }
                 return null; // Will need total memory from guest info for percentage
             case 'diskread':
-                // Only filter truly impossible rates (>50GB/s)
                 const diskReadRate = dataPoint.diskReadRate;
                 if (diskReadRate && diskReadRate > 50 * 1024 * 1024 * 1024) {
                     return null;
@@ -350,7 +346,6 @@ class MetricsHistory {
                 }
                 return null;
             case 'diskread':
-                // Only filter truly impossible rates (>50GB/s)
                 const diskReadRate = dataPoint.diskReadRate;
                 if (diskReadRate && diskReadRate > 50 * 1024 * 1024 * 1024) {
                     return null;
@@ -563,7 +558,6 @@ class MetricsHistory {
         
         // Guest metrics
         for (const [guestId, guestHistory] of this.guestMetrics) {
-            // Estimate ~100 bytes per data point (compressed)
             totalBytes += guestHistory.dataPoints.length * 100;
             // Add overhead for maps and structures
             totalBytes += 1024;
@@ -571,7 +565,6 @@ class MetricsHistory {
         
         // Node metrics
         for (const [nodeId, nodeHistory] of this.nodeMetrics) {
-            // Estimate ~80 bytes per data point (less data than guests)
             totalBytes += nodeHistory.dataPoints.length * 80;
             // Add overhead for maps and structures
             totalBytes += 1024;
@@ -655,7 +648,6 @@ class MetricsHistory {
         }
 
         // Set lastValues for rate calculations
-        // Only set if the last point is recent enough (< 5 minutes old)
         // This prevents rate spikes after restarts with old data
         if (sortedPoints.length > 0) {
             const lastPoint = sortedPoints[sortedPoints.length - 1];

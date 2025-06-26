@@ -45,7 +45,6 @@ class MetricsPersistence {
             const jsonData = JSON.stringify(snapshot);
             const compressed = await gzip(jsonData);
 
-            // Write to temp file first (atomic write)
             await fs.writeFile(this.tempFile, compressed);
             await fs.rename(this.tempFile, this.snapshotFile);
 
@@ -88,7 +87,6 @@ class MetricsPersistence {
                 throw new Error(`Unsupported snapshot version: ${snapshot.version}`);
             }
             
-            // Log timezone info if available (v2+)
             if (snapshot.version >= 2 && snapshot.timezone) {
                 const currentOffset = new Date().getTimezoneOffset();
                 const snapshotOffset = snapshot.timezoneOffset || 0;
@@ -216,7 +214,6 @@ class MetricsPersistence {
             // Store point if:
             // 1. It's the first point
             // 2. Enough time has passed based on the interval
-            // 3. It's been too long since last point (prevent gaps > 2x interval)
             const timeSinceLastPoint = lastStoredPoint ? point.timestamp - lastStoredPoint.timestamp : Infinity;
             
             // Only check for significant changes at interval boundaries to optimize performance
@@ -250,7 +247,6 @@ class MetricsPersistence {
     hasSignificantChange(point, lastPoint) {
         if (!lastPoint) return true;
         
-        // Check percentage-based metrics (CPU, memory, disk)
         const percentageMetrics = ['cpu', 'mem', 'disk'];
         for (const metric of percentageMetrics) {
             if (point[metric] !== undefined && lastPoint[metric] !== undefined) {
@@ -265,7 +261,6 @@ class MetricsPersistence {
                     // Always capture transitions to/from idle
                     if ((previous < 5 && current >= 5) || (previous >= 5 && current < 5)) return true;
                     
-                    // For active CPU, use relative change (20% of current value)
                     if (current > 5) {
                         const relativeChange = Math.abs(current - previous) / current;
                         if (relativeChange > 0.2) return true;
@@ -284,26 +279,22 @@ class MetricsPersistence {
             }
         }
         
-        // Check rate-based metrics (I/O)
         const rateMetrics = ['diskReadRate', 'diskWriteRate', 'netInRate', 'netOutRate'];
         for (const metric of rateMetrics) {
             if (point[metric] !== undefined && lastPoint[metric] !== undefined) {
                 const current = point[metric] || 0;
                 const previous = lastPoint[metric] || 0;
                 
-                // Detect idle to active transitions (1KB/s threshold)
                 const wasIdle = previous < 1024;
                 const isIdle = current < 1024;
                 
                 if (wasIdle !== isIdle) return true; // State change
                 
-                // For active I/O, detect significant rate changes (30% relative)
                 if (!isIdle && previous > 0) {
                     const relativeChange = Math.abs(current - previous) / previous;
                     if (relativeChange > 0.3) return true;
                 }
                 
-                // Also capture large absolute jumps (10MB/s)
                 if (Math.abs(current - previous) > 10 * 1024 * 1024) return true;
             }
         }

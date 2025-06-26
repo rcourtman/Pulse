@@ -249,7 +249,6 @@ class DiagnosticTool {
                         perInstanceCounts: ns.perInstanceCounts || {}
                     }));
             }
-            // Keep current filter values as they are (already sanitized if namespaces)
             if (sanitized.state.namespaceFilteringDebug.currentFilters) {
                 const filters = sanitized.state.namespaceFilteringDebug.currentFilters;
                 if (filters.namespace && filters.namespace !== 'all' && filters.namespace !== 'root') {
@@ -298,7 +297,6 @@ class DiagnosticTool {
             .replace(/([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/g, '[HOSTNAME]')
             .replace(/"[^"]*\.lan[^"]*"/g, '"[HOSTNAME]"')
             .replace(/"[^"]*\.local[^"]*"/g, '"[HOSTNAME]"')
-            // Sanitize namespace names in recommendations (but keep 'root')
             .replace(/namespaces?: ([a-zA-Z0-9-_]+(?:, [a-zA-Z0-9-_]+)*)/g, (match, namespaces) => {
                 const nsList = namespaces.split(', ');
                 const sanitizedList = nsList.map(ns => ns === 'root' ? 'root' : '[namespace]');
@@ -376,7 +374,6 @@ class DiagnosticTool {
                             let totalVMs = 0;
                             let vmCheckSuccessful = false;
                             
-                            // Test VM listing on each node (same as the actual app)
                             for (const node of nodesData.data.data) {
                                 if (node && node.node) {
                                     try {
@@ -409,7 +406,6 @@ class DiagnosticTool {
                             let totalContainers = 0;
                             let containerCheckSuccessful = false;
                             
-                            // Test container listing on each node (same as the actual app)
                             for (const node of nodesData.data.data) {
                                 if (node && node.node) {
                                     try {
@@ -435,7 +431,6 @@ class DiagnosticTool {
                         permCheck.errors.push('Cannot test container listing: No nodes available');
                     }
 
-                    // Test node stats permission (pick first node if available)
                     if (permCheck.canListNodes && permCheck.nodeCount > 0) {
                         try {
                             const nodesData = await clientObj.client.get('/nodes');
@@ -451,7 +446,6 @@ class DiagnosticTool {
                         }
                     }
 
-                    // Test storage permissions (critical for backup discovery)
                     if (permCheck.canListNodes && permCheck.nodeCount > 0) {
                         try {
                             const nodesData = await clientObj.client.get('/nodes');
@@ -1111,7 +1105,6 @@ class DiagnosticTool {
             }
         }
 
-        // Check PBS configuration (fallback if permissions not available)
         if (report.configuration && report.configuration.pbs && Array.isArray(report.configuration.pbs)) {
             report.configuration.pbs.forEach((pbs, index) => {
             if (pbs.node_name === 'NOT SET') {

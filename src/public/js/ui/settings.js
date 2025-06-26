@@ -93,7 +93,6 @@ PulseApp.ui.settings = (() => {
         // Update content
         renderTabContent();
         
-        // Load current version if system tab is active (after DOM element exists)
         if (activeTab === 'system') {
             await loadCurrentVersion();
         }
@@ -212,7 +211,6 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderProxmoxTab(proxmox, config) {
-        // Handle both structured config (proxmox object) and flat config (direct env vars)
         let host = proxmox?.host || config.PROXMOX_HOST || '';
         let port = proxmox?.port || config.PROXMOX_PORT || '';
         const tokenId = proxmox?.tokenId || config.PROXMOX_TOKEN_ID || '';
@@ -221,9 +219,7 @@ PulseApp.ui.settings = (() => {
         // Clean the host value if it contains protocol or port, and extract port if needed
         if (host) {
             const originalHost = host;
-            // Remove protocol (http:// or https://)
             host = host.replace(/^https?:\/\//, '');
-            // Extract port if it's included in the host (e.g., "proxmox.lan:8006")
             const portMatch = host.match(/^([^:]+)(:(\d+))?$/);
             if (portMatch) {
                 host = portMatch[1];
@@ -325,7 +321,6 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderPBSTab(pbs, config) {
-        // Handle both structured config (pbs object) and flat config (direct env vars)
         let host = pbs?.host || config.PBS_HOST || '';
         let port = pbs?.port || config.PBS_PORT || '';
         const tokenId = pbs?.tokenId || config.PBS_TOKEN_ID || '';
@@ -333,9 +328,7 @@ PulseApp.ui.settings = (() => {
         // Clean the host value if it contains protocol or port, and extract port if needed
         if (host) {
             const originalHost = host;
-            // Remove protocol (http:// or https://)
             host = host.replace(/^https?:\/\//, '');
-            // Extract port if it's included in the host (e.g., "192.168.0.16:8007")
             const portMatch = host.match(/^([^:]+)(:(\d+))?$/);
             if (portMatch) {
                 host = portMatch[1];
@@ -982,7 +975,6 @@ PulseApp.ui.settings = (() => {
             emptyState.style.display = 'none';
         }
 
-        // Count only actual endpoint divs (not the empty state)
         const existingEndpoints = container.querySelectorAll('.border:not(.border-dashed)');
         
         // Find the next available index by checking existing endpoints
@@ -1058,7 +1050,6 @@ PulseApp.ui.settings = (() => {
             emptyState.style.display = 'none';
         }
 
-        // Count only actual endpoint divs (not the empty state)
         const existingEndpoints = container.querySelectorAll('.border:not(.border-dashed)');
         
         // Find the next available index by checking existing endpoints
@@ -1166,7 +1157,6 @@ PulseApp.ui.settings = (() => {
                             
                             // Clean host values that contain protocol or port
                             if (configKey.includes('PROXMOX_HOST_') && value) {
-                                // Remove protocol (http:// or https://)
                                 value = value.replace(/^https?:\/\//, '');
                                 // Extract port if it's included in the host
                                 const portMatch = value.match(/^([^:]+)(:(\d+))?$/);
@@ -1223,7 +1213,6 @@ PulseApp.ui.settings = (() => {
                             
                             // Clean host values that contain protocol or port
                             if (configKey.includes('PBS_HOST_') && value) {
-                                // Remove protocol (http:// or https://)
                                 value = value.replace(/^https?:\/\//, '');
                                 // Extract port if it's included in the host
                                 const portMatch = value.match(/^([^:]+)(:(\d+))?$/);
@@ -1248,7 +1237,6 @@ PulseApp.ui.settings = (() => {
         }
     }
 
-    // Rest of the functions (testConnections, saveConfiguration, etc.)
     async function testConnections() {
         showMessage('Testing connections...', 'info');
         
@@ -1319,9 +1307,7 @@ PulseApp.ui.settings = (() => {
                 // Clean PBS_HOST entries - remove protocol and port if included
                 if (name.startsWith('PBS_HOST')) {
                     let cleanHost = value.trim();
-                    // Remove protocol (http:// or https://)
                     cleanHost = cleanHost.replace(/^https?:\/\//, '');
-                    // Remove port if it's included in the host (e.g., "192.168.1.1:8007")
                     const portMatch = cleanHost.match(/^([^:]+)(:\d+)?$/);
                     if (portMatch) {
                         cleanHost = portMatch[1];
@@ -1575,7 +1561,6 @@ PulseApp.ui.settings = (() => {
             if (data && data.latestVersion) {
                 const latestVersion = data.latestVersion;
                 const currentVersion = data.currentVersion || currentConfig.version || 'Unknown';
-                // Parse channel from descriptive text (e.g., "RC releases only" -> "rc")
                 const rawChannel = data.updateChannel || 'stable';
                 const rawChannelLower = rawChannel.toLowerCase();
                 const updateChannel = (rawChannelLower.includes('rc') || rawChannelLower.includes('release candidate') || rawChannelLower.includes('alpha') || rawChannelLower.includes('beta')) ? 'rc' : 'stable';
@@ -1624,12 +1609,10 @@ PulseApp.ui.settings = (() => {
                     channelMismatchWarning.classList.remove('hidden');
                 }
                 
-                // Check if this is a "downgrade" scenario (RC to stable)
                 const isDowngradeToStable = isCurrentRC && updateChannel === 'stable' && 
                     currentVersion !== latestVersion;
                 
                 if (data.updateAvailable || isDowngradeToStable) {
-                    // Update available (or downgrade to stable)
                     latestVersionElement.className = 'font-mono font-semibold text-green-600 dark:text-green-400';
                     
                     let updateText;
@@ -1710,7 +1693,6 @@ PulseApp.ui.settings = (() => {
                     // Recursively call with cached data
                     setTimeout(() => {
                         const cachedData = staleCache.data;
-                        // Process cached data (simplified version)
                         latestVersionElement.textContent = cachedData.latestVersion || 'Unknown';
                         latestVersionElement.className = 'font-mono font-semibold text-gray-700 dark:text-gray-300';
                         versionStatusElement.innerHTML = '<span class="text-amber-600 dark:text-amber-400">⚠️ Cached data (rate limited)</span>';
@@ -1720,7 +1702,6 @@ PulseApp.ui.settings = (() => {
         }
     }
     
-    // Simple version comparison (assumes semver format)
     function compareVersions(version1, version2) {
         const v1parts = version1.split('.').map(Number);
         const v2parts = version2.split('.').map(Number);
@@ -1758,7 +1739,6 @@ PulseApp.ui.settings = (() => {
         }
         
         if (updateReleaseNotes && releaseData.body) {
-            // Convert markdown to basic HTML (simple implementation)
             const htmlContent = releaseData.body
                 .replace(/### (.*)/g, '<h4 class="font-semibold mt-3 mb-1">$1</h4>')
                 .replace(/## (.*)/g, '<h3 class="font-semibold text-lg mt-3 mb-2">$1</h3>')
@@ -1834,7 +1814,6 @@ PulseApp.ui.settings = (() => {
                 return;
             }
             
-            // Check if current version is a development version (has -dev or +commit)
             const isDevVersion = cleanCurrentVersion.includes('-dev') || cleanCurrentVersion.includes('+');
             
             if (isDevVersion) {
@@ -1850,7 +1829,6 @@ PulseApp.ui.settings = (() => {
             // If current version is a dynamic RC (like 3.24.0-rc30), try to find the closest stable version
             let baseVersion, headVersion;
             
-            // Handle git describe format (e.g., v3.30.0-rc2-60-gb63f582, v3.30.0-rc2-60-gb63f582-dirty)
             const gitDescribeMatch = cleanCurrentVersion.match(/^(\d+\.\d+\.\d+(?:-rc\d+)?)-\d+-g[a-f0-9]+(?:-dirty)?$/);
             let actualCurrentVersion = cleanCurrentVersion;
             if (gitDescribeMatch) {
@@ -2366,7 +2344,6 @@ PulseApp.ui.settings = (() => {
         const currentState = PulseApp.state.get();
         const allGuests = [];
         
-        // Check if we have dashboard data (which contains VMs/LXCs)
         const dashboardData = PulseApp.state.get('dashboardData') || [];
         
         // Add all guests from dashboard data
@@ -2488,7 +2465,6 @@ PulseApp.ui.settings = (() => {
                 endpointField.value = selectedEndpoint;
                 vmidField.value = selectedVmid;
                 
-                // Find the current node for this VM (for display purposes)
                 const selectedGuest = allGuests.find(g => g.endpointId === selectedEndpoint && g.id === selectedVmid);
                 
                 // If we can't find the guest or it doesn't have a node, use a placeholder
@@ -3365,7 +3341,6 @@ PulseApp.ui.settings = (() => {
         // Replace IP addresses
         sanitized = sanitized.replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '[IP-ADDRESS]');
         
-        // Replace hostnames (anything before port or path)
         sanitized = sanitized.replace(/^[^:/]+/, '[HOSTNAME]');
         
         // Replace ports
@@ -3511,7 +3486,6 @@ PulseApp.ui.settings = (() => {
             }
         }
         
-        // Re-check for updates with the selected channel (preview mode)
         // Debounce rapid changes to prevent API spam
         if (updateCheckTimeout) {
             clearTimeout(updateCheckTimeout);
@@ -3551,7 +3525,6 @@ PulseApp.ui.settings = (() => {
         }
     }
     
-    // Proceed with switching to stable release (downgrade)
     function proceedWithStableSwitch() {
         const warningElement = document.getElementById('channel-mismatch-warning');
         if (warningElement) {
@@ -3565,7 +3538,6 @@ PulseApp.ui.settings = (() => {
         }
     }
     
-    // Acknowledge the user wants to stay on stable channel (legacy)
     function acknowledgeStableChoice() {
         proceedWithStableSwitch();
     }
@@ -3579,7 +3551,6 @@ PulseApp.ui.settings = (() => {
         switchToChannel(recommendedChannel);
     }
 
-    // Clear update cache (useful after saving settings)
     function clearUpdateCache() {
         updateCache.clear();
     }

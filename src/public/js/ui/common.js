@@ -168,7 +168,6 @@ PulseApp.ui.common = (() => {
             });
         });
         
-        // Setup backups group filter (grouped/list)
         document.querySelectorAll('input[name="backups-group-filter"]').forEach(radio => {
             radio.addEventListener('change', function() {
                 if (this.checked) {
@@ -203,7 +202,6 @@ PulseApp.ui.common = (() => {
 
             // Handle Escape key
             if (event.key === 'Escape') {
-                // Check which tab is actually visible (not just has active class)
                 const mainTab = document.getElementById('main');
                 const backupsTab = document.getElementById('backups');
                 
@@ -230,7 +228,6 @@ PulseApp.ui.common = (() => {
                 event.key !== ' ' &&
                 /[a-zA-Z0-9]/.test(event.key) // Only alphanumeric characters
             ) {
-                // Check which tab is actually visible (not just has active class)
                 const mainTab = document.getElementById('main');
                 const backupsTab = document.getElementById('backups');
                 
@@ -422,7 +419,6 @@ PulseApp.ui.common = (() => {
         const hasActiveStates = hasActiveFilters();
         
         if (hasActiveStates) {
-            // Highlighted state - button is active (toned down)
             resetButton.className = 'flex items-center justify-center p-1 h-11 w-11 sm:h-7 sm:w-7 text-xs border border-blue-400 dark:border-blue-500 rounded bg-blue-50/50 dark:bg-blue-900/10 text-blue-600 dark:text-blue-400 hover:bg-blue-100/50 dark:hover:bg-blue-900/20 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-colors flex-shrink-0';
         } else {
             // Default state - button is inactive

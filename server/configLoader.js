@@ -98,7 +98,6 @@ function loadPbsConfig(index = null) {
         const parsedUrl = new URL(pbsHostUrl);
         pbsHostname = parsedUrl.hostname;
     } catch (e) {
-        // console.warn(`WARN: Could not parse PBS_HOST URL "${pbsHostUrl}". Using full value as fallback name.`);
     }
 
     const pbsTokenId = process.env[tokenIdVar];
@@ -194,7 +193,6 @@ function loadConfiguration() {
         };
     }
 
-    // Set the flag if placeholders were detected (but don't throw error)
     if (placeholderVars.length > 0) {
         isConfigPlaceholder = true;
         // Ensure token ID placeholder is included if missing
@@ -214,13 +212,10 @@ function loadConfiguration() {
         const tokenId = process.env[tokenIdEnv];
         const tokenSecret = process.env[tokenSecretEnv];
 
-        // Basic validation for additional endpoints (primary is validated earlier)
         if (index !== null && (!tokenId || !tokenSecret)) {
-            // console.warn(`WARN: Skipping endpoint ${index || idPrefix} (Host: ${host}). Missing token ID or secret.`);
             return null;
         }
         if (index !== null && placeholderValues.some(p => host.includes(p) || tokenId.includes(p) || tokenSecret.includes(p))) {
-            // console.warn(`WARN: Skipping endpoint ${index || idPrefix} (Host: ${host}). Environment variables seem to contain placeholder values.`);
             return null;
         }
         
@@ -241,7 +236,6 @@ function loadConfiguration() {
         };
     }
 
-    // Load primary endpoint (index null for helper)
     const primaryEndpoint = createProxmoxEndpointConfig(
         'primary', 
         null, // No index for primary
@@ -284,56 +278,9 @@ function loadConfiguration() {
     }
 
     if (endpoints.length > 1) {
-        // console.log(`INFO: Loaded configuration for ${endpoints.length} Proxmox endpoints.`);
     }
 
     // --- Load All PBS Configurations ---
     const pbsConfigs = [];
     // Load primary PBS config
     const primaryPbsResult = loadPbsConfig();
-    /* istanbul ignore else */ // Ignore else path - tested by 'should not add primary PBS config if host is set but tokens are missing'
-    if (primaryPbsResult.config) {
-        pbsConfigs.push(primaryPbsResult.config);
-    }
-
-    // Load additional PBS configs
-    // Check all environment variables for PBS_HOST_N pattern to handle non-sequential numbering
-    const pbsHostKeys = Object.keys(process.env)
-        .filter(key => key.match(/^PBS_HOST_\d+$/))
-        .map(key => {
-            const match = key.match(/^PBS_HOST_(\d+)$/);
-            return match ? parseInt(match[1]) : null;
-        })
-        .filter(num => num !== null)
-        .sort((a, b) => a - b);
-    
-    for (const pbsIndex of pbsHostKeys) {
-        const pbsResult = loadPbsConfig(pbsIndex);
-        if (pbsResult.config) {
-            pbsConfigs.push(pbsResult.config);
-        }
-    }
-
-    if (pbsConfigs.length > 0) {
-        // console.log(`INFO: Loaded configuration for ${pbsConfigs.length} PBS instances.`);
-    } else {
-        // console.log("INFO: No PBS instances configured.");
-    }
-
-    // --- Final Validation ---
-    const enabledEndpoints = endpoints.filter(e => e.enabled);
-    if (enabledEndpoints.length === 0 && pbsConfigs.length === 0) {
-         // Throw error instead of exiting
-        throw new ConfigurationError('\n--- Configuration Error ---\nNo enabled Proxmox VE or PBS endpoints could be configured. Please check your .env file and environment variables.\n');
-    }
-
-    // console.log('INFO: Configuration loaded successfully.');
-    
-    // Load update channel preference
-    const updateChannel = getUpdateChannelPreference();
-    
-    // Return the flag along with endpoints and pbsConfigs
-    return { endpoints, pbsConfigs, isConfigPlaceholder, updateChannel };
-}
-
-module.exports = { loadConfiguration, getUpdateChannelPreference, ConfigurationError }; // Export the function and error class

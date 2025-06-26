@@ -104,7 +104,6 @@ async function checkVerificationJob(pbsClient, datastore, jobId) {
  * @returns {Object} Object with datastore and jobId
  */
 function extractVerificationJobInfo(task) {
-    // Try to extract from comment first (e.g., "main:v-3fb332a6-ba43")
     if (task.comment && task.comment.includes(':')) {
         const parts = task.comment.split(':');
         if (parts.length >= 2) {

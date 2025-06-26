@@ -120,7 +120,6 @@ class WebhookBatcher extends EventEmitter {
                     const item = batch[i];
                     await this.sendSingleWebhook(item.alert, item.webhookUrl);
                     
-                    // Add delay between webhooks (except after the last one)
                     if (i < batch.length - 1) {
                         const delay = item.priority === 'critical' ? 
                             this.config.priorityDelay : 

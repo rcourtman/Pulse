@@ -257,7 +257,6 @@ router.get('/snapshots', (req, res) => {
             };
         });
         
-        // Sort by age (most recent first)
         snapshotDebug.sort((a, b) => parseFloat(a.ageHours) - parseFloat(b.ageHours));
         
         const recentSnapshots = snapshotDebug.filter(s => s.willShowAsJustNow);

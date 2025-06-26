@@ -182,7 +182,6 @@ PulseApp.state = (() => {
                 }
             });
             
-            // Update endpoint configurations (these don't need change tracking)
             if (newData.endpoints) {
                 internalState.endpoints = newData.endpoints;
             }

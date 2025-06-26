@@ -53,7 +53,6 @@ PulseApp.ui.backupDetailCard = (() => {
     function getMultiDateContent(data) {
         const { backups, stats, filterInfo } = data;
         
-        // Check if any filters are active (excluding 'all' values)
         const hasActiveFilters = filterInfo && (
             filterInfo.search ||
             (filterInfo.guestType && filterInfo.guestType !== 'all') ||
@@ -154,7 +153,6 @@ PulseApp.ui.backupDetailCard = (() => {
                 // Create unique guest key to prevent duplicates
                 const guestKey = `${guest.guestId || guest.vmid}-${guest.node}`;
                 
-                // Check if this guest is already in the list (shouldn't happen but let's be safe)
                 const existingGuestIndex = group.guests.findIndex(g => `${g.id}-${g.node}` === guestKey);
                 if (existingGuestIndex >= 0) {
                     // Update existing guest if newer backup
@@ -486,7 +484,6 @@ PulseApp.ui.backupDetailCard = (() => {
                                 // Get filtered backup types and counts based on active filter
                                 const filteredBackupData = getFilteredSingleDateBackupData(backup, filterInfo);
                                 
-                                // Check if we need a namespace header (only for PBS backups)
                                 let namespaceHeader = '';
                                 
                                 // Only show namespace headers for PBS backups

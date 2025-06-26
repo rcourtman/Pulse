@@ -59,7 +59,6 @@ router.get('/', (req, res) => {
     }
 });
 
-// Active alerts endpoint (simplified response for alert monitor modal)
 router.get('/active', (req, res) => {
     try {
         const filters = {
@@ -141,7 +140,6 @@ router.post('/test-email', async (req, res) => {
     try {
         console.log('[Test Email] Sending test email...');
         
-        // Use the unified sendTestEmail method without custom config (uses existing transporter)
         const testResult = await stateManager.alertManager.sendTestEmail();
         
         if (testResult.success) {
@@ -305,7 +303,6 @@ router.post('/test', async (req, res) => {
             }
         }
         
-        // Create dashboard alert if requested (after all other notifications are processed)
         if (notificationChannels.includes('local')) {
             try {
                 const alertManager = stateManager.alertManager;
@@ -440,7 +437,6 @@ router.post('/evaluate', async (req, res) => {
     }
 });
 
-// Debug endpoint for alert threshold evaluation (without rule ID)
 router.get('/debug', (req, res) => {
     try {
         const ruleId = req.query.ruleId;

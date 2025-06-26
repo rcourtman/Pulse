@@ -30,7 +30,6 @@ PulseApp.utils = (() => {
             if (percentage >= 80) return 'yellow';
             return 'green'; // Healthy green for normal disk usage
         } else {
-            // Generic/legacy fallback (for other uses like storage, etc.)
             if (percentage >= 90) return 'red';
             if (percentage >= 75) return 'yellow';
             return 'green'; // Keep green for non-dashboard usage
@@ -57,12 +56,10 @@ PulseApp.utils = (() => {
         `;
     }
     
-    // Extract timestamp from backup object (handles multiple formats)
     function getBackupTimestamp(backup) {
         return backup.timestamp || backup['backup-time'] || backup.ctime || backup.snaptime;
     }
     
-    // Convert date to ISO date string (YYYY-MM-DD)
     function toDateKey(date) {
         if (!date) return null;
         const d = date instanceof Date ? date : new Date(date * 1000);
@@ -348,7 +345,6 @@ PulseApp.utils = (() => {
         // For Proxmox nodes, we need to find which endpoint this node belongs to
         // by looking at the nodes data from the API
         
-        // First check if nodeName matches a displayName (for nodes with custom names)
         // This needs to be checked first because the UI shows displayName in headers
         const nodeByDisplayName = nodesData.find(node => node.displayName === nodeName);
         if (nodeByDisplayName && nodeByDisplayName.endpointId) {

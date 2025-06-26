@@ -66,7 +66,6 @@ async function analyzeVerificationHealth(pbsClient, datastoreName) {
                         const encodedJobInfo = upidParts[7]; 
                         
                         if (taskType === 'verificationjob' && encodedJobInfo) {
-                            // Decode hex-encoded characters (\x3a = ':')
                             const decodedInfo = encodedJobInfo.replace(/\\x([0-9a-fA-F]{2})/g, (match, hex) => 
                                 String.fromCharCode(parseInt(hex, 16))
                             );
@@ -221,7 +220,6 @@ async function detectStaleVerificationReferences(pbsClient, datastoreName) {
         const currentJobs = await getVerificationJobs(pbsClient);
         const currentJobIds = new Set(currentJobs.map(job => job.id));
         
-        // Get verification health analysis (which includes job IDs found in snapshots)
         const healthAnalysis = await analyzeVerificationHealth(pbsClient, datastoreName);
         
         // Find verification job references in snapshots that don't have current job configs

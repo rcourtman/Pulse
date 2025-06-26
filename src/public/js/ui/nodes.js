@@ -27,7 +27,6 @@ PulseApp.ui.nodes = (() => {
             ? 'bg-green-500 dark:bg-green-400'
             : 'bg-red-500 dark:bg-red-400';
 
-        // Check if charts mode is active (same pattern as dashboard)
         const isChartsMode = document.getElementById('toggle-charts-checkbox')?.checked || false;
         const mainContainer = document.getElementById('main');
         const chartsEnabled = isChartsMode && mainContainer && mainContainer.classList.contains('charts-mode');

@@ -69,7 +69,6 @@ class DnsResolver {
       const allAddresses = [...addresses, ...addresses6];
       
       if (allAddresses.length === 0) {
-        // Fallback to lookup (uses system resolver)
         console.log(`[DnsResolver] DNS resolve failed for ${hostname}, trying system lookup`);
         const result = await lookup(hostname, { all: true });
         const lookupAddresses = result.map(r => r.address);

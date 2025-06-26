@@ -164,7 +164,6 @@ PulseApp.ui.thresholds = (() => {
                         thresholdSettingsPanel.classList.remove('hidden');
                     }
                     
-                    // Disable other modes (mutually exclusive)
                     const chartsToggle = document.getElementById('toggle-charts-checkbox');
                     const alertsToggle = document.getElementById('toggle-alerts-checkbox');
                     if (chartsToggle && chartsToggle.checked) {
@@ -349,7 +348,6 @@ PulseApp.ui.thresholds = (() => {
         const tableBody = document.querySelector('#main-table tbody');
         if (!tableBody) return;
         
-        // Clear ALL rows with data-id attribute (guest rows)
         const rows = tableBody.querySelectorAll('tr[data-id]');
         rows.forEach(row => {
             row.style.display = '';
@@ -610,7 +608,6 @@ PulseApp.ui.thresholds = (() => {
         return isDraggingSlider;
     }
 
-    // Helper function to create threshold slider HTML (used by alerts system)
     function createThresholdSliderHtml(id, min, max, step, value, additionalClasses = '') {
         return `
             <div class="flex flex-row items-center gap-1 ${additionalClasses}">
@@ -625,7 +622,6 @@ PulseApp.ui.thresholds = (() => {
         `;
     }
 
-    // Helper function to create threshold select HTML (used by alerts system)
     function createThresholdSelectHtml(id, options, value, additionalClasses = '') {
         const optionsHtml = options.map(option => 
             `<option value="${option.value}" ${option.value === value ? 'selected' : ''}>${option.label}</option>`

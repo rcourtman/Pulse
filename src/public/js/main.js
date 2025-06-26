@@ -104,7 +104,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const isConnected = PulseApp.socketHandler?.isConnected();
         const initialDataReceived = PulseApp.state?.get('initialDataReceived');
         
-        // Also check if we have any data at all (not just VMs/containers)
         const hasAnyData = PulseApp.state && (
             (PulseApp.state.get('nodesData') || []).length > 0 ||
             (PulseApp.state.get('vmsData') || []).length > 0 ||
@@ -277,7 +276,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 2000);
     
-    // Periodically check for updates (every 6 hours)
     setInterval(() => {
         fetchVersion();
     }, 6 * 60 * 60 * 1000);

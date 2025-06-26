@@ -142,7 +142,6 @@ class PBSBackup {
         // Must match VMID
         if (String(this.backupId) !== String(guest.vmid)) return false;
         
-        // Must match type (vm/ct)
         const guestType = guest.type === 'qemu' ? 'vm' : 'ct';
         if (this.backupType !== guestType) return false;
         
@@ -154,7 +153,6 @@ class PBSBackup {
         // Get dynamic token mappings
         const tokenMappings = PBSBackup.buildTokenMappings();
         
-        // For primary endpoint guests (including when endpointId is not set)
         if (!guestEndpoint || guestEndpoint === 'primary') {
             // Check if token maps to this node
             if (tokenMappings[endpointHint] && tokenMappings[endpointHint].includes(guestNode)) {
@@ -289,7 +287,6 @@ class Guest {
         this.status = data.status;
         this.tags = data.tags;
         
-        // Associated backups (populated later)
         this.pbsBackups = [];
         this.pveBackups = [];
         this.snapshots = [];

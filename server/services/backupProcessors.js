@@ -323,7 +323,6 @@ class BackupProcessingCoordinator {
             const pbsBackups = this.pbsProcessor.processRawData(data.pbsInstances || []);
             console.log(`[Coordinator] Processed ${pbsBackups.length} PBS backups`);
             
-            // Match PBS backups to guests (with namespace filter)
             this.pbsProcessor.matchBackupsToGuests(allGuests, namespaceFilter);
         }
         
@@ -331,7 +330,6 @@ class BackupProcessingCoordinator {
             const pveBackups = this.pveProcessor.processRawData(data.storageBackups || []);
             console.log(`[Coordinator] Processed ${pveBackups.length} PVE backups`);
             
-            // Match PVE backups to guests (no namespace filter)
             this.pveProcessor.matchBackupsToGuests(allGuests);
         }
         
@@ -343,7 +341,6 @@ class BackupProcessingCoordinator {
             this.snapshotProcessor.matchSnapshotsToGuests(allGuests);
         }
         
-        // 3. Filter guests based on namespace (only if PBS is included)
         let filteredGuests = allGuests;
         if (namespaceFilter !== 'all' && (backupTypeFilter === 'all' || backupTypeFilter === 'pbs')) {
             console.log(`[Coordinator] Applying namespace filter '${namespaceFilter}' (backup type filter: '${backupTypeFilter}')`);

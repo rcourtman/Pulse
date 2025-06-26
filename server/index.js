@@ -66,7 +66,6 @@ const { Server } = require('socket.io');
 const axios = require('axios');
 const axiosRetry = require('axios-retry').default; // Import axios-retry
 
-// Hot reload dependencies (always try to load for development convenience)
 let chokidar;
 try {
   chokidar = require('chokidar');
@@ -78,7 +77,6 @@ try {
 const { initializeApiClients } = require('./apiClients');
 let apiClients = {};   // Initialize as empty objects
 let pbsApiClients = {};
-// Note: Client initialization is now async and happens in startServer()
 // --- END API Client Initialization ---
 
 // Configuration API
@@ -132,12 +130,10 @@ app.get('/api/version', async (req, res) => {
         let updateAvailable = false;
         let releaseUrl = null;
         
-        // Check if this is a development build (ahead of all releases)
         const isDevelopmentBuild = currentVersion.includes('-dev.') || currentVersion.includes('-dirty');
         
         if (!isDevelopmentBuild) {
             try {
-                // Check for channel override from query parameter (for preview functionality)
                 const channelOverride = req.query.channel;
                 
                 // Try to check for updates with optional channel override
@@ -194,7 +190,6 @@ app.get('/api/storage', async (req, res) => {
 // Chart data API endpoint
 app.get('/api/charts', async (req, res) => {
     try {
-        // Get time range from query parameter (default to 60 minutes)
         const timeRangeMinutes = parseInt(req.query.range) || 60;
         
         // Get current guest info for context
@@ -411,7 +406,6 @@ app.post('/api/test-webhook', async (req, res) => {
                 }]
             };
         } else {
-            // Generic webhook format with all fields (backward compatibility)
             testPayload = {
                 timestamp: new Date().toISOString(),
                 alert: {
@@ -601,11 +595,6 @@ const io = initializeSocket(server);
 
 // --- Global State Variables ---
 // These will hold the latest fetched data
-// let currentNodes = [];
-// let currentVms = [];
-// let currentContainers = [];
-// let currentMetrics = [];
-// let pbsDataArray = []; // Array to hold data for each PBS instance
 let isDiscoveryRunning = false; // Prevent concurrent discovery runs
 let isMetricsRunning = false;   // Prevent concurrent metric runs
 let discoveryTimeoutId = null;
@@ -673,7 +662,6 @@ async function runDiscoveryCycle() {
     const updatedState = stateManager.getState(); // Get the fully updated state
     console.log(`[Discovery Cycle] Updated state. Nodes: ${updatedState.nodes.length}, VMs: ${updatedState.vms.length}, CTs: ${updatedState.containers.length}, PBS: ${updatedState.pbs.length}`);
 
-    // Emit combined data using updated state manager state (which includes the flag)
     if (io.engine.clientsCount > 0) {
         try {
             const pveBackups = updatedState.pveBackups || {};
@@ -800,10 +788,8 @@ async function runMetricCycle() {
            
            // Emit only metrics updates if needed, or rely on full rawData updates?
            // Consider emitting a smaller 'metricsUpdate' event if performance is key
-           // io.emit('metricsUpdate', stateManager.getState().metrics);
         }
 
-        // Emit rawData with updated global state (which includes metrics, alerts, and placeholder flag)
         try {
             const currentState = stateManager.getState();
             // Test serialization first to catch circular reference errors
@@ -819,7 +805,6 @@ async function runMetricCycle() {
            console.log('[Metrics Cycle] No running guests found, clearing metrics.');
            stateManager.clearMetricsData(); // Clear metrics
            // Emit state update with cleared metrics only if clients are connected
-           // (Avoid unnecessary emits if no one is listening and nothing changed except clearing metrics)
            if (io.engine.clientsCount > 0) {
                try {
                    const currentState = stateManager.getState();
@@ -965,7 +950,6 @@ function setupEnvFileWatcher() {
             // Debounce the reload to avoid multiple reloads for rapid changes
             clearTimeout(reloadDebounceTimer);
             reloadDebounceTimer = setTimeout(async () => {
-                // Prevent reload if we just reloaded within the last 2 seconds (from API save)
                 const now = Date.now();
                 if (now - global.lastReloadTime < 2000) {
                     console.log('.env file changed but skipping reload (too recent)');
