@@ -1506,6 +1506,7 @@ async function fetchStorageBackups(apiClient, endpointId, nodeName, storage, isS
             notes: backup.notes,
             protected: backup.protected || false,
             storage: storage,
+            storageShared: isShared,
             node: nodeName,
             endpointId: endpointId
         }));
@@ -1812,6 +1813,7 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
             const pbsStorages = allBackupStorages.filter(storage => storage.type === 'pbs');
             const backupStorages = allBackupStorages.filter(storage => storage.type !== 'pbs');
             
+            
             console.log(`[PVE Backup Debug - ${endpointId}-${nodeName}] Backup-capable storages: total=${allBackupStorages.length}, PBS=${pbsStorages.length}, non-PBS=${backupStorages.length}`);
             
             if (pbsStorages.length > 0) {
@@ -1878,6 +1880,7 @@ async function fetchPveBackupData(currentApiClients, nodes, vms, containers) {
     await Promise.allSettled([...nodeBackupPromises, ...guestSnapshotPromises]);
     
     const deduplicatedStorageBackups = deduplicateStorageBackups(allStorageBackups);
+    
     
     return {
         backupTasks: allBackupTasks,
@@ -2791,6 +2794,36 @@ function generateGlobalRecommendations(diagnostics) {
 }
 
 /**
+ * Format a timestamp as relative time (e.g., "2 hours ago")
+ */
+function formatRelativeTime(timestamp) {
+    if (!timestamp) return 'Never';
+    
+    const now = Math.floor(Date.now() / 1000);
+    const diff = now - timestamp;
+    
+    if (diff < 60) return 'Just now';
+    
+    const minutes = Math.floor(diff / 60);
+    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    
+    const hours = Math.floor(diff / 3600);
+    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    
+    const days = Math.floor(diff / 86400);
+    if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
+    
+    const weeks = Math.floor(diff / 604800);
+    if (weeks < 4) return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+    
+    const months = Math.floor(diff / 2592000);
+    if (months < 12) return `${months} month${months !== 1 ? 's' : ''} ago`;
+    
+    const years = Math.floor(diff / 31536000);
+    return `${years} year${years !== 1 ? 's' : ''} ago`;
+}
+
+/**
  * Process all backup data using the new backup processing system
  * This function replaces the complex backup processing logic with a cleaner approach
  */
@@ -2832,8 +2865,11 @@ async function processBackupDataWithCoordinator(vms, containers, pbsInstances, p
             
             // Backup metadata
             latestBackupTime,
+            lastBackupText: formatRelativeTime(latestBackupTime),
             pbsNamespaces: namespaces,
-            pbsNamespaceText: namespaces.length > 0 ? namespaces.join(', ') : '-',
+            pbsNamespaceText: namespaces.length > 0 
+                ? namespaces.map(ns => ns === '' ? 'root' : ns).join(', ') 
+                : '-',
             
             backupHealthStatus: calculateBackupHealthStatus(latestBackupTime),
             
