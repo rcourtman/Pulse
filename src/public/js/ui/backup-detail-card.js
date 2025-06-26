@@ -53,7 +53,258 @@ PulseApp.ui.backupDetailCard = (() => {
     function getMultiDateContent(data) {
         const { backups, stats, filterInfo } = data;
         
-        const hasActiveFilters = filterInfo && (
+        // For the refactored table, always show a simple summary
+        return getSimpleBackupSummary(backups, stats, filterInfo, data);
+    }
+
+    function getSimpleBackupSummary(backups, stats, filterInfo, additionalData) {
+        if (!backups || backups.length === 0) {
+            return getEmptyState(false);
+        }
+        
+        // Calculate actionable insights from the filtered backups
+        const backupTypeFilter = filterInfo?.backupType || 'all';
+        const now = Date.now() / 1000; // Current time in seconds
+        
+        // Process snapshot data if provided
+        const snapshotsByGuest = {};
+        if (additionalData?.vmSnapshots) {
+            additionalData.vmSnapshots.forEach(snapshot => {
+                const vmid = String(snapshot.vmid);
+                if (!snapshotsByGuest[vmid]) {
+                    snapshotsByGuest[vmid] = [];
+                }
+                snapshotsByGuest[vmid].push(snapshot);
+            });
+        }
+        
+        // Health tracking
+        const healthAlerts = [];
+        const guestsNeedingAttention = [];
+        let oldestBackupTime = Infinity;
+        let newestBackupTime = 0;
+        let oldestBackupGuest = null;
+        let newestBackupGuest = null;
+        
+        // Activity tracking  
+        const last24h = now - (24 * 60 * 60);
+        const last7d = now - (7 * 24 * 60 * 60);
+        const last30d = now - (30 * 24 * 60 * 60);
+        let backupsLast24h = 0;
+        let backupsLast7d = 0;
+        let backupsLast30d = 0;
+        
+        // Size tracking
+        let totalSize = 0;
+        let largestBackup = null;
+        let largestBackupSize = 0;
+        
+        // Failed tasks
+        let failedTasks = 0;
+        let failedTasksGuests = [];
+        
+        // Backup patterns
+        const backupFrequencies = [];
+        const orphanedGuests = []; // Guests with backups but in stopped/paused state
+        const inconsistentBackups = []; // Guests with mixed backup types (some failing)
+        let totalBackupCount = 0;
+        
+        // Time patterns
+        const hourCounts = new Array(24).fill(0); // Track which hours backups occur
+        const daysSinceBackup = [];
+        
+        backups.forEach(guest => {
+            // Skip guests that don't match the current filter
+            if (backupTypeFilter === 'snapshots' && (!guest.snapshotCount || guest.snapshotCount === 0)) {
+                return; // Skip guests without snapshots when filtering by snapshots
+            } else if (backupTypeFilter === 'pbs' && (!guest.pbsBackups || guest.pbsBackups === 0)) {
+                return; // Skip guests without PBS backups when filtering by PBS
+            } else if (backupTypeFilter === 'pve' && (!guest.pveBackups || guest.pveBackups === 0)) {
+                return; // Skip guests without PVE backups when filtering by PVE
+            }
+            
+            // Check backup health and track guests needing attention
+            if (guest.backupHealthStatus === 'none') {
+                guestsNeedingAttention.push({
+                    name: guest.guestName,
+                    id: guest.guestId,
+                    reason: 'No backups'
+                });
+            } else if (guest.backupHealthStatus === 'old' || guest.backupHealthStatus === 'failed') {
+                const lastBackup = guest.latestBackupTime;
+                const daysSince = lastBackup ? Math.floor((now - lastBackup) / (24 * 60 * 60)) : null;
+                guestsNeedingAttention.push({
+                    name: guest.guestName,
+                    id: guest.guestId,
+                    reason: guest.backupHealthStatus === 'failed' ? 'Failed backup' : `${daysSince}+ days old`
+                });
+            }
+            
+            // Track newest and oldest backups/snapshots based on filter
+            let relevantTime = null;
+            
+            // Determine which timestamp to use based on filter
+            if (backupTypeFilter === 'snapshots') {
+                // For snapshots, get the latest snapshot time for this guest
+                const guestId = String(guest.guestId);
+                const guestSnapshots = snapshotsByGuest[guestId] || [];
+                if (guestSnapshots.length > 0) {
+                    // Find the most recent snapshot
+                    relevantTime = Math.max(...guestSnapshots.map(s => s.snaptime || 0));
+                } else if (guest.latestSnapshotTime) {
+                    // Use latestSnapshotTime from guest data if available
+                    relevantTime = guest.latestSnapshotTime;
+                }
+                // Don't fall back to backup times when filtering by snapshots
+            } else if (backupTypeFilter === 'all') {
+                // For 'all', use the most recent of any type
+                const guestSnapshots = snapshotsByGuest[String(guest.guestId)] || [];
+                const latestSnapshotTime = guestSnapshots.length > 0 ? 
+                    Math.max(...guestSnapshots.map(s => s.snaptime || 0)) : 0;
+                
+                relevantTime = Math.max(
+                    guest.latestBackupTime || 0,
+                    latestSnapshotTime
+                ) || null;
+            } else if (backupTypeFilter === 'pbs') {
+                // For PBS filter, use PBS-specific backup time
+                relevantTime = guest.lastPbsBackupTime || guest.latestBackupTime;
+            } else if (backupTypeFilter === 'pve') {
+                // For PVE filter, use PVE-specific backup time
+                relevantTime = guest.lastPveBackupTime || guest.latestBackupTime;
+            } else {
+                // Default to general backup time
+                relevantTime = guest.latestBackupTime;
+            }
+            
+            if (relevantTime) {
+                // For snapshot filter, only count if this guest actually has snapshots
+                if (backupTypeFilter === 'snapshots' && guest.snapshotCount === 0) {
+                    relevantTime = null;
+                }
+            }
+            
+            if (relevantTime) {
+                if (relevantTime > newestBackupTime) {
+                    newestBackupTime = relevantTime;
+                    newestBackupGuest = guest;
+                }
+                if (relevantTime < oldestBackupTime) {
+                    oldestBackupTime = relevantTime;
+                    oldestBackupGuest = guest;
+                }
+                
+                // Count recent activity
+                if (relevantTime > last24h) backupsLast24h++;
+                if (relevantTime > last7d) backupsLast7d++;
+                if (relevantTime > last30d) backupsLast30d++;
+            }
+            
+            // Track failed tasks
+            if (guest.lastBackupTask && guest.lastBackupTask.endtime > last24h && 
+                guest.lastBackupTask.exitstatus && guest.lastBackupTask.exitstatus !== 'OK') {
+                failedTasks++;
+                failedTasksGuests.push(guest.guestName);
+            }
+            
+            // Track backup patterns
+            if (guest.latestBackupTime) {
+                const daysSince = Math.floor((now - guest.latestBackupTime) / (24 * 60 * 60));
+                daysSinceBackup.push(daysSince);
+                
+                // Track hour of backup
+                const backupDate = new Date(guest.latestBackupTime * 1000);
+                hourCounts[backupDate.getHours()]++;
+            }
+            
+            // Track total backup count
+            totalBackupCount += (guest.pbsBackups || 0) + (guest.pveBackups || 0);
+            
+            // Check for orphaned backups (stopped/paused VMs with backups)
+            if (guest.status && (guest.status === 'stopped' || guest.status === 'paused') && 
+                guest.latestBackupTime && guest.latestBackupTime > last30d) {
+                orphanedGuests.push({
+                    name: guest.guestName,
+                    status: guest.status,
+                    lastBackup: formatRelativeTime(guest.latestBackupTime)
+                });
+            }
+            
+            // Check for inconsistent backup patterns
+            if (guest.pbsBackups > 0 && guest.pveBackups > 0) {
+                // Guest has multiple backup types - could indicate migration or misconfiguration
+                inconsistentBackups.push({
+                    name: guest.guestName,
+                    types: `${guest.pbsBackups} PBS, ${guest.pveBackups} PVE`
+                });
+            }
+            
+            // Track sizes if available
+            if (guest.totalBackupSize) {
+                totalSize += guest.totalBackupSize;
+                if (guest.totalBackupSize > largestBackupSize) {
+                    largestBackupSize = guest.totalBackupSize;
+                    largestBackup = guest;
+                }
+            }
+        });
+        
+        // Calculate intelligent insights
+        const insights = [];
+        
+        // Backup frequency insight
+        if (daysSinceBackup.length > 0) {
+            const avgDaysSince = daysSinceBackup.reduce((a, b) => a + b, 0) / daysSinceBackup.length;
+            if (avgDaysSince > 7) {
+                insights.push({
+                    type: 'warning',
+                    text: `Backup frequency low: avg ${Math.round(avgDaysSince)} days between backups`
+                });
+            }
+        }
+        
+        // Find most active backup hour
+        const maxHour = hourCounts.indexOf(Math.max(...hourCounts));
+        const maxCount = Math.max(...hourCounts);
+        if (maxCount > backups.length * 0.3) { // If >30% backups happen in same hour
+            insights.push({
+                type: 'info',
+                text: `Peak backup time: ${maxHour}:00 (${maxCount} backups)`
+            });
+        }
+        
+        // Orphaned backups insight
+        if (orphanedGuests.length > 0) {
+            insights.push({
+                type: 'info',
+                text: `${orphanedGuests.length} stopped/paused ${orphanedGuests.length === 1 ? 'VM has' : 'VMs have'} recent backups`,
+                detail: orphanedGuests[0].name
+            });
+        }
+        
+        // Mixed backup types insight
+        if (inconsistentBackups.length > 0) {
+            insights.push({
+                type: 'warning',
+                text: `${inconsistentBackups.length} ${inconsistentBackups.length === 1 ? 'guest has' : 'guests have'} mixed backup types`,
+                detail: inconsistentBackups[0].name
+            });
+        }
+        
+        // Backup efficiency insight
+        if (totalBackupCount > 0 && backups.length > 0) {
+            const avgBackupsPerGuest = totalBackupCount / backups.length;
+            if (avgBackupsPerGuest > 20) {
+                insights.push({
+                    type: 'info',
+                    text: `High retention: avg ${Math.round(avgBackupsPerGuest)} backups per guest`
+                });
+            }
+        }
+        
+        // Generate filter label
+        const filterLabel = getFilterLabel(filterInfo);
+        const hasFilters = filterInfo && (
             filterInfo.search ||
             (filterInfo.guestType && filterInfo.guestType !== 'all') ||
             (filterInfo.backupType && filterInfo.backupType !== 'all') ||
@@ -61,13 +312,164 @@ PulseApp.ui.backupDetailCard = (() => {
             (filterInfo.namespace && filterInfo.namespace !== 'all') ||
             (filterInfo.pbsInstance && filterInfo.pbsInstance !== 'all')
         );
-        // If no filters active, show summary view
-        if (!hasActiveFilters) {
-            return getCompactOverview(backups, stats, filterInfo);
-        }
         
-        // Otherwise show detailed table view
-        return getCompactDetailTable(backups, stats, filterInfo);
+        // Format time helpers
+        const formatRelativeTime = (timestamp) => {
+            if (!timestamp) return 'Never';
+            const seconds = now - timestamp;
+            if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+            if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+            if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+            return `${Math.floor(seconds / 604800)}w ago`;
+        };
+        
+        const formatSize = (bytes) => {
+            if (!bytes) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+        };
+        
+        return `
+            <div class="flex flex-col h-full">
+                <!-- Header -->
+                <div class="mb-2 pb-1 border-b border-gray-200 dark:border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                            ${hasFilters ? filterLabel : 'Backup Summary'}
+                        </h3>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">${backups.length} guests</span>
+                    </div>
+                </div>
+                
+                <!-- Actionable Insights -->
+                <div class="flex-grow overflow-y-auto">
+                    <!-- Health Alerts -->
+                    ${guestsNeedingAttention.length > 0 ? `
+                        <div class="mb-3 p-2 bg-red-50 dark:bg-red-900/20 rounded-md border border-red-200 dark:border-red-800">
+                            <h4 class="text-xs font-medium text-red-700 dark:text-red-300 mb-1">
+                                ⚠️ ${guestsNeedingAttention.length} ${guestsNeedingAttention.length === 1 ? 'guest needs' : 'guests need'} attention
+                            </h4>
+                            <div class="space-y-0.5">
+                                ${guestsNeedingAttention.slice(0, 3).map(guest => `
+                                    <div class="text-xs text-red-600 dark:text-red-400">
+                                        <span class="font-medium">${guest.name || guest.id}</span>: ${guest.reason}
+                                    </div>
+                                `).join('')}
+                                ${guestsNeedingAttention.length > 3 ? `
+                                    <div class="text-xs text-red-600 dark:text-red-400 italic">
+                                        +${guestsNeedingAttention.length - 3} more...
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    ` : `
+                        <div class="mb-3 p-2 bg-green-50 dark:bg-green-900/20 rounded-md border border-green-200 dark:border-green-800">
+                            <div class="text-xs text-green-700 dark:text-green-300">
+                                ✓ All guests backed up successfully
+                            </div>
+                        </div>
+                    `}
+                    
+                    <!-- Recent Activity -->
+                    <div class="mb-3">
+                        <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Recent Activity</h4>
+                        <div class="space-y-1">
+                            ${newestBackupGuest ? `
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-600 dark:text-gray-400">
+                                        Last ${backupTypeFilter === 'snapshots' ? 'snapshot' : 
+                                               backupTypeFilter === 'pbs' ? 'PBS backup' : 
+                                               backupTypeFilter === 'pve' ? 'PVE backup' : 'backup'}
+                                    </span>
+                                    <span class="text-xs font-medium text-gray-800 dark:text-gray-200">
+                                        ${formatRelativeTime(newestBackupTime)} 
+                                        <span class="text-gray-500">(${newestBackupGuest.guestName})</span>
+                                    </span>
+                                </div>
+                            ` : ''}
+                            ${oldestBackupGuest && oldestBackupTime !== newestBackupTime ? `
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-600 dark:text-gray-400">
+                                        Least recent ${backupTypeFilter === 'snapshots' ? 'snapshot' : 
+                                                      backupTypeFilter === 'pbs' ? 'PBS' : 
+                                                      backupTypeFilter === 'pve' ? 'PVE' : ''}
+                                    </span>
+                                    <span class="text-xs font-medium text-gray-800 dark:text-gray-200">
+                                        ${formatRelativeTime(oldestBackupTime)}
+                                        <span class="text-gray-500">(${oldestBackupGuest.guestName})</span>
+                                    </span>
+                                </div>
+                            ` : ''}
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs text-gray-600 dark:text-gray-400">Activity</span>
+                                <span class="text-xs font-medium text-gray-800 dark:text-gray-200">
+                                    24h: ${backupsLast24h} | 7d: ${backupsLast7d} | 30d: ${backupsLast30d}
+                                </span>
+                            </div>
+                            ${failedTasks > 0 ? `
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-600 dark:text-gray-400">Failed (24h)</span>
+                                    <span class="text-xs font-medium text-red-600 dark:text-red-400">${failedTasks} tasks</span>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Intelligent Insights -->
+                    ${insights.length > 0 ? `
+                        <div class="mb-3">
+                            <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Insights</h4>
+                            <div class="space-y-1">
+                                ${insights.slice(0, 3).map(insight => `
+                                    <div class="text-xs ${
+                                        insight.type === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                                        insight.type === 'error' ? 'text-red-600 dark:text-red-400' :
+                                        'text-blue-600 dark:text-blue-400'
+                                    }">
+                                        ${insight.type === 'warning' ? '⚡' : 
+                                          insight.type === 'error' ? '❌' : '💡'} 
+                                        ${insight.text}
+                                        ${insight.detail ? `<span class="text-gray-500 dark:text-gray-400">(${insight.detail})</span>` : ''}
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Storage Insights (if available) -->
+                    ${totalSize > 0 ? `
+                        <div class="mb-3">
+                            <h4 class="text-xs font-medium text-gray-600 dark:text-gray-400 mb-2">Storage</h4>
+                            <div class="space-y-1">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-xs text-gray-600 dark:text-gray-400">Total size</span>
+                                    <span class="text-xs font-medium text-gray-800 dark:text-gray-200">${formatSize(totalSize)}</span>
+                                </div>
+                                ${largestBackup ? `
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs text-gray-600 dark:text-gray-400">Largest</span>
+                                        <span class="text-xs font-medium text-gray-800 dark:text-gray-200">
+                                            ${formatSize(largestBackupSize)}
+                                            <span class="text-gray-500">(${largestBackup.guestName})</span>
+                                        </span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <!-- Filter Summary -->
+                    ${hasFilters && backupTypeFilter !== 'all' ? `
+                        <div class="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <div class="text-xs text-gray-500 dark:text-gray-400 italic">
+                                Showing ${backupTypeFilter === 'pbs' ? 'PBS' : backupTypeFilter === 'pve' ? 'PVE' : 'snapshot'} data only
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
     }
 
     function getCompactOverview(backups, stats, filterInfo) {
@@ -434,31 +836,50 @@ PulseApp.ui.backupDetailCard = (() => {
     function getSingleDateContent(data) {
         const { date, backups, stats, filterInfo } = data;
         
-        
         if (!backups || backups.length === 0) {
             return getEmptyState(false);
         }
         
-        
-        // Sort by namespace first (if "all" namespaces selected), then by guest name
-        const namespaceFilter = data.namespaceFilter || 'all';
+        // Sort by guest name
         const sortedBackups = [...backups].sort((a, b) => {
-            if (namespaceFilter === 'all') {
-                // Sort by namespace path hierarchically
-                const aNamespace = a.namespace || 'root';
-                const bNamespace = b.namespace || 'root';
-                
-                // Root always comes first
-                if (aNamespace === 'root' && bNamespace !== 'root') return -1;
-                if (bNamespace === 'root' && aNamespace !== 'root') return 1;
-                
-                // For nested namespaces, sort by full path
-                const namespaceCompare = aNamespace.localeCompare(bNamespace);
-                if (namespaceCompare !== 0) return namespaceCompare;
-            }
-            // Then sort by name
-            return (a.name || a.vmid).localeCompare(b.name || b.vmid);
+            return (a.name || `VM ${a.vmid}`).localeCompare(b.name || `VM ${b.vmid}`);
         });
+        
+        // Generate simple list of backups for the selected date
+        const backupList = sortedBackups.map(backup => {
+            // Get backup type labels based on the types array from calendar
+            const types = Array.isArray(backup.types) ? backup.types : [];
+            const typeLabels = [];
+            
+            if (types.includes('pbsSnapshots')) {
+                typeLabels.push('<span class="px-1 py-0.5 rounded text-[8px] bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-medium">PBS</span>');
+            }
+            if (types.includes('pveBackups')) {
+                typeLabels.push('<span class="px-1 py-0.5 rounded text-[8px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-medium">PVE</span>');
+            }
+            if (types.includes('vmSnapshots')) {
+                typeLabels.push('<span class="px-1 py-0.5 rounded text-[8px] bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 font-medium">SNAP</span>');
+            }
+            
+            const guestType = backup.type === 'qemu' ? 'VM' : (backup.type === 'lxc' ? 'LXC' : backup.type);
+            
+            return `
+                <div class="flex items-center justify-between px-1 py-0.5 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded">
+                    <div class="flex items-center gap-1 min-w-0">
+                        <span class="text-[9px] font-medium ${guestType === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${guestType}</span>
+                        <span class="font-mono text-gray-600 dark:text-gray-400">${backup.vmid}</span>
+                        <span class="truncate text-gray-700 dark:text-gray-300">${backup.name || `Guest ${backup.vmid}`}</span>
+                        ${backup.node ? `<span class="text-[9px] text-gray-500 dark:text-gray-400">(${backup.node})</span>` : ''}
+                    </div>
+                    <div class="flex items-center gap-2 ml-2">
+                        <div class="flex items-center gap-1 text-[9px]">
+                            ${typeLabels.join(' ')}
+                            ${backup.backupCount > 1 ? `<span class="text-gray-500 dark:text-gray-400">${backup.backupCount}</span>` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
         
         return `
             <div class="flex flex-col h-full">
@@ -478,57 +899,7 @@ PulseApp.ui.backupDetailCard = (() => {
                 <!-- Guest List -->
                 <div class="flex-1 overflow-y-auto">
                     <div class="space-y-0.5">
-                        ${(() => {
-                            let currentNamespace = null;
-                            return sortedBackups.map(backup => {
-                                // Get filtered backup types and counts based on active filter
-                                const filteredBackupData = getFilteredSingleDateBackupData(backup, filterInfo);
-                                
-                                let namespaceHeader = '';
-                                
-                                // Only show namespace headers for PBS backups
-                                if (namespaceFilter === 'all' && backup.pbsBackups > 0) {
-                                    const backupNamespace = backup.namespace || 'root';
-                                    
-                                    if (backupNamespace !== currentNamespace) {
-                                        currentNamespace = backupNamespace;
-                                        
-                                        // Calculate nesting level and format namespace path
-                                        const namespaceParts = currentNamespace.split('/');
-                                        const nestingLevel = namespaceParts.length - 1;
-                                        const displayName = namespaceParts[namespaceParts.length - 1];
-                                        const parentPath = namespaceParts.slice(0, -1).join('/');
-                                        
-                                        namespaceHeader = `
-                                            <div class="px-1 py-1 mt-2 ${currentNamespace !== sortedBackups[0].namespace ? 'border-t border-gray-200 dark:border-gray-700' : ''}">
-                                                <div class="flex items-center" style="padding-left: ${nestingLevel * 12}px">
-                                                    ${nestingLevel > 0 ? '<span class="text-[10px] text-gray-400 dark:text-gray-500 mr-1">└─</span>' : ''}
-                                                    <span class="text-[10px] font-semibold text-purple-700 dark:text-purple-400 uppercase">
-                                                        ${displayName}
-                                                    </span>
-                                                    ${parentPath ? `<span class="text-[9px] text-gray-500 dark:text-gray-400 ml-1">(in ${parentPath})</span>` : ''}
-                                                </div>
-                                            </div>
-                                        `;
-                                    }
-                                }
-                                
-                                return namespaceHeader + `
-                                    <div class="flex items-center justify-between px-1 py-0.5 text-[11px] hover:bg-gray-50 dark:hover:bg-gray-700/30 rounded">
-                                        <div class="flex items-center gap-1 min-w-0">
-                                            <span class="text-[9px] font-medium ${backup.type === 'VM' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}">${backup.type}</span>
-                                            <span class="font-mono text-gray-600 dark:text-gray-400">${backup.vmid}</span>
-                                            <span class="truncate text-gray-700 dark:text-gray-300">${backup.name}</span>
-                                        </div>
-                                        <div class="flex items-center gap-2 ml-2">
-                                            <div class="flex items-center gap-1 text-[9px]">
-                                                ${filteredBackupData.typeLabels}
-                                            </div>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('');
-                        })()}
+                        ${backupList}
                     </div>
                 </div>
             </div>

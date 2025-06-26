@@ -23,10 +23,8 @@ PulseApp.ui.pbs = (() => {
 
     // Initialize the PBS tab
     function init() {
-        console.log('[PBS] Initializing PBS tab');
         const container = document.getElementById('pbs-instances-container');
         if (!container) {
-            console.error('[PBS] Container not found');
             return;
         }
 
@@ -39,11 +37,7 @@ PulseApp.ui.pbs = (() => {
         
         // Get initial data
         const pbsData = PulseApp.state?.get?.('pbsDataArray') || PulseApp.state?.pbs || [];
-        console.log('[PBS] Initial PBS data:', pbsData);
-        console.log('[PBS] Data length:', pbsData.length);
         if (pbsData.length > 0) {
-            console.log('[PBS] First instance:', pbsData[0]);
-            console.log('[PBS] Datastores:', pbsData[0].datastores);
         }
         
         // Initialize with data
@@ -53,7 +47,6 @@ PulseApp.ui.pbs = (() => {
 
     // Render main structure
     function renderMainStructure(container) {
-        console.log('[PBS] renderMainStructure called with data:', state.pbsData);
         container.innerHTML = '';
         
         if (!state.pbsData || state.pbsData.length === 0) {
@@ -132,17 +125,13 @@ PulseApp.ui.pbs = (() => {
 
     // Render the currently active PBS instance
     function renderActiveInstance() {
-        console.log('[PBS] renderActiveInstance called');
         const contentArea = document.getElementById('pbs-content');
         if (!contentArea) {
-            console.log('[PBS] No content area found');
             return;
         }
         
         const instance = state.pbsData[state.activeInstanceIndex];
-        console.log('[PBS] Active instance:', instance);
         if (!instance) {
-            console.log('[PBS] No instance at index', state.activeInstanceIndex);
             return;
         }
         
@@ -150,7 +139,6 @@ PulseApp.ui.pbs = (() => {
         
         // Get namespaces for this instance
         const namespaces = collectNamespaces(instance);
-        console.log('[PBS] Collected namespaces:', namespaces);
         
         // If multiple namespaces, show namespace tabs
         if (namespaces.length > 1) {
@@ -187,18 +175,14 @@ PulseApp.ui.pbs = (() => {
         
         // Check datastores for namespaces
         if (instance.datastores) {
-            console.log('[PBS] Checking datastores for namespaces:', instance.datastores);
             instance.datastores.forEach(ds => {
-                console.log('[PBS] Datastore:', ds.name, 'has namespaces?', ds.namespaces);
                 if (ds.namespaces) {
                     ds.namespaces.forEach(ns => namespaces.add(ns));
                 }
                 // Also check snapshots for namespaces
                 if (ds.snapshots) {
-                    console.log('[PBS] Found', ds.snapshots.length, 'snapshots in datastore', ds.name);
                     ds.snapshots.forEach(snap => {
                         if (snap.namespace !== undefined) {
-                            console.log('[PBS] Adding namespace:', snap.namespace || 'root');
                             namespaces.add(snap.namespace || 'root');
                         }
                     });
@@ -294,15 +278,15 @@ PulseApp.ui.pbs = (() => {
         const datastoresSection = createDatastoresSection(instance, instanceIndex);
         container.appendChild(datastoresSection);
         
+        // Task summary table
+        const summaryTable = createTaskSummaryTable(instance, instanceIndex);
+        container.appendChild(summaryTable);
+        
         // Add snapshots section
         const snapshotsSection = createSnapshotsSection(instance, instanceIndex);
         if (snapshotsSection) {
             container.appendChild(snapshotsSection);
         }
-        
-        // Task summary table
-        const summaryTable = createTaskSummaryTable(instance, instanceIndex);
-        container.appendChild(summaryTable);
         
         // Task detail tables
         const taskTables = createTaskTables(instance, instanceIndex);
@@ -582,49 +566,6 @@ PulseApp.ui.pbs = (() => {
         const container = document.createElement('div');
         container.className = 'space-y-4';
         
-        // Add collapse/expand all buttons
-        const controlsDiv = document.createElement('div');
-        controlsDiv.className = 'flex gap-2 mb-2';
-        
-        const collapseAllBtn = document.createElement('button');
-        collapseAllBtn.className = 'text-xs px-2 py-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
-        collapseAllBtn.innerHTML = `
-            <span class="flex items-center gap-1">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="18 15 12 9 6 15"></polyline>
-                </svg>
-                Collapse All
-            </span>
-        `;
-        collapseAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.bg-white.dark\\:bg-gray-800').forEach(section => {
-                if (section.dataset.collapsed !== 'true') {
-                    toggleTaskSection(section);
-                }
-            });
-        });
-        
-        const expandAllBtn = document.createElement('button');
-        expandAllBtn.className = 'text-xs px-2 py-1 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors';
-        expandAllBtn.innerHTML = `
-            <span class="flex items-center gap-1">
-                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-                Expand All
-            </span>
-        `;
-        expandAllBtn.addEventListener('click', () => {
-            container.querySelectorAll('.bg-white.dark\\:bg-gray-800').forEach(section => {
-                if (section.dataset.collapsed === 'true') {
-                    toggleTaskSection(section);
-                }
-            });
-        });
-        
-        controlsDiv.appendChild(collapseAllBtn);
-        controlsDiv.appendChild(expandAllBtn);
-        container.appendChild(controlsDiv);
         
         const taskTypes = [
             { key: 'backupTasks', title: 'Recent Backup Tasks', type: 'backup' },
@@ -821,23 +762,19 @@ PulseApp.ui.pbs = (() => {
 
     // Main update function - called by socket handler
     function updatePbsInfo(pbsArray) {
-        console.log('[PBS] updatePbsInfo called with:', pbsArray);
         state.pbsData = pbsArray || [];
         
         const container = document.getElementById('pbs-instances-container');
         if (!container) {
-            console.log('[PBS] Container not found in update');
             return;
         }
         
         // If no content yet, do initial render
         const contentArea = document.getElementById('pbs-content');
         if (!contentArea) {
-            console.log('[PBS] No content area, doing initial render');
             renderMainStructure(container);
         } else {
             // Incremental update
-            console.log('[PBS] Content exists, doing incremental update');
             updateExistingData();
         }
     }
@@ -1397,13 +1334,34 @@ PulseApp.ui.pbs = (() => {
         const section = document.createElement('div');
         section.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4';
         
+        // Create collapsible header
+        const header = document.createElement('div');
+        header.className = 'flex justify-between items-center mb-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 -m-1 p-1 rounded transition-colors';
+        
         const heading = document.createElement('h4');
-        heading.className = 'text-md font-semibold mb-3 text-gray-700 dark:text-gray-300';
+        heading.className = 'text-md font-semibold text-gray-700 dark:text-gray-300';
         heading.textContent = `Backup Snapshots (${snapshots.length})`;
-        section.appendChild(heading);
+        
+        const collapseIcon = document.createElement('span');
+        collapseIcon.className = 'collapse-icon transition-transform duration-200';
+        collapseIcon.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>`;
+        
+        header.appendChild(heading);
+        header.appendChild(collapseIcon);
+        section.appendChild(header);
         
         const tableContainer = document.createElement('div');
-        tableContainer.className = 'overflow-x-auto';
+        tableContainer.className = 'overflow-x-auto transition-all duration-200';
+        
+        // Add collapse functionality
+        header.addEventListener('click', () => {
+            const isCollapsed = section.dataset.collapsed === 'true';
+            section.dataset.collapsed = isCollapsed ? 'false' : 'true';
+            tableContainer.style.display = isCollapsed ? 'block' : 'none';
+            collapseIcon.style.transform = isCollapsed ? 'rotate(90deg)' : 'rotate(0deg)';
+        });
         
         const table = document.createElement('table');
         table.className = 'min-w-full text-sm';
@@ -1457,6 +1415,13 @@ PulseApp.ui.pbs = (() => {
         table.appendChild(tbody);
         tableContainer.appendChild(table);
         section.appendChild(tableContainer);
+        
+        // Default state - start collapsed if more than 20 snapshots
+        if (snapshots.length > 20) {
+            section.dataset.collapsed = 'true';
+            tableContainer.style.display = 'none';
+            collapseIcon.style.transform = 'rotate(0deg)';
+        }
         
         return section;
     }

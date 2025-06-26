@@ -572,7 +572,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                             snapshotCount: 0,
                             failureCount: 0
                         }
-                    });
+                    }, true);
                 }
             }
         });
@@ -630,36 +630,41 @@ PulseApp.ui.calendarHeatmap = (() => {
         const namespaceFilter = PulseApp.state.get('backupsFilterNamespace') || 'all';
         
         // Get guest data for hostname lookup
-        const vmsData = PulseApp.state.get('vmsData') || [];
-        const containersData = PulseApp.state.get('containersData') || [];
-        const allGuests = [...vmsData, ...containersData];
+        // Prefer guest data passed with backupData (from refactored table) over state store
+        const allGuests = backupData.guests || [...(PulseApp.state.get('vmsData') || []), ...(PulseApp.state.get('containersData') || [])];
         const guestLookup = {};
         
         // When namespace filtering is active, only include filtered guests in lookup
         const guestsToProcess = (namespaceFilter !== 'all' && filteredGuestIds && filteredGuestIds.length > 0) 
             ? allGuests.filter(guest => {
+                const vmid = guest.guestId || guest.vmid;
                 const nodeIdentifier = guest.node || guest.endpointId || '';
-                const uniqueKey = nodeIdentifier ? `${guest.vmid}-${nodeIdentifier}` : guest.vmid.toString();
-                return filteredGuestIds.includes(uniqueKey) || filteredGuestIds.includes(guest.vmid.toString());
+                const uniqueKey = nodeIdentifier ? `${vmid}-${nodeIdentifier}` : vmid.toString();
+                return filteredGuestIds.includes(uniqueKey) || filteredGuestIds.includes(vmid.toString());
             })
             : allGuests;
         
         guestsToProcess.forEach(guest => {
+            // Handle both refactored table structure (guestId/guestName) and original structure (vmid/name)
+            const vmid = guest.guestId || guest.vmid;
+            const name = guest.guestName || guest.name;
+            const type = guest.guestType || guest.type;
+            
             // Create unique key for guest lookup
             const nodeIdentifier = guest.node || guest.endpointId || '';
-            const uniqueKey = nodeIdentifier ? `${guest.vmid}-${nodeIdentifier}` : guest.vmid.toString();
+            const uniqueKey = nodeIdentifier ? `${vmid}-${nodeIdentifier}` : vmid.toString();
             guestLookup[uniqueKey] = {
-                name: guest.name,
-                type: guest.type === 'qemu' ? 'VM' : 'CT',
-                vmid: guest.vmid,
+                name: name,
+                type: type === 'qemu' ? 'VM' : 'CT',
+                vmid: vmid,
                 node: guest.node,
                 endpointId: guest.endpointId
             };
             // Also add simple vmid lookup as fallback for backward compatibility
-            if (!guestLookup[guest.vmid]) {
-                guestLookup[guest.vmid] = {
-                    name: guest.name,
-                    type: guest.type === 'qemu' ? 'VM' : 'CT'
+            if (!guestLookup[vmid]) {
+                guestLookup[vmid] = {
+                    name: name,
+                    type: type === 'qemu' ? 'VM' : 'CT'
                 };
             }
         });
@@ -789,7 +794,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 }
                 
                 // Use unique key for guest lookup, fall back to vmid if not found
-                const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
+                const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: 'Unknown', type: 'VM' };
                 
                 // Check if this guest already exists for this date
                 // Important: Check by uniqueKey (vmid-node) not just vmid, since different nodes can have same vmid
@@ -1231,9 +1236,8 @@ PulseApp.ui.calendarHeatmap = (() => {
         const allData = {};
         
         // Get guest data for hostname lookup
-        const vmsData = PulseApp.state.get('vmsData') || [];
-        const containersData = PulseApp.state.get('containersData') || [];
-        const allGuests = [...vmsData, ...containersData];
+        // Prefer guest data passed with backupData (from refactored table) over state store
+        const allGuests = backupData.guests || [...(PulseApp.state.get('vmsData') || []), ...(PulseApp.state.get('containersData') || [])];
         const guestLookup = {};
         allGuests.forEach(guest => {
             // Create unique key for guest lookup
@@ -1336,7 +1340,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 // Extract vmid from unique key for guest lookup
                 const vmid = dateData[dateKey].vmid || extractVmidFromGuestKey(uniqueGuestKey);
                 // Use unique key for guest lookup, fall back to vmid if not found
-                const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
+                const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: 'Unknown', type: 'VM' };
                 
                 // Check if this guest (by vmid) already exists for this date
                 const existingGuestIndex = allData[dateKey].guests.findIndex(g => g.vmid === vmid);
@@ -1445,9 +1449,8 @@ PulseApp.ui.calendarHeatmap = (() => {
         const today = new Date();
         
         // Get guest data for hostname lookup
-        const vmsData = PulseApp.state.get('vmsData') || [];
-        const containersData = PulseApp.state.get('containersData') || [];
-        const allGuests = [...vmsData, ...containersData];
+        // Prefer guest data passed with backupData (from refactored table) over state store
+        const allGuests = backupData.guests || [...(PulseApp.state.get('vmsData') || []), ...(PulseApp.state.get('containersData') || [])];
         const guestLookup = {};
         allGuests.forEach(guest => {
             // Create unique key for guest lookup
@@ -1603,7 +1606,7 @@ PulseApp.ui.calendarHeatmap = (() => {
                 // Extract vmid from unique key for guest lookup
                 const vmid = dateData[dateKey].vmid || extractVmidFromGuestKey(uniqueGuestKey);
                 // Use unique key for guest lookup, fall back to vmid if not found
-                const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: `Unknown-${vmid}`, type: 'VM' };
+                const guestInfo = guestLookup[uniqueGuestKey] || guestLookup[vmid] || { name: 'Unknown', type: 'VM' };
                 
                 const existingGuestIndex = yearData[dateKey].guestsByRetention[retentionLevel].findIndex(g => g.vmid === vmid);
                 
