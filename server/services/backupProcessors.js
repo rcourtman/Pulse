@@ -127,6 +127,14 @@ class PBSBackupProcessor {
             if (!matchFound) {
                 unmatchedCount++;
                 console.log(`[PBSProcessor] Unmatched backup: ${backup.backupType}/${backup.backupId} in namespace '${backup.namespace}' with owner '${backup.owner}' (ownerToken: '${backup.ownerToken}')`);
+                // Log potential matching candidates for debugging
+                const potentialGuests = guests.filter(g => String(g.vmid) === String(backup.backupId));
+                if (potentialGuests.length > 0) {
+                    console.log(`[PBSProcessor]   -> Found ${potentialGuests.length} guests with matching VMID:`);
+                    potentialGuests.forEach(g => {
+                        console.log(`[PBSProcessor]      - Guest: node=${g.node}, endpointId=${g.endpointId}, type=${g.type}`);
+                    });
+                }
             }
         });
         
