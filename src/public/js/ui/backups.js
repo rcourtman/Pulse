@@ -1009,7 +1009,7 @@ PulseApp.ui.backups = (() => {
             apiData.availableNamespaces.forEach(ns => {
                 const option = document.createElement('option');
                 option.value = ns;
-                option.textContent = ns === 'root' ? 'Root Namespace' : ns;
+                option.textContent = ns;
                 domElements.namespaceFilter.appendChild(option);
             });
             

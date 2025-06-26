@@ -208,7 +208,7 @@ PulseApp.ui.pbs = (() => {
             tab.className = namespace === selectedNamespace ?
                 'px-3 py-1 text-sm font-medium text-white bg-blue-600 rounded' :
                 'px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded';
-            tab.textContent = namespace === 'root' ? 'Root' : namespace;
+            tab.textContent = namespace;
             
             tab.addEventListener('click', () => {
                 state.selectedNamespaceByInstance.set(state.activeInstanceIndex, namespace);
