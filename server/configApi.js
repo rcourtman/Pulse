@@ -38,7 +38,6 @@ class ConfigApi {
                     host: config.PROXMOX_HOST,
                     port: config.PROXMOX_PORT || '8006',
                     tokenId: config.PROXMOX_TOKEN_ID,
-                    nodeName: config.PROXMOX_NODE_NAME,
                     enabled: config.PROXMOX_ENABLED !== 'false',
                     // Don't send the secret
                 } : null,
@@ -46,7 +45,6 @@ class ConfigApi {
                     host: config.PBS_HOST,
                     port: config.PBS_PORT || '8007',
                     tokenId: config.PBS_TOKEN_ID,
-                    nodeName: config.PBS_NODE_NAME,
                     // Don't send the secret
                 } : null,
                 advanced: {
@@ -386,7 +384,7 @@ class ConfigApi {
                     if (secret) {
                         testEndpoints.push({
                             id: 'test-primary',
-                            name: config.PROXMOX_NODE_NAME || 'Primary PVE',
+                            name: 'Primary PVE',
                             host: config.PROXMOX_HOST,
                             port: parseInt(config.PROXMOX_PORT) || 8006,
                             tokenId: config.PROXMOX_TOKEN_ID,
@@ -411,7 +409,7 @@ class ConfigApi {
                             if (secret) {
                                 testEndpoints.push({
                                     id: `test-endpoint-${index}`,
-                                    name: config[`PROXMOX_NODE_NAME_${index}`] || `PVE Endpoint ${index}`,
+                                    name: `PVE Endpoint ${index}`,
                                     host,
                                     port: parseInt(config[`PROXMOX_PORT_${index}`]) || 8006,
                                     tokenId,
@@ -430,7 +428,7 @@ class ConfigApi {
                     if (secret) {
                         testPbsConfigs.push({
                             id: 'test-pbs-primary',
-                            name: config.PBS_NODE_NAME || 'Primary PBS',
+                            name: 'Primary PBS',
                             host: config.PBS_HOST,
                             port: parseInt(config.PBS_PORT) || 8007,
                             tokenId: config.PBS_TOKEN_ID,
@@ -453,7 +451,7 @@ class ConfigApi {
                             if (secret) {
                                 testPbsConfigs.push({
                                     id: `test-pbs-${index}`,
-                                    name: config[`PBS_NODE_NAME_${index}`] || `PBS Endpoint ${index}`,
+                                    name: `PBS Endpoint ${index}`,
                                     host,
                                     port: parseInt(config[`PBS_PORT_${index}`]) || 8007,
                                     tokenId,

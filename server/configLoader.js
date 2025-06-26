@@ -79,7 +79,6 @@ function loadPbsConfig(index = null) {
     const hostVar = `PBS_HOST${suffix}`;
     const tokenIdVar = `PBS_TOKEN_ID${suffix}`;
     const tokenSecretVar = `PBS_TOKEN_SECRET${suffix}`;
-    const nodeNameVar = `PBS_NODE_NAME${suffix}`;
     const portVar = `PBS_PORT${suffix}`;
     const selfSignedVar = `PBS_ALLOW_SELF_SIGNED_CERTS${suffix}`;
     const enabledVar = `PBS_ENABLED${suffix}`;
@@ -118,12 +117,11 @@ function loadPbsConfig(index = null) {
             config = {
                 id: `${idPrefix}_token`,
                 authMethod: 'token',
-                name: process.env[nodeNameVar] || pbsHostname,
+                name: pbsHostname,
                 host: pbsHostUrl,
                 port: process.env[portVar] || (pbsHostUrl && pbsHostUrl.includes('://') ? '' : '8007'),
                 tokenId: pbsTokenId,
                 tokenSecret: pbsTokenSecret,
-                nodeName: process.env[nodeNameVar], // Keep nodeName field
                 namespace: process.env[namespaceVar] || '', // Default to root namespace if not specified
                 namespaces: process.env[namespaceVar] ? process.env[namespaceVar].split(',').map(ns => ns.trim()).filter(ns => ns !== undefined) : null, // Support comma-separated namespaces, null for auto-discovery
                 allowSelfSignedCerts: process.env[selfSignedVar] !== 'false',
@@ -211,11 +209,10 @@ function loadConfiguration() {
     // --- Load All Proxmox Endpoint Configurations ---
     const endpoints = [];
 
-    function createProxmoxEndpointConfig(idPrefix, index, hostEnv, portEnv, tokenIdEnv, tokenSecretEnv, enabledEnv, selfSignedEnv, nodeNameEnv) {
+    function createProxmoxEndpointConfig(idPrefix, index, hostEnv, portEnv, tokenIdEnv, tokenSecretEnv, enabledEnv, selfSignedEnv) {
         const host = process.env[hostEnv];
         const tokenId = process.env[tokenIdEnv];
         const tokenSecret = process.env[tokenSecretEnv];
-        const nodeName = process.env[nodeNameEnv];
 
         // Basic validation for additional endpoints (primary is validated earlier)
         if (index !== null && (!tokenId || !tokenSecret)) {
@@ -233,7 +230,7 @@ function loadConfiguration() {
         
         return {
             id: index ? `${idPrefix}_${index}` : idPrefix,
-            name: nodeName || null, // Only use explicitly configured names
+            name: null, // No explicit names needed
             host: host,
             port: process.env[portEnv] || (host && host.includes('://') ? '' : '8006'),
             tokenId: tokenId,
@@ -253,8 +250,7 @@ function loadConfiguration() {
         'PROXMOX_TOKEN_ID', 
         'PROXMOX_TOKEN_SECRET', 
         'PROXMOX_ENABLED', 
-        'PROXMOX_ALLOW_SELF_SIGNED_CERTS',
-        'PROXMOX_NODE_NAME'
+        'PROXMOX_ALLOW_SELF_SIGNED_CERTS'
     );
     if (primaryEndpoint) { // Should always exist due to earlier checks, but good practice
         endpoints.push(primaryEndpoint);
@@ -280,8 +276,7 @@ function loadConfiguration() {
             `PROXMOX_TOKEN_ID_${i}`,
             `PROXMOX_TOKEN_SECRET_${i}`,
             `PROXMOX_ENABLED_${i}`,
-            `PROXMOX_ALLOW_SELF_SIGNED_CERTS_${i}`,
-            `PROXMOX_NODE_NAME_${i}`
+            `PROXMOX_ALLOW_SELF_SIGNED_CERTS_${i}`
         );
         if (additionalEndpoint) {
             endpoints.push(additionalEndpoint);
