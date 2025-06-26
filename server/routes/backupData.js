@@ -67,20 +67,49 @@ router.get('/', async (req, res) => {
             });
         }
         
+        // Extract PVE backups and snapshots
+        const pveBackups = [];
+        const vmSnapshots = [];
+        
+        // Get PVE storage backups
+        if (pveBackupData?.storageBackups) {
+            pveBackupData.storageBackups.forEach(backup => {
+                pveBackups.push({
+                    ...backup,
+                    source: 'pve',
+                    'backup-time': backup.ctime // Normalize timestamp field
+                });
+            });
+        }
+        
+        // Get VM/CT snapshots
+        if (pveBackupData?.guestSnapshots) {
+            pveBackupData.guestSnapshots.forEach(snapshot => {
+                vmSnapshots.push({
+                    ...snapshot,
+                    source: 'snapshot',
+                    'backup-time': snapshot.snaptime // Normalize timestamp field
+                });
+            });
+        }
+        
         res.json({
             success: true,
             data: {
                 ...result,
                 backupTasks,
-                // Also include raw PBS data for calendar
+                // Include raw backup data for calendar
                 pbsSnapshots: pbsInstances.flatMap(pbs => 
                     (pbs.datastores || []).flatMap(ds => 
                         (ds.snapshots || []).map(snap => ({
                             ...snap,
-                            pbsInstanceName: pbs.pbsInstanceName || pbs.name
+                            pbsInstanceName: pbs.pbsInstanceName || pbs.name,
+                            source: 'pbs'
                         }))
                     )
-                )
+                ),
+                pveBackups,
+                vmSnapshots
             },
             filters: filters,
             timestamp: new Date().toISOString()
