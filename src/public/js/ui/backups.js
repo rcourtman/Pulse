@@ -856,27 +856,8 @@ PulseApp.ui.backups = (() => {
             }
         });
         
-        // Build summary HTML
-        let summaryHTML = `Showing ${stats.totalGuests} guests with `;
-        const parts = [];
-        if (stats.totalPBSBackups > 0) parts.push(`${stats.totalPBSBackups} PBS backups`);
-        if (stats.totalPVEBackups > 0) parts.push(`${stats.totalPVEBackups} PVE backups`);
-        if (stats.totalSnapshots > 0) parts.push(`${stats.totalSnapshots} snapshots`);
-        
-        summaryHTML += parts.length > 0 ? parts.join(', ') : 'no backups';
-        
-        // Only show PBS instances if PBS backups are included in the filter
-        if (stats.pbsInstances.size > 0 && 
-            (backupsState.filters.backupType === 'all' || backupsState.filters.backupType === 'pbs')) {
-            summaryHTML += ' across PBS instances: ';
-            const instanceParts = [];
-            stats.pbsInstances.forEach((count, instance) => {
-                instanceParts.push(`${instance} (${count})`);
-            });
-            summaryHTML += instanceParts.join(', ');
-        }
-        
-        summaryElement.innerHTML = summaryHTML;
+        // Clear the summary - information is already shown in table and summary card
+        summaryElement.innerHTML = '';
     }
     
     // Update visualization section (calendar, etc)
