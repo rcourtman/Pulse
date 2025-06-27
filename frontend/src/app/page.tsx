@@ -1,8 +1,10 @@
 "use client";
-import FAQ from "@/components/FAQ";
-import AnimatedGradientText from "@/components/ui/animated-gradient-text";
-import { Button } from "@/components/ui/button";
-import { CardFooter } from "@/components/ui/card";
+import { ArrowRightIcon, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FaGithub } from "react-icons/fa";
+import { useTheme } from "next-themes";
+import Link from "next/link";
+
 import {
   Dialog,
   DialogContent,
@@ -11,15 +13,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import Particles from "@/components/ui/particles";
+import AnimatedGradientText from "@/components/ui/animated-gradient-text";
 import { Separator } from "@/components/ui/separator";
-import { basePath } from "@/config/siteConfig";
+import { CardFooter } from "@/components/ui/card";
+import Particles from "@/components/ui/particles";
+import { Button } from "@/components/ui/button";
+import { basePath } from "@/config/site-config";
+import FAQ from "@/components/faq";
 import { cn } from "@/lib/utils";
-import { ArrowRightIcon, ExternalLink } from "lucide-react";
-import { useTheme } from "next-themes";
-import Link from "next/link";
-import { useEffect, useState } from "react";
-import { FaGithub } from "react-icons/fa";
 
 function CustomArrowRightIcon() {
   return <ArrowRightIcon className="h-4 w-4" width={1} />;
@@ -50,7 +51,9 @@ export default function Page() {
                         `p-px ![mask-composite:subtract]`,
                       )}
                     />
-                    ❤️ <Separator className="mx-2 h-4" orientation="vertical" />
+                    ❤️
+                    {" "}
+                    <Separator className="mx-2 h-4" orientation="vertical" />
                     <span
                       className={cn(
                         `animate-gradient bg-gradient-to-r from-[#ffaa40] via-[#9c40ff] to-[#ffaa40] bg-[length:var(--bg-size)_100%] bg-clip-text text-transparent`,
@@ -78,7 +81,9 @@ export default function Page() {
                       rel="noopener noreferrer"
                       className="flex items-center justify-center"
                     >
-                      <FaGithub className="mr-2 h-4 w-4" /> Tteck&apos;s GitHub
+                      <FaGithub className="mr-2 h-4 w-4" />
+                      {" "}
+                      Tteck&apos;s GitHub
                     </a>
                   </Button>
                   <Button className="w-full" asChild>
@@ -88,7 +93,9 @@ export default function Page() {
                       rel="noopener noreferrer"
                       className="flex items-center justify-center"
                     >
-                      <ExternalLink className="mr-2 h-4 w-4" /> Proxmox Helper Scripts
+                      <ExternalLink className="mr-2 h-4 w-4" />
+                      {" "}
+                      Proxmox Helper Scripts
                     </a>
                   </Button>
                 </CardFooter>
@@ -104,7 +111,10 @@ export default function Page() {
                   We are a community-driven initiative that simplifies the setup of Proxmox Virtual Environment (VE).
                 </p>
                 <p>
-                  With 300+ scripts to help you manage your <b>Proxmox VE environment</b>. Whether you&#39;re a seasoned
+                  With 300+ scripts to help you manage your
+                  {" "}
+                  <b>Proxmox VE environment</b>
+                  . Whether you&#39;re a seasoned
                   user or a newcomer, we&#39;ve got you covered.
                 </p>
               </div>

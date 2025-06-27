@@ -1,10 +1,12 @@
-import { basePath } from "@/config/siteConfig";
-import { cn } from "@/lib/utils";
-import Link from "next/link";
-import { useEffect, useState } from "react";
 import { FaGithub, FaStar } from "react-icons/fa";
-import { buttonVariants } from "./button";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+import { basePath } from "@/config/site-config";
+import { cn } from "@/lib/utils";
+
 import NumberTicker from "./number-ticker";
+import { buttonVariants } from "./button";
 
 export default function StarOnGithubButton() {
   const [stars, setStars] = useState(0);
@@ -23,7 +25,8 @@ export default function StarOnGithubButton() {
           const data = await res.json();
           setStars(data.stargazers_count || stars);
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error("Error fetching stars:", error);
       }
     };
@@ -43,7 +46,8 @@ export default function StarOnGithubButton() {
       <span className="absolute right-0 -mt-12 h-32 translate-x-12 rotate-12 bg-white opacity-10 transition-all duration-1000 ease-out group-hover:-translate-x-40" />
       <div className="flex items-center">
         <FaGithub className="size-4" />
-        <span className="ml-1">Star on GitHub</span>{" "}
+        <span className="ml-1">Star on GitHub</span>
+        {" "}
       </div>
       <div className="ml-2 flex items-center gap-1 text-sm md:flex">
         <FaStar className="size-4 text-gray-500 transition-all duration-300 group-hover:text-yellow-300" />

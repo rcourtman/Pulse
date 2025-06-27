@@ -1,10 +1,11 @@
+/* eslint-disable ts/no-require-imports */
+//
 import type { Config } from "tailwindcss";
-
-const svgToDataUri = require("mini-svg-data-uri");
 
 const {
   default: flattenColorPalette,
 } = require("tailwindcss/lib/util/flattenColorPalette");
+const svgToDataUri = require("mini-svg-data-uri");
 
 const config = {
   darkMode: ["class"],
@@ -73,11 +74,11 @@ const config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        shine: {
+        "shine": {
           from: { backgroundPosition: "200% 0" },
           to: { backgroundPosition: "-200% 0" },
         },
-        gradient: {
+        "gradient": {
           to: {
             backgroundPosition: "var(--bg-size) 0",
           },
@@ -89,11 +90,11 @@ const config = {
           "50%": {
             "background-position": "100% 100%",
           },
-          to: {
+          "to": {
             "background-position": "0% 0%",
           },
         },
-        moveHorizontal: {
+        "moveHorizontal": {
           "0%": {
             transform: "translateX(-50%) translateY(-10%)",
           },
@@ -104,7 +105,7 @@ const config = {
             transform: "translateX(-50%) translateY(-10%)",
           },
         },
-        moveInCircle: {
+        "moveInCircle": {
           "0%": {
             transform: "rotate(0deg)",
           },
@@ -115,7 +116,7 @@ const config = {
             transform: "rotate(360deg)",
           },
         },
-        moveVertical: {
+        "moveVertical": {
           "0%": {
             transform: "translateY(-50%)",
           },
@@ -130,8 +131,8 @@ const config = {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        shine: "shine 8s ease-in-out infinite",
-        gradient: "gradient 8s linear infinite",
+        "shine": "shine 8s ease-in-out infinite",
+        "gradient": "gradient 8s linear infinite",
       },
     },
   },
@@ -168,8 +169,8 @@ const config = {
 } satisfies Config;
 
 function addVariablesForColors({ addBase, theme }: any) {
-  let allColors = flattenColorPalette(theme("colors"));
-  let newVars = Object.fromEntries(
+  const allColors = flattenColorPalette(theme("colors"));
+  const newVars = Object.fromEntries(
     Object.entries(allColors).map(([key, val]) => [`--${key}`, val]),
   );
   addBase({

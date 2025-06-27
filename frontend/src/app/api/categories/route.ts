@@ -1,7 +1,8 @@
-import { Metadata, Script } from "@/lib/types";
-import { promises as fs } from "fs";
 import { NextResponse } from "next/server";
-import path from "path";
+import { promises as fs } from "node:fs";
+import path from "node:path";
+
+import type { Metadata, Script } from "@/lib/types";
 
 export const dynamic = "force-static";
 
@@ -10,21 +11,21 @@ const metadataFileName = "metadata.json";
 const versionFileName = "version.json";
 const encoding = "utf-8";
 
-const getMetadata = async () => {
+async function getMetadata() {
   const filePath = path.resolve(jsonDir, metadataFileName);
   const fileContent = await fs.readFile(filePath, encoding);
   const metadata: Metadata = JSON.parse(fileContent);
   return metadata;
-};
+}
 
-const getScripts = async () => {
+async function getScripts() {
   const filePaths = (await fs.readdir(jsonDir))
-    .filter((fileName) => 
-      fileName.endsWith(".json") && 
-      fileName !== metadataFileName && 
-      fileName !== versionFileName
+    .filter(fileName =>
+      fileName.endsWith(".json")
+      && fileName !== metadataFileName
+      && fileName !== versionFileName,
     )
-    .map((fileName) => path.resolve(jsonDir, fileName));
+    .map(fileName => path.resolve(jsonDir, fileName));
 
   const scripts = await Promise.all(
     filePaths.map(async (filePath) => {
@@ -34,7 +35,7 @@ const getScripts = async () => {
     }),
   );
   return scripts;
-};
+}
 
 export async function GET() {
   try {
@@ -43,7 +44,7 @@ export async function GET() {
 
     const categories = metadata.categories
       .map((category) => {
-        category.scripts = scripts.filter((script) =>
+        category.scripts = scripts.filter(script =>
           script.categories?.includes(category.id),
         );
         return category;
@@ -51,7 +52,8 @@ export async function GET() {
       .sort((a, b) => a.sort_order - b.sort_order);
 
     return NextResponse.json(categories);
-  } catch (error) {
+  }
+  catch (error) {
     console.error(error as Error);
     return NextResponse.json(
       { error: "Failed to fetch categories" },

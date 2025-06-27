@@ -1,12 +1,13 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import React, { useEffect, useRef, useState } from "react";
 
-interface MousePosition {
+import { cn } from "@/lib/utils";
+
+type MousePosition = {
   x: number;
   y: number;
-}
+};
 
 function MousePosition(): MousePosition {
   const [mousePosition, setMousePosition] = useState<MousePosition>({
@@ -29,7 +30,7 @@ function MousePosition(): MousePosition {
   return mousePosition;
 }
 
-interface ParticlesProps {
+type ParticlesProps = {
   className?: string;
   quantity?: number;
   staticity?: number;
@@ -39,18 +40,18 @@ interface ParticlesProps {
   color?: string;
   vx?: number;
   vy?: number;
-}
+};
 function hexToRgb(hex: string): number[] {
   hex = hex.replace("#", "");
 
   if (hex.length === 3) {
     hex = hex
       .split("")
-      .map((char) => char + char)
+      .map(char => char + char)
       .join("");
   }
 
-  const hexInt = parseInt(hex, 16);
+  const hexInt = Number.parseInt(hex, 16);
   const red = (hexInt >> 16) & 255;
   const green = (hexInt >> 8) & 255;
   const blue = hexInt & 255;
@@ -150,7 +151,7 @@ const Particles: React.FC<ParticlesProps> = ({
     const translateY = 0;
     const pSize = Math.floor(Math.random() * 2) + size;
     const alpha = 0;
-    const targetAlpha = parseFloat((Math.random() * 0.6 + 0.1).toFixed(1));
+    const targetAlpha = Number.parseFloat((Math.random() * 0.6 + 0.1).toFixed(1));
     const dx = (Math.random() - 0.5) * 0.1;
     const dy = (Math.random() - 0.5) * 0.1;
     const magnetism = 0.1 + Math.random() * 4;
@@ -213,8 +214,8 @@ const Particles: React.FC<ParticlesProps> = ({
     start2: number,
     end2: number,
   ): number => {
-    const remapped =
-      ((value - start1) * (end2 - start2)) / (end1 - start1) + start2;
+    const remapped
+      = ((value - start1) * (end2 - start2)) / (end1 - start1) + start2;
     return remapped > 0 ? remapped : 0;
   };
 
@@ -229,7 +230,7 @@ const Particles: React.FC<ParticlesProps> = ({
         canvasSize.current.h - circle.y - circle.translateY - circle.size, // distance from bottom edge
       ];
       const closestEdge = edge.reduce((a, b) => Math.min(a, b));
-      const remapClosestEdge = parseFloat(
+      const remapClosestEdge = Number.parseFloat(
         remapValue(closestEdge, 0, 20, 0, 1).toFixed(2),
       );
       if (remapClosestEdge > 1) {
@@ -237,26 +238,27 @@ const Particles: React.FC<ParticlesProps> = ({
         if (circle.alpha > circle.targetAlpha) {
           circle.alpha = circle.targetAlpha;
         }
-      } else {
+      }
+      else {
         circle.alpha = circle.targetAlpha * remapClosestEdge;
       }
       circle.x += circle.dx + vx;
       circle.y += circle.dy + vy;
-      circle.translateX +=
-        (mouse.current.x / (staticity / circle.magnetism) - circle.translateX) /
-        ease;
-      circle.translateY +=
-        (mouse.current.y / (staticity / circle.magnetism) - circle.translateY) /
-        ease;
+      circle.translateX
+        += (mouse.current.x / (staticity / circle.magnetism) - circle.translateX)
+          / ease;
+      circle.translateY
+        += (mouse.current.y / (staticity / circle.magnetism) - circle.translateY)
+          / ease;
 
       drawCircle(circle, true);
 
       // circle gets out of the canvas
       if (
-        circle.x < -circle.size ||
-        circle.x > canvasSize.current.w + circle.size ||
-        circle.y < -circle.size ||
-        circle.y > canvasSize.current.h + circle.size
+        circle.x < -circle.size
+        || circle.x > canvasSize.current.w + circle.size
+        || circle.y < -circle.size
+        || circle.y > canvasSize.current.h + circle.size
       ) {
         // remove the circle from the array
         circles.current.splice(i, 1);

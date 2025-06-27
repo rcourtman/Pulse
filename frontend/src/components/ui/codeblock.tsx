@@ -1,14 +1,18 @@
 "use client";
 
-import { basePath } from "@/config/siteConfig";
-import { cn } from "@/lib/utils";
-import { cva, type VariantProps } from "class-variance-authority";
+import type { VariantProps } from "class-variance-authority";
+
+import { cva } from "class-variance-authority";
 import { Clipboard, Copy } from "lucide-react";
-import Link from "next/link";
 import * as React from "react";
 import { toast } from "sonner";
-import { Button } from "./button";
+import Link from "next/link";
+
+import { basePath } from "@/config/site-config";
+import { cn } from "@/lib/utils";
+
 import { Separator } from "./separator";
+import { Button } from "./button";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
@@ -40,23 +44,24 @@ const buttonVariants = cva(
   },
 );
 
-const handleCopy = (type: string, value: string) => {
+function handleCopy(type: string, value: string) {
   navigator.clipboard.writeText(value);
 
   let amountOfScriptsCopied = localStorage.getItem("amountOfScriptsCopied");
 
   if (amountOfScriptsCopied === null) {
     localStorage.setItem("amountOfScriptsCopied", "1");
-  } else {
-    amountOfScriptsCopied = (parseInt(amountOfScriptsCopied) + 1).toString();
+  }
+  else {
+    amountOfScriptsCopied = (Number.parseInt(amountOfScriptsCopied) + 1).toString();
     localStorage.setItem("amountOfScriptsCopied", amountOfScriptsCopied);
 
     if (
-      parseInt(amountOfScriptsCopied) === 3 ||
-      parseInt(amountOfScriptsCopied) === 10 ||
-      parseInt(amountOfScriptsCopied) === 25 ||
-      parseInt(amountOfScriptsCopied) === 50 ||
-      parseInt(amountOfScriptsCopied) === 100
+      Number.parseInt(amountOfScriptsCopied) === 3
+      || Number.parseInt(amountOfScriptsCopied) === 10
+      || Number.parseInt(amountOfScriptsCopied) === 25
+      || Number.parseInt(amountOfScriptsCopied) === 50
+      || Number.parseInt(amountOfScriptsCopied) === 100
     ) {
       setTimeout(() => {
         toast.info(
@@ -86,17 +91,20 @@ const handleCopy = (type: string, value: string) => {
   toast.success(
     <div className="flex items-center gap-2">
       <Clipboard className="h-4 w-4" />
-      <span>Copied {type} to clipboard</span>
+      <span>
+        Copied
+        {type}
+        {" "}
+        to clipboard
+      </span>
     </div>,
   );
-};
+}
 
-export interface CodeBlockProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof buttonVariants> {
+export type CodeBlockProps = {
   asChild?: boolean;
   code: string;
-}
+} & React.ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof buttonVariants>;
 
 const CodeBlock = React.forwardRef<HTMLDivElement, CodeBlockProps>(
   ({ className, variant, size, asChild = false, code }, ref) => {
@@ -121,7 +129,10 @@ const CodeBlock = React.forwardRef<HTMLDivElement, CodeBlockProps>(
           )}
         >
           <p className="flex items-center gap-2">
-            {code} <Separator orientation="vertical" />{" "}
+            {code}
+            {" "}
+            <Separator orientation="vertical" />
+            {" "}
             <Copy
               className="cursor-pointer"
               size={16}

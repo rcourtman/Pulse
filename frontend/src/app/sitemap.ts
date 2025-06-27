@@ -1,11 +1,12 @@
-import { basePath } from "@/config/siteConfig";
 import type { MetadataRoute } from "next";
+
+import { basePath } from "@/config/site-config";
 
 export const dynamic = "force-static";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  let domain = "community-scripts.github.io";
-  let protocol = "https";
+  const domain = "community-scripts.github.io";
+  const protocol = "https";
   return [
     {
       url: `${protocol}://${domain}/${basePath}`,
@@ -18,6 +19,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     {
       url: `${protocol}://${domain}/${basePath}/json-editor`,
       lastModified: new Date(),
-    }
+    },
   ];
 }

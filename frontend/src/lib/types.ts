@@ -1,4 +1,4 @@
-import { AlertColors } from "@/config/siteConfig";
+import type { AlertColors } from "@/config/site-config";
 
 export type Script = {
   name: string;
@@ -48,18 +48,18 @@ export type Metadata = {
   categories: Category[];
 };
 
-export interface Version {
+export type Version = {
   name: string;
   slug: string;
-}
+};
 
-export interface OperatingSystem {
+export type OperatingSystem = {
   name: string;
   versions: Version[];
-}
+};
 
-export interface AppVersion {
+export type AppVersion = {
   name: string;
   version: string;
   date: Date;
-}
+};

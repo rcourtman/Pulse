@@ -1,8 +1,9 @@
 "use client";
-import { cn } from "@/lib/utils";
 import { CheckIcon, ClipboardIcon } from "lucide-react";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
+
+import { cn } from "@/lib/utils";
+
 import { Card } from "./card";
 
 export default function CodeCopyButton({
@@ -26,7 +27,6 @@ export default function CodeCopyButton({
 
     setHasCopied(true);
 
-
     // toast.success(`copied ${type} to clipboard`, {
     //   icon: <ClipboardCheck className="h-4 w-4" />,
     // });
@@ -42,11 +42,13 @@ export default function CodeCopyButton({
           className={cn(" right-0 cursor-pointer bg-muted px-3 py-4")}
           onClick={() => handleCopy("install command", children)}
         >
-          {hasCopied ? (
-            <CheckIcon className="h-4 w-4" />
-          ) : (
-            <ClipboardIcon className="h-4 w-4" />
-          )}
+          {hasCopied
+            ? (
+                <CheckIcon className="h-4 w-4" />
+              )
+            : (
+                <ClipboardIcon className="h-4 w-4" />
+              )}
           <span className="sr-only">Copy</span>
         </div>
       </Card>

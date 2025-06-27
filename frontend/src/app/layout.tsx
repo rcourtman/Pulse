@@ -1,18 +1,20 @@
-import Footer from "@/components/Footer";
-import Navbar from "@/components/Navbar";
-import QueryProvider from "@/components/query-provider";
-import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/ui/sonner";
-import { analytics, basePath } from "@/config/siteConfig";
-import "@/styles/globals.css";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+
 import { NuqsAdapter } from "nuqs/adapters/next/app";
+import { Inter } from "next/font/google";
 import React from "react";
+
+import { ThemeProvider } from "@/components/theme-provider";
+import { analytics, basePath } from "@/config/site-config";
+import "@/styles/globals.css";
+import QueryProvider from "@/components/query-provider";
+import { Toaster } from "@/components/ui/sonner";
+import Footer from "@/components/footer";
+import Navbar from "@/components/navbar";
 
 const inter = Inter({ subsets: ["latin"] });
 
-export const metadata : Metadata = {
+export const metadata: Metadata = {
   title: "Proxmox VE Helper-Scripts",
   description:
     "The official website for the Proxmox VE Helper-Scripts (Community) Repository. Featuring over 300+ scripts to help you manage your Proxmox VE environment.",

@@ -1,26 +1,32 @@
 "use client";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
-import { fetchCategories } from "@/lib/data";
-import { Category } from "@/lib/types";
-import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import type { z } from "zod";
+
 import { CalendarIcon, Check, Clipboard, Download } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { format } from "date-fns";
 import { toast } from "sonner";
-import { z } from "zod";
-import Categories from "./_components/Categories";
-import InstallMethod from "./_components/InstallMethod";
-import Note from "./_components/Note";
-import { ScriptSchema, type Script } from "./_schemas/schemas";
+
+import type { Category } from "@/lib/types";
+
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Calendar } from "@/components/ui/calendar";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { fetchCategories } from "@/lib/data";
+import { cn } from "@/lib/utils";
+
+import type { Script } from "./_schemas/schemas";
+
+import InstallMethod from "./_components/install-method";
+import { ScriptSchema } from "./_schemas/schemas";
+import Categories from "./_components/categories";
+import Note from "./_components/note";
 
 const initialScript: Script = {
   name: "",
@@ -54,7 +60,7 @@ export default function JSONGenerator() {
   useEffect(() => {
     fetchCategories()
       .then(setCategories)
-      .catch((error) => console.error("Error fetching categories:", error));
+      .catch(error => console.error("Error fetching categories:", error));
   }, []);
 
   const updateScript = useCallback((key: keyof Script, value: Script[keyof Script]) => {
@@ -67,11 +73,14 @@ export default function JSONGenerator() {
 
           if (updated.type === "pve") {
             scriptPath = `tools/pve/${updated.slug}.sh`;
-          } else if (updated.type === "addon") {
+          }
+          else if (updated.type === "addon") {
             scriptPath = `tools/addon/${updated.slug}.sh`;
-          } else if (method.type === "alpine") {
+          }
+          else if (method.type === "alpine") {
             scriptPath = `${updated.type}/alpine-${updated.slug}.sh`;
-          } else {
+          }
+          else {
             scriptPath = `${updated.type}/${updated.slug}.sh`;
           }
 
@@ -136,7 +145,10 @@ export default function JSONGenerator() {
           <div className="mt-2 space-y-1">
             {zodErrors.errors.map((error, index) => (
               <AlertDescription key={index} className="p-1 text-red-500">
-                {error.path.join(".")} - {error.message}
+                {error.path.join(".")}
+                {" "}
+                -
+                {error.message}
               </AlertDescription>
             ))}
           </div>
@@ -154,25 +166,31 @@ export default function JSONGenerator() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>
-                Name <span className="text-red-500">*</span>
+                Name
+                {" "}
+                <span className="text-red-500">*</span>
               </Label>
-              <Input placeholder="Example" value={script.name} onChange={(e) => updateScript("name", e.target.value)} />
+              <Input placeholder="Example" value={script.name} onChange={e => updateScript("name", e.target.value)} />
             </div>
             <div>
               <Label>
-                Slug <span className="text-red-500">*</span>
+                Slug
+                {" "}
+                <span className="text-red-500">*</span>
               </Label>
-              <Input placeholder="example" value={script.slug} onChange={(e) => updateScript("slug", e.target.value)} />
+              <Input placeholder="example" value={script.slug} onChange={e => updateScript("slug", e.target.value)} />
             </div>
           </div>
           <div>
             <Label>
-              Logo <span className="text-red-500">*</span>
+              Logo
+              {" "}
+              <span className="text-red-500">*</span>
             </Label>
             <Input
               placeholder="Full logo URL"
               value={script.logo || ""}
-              onChange={(e) => updateScript("logo", e.target.value || null)}
+              onChange={e => updateScript("logo", e.target.value || null)}
             />
           </div>
           <div>
@@ -180,17 +198,19 @@ export default function JSONGenerator() {
             <Input
               placeholder="Path to config file"
               value={script.config_path || ""}
-              onChange={(e) => updateScript("config_path", e.target.value || null)}
+              onChange={e => updateScript("config_path", e.target.value || null)}
             />
           </div>
           <div>
             <Label>
-              Description <span className="text-red-500">*</span>
+              Description
+              {" "}
+              <span className="text-red-500">*</span>
             </Label>
             <Textarea
               placeholder="Example"
               value={script.description}
-              onChange={(e) => updateScript("description", e.target.value)}
+              onChange={e => updateScript("description", e.target.value)}
             />
           </div>
           <Categories script={script} setScript={setScript} categories={categories} />
@@ -200,7 +220,7 @@ export default function JSONGenerator() {
               <Popover>
                 <PopoverTrigger asChild className="flex-1">
                   <Button
-                    variant={"outline"}
+                    variant="outline"
                     className={cn("pl-3 text-left font-normal w-full", !script.date_created && "text-muted-foreground")}
                   >
                     {formattedDate || <span>Pick a date</span>}
@@ -219,7 +239,7 @@ export default function JSONGenerator() {
             </div>
             <div className="flex flex-col gap-2 w-full">
               <Label>Type</Label>
-              <Select value={script.type} onValueChange={(value) => updateScript("type", value)}>
+              <Select value={script.type} onValueChange={value => updateScript("type", value)}>
                 <SelectTrigger className="flex-1">
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
@@ -234,11 +254,11 @@ export default function JSONGenerator() {
           </div>
           <div className="w-full flex gap-5">
             <div className="flex items-center space-x-2">
-              <Switch checked={script.updateable} onCheckedChange={(checked) => updateScript("updateable", checked)} />
+              <Switch checked={script.updateable} onCheckedChange={checked => updateScript("updateable", checked)} />
               <label>Updateable</label>
             </div>
             <div className="flex items-center space-x-2">
-              <Switch checked={script.privileged} onCheckedChange={(checked) => updateScript("privileged", checked)} />
+              <Switch checked={script.privileged} onCheckedChange={checked => updateScript("privileged", checked)} />
               <label>Privileged</label>
             </div>
           </div>
@@ -246,18 +266,18 @@ export default function JSONGenerator() {
             placeholder="Interface Port"
             type="number"
             value={script.interface_port || ""}
-            onChange={(e) => updateScript("interface_port", e.target.value ? Number(e.target.value) : null)}
+            onChange={e => updateScript("interface_port", e.target.value ? Number(e.target.value) : null)}
           />
           <div className="flex gap-2">
             <Input
               placeholder="Website URL"
               value={script.website || ""}
-              onChange={(e) => updateScript("website", e.target.value || null)}
+              onChange={e => updateScript("website", e.target.value || null)}
             />
             <Input
               placeholder="Documentation URL"
               value={script.documentation || ""}
-              onChange={(e) => updateScript("documentation", e.target.value || null)}
+              onChange={e => updateScript("documentation", e.target.value || null)}
             />
           </div>
           <InstallMethod script={script} setScript={setScript} setIsValid={setIsValid} setZodErrors={setZodErrors} />
@@ -265,22 +285,20 @@ export default function JSONGenerator() {
           <Input
             placeholder="Username"
             value={script.default_credentials.username || ""}
-            onChange={(e) =>
+            onChange={e =>
               updateScript("default_credentials", {
                 ...script.default_credentials,
                 username: e.target.value || null,
-              })
-            }
+              })}
           />
           <Input
             placeholder="Password"
             value={script.default_credentials.password || ""}
-            onChange={(e) =>
+            onChange={e =>
               updateScript("default_credentials", {
                 ...script.default_credentials,
                 password: e.target.value || null,
-              })
-            }
+              })}
           />
           <Note script={script} setScript={setScript} setIsValid={setIsValid} setZodErrors={setZodErrors} />
         </form>

@@ -1,9 +1,10 @@
-import { basePath } from "@/config/siteConfig";
 import type { MetadataRoute } from "next";
 
-export const generateStaticParams = () => {
+import { basePath } from "@/config/site-config";
+
+export function generateStaticParams() {
   return [];
-};
+}
 
 export default function manifest(): MetadataRoute.Manifest {
   return {

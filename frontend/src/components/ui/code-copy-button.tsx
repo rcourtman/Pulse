@@ -1,8 +1,10 @@
 "use client";
-import { cn } from "@/lib/utils";
 import { CheckIcon, ClipboardIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+import { cn } from "@/lib/utils";
+
 import { Card } from "./card";
 
 export default function CodeCopyButton({
@@ -26,7 +28,7 @@ export default function CodeCopyButton({
 
     setHasCopied(true);
 
-    let warning = localStorage.getItem("warning");
+    const warning = localStorage.getItem("warning");
 
     if (warning === null) {
       localStorage.setItem("warning", "1");
@@ -50,11 +52,13 @@ export default function CodeCopyButton({
           className={cn("bg-muted px-3 py-4")}
           title="Copy"
         >
-          {hasCopied ? (
-            <CheckIcon className="h-4 w-4" />
-          ) : (
-            <ClipboardIcon className="h-4 w-4" />
-          )}
+          {hasCopied
+            ? (
+                <CheckIcon className="h-4 w-4" />
+              )
+            : (
+                <ClipboardIcon className="h-4 w-4" />
+              )}
         </button>
       </Card>
     </div>
