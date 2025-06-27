@@ -33,6 +33,9 @@ jobs:
             echo "No files found containing GitHub raw URLs"
           fi
 
+          git add .
+          git commit -m "Sync to Gitea"
+
       - name: Push to Gitea
         run: |
           git config --global user.name "Push From Github"
