@@ -28,6 +28,7 @@ NODE_VERSION="22" NODE_MODULE="pnpm@$pnpm_desired" setup_nodejs
 
 msg_info "Installing Jellyseerr (Patience)"
 export CYPRESS_INSTALL_BINARY=0
+cd /opt/jellyseer
 $STD pnpm install --frozen-lockfile
 export NODE_OPTIONS="--max-old-space-size=3072"
 $STD pnpm build
