@@ -819,6 +819,14 @@
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
           <span class="hidden md:inline">Storage</span>
       </div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="snapshots" role="tab" aria-selected="false" aria-controls="snapshots" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><circle cx="12" cy="12" r="10"></circle><path d="M8 14s1.5 2 4 2 4-2 4-2"></path><line x1="9" y1="9" x2="9.01" y2="9"></line><line x1="15" y1="9" x2="15.01" y2="9"></line></svg>
+          <span class="hidden md:inline">Snapshots</span>
+      </div>
+      <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="backups" role="tab" aria-selected="false" aria-controls="backups" tabindex="-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+          <span class="hidden md:inline">Backups</span>
+      </div>
       <div class="tab px-3 py-1.5 cursor-pointer bg-gray-100 dark:bg-gray-700/50 border-transparent text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-t flex items-center gap-1.5" data-tab="pbs" role="tab" aria-selected="false" aria-controls="pbs" tabindex="-1">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-middle"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
           <span class="hidden md:inline">PBS</span>
@@ -1261,6 +1269,23 @@
         </div>
       </div>
     </div>
+    
+    <div id="snapshots" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
+      <div class="p-3">
+        <div id="snapshots-content">
+          <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading snapshots data...</p>
+        </div>
+      </div>
+    </div>
+    
+    <div id="backups" class="tab-content hidden bg-white dark:bg-gray-800 rounded-b rounded-tr shadow mb-2">
+      <div class="p-3">
+        <div id="backups-content">
+          <p class="text-gray-500 dark:text-gray-400 p-4 text-center">Loading backups data...</p>
+        </div>
+      </div>
+    </div>
+    
     <div id="pbs" class="tab-content hidden bg-white dark:bg-gray-800 p-4 border border-t-0 border-gray-300 dark:border-gray-700 rounded-b-lg shadow-sm">
       <div id="pbs-instances-container" class="space-y-6">
         <p id="pbs-loading-message" class="text-gray-500 dark:text-gray-400">Loading PBS data...</p>
@@ -1350,6 +1375,8 @@
   <script src="/js/ui/nodes.js" defer></script>
   <script src="/js/ui/dashboard.js" defer></script>
   <script src="/js/ui/storage.js" defer></script>
+  <script src="/js/ui/snapshots.js" defer></script>
+  <script src="/js/ui/backups.js" defer></script>
   <script src="/js/ui/pbs.js" defer></script>
   <script src="/js/ui/settings.js" defer></script>
   <script src="/js/ui/chartsControls.js" defer></script>

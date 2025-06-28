@@ -236,7 +236,15 @@ PulseApp.socketHandler = (() => {
                 case 'pbs':
                     updatePbsTab(data);
                     break;
+                case 'snapshots':
+                    if (PulseApp.ui && PulseApp.ui.snapshots && PulseApp.ui.snapshots.updateSnapshotsInfo) {
+                        PulseApp.ui.snapshots.updateSnapshotsInfo();
+                    }
+                    break;
                 case 'backups':
+                    if (PulseApp.ui && PulseApp.ui.backups && PulseApp.ui.backups.updateBackupsInfo) {
+                        PulseApp.ui.backups.updateBackupsInfo();
+                    }
                     break;
             }
 
