@@ -132,13 +132,13 @@ PulseApp.ui.snapshots = (() => {
                 <table class="w-full text-xs sm:text-sm">
                     <thead class="bg-gray-100 dark:bg-gray-800">
                         <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                            <th class="sortable p-1 px-2" data-sort="vmid">VMID</th>
-                            <th class="sortable p-1 px-2" data-sort="name">Guest Name</th>
-                            <th class="sortable p-1 px-2" data-sort="type">Type</th>
-                            <th class="sortable p-1 px-2" data-sort="snapname">Snapshot Name</th>
-                            <th class="sortable p-1 px-2" data-sort="node">Node</th>
-                            <th class="sortable p-1 px-2" data-sort="snaptime">Age</th>
-                            <th class="p-1 px-2">Description</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="vmid">VMID</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="name">Guest Name</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="type">Type</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="snapname">Snapshot Name</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="node">Node</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="snaptime">Age</th>
+                            <th class="p-1 px-2 whitespace-nowrap">Description</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -208,7 +208,7 @@ PulseApp.ui.snapshots = (() => {
                     </td>
                     <td class="p-1 px-2 align-middle">${snapshot.snapname}</td>
                     <td class="p-1 px-2 align-middle">${snapshot.node}</td>
-                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">${age}</td>
+                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400 whitespace-nowrap">${age}</td>
                     <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">${snapshot.description || '-'}</td>
                 </tr>
             `;
@@ -253,12 +253,12 @@ PulseApp.ui.snapshots = (() => {
         const now = Date.now() / 1000;
         const diff = now - timestamp;
         
-        if (diff < 60) return 'Just now';
-        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-        if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
-        if (diff < 2592000) return Math.floor(diff / 604800) + 'w ago';
-        return Math.floor(diff / 2592000) + 'mo ago';
+        if (diff < 60) return 'Just\u00A0now';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm\u00A0ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h\u00A0ago';
+        if (diff < 604800) return Math.floor(diff / 86400) + 'd\u00A0ago';
+        if (diff < 2592000) return Math.floor(diff / 604800) + 'w\u00A0ago';
+        return Math.floor(diff / 2592000) + 'mo\u00A0ago';
     }
 
     function setupEventListeners() {
