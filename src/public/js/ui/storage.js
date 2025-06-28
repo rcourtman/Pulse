@@ -211,7 +211,7 @@ PulseApp.ui.storage = (() => {
                     </div>
                     <div class="flex-1 max-w-sm">
                         <div class="flex items-center justify-between mb-1">
-                            <span class="text-xs text-gray-600 dark:text-gray-400">Overall Usage</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">Overall Usage</span>
                             <span class="text-xs font-medium ${usageColorClass}">${summary.usagePercent.toFixed(1)}%</span>
                         </div>
                         ${PulseApp.utils.createProgressTextBarHTML(summary.usagePercent, '', usageColorClass, '')}
@@ -502,7 +502,7 @@ PulseApp.ui.storage = (() => {
                 }[color] || 'bg-gray-500/60 dark:bg-gray-500/50';
                 
                 return `
-                    <div class="text-[10px] text-gray-600 dark:text-gray-400">
+                    <div class="text-[10px] text-gray-500 dark:text-gray-400">
                         <div class="flex items-center gap-1 mb-0.5">
                             <span class="font-medium truncate flex-1">${storage.name}:</span>
                             ${storage.shared ? '<span class="text-[9px] text-green-600 dark:text-green-400">●</span>' : ''}
@@ -560,12 +560,12 @@ PulseApp.ui.storage = (() => {
             </div>
             
             <div class="space-y-1">
-                <div class="flex justify-between text-[11px] text-gray-600 dark:text-gray-400">
+                <div class="flex justify-between text-[11px] text-gray-500 dark:text-gray-400">
                     <span>Type: ${store.type || 'N/A'}</span>
                     <span class="${usageColorClass} font-medium">${usagePercent.toFixed(0)}%</span>
                 </div>
                 ${usageBarHTML}
-                <div class="flex justify-between text-[11px] text-gray-600 dark:text-gray-400">
+                <div class="flex justify-between text-[11px] text-gray-500 dark:text-gray-400">
                     <span>${PulseApp.utils.formatBytes(store.used)} used</span>
                     <span>${PulseApp.utils.formatBytes(store.avail)} free</span>
                 </div>
