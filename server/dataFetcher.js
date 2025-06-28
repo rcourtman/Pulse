@@ -11,7 +11,6 @@ const {
     getVerificationRecommendations 
 } = require('./pbsVerificationUtils');
 const { runVerificationDiagnostics } = require('./pbsVerificationDiagnostics');
-const { BackupProcessingCoordinator } = require('./services/backupProcessors');
 
 let pLimit;
 let requestLimiter;

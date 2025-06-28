@@ -237,7 +237,6 @@ PulseApp.socketHandler = (() => {
                     updatePbsTab(data);
                     break;
                 case 'backups':
-                    updateBackupsTab(data);
                     break;
             }
 
@@ -324,19 +323,6 @@ PulseApp.socketHandler = (() => {
         }
     }
 
-    function updateBackupsTab(data) {
-        try {
-            // Only update if backups tab is active and we have relevant data
-            const backupsTab = document.querySelector('[data-tab="backups"]');
-            const isBackupsTabActive = backupsTab && backupsTab.classList.contains('active');
-            
-            if (PulseApp.ui && PulseApp.ui.backups && (data.pbs || data.pveBackups) && isBackupsTabActive) {
-                PulseApp.ui.backups.updateBackupsTab(false); // Mark as API update, not user action
-            }
-        } catch (error) {
-            console.error('[Socket] Error updating backups tab:', error);
-        }
-    }
 
     function updatePerformanceIndicators(data) {
         try {
