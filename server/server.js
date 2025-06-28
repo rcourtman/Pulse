@@ -47,6 +47,12 @@ function createServer() {
     const alertRoutes = require('./routes/alerts');
     app.use('/api/alerts', alertRoutes);
 
+    const snapshotsRoutes = require('./routes/snapshots');
+    app.use('/api', snapshotsRoutes);
+
+    const backupsRoutes = require('./routes/backups');
+    app.use('/api', backupsRoutes);
+
     // --- HTML Routes ---
     app.get('/', (req, res) => {
         const indexPath = path.join(publicDir, 'index.html');
