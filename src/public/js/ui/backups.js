@@ -256,7 +256,11 @@ PulseApp.ui.backups = (() => {
             return `
                 <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td class="p-1 px-2 align-middle">${backup.vmid}</td>
-                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">${backup.notes || '-'}</td>
+                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">
+                        <div class="max-w-[120px] sm:max-w-[200px] lg:max-w-[300px] truncate" title="${backup.notes || ''}">
+                            ${backup.notes || '-'}
+                        </div>
+                    </td>
                     <td class="p-1 px-2 align-middle">
                         <span class="px-1.5 py-0.5 text-xs font-medium rounded ${
                             backup.type === 'vm' 

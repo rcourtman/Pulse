@@ -198,7 +198,11 @@ PulseApp.ui.snapshots = (() => {
             return `
                 <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td class="p-1 px-2 align-middle">${snapshot.vmid}</td>
-                    <td class="p-1 px-2 align-middle">${snapshot.name}</td>
+                    <td class="p-1 px-2 align-middle">
+                        <div class="max-w-[100px] sm:max-w-[150px] lg:max-w-[200px] truncate" title="${snapshot.name}">
+                            ${snapshot.name}
+                        </div>
+                    </td>
                     <td class="p-1 px-2 align-middle">
                         <span class="px-1.5 py-0.5 text-xs font-medium rounded ${
                             snapshot.type === 'qemu' 
@@ -206,10 +210,18 @@ PulseApp.ui.snapshots = (() => {
                                 : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                         }">${typeLabel}</span>
                     </td>
-                    <td class="p-1 px-2 align-middle">${snapshot.snapname}</td>
+                    <td class="p-1 px-2 align-middle">
+                        <div class="max-w-[100px] sm:max-w-[150px] lg:max-w-[200px] truncate" title="${snapshot.snapname}">
+                            ${snapshot.snapname}
+                        </div>
+                    </td>
                     <td class="p-1 px-2 align-middle">${snapshot.node}</td>
                     <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400 whitespace-nowrap">${age}</td>
-                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">${snapshot.description || '-'}</td>
+                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">
+                        <div class="max-w-[120px] sm:max-w-[200px] lg:max-w-[300px] truncate" title="${snapshot.description || ''}">
+                            ${snapshot.description || '-'}
+                        </div>
+                    </td>
                 </tr>
             `;
         }).join('');
