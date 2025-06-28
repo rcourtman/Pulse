@@ -628,21 +628,30 @@ PulseApp.ui.storage = (() => {
         // Create sticky storage name column
         const storageNameContent = `${store.storage || 'N/A'}${warningBadge}`;
         const stickyStorageCell = PulseApp.ui.common.createStickyColumn(storageNameContent, {
-            additionalClasses: 'text-gray-900 dark:text-gray-100'
+            additionalClasses: 'text-gray-700 dark:text-gray-300'
         });
         row.appendChild(stickyStorageCell);
         
         // Create regular cells
-        row.appendChild(PulseApp.ui.common.createTableCell(contentBadges, 'p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs'));
-        row.appendChild(PulseApp.ui.common.createTableCell(store.type || 'N/A', 'p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300 text-xs'));
+        row.appendChild(PulseApp.ui.common.createTableCell(contentBadges, 'p-1 px-2 whitespace-nowrap text-xs'));
+        row.appendChild(PulseApp.ui.common.createTableCell(store.type || 'N/A', 'p-1 px-2 whitespace-nowrap text-xs'));
         row.appendChild(PulseApp.ui.common.createTableCell(sharedText, 'p-1 px-2 whitespace-nowrap text-center'));
-        row.appendChild(PulseApp.ui.common.createTableCell(usageBarHTML, 'p-1 px-2 text-gray-600 dark:text-gray-300 min-w-[250px]'));
-        row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.avail), 'p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300'));
-        row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.total), 'p-1 px-2 whitespace-nowrap text-gray-600 dark:text-gray-300'));
+        row.appendChild(PulseApp.ui.common.createTableCell(usageBarHTML, 'p-1 px-2 min-w-[250px]'));
+        row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.avail), 'p-1 px-2 whitespace-nowrap'));
+        row.appendChild(PulseApp.ui.common.createTableCell(PulseApp.utils.formatBytes(store.total), 'p-1 px-2 whitespace-nowrap'));
         return row;
     }
 
+    function resetSort() {
+        // Reset sort order to default (name)
+        currentSortOrder = 'name';
+        
+        // Update the storage table with default sort
+        updateStorageInfo();
+    }
+
     return {
-        updateStorageInfo
+        updateStorageInfo,
+        resetSort
     };
 })();

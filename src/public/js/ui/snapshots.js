@@ -197,8 +197,8 @@ PulseApp.ui.snapshots = (() => {
             
             return `
                 <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td class="p-1 px-2 align-middle">${snapshot.vmid}</td>
-                    <td class="p-1 px-2 align-middle">
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${snapshot.vmid}</td>
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">
                         <div class="max-w-[100px] sm:max-w-[150px] lg:max-w-[200px] truncate" title="${snapshot.name}">
                             ${snapshot.name}
                         </div>
@@ -210,14 +210,14 @@ PulseApp.ui.snapshots = (() => {
                                 : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                         }">${typeLabel}</span>
                     </td>
-                    <td class="p-1 px-2 align-middle">
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">
                         <div class="max-w-[100px] sm:max-w-[150px] lg:max-w-[200px] truncate" title="${snapshot.snapname}">
                             ${snapshot.snapname}
                         </div>
                     </td>
-                    <td class="p-1 px-2 align-middle">${snapshot.node}</td>
-                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400 whitespace-nowrap">${age}</td>
-                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400">
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${snapshot.node}</td>
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300 whitespace-nowrap">${age}</td>
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">
                         <div class="max-w-[120px] sm:max-w-[200px] lg:max-w-[300px] truncate" title="${snapshot.description || ''}">
                             ${snapshot.description || '-'}
                         </div>
@@ -374,9 +374,43 @@ PulseApp.ui.snapshots = (() => {
         }
     }
 
+    function resetFiltersAndSort() {
+        // Reset search input
+        const searchInput = document.getElementById('snapshot-search');
+        if (searchInput) {
+            searchInput.value = '';
+            currentFilters.searchTerm = '';
+        }
+        
+        // Reset guest type filter to 'all'
+        const typeAllRadio = document.getElementById('type-all');
+        if (typeAllRadio) {
+            typeAllRadio.checked = true;
+            currentFilters.guestType = 'all';
+        }
+        
+        // Reset sort to default (snapshot time descending)
+        currentSort.field = 'snaptime';
+        currentSort.ascending = false;
+        
+        // Update the table with reset filters and sort
+        const tbody = document.querySelector('#snapshots-content tbody');
+        if (tbody) {
+            tbody.innerHTML = renderSnapshotRows();
+        }
+        
+        // Update sort UI
+        PulseApp.state.setSortState('snapshots', 'snaptime', 'desc');
+        const snaptimeHeader = document.querySelector('#snapshots-table th[data-sort="snaptime"]');
+        if (snaptimeHeader) {
+            PulseApp.ui.common.updateSortUI('snapshots-table', snaptimeHeader, 'snapshots');
+        }
+    }
+
     return {
         init,
         updateSnapshotsInfo,
-        sortBy
+        sortBy,
+        resetFiltersAndSort
     };
 })();
