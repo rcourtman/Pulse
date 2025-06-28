@@ -1,0 +1,417 @@
+PulseApp.ui = PulseApp.ui || {};
+
+PulseApp.ui.backups = (() => {
+    let isInitialized = false;
+    let currentFilters = {
+        searchTerm: '',
+        backupType: 'all', // 'all', 'pve', 'pbs'
+        node: 'all'
+    };
+    let currentSort = {
+        field: 'ctime',
+        ascending: false
+    };
+    let backupsData = {
+        unified: [],
+        pbsEnabled: false
+    };
+
+    function init() {
+        if (isInitialized) return;
+        isInitialized = true;
+        
+        updateBackupsInfo();
+    }
+
+    function updateBackupsInfo() {
+        const container = document.getElementById('backups-content');
+        if (!container) return;
+
+        // Only show loading state on initial load
+        if (!isInitialized || backupsData.unified.length === 0) {
+            container.innerHTML = `
+                <div class="p-4 text-center text-gray-500 dark:text-gray-400">
+                    Loading backups...
+                </div>
+            `;
+        }
+
+        // Fetch unified backups data
+        fetch('/api/backups/unified')
+            .then(response => response.json())
+            .then(data => {
+                const newBackups = data.backups || [];
+                const newPbsEnabled = data.pbs?.enabled || false;
+                
+                // Check if data has actually changed
+                const hasChanged = JSON.stringify(newBackups) !== JSON.stringify(backupsData.unified) ||
+                                 newPbsEnabled !== backupsData.pbsEnabled;
+                
+                if (hasChanged) {
+                    backupsData.unified = newBackups;
+                    backupsData.pbsEnabled = newPbsEnabled;
+                    
+                    // Only render full UI on first load
+                    if (container.querySelector('.overflow-x-auto')) {
+                        // Update only the table body
+                        const tbody = container.querySelector('tbody');
+                        if (tbody) {
+                            tbody.innerHTML = renderBackupRows();
+                        }
+                        
+                        // Update summary
+                        const summary = calculateSummary();
+                        const summaryElements = container.querySelectorAll('.text-xl.font-semibold');
+                        if (summaryElements.length >= 3) {
+                            summaryElements[0].textContent = summary.total;
+                            summaryElements[1].textContent = summary.pve;
+                            if (backupsData.pbsEnabled && summaryElements.length >= 4) {
+                                summaryElements[2].textContent = summary.pbs;
+                                summaryElements[3].textContent = formatBytes(summary.totalSize);
+                            } else {
+                                summaryElements[2].textContent = formatBytes(summary.totalSize);
+                            }
+                        }
+                    } else {
+                        // First load - render full UI
+                        renderBackupsUI();
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching backups:', error);
+                // Only show error if we don't have data already
+                if (backupsData.unified.length === 0) {
+                    container.innerHTML = `
+                        <div class="p-8 text-center">
+                            <div class="text-red-500 dark:text-red-400">
+                                Failed to load backups data: ${error.message}
+                            </div>
+                            <button onclick="PulseApp.ui.backups.updateBackupsInfo()" class="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                                Retry
+                            </button>
+                        </div>
+                    `;
+                }
+            });
+    }
+
+    function renderBackupsUI() {
+        const container = document.getElementById('backups-content');
+        if (!container) return;
+
+        const summary = calculateSummary();
+        const uniqueNodes = getUniqueNodes();
+
+        container.innerHTML = `
+            <!-- Summary -->
+            <div class="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                        <div class="text-gray-600 dark:text-gray-400">Total Backups</div>
+                        <div class="text-xl font-semibold">${summary.total}</div>
+                    </div>
+                    <div>
+                        <div class="text-gray-600 dark:text-gray-400">PVE Backups</div>
+                        <div class="text-xl font-semibold text-orange-600">${summary.pve}</div>
+                    </div>
+                    ${backupsData.pbsEnabled ? `
+                        <div>
+                            <div class="text-gray-600 dark:text-gray-400">PBS Backups</div>
+                            <div class="text-xl font-semibold text-purple-600">${summary.pbs}</div>
+                        </div>
+                    ` : ''}
+                    <div>
+                        <div class="text-gray-600 dark:text-gray-400">Total Size</div>
+                        <div class="text-xl font-semibold">${formatBytes(summary.totalSize)}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="mb-3 p-2 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
+                <div class="flex flex-wrap items-center gap-3">
+                    <input type="search" id="backup-search" placeholder="Search by VMID or notes..." 
+                        value="${currentFilters.searchTerm}"
+                        class="flex-1 min-w-[200px] px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                    
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Type:</span>
+                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                            <input type="radio" id="backup-type-all" name="backup-type" value="all" class="hidden peer/all" ${currentFilters.backupType === 'all' ? 'checked' : ''}>
+                            <label for="backup-type-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-gray-100 dark:peer-checked/all:bg-gray-700 peer-checked/all:text-blue-600 dark:peer-checked/all:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                            
+                            <input type="radio" id="backup-type-pve" name="backup-type" value="pve" class="hidden peer/pve" ${currentFilters.backupType === 'pve' ? 'checked' : ''}>
+                            <label for="backup-type-pve" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/pve:bg-gray-100 dark:peer-checked/pve:bg-gray-700 peer-checked/pve:text-blue-600 dark:peer-checked/pve:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PVE</label>
+                            
+                            ${backupsData.pbsEnabled ? `
+                                <input type="radio" id="backup-type-pbs" name="backup-type" value="pbs" class="hidden peer/pbs" ${currentFilters.backupType === 'pbs' ? 'checked' : ''}>
+                                <label for="backup-type-pbs" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/pbs:bg-gray-100 dark:peer-checked/pbs:bg-gray-700 peer-checked/pbs:text-blue-600 dark:peer-checked/pbs:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">PBS</label>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    ${uniqueNodes.length > 1 ? `
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Node:</span>
+                            <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                                <input type="radio" id="node-all" name="backup-node" value="all" class="hidden peer/all" ${currentFilters.node === 'all' ? 'checked' : ''}>
+                                <label for="node-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-gray-100 dark:peer-checked/all:bg-gray-700 peer-checked/all:text-blue-600 dark:peer-checked/all:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                                
+                                ${uniqueNodes.map((node, idx) => `
+                                    <input type="radio" id="node-${node}" name="backup-node" value="${node}" class="hidden peer/${node}" ${currentFilters.node === node ? 'checked' : ''}>
+                                    <label for="node-${node}" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/${node}:bg-gray-100 dark:peer-checked/${node}:bg-gray-700 peer-checked/${node}:text-blue-600 dark:peer-checked/${node}:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">${node}</label>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- Backups Table -->
+            <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
+                <table class="w-full text-sm">
+                    <thead class="bg-gray-100 dark:bg-gray-700">
+                        <tr class="text-left text-xs">
+                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('vmid')">
+                                VMID <span class="sort-indicator"></span>
+                            </th>
+                            <th class="px-3 py-2">Name/Notes</th>
+                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('type')">
+                                Type <span class="sort-indicator"></span>
+                            </th>
+                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('node')">
+                                Node <span class="sort-indicator"></span>
+                            </th>
+                            <th class="px-3 py-2">Storage</th>
+                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('size')">
+                                Size <span class="sort-indicator"></span>
+                            </th>
+                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('ctime')">
+                                Age <span class="sort-indicator"></span>
+                            </th>
+                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('source')">
+                                Source <span class="sort-indicator"></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        ${renderBackupRows()}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        // Setup event listeners
+        setupEventListeners();
+    }
+
+    function calculateSummary() {
+        let total = 0;
+        let pve = 0;
+        let pbs = 0;
+        let totalSize = 0;
+
+        backupsData.unified.forEach(backup => {
+            total++;
+            totalSize += backup.size || 0;
+            if (backup.source === 'pve') {
+                pve++;
+            } else {
+                pbs++;
+            }
+        });
+
+        return { total, pve, pbs, totalSize };
+    }
+
+    function getUniqueNodes() {
+        const nodes = new Set();
+        backupsData.unified.forEach(backup => {
+            if (backup.node) nodes.add(backup.node);
+        });
+        return Array.from(nodes).sort();
+    }
+
+    function renderBackupRows() {
+        const filtered = filterBackups();
+        const sorted = sortBackups(filtered);
+        
+        if (sorted.length === 0) {
+            return `
+                <tr>
+                    <td colspan="8" class="px-3 py-8 text-center text-gray-500 dark:text-gray-400">
+                        No backups found
+                    </td>
+                </tr>
+            `;
+        }
+
+        return sorted.map(backup => {
+            const age = getRelativeTime(backup.ctime);
+            const typeLabel = backup.type === 'vm' ? 'VM' : 'CT';
+            const sourceColor = backup.source === 'pve' ? 'orange' : 'purple';
+            
+            return `
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                    <td class="px-3 py-2">${backup.vmid}</td>
+                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${backup.notes || '-'}</td>
+                    <td class="px-3 py-2">
+                        <span class="px-1.5 py-0.5 text-xs font-medium rounded ${
+                            backup.type === 'vm' 
+                                ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' 
+                                : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
+                        }">${typeLabel}</span>
+                    </td>
+                    <td class="px-3 py-2">${backup.node || '-'}</td>
+                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${backup.storage || backup.datastore || '-'}</td>
+                    <td class="px-3 py-2">${formatBytes(backup.size)}</td>
+                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${age}</td>
+                    <td class="px-3 py-2">
+                        <span class="inline-flex items-center gap-1">
+                            <span class="inline-block w-2 h-2 rounded-full bg-${sourceColor}-500"></span>
+                            <span class="text-xs">${backup.source.toUpperCase()}</span>
+                        </span>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function filterBackups() {
+        return backupsData.unified.filter(backup => {
+            // Type filter
+            if (currentFilters.backupType !== 'all') {
+                if (backup.source !== currentFilters.backupType) return false;
+            }
+            
+            // Node filter
+            if (currentFilters.node !== 'all') {
+                if (backup.node !== currentFilters.node) return false;
+            }
+            
+            // Search filter
+            if (currentFilters.searchTerm) {
+                const search = currentFilters.searchTerm.toLowerCase();
+                const vmidMatch = backup.vmid?.toString().includes(search);
+                const notesMatch = backup.notes?.toLowerCase().includes(search);
+                const nodeMatch = backup.node?.toLowerCase().includes(search);
+                const storageMatch = (backup.storage || backup.datastore || '').toLowerCase().includes(search);
+                if (!vmidMatch && !notesMatch && !nodeMatch && !storageMatch) return false;
+            }
+            
+            return true;
+        });
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function getRelativeTime(timestamp) {
+        if (!timestamp) return 'Unknown';
+        
+        const now = Date.now() / 1000;
+        const diff = now - timestamp;
+        
+        if (diff < 60) return 'Just now';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+        if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+        return new Date(timestamp * 1000).toLocaleDateString();
+    }
+
+    function setupEventListeners() {
+        // Search
+        const searchInput = document.getElementById('backup-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                currentFilters.searchTerm = e.target.value;
+                const tbody = document.querySelector('#backups-content tbody');
+                if (tbody) {
+                    tbody.innerHTML = renderBackupRows();
+                }
+            });
+        }
+        
+        // Type filter radio buttons
+        document.querySelectorAll('input[name="backup-type"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                currentFilters.backupType = e.target.value;
+                const tbody = document.querySelector('#backups-content tbody');
+                if (tbody) {
+                    tbody.innerHTML = renderBackupRows();
+                }
+            });
+        });
+        
+        // Node filter radio buttons
+        document.querySelectorAll('input[name="backup-node"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                currentFilters.node = e.target.value;
+                const tbody = document.querySelector('#backups-content tbody');
+                if (tbody) {
+                    tbody.innerHTML = renderBackupRows();
+                }
+            });
+        });
+    }
+
+    function sortBackups(backups) {
+        return backups.sort((a, b) => {
+            let aVal = a[currentSort.field];
+            let bVal = b[currentSort.field];
+            
+            // Handle numeric fields
+            if (currentSort.field === 'vmid') {
+                aVal = parseInt(aVal) || 0;
+                bVal = parseInt(bVal) || 0;
+            } else if (currentSort.field === 'ctime' || currentSort.field === 'size') {
+                aVal = aVal || 0;
+                bVal = bVal || 0;
+            } else {
+                // String fields
+                aVal = (aVal || '').toString().toLowerCase();
+                bVal = (bVal || '').toString().toLowerCase();
+            }
+            
+            if (aVal < bVal) return currentSort.ascending ? -1 : 1;
+            if (aVal > bVal) return currentSort.ascending ? 1 : -1;
+            return 0;
+        });
+    }
+    
+    function sortBy(field) {
+        if (currentSort.field === field) {
+            currentSort.ascending = !currentSort.ascending;
+        } else {
+            currentSort.field = field;
+            currentSort.ascending = true;
+        }
+        
+        const tbody = document.querySelector('#backups-content tbody');
+        if (tbody) {
+            tbody.innerHTML = renderBackupRows();
+        }
+        
+        // Update sort indicators
+        document.querySelectorAll('th .sort-indicator').forEach(indicator => {
+            indicator.textContent = '';
+        });
+        
+        const activeHeader = document.querySelector(`th[onclick*="${field}"] .sort-indicator`);
+        if (activeHeader) {
+            activeHeader.textContent = currentSort.ascending ? '▲' : '▼';
+        }
+    }
+
+    return {
+        init,
+        updateBackupsInfo,
+        sortBy
+    };
+})();

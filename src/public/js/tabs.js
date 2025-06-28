@@ -93,6 +93,18 @@ PulseApp.ui.tabs = (() => {
                 }
             }
 
+            if (tabId === 'snapshots') {
+                if (PulseApp.ui && PulseApp.ui.snapshots) {
+                    PulseApp.ui.snapshots.updateSnapshotsInfo();
+                }
+            }
+
+            if (tabId === 'backups') {
+                if (PulseApp.ui && PulseApp.ui.backups) {
+                    PulseApp.ui.backups.updateBackupsInfo();
+                }
+            }
+
             if (tabId === 'pbs') {
                 if (PulseApp.ui && PulseApp.ui.pbs) {
                     const pbsDataArray = PulseApp.state.get('pbsDataArray') || [];
@@ -393,6 +405,16 @@ PulseApp.ui.tabs = (() => {
             case 'storage':
                 if (PulseApp.ui && PulseApp.ui.storage) {
                     // Storage data is already fetched, just update the UI
+                }
+                break;
+            case 'snapshots':
+                if (PulseApp.ui && PulseApp.ui.snapshots) {
+                    PulseApp.ui.snapshots.init();
+                }
+                break;
+            case 'backups':
+                if (PulseApp.ui && PulseApp.ui.backups) {
+                    PulseApp.ui.backups.init();
                 }
                 break;
             case 'pbs':
