@@ -173,14 +173,14 @@ PulseApp.ui.backups = (() => {
                 <table class="w-full text-xs sm:text-sm">
                     <thead class="bg-gray-100 dark:bg-gray-800">
                         <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
-                            <th class="sortable p-1 px-2" data-sort="vmid">VMID</th>
-                            <th class="p-1 px-2">Name/Notes</th>
-                            <th class="sortable p-1 px-2" data-sort="type">Type</th>
-                            <th class="sortable p-1 px-2" data-sort="node">Node</th>
-                            <th class="p-1 px-2">Storage</th>
-                            <th class="sortable p-1 px-2" data-sort="size">Size</th>
-                            <th class="sortable p-1 px-2" data-sort="ctime">Age</th>
-                            <th class="sortable p-1 px-2" data-sort="source">Source</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="vmid">VMID</th>
+                            <th class="p-1 px-2 whitespace-nowrap">Name/Notes</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="type">Type</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="node">Node</th>
+                            <th class="p-1 px-2 whitespace-nowrap">Storage</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="size">Size</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="ctime">Age</th>
+                            <th class="sortable p-1 px-2 whitespace-nowrap" data-sort="source">Source</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -266,8 +266,8 @@ PulseApp.ui.backups = (() => {
                     </td>
                     <td class="p-1 px-2 align-middle">${backup.node || '-'}</td>
                     <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">${backup.storage || backup.datastore || '-'}</td>
-                    <td class="p-1 px-2 align-middle">${formatBytes(backup.size)}</td>
-                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">${age}</td>
+                    <td class="p-1 px-2 align-middle whitespace-nowrap">${formatBytes(backup.size)}</td>
+                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400 whitespace-nowrap">${age}</td>
                     <td class="p-1 px-2 align-middle">
                         <span class="inline-flex items-center gap-1">
                             <span class="inline-block w-2 h-2 rounded-full bg-${sourceColor}-500"></span>
@@ -306,11 +306,13 @@ PulseApp.ui.backups = (() => {
     }
 
     function formatBytes(bytes) {
-        if (!bytes || bytes === 0) return '0 B';
+        if (!bytes || bytes === 0) return '0\u00A0B';
         const k = 1024;
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        const value = parseFloat((bytes / Math.pow(k, i)).toFixed(2));
+        // Use non-breaking space to prevent wrapping between number and unit
+        return value + '\u00A0' + sizes[i];
     }
 
     function getRelativeTime(timestamp) {
@@ -319,10 +321,10 @@ PulseApp.ui.backups = (() => {
         const now = Date.now() / 1000;
         const diff = now - timestamp;
         
-        if (diff < 60) return 'Just now';
-        if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
-        if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
-        if (diff < 604800) return Math.floor(diff / 86400) + 'd ago';
+        if (diff < 60) return 'Just\u00A0now';
+        if (diff < 3600) return Math.floor(diff / 60) + 'm\u00A0ago';
+        if (diff < 86400) return Math.floor(diff / 3600) + 'h\u00A0ago';
+        if (diff < 604800) return Math.floor(diff / 86400) + 'd\u00A0ago';
         return new Date(timestamp * 1000).toLocaleDateString();
     }
 
