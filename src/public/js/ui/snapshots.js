@@ -128,32 +128,20 @@ PulseApp.ui.snapshots = (() => {
             </div>
 
             <!-- Snapshots Table -->
-            <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded">
-                <table class="w-full text-sm">
-                    <thead class="bg-gray-100 dark:bg-gray-700">
-                        <tr class="text-left text-xs">
-                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('vmid')">
-                                VMID <span class="sort-indicator"></span>
-                            </th>
-                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('name')">
-                                Guest Name <span class="sort-indicator"></span>
-                            </th>
-                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('type')">
-                                Type <span class="sort-indicator"></span>
-                            </th>
-                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('snapname')">
-                                Snapshot Name <span class="sort-indicator"></span>
-                            </th>
-                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('node')">
-                                Node <span class="sort-indicator"></span>
-                            </th>
-                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('snaptime')">
-                                Age <span class="sort-indicator"></span>
-                            </th>
+            <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
+                <table class="w-full text-xs sm:text-sm">
+                    <thead class="bg-gray-100 dark:bg-gray-800">
+                        <tr class="text-[10px] sm:text-xs font-medium tracking-wider text-left text-gray-600 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-300 border-b border-gray-300 dark:border-gray-600">
+                            <th class="sortable p-1 px-2" data-sort="vmid">VMID</th>
+                            <th class="sortable p-1 px-2" data-sort="name">Guest Name</th>
+                            <th class="sortable p-1 px-2" data-sort="type">Type</th>
+                            <th class="sortable p-1 px-2" data-sort="snapname">Snapshot Name</th>
+                            <th class="sortable p-1 px-2" data-sort="node">Node</th>
+                            <th class="sortable p-1 px-2" data-sort="snaptime">Age</th>
                             <th class="p-1 px-2">Description</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    <tbody>
                         ${renderSnapshotRows()}
                     </tbody>
                 </table>
@@ -162,6 +150,19 @@ PulseApp.ui.snapshots = (() => {
 
         // Setup event listeners
         setupEventListeners();
+        
+        // Setup sortable headers
+        const table = document.querySelector('#snapshots-content table');
+        if (table) {
+            table.id = 'snapshots-table';
+            table.querySelectorAll('th.sortable').forEach(th => {
+                th.style.cursor = 'pointer';
+                th.addEventListener('click', () => {
+                    const field = th.getAttribute('data-sort');
+                    if (field) sortBy(field);
+                });
+            });
+        }
     }
 
     function calculateSummary() {
@@ -195,20 +196,20 @@ PulseApp.ui.snapshots = (() => {
             const typeLabel = snapshot.type === 'qemu' ? 'VM' : 'LXC';
             
             return `
-                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td class="p-1 px-2">${snapshot.vmid}</td>
-                    <td class="p-1 px-2">${snapshot.name}</td>
-                    <td class="p-1 px-2">
+                <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td class="p-1 px-2 align-middle">${snapshot.vmid}</td>
+                    <td class="p-1 px-2 align-middle">${snapshot.name}</td>
+                    <td class="p-1 px-2 align-middle">
                         <span class="px-1.5 py-0.5 text-xs font-medium rounded ${
                             snapshot.type === 'qemu' 
                                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' 
                                 : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                         }">${typeLabel}</span>
                     </td>
-                    <td class="p-1 px-2">${snapshot.snapname}</td>
-                    <td class="p-1 px-2">${snapshot.node}</td>
-                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400">${age}</td>
-                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400">${snapshot.description || '-'}</td>
+                    <td class="p-1 px-2 align-middle">${snapshot.snapname}</td>
+                    <td class="p-1 px-2 align-middle">${snapshot.node}</td>
+                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">${age}</td>
+                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">${snapshot.description || '-'}</td>
                 </tr>
             `;
         }).join('');
@@ -348,14 +349,16 @@ PulseApp.ui.snapshots = (() => {
             tbody.innerHTML = renderSnapshotRows();
         }
         
-        // Update sort indicators
-        document.querySelectorAll('th .sort-indicator').forEach(indicator => {
-            indicator.textContent = '';
-        });
-        
-        const activeHeader = document.querySelector(`th[onclick*="${field}"] .sort-indicator`);
-        if (activeHeader) {
-            activeHeader.textContent = currentSort.ascending ? '▲' : '▼';
+        // Update sort UI using common function
+        const table = document.querySelector('#snapshots-content table');
+        if (table && PulseApp.ui.common) {
+            const clickedHeader = table.querySelector(`th[data-sort="${field}"]`);
+            if (clickedHeader) {
+                // Create a temporary table element with ID for common.js compatibility
+                table.id = 'snapshots-table';
+                PulseApp.state.setSortState('snapshots', field, currentSort.ascending ? 'asc' : 'desc');
+                PulseApp.ui.common.updateSortUI('snapshots-table', clickedHeader, 'snapshots');
+            }
         }
     }
 
