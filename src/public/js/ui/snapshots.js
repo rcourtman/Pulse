@@ -94,11 +94,11 @@ PulseApp.ui.snapshots = (() => {
             <div class="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
                 <div class="grid grid-cols-2 gap-4 text-sm">
                     <div>
-                        <div class="text-gray-600 dark:text-gray-400">Active Snapshots</div>
+                        <div class="text-gray-500 dark:text-gray-400">Active Snapshots</div>
                         <div class="text-xl font-semibold">${summary.totalCount}</div>
                     </div>
                     <div>
-                        <div class="text-gray-600 dark:text-gray-400">Guests with Snapshots</div>
+                        <div class="text-gray-500 dark:text-gray-400">Guests with Snapshots</div>
                         <div class="text-xl font-semibold">${summary.uniqueGuests}</div>
                     </div>
                 </div>
@@ -112,7 +112,7 @@ PulseApp.ui.snapshots = (() => {
                         class="flex-1 min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
                     
                     <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Type:</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
                         <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                             <input type="radio" id="type-all" name="guest-type" value="all" class="hidden peer/all" ${currentFilters.guestType === 'all' ? 'checked' : ''}>
                             <label for="type-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-gray-100 dark:peer-checked/all:bg-gray-700 peer-checked/all:text-blue-600 dark:peer-checked/all:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
@@ -216,8 +216,8 @@ PulseApp.ui.snapshots = (() => {
                         </div>
                     </td>
                     <td class="p-1 px-2 align-middle">${snapshot.node}</td>
-                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400 whitespace-nowrap">${age}</td>
-                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">
+                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400 whitespace-nowrap">${age}</td>
+                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400">
                         <div class="max-w-[120px] sm:max-w-[200px] lg:max-w-[300px] truncate" title="${snapshot.description || ''}">
                             ${snapshot.description || '-'}
                         </div>

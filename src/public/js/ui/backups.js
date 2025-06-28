@@ -108,21 +108,21 @@ PulseApp.ui.backups = (() => {
             <div class="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
-                        <div class="text-gray-600 dark:text-gray-400">Total Backups</div>
+                        <div class="text-gray-500 dark:text-gray-400">Total Backups</div>
                         <div class="text-xl font-semibold">${summary.total}</div>
                     </div>
                     <div>
-                        <div class="text-gray-600 dark:text-gray-400">PVE Backups</div>
+                        <div class="text-gray-500 dark:text-gray-400">PVE Backups</div>
                         <div class="text-xl font-semibold text-orange-600">${summary.pve}</div>
                     </div>
                     ${backupsData.pbsEnabled ? `
                         <div>
-                            <div class="text-gray-600 dark:text-gray-400">PBS Backups</div>
+                            <div class="text-gray-500 dark:text-gray-400">PBS Backups</div>
                             <div class="text-xl font-semibold text-purple-600">${summary.pbs}</div>
                         </div>
                     ` : ''}
                     <div>
-                        <div class="text-gray-600 dark:text-gray-400">Total Size</div>
+                        <div class="text-gray-500 dark:text-gray-400">Total Size</div>
                         <div class="text-xl font-semibold">${formatBytes(summary.totalSize)}</div>
                     </div>
                 </div>
@@ -136,7 +136,7 @@ PulseApp.ui.backups = (() => {
                         class="flex-1 min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
                     
                     <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Type:</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
                         <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                             <input type="radio" id="backup-type-all" name="backup-type" value="all" class="hidden peer/all" ${currentFilters.backupType === 'all' ? 'checked' : ''}>
                             <label for="backup-type-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-gray-100 dark:peer-checked/all:bg-gray-700 peer-checked/all:text-blue-600 dark:peer-checked/all:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
@@ -153,7 +153,7 @@ PulseApp.ui.backups = (() => {
                     
                     ${uniqueNodes.length > 1 ? `
                         <div class="flex items-center gap-2">
-                            <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Node:</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Node:</span>
                             <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                                 <input type="radio" id="node-all" name="backup-node" value="all" class="hidden peer/all" ${currentFilters.node === 'all' ? 'checked' : ''}>
                                 <label for="node-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/all:bg-gray-100 dark:peer-checked/all:bg-gray-700 peer-checked/all:text-blue-600 dark:peer-checked/all:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
@@ -256,7 +256,7 @@ PulseApp.ui.backups = (() => {
             return `
                 <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                     <td class="p-1 px-2 align-middle">${backup.vmid}</td>
-                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">
+                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400">
                         <div class="max-w-[120px] sm:max-w-[200px] lg:max-w-[300px] truncate" title="${backup.notes || ''}">
                             ${backup.notes || '-'}
                         </div>
@@ -269,9 +269,9 @@ PulseApp.ui.backups = (() => {
                         }">${typeLabel}</span>
                     </td>
                     <td class="p-1 px-2 align-middle">${backup.node || '-'}</td>
-                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400">${backup.storage || backup.datastore || '-'}</td>
+                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400">${backup.storage || backup.datastore || '-'}</td>
                     <td class="p-1 px-2 align-middle whitespace-nowrap">${formatBytes(backup.size)}</td>
-                    <td class="p-1 px-2 align-middle text-gray-600 dark:text-gray-400 whitespace-nowrap">${age}</td>
+                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400 whitespace-nowrap">${age}</td>
                     <td class="p-1 px-2 align-middle">
                         <span class="inline-flex items-center gap-1">
                             <span class="inline-block w-2 h-2 rounded-full bg-${sourceColor}-500"></span>
