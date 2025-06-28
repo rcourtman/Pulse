@@ -1,8 +1,53 @@
 [
   {
+    "name": "plexguide/Huntarr.io",
+    "version": "8.1.10",
+    "date": "2025-06-27T23:24:52Z"
+  },
+  {
+    "name": "pocket-id/pocket-id",
+    "version": "v1.5.0",
+    "date": "2025-06-27T22:04:32Z"
+  },
+  {
+    "name": "linkwarden/linkwarden",
+    "version": "v2.11.1",
+    "date": "2025-06-27T21:21:59Z"
+  },
+  {
+    "name": "homarr-labs/homarr",
+    "version": "v1.26.0",
+    "date": "2025-06-27T19:15:24Z"
+  },
+  {
+    "name": "ollama/ollama",
+    "version": "v0.9.4-rc2",
+    "date": "2025-06-27T18:45:33Z"
+  },
+  {
+    "name": "home-assistant/core",
+    "version": "2025.6.3",
+    "date": "2025-06-24T13:00:12Z"
+  },
+  {
+    "name": "mattermost/mattermost",
+    "version": "preview-v0.1",
+    "date": "2025-06-27T14:35:47Z"
+  },
+  {
+    "name": "goauthentik/authentik",
+    "version": "version/2025.6.3",
+    "date": "2025-06-27T14:01:06Z"
+  },
+  {
     "name": "rclone/rclone",
     "version": "v1.70.2",
-    "date": "2025-06-27T11:30:28Z"
+    "date": "2025-06-27T13:21:17Z"
+  },
+  {
+    "name": "documenso/documenso",
+    "version": "v1.12.0-rc.7",
+    "date": "2025-06-27T12:17:45Z"
   },
   {
     "name": "sabnzbd/sabnzbd",
@@ -20,19 +65,9 @@
     "date": "2025-06-27T09:14:14Z"
   },
   {
-    "name": "documenso/documenso",
-    "version": "v1.12.0-rc.5",
-    "date": "2025-06-27T08:53:45Z"
-  },
-  {
     "name": "cockpit-project/cockpit",
     "version": "341.1",
     "date": "2025-06-27T08:50:16Z"
-  },
-  {
-    "name": "home-assistant/core",
-    "version": "2025.6.3",
-    "date": "2025-06-24T13:00:12Z"
   },
   {
     "name": "zabbix/zabbix",
@@ -43,11 +78,6 @@
     "name": "Jackett/Jackett",
     "version": "v0.22.2064",
     "date": "2025-06-27T05:54:03Z"
-  },
-  {
-    "name": "ollama/ollama",
-    "version": "v0.9.3-rc5",
-    "date": "2025-06-26T04:47:09Z"
   },
   {
     "name": "MediaBrowser/Emby.Releases",
@@ -110,11 +140,6 @@
     "date": "2025-06-26T14:23:26Z"
   },
   {
-    "name": "plexguide/Huntarr.io",
-    "version": "8.1.9",
-    "date": "2025-06-26T14:16:45Z"
-  },
-  {
     "name": "Dolibarr/dolibarr",
     "version": "18.0.7",
     "date": "2025-06-26T09:16:33Z"
@@ -168,11 +193,6 @@
     "name": "bunkerity/bunkerweb",
     "version": "testing",
     "date": "2025-06-16T18:10:42Z"
-  },
-  {
-    "name": "mattermost/mattermost",
-    "version": "v9.11.17",
-    "date": "2025-06-18T08:12:05Z"
   },
   {
     "name": "n8n-io/n8n",
@@ -241,8 +261,8 @@
   },
   {
     "name": "runtipi/runtipi",
-    "version": "v4.2.1",
-    "date": "2025-06-03T20:04:28Z"
+    "version": "nightly",
+    "date": "2025-06-23T19:10:33Z"
   },
   {
     "name": "VictoriaMetrics/VictoriaMetrics",
@@ -268,11 +288,6 @@
     "name": "qbittorrent/qBittorrent",
     "version": "release-5.1.1",
     "date": "2025-06-22T21:41:17Z"
-  },
-  {
-    "name": "pocket-id/pocket-id",
-    "version": "v1.4.1",
-    "date": "2025-06-22T19:38:08Z"
   },
   {
     "name": "clusterzx/paperless-ai",
@@ -328,11 +343,6 @@
     "name": "immich-app/immich",
     "version": "v1.135.3",
     "date": "2025-06-20T20:19:20Z"
-  },
-  {
-    "name": "homarr-labs/homarr",
-    "version": "v1.25.0",
-    "date": "2025-06-20T19:15:43Z"
   },
   {
     "name": "Sonarr/Sonarr",
@@ -473,11 +483,6 @@
     "name": "kimai/kimai",
     "version": "2.36.1",
     "date": "2025-06-16T19:20:54Z"
-  },
-  {
-    "name": "goauthentik/authentik",
-    "version": "version/2025.6.2",
-    "date": "2025-06-16T17:54:39Z"
   },
   {
     "name": "emqx/emqx",
@@ -893,11 +898,6 @@
     "name": "garethgeorge/backrest",
     "version": "v1.8.1",
     "date": "2025-05-06T04:27:00Z"
-  },
-  {
-    "name": "linkwarden/linkwarden",
-    "version": "v2.10.2",
-    "date": "2025-05-06T03:12:53Z"
   },
   {
     "name": "postgres/postgres",
