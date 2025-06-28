@@ -190,7 +190,13 @@ PulseApp.ui.pbs = (() => {
             });
         }
         
-        return Array.from(namespaces).sort();
+        return Array.from(namespaces).sort((a, b) => {
+            // Always put 'root' first
+            if (a === 'root') return -1;
+            if (b === 'root') return 1;
+            // Otherwise sort alphabetically
+            return a.localeCompare(b);
+        });
     }
 
     // Create namespace tabs
@@ -199,34 +205,51 @@ PulseApp.ui.pbs = (() => {
         container.className = 'mb-4';
         
         const wrapper = document.createElement('div');
-        wrapper.className = 'flex items-center gap-3';
+        wrapper.className = 'flex items-center gap-2';
         
         const label = document.createElement('span');
-        label.className = 'text-sm font-medium text-gray-600 dark:text-gray-400';
+        label.className = 'text-xs text-gray-500 dark:text-gray-400 font-medium';
         label.textContent = 'Namespace:';
         wrapper.appendChild(label);
         
-        const tabsDiv = document.createElement('div');
-        tabsDiv.className = 'flex flex-wrap gap-2';
+        const segmentedControl = document.createElement('div');
+        segmentedControl.className = 'segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden';
         
         const selectedNamespace = state.selectedNamespaceByInstance.get(state.activeInstanceIndex) || 'root';
+        const instanceId = state.activeInstanceIndex;
         
-        namespaces.forEach(namespace => {
-            const tab = document.createElement('button');
-            tab.className = namespace === selectedNamespace ?
-                'px-3 py-1 text-sm font-medium text-white bg-blue-600 rounded' :
-                'px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded';
-            tab.textContent = namespace;
+        namespaces.forEach((namespace, idx) => {
+            const safeId = `pbs-namespace-${instanceId}-${namespace.replace(/[^a-zA-Z0-9]/g, '-')}`;
             
-            tab.addEventListener('click', () => {
-                state.selectedNamespaceByInstance.set(state.activeInstanceIndex, namespace);
-                renderActiveInstance();
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.id = safeId;
+            input.name = `pbs-namespace-${instanceId}`;
+            input.value = namespace;
+            input.className = `hidden peer/${safeId}`;
+            input.checked = namespace === selectedNamespace;
+            
+            const label = document.createElement('label');
+            label.htmlFor = safeId;
+            label.className = 'flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 ' +
+                (idx > 0 ? 'border-l border-gray-300 dark:border-gray-600 ' : '') +
+                `peer-checked/${safeId}:bg-gray-100 dark:peer-checked/${safeId}:bg-gray-700 ` +
+                `peer-checked/${safeId}:text-blue-600 dark:peer-checked/${safeId}:text-blue-400 ` +
+                'hover:bg-gray-50 dark:hover:bg-gray-700 select-none';
+            label.textContent = namespace;
+            
+            input.addEventListener('change', () => {
+                if (input.checked) {
+                    state.selectedNamespaceByInstance.set(state.activeInstanceIndex, namespace);
+                    renderActiveInstance();
+                }
             });
             
-            tabsDiv.appendChild(tab);
+            segmentedControl.appendChild(input);
+            segmentedControl.appendChild(label);
         });
         
-        wrapper.appendChild(tabsDiv);
+        wrapper.appendChild(segmentedControl);
         container.appendChild(wrapper);
         return container;
     }
@@ -478,7 +501,7 @@ PulseApp.ui.pbs = (() => {
         
         // Task type cell
         const typeCell = document.createElement('td');
-        typeCell.className = 'p-1 px-2 font-semibold text-gray-800 dark:text-gray-200';
+        typeCell.className = 'p-1 px-2 font-semibold text-gray-700 dark:text-gray-300';
         typeCell.textContent = taskType;
         row.appendChild(typeCell);
         
@@ -1409,16 +1432,16 @@ PulseApp.ui.pbs = (() => {
             const verified = snap.verification ? '✓' : '-';
             
             row.innerHTML = `
-                <td class="py-2 pr-4">
+                <td class="py-2 pr-4 text-gray-700 dark:text-gray-300">
                     <span class="font-medium">${guestType} ${guestId}</span>
                 </td>
-                <td class="py-2 px-4 text-gray-600 dark:text-gray-400">
+                <td class="py-2 px-4 text-gray-700 dark:text-gray-300">
                     ${time.toLocaleString()}
                 </td>
-                <td class="py-2 px-4">${size}</td>
-                <td class="py-2 px-4 text-gray-600 dark:text-gray-400">${snap.owner || '-'}</td>
-                <td class="py-2 px-4">${snap.datastore}</td>
-                <td class="py-2 px-4 text-center">${verified}</td>
+                <td class="py-2 px-4 text-gray-700 dark:text-gray-300">${size}</td>
+                <td class="py-2 px-4 text-gray-700 dark:text-gray-300">${snap.owner || '-'}</td>
+                <td class="py-2 px-4 text-gray-700 dark:text-gray-300">${snap.datastore}</td>
+                <td class="py-2 px-4 text-center text-gray-700 dark:text-gray-300">${verified}</td>
             `;
             
             tbody.appendChild(row);
@@ -1695,9 +1718,32 @@ PulseApp.ui.pbs = (() => {
         document.body.appendChild(overlay);
     }
     
+    function resetToDefaults() {
+        // Reset time range to default (7 days)
+        state.selectedTimeRange = '7d';
+        const timeRangeSelector = document.getElementById('pbs-time-range-selector');
+        if (timeRangeSelector) {
+            timeRangeSelector.value = '7d';
+        }
+        
+        // Reset to first PBS instance
+        if (state.pbsData.length > 1) {
+            state.activeInstanceIndex = 0;
+            switchInstance(0);
+        }
+        
+        // Reset namespace selections to root for all instances
+        state.selectedNamespaceByInstance.clear();
+        state.selectedNamespace = 'root';
+        
+        // Re-render the active instance with default settings
+        renderActiveInstance();
+    }
+
     // Public API
     return {
         init,
-        updatePbsInfo
+        updatePbsInfo,
+        resetToDefaults
     };
 })();

@@ -123,11 +123,7 @@ PulseApp.ui.common = (() => {
 
             // Handle Escape key
             if (event.key === 'Escape') {
-                const mainTab = document.getElementById('main');
-                
-                if (mainTab && !mainTab.classList.contains('hidden')) {
-                    resetDashboardView();
-                }
+                handleEscapeKey();
             } 
             // Handle Enter key in search inputs
             else if (isSearchInputFocused && event.key === 'Enter') {
@@ -239,6 +235,7 @@ PulseApp.ui.common = (() => {
           th.setAttribute('tabindex', '0');
           th.setAttribute('role', 'button');
           th.setAttribute('aria-label', `Sort by ${th.textContent.trim()}`);
+          
           
           const handleSort = () => {
             const column = th.getAttribute('data-sort');
@@ -375,11 +372,14 @@ PulseApp.ui.common = (() => {
             tag = 'td',
             title = '',
             additionalClasses = '',
-            padding = 'py-1 px-2'
+            padding = 'py-1 px-2',
+            includeTextColor = true
         } = options;
         
         const element = document.createElement(tag);
-        element.className = `sticky left-0 z-10 ${padding} align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 ${additionalClasses}`.trim();
+        // Add grey text color for td elements unless already has text color or disabled
+        const textColorClass = includeTextColor && tag === 'td' && !additionalClasses.includes('text-') ? 'text-gray-700 dark:text-gray-300' : '';
+        element.className = `sticky left-0 z-10 ${padding} align-middle whitespace-nowrap overflow-hidden text-ellipsis max-w-0 ${textColorClass} ${additionalClasses}`.trim();
         
         if (title) {
             element.title = title;
@@ -394,11 +394,67 @@ PulseApp.ui.common = (() => {
         return element;
     }
     
-    function createTableCell(content, classes = 'py-1 px-2 align-middle') {
+    function createTableCell(content, classes = 'py-1 px-2 align-middle', includeTextColor = true) {
         const cell = document.createElement('td');
-        cell.className = classes;
+        // Add default grey text color unless explicitly disabled
+        const textColorClass = includeTextColor && !classes.includes('text-') ? 'text-gray-700 dark:text-gray-300' : '';
+        cell.className = `${classes} ${textColorClass}`.trim();
         cell.innerHTML = content;
         return cell;
+    }
+
+    function handleEscapeKey() {
+        // Determine which tab is active
+        const activeTabContent = document.querySelector('.tab-content:not(.hidden)');
+        if (!activeTabContent) return;
+        
+        const activeTabId = activeTabContent.id;
+        
+        switch (activeTabId) {
+            case 'main':
+                // Dashboard tab
+                resetDashboardView();
+                break;
+                
+            case 'storage':
+                // Storage tab - reset sorting
+                if (PulseApp.ui.storage && PulseApp.ui.storage.resetSort) {
+                    PulseApp.ui.storage.resetSort();
+                }
+                break;
+                
+            case 'backups':
+                // Backups tab - reset search, filters, and sorting
+                if (PulseApp.ui.backups && PulseApp.ui.backups.resetFiltersAndSort) {
+                    PulseApp.ui.backups.resetFiltersAndSort();
+                }
+                break;
+                
+            case 'snapshots':
+                // Snapshots tab - reset search, filters, and sorting
+                if (PulseApp.ui.snapshots && PulseApp.ui.snapshots.resetFiltersAndSort) {
+                    PulseApp.ui.snapshots.resetFiltersAndSort();
+                }
+                break;
+                
+            case 'pbs':
+                // PBS tab - reset time range and selections
+                if (PulseApp.ui.pbs && PulseApp.ui.pbs.resetToDefaults) {
+                    PulseApp.ui.pbs.resetToDefaults();
+                }
+                break;
+                
+            case 'nodes':
+                // Nodes tab - reset sorting if available
+                if (PulseApp.ui.nodes && PulseApp.ui.nodes.resetSort) {
+                    PulseApp.ui.nodes.resetSort();
+                }
+                break;
+                
+            case 'settings':
+                // Settings tab - nothing to reset
+                break;
+        }
     }
 
     return {

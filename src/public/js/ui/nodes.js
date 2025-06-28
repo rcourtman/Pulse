@@ -51,7 +51,7 @@ PulseApp.ui.nodes = (() => {
         }
 
         row.innerHTML = `
-            <td class="p-1 px-2 whitespace-nowrap">
+            <td class="p-1 px-2 whitespace-nowrap text-gray-700 dark:text-gray-300">
               <span class="flex items-center">
                 <span class="h-2.5 w-2.5 rounded-full ${statusColor} mr-2 flex-shrink-0"></span>
                 <span class="capitalize">${statusText}</span>
@@ -61,8 +61,8 @@ PulseApp.ui.nodes = (() => {
             <td class="p-1 px-2 min-w-[200px]">${cpuContent}</td>
             <td class="p-1 px-2 min-w-[200px]">${memoryContent}</td>
             <td class="p-1 px-2 min-w-[200px]">${diskContent}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${uptimeFormatted}</td>
-            <td class="p-1 px-2 whitespace-nowrap">${normalizedLoadFormatted}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-700 dark:text-gray-300">${uptimeFormatted}</td>
+            <td class="p-1 px-2 whitespace-nowrap text-gray-700 dark:text-gray-300">${normalizedLoadFormatted}</td>
         `;
         return row;
     }

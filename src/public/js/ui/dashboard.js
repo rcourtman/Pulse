@@ -1244,16 +1244,16 @@ PulseApp.ui.dashboard = (() => {
                     ${nodeNameContent}
                 </div>
             </td>
-            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">NODE</td>
-            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
-            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">${PulseApp.utils.formatUptime(node.uptime || 0)}</td>
+            <td class="py-1 px-2 text-gray-700 dark:text-gray-300">NODE</td>
+            <td class="py-1 px-2 text-gray-700 dark:text-gray-300">-</td>
+            <td class="py-1 px-2 text-gray-700 dark:text-gray-300">${PulseApp.utils.formatUptime(node.uptime || 0)}</td>
             <td class="py-1 px-2 min-w-[160px]">${cpuContent}</td>
             <td class="py-1 px-2 min-w-[160px]">${memContent}</td>
             <td class="py-1 px-2 min-w-[160px]">${diskContent}</td>
-            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
-            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
-            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
-            <td class="py-1 px-2 text-gray-500 dark:text-gray-400">-</td>
+            <td class="py-1 px-2 text-gray-700 dark:text-gray-300">-</td>
+            <td class="py-1 px-2 text-gray-700 dark:text-gray-300">-</td>
+            <td class="py-1 px-2 text-gray-700 dark:text-gray-300">-</td>
+            <td class="py-1 px-2 text-gray-700 dark:text-gray-300">-</td>
         `;
         
         return row;
@@ -1291,7 +1291,7 @@ PulseApp.ui.dashboard = (() => {
             `;
         } else {
             if (guest.diskTotal) {
-                return `<span class="text-xs text-gray-700 dark:text-gray-200 truncate">${PulseApp.utils.formatBytes(guest.diskTotal)}</span>`;
+                return `<span class="text-xs text-gray-700 dark:text-gray-300 truncate">${PulseApp.utils.formatBytes(guest.diskTotal)}</span>`;
             }
             return '-';
         }

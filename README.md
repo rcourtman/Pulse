@@ -10,6 +10,8 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 
 ### 📸 Screenshots
 
+> **Note:** Some screenshots may not reflect the latest UI updates in v3.33.0, particularly the new separated Snapshots and Backups tabs. New screenshots will be added in the next update.
+
 <details>
 <summary><strong>Click to view more screenshots</strong></summary>
 
@@ -17,20 +19,20 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <div align="center">
 <table>
 <tr>
-<td align="center"><strong>PBS Tab</strong></td>
-<td align="center"><strong>Backups Tab</strong></td>
-</tr>
-<tr>
-<td><img src="docs/images/02-pbs-view.png" alt="PBS View" width="400"/></td>
-<td><img src="docs/images/03-backups-view.png" alt="Backups View" width="400"/></td>
-</tr>
-<tr>
 <td align="center"><strong>Storage Tab</strong></td>
-<td align="center"><strong>Line Graph Toggle</strong></td>
+<td align="center"><strong>PBS Tab</strong></td>
 </tr>
 <tr>
 <td><img src="docs/images/04-storage-view.png" alt="Storage View" width="400"/></td>
+<td><img src="docs/images/02-pbs-view.png" alt="PBS View" width="400"/></td>
+</tr>
+<tr>
+<td align="center"><strong>Line Graph Toggle</strong></td>
+<td align="center"><strong>Dashboard View</strong></td>
+</tr>
+<tr>
 <td><img src="docs/images/05-line-graph-toggle.png" alt="Line Graph Toggle View" width="400"/></td>
+<td><img src="docs/images/01-dashboard.png" alt="Dashboard" width="400"/></td>
 </tr>
 </table>
 </div>
@@ -41,12 +43,10 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 <tr>
 <td align="center"><strong>Mobile Dashboard</strong></td>
 <td align="center"><strong>Mobile PBS View</strong></td>
-<td align="center"><strong>Mobile Backups View</strong></td>
 </tr>
 <tr>
 <td><img src="docs/images/06-mobile-dashboard.png" alt="Mobile Dashboard" width="250"/></td>
 <td><img src="docs/images/07-mobile-pbs-view.png" alt="Mobile PBS View" width="250"/></td>
-<td><img src="docs/images/08-mobile-backups-view.png" alt="Mobile Backups View" width="250"/></td>
 </tr>
 </table>
 </div>
@@ -54,6 +54,26 @@ A lightweight monitoring application for Proxmox VE that displays real-time stat
 </details>
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/rcourtman)
+
+## 🚀 Recent Major Updates (v3.33.0)
+
+### Backup System Overhaul
+- **Separated Tabs**: Snapshots and Backups now have dedicated tabs for cleaner organization
+- **Simplified UI**: Replaced complex cards with efficient table-based design
+- **Enhanced Performance**: Unified API endpoints and WebSocket updates without UI flashing
+- **Better Search**: Real-time search and column sorting across all backup data
+
+### Code Quality Improvements
+- Major codebase refactoring and cleanup
+- Reduced code duplication with shared utilities
+- Improved type safety and error handling
+- Modularized server architecture
+
+### UI/UX Enhancements
+- Standardized table styling across all tabs
+- Improved mobile responsiveness
+- Consistent filter and toggle designs
+- Fixed keyboard input capture issues
 
 ## 🚀 Quick Start
 
@@ -580,6 +600,12 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - Simple, responsive web interface with dark/light theme support
 - Multi-environment PVE monitoring support (monitor multiple clusters/sites)
 - Efficient polling: Stops API polling when no clients are connected
+- **Organized tab structure:**
+  - **Main**: Dashboard with VM/CT status overview
+  - **Storage**: Storage usage and health monitoring
+  - **Snapshots**: VM/CT snapshot management (NEW)
+  - **Backups**: Full backup monitoring for PBS and PVE
+  - **PBS**: Proxmox Backup Server status and tasks
 
 ### Advanced Alert System
 - **Configurable alert thresholds** for CPU, Memory, Disk, and VM/CT availability
@@ -609,6 +635,7 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Automatic Backup & Restore** of configuration during updates
 - **Context-Aware Updates** showing exactly what changes with each version switch
 - **Dual Update Channels** with persistent preference management
+- **Current Version**: v3.33.0 (Development) - Latest stable: v3.32.0
 
 #### Update Channels
 - **Stable Channel**: Production-ready releases (e.g., v3.27.1)
@@ -623,32 +650,40 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - **Smart Switching**: See exact commit differences when switching between channels
 
 ### Backup Monitoring
-- **Comprehensive backup monitoring:**
-  - Proxmox Backup Server (PBS) snapshots and tasks
-  - PVE backup files on local and shared storage
-  - VM/CT snapshot tracking with calendar heatmap visualization
-- **Enhanced backup health card** with health score calculation
-- **Recent coverage metrics** showing protection status
-- **Backup type filtering** with styled badges
+- **Comprehensive backup monitoring with separated views:**
+  - **Snapshots Tab**: VM/CT point-in-time snapshots with real-time search and sorting
+  - **Backups Tab**: Full backups from both PBS and PVE storage
+  - **PBS Tab**: Dedicated Proxmox Backup Server monitoring
+- **Real-time search and filtering** across all backup data
+- **Column sorting** for easy data organization
+- **Unified API** for streamlined PBS and PVE backup data access
+- **WebSocket updates** for live data without UI flashing
 
 <details>
 <summary><strong>Understanding Backup Types in Pulse</strong></summary>
 
-Pulse monitors three distinct types of backups:
+Pulse monitors three distinct types of backups, now organized into separate tabs for better clarity:
 
-1. **PBS Backups** (Purple indicator ●)
-   - Backups stored in Proxmox Backup Server
+1. **PBS Backups** (Purple indicator ● - shown in Backups tab)
+   - Full backups stored in Proxmox Backup Server
    - Accessed via PBS API with deduplication and verification features
    - Requires separate PBS API token configuration
+   - Also has dedicated PBS tab for server-level monitoring
    
-2. **PVE Backups** (Orange indicator ●)
-   - Backups stored on any Proxmox VE storage (NFS, CIFS, local, etc.)
+2. **PVE Backups** (Orange indicator ● - shown in Backups tab)
+   - Full backups stored on any Proxmox VE storage (NFS, CIFS, local, etc.)
    - All non-PBS backup storage is considered "PVE storage"
    - Accessed via Proxmox VE API
    
-3. **Snapshots** (Yellow indicator ●)
+3. **Snapshots** (Yellow indicator ● - shown in Snapshots tab)
    - VM/CT point-in-time snapshots (not full backups)
    - Stored locally on the Proxmox node
+   - Now has its own dedicated tab for easier management
+
+**Navigation:**
+- **Snapshots Tab**: View and manage all VM/CT snapshots
+- **Backups Tab**: View all full backups (both PBS and PVE)
+- **PBS Tab**: Monitor Proxmox Backup Server status and tasks
 
 **Important:** If you have PBS configured as storage in Proxmox VE, those backups are accessed via the PBS API directly, not through PVE storage. This prevents double-counting of PBS backups.
 </details>
@@ -961,7 +996,7 @@ Pulse includes a comprehensive built-in diagnostic tool to help troubleshoot con
 ### Common Issues
 
 *   **Proxmox Log File Growth / log2ram Issues:** 
-    - **Update (v3.30.0+):** Pulse now uses the bulk `/cluster/resources` endpoint, reducing API calls by up to 95% while maintaining 2-second polling
+    - **Update (v3.30.0+):** Pulse uses the bulk `/cluster/resources` endpoint, reducing API calls by up to 95% while maintaining 2-second polling
     - **If you still experience log growth**, you can configure Proxmox logging: 
       
       **Option 1: Use tmpfs for pveproxy logs (Best for log2ram users)**
