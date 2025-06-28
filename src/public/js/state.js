@@ -12,11 +12,6 @@ PulseApp.state = (() => {
         pbsDataArray: [],
         endpoints: [], // Add endpoint configurations
         pbsConfigs: [], // Add PBS configurations
-        pveBackups: { // Add PVE backup data
-            backupTasks: [],
-            storageBackups: [],
-            guestSnapshots: []
-        },
         dashboardHistory: {},
         initialDataReceived: false,
         
@@ -35,11 +30,6 @@ PulseApp.state = (() => {
         groupByNode: savedFilterState.groupByNode ?? true,
         filterGuestType: savedFilterState.filterGuestType || 'all',
         filterStatus: savedFilterState.filterStatus || 'all',
-        backupsFilterHealth: savedFilterState.backupsFilterHealth || 'all',
-        backupsFilterGuestType: savedFilterState.backupsFilterGuestType || 'all',
-        backupsFilterBackupType: savedFilterState.backupsFilterBackupType || 'all',
-        backupsFilterFailures: savedFilterState.backupsFilterFailures || false,
-        backupsSearchTerm: '',
         
         // Enhanced monitoring data
         alerts: {
@@ -74,7 +64,6 @@ PulseApp.state = (() => {
         
         sortState: {
             main: { column: 'id', direction: 'asc', ...(savedSortState.main || {}) },
-            backups: { column: 'latestBackupTime', direction: 'desc', ...(savedSortState.backups || {}) }
         },
         thresholdState: {
             cpu: { value: 0 },
@@ -111,8 +100,6 @@ PulseApp.state = (() => {
             groupByNode: internalState.groupByNode,
             filterGuestType: internalState.filterGuestType,
             filterStatus: internalState.filterStatus,
-            backupsFilterHealth: internalState.backupsFilterHealth,
-            backupsFilterGuestType: internalState.backupsFilterGuestType,
             thresholdHideMode: internalState.thresholdHideMode
         };
         localStorage.setItem('pulseFilterState', JSON.stringify(stateToSave));

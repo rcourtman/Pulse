@@ -2,17 +2,13 @@ PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.common = (() => {
     let searchInput = null;
-    let backupsSearchInput = null;
 
     function init() {
         searchInput = document.getElementById('dashboard-search');
-        backupsSearchInput = document.getElementById('backups-search');
 
         setupTableSorting('main-table');
-        setupTableSorting('backups-overview-table');
 
         _setupDashboardFilterListeners();
-        _setupBackupFilterListeners();
         _setupResetButtonListeners();
         _setupGlobalKeydownListeners();
         _setupTabSwitchListeners();
@@ -27,13 +23,6 @@ PulseApp.ui.common = (() => {
         const groupByNode = PulseApp.state.get('groupByNode');
         const filterGuestType = PulseApp.state.get('filterGuestType');
         const filterStatus = PulseApp.state.get('filterStatus');
-        const backupsFilterHealth = PulseApp.state.get('backupsFilterHealth');
-        const backupsFilterGuestType = PulseApp.state.get('backupsFilterGuestType');
-        const backupsFilterBackupType = PulseApp.state.get('backupsFilterBackupType') || 'all';
-        // Initialize backup type filter if not set
-        if (!PulseApp.state.get('backupsFilterBackupType')) {
-            PulseApp.state.set('backupsFilterBackupType', 'all');
-        }
 
         const groupRadio = document.getElementById(groupByNode ? 'group-grouped' : 'group-list');
         if (groupRadio) groupRadio.checked = true;
@@ -41,31 +30,16 @@ PulseApp.ui.common = (() => {
         if (typeRadio) typeRadio.checked = true;
         const statusRadio = document.getElementById(`filter-status-${filterStatus}`);
         if (statusRadio) statusRadio.checked = true;
-        const backupHealthRadio = document.getElementById(`backups-filter-status-${backupsFilterHealth}`);
-        if (backupHealthRadio) backupHealthRadio.checked = true;
-        const backupTypeRadio = document.getElementById(`backups-filter-type-${backupsFilterGuestType}`);
-        if (backupTypeRadio) backupTypeRadio.checked = true;
-        const calendarBackupRadio = document.getElementById(`backups-filter-backup-${backupsFilterBackupType}`);
-        if (calendarBackupRadio) calendarBackupRadio.checked = true;
-        
-        // Set initial state for backups group filter
-        const backupsGroupRadio = document.getElementById(groupByNode ? 'backups-group-grouped' : 'backups-group-list');
-        if (backupsGroupRadio) backupsGroupRadio.checked = true;
     }
 
     function applyInitialSortUI() {
         const mainSortState = PulseApp.state.getSortState('main');
-        const backupsSortState = PulseApp.state.getSortState('backups');
 
         const initialMainHeader = document.querySelector(`#main-table th[data-sort="${mainSortState.column}"]`);
         if (initialMainHeader) {
           updateSortUI('main-table', initialMainHeader);
         }
 
-        const initialBackupsHeader = document.querySelector(`#backups-overview-table th[data-sort="${backupsSortState.column}"]`);
-        if (initialBackupsHeader) {
-          updateSortUI('backups-overview-table', initialBackupsHeader);
-        }
     }
 
     function _setupDashboardFilterListeners() {
@@ -78,11 +52,6 @@ PulseApp.ui.common = (() => {
                     PulseApp.state.saveFilterState();
                     updateResetButtonState();
                     
-                    // Also update backups tab if it's active
-                    const backupsTab = document.querySelector('[data-tab="backups"]');
-                    if (backupsTab && backupsTab.classList.contains('active') && PulseApp.ui.backups) {
-                        PulseApp.ui.backups.updateBackupsTab(true);
-                    }
                 }
             });
         });
@@ -132,53 +101,6 @@ PulseApp.ui.common = (() => {
         }
     }
 
-    function _setupBackupFilterListeners() {
-        document.querySelectorAll('input[name="backups-type-filter"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                if (this.checked) {
-                    PulseApp.state.set('backupsFilterGuestType', this.value);
-                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
-                    PulseApp.state.saveFilterState();
-                }
-            });
-        });
-
-        document.querySelectorAll('input[name="backups-status-filter"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                if (this.checked) {
-                    PulseApp.state.set('backupsFilterHealth', this.value);
-                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
-                    PulseApp.state.saveFilterState();
-                }
-            });
-        });
-
-        document.querySelectorAll('input[name="backups-backup-filter"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                if (this.checked) {
-                    // Clear any selected calendar day when filter changes
-                    if (PulseApp.ui.calendarHeatmap && PulseApp.ui.calendarHeatmap.clearSelection) {
-                        PulseApp.ui.calendarHeatmap.clearSelection();
-                    }
-                    
-                    PulseApp.state.set('backupsFilterBackupType', this.value);
-                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
-                    PulseApp.state.saveFilterState();
-                }
-            });
-        });
-        
-        document.querySelectorAll('input[name="backups-group-filter"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                if (this.checked) {
-                    PulseApp.state.set('groupByNode', this.value === 'grouped');
-                    PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action
-                    PulseApp.state.saveFilterState();
-                }
-            });
-        });
-
-    }
 
     function _setupResetButtonListeners() {
         const resetButton = document.getElementById('reset-filters-button');
@@ -187,13 +109,12 @@ PulseApp.ui.common = (() => {
         } else {
             console.warn('Reset button #reset-filters-button not found.');
         }
-        // Note: Reset button for backups tab is handled within backups.js init
     }
 
     function _setupGlobalKeydownListeners() {
         document.addEventListener('keydown', function(event) {
             const activeElement = document.activeElement;
-            const isSearchInputFocused = activeElement === searchInput || activeElement === backupsSearchInput;
+            const isSearchInputFocused = activeElement === searchInput;
             const isGeneralInputElement = !isSearchInputFocused && (
                 activeElement.tagName === 'INPUT' || 
                 activeElement.tagName === 'TEXTAREA' || 
@@ -203,13 +124,8 @@ PulseApp.ui.common = (() => {
             // Handle Escape key
             if (event.key === 'Escape') {
                 const mainTab = document.getElementById('main');
-                const backupsTab = document.getElementById('backups');
                 
-                if (backupsTab && !backupsTab.classList.contains('hidden')) {
-                    if (PulseApp.ui.backups && PulseApp.ui.backups.resetBackupsView) {
-                        PulseApp.ui.backups.resetBackupsView();
-                    }
-                } else if (mainTab && !mainTab.classList.contains('hidden')) {
+                if (mainTab && !mainTab.classList.contains('hidden')) {
                     resetDashboardView();
                 }
             } 
@@ -231,14 +147,8 @@ PulseApp.ui.common = (() => {
                 /[a-zA-Z0-9]/.test(event.key) // Only alphanumeric characters
             ) {
                 const mainTab = document.getElementById('main');
-                const backupsTab = document.getElementById('backups');
                 
-                if (backupsTab && !backupsTab.classList.contains('hidden') && backupsSearchInput) {
-                    // Backups tab is visible
-                    backupsSearchInput.focus();
-                    backupsSearchInput.value = event.key; // Set the typed character immediately
-                    event.preventDefault(); // Prevent the character from being typed twice
-                } else if (mainTab && !mainTab.classList.contains('hidden') && searchInput) {
+                if (mainTab && !mainTab.classList.contains('hidden') && searchInput) {
                     // Main tab is visible
                     searchInput.focus();
                     searchInput.value = event.key; // Set the typed character immediately
@@ -254,16 +164,9 @@ PulseApp.ui.common = (() => {
             tab.addEventListener('click', function() {
                 const targetTab = this.getAttribute('data-tab');
                 
-                // Clear search inputs when switching between main and backups tabs
-                if (targetTab === 'main' && backupsSearchInput && backupsSearchInput.value) {
-                    // Switching to main tab, clear backups search if it has content
-                    backupsSearchInput.value = '';
-                    // Trigger search update to clear filtered results
-                    if (PulseApp.ui && PulseApp.ui.backups) {
-                        PulseApp.ui.backups.updateBackupsTab();
-                    }
-                } else if (targetTab === 'backups' && searchInput && searchInput.value) {
-                    // Switching to backups tab, clear main search if it has content
+                // Clear search input when switching tabs
+                if (targetTab !== 'main' && searchInput && searchInput.value) {
+                    // Switching away from main tab, clear main search if it has content
                     searchInput.value = '';
                     // Trigger dashboard update to clear filtered results
                     if (PulseApp.ui && PulseApp.ui.dashboard) {
@@ -286,8 +189,6 @@ PulseApp.ui.common = (() => {
              derivedKey = 'nodes';
          } else if (tableId.startsWith('main-')) {
              derivedKey = 'main';
-         } else if (tableId.startsWith('backups-')) {
-             derivedKey = 'backups';
          } else {
              derivedKey = null;
          }
@@ -354,9 +255,6 @@ PulseApp.ui.common = (() => {
             switch(tableType) {
                 case 'main':
                     PulseApp.ui.dashboard.updateDashboardTable();
-                    break;
-                case 'backups':
-                    PulseApp.ui.backups.updateBackupsTab(false, true); // sortOnly = true
                     break;
                 default:
                     console.error('Unknown table type for sorting update:', tableType);

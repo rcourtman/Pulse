@@ -34,8 +34,6 @@ function createServer() {
     const { setupThresholdRoutes } = require('./thresholdRoutes');
     setupThresholdRoutes(app);
 
-    const backupDataRouter = require('./routes/backupData');
-    app.use('/api/backup-data', backupDataRouter);
 
     const updateRoutes = require('./routes/updates');
     app.use('/api/updates', updateRoutes);
