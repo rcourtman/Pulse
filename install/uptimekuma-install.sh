@@ -22,7 +22,6 @@ NODE_VERSION="22" setup_nodejs
 
 msg_info "Installing Uptime Kuma"
 $STD git clone https://github.com/louislam/uptime-kuma.git
-mv uptime-kuma /opt/uptime-kuma
 cd /opt/uptime-kuma
 $STD npm run setup
 msg_ok "Installed Uptime Kuma"
