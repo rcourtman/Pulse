@@ -67,9 +67,9 @@ PulseApp.ui.backups = (() => {
                             summaryElements[1].textContent = summary.pve;
                             if (backupsData.pbsEnabled && summaryElements.length >= 4) {
                                 summaryElements[2].textContent = summary.pbs;
-                                summaryElements[3].textContent = formatBytes(summary.totalSize);
+                                summaryElements[3].textContent = formatBytes(summary.totalSize).text;
                             } else {
-                                summaryElements[2].textContent = formatBytes(summary.totalSize);
+                                summaryElements[2].textContent = formatBytes(summary.totalSize).text;
                             }
                         }
                     } else {
@@ -113,17 +113,17 @@ PulseApp.ui.backups = (() => {
                     </div>
                     <div>
                         <div class="text-gray-500 dark:text-gray-400">PVE Backups</div>
-                        <div class="text-xl font-semibold text-orange-600">${summary.pve}</div>
+                        <div class="text-xl font-semibold">${summary.pve}</div>
                     </div>
                     ${backupsData.pbsEnabled ? `
                         <div>
                             <div class="text-gray-500 dark:text-gray-400">PBS Backups</div>
-                            <div class="text-xl font-semibold text-purple-600">${summary.pbs}</div>
+                            <div class="text-xl font-semibold">${summary.pbs}</div>
                         </div>
                     ` : ''}
                     <div>
                         <div class="text-gray-500 dark:text-gray-400">Total Size</div>
-                        <div class="text-xl font-semibold">${formatBytes(summary.totalSize)}</div>
+                        <div class="text-xl font-semibold">${formatBytes(summary.totalSize).text}</div>
                     </div>
                 </div>
             </div>
@@ -251,12 +251,11 @@ PulseApp.ui.backups = (() => {
         return sorted.map(backup => {
             const age = getRelativeTime(backup.ctime);
             const typeLabel = backup.type === 'vm' ? 'VM' : 'LXC';
-            const sourceColor = backup.source === 'pve' ? 'orange' : 'purple';
             
             return `
                 <tr class="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                    <td class="p-1 px-2 align-middle">${backup.vmid}</td>
-                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400">
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${backup.vmid}</td>
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">
                         <div class="max-w-[120px] sm:max-w-[200px] lg:max-w-[300px] truncate" title="${backup.notes || ''}">
                             ${backup.notes || '-'}
                         </div>
@@ -268,15 +267,12 @@ PulseApp.ui.backups = (() => {
                                 : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                         }">${typeLabel}</span>
                     </td>
-                    <td class="p-1 px-2 align-middle">${backup.node || '-'}</td>
-                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400">${backup.storage || backup.datastore || '-'}</td>
-                    <td class="p-1 px-2 align-middle whitespace-nowrap">${formatBytes(backup.size)}</td>
-                    <td class="p-1 px-2 align-middle text-gray-500 dark:text-gray-400 whitespace-nowrap">${age}</td>
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${backup.node || '-'}</td>
+                    <td class="p-1 px-2 align-middle text-gray-700 dark:text-gray-300">${backup.storage || backup.datastore || '-'}</td>
+                    <td class="p-1 px-2 align-middle ${formatBytes(backup.size).colorClass} whitespace-nowrap">${formatBytes(backup.size).text}</td>
+                    <td class="p-1 px-2 align-middle ${age.colorClass} whitespace-nowrap">${age.text}</td>
                     <td class="p-1 px-2 align-middle">
-                        <span class="inline-flex items-center gap-1">
-                            <span class="inline-block w-2 h-2 rounded-full bg-${sourceColor}-500"></span>
-                            <span class="text-xs">${backup.source.toUpperCase()}</span>
-                        </span>
+                        <span class="text-xs">${backup.source.toUpperCase()}</span>
                     </td>
                 </tr>
             `;
@@ -310,26 +306,66 @@ PulseApp.ui.backups = (() => {
     }
 
     function formatBytes(bytes) {
-        if (!bytes || bytes === 0) return '0\u00A0B';
+        if (!bytes || bytes === 0) return { text: '0\u00A0B', colorClass: 'text-gray-500 dark:text-gray-400' };
+        
         const k = 1024;
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         const value = parseFloat((bytes / Math.pow(k, i)).toFixed(2));
-        // Use non-breaking space to prevent wrapping between number and unit
-        return value + '\u00A0' + sizes[i];
+        const text = value + '\u00A0' + sizes[i];
+        
+        // Color based on size in GB
+        const sizeInGB = bytes / (1024 * 1024 * 1024);
+        let colorClass;
+        
+        if (sizeInGB < 1) {
+            colorClass = 'text-green-600 dark:text-green-400';  // < 1 GB
+        } else if (sizeInGB < 10) {
+            colorClass = 'text-blue-600 dark:text-blue-400';   // 1-10 GB
+        } else if (sizeInGB < 50) {
+            colorClass = 'text-yellow-600 dark:text-yellow-400'; // 10-50 GB
+        } else if (sizeInGB < 100) {
+            colorClass = 'text-orange-600 dark:text-orange-400'; // 50-100 GB
+        } else {
+            colorClass = 'text-red-600 dark:text-red-400';     // > 100 GB
+        }
+        
+        return { text, colorClass };
     }
 
     function getRelativeTime(timestamp) {
-        if (!timestamp) return 'Unknown';
+        if (!timestamp) return { text: 'Unknown', colorClass: 'text-gray-500 dark:text-gray-400' };
         
         const now = Date.now() / 1000;
         const diff = now - timestamp;
+        const days = diff / 86400;
         
-        if (diff < 60) return 'Just\u00A0now';
-        if (diff < 3600) return Math.floor(diff / 60) + 'm\u00A0ago';
-        if (diff < 86400) return Math.floor(diff / 3600) + 'h\u00A0ago';
-        if (diff < 604800) return Math.floor(diff / 86400) + 'd\u00A0ago';
-        return new Date(timestamp * 1000).toLocaleDateString();
+        let text, colorClass;
+        
+        if (diff < 60) {
+            text = 'Just\u00A0now';
+            colorClass = 'text-green-600 dark:text-green-400';
+        } else if (diff < 3600) {
+            text = Math.floor(diff / 60) + 'm\u00A0ago';
+            colorClass = 'text-green-600 dark:text-green-400';
+        } else if (diff < 86400) {
+            text = Math.floor(diff / 3600) + 'h\u00A0ago';
+            colorClass = 'text-green-600 dark:text-green-400';
+        } else if (days < 7) {
+            text = Math.floor(days) + 'd\u00A0ago';
+            colorClass = 'text-blue-600 dark:text-blue-400';
+        } else if (days < 30) {
+            text = Math.floor(days) + 'd\u00A0ago';
+            colorClass = 'text-yellow-600 dark:text-yellow-400';
+        } else if (days < 90) {
+            text = Math.floor(days) + 'd\u00A0ago';
+            colorClass = 'text-orange-600 dark:text-orange-400';
+        } else {
+            text = new Date(timestamp * 1000).toLocaleDateString();
+            colorClass = 'text-red-600 dark:text-red-400';
+        }
+        
+        return { text, colorClass };
     }
 
     function setupEventListeners() {
@@ -442,9 +478,50 @@ PulseApp.ui.backups = (() => {
         }
     }
 
+    function resetFiltersAndSort() {
+        // Reset search input
+        const searchInput = document.getElementById('backup-search');
+        if (searchInput) {
+            searchInput.value = '';
+            currentFilters.searchTerm = '';
+        }
+        
+        // Reset backup type filter to 'all'
+        const typeAllRadio = document.getElementById('backup-type-all');
+        if (typeAllRadio) {
+            typeAllRadio.checked = true;
+            currentFilters.backupType = 'all';
+        }
+        
+        // Reset node filter to 'all'
+        const nodeAllRadio = document.getElementById('node-all');
+        if (nodeAllRadio) {
+            nodeAllRadio.checked = true;
+            currentFilters.node = 'all';
+        }
+        
+        // Reset sort to default (creation time descending)
+        currentSort.field = 'ctime';
+        currentSort.ascending = false;
+        
+        // Update the table with reset filters and sort
+        const tbody = document.querySelector('#backups-content tbody');
+        if (tbody) {
+            tbody.innerHTML = renderBackupRows();
+        }
+        
+        // Update sort UI
+        PulseApp.state.setSortState('backups', 'ctime', 'desc');
+        const ctimeHeader = document.querySelector('#backups-table th[data-sort="ctime"]');
+        if (ctimeHeader) {
+            PulseApp.ui.common.updateSortUI('backups-table', ctimeHeader, 'backups');
+        }
+    }
+
     return {
         init,
         updateBackupsInfo,
-        sortBy
+        sortBy,
+        resetFiltersAndSort
     };
 })();
