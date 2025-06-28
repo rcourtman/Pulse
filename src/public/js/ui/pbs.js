@@ -88,7 +88,7 @@ PulseApp.ui.pbs = (() => {
             tab.className = index === state.activeInstanceIndex ? 
                 'py-2 px-1 border-b-2 border-blue-500 font-medium text-sm text-blue-600 dark:text-blue-400' :
                 'py-2 px-1 border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 font-medium text-sm';
-            tab.textContent = instance.pbsInstanceName || `PBS Instance ${index + 1}`;
+            tab.textContent = `PBS: ${instance.pbsInstanceName || `Instance ${index + 1}`}`;
             tab.dataset.instanceIndex = index;
             
             tab.addEventListener('click', () => {
@@ -198,6 +198,14 @@ PulseApp.ui.pbs = (() => {
         const container = document.createElement('div');
         container.className = 'mb-4';
         
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex items-center gap-3';
+        
+        const label = document.createElement('span');
+        label.className = 'text-sm font-medium text-gray-600 dark:text-gray-400';
+        label.textContent = 'Namespace:';
+        wrapper.appendChild(label);
+        
         const tabsDiv = document.createElement('div');
         tabsDiv.className = 'flex flex-wrap gap-2';
         
@@ -218,7 +226,8 @@ PulseApp.ui.pbs = (() => {
             tabsDiv.appendChild(tab);
         });
         
-        container.appendChild(tabsDiv);
+        wrapper.appendChild(tabsDiv);
+        container.appendChild(wrapper);
         return container;
     }
 
@@ -397,13 +406,14 @@ PulseApp.ui.pbs = (() => {
         const rangeMs = TIME_RANGES[state.selectedTimeRange];
         const startDate = new Date(now.getTime() - rangeMs);
         
-        const dateFormat = { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+        const dateOptions = { month: 'short', day: 'numeric' };
+        const yearOptions = { year: 'numeric' };
         
-        description.innerHTML = `
-            <div class="text-sm">
-                ${startDate.toLocaleDateString('en-US', dateFormat)} - ${now.toLocaleDateString('en-US', dateFormat)}
-            </div>
-        `;
+        const startDateStr = startDate.toLocaleDateString('en-US', dateOptions);
+        const endDateStr = now.toLocaleDateString('en-US', dateOptions);
+        const currentYear = now.toLocaleDateString('en-US', yearOptions);
+        
+        description.innerHTML = `${startDateStr} - ${endDateStr}, ${currentYear}`;
     }
 
     // Create task summary table
@@ -418,7 +428,7 @@ PulseApp.ui.pbs = (() => {
         
         const subtitle = document.createElement('p');
         subtitle.className = 'text-xs text-gray-500 dark:text-gray-400 mb-2';
-        subtitle.textContent = 'Task counts reflect the selected time range filter above';
+        subtitle.textContent = 'Shows backup/maintenance operations within the selected time range (not total stored files)';
         section.appendChild(subtitle);
         
         // Add table container with overflow-x-auto for mobile scrolling
@@ -510,8 +520,8 @@ PulseApp.ui.pbs = (() => {
                 row.cells[3].innerHTML = '<span class="text-gray-400">-</span>';
             } else {
                 row.cells[1].innerHTML = '<span class="text-gray-500">No tasks</span>';
-                row.cells[2].textContent = 'N/A';
-                row.cells[3].textContent = 'N/A';
+                row.cells[2].textContent = '-';
+                row.cells[3].textContent = '-';
             }
             return;
         }
@@ -550,8 +560,8 @@ PulseApp.ui.pbs = (() => {
         const lastFailed = sortedTasks.find(t => t.status && t.status !== 'OK' && !t.status.toLowerCase().includes('running'));
         
         // Update time cells
-        row.cells[2].textContent = lastOk ? PulseApp.utils.formatPbsTimestampRelative(lastOk.startTime) : 'N/A';
-        row.cells[3].textContent = lastFailed ? PulseApp.utils.formatPbsTimestampRelative(lastFailed.startTime) : 'N/A';
+        row.cells[2].textContent = lastOk ? PulseApp.utils.formatPbsTimestampRelative(lastOk.startTime) : '-';
+        row.cells[3].textContent = lastFailed ? PulseApp.utils.formatPbsTimestampRelative(lastFailed.startTime) : '-';
         
         // Update row styling
         if (failedCount > 0) {
@@ -568,10 +578,10 @@ PulseApp.ui.pbs = (() => {
         
         
         const taskTypes = [
-            { key: 'backupTasks', title: 'Recent Backup Tasks', type: 'backup' },
-            { key: 'verificationTasks', title: 'Recent Verification Tasks', type: 'verify' },
-            { key: 'syncTasks', title: 'Recent Sync Tasks', type: 'sync' },
-            { key: 'pruneTasks', title: 'Recent Prune/GC Tasks', type: 'prune' }
+            { key: 'backupTasks', title: 'Backup Task History', type: 'backup' },
+            { key: 'verificationTasks', title: 'Verification Task History', type: 'verify' },
+            { key: 'syncTasks', title: 'Sync Task History', type: 'sync' },
+            { key: 'pruneTasks', title: 'Prune/GC Task History', type: 'prune' }
         ];
         
         taskTypes.forEach(taskType => {
@@ -734,7 +744,7 @@ PulseApp.ui.pbs = (() => {
         // Start time cell
         const startCell = document.createElement('td');
         startCell.className = 'p-1 px-2 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap';
-        startCell.textContent = task.startTime ? PulseApp.utils.formatPbsTimestampRelative(task.startTime) : 'N/A';
+        startCell.textContent = task.startTime ? PulseApp.utils.formatPbsTimestampRelative(task.startTime) : '-';
         row.appendChild(startCell);
         
         // Duration cell
@@ -867,7 +877,7 @@ PulseApp.ui.pbs = (() => {
         const failed = Array.from(visibleRows).filter(r => r.querySelector('.text-red-600')).length;
         const running = Array.from(visibleRows).filter(r => r.querySelector('.text-blue-600')).length;
         
-        let text = `(${total} total`;
+        let text = `(${total} ${total === 1 ? 'task' : 'tasks'}`;
         if (failed > 0) text += `, ${failed} failed`;
         if (running > 0) text += `, ${running} running`;
         text += ')';
@@ -960,7 +970,7 @@ PulseApp.ui.pbs = (() => {
     
     // Parse duration text to seconds
     function parseDurationToSeconds(duration) {
-        if (duration === 'N/A' || duration === 'Running...') return 0;
+        if (duration === '-' || duration === 'Running...') return 0;
         
         let seconds = 0;
         const parts = duration.match(/(\d+)([hms])/g);
@@ -1197,7 +1207,7 @@ PulseApp.ui.pbs = (() => {
 
     function formatDuration(task) {
         if (!task.endTime || !task.startTime) {
-            return task.status ? 'N/A' : 'Running...';
+            return task.status ? '-' : 'Running...';
         }
         
         const duration = task.endTime - task.startTime;
@@ -1332,35 +1342,37 @@ PulseApp.ui.pbs = (() => {
         }
         
         const section = document.createElement('div');
-        section.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4';
+        section.className = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700';
         
-        // Create collapsible header
-        const header = document.createElement('div');
-        header.className = 'flex justify-between items-center mb-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/30 -m-1 p-1 rounded transition-colors';
+        const header = document.createElement('h4');
+        header.className = 'text-md font-semibold p-3 border-b border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors';
         
-        const heading = document.createElement('h4');
-        heading.className = 'text-md font-semibold text-gray-700 dark:text-gray-300';
-        heading.textContent = `Backup Snapshots (${snapshots.length})`;
+        const titleContainer = document.createElement('div');
+        titleContainer.className = 'flex items-center gap-2';
         
+        // Collapse/expand icon
         const collapseIcon = document.createElement('span');
         collapseIcon.className = 'collapse-icon transition-transform duration-200';
-        collapseIcon.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-        </svg>`;
+        collapseIcon.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        `;
+        titleContainer.appendChild(collapseIcon);
         
-        header.appendChild(heading);
-        header.appendChild(collapseIcon);
+        const headerSpan = document.createElement('span');
+        headerSpan.textContent = `Stored Backup Files (${snapshots.length})`;
+        titleContainer.appendChild(headerSpan);
+        
+        header.appendChild(titleContainer);
         section.appendChild(header);
         
         const tableContainer = document.createElement('div');
-        tableContainer.className = 'overflow-x-auto transition-all duration-200';
+        tableContainer.className = 'overflow-x-auto task-table-container';
         
         // Add collapse functionality
         header.addEventListener('click', () => {
-            const isCollapsed = section.dataset.collapsed === 'true';
-            section.dataset.collapsed = isCollapsed ? 'false' : 'true';
-            tableContainer.style.display = isCollapsed ? 'block' : 'none';
-            collapseIcon.style.transform = isCollapsed ? 'rotate(90deg)' : 'rotate(0deg)';
+            toggleTaskSection(section);
         });
         
         const table = document.createElement('table');
@@ -1416,11 +1428,14 @@ PulseApp.ui.pbs = (() => {
         tableContainer.appendChild(table);
         section.appendChild(tableContainer);
         
-        // Default state - start collapsed if more than 20 snapshots
-        if (snapshots.length > 20) {
+        // Default state - start collapsed if more than 5 snapshots (matching task sections)
+        if (snapshots.length > 5) {
             section.dataset.collapsed = 'true';
             tableContainer.style.display = 'none';
-            collapseIcon.style.transform = 'rotate(0deg)';
+            const icon = header.querySelector('.collapse-icon');
+            if (icon) {
+                icon.style.transform = 'rotate(-90deg)';
+            }
         }
         
         return section;
@@ -1489,37 +1504,37 @@ PulseApp.ui.pbs = (() => {
             nameCell.className = 'py-2 pr-4 text-gray-700 dark:text-gray-300';
             if (usagePercent >= 95) {
                 nameCell.className += ' text-red-700 dark:text-red-300 font-semibold';
-                nameCell.textContent = `${ds.name || 'N/A'} [CRITICAL: ${usagePercent}% full]`;
+                nameCell.textContent = `${ds.name || '-'} [CRITICAL: ${usagePercent}% full]`;
             } else if (usagePercent >= 85) {
                 nameCell.className += ' text-yellow-700 dark:text-yellow-300 font-semibold';
-                nameCell.textContent = `${ds.name || 'N/A'} [WARNING: ${usagePercent}% full]`;
+                nameCell.textContent = `${ds.name || '-'} [WARNING: ${usagePercent}% full]`;
             } else {
-                nameCell.textContent = ds.name || 'N/A';
+                nameCell.textContent = ds.name || '-';
             }
             row.appendChild(nameCell);
             
             // Path cell
             const pathCell = document.createElement('td');
             pathCell.className = 'py-2 px-4 text-gray-500 dark:text-gray-400 text-xs';
-            pathCell.textContent = ds.path || 'N/A';
+            pathCell.textContent = ds.path || '-';
             row.appendChild(pathCell);
             
             // Used cell
             const usedCell = document.createElement('td');
             usedCell.className = 'py-2 px-4 text-gray-700 dark:text-gray-300';
-            usedCell.textContent = ds.used !== null ? PulseApp.utils.formatBytes(ds.used) : 'N/A';
+            usedCell.textContent = ds.used !== null ? PulseApp.utils.formatBytes(ds.used) : '-';
             row.appendChild(usedCell);
             
             // Available cell
             const availCell = document.createElement('td');
             availCell.className = 'py-2 px-4 text-gray-700 dark:text-gray-300';
-            availCell.textContent = ds.available !== null ? PulseApp.utils.formatBytes(ds.available) : 'N/A';
+            availCell.textContent = ds.available !== null ? PulseApp.utils.formatBytes(ds.available) : '-';
             row.appendChild(availCell);
             
             // Total cell
             const totalCell = document.createElement('td');
             totalCell.className = 'py-2 px-4 text-gray-700 dark:text-gray-300';
-            totalCell.textContent = ds.total !== null ? PulseApp.utils.formatBytes(ds.total) : 'N/A';
+            totalCell.textContent = ds.total !== null ? PulseApp.utils.formatBytes(ds.total) : '-';
             row.appendChild(totalCell);
             
             // Usage cell with progress bar
@@ -1530,14 +1545,14 @@ PulseApp.ui.pbs = (() => {
                 const usageText = `${usagePercent}% (${PulseApp.utils.formatBytes(usedBytes)} of ${PulseApp.utils.formatBytes(totalBytes)})`;
                 usageCell.innerHTML = PulseApp.utils.createProgressTextBarHTML(usagePercent, usageText, usageColor, `${usagePercent}%`);
             } else {
-                usageCell.textContent = 'N/A';
+                usageCell.textContent = '-';
             }
             row.appendChild(usageCell);
             
             // Deduplication cell
             const dedupCell = document.createElement('td');
             dedupCell.className = 'py-2 px-4 text-gray-700 dark:text-gray-300 font-semibold';
-            dedupCell.textContent = ds.deduplicationFactor ? `${ds.deduplicationFactor}x` : 'N/A';
+            dedupCell.textContent = ds.deduplicationFactor ? `${ds.deduplicationFactor}x` : '-';
             row.appendChild(dedupCell);
             
             // GC Status cell
@@ -1558,8 +1573,8 @@ PulseApp.ui.pbs = (() => {
     
     // Get GC status display
     function getGcStatusDisplay(gcStatus) {
-        if (!gcStatus) {
-            return '<span class="text-gray-500 dark:text-gray-400 text-xs">Unknown</span>';
+        if (!gcStatus || gcStatus === 'unknown') {
+            return '<span class="text-gray-500 dark:text-gray-400 text-xs">-</span>';
         }
         
         if (gcStatus === 'OK' || gcStatus === 'ok') {
@@ -1617,12 +1632,12 @@ PulseApp.ui.pbs = (() => {
             { label: 'Status', value: task.status || 'Running', isStatus: true },
             { label: 'Node', value: nodeName },
             { label: 'Process ID', value: pid },
-            { label: 'Start Time', value: task.startTime ? new Date(task.startTime * 1000).toLocaleString() : 'N/A' },
-            { label: 'End Time', value: task.endTime ? new Date(task.endTime * 1000).toLocaleString() : 'N/A' },
+            { label: 'Start Time', value: task.startTime ? new Date(task.startTime * 1000).toLocaleString() : '-' },
+            { label: 'End Time', value: task.endTime ? new Date(task.endTime * 1000).toLocaleString() : '-' },
             { label: 'Duration', value: formatDuration(task) },
-            { label: 'Worker ID', value: task.id || 'N/A', monospace: true },
-            { label: 'Guest', value: task.guest || 'N/A' },
-            { label: 'UPID', value: task.upid || 'N/A', monospace: true }
+            { label: 'Worker ID', value: task.id || '-', monospace: true },
+            { label: 'Guest', value: task.guest || '-' },
+            { label: 'UPID', value: task.upid || '-', monospace: true }
         ];
         
         // Add task log if available
