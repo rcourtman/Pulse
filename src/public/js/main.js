@@ -48,8 +48,6 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.dashboard?.updateDashboardTable();
         PulseApp.ui.storage?.updateStorageInfo();
         PulseApp.ui.pbs?.updatePbsInfo(pbsDataArray);
-        // Update backups
-        PulseApp.ui.backups?.updateBackupsTab();
         
         // Restore the original function
         PulseApp.utils.preserveScrollPosition = originalPreserveScrollPosition;
@@ -140,8 +138,6 @@ document.addEventListener('DOMContentLoaded', function() {
         PulseApp.ui.dashboard?.init?.();
         PulseApp.ui.storage?.init?.();
         PulseApp.ui.pbs?.initPbsEventListeners?.();
-        // Initialize backups based on feature flag
-        PulseApp.ui.backups?.init?.();
         PulseApp.ui.settings?.init?.();
         PulseApp.ui.thresholds?.init?.();
         PulseApp.ui.alerts?.init?.();

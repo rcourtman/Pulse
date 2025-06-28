@@ -38,18 +38,6 @@ PulseApp.ui.emptyStates = (() => {
                 message: 'No storage repositories are configured on this system.',
                 actions: []
             },
-            'no-backups': {
-                icon: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 text-gray-300 dark:text-gray-600">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    <path d="m9 12 2 2 4-4"/>
-                </svg>`,
-                title: 'No Backups Found',
-                message: context.filtered ? 'No backups match your current filters.' : 'No backup data is available yet.',
-                actions: context.filtered ? [{
-                    text: 'Clear Filters',
-                    onclick: 'PulseApp.ui.backups.resetBackupsView()'
-                }] : []
-            },
             'no-pbs': {
                 icon: `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-4 text-gray-300 dark:text-gray-600">
                     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>

@@ -86,16 +86,6 @@ PulseApp.ui.tabs = (() => {
                 }
             }
 
-            if (tabId === 'backups') {
-                // Only update if this is the first time loading the tab
-                if (isFirstLoad) {
-                    if (PulseApp.ui && PulseApp.ui.backups) {
-                        PulseApp.ui.backups.updateBackupsTab(true); // Mark as user action since they switched tabs
-                    } else {
-                        console.warn('[Tabs] PulseApp.ui.backups not available for updateBackupsTab')
-                    }
-                }
-            }
 
             if (tabId === 'storage') {
                 if (PulseApp.ui && PulseApp.ui.storage) {
@@ -215,10 +205,9 @@ PulseApp.ui.tabs = (() => {
 
     function updateTabAvailability() {
         const pbsTab = document.querySelector('.tab[data-tab="pbs"]');
-        const backupsTab = document.querySelector('.tab[data-tab="backups"]');
 
-        if (!pbsTab || !backupsTab) {
-            console.warn("PBS or Backups tab element not found for availability update.");
+        if (!pbsTab) {
+            console.warn("PBS tab element not found for availability update.");
             return;
         }
 
@@ -226,12 +215,11 @@ PulseApp.ui.tabs = (() => {
         const isPbsAvailable = pbsDataArray.length > 0 && pbsDataArray.some(pbs => pbs.status === 'ok');
 
         styleTabAvailability(pbsTab, isPbsAvailable);
-        styleTabAvailability(backupsTab, isPbsAvailable);
 
         // Ensure correct active/inactive styling after availability change
         const currentActiveTab = document.querySelector('.tab.active');
 
-        [pbsTab, backupsTab].forEach(tab => {
+        [pbsTab].forEach(tab => {
             if (!tab) return; // Skip if tab element doesn't exist
 
             if (isPbsAvailable) {
@@ -405,11 +393,6 @@ PulseApp.ui.tabs = (() => {
             case 'storage':
                 if (PulseApp.ui && PulseApp.ui.storage) {
                     // Storage data is already fetched, just update the UI
-                }
-                break;
-            case 'backups':
-                if (PulseApp.ui && PulseApp.ui.backups) {
-                    // Backups data is fetched on demand in updateBackupsTab
                 }
                 break;
             case 'pbs':
