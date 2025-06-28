@@ -133,7 +133,7 @@ PulseApp.ui.backups = (() => {
                 <div class="flex flex-wrap items-center gap-3">
                     <input type="search" id="backup-search" placeholder="Search by VMID or notes..." 
                         value="${currentFilters.searchTerm}"
-                        class="flex-1 min-w-[200px] px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        class="flex-1 min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
                     
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Type:</span>
@@ -173,24 +173,24 @@ PulseApp.ui.backups = (() => {
                 <table class="w-full text-sm">
                     <thead class="bg-gray-100 dark:bg-gray-700">
                         <tr class="text-left text-xs">
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('vmid')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('vmid')">
                                 VMID <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2">Name/Notes</th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('type')">
+                            <th class="p-1 px-2">Name/Notes</th>
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('type')">
                                 Type <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('node')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('node')">
                                 Node <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2">Storage</th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('size')">
+                            <th class="p-1 px-2">Storage</th>
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('size')">
                                 Size <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('ctime')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('ctime')">
                                 Age <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('source')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.backups.sortBy('source')">
                                 Source <span class="sort-indicator"></span>
                             </th>
                         </tr>
@@ -249,25 +249,25 @@ PulseApp.ui.backups = (() => {
 
         return sorted.map(backup => {
             const age = getRelativeTime(backup.ctime);
-            const typeLabel = backup.type === 'vm' ? 'VM' : 'CT';
+            const typeLabel = backup.type === 'vm' ? 'VM' : 'LXC';
             const sourceColor = backup.source === 'pve' ? 'orange' : 'purple';
             
             return `
-                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td class="px-3 py-2">${backup.vmid}</td>
-                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${backup.notes || '-'}</td>
-                    <td class="px-3 py-2">
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td class="p-1 px-2">${backup.vmid}</td>
+                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400">${backup.notes || '-'}</td>
+                    <td class="p-1 px-2">
                         <span class="px-1.5 py-0.5 text-xs font-medium rounded ${
                             backup.type === 'vm' 
                                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' 
                                 : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                         }">${typeLabel}</span>
                     </td>
-                    <td class="px-3 py-2">${backup.node || '-'}</td>
-                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${backup.storage || backup.datastore || '-'}</td>
-                    <td class="px-3 py-2">${formatBytes(backup.size)}</td>
-                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${age}</td>
-                    <td class="px-3 py-2">
+                    <td class="p-1 px-2">${backup.node || '-'}</td>
+                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400">${backup.storage || backup.datastore || '-'}</td>
+                    <td class="p-1 px-2">${formatBytes(backup.size)}</td>
+                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400">${age}</td>
+                    <td class="p-1 px-2">
                         <span class="inline-flex items-center gap-1">
                             <span class="inline-block w-2 h-2 rounded-full bg-${sourceColor}-500"></span>
                             <span class="text-xs">${backup.source.toUpperCase()}</span>
@@ -337,6 +337,30 @@ PulseApp.ui.backups = (() => {
                 }
             });
         }
+        
+        // Auto-focus search on keypress (like main dashboard)
+        document.addEventListener('keydown', (e) => {
+            // Check if backups tab is active
+            const backupsTab = document.getElementById('backups');
+            if (!backupsTab || backupsTab.classList.contains('hidden')) return;
+            
+            // Don't interfere with input fields or special keys
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || 
+                e.ctrlKey || e.metaKey || e.altKey || e.key === 'Tab' || e.key === 'Escape') {
+                return;
+            }
+            
+            // Focus search on alphanumeric keys
+            if (e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key)) {
+                const searchInput = document.getElementById('backup-search');
+                if (searchInput && document.activeElement !== searchInput) {
+                    e.preventDefault();
+                    searchInput.focus();
+                    searchInput.value = searchInput.value + e.key;
+                    searchInput.dispatchEvent(new Event('input'));
+                }
+            }
+        });
         
         // Type filter radio buttons
         document.querySelectorAll('input[name="backup-type"]').forEach(radio => {

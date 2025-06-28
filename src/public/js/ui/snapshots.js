@@ -109,7 +109,7 @@ PulseApp.ui.snapshots = (() => {
                 <div class="flex flex-wrap items-center gap-3">
                     <input type="search" id="snapshot-search" placeholder="Search snapshots..." 
                         value="${currentFilters.searchTerm}"
-                        class="flex-1 min-w-[200px] px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                        class="flex-1 min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
                     
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-600 dark:text-gray-400 font-medium">Type:</span>
@@ -132,25 +132,25 @@ PulseApp.ui.snapshots = (() => {
                 <table class="w-full text-sm">
                     <thead class="bg-gray-100 dark:bg-gray-700">
                         <tr class="text-left text-xs">
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('vmid')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('vmid')">
                                 VMID <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('name')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('name')">
                                 Guest Name <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('type')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('type')">
                                 Type <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('snapname')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('snapname')">
                                 Snapshot Name <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('node')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('node')">
                                 Node <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('snaptime')">
+                            <th class="p-1 px-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600" onclick="PulseApp.ui.snapshots.sortBy('snaptime')">
                                 Age <span class="sort-indicator"></span>
                             </th>
-                            <th class="px-3 py-2">Description</th>
+                            <th class="p-1 px-2">Description</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
@@ -192,23 +192,23 @@ PulseApp.ui.snapshots = (() => {
 
         return sorted.map(snapshot => {
             const age = getRelativeTime(snapshot.snaptime);
-            const typeLabel = snapshot.type === 'qemu' ? 'VM' : 'CT';
+            const typeLabel = snapshot.type === 'qemu' ? 'VM' : 'LXC';
             
             return `
-                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td class="px-3 py-2">${snapshot.vmid}</td>
-                    <td class="px-3 py-2">${snapshot.name}</td>
-                    <td class="px-3 py-2">
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700">
+                    <td class="p-1 px-2">${snapshot.vmid}</td>
+                    <td class="p-1 px-2">${snapshot.name}</td>
+                    <td class="p-1 px-2">
                         <span class="px-1.5 py-0.5 text-xs font-medium rounded ${
                             snapshot.type === 'qemu' 
                                 ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' 
                                 : 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300'
                         }">${typeLabel}</span>
                     </td>
-                    <td class="px-3 py-2">${snapshot.snapname}</td>
-                    <td class="px-3 py-2">${snapshot.node}</td>
-                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${age}</td>
-                    <td class="px-3 py-2 text-gray-600 dark:text-gray-400">${snapshot.description || '-'}</td>
+                    <td class="p-1 px-2">${snapshot.snapname}</td>
+                    <td class="p-1 px-2">${snapshot.node}</td>
+                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400">${age}</td>
+                    <td class="p-1 px-2 text-gray-600 dark:text-gray-400">${snapshot.description || '-'}</td>
                 </tr>
             `;
         }).join('');
@@ -273,6 +273,30 @@ PulseApp.ui.snapshots = (() => {
                 }
             });
         }
+        
+        // Auto-focus search on keypress (like main dashboard)
+        document.addEventListener('keydown', (e) => {
+            // Check if snapshots tab is active
+            const snapshotsTab = document.getElementById('snapshots');
+            if (!snapshotsTab || snapshotsTab.classList.contains('hidden')) return;
+            
+            // Don't interfere with input fields or special keys
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || 
+                e.ctrlKey || e.metaKey || e.altKey || e.key === 'Tab' || e.key === 'Escape') {
+                return;
+            }
+            
+            // Focus search on alphanumeric keys
+            if (e.key.length === 1 && /[a-zA-Z0-9]/.test(e.key)) {
+                const searchInput = document.getElementById('snapshot-search');
+                if (searchInput && document.activeElement !== searchInput) {
+                    e.preventDefault();
+                    searchInput.focus();
+                    searchInput.value = searchInput.value + e.key;
+                    searchInput.dispatchEvent(new Event('input'));
+                }
+            }
+        });
         
         // Guest type radio buttons
         document.querySelectorAll('input[name="guest-type"]').forEach(radio => {
