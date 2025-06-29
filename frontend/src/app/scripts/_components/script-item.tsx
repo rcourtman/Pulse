@@ -61,6 +61,7 @@ function ScriptHeader({ item }: { item: Script }) {
                 <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
                   <span>
                     Added
+                    {" "}
                     {extractDate(item.date_created)}
                   </span>
                   <span>•</span>
