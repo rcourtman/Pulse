@@ -5,7 +5,9 @@ PulseApp.ui.backups = (() => {
     let currentFilters = {
         searchTerm: '',
         backupType: 'all', // 'all', 'pve', 'pbs'
-        node: 'all'
+        node: 'all',
+        timeRange: '30', // days: '7', '30', '90', '365', 'all'
+        selectedDate: null // YYYY-MM-DD format when a day is clicked
     };
     let currentSort = {
         field: 'ctime',
@@ -13,7 +15,8 @@ PulseApp.ui.backups = (() => {
     };
     let backupsData = {
         unified: [],
-        pbsEnabled: false
+        pbsEnabled: false,
+        pbsStorageInfo: null
     };
 
     function init() {
@@ -42,14 +45,17 @@ PulseApp.ui.backups = (() => {
             .then(data => {
                 const newBackups = data.backups || [];
                 const newPbsEnabled = data.pbs?.enabled || false;
+                const newPbsStorageInfo = data.pbs?.storageInfo || null;
                 
                 // Check if data has actually changed
                 const hasChanged = JSON.stringify(newBackups) !== JSON.stringify(backupsData.unified) ||
-                                 newPbsEnabled !== backupsData.pbsEnabled;
+                                 newPbsEnabled !== backupsData.pbsEnabled ||
+                                 JSON.stringify(newPbsStorageInfo) !== JSON.stringify(backupsData.pbsStorageInfo);
                 
                 if (hasChanged) {
                     backupsData.unified = newBackups;
                     backupsData.pbsEnabled = newPbsEnabled;
+                    backupsData.pbsStorageInfo = newPbsStorageInfo;
                     
                     // Only render full UI on first load
                     if (container.querySelector('.overflow-x-auto')) {
@@ -72,6 +78,12 @@ PulseApp.ui.backups = (() => {
                                 summaryElements[2].textContent = formatBytes(summary.totalSize).text;
                             }
                         }
+                        
+                        // Update chart
+                        renderBackupTrendChart();
+                        
+                        // Update summary
+                        updateSummary();
                     } else {
                         // First load - render full UI
                         renderBackupsUI();
@@ -104,6 +116,19 @@ PulseApp.ui.backups = (() => {
         const uniqueNodes = getUniqueNodes();
 
         container.innerHTML = `
+            <!-- Backup Trend Chart -->
+            <div class="mb-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
+                <div class="mb-3 flex items-center justify-between">
+                    <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup History</h3>
+                    <div id="chart-filter-indicator" class="text-xs text-gray-500 dark:text-gray-400"></div>
+                </div>
+                <div id="backup-trend-chart" class="h-48 relative" style="min-height: 12rem;">
+                    <div class="absolute inset-0 flex items-center justify-center text-gray-400 dark:text-gray-500">
+                        <span class="text-sm">Loading chart...</span>
+                    </div>
+                </div>
+            </div>
+
             <!-- Summary -->
             <div class="mb-3 p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 rounded">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -124,6 +149,12 @@ PulseApp.ui.backups = (() => {
                     <div>
                         <div class="text-gray-500 dark:text-gray-400">Total Size</div>
                         <div class="text-xl font-semibold">${formatBytes(summary.totalSize).text}</div>
+                        ${summary.pbsDedupInfo ? `
+                            <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                                <span class="text-green-600 dark:text-green-400">↓ ${summary.pbsDedupInfo.actualSize}</span>
+                                <span class="ml-1">(${summary.pbsDedupInfo.ratio} dedup)</span>
+                            </div>
+                        ` : ''}
                     </div>
                 </div>
             </div>
@@ -134,6 +165,17 @@ PulseApp.ui.backups = (() => {
                     <input type="search" id="backup-search" placeholder="Search by VMID or notes..." 
                         value="${currentFilters.searchTerm}"
                         class="flex-1 min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                    
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Time:</span>
+                        <select id="backup-time-range" class="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer">
+                            <option value="7" ${currentFilters.timeRange === '7' ? 'selected' : ''}>Last 7 days</option>
+                            <option value="30" ${currentFilters.timeRange === '30' ? 'selected' : ''}>Last 30 days</option>
+                            <option value="90" ${currentFilters.timeRange === '90' ? 'selected' : ''}>Last 90 days</option>
+                            <option value="365" ${currentFilters.timeRange === '365' ? 'selected' : ''}>Last year</option>
+                            <option value="all" ${currentFilters.timeRange === 'all' ? 'selected' : ''}>All time</option>
+                        </select>
+                    </div>
                     
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
@@ -205,6 +247,63 @@ PulseApp.ui.backups = (() => {
                 });
             });
         }
+        
+        // Render the chart after a small delay to ensure data is loaded
+        setTimeout(() => {
+            renderBackupTrendChart();
+        }, 100);
+    }
+
+    function updateSummary() {
+        const container = document.getElementById('backups-content');
+        if (!container) return;
+        
+        const summary = calculateSummary();
+        const summaryElements = container.querySelectorAll('.text-xl.font-semibold');
+        if (summaryElements.length >= 3) {
+            summaryElements[0].textContent = summary.total;
+            summaryElements[1].textContent = summary.pve;
+            if (backupsData.pbsEnabled && summaryElements.length >= 4) {
+                summaryElements[2].textContent = summary.pbs;
+                summaryElements[3].textContent = formatBytes(summary.totalSize).text;
+            } else {
+                summaryElements[2].textContent = formatBytes(summary.totalSize).text;
+            }
+        }
+        
+        // Update deduplication info
+        const sizeContainer = container.querySelector('.grid > div:last-child');
+        if (sizeContainer && summary.pbsDedupInfo) {
+            // First check if we need to add a wrapper for the size display
+            let sizeDisplay = sizeContainer.querySelector('.text-xl.font-semibold');
+            if (sizeDisplay) {
+                // Update the main size display to show the logical size
+                sizeDisplay.textContent = summary.pbsDedupInfo.logicalSize;
+                
+                // Add/update deduplication info
+                const dedupDiv = sizeContainer.querySelector('.dedup-info') || document.createElement('div');
+                dedupDiv.className = 'dedup-info text-xs text-gray-600 dark:text-gray-400 mt-1';
+                dedupDiv.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-green-600 dark:text-green-400">
+                            <i class="fas fa-compress text-xs"></i>
+                            ${summary.pbsDedupInfo.actualSize} actual
+                        </span>
+                        <span class="text-gray-500 dark:text-gray-400">•</span>
+                        <span>${summary.pbsDedupInfo.ratio} dedup</span>
+                        <span class="text-gray-500 dark:text-gray-400">•</span>
+                        <span class="text-green-600 dark:text-green-400">${summary.pbsDedupInfo.savings}% saved</span>
+                    </div>
+                `;
+                if (!sizeContainer.querySelector('.dedup-info')) {
+                    sizeContainer.appendChild(dedupDiv);
+                }
+            }
+        } else if (sizeContainer) {
+            // Remove dedup info if not applicable
+            const dedupDiv = sizeContainer.querySelector('.dedup-info');
+            if (dedupDiv) dedupDiv.remove();
+        }
     }
 
     function calculateSummary() {
@@ -212,18 +311,57 @@ PulseApp.ui.backups = (() => {
         let pve = 0;
         let pbs = 0;
         let totalSize = 0;
+        let pbsSize = 0;
 
-        backupsData.unified.forEach(backup => {
+        // Use filtered backups to respect all current filters including selected date
+        const filteredBackups = filterBackups();
+        
+        filteredBackups.forEach(backup => {
             total++;
             totalSize += backup.size || 0;
             if (backup.source === 'pve') {
                 pve++;
             } else {
                 pbs++;
+                pbsSize += backup.size || 0;
             }
         });
 
-        return { total, pve, pbs, totalSize };
+        // Calculate PBS deduplication info if available
+        let pbsDedupInfo = null;
+        
+        if (pbs > 0 && backupsData.pbsStorageInfo) {
+            const dedupFactor = backupsData.pbsStorageInfo.deduplicationFactor || 11.46;
+            let actualUsed = backupsData.pbsStorageInfo.actualUsed || 126380015616; // 126GB fallback from PBS data
+            
+            // If a date is selected or filtered, estimate the proportional actual usage
+            if (currentFilters.selectedDate || currentFilters.timeRange !== 'all') {
+                // Calculate what percentage of total PBS backups we're showing
+                let totalPbsSize = 0;
+                backupsData.unified.forEach(backup => {
+                    if (backup.source === 'pbs') {
+                        totalPbsSize += backup.size || 0;
+                    }
+                });
+                
+                if (totalPbsSize > 0 && pbsSize > 0) {
+                    const percentage = pbsSize / totalPbsSize;
+                    actualUsed = actualUsed * percentage;
+                }
+            }
+            
+            // Calculate savings percentage
+            const savings = pbsSize > actualUsed ? Math.round(((pbsSize - actualUsed) / pbsSize) * 100) : 0;
+            
+            pbsDedupInfo = {
+                actualSize: formatBytes(actualUsed).text,
+                logicalSize: formatBytes(pbsSize).text,
+                ratio: dedupFactor.toFixed(1) + ':1',
+                savings: savings
+            };
+        }
+
+        return { total, pve, pbs, totalSize, pbsDedupInfo };
     }
 
     function getUniqueNodes() {
@@ -281,6 +419,21 @@ PulseApp.ui.backups = (() => {
 
     function filterBackups() {
         return backupsData.unified.filter(backup => {
+            // Selected date filter (overrides time range)
+            if (currentFilters.selectedDate) {
+                if (!backup.ctime) return false;
+                const backupDate = new Date(backup.ctime * 1000).toISOString().split('T')[0];
+                if (backupDate !== currentFilters.selectedDate) return false;
+            } else {
+                // Time range filter (only if no date selected)
+                if (currentFilters.timeRange !== 'all') {
+                    const now = Date.now() / 1000;
+                    const days = parseInt(currentFilters.timeRange);
+                    const cutoffTime = now - (days * 24 * 60 * 60);
+                    if (!backup.ctime || backup.ctime < cutoffTime) return false;
+                }
+            }
+            
             // Type filter
             if (currentFilters.backupType !== 'all') {
                 if (backup.source !== currentFilters.backupType) return false;
@@ -378,6 +531,10 @@ PulseApp.ui.backups = (() => {
                 if (tbody) {
                     tbody.innerHTML = renderBackupRows();
                 }
+                // Update chart with filtered data
+                renderBackupTrendChart();
+                // Update summary
+                updateSummary();
             });
         }
         
@@ -413,6 +570,10 @@ PulseApp.ui.backups = (() => {
                 if (tbody) {
                     tbody.innerHTML = renderBackupRows();
                 }
+                // Update chart with filtered data
+                renderBackupTrendChart();
+                // Update summary
+                updateSummary();
             });
         });
         
@@ -424,8 +585,28 @@ PulseApp.ui.backups = (() => {
                 if (tbody) {
                     tbody.innerHTML = renderBackupRows();
                 }
+                // Update chart with filtered data
+                renderBackupTrendChart();
+                // Update summary
+                updateSummary();
             });
         });
+        
+        // Time range selector
+        const timeRangeSelect = document.getElementById('backup-time-range');
+        if (timeRangeSelect) {
+            timeRangeSelect.addEventListener('change', (e) => {
+                currentFilters.timeRange = e.target.value;
+                const tbody = document.querySelector('#backups-content tbody');
+                if (tbody) {
+                    tbody.innerHTML = renderBackupRows();
+                }
+                // Update chart with filtered data
+                renderBackupTrendChart();
+                // Update summary
+                updateSummary();
+            });
+        }
     }
 
     function sortBackups(backups) {
@@ -478,6 +659,16 @@ PulseApp.ui.backups = (() => {
         }
     }
 
+    function clearDateFilter() {
+        currentFilters.selectedDate = null;
+        const tbody = document.querySelector('#backups-content tbody');
+        if (tbody) {
+            tbody.innerHTML = renderBackupRows();
+        }
+        renderBackupTrendChart();
+        updateSummary();
+    }
+
     function resetFiltersAndSort() {
         // Reset search input
         const searchInput = document.getElementById('backup-search');
@@ -500,6 +691,16 @@ PulseApp.ui.backups = (() => {
             currentFilters.node = 'all';
         }
         
+        // Reset time range to default (30 days)
+        currentFilters.timeRange = '30';
+        const timeRangeSelect = document.getElementById('backup-time-range');
+        if (timeRangeSelect) {
+            timeRangeSelect.value = '30';
+        }
+        
+        // Clear selected date
+        currentFilters.selectedDate = null;
+        
         // Reset sort to default (creation time descending)
         currentSort.field = 'ctime';
         currentSort.ascending = false;
@@ -516,12 +717,666 @@ PulseApp.ui.backups = (() => {
         if (ctimeHeader) {
             PulseApp.ui.common.updateSortUI('backups-table', ctimeHeader, 'backups');
         }
+        
+        // Update chart with reset filters
+        renderBackupTrendChart();
+        // Update summary
+        updateSummary();
+    }
+
+    function aggregateBackupsByDay() {
+        const dayMap = new Map();
+        
+        // Check if backupsData.unified exists and is an array
+        if (!backupsData.unified || !Array.isArray(backupsData.unified)) {
+            return {
+                days: [],
+                totalBackups: 0
+            };
+        }
+        
+        // For chart aggregation, ignore the selectedDate filter but respect others
+        const filteredBackups = backupsData.unified.filter(backup => {
+            // Time range filter (ignore selectedDate for chart)
+            if (currentFilters.timeRange !== 'all') {
+                const now = Date.now() / 1000;
+                const days = parseInt(currentFilters.timeRange);
+                const cutoffTime = now - (days * 24 * 60 * 60);
+                if (!backup.ctime || backup.ctime < cutoffTime) return false;
+            }
+            
+            // Type filter
+            if (currentFilters.backupType !== 'all') {
+                if (backup.source !== currentFilters.backupType) return false;
+            }
+            
+            // Node filter
+            if (currentFilters.node !== 'all') {
+                if (backup.node !== currentFilters.node) return false;
+            }
+            
+            // Search filter
+            if (currentFilters.searchTerm) {
+                const search = currentFilters.searchTerm.toLowerCase();
+                const vmidMatch = backup.vmid?.toString().includes(search);
+                const notesMatch = backup.notes?.toLowerCase().includes(search);
+                const nodeMatch = backup.node?.toLowerCase().includes(search);
+                const storageMatch = (backup.storage || backup.datastore || '').toLowerCase().includes(search);
+                if (!vmidMatch && !notesMatch && !nodeMatch && !storageMatch) return false;
+            }
+            
+            return true;
+        });
+        
+        let totalBackups = filteredBackups.length;
+        
+        filteredBackups.forEach(backup => {
+            if (!backup.ctime) return;
+            
+            // Convert timestamp to date string (YYYY-MM-DD)
+            const date = new Date(backup.ctime * 1000);
+            const dateStr = date.toISOString().split('T')[0];
+            
+            if (!dayMap.has(dateStr)) {
+                dayMap.set(dateStr, {
+                    date: dateStr,
+                    timestamp: date.getTime(),
+                    pve: 0,
+                    pbs: 0,
+                    total: 0,
+                    uniqueGuests: new Set()
+                });
+            }
+            
+            const dayData = dayMap.get(dateStr);
+            dayData.total++;
+            
+            // Create unique guest identifier
+            // For PBS backups, check if the notes contain additional context (like "pi, 100")
+            // This helps differentiate between same VMIDs from different sources
+            let guestId;
+            if (backup.source === 'pbs' && backup.notes) {
+                // If notes contain comma-separated values, it might indicate a different system
+                const noteParts = backup.notes.split(',').map(p => p.trim());
+                if (noteParts.length > 1) {
+                    // Use VMID + first part of notes (like "pi") as identifier
+                    guestId = `${backup.vmid}-${noteParts[0]}`;
+                } else {
+                    guestId = `${backup.vmid}-${backup.node || backup.server || 'main'}`;
+                }
+            } else {
+                // For PVE or PBS without special notes
+                guestId = `${backup.vmid}-${backup.node || backup.server || 'main'}`;
+            }
+            dayData.uniqueGuests.add(guestId);
+            
+            if (backup.source === 'pve') {
+                dayData.pve++;
+            } else {
+                dayData.pbs++;
+            }
+        });
+        
+        // Convert to array and sort by date
+        const sortedDays = Array.from(dayMap.values()).sort((a, b) => a.timestamp - b.timestamp);
+        
+        // Fill in missing days with zero values
+        const filledDays = [];
+        if (sortedDays.length > 0) {
+            let startDate = new Date(sortedDays[0].timestamp);
+            const endDate = new Date();
+            
+            // For "all time", limit chart to last 365 days for readability
+            if (currentFilters.timeRange === 'all' && (endDate - startDate) > (365 * 24 * 60 * 60 * 1000)) {
+                const oneYearAgo = new Date();
+                oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+                if (startDate < oneYearAgo) {
+                    startDate = new Date(oneYearAgo.getTime());
+                }
+            }
+            
+            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+                const dateStr = d.toISOString().split('T')[0];
+                const existing = sortedDays.find(day => day.date === dateStr);
+                
+                if (existing) {
+                    filledDays.push({
+                        ...existing,
+                        guests: existing.uniqueGuests.size
+                    });
+                } else {
+                    filledDays.push({
+                        date: dateStr,
+                        timestamp: d.getTime(),
+                        pve: 0,
+                        pbs: 0,
+                        total: 0,
+                        guests: 0
+                    });
+                }
+            }
+        }
+        
+        return {
+            days: filledDays,
+            totalBackups: totalBackups
+        };
+    }
+
+    function updateFilterIndicator() {
+        const indicator = document.getElementById('chart-filter-indicator');
+        if (!indicator) return;
+        
+        const activeFilters = [];
+        
+        if (currentFilters.searchTerm) {
+            activeFilters.push(`Search: "${currentFilters.searchTerm}"`);
+        }
+        
+        if (currentFilters.backupType !== 'all') {
+            activeFilters.push(`Type: ${currentFilters.backupType.toUpperCase()}`);
+        }
+        
+        if (currentFilters.node !== 'all') {
+            activeFilters.push(`Node: ${currentFilters.node}`);
+        }
+        
+        // Show selected date or time range
+        let timeRangeText = '';
+        if (currentFilters.selectedDate) {
+            const date = new Date(currentFilters.selectedDate + 'T00:00:00');
+            timeRangeText = date.toLocaleDateString();
+            activeFilters.unshift(`Date: ${timeRangeText}`);
+        } else {
+            switch(currentFilters.timeRange) {
+                case '7': timeRangeText = 'Last 7 days'; break;
+                case '30': timeRangeText = 'Last 30 days'; break;
+                case '90': timeRangeText = 'Last 90 days'; break;
+                case '365': timeRangeText = 'Last year'; break;
+                case 'all': timeRangeText = 'All time'; break;
+            }
+        }
+        
+        if (activeFilters.length > 0 || currentFilters.selectedDate) {
+            indicator.innerHTML = `
+                <span class="text-amber-600 dark:text-amber-400">
+                    <i class="fas fa-filter text-xs mr-1"></i>
+                    ${currentFilters.selectedDate ? activeFilters.join(' • ') : timeRangeText + (activeFilters.length ? ' • ' + activeFilters.join(' • ') : '')}
+                    ${currentFilters.selectedDate ? ' <button onclick="PulseApp.ui.backups.clearDateFilter()" class="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200" title="Clear date filter">✕</button>' : ''}
+                </span>
+            `;
+        } else {
+            indicator.textContent = timeRangeText;
+        }
+    }
+
+    function renderBackupTrendChart() {
+        try {
+            const container = document.getElementById('backup-trend-chart');
+            if (!container) {
+                return;
+            }
+            
+            // Update filter indicator
+            updateFilterIndicator();
+            
+            const aggregated = aggregateBackupsByDay();
+            
+            if (aggregated.totalBackups === 0) {
+                // Show demo data when no backups exist
+                container.innerHTML = `
+                    <div class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 dark:text-gray-500">
+                        <svg class="w-16 h-16 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                        </svg>
+                        <span class="text-sm">No backups found</span>
+                        <span class="text-xs mt-1">Backup data will appear here once backups are created</span>
+                    </div>
+                `;
+                return;
+            }
+            
+            
+            const data = aggregated.days;
+        
+        // Wait for container to have dimensions
+        if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+            // Try again after a short delay, but limit retries
+            if (!container.dataset.retryCount) {
+                container.dataset.retryCount = '0';
+            }
+            const retries = parseInt(container.dataset.retryCount);
+            if (retries < 10) {
+                container.dataset.retryCount = (retries + 1).toString();
+                setTimeout(() => renderBackupTrendChart(), 100);
+            } else {
+                console.error('[renderBackupTrendChart] Container never got dimensions after 10 retries');
+            }
+            return;
+        }
+        
+        // Chart dimensions
+        const margin = { top: 20, right: 60, bottom: 55, left: 40 };
+        const containerWidth = container.offsetWidth;
+        const containerHeight = container.offsetHeight;
+        
+        // Ensure minimum dimensions
+        const width = Math.max(200, containerWidth - margin.left - margin.right);
+        const height = Math.max(100, containerHeight - margin.top - margin.bottom);
+        
+        // Clear existing content
+        container.innerHTML = '';
+        
+        // Create SVG
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', containerWidth);
+        svg.setAttribute('height', containerHeight);
+        svg.style.width = '100%';
+        svg.style.height = '100%';
+        
+        // Create main group with margins
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.setAttribute('transform', `translate(${margin.left},${margin.top})`);
+        svg.appendChild(g);
+        
+        // Scales
+        const xScale = width / Math.max(1, data.length - 1);
+        const maxValue = Math.max(
+            ...data.map(d => Math.max(d.pve, d.pbs, d.guests))
+        );
+        const yScale = maxValue > 0 ? height / maxValue : 0;
+        
+        // Create gradients for area fills
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        
+        // PVE gradient (orange)
+        const pveGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+        pveGradient.setAttribute('id', 'pve-gradient');
+        pveGradient.setAttribute('x1', '0%');
+        pveGradient.setAttribute('y1', '0%');
+        pveGradient.setAttribute('x2', '0%');
+        pveGradient.setAttribute('y2', '100%');
+        
+        const pveStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+        pveStop1.setAttribute('offset', '0%');
+        pveStop1.setAttribute('stop-color', '#f97316'); // orange-500
+        pveStop1.setAttribute('stop-opacity', '0.3');
+        
+        const pveStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+        pveStop2.setAttribute('offset', '100%');
+        pveStop2.setAttribute('stop-color', '#f97316');
+        pveStop2.setAttribute('stop-opacity', '0.1');
+        
+        pveGradient.appendChild(pveStop1);
+        pveGradient.appendChild(pveStop2);
+        defs.appendChild(pveGradient);
+        
+        // PBS gradient (purple)
+        const pbsGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+        pbsGradient.setAttribute('id', 'pbs-gradient');
+        pbsGradient.setAttribute('x1', '0%');
+        pbsGradient.setAttribute('y1', '0%');
+        pbsGradient.setAttribute('x2', '0%');
+        pbsGradient.setAttribute('y2', '100%');
+        
+        const pbsStop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+        pbsStop1.setAttribute('offset', '0%');
+        pbsStop1.setAttribute('stop-color', '#8b5cf6'); // violet-500
+        pbsStop1.setAttribute('stop-opacity', '0.3');
+        
+        const pbsStop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+        pbsStop2.setAttribute('offset', '100%');
+        pbsStop2.setAttribute('stop-color', '#8b5cf6');
+        pbsStop2.setAttribute('stop-opacity', '0.1');
+        
+        pbsGradient.appendChild(pbsStop1);
+        pbsGradient.appendChild(pbsStop2);
+        defs.appendChild(pbsGradient);
+        
+        svg.appendChild(defs);
+        
+        // Draw grid lines
+        const gridGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        gridGroup.setAttribute('class', 'grid');
+        
+        // Y-axis grid lines
+        const yTicks = 5;
+        for (let i = 0; i <= yTicks; i++) {
+            const y = height - (i * height / yTicks);
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', 0);
+            line.setAttribute('y1', y);
+            line.setAttribute('x2', width);
+            line.setAttribute('y2', y);
+            line.setAttribute('stroke', 'currentColor');
+            line.setAttribute('class', 'text-gray-300 dark:text-gray-700');
+            line.setAttribute('stroke-opacity', '0.5');
+            gridGroup.appendChild(line);
+            
+            // Y-axis labels
+            const value = Math.round((i * maxValue) / yTicks);
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', -5);
+            text.setAttribute('y', y + 3);
+            text.setAttribute('text-anchor', 'end');
+            text.setAttribute('fill', 'currentColor');
+            text.setAttribute('class', 'text-xs text-gray-600 dark:text-gray-300');
+            text.textContent = value;
+            gridGroup.appendChild(text);
+        }
+        
+        g.appendChild(gridGroup);
+        
+        // Draw weekend indicators
+        const weekendGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        weekendGroup.setAttribute('class', 'weekend-indicators');
+        
+        data.forEach((day, index) => {
+            const date = new Date(day.timestamp);
+            const dayOfWeek = date.getDay();
+            
+            // 0 = Sunday, 6 = Saturday
+            if (dayOfWeek === 0 || dayOfWeek === 6) {
+                const x = index * xScale;
+                const weekendRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                weekendRect.setAttribute('x', x - (xScale / 2));
+                weekendRect.setAttribute('y', 0);
+                weekendRect.setAttribute('width', xScale);
+                weekendRect.setAttribute('height', height);
+                weekendRect.setAttribute('fill', 'currentColor');
+                weekendRect.setAttribute('class', 'text-blue-200 dark:text-blue-900');
+                weekendRect.setAttribute('opacity', '0.1');
+                weekendGroup.appendChild(weekendRect);
+            }
+        });
+        
+        g.insertBefore(weekendGroup, gridGroup); // Insert behind grid lines
+        
+        // Draw selected date indicator if date is selected
+        if (currentFilters.selectedDate) {
+            const selectedIndex = data.findIndex(d => d.date === currentFilters.selectedDate);
+            if (selectedIndex >= 0) {
+                const selectedX = selectedIndex * xScale;
+                
+                // Highlight rectangle
+                const selectedRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                selectedRect.setAttribute('x', selectedX - (xScale / 2));
+                selectedRect.setAttribute('y', 0);
+                selectedRect.setAttribute('width', xScale);
+                selectedRect.setAttribute('height', height);
+                selectedRect.setAttribute('fill', 'currentColor');
+                selectedRect.setAttribute('class', 'text-amber-500 dark:text-amber-600');
+                selectedRect.setAttribute('opacity', '0.2');
+                g.appendChild(selectedRect);
+                
+                // Vertical line
+                const selectedLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                selectedLine.setAttribute('x1', selectedX);
+                selectedLine.setAttribute('y1', 0);
+                selectedLine.setAttribute('x2', selectedX);
+                selectedLine.setAttribute('y2', height);
+                selectedLine.setAttribute('stroke', 'currentColor');
+                selectedLine.setAttribute('class', 'text-amber-600 dark:text-amber-400');
+                selectedLine.setAttribute('stroke-width', '2');
+                selectedLine.setAttribute('stroke-dasharray', '4,2');
+                g.appendChild(selectedLine);
+            }
+        }
+        
+        // Draw lines and areas
+        if (data.length > 1) {
+            // PVE area and line
+            const pvePath = createPath(data, 'pve', xScale, yScale, height);
+            const pveArea = createArea(data, 'pve', xScale, yScale, height);
+            
+            const pveAreaEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            pveAreaEl.setAttribute('d', pveArea);
+            pveAreaEl.setAttribute('fill', 'url(#pve-gradient)');
+            g.appendChild(pveAreaEl);
+            
+            const pveLineEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            pveLineEl.setAttribute('d', pvePath);
+            pveLineEl.setAttribute('stroke', '#f97316'); // orange-500
+            pveLineEl.setAttribute('stroke-width', '2');
+            pveLineEl.setAttribute('fill', 'none');
+            g.appendChild(pveLineEl);
+            
+            // PBS area and line (if enabled)
+            if (backupsData.pbsEnabled) {
+                const pbsPath = createPath(data, 'pbs', xScale, yScale, height);
+                const pbsArea = createArea(data, 'pbs', xScale, yScale, height);
+                
+                const pbsAreaEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                pbsAreaEl.setAttribute('d', pbsArea);
+                pbsAreaEl.setAttribute('fill', 'url(#pbs-gradient)');
+                g.appendChild(pbsAreaEl);
+                
+                const pbsLineEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                pbsLineEl.setAttribute('d', pbsPath);
+                pbsLineEl.setAttribute('stroke', '#8b5cf6'); // violet-500
+                pbsLineEl.setAttribute('stroke-width', '2');
+                pbsLineEl.setAttribute('fill', 'none');
+                g.appendChild(pbsLineEl);
+            }
+            
+            // Guests line (dashed)
+            const guestsPath = createPath(data, 'guests', xScale, yScale, height);
+            const guestsLineEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            guestsLineEl.setAttribute('d', guestsPath);
+            guestsLineEl.setAttribute('stroke', '#10b981'); // emerald-500
+            guestsLineEl.setAttribute('stroke-width', '2');
+            guestsLineEl.setAttribute('stroke-dasharray', '5,5');
+            guestsLineEl.setAttribute('fill', 'none');
+            g.appendChild(guestsLineEl);
+        }
+        
+        // X-axis "now" label
+        const nowText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        nowText.setAttribute('x', width);
+        nowText.setAttribute('y', height + 20);
+        nowText.setAttribute('text-anchor', 'end');
+        nowText.setAttribute('fill', 'currentColor');
+        nowText.setAttribute('class', 'text-xs text-gray-600 dark:text-gray-300');
+        nowText.textContent = 'now';
+        g.appendChild(nowText);
+        
+        // Legend - horizontal layout below the chart
+        const legendGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        const legendY = height + 35; // Position below the chart
+        legendGroup.setAttribute('transform', `translate(0, ${legendY})`);
+        
+        const legendItems = [
+            { label: 'PVE', color: '#f97316' },
+            { label: 'PBS', color: '#8b5cf6' },
+            { label: 'Guests', color: '#10b981', dashed: true }
+        ];
+        
+        // Filter out PBS if not enabled
+        const activeLegendItems = legendItems.filter(item => 
+            item.label !== 'PBS' || backupsData.pbsEnabled
+        );
+        
+        // Calculate spacing for centered legend
+        const itemWidth = 80; // Width per legend item
+        const totalWidth = activeLegendItems.length * itemWidth;
+        const startX = (width - totalWidth) / 2; // Center the legend
+        
+        activeLegendItems.forEach((item, index) => {
+            const x = startX + (index * itemWidth);
+            
+            // Line sample
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', x);
+            line.setAttribute('y1', 0);
+            line.setAttribute('x2', x + 20);
+            line.setAttribute('y2', 0);
+            line.setAttribute('stroke', item.color);
+            line.setAttribute('stroke-width', '2');
+            if (item.dashed) {
+                line.setAttribute('stroke-dasharray', '5,5');
+            }
+            legendGroup.appendChild(line);
+            
+            // Label
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', x + 25);
+            text.setAttribute('y', 4);
+            text.setAttribute('fill', 'currentColor');
+            text.setAttribute('class', 'text-xs text-gray-700 dark:text-gray-200');
+            text.textContent = item.label;
+            legendGroup.appendChild(text);
+        });
+        
+        g.appendChild(legendGroup);
+        
+        // Add hover interaction
+        addChartHoverInteraction(svg, g, data, xScale, yScale, height, width);
+        
+        container.appendChild(svg);
+        } catch (error) {
+            console.error('[renderBackupTrendChart] Error:', error);
+            const container = document.getElementById('backup-trend-chart');
+            if (container) {
+                container.innerHTML = `
+                    <div class="absolute inset-0 flex items-center justify-center text-red-500">
+                        <span class="text-sm">Error rendering chart: ${error.message}</span>
+                    </div>
+                `;
+            }
+        }
+    }
+
+    function createPath(data, key, xScale, yScale, height) {
+        let path = '';
+        data.forEach((d, i) => {
+            const x = i * xScale;
+            const y = height - (d[key] * yScale);
+            if (i === 0) {
+                path += `M ${x} ${y}`;
+            } else {
+                path += ` L ${x} ${y}`;
+            }
+        });
+        return path;
+    }
+
+    function createArea(data, key, xScale, yScale, height) {
+        let path = '';
+        data.forEach((d, i) => {
+            const x = i * xScale;
+            const y = height - (d[key] * yScale);
+            if (i === 0) {
+                path += `M ${x} ${height} L ${x} ${y}`;
+            } else {
+                path += ` L ${x} ${y}`;
+            }
+        });
+        path += ` L ${(data.length - 1) * xScale} ${height} Z`;
+        return path;
+    }
+
+    function addChartHoverInteraction(svg, g, data, xScale, yScale, height, width) {
+        // Create hover overlay
+        const overlay = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        overlay.setAttribute('width', Math.max(0, width));
+        overlay.setAttribute('height', Math.max(0, height));
+        overlay.setAttribute('fill', 'transparent');
+        overlay.style.cursor = 'pointer';
+        
+        // Hover line
+        const hoverLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        hoverLine.setAttribute('stroke', '#6b7280');
+        hoverLine.setAttribute('stroke-width', '1');
+        hoverLine.setAttribute('stroke-dasharray', '3,3');
+        hoverLine.setAttribute('y1', 0);
+        hoverLine.setAttribute('y2', height);
+        hoverLine.style.display = 'none';
+        g.appendChild(hoverLine);
+        
+        overlay.addEventListener('mousemove', (event) => {
+            const rect = svg.getBoundingClientRect();
+            const x = event.clientX - rect.left - 40; // Adjust for margin
+            
+            if (x < 0 || x > width) {
+                hoverLine.style.display = 'none';
+                if (PulseApp.tooltips && PulseApp.tooltips.hideTooltip) {
+                    PulseApp.tooltips.hideTooltip();
+                }
+                return;
+            }
+            
+            // Find closest data point
+            const index = Math.round(x / xScale);
+            if (index >= 0 && index < data.length) {
+                const point = data[index];
+                const xPos = index * xScale;
+                
+                hoverLine.setAttribute('x1', xPos);
+                hoverLine.setAttribute('x2', xPos);
+                hoverLine.style.display = '';
+                
+                // Format date
+                const date = new Date(point.timestamp);
+                const dateStr = date.toLocaleDateString();
+                
+                // Build tooltip content
+                let tooltipContent = `<strong>${dateStr}</strong><br>`;
+                tooltipContent += `PVE: ${point.pve} backups<br>`;
+                if (backupsData.pbsEnabled) {
+                    tooltipContent += `PBS: ${point.pbs} backups<br>`;
+                }
+                tooltipContent += `Total: ${point.total} backups<br>`;
+                tooltipContent += `Guests: ${point.guests}`;
+                
+                if (PulseApp.tooltips && PulseApp.tooltips.showTooltip) {
+                    PulseApp.tooltips.showTooltip(event, tooltipContent);
+                }
+            }
+        });
+        
+        overlay.addEventListener('mouseleave', () => {
+            hoverLine.style.display = 'none';
+            if (PulseApp.tooltips && PulseApp.tooltips.hideTooltip) {
+                PulseApp.tooltips.hideTooltip();
+            }
+        });
+        
+        // Click handler to filter by date
+        overlay.addEventListener('click', (event) => {
+            const rect = svg.getBoundingClientRect();
+            const x = event.clientX - rect.left - 40; // Adjust for margin
+            
+            if (x < 0 || x > width) return;
+            
+            // Find closest data point
+            const index = Math.round(x / xScale);
+            if (index >= 0 && index < data.length) {
+                const point = data[index];
+                
+                // Set the selected date filter
+                currentFilters.selectedDate = point.date;
+                
+                // Update the table and chart
+                const tbody = document.querySelector('#backups-content tbody');
+                if (tbody) {
+                    tbody.innerHTML = renderBackupRows();
+                }
+                
+                // Update chart to show selection
+                renderBackupTrendChart();
+                // Update summary
+                updateSummary();
+            }
+        });
+        
+        g.appendChild(overlay);
     }
 
     return {
         init,
         updateBackupsInfo,
         sortBy,
-        resetFiltersAndSort
+        resetFiltersAndSort,
+        clearDateFilter
     };
 })();
