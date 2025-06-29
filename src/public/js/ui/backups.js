@@ -204,13 +204,22 @@ PulseApp.ui.backups = (() => {
                     
                     <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Time:</span>
-                        <select id="backup-time-range" class="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer">
-                            <option value="7" ${currentFilters.timeRange === '7' ? 'selected' : ''}>Last 7 days</option>
-                            <option value="30" ${currentFilters.timeRange === '30' ? 'selected' : ''}>Last 30 days</option>
-                            <option value="90" ${currentFilters.timeRange === '90' ? 'selected' : ''}>Last 90 days</option>
-                            <option value="365" ${currentFilters.timeRange === '365' ? 'selected' : ''}>Last year</option>
-                            <option value="all" ${currentFilters.timeRange === 'all' ? 'selected' : ''}>All time</option>
-                        </select>
+                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                            <input type="radio" id="time-7" name="backup-time" value="7" class="hidden peer" ${currentFilters.timeRange === '7' ? 'checked' : ''}>
+                            <label for="time-7" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === '7' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none">7d</label>
+                            
+                            <input type="radio" id="time-30" name="backup-time" value="30" class="hidden peer" ${currentFilters.timeRange === '30' ? 'checked' : ''}>
+                            <label for="time-30" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === '30' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">30d</label>
+                            
+                            <input type="radio" id="time-90" name="backup-time" value="90" class="hidden peer" ${currentFilters.timeRange === '90' ? 'checked' : ''}>
+                            <label for="time-90" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === '90' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">90d</label>
+                            
+                            <input type="radio" id="time-365" name="backup-time" value="365" class="hidden peer" ${currentFilters.timeRange === '365' ? 'checked' : ''}>
+                            <label for="time-365" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === '365' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">1y</label>
+                            
+                            <input type="radio" id="time-all" name="backup-time" value="all" class="hidden peer" ${currentFilters.timeRange === 'all' ? 'checked' : ''}>
+                            <label for="time-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === 'all' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
+                        </div>
                     </div>
                     
                     <div class="flex items-center gap-2">
@@ -804,28 +813,30 @@ PulseApp.ui.backups = (() => {
             });
         });
         
-        // Time range selector
-        const timeRangeSelect = document.getElementById('backup-time-range');
-        if (timeRangeSelect) {
-            timeRangeSelect.addEventListener('change', (e) => {
-                currentFilters.timeRange = e.target.value;
-                const tbody = document.querySelector('#backups-content tbody');
-                if (tbody) {
-                    tbody.innerHTML = renderBackupRows();
-                }
-                // Update chart with filtered data
-                renderBackupTrendChart();
-                // Update summary
-                updateSummary();
-                
-                // Update time range text display
-                const timeRangeText = document.getElementById('time-range-text');
-                if (timeRangeText && !currentFilters.selectedDate) {
-                    const selectedOption = timeRangeSelect.options[timeRangeSelect.selectedIndex];
-                    timeRangeText.textContent = `Showing: ${selectedOption.text}`;
+        // Time range radio buttons
+        document.querySelectorAll('input[name="backup-time"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    currentFilters.timeRange = e.target.value;
+                    const tbody = document.querySelector('#backups-content tbody');
+                    if (tbody) {
+                        tbody.innerHTML = renderBackupRows();
+                    }
+                    // Update chart with filtered data
+                    renderBackupTrendChart();
+                    // Update summary
+                    updateSummary();
+                    
+                    // Update time range text display
+                    const timeRangeText = document.getElementById('time-range-text');
+                    if (timeRangeText && !currentFilters.selectedDate) {
+                        const label = e.target.nextElementSibling.textContent;
+                        const displayText = e.target.value === 'all' ? 'All time' : `Last ${label}`;
+                        timeRangeText.textContent = `Showing: ${displayText}`;
+                    }
                 }
             });
-        }
+        });
         
         // Grouping radio buttons
         document.querySelectorAll('input[name="backup-group"]').forEach(radio => {
@@ -903,10 +914,11 @@ PulseApp.ui.backups = (() => {
         // Restore time range text
         const timeRangeText = document.getElementById('time-range-text');
         if (timeRangeText) {
-            const timeRangeSelect = document.getElementById('backup-time-range');
-            if (timeRangeSelect) {
-                const selectedOption = timeRangeSelect.options[timeRangeSelect.selectedIndex];
-                timeRangeText.textContent = `Showing: ${selectedOption.text}`;
+            const selectedRadio = document.querySelector('input[name="backup-time"]:checked');
+            if (selectedRadio) {
+                const label = selectedRadio.nextElementSibling.textContent;
+                const displayText = selectedRadio.value === 'all' ? 'All time' : `Last ${label}`;
+                timeRangeText.textContent = `Showing: ${displayText}`;
             }
         }
     }
