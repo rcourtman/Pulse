@@ -1384,8 +1384,8 @@ PulseApp.ui.alerts = (() => {
             const data = await response.json();
             
             // Extract notification status from config
-            const emailEnabled = data.ALERT_EMAIL_ENABLED !== false && data.GLOBAL_EMAIL_ENABLED !== false;
-            const webhookEnabled = data.ALERT_WEBHOOK_ENABLED !== false && data.GLOBAL_WEBHOOK_ENABLED !== false;
+            const emailEnabled = data.ALERT_EMAIL_ENABLED !== false && (data.SMTP_HOST || data.ALERT_FROM_EMAIL);
+            const webhookEnabled = data.ALERT_WEBHOOK_ENABLED !== false && !!data.WEBHOOK_URL;
             
             // Update toggle switches
             const emailToggle = document.getElementById('alert-email-toggle');
