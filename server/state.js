@@ -513,6 +513,23 @@ function getHealthSummary() {
   };
 }
 
+// Update PBS servers (for push mode)
+function updatePbsServers(pbsServers) {
+  if (Array.isArray(pbsServers)) {
+    state.pbs = pbsServers;
+    // Mark push-mode servers that haven't sent data recently as offline
+    state.pbs.forEach(pbs => {
+      if (pbs.pushMode && pbs.lastPushReceived) {
+        // Mark as offline if no push received in 2 minutes
+        if (Date.now() - pbs.lastPushReceived > 120000) {
+          pbs.online = false;
+          pbs.error = 'No data received in 2 minutes';
+        }
+      }
+    });
+  }
+}
+
 // Graceful cleanup
 function destroy() {
   console.log('[State Manager] Cleaning up...');
@@ -536,6 +553,7 @@ module.exports = {
   updateMetricsData,
   clearMetricsData,
   hasData,
+  updatePbsServers,
   
   // Enhanced monitoring functions
   getPerformanceHistory,

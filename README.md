@@ -257,6 +257,19 @@ Use this method if you have cloned the repository and want to build and run the 
 2.  **Run:** `docker compose up --build -d` (The included `docker-compose.yml` uses the `build:` context by default).
 3.  **Access and Configure:** Open your browser to `http://localhost:7655` (or your host IP if Docker runs remotely) and configure via the web interface.
 
+### 🔒 PBS Push Mode (For Isolated Servers)
+
+If you have PBS servers behind firewalls or in isolated networks that can't be reached by Pulse:
+
+1. **Enable on Pulse:** Add `PULSE_PUSH_API_KEY=your-secure-key` to your Pulse environment
+2. **Install Agent on PBS:** Run on each isolated PBS server:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/rcourtman/Pulse/main/scripts/install-pulse-agent.sh | bash
+   ```
+3. **Configure & Start:** Edit `/etc/pulse-agent/pulse-agent.env` with your settings and start the agent
+
+See [PBS Push Mode Documentation](docs/PBS_PUSH_MODE.md) for detailed setup instructions.
+
 ## 🛠️ Configuration
 
 Pulse features a comprehensive web-based configuration system accessible through the settings menu. No manual file editing required!
@@ -375,11 +388,9 @@ Pulse supports webhook notifications for alerts, compatible with Discord, Slack,
 - **Home Assistant** - Trigger automations
 - **Any webhook endpoint** - Standard JSON format
 
-📖 **For detailed setup instructions, see [Webhook Setup Guide](docs/webhooks.md)**
-
 **Features:**
 - Rich embed formatting with color-coded severity levels
-- Automatic retry on failure
+- Smart alert batching to prevent webhook spam
 - Dual payload format supporting multiple platforms
 - Real-time alert notifications for:
   - Resource threshold violations (CPU, Memory, Disk)
@@ -600,6 +611,10 @@ For development purposes or running directly from source, see the **[DEVELOPMENT
 - Simple, responsive web interface with dark/light theme support
 - Multi-environment PVE monitoring support (monitor multiple clusters/sites)
 - Efficient polling: Stops API polling when no clients are connected
+- **PBS Push Mode**: Monitor isolated/firewalled PBS servers via agent (NEW)
+  - Perfect for air-gapped or DMZ backup servers
+  - Agent pushes metrics over HTTPS (no incoming connections needed)
+  - Visual indicators for push vs pull connections
 - **Organized tab structure:**
   - **Main**: Dashboard with VM/CT status overview
   - **Storage**: Storage usage and health monitoring
