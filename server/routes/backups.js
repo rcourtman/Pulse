@@ -109,6 +109,40 @@ router.get('/backups/pbs', (req, res) => {
     }
 });
 
+// Get PBS storage info
+router.get('/backups/pbs-storage', (req, res) => {
+    try {
+        const currentState = stateManager.getState();
+        const pbsDataArray = currentState.pbs || [];
+        
+        if (pbsDataArray.length === 0) {
+            return res.json({ datastores: [] });
+        }
+        
+        const datastores = [];
+        pbsDataArray.forEach(pbsInstance => {
+            if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
+                pbsInstance.datastores.forEach(datastore => {
+                    if (datastore.status) {
+                        datastores.push({
+                            name: datastore.name,
+                            total: datastore.status.total || 0,
+                            used: datastore.status.used || 0,
+                            available: datastore.status.avail || 0,
+                            percentage: Math.round((datastore.status.used / datastore.status.total) * 100) || 0
+                        });
+                    }
+                });
+            }
+        });
+        
+        res.json({ datastores });
+    } catch (error) {
+        console.error('Error fetching PBS storage info:', error);
+        res.status(500).json({ error: 'Failed to fetch PBS storage info' });
+    }
+});
+
 // Get unified view of all backups
 router.get('/backups/unified', (req, res) => {
     try {
@@ -197,11 +231,48 @@ router.get('/backups/unified', (req, res) => {
             }
         });
 
+        // Get PBS deduplication info if PBS is enabled
+        let pbsStorageInfo = null;
+        if (pbsEnabled && pbsDataArray.length > 0) {
+            let totalUsed = 0;
+            let totalAvailable = 0;
+            let totalCapacity = 0;
+            let avgDedupFactor = 0;
+            let datastoreCount = 0;
+            
+            pbsDataArray.forEach(pbsInstance => {
+                if (pbsInstance.datastores && Array.isArray(pbsInstance.datastores)) {
+                    pbsInstance.datastores.forEach(datastore => {
+                        if (datastore.used !== undefined && datastore.total !== undefined) {
+                            totalUsed += datastore.used;
+                            totalAvailable += datastore.available || 0;
+                            totalCapacity += datastore.total;
+                            if (datastore.deduplicationFactor) {
+                                avgDedupFactor += datastore.deduplicationFactor;
+                                datastoreCount++;
+                            }
+                        }
+                    });
+                }
+            });
+            
+            if (totalUsed > 0 || datastoreCount > 0) {
+                avgDedupFactor = datastoreCount > 0 ? avgDedupFactor / datastoreCount : 1;
+                pbsStorageInfo = {
+                    actualUsed: totalUsed,
+                    totalCapacity: totalCapacity,
+                    available: totalAvailable,
+                    deduplicationFactor: avgDedupFactor
+                };
+            }
+        }
+        
         res.json({
             backups: allBackups,
             pbs: {
                 enabled: pbsEnabled,
-                servers: pbsDataArray.map(pbs => pbs.name)
+                servers: pbsDataArray.map(pbs => pbs.pbsInstanceName || pbs.name || 'PBS'),
+                storageInfo: pbsStorageInfo
             },
             collisions: collisions,
             timestamp: Date.now()
