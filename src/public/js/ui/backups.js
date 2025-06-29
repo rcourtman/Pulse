@@ -611,10 +611,11 @@ PulseApp.ui.backups = (() => {
                     break;
                 case 'date':
                     const date = new Date(backup.ctime * 1000);
-                    groupKey = date.toLocaleDateString(undefined, { 
-                        year: 'numeric', 
-                        month: '2-digit', 
-                        day: '2-digit' 
+                    // Use a more explicit format that respects locale better
+                    groupKey = date.toLocaleDateString(navigator.language || undefined, { 
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
                     });
                     break;
                 default:
