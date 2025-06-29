@@ -419,44 +419,9 @@ PulseApp.ui.settings = (() => {
     }
 
     function renderNotificationsTab(config) {
-        const emailEnabled = config.GLOBAL_EMAIL_ENABLED !== 'false' && config.GLOBAL_EMAIL_ENABLED !== false;
-        const webhookEnabled = config.GLOBAL_WEBHOOK_ENABLED !== 'false' && config.GLOBAL_WEBHOOK_ENABLED !== false;
-        
         return `
-            <!-- Global Notification Controls -->
-            <div class="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-blue-50 dark:bg-blue-900/20 mb-6">
-                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                        <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Global Notification Controls</h4>
-                        <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Master switches for all alert notifications</p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-6">
-                        <div class="flex items-center gap-3">
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Email Notifications</span>
-                            <label for="global-email-toggle" class="relative inline-flex items-center cursor-pointer focus:outline-none">
-                                <input type="checkbox" id="global-email-toggle" name="GLOBAL_EMAIL_ENABLED" value="true"
-                                       ${emailEnabled ? 'checked' : ''}
-                                       class="sr-only peer focus:outline-none"
-                                       onchange="PulseApp.ui.settings.handleGlobalEmailToggle(this.checked)">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 focus:outline-none"></div>
-                            </label>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <span class="text-sm text-gray-700 dark:text-gray-300">Webhook Notifications</span>
-                            <label for="global-webhook-toggle" class="relative inline-flex items-center cursor-pointer focus:outline-none">
-                                <input type="checkbox" id="global-webhook-toggle" name="GLOBAL_WEBHOOK_ENABLED" value="true"
-                                       ${webhookEnabled ? 'checked' : ''}
-                                       class="sr-only peer focus:outline-none"
-                                       onchange="PulseApp.ui.settings.handleGlobalWebhookToggle(this.checked)">
-                                <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 focus:outline-none"></div>
-                            </label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <!-- Email Configuration -->
-            <div id="email-config-section" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4 mb-6 ${!emailEnabled ? 'opacity-50 pointer-events-none' : ''}">
+            <div id="email-config-section" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-4 mb-6">
                 <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Email Configuration</h4>
                 
                 <div class="grid grid-cols-1 gap-3">
@@ -549,7 +514,7 @@ PulseApp.ui.settings = (() => {
             </div>
 
             <!-- Webhook Configuration -->
-            <div id="webhook-config-section" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 ${!webhookEnabled ? 'opacity-50 pointer-events-none' : ''}">
+            <div id="webhook-config-section" class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <div class="flex items-center justify-between mb-3">
                     <h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">Webhook Configuration</h4>
                     <span id="webhook-status-indicator" class="text-xs"></span>
@@ -3555,41 +3520,7 @@ PulseApp.ui.settings = (() => {
         updateCache.clear();
     }
 
-    // Notification settings functions
-    function handleGlobalEmailToggle(enabled) {
-        const emailSection = document.getElementById('email-config-section');
-        if (emailSection) {
-            if (enabled) {
-                emailSection.classList.remove('opacity-50', 'pointer-events-none');
-            } else {
-                emailSection.classList.add('opacity-50', 'pointer-events-none');
-            }
-        }
-        
-        // Update alert mode notification status if alerts module is available
-        if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
-            PulseApp.ui.alerts.updateNotificationStatus();
-        }
-    }
 
-    function handleGlobalWebhookToggle(enabled) {
-        const webhookSection = document.getElementById('webhook-config-section');
-        if (webhookSection) {
-            if (enabled) {
-                webhookSection.classList.remove('opacity-50', 'pointer-events-none');
-            } else {
-                webhookSection.classList.add('opacity-50', 'pointer-events-none');
-            }
-        }
-        
-        // Update webhook status indicator
-        setTimeout(() => updateWebhookStatus(), 100);
-        
-        // Update alert mode notification status if alerts module is available
-        if (PulseApp.ui.alerts && PulseApp.ui.alerts.updateNotificationStatus) {
-            PulseApp.ui.alerts.updateNotificationStatus();
-        }
-    }
 
     async function testEmailConfiguration() {
         const formData = collectFormData();
@@ -3645,12 +3576,6 @@ PulseApp.ui.settings = (() => {
             const statusResponse = await PulseApp.apiClient.get('/api/webhook-status');
             console.log('[Settings] Webhook status:', statusResponse);
             
-            if (!statusResponse.enabled) {
-                showMessage('⚠️ Webhooks are globally disabled. Set GLOBAL_WEBHOOK_ENABLED=true in your environment.', 'warning');
-                testButton.disabled = false;
-                testButton.textContent = originalText;
-                return;
-            }
             
             if (!formData.WEBHOOK_URL) {
                 showMessage('Please enter a webhook URL', 'error');
@@ -3789,8 +3714,6 @@ PulseApp.ui.settings = (() => {
         proceedWithStableSwitch,
         clearUpdateCache,
         getCurrentConfig: () => currentConfig,
-        handleGlobalEmailToggle,
-        handleGlobalWebhookToggle,
         testEmailConfiguration,
         testWebhookConfiguration,
         updateWebhookStatus

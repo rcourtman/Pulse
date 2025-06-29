@@ -516,8 +516,8 @@ app.post('/api/test-webhook', async (req, res) => {
 app.get('/api/webhook-status', (req, res) => {
     try {
         const alertManager = stateManager.alertManager;
-        const webhookEnabled = process.env.GLOBAL_WEBHOOK_ENABLED === 'true';
         const webhookUrl = process.env.WEBHOOK_URL;
+        const webhookEnabled = !!webhookUrl; // Webhook is enabled if URL exists
         
         // Get cooldown information
         const cooldownConfig = alertManager.webhookCooldownConfig;
