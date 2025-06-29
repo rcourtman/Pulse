@@ -528,6 +528,24 @@ PulseApp.ui.backups = (() => {
         }
     }
 
+    // Helper function to update radio button visual state
+    function updateRadioButtonStyles(radioName) {
+        document.querySelectorAll(`input[name="${radioName}"]`).forEach(radio => {
+            const label = radio.nextElementSibling;
+            if (!label) return;
+            
+            // Remove all state classes
+            label.classList.remove('bg-gray-100', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400', 'bg-white', 'dark:bg-gray-800');
+            
+            // Add appropriate classes based on checked state
+            if (radio.checked) {
+                label.classList.add('bg-gray-100', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
+            } else {
+                label.classList.add('bg-white', 'dark:bg-gray-800');
+            }
+        });
+    }
+
     function renderGroupedBackups(backups) {
         const groups = {};
         
@@ -667,24 +685,6 @@ PulseApp.ui.backups = (() => {
                 }
             }
         });
-        
-        // Helper function to update radio button visual state
-        function updateRadioButtonStyles(radioName) {
-            document.querySelectorAll(`input[name="${radioName}"]`).forEach(radio => {
-                const label = radio.nextElementSibling;
-                if (!label) return;
-                
-                // Remove all state classes
-                label.classList.remove('bg-gray-100', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400', 'bg-white', 'dark:bg-gray-800');
-                
-                // Add appropriate classes based on checked state
-                if (radio.checked) {
-                    label.classList.add('bg-gray-100', 'dark:bg-gray-700', 'text-blue-600', 'dark:text-blue-400');
-                } else {
-                    label.classList.add('bg-white', 'dark:bg-gray-800');
-                }
-            });
-        }
         
         // Type filter radio buttons
         document.querySelectorAll('input[name="backup-type"]').forEach(radio => {
