@@ -1,12 +1,34 @@
 PulseApp.ui = PulseApp.ui || {};
 
 PulseApp.ui.backups = (() => {
+    // Consistent date formatting for global users
+    function formatDateKey(timestamp) {
+        // Convert Unix timestamp to YYYY-MM-DD in UTC
+        const date = new Date(timestamp * 1000);
+        const year = date.getUTCFullYear();
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    
+    function formatDateDisplay(timestamp) {
+        // Format date for display using user's locale
+        const date = new Date(timestamp * 1000);
+        return date.toLocaleDateString(undefined, { 
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            timeZone: 'UTC'
+        });
+    }
+    
     let isInitialized = false;
     let currentFilters = {
         searchTerm: '',
         backupType: 'all', // 'all', 'pve', 'pbs'
         node: 'all',
-        selectedDate: null // YYYY-MM-DD format when a day is clicked
+        selectedDate: null, // YYYY-MM-DD format when a day is clicked
+        showMissingBackups: false
     };
     let currentChartType = 'count'; // 'count' or 'storage'
     const currentGrouping = 'date'; // Always group by date
@@ -17,7 +39,8 @@ PulseApp.ui.backups = (() => {
     let backupsData = {
         unified: [],
         pbsEnabled: false,
-        pbsStorageInfo: null
+        pbsStorageInfo: null,
+        coverage: null
     };
     let resizeTimeout = null;
     let currentTimeRange = '30d'; // Default to 30 days
@@ -83,16 +106,19 @@ PulseApp.ui.backups = (() => {
                 const newBackups = data.backups || [];
                 const newPbsEnabled = data.pbs?.enabled || false;
                 const newPbsStorageInfo = data.pbs?.storageInfo || null;
+                const newCoverage = data.coverage || null;
                 
                 // Check if data has actually changed
                 const hasChanged = JSON.stringify(newBackups) !== JSON.stringify(backupsData.unified) ||
                                  newPbsEnabled !== backupsData.pbsEnabled ||
-                                 JSON.stringify(newPbsStorageInfo) !== JSON.stringify(backupsData.pbsStorageInfo);
+                                 JSON.stringify(newPbsStorageInfo) !== JSON.stringify(backupsData.pbsStorageInfo) ||
+                                 JSON.stringify(newCoverage) !== JSON.stringify(backupsData.coverage);
                 
                 if (hasChanged) {
                     backupsData.unified = newBackups;
                     backupsData.pbsEnabled = newPbsEnabled;
                     backupsData.pbsStorageInfo = newPbsStorageInfo;
+                    backupsData.coverage = newCoverage;
                     
                     // Only render full UI on first load
                     if (container.querySelector('.overflow-x-auto')) {
@@ -100,6 +126,12 @@ PulseApp.ui.backups = (() => {
                         const tbody = container.querySelector('tbody');
                         if (tbody) {
                             tbody.innerHTML = renderBackupRows();
+                        }
+                        
+                        // Update coverage component
+                        const coverageContainer = container.querySelector('.backup-coverage-container');
+                        if (coverageContainer) {
+                            coverageContainer.outerHTML = renderBackupCoverage();
                         }
                         
                         // Update chart
@@ -128,6 +160,151 @@ PulseApp.ui.backups = (() => {
             });
     }
 
+    function renderBackupCoverage() {
+        if (!backupsData.coverage) {
+            return '';
+        }
+        
+        const coverage = backupsData.coverage;
+        
+        // Use 24h as the primary indicator
+        const percentage = coverage.percentage24h;
+        
+        // Determine status color and icon based on 24h coverage
+        let statusColor, statusIcon, statusText;
+        if (percentage === 100) {
+            statusColor = 'green';
+            statusIcon = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+            statusText = 'All guests backed up';
+        } else if (percentage >= 80) {
+            statusColor = 'yellow';
+            statusIcon = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+            statusText = 'Some guests need backups';
+        } else {
+            statusColor = 'red';
+            statusIcon = '<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+            statusText = 'Many guests missing backups';
+        }
+        
+        const missingCount = coverage.totalGuests - coverage.backedUp24h;
+        
+        return `
+            <!-- Backup Coverage -->
+            <div class="backup-coverage-container mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
+                <div class="p-3">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Backup Coverage</h3>
+                            <span class="text-gray-400 dark:text-gray-500 cursor-help" 
+                                data-tooltip="Coverage tracks unique VMIDs. Duplicate VMIDs across nodes are counted once.">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-${statusColor}-500 dark:text-${statusColor}-400">
+                                ${statusIcon}
+                            </span>
+                            <span class="text-sm font-medium text-${statusColor}-600 dark:text-${statusColor}-400">
+                                ${statusText}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">${coverage.backedUp24h}/${coverage.totalGuests}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Last 24 hours</div>
+                            <div class="text-sm font-medium text-${coverage.percentage24h === 100 ? 'green' : coverage.percentage24h >= 80 ? 'yellow' : 'red'}-600 dark:text-${coverage.percentage24h === 100 ? 'green' : coverage.percentage24h >= 80 ? 'yellow' : 'red'}-400">
+                                ${coverage.percentage24h}%
+                            </div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">${coverage.backedUp48h}/${coverage.totalGuests}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Last 48 hours</div>
+                            <div class="text-sm text-${coverage.percentage48h === 100 ? 'green' : coverage.percentage48h >= 80 ? 'yellow' : 'red'}-600 dark:text-${coverage.percentage48h === 100 ? 'green' : coverage.percentage48h >= 80 ? 'yellow' : 'red'}-400">
+                                ${coverage.percentage48h}%
+                            </div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="text-2xl font-bold text-gray-800 dark:text-gray-100">${coverage.backedUp7d}/${coverage.totalGuests}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Last 7 days</div>
+                            <div class="text-sm text-${coverage.percentage7d === 100 ? 'green' : coverage.percentage7d >= 80 ? 'yellow' : 'red'}-600 dark:text-${coverage.percentage7d === 100 ? 'green' : coverage.percentage7d >= 80 ? 'yellow' : 'red'}-400">
+                                ${coverage.percentage7d}%
+                            </div>
+                        </div>
+                        
+                        <div class="text-center">
+                            <div class="text-2xl font-bold ${coverage.neverBackedUp > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-800 dark:text-gray-100'}">${coverage.neverBackedUp}</div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400">Never backed up</div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">-</div>
+                        </div>
+                    </div>
+                    
+                    ${missingCount > 0 ? `
+                        <div class="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                            <button onclick="PulseApp.ui.backups.toggleMissingBackups()" 
+                                class="flex items-center justify-between w-full text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded p-2 -m-2 transition-colors">
+                                <div class="flex items-center gap-2">
+                                    <svg id="missing-backups-chevron" class="w-4 h-4 text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                    </svg>
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                        Missing backups (${missingCount})
+                                    </span>
+                                </div>
+                                <span class="text-xs text-gray-500 dark:text-gray-400">
+                                    Click to ${currentFilters.showMissingBackups ? 'hide' : 'show'}
+                                </span>
+                            </button>
+                            
+                            <div id="missing-backups-list" class="mt-3 ${currentFilters.showMissingBackups ? '' : 'hidden'}">
+                                <div class="max-h-64 overflow-y-auto">
+                                    <table class="w-full text-sm">
+                                        <thead class="sticky top-0 bg-gray-50 dark:bg-gray-700/50">
+                                            <tr>
+                                                <th class="text-left p-2 font-medium text-gray-700 dark:text-gray-300">Guest</th>
+                                                <th class="text-left p-2 font-medium text-gray-700 dark:text-gray-300">Type</th>
+                                                <th class="text-left p-2 font-medium text-gray-700 dark:text-gray-300">Node(s)</th>
+                                                <th class="text-left p-2 font-medium text-gray-700 dark:text-gray-300">Last Backup</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${coverage.missingBackups.filter(guest => {
+                                                // Show guests missing backups in last 24h
+                                                if (guest.lastBackup === null) return true; // Always show never backed up
+                                                return guest.daysSinceBackup >= 1;
+                                            }).map(guest => `
+                                                <tr class="border-t border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                                                    <td class="p-2">
+                                                        <span class="font-medium">${guest.vmid}</span>
+                                                        ${guest.name ? `<span class="text-xs text-gray-500 dark:text-gray-400 ml-1">${guest.name}</span>` : ''}
+                                                    </td>
+                                                    <td class="p-2">
+                                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${guest.type === 'VM' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'}">
+                                                            ${guest.type}
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-2 text-xs">${guest.nodes.join(', ')}</td>
+                                                    <td class="p-2 text-xs ${guest.lastBackup === null ? 'text-red-600 dark:text-red-400 font-medium' : 'text-gray-600 dark:text-gray-400'}">
+                                                        ${guest.lastBackup === null ? 'Never' : `${guest.daysSinceBackup} day${guest.daysSinceBackup !== 1 ? 's' : ''} ago`}
+                                                    </td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
     function renderBackupsUI() {
         const container = document.getElementById('backups-content');
         if (!container) return;
@@ -135,6 +312,8 @@ PulseApp.ui.backups = (() => {
         const uniqueNodes = getUniqueNodes();
 
         container.innerHTML = `
+            ${renderBackupCoverage()}
+            
             <!-- Backup Trend Chart -->
             <div class="mb-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-sm">
                 <div class="flex items-center justify-between p-3 pb-0">
@@ -298,7 +477,7 @@ PulseApp.ui.backups = (() => {
         const backupsToCount = currentFilters.selectedDate 
             ? backupsData.unified.filter(backup => {
                 if (!backup.ctime) return false;
-                const backupDate = new Date(backup.ctime * 1000).toLocaleDateString('en-CA');
+                const backupDate = formatDateKey(backup.ctime);
                 return backupDate === currentFilters.selectedDate;
               })
             : backupsData.unified;
@@ -417,7 +596,7 @@ PulseApp.ui.backups = (() => {
             // Selected date filter (overrides time range)
             if (currentFilters.selectedDate) {
                 if (!backup.ctime) return false;
-                const backupDate = new Date(backup.ctime * 1000).toLocaleDateString('en-CA'); // YYYY-MM-DD format for comparison
+                const backupDate = formatDateKey(backup.ctime); // YYYY-MM-DD format for comparison
                 if (backupDate !== currentFilters.selectedDate) return false;
             } else {
                 // Time range filter (only if no specific date is selected)
@@ -578,13 +757,8 @@ PulseApp.ui.backups = (() => {
         
         // Group backups by date
         backups.forEach(backup => {
-            const date = new Date(backup.ctime * 1000);
-            // Use a more explicit format that respects locale better
-            const groupKey = date.toLocaleDateString(navigator.language || undefined, { 
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric'
-            });
+            // Use consistent UTC formatting for grouping
+            const groupKey = formatDateDisplay(backup.ctime);
             
             if (!groups[groupKey]) {
                 groups[groupKey] = {
@@ -992,7 +1166,7 @@ PulseApp.ui.backups = (() => {
             
             // Convert timestamp to date string (YYYY-MM-DD)
             const date = new Date(backup.ctime * 1000);
-            const dateStr = date.toISOString().split('T')[0];
+            const dateStr = formatDateKey(backup.ctime);
             
             if (!dayMap.has(dateStr)) {
                 dayMap.set(dateStr, {
@@ -1089,8 +1263,12 @@ PulseApp.ui.backups = (() => {
             let cumulativePbsSize = 0;
             let cumulativeTotalSize = 0;
             
-            for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-                const dateStr = d.toLocaleDateString('en-CA'); // YYYY-MM-DD format for internal use
+            for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
+                // Format date consistently in UTC
+                const year = d.getUTCFullYear();
+                const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(d.getUTCDate()).padStart(2, '0');
+                const dateStr = `${year}-${month}-${day}`;
                 const existing = sortedDays.find(day => day.date === dateStr);
                 
                 if (existing) {
@@ -1386,9 +1564,25 @@ PulseApp.ui.backups = (() => {
             if (dayOfWeek === 0 || dayOfWeek === 6) {
                 const x = index * xScale;
                 const weekendRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                weekendRect.setAttribute('x', x - (xScale / 2));
+                
+                // Calculate position and width to stay within chart bounds
+                let rectX = x - (xScale / 2);
+                let rectWidth = xScale;
+                
+                // Constrain left edge
+                if (rectX < 0) {
+                    rectWidth += rectX;
+                    rectX = 0;
+                }
+                
+                // Constrain right edge
+                if (rectX + rectWidth > width) {
+                    rectWidth = width - rectX;
+                }
+                
+                weekendRect.setAttribute('x', rectX);
                 weekendRect.setAttribute('y', 0);
-                weekendRect.setAttribute('width', xScale);
+                weekendRect.setAttribute('width', rectWidth);
                 weekendRect.setAttribute('height', height);
                 weekendRect.setAttribute('fill', 'currentColor');
                 weekendRect.setAttribute('class', 'text-blue-200 dark:text-blue-900');
@@ -1405,11 +1599,27 @@ PulseApp.ui.backups = (() => {
             if (selectedIndex >= 0) {
                 const selectedX = selectedIndex * xScale;
                 
-                // Highlight rectangle
+                // Highlight rectangle - constrain to chart boundaries
                 const selectedRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-                selectedRect.setAttribute('x', selectedX - (xScale / 2));
+                
+                // Calculate x position and width to stay within chart bounds
+                let rectX = selectedX - (xScale / 2);
+                let rectWidth = xScale;
+                
+                // Constrain left edge
+                if (rectX < 0) {
+                    rectWidth += rectX; // Reduce width by the overflow amount
+                    rectX = 0;
+                }
+                
+                // Constrain right edge
+                if (rectX + rectWidth > width) {
+                    rectWidth = width - rectX;
+                }
+                
+                selectedRect.setAttribute('x', rectX);
                 selectedRect.setAttribute('y', 0);
-                selectedRect.setAttribute('width', xScale);
+                selectedRect.setAttribute('width', rectWidth);
                 selectedRect.setAttribute('height', height);
                 selectedRect.setAttribute('fill', 'currentColor');
                 selectedRect.setAttribute('class', 'text-amber-500 dark:text-amber-600');
@@ -1811,13 +2021,14 @@ PulseApp.ui.backups = (() => {
                 hoverLine.setAttribute('x2', xPos);
                 hoverLine.style.display = '';
                 
-                // Format date
+                // Format date in UTC for consistency
                 const date = new Date(point.timestamp);
                 const dateStr = date.toLocaleDateString(undefined, {
                     weekday: 'short',
                     year: 'numeric',
                     month: 'short',
-                    day: 'numeric'
+                    day: 'numeric',
+                    timeZone: 'UTC'
                 });
                 
                 // Build tooltip content based on chart type
@@ -1883,11 +2094,32 @@ PulseApp.ui.backups = (() => {
         g.appendChild(overlay);
     }
 
+    function toggleMissingBackups() {
+        currentFilters.showMissingBackups = !currentFilters.showMissingBackups;
+        
+        const list = document.getElementById('missing-backups-list');
+        const chevron = document.getElementById('missing-backups-chevron');
+        
+        if (list) {
+            list.classList.toggle('hidden');
+        }
+        
+        if (chevron) {
+            if (currentFilters.showMissingBackups) {
+                chevron.style.transform = 'rotate(90deg)';
+            } else {
+                chevron.style.transform = 'rotate(0deg)';
+            }
+        }
+    }
+    
+
     return {
         init,
         updateBackupsInfo,
         sortBy,
         resetFiltersAndSort,
-        clearDateFilter
+        clearDateFilter,
+        toggleMissingBackups
     };
 })();
