@@ -234,10 +234,6 @@ PulseApp.ui.backups = (() => {
                 </div>
             </div>
             
-            <!-- Filter info display -->
-            <div class="mb-2 text-xs text-gray-600 dark:text-gray-400">
-                <span id="time-range-text"></span>
-            </div>
 
             <!-- Backups Table -->
             <div class="overflow-x-auto border border-gray-200 dark:border-gray-700 rounded overflow-hidden scrollbar">
@@ -807,11 +803,6 @@ PulseApp.ui.backups = (() => {
         renderBackupTrendChart();
         updateSummary();
         
-        // Clear time range text
-        const timeRangeText = document.getElementById('time-range-text');
-        if (timeRangeText) {
-            timeRangeText.textContent = '';
-        }
     }
 
     function resetFiltersAndSort() {
@@ -865,11 +856,6 @@ PulseApp.ui.backups = (() => {
         // Update summary
         updateSummary();
         
-        // Clear time range text
-        const timeRangeText = document.getElementById('time-range-text');
-        if (timeRangeText) {
-            timeRangeText.textContent = '';
-        }
     }
 
     function aggregateBackupsByDay() {
@@ -1748,17 +1734,6 @@ PulseApp.ui.backups = (() => {
                 // Update summary
                 updateSummary();
                 
-                // Show selected date in filter info area
-                const timeRangeText = document.getElementById('time-range-text');
-                if (timeRangeText) {
-                    const dateStr = new Date(point.timestamp).toLocaleDateString(undefined, {
-                        weekday: 'short',
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric'
-                    });
-                    timeRangeText.innerHTML = `Filtering: <span class="font-medium text-amber-600 dark:text-amber-400">${dateStr}</span> <button onclick="PulseApp.ui.backups.clearDateFilter()" class="ml-2 text-blue-600 dark:text-blue-400 hover:underline">Clear</button>`;
-                }
             }
         });
         
