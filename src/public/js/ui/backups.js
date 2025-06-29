@@ -6,7 +6,6 @@ PulseApp.ui.backups = (() => {
         searchTerm: '',
         backupType: 'all', // 'all', 'pve', 'pbs'
         node: 'all',
-        timeRange: '30', // days: '7', '30', '90', '365', 'all'
         selectedDate: null // YYYY-MM-DD format when a day is clicked
     };
     let currentChartType = 'count'; // 'count' or 'storage'
@@ -203,26 +202,6 @@ PulseApp.ui.backups = (() => {
                         class="flex-1 min-w-[200px] p-1 px-2 h-7 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none">
                     
                     <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Time:</span>
-                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
-                            <input type="radio" id="time-7" name="backup-time" value="7" class="hidden peer" ${currentFilters.timeRange === '7' ? 'checked' : ''}>
-                            <label for="time-7" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === '7' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} hover:bg-gray-50 dark:hover:bg-gray-700 select-none">7d</label>
-                            
-                            <input type="radio" id="time-30" name="backup-time" value="30" class="hidden peer" ${currentFilters.timeRange === '30' ? 'checked' : ''}>
-                            <label for="time-30" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === '30' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">30d</label>
-                            
-                            <input type="radio" id="time-90" name="backup-time" value="90" class="hidden peer" ${currentFilters.timeRange === '90' ? 'checked' : ''}>
-                            <label for="time-90" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === '90' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">90d</label>
-                            
-                            <input type="radio" id="time-365" name="backup-time" value="365" class="hidden peer" ${currentFilters.timeRange === '365' ? 'checked' : ''}>
-                            <label for="time-365" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === '365' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">1y</label>
-                            
-                            <input type="radio" id="time-all" name="backup-time" value="all" class="hidden peer" ${currentFilters.timeRange === 'all' ? 'checked' : ''}>
-                            <label for="time-all" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer ${currentFilters.timeRange === 'all' ? 'bg-gray-100 dark:bg-gray-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-gray-800'} border-l border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">All</label>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-center gap-2">
                         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Type:</span>
                         <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
                             <input type="radio" id="backup-type-all" name="backup-type" value="all" class="hidden peer" ${currentFilters.backupType === 'all' ? 'checked' : ''}>
@@ -257,7 +236,7 @@ PulseApp.ui.backups = (() => {
             
             <!-- Filter info display -->
             <div class="mb-2 text-xs text-gray-600 dark:text-gray-400">
-                <span id="time-range-text">Showing: ${currentFilters.timeRange === 'all' ? 'All time' : `Last ${currentFilters.timeRange} days`}</span>
+                <span id="time-range-text"></span>
             </div>
 
             <!-- Backups Table -->
@@ -445,14 +424,6 @@ PulseApp.ui.backups = (() => {
                 if (!backup.ctime) return false;
                 const backupDate = new Date(backup.ctime * 1000).toLocaleDateString('en-CA'); // YYYY-MM-DD format for comparison
                 if (backupDate !== currentFilters.selectedDate) return false;
-            } else {
-                // Time range filter (only if no date selected)
-                if (currentFilters.timeRange !== 'all') {
-                    const now = Date.now() / 1000;
-                    const days = parseInt(currentFilters.timeRange);
-                    const cutoffTime = now - (days * 24 * 60 * 60);
-                    if (!backup.ctime || backup.ctime < cutoffTime) return false;
-                }
             }
             
             // Type filter
@@ -774,31 +745,6 @@ PulseApp.ui.backups = (() => {
             });
         });
         
-        // Time range radio buttons
-        document.querySelectorAll('input[name="backup-time"]').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if (e.target.checked) {
-                    currentFilters.timeRange = e.target.value;
-                    updateRadioButtonStyles('backup-time');
-                    const tbody = document.querySelector('#backups-content tbody');
-                    if (tbody) {
-                        tbody.innerHTML = renderBackupRows();
-                    }
-                    // Update chart with filtered data
-                    renderBackupTrendChart();
-                    // Update summary
-                    updateSummary();
-                    
-                    // Update time range text display
-                    const timeRangeText = document.getElementById('time-range-text');
-                    if (timeRangeText && !currentFilters.selectedDate) {
-                        const label = e.target.nextElementSibling.textContent;
-                        const displayText = e.target.value === 'all' ? 'All time' : `Last ${label}`;
-                        timeRangeText.textContent = `Showing: ${displayText}`;
-                    }
-                }
-            });
-        });
         
     }
 
@@ -861,15 +807,10 @@ PulseApp.ui.backups = (() => {
         renderBackupTrendChart();
         updateSummary();
         
-        // Restore time range text
+        // Clear time range text
         const timeRangeText = document.getElementById('time-range-text');
         if (timeRangeText) {
-            const selectedRadio = document.querySelector('input[name="backup-time"]:checked');
-            if (selectedRadio) {
-                const label = selectedRadio.nextElementSibling.textContent;
-                const displayText = selectedRadio.value === 'all' ? 'All time' : `Last ${label}`;
-                timeRangeText.textContent = `Showing: ${displayText}`;
-            }
+            timeRangeText.textContent = '';
         }
     }
 
@@ -895,13 +836,6 @@ PulseApp.ui.backups = (() => {
             currentFilters.node = 'all';
         }
         
-        // Reset time range to default (30 days)
-        currentFilters.timeRange = '30';
-        const time30Radio = document.getElementById('time-30');
-        if (time30Radio) {
-            time30Radio.checked = true;
-        }
-        
         // Clear selected date
         currentFilters.selectedDate = null;
         
@@ -912,7 +846,6 @@ PulseApp.ui.backups = (() => {
         // Update visual state of all radio buttons
         updateRadioButtonStyles('backup-type');
         updateRadioButtonStyles('backup-node');
-        updateRadioButtonStyles('backup-time');
         
         // Update the table with reset filters and sort
         const tbody = document.querySelector('#backups-content tbody');
@@ -932,10 +865,10 @@ PulseApp.ui.backups = (() => {
         // Update summary
         updateSummary();
         
-        // Update time range text
+        // Clear time range text
         const timeRangeText = document.getElementById('time-range-text');
         if (timeRangeText) {
-            timeRangeText.textContent = 'Showing: Last 30 days';
+            timeRangeText.textContent = '';
         }
     }
 
@@ -952,14 +885,6 @@ PulseApp.ui.backups = (() => {
         
         // For chart aggregation, ignore the selectedDate filter but respect others
         const filteredBackups = backupsData.unified.filter(backup => {
-            // Time range filter (ignore selectedDate for chart)
-            if (currentFilters.timeRange !== 'all') {
-                const now = Date.now() / 1000;
-                const days = parseInt(currentFilters.timeRange);
-                const cutoffTime = now - (days * 24 * 60 * 60);
-                if (!backup.ctime || backup.ctime < cutoffTime) return false;
-            }
-            
             // Type filter
             if (currentFilters.backupType !== 'all') {
                 if (backup.source !== currentFilters.backupType) return false;
@@ -1048,13 +973,11 @@ PulseApp.ui.backups = (() => {
             let startDate = new Date(sortedDays[0].timestamp);
             const endDate = new Date();
             
-            // For "all time", limit chart to last 365 days for readability
-            if (currentFilters.timeRange === 'all' && (endDate - startDate) > (365 * 24 * 60 * 60 * 1000)) {
-                const oneYearAgo = new Date();
-                oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-                if (startDate < oneYearAgo) {
-                    startDate = new Date(oneYearAgo.getTime());
-                }
+            // Always show last 30 days in chart for readability
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+            if (startDate < thirtyDaysAgo) {
+                startDate = new Date(thirtyDaysAgo.getTime());
             }
             
             // Track cumulative values for storage chart
@@ -1125,25 +1048,16 @@ PulseApp.ui.backups = (() => {
             activeFilters.push(`Node: ${currentFilters.node}`);
         }
         
-        // Show selected date or time range
-        let timeRangeText = '';
+        // Show selected date
         if (currentFilters.selectedDate) {
             const date = new Date(currentFilters.selectedDate + 'T00:00:00');
-            timeRangeText = date.toLocaleDateString(undefined, { 
+            const dateText = date.toLocaleDateString(undefined, { 
                 weekday: 'long',
                 year: 'numeric', 
                 month: 'long', 
                 day: 'numeric' 
             });
-            activeFilters.unshift(`Date: ${timeRangeText}`);
-        } else {
-            switch(currentFilters.timeRange) {
-                case '7': timeRangeText = 'Last 7 days'; break;
-                case '30': timeRangeText = 'Last 30 days'; break;
-                case '90': timeRangeText = 'Last 90 days'; break;
-                case '365': timeRangeText = 'Last year'; break;
-                case 'all': timeRangeText = 'All time'; break;
-            }
+            activeFilters.unshift(`Date: ${dateText}`);
         }
         
         if (activeFilters.length > 0 || currentFilters.selectedDate) {
@@ -1843,7 +1757,7 @@ PulseApp.ui.backups = (() => {
                         month: 'short',
                         day: 'numeric'
                     });
-                    timeRangeText.innerHTML = `Showing backups for: <span class="font-medium text-amber-600 dark:text-amber-400">${dateStr}</span> <button onclick="PulseApp.ui.backups.clearDateFilter()" class="ml-2 text-blue-600 dark:text-blue-400 hover:underline">Clear</button>`;
+                    timeRangeText.innerHTML = `Filtering: <span class="font-medium text-amber-600 dark:text-amber-400">${dateStr}</span> <button onclick="PulseApp.ui.backups.clearDateFilter()" class="ml-2 text-blue-600 dark:text-blue-400 hover:underline">Clear</button>`;
                 }
             }
         });
