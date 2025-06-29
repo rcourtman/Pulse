@@ -570,7 +570,11 @@ PulseApp.ui.backups = (() => {
             text = Math.floor(days) + 'd\u00A0ago';
             colorClass = 'text-orange-600 dark:text-orange-400';
         } else {
-            text = new Date(timestamp * 1000).toLocaleDateString();
+            text = new Date(timestamp * 1000).toLocaleDateString(undefined, { 
+                year: 'numeric', 
+                month: 'short', 
+                day: 'numeric' 
+            });
             colorClass = 'text-red-600 dark:text-red-400';
         }
         
@@ -607,7 +611,11 @@ PulseApp.ui.backups = (() => {
                     break;
                 case 'date':
                     const date = new Date(backup.ctime * 1000);
-                    groupKey = date.toLocaleDateString();
+                    groupKey = date.toLocaleDateString(undefined, { 
+                        year: 'numeric', 
+                        month: '2-digit', 
+                        day: '2-digit' 
+                    });
                     break;
                 default:
                     groupKey = 'All';
@@ -1122,7 +1130,12 @@ PulseApp.ui.backups = (() => {
         let timeRangeText = '';
         if (currentFilters.selectedDate) {
             const date = new Date(currentFilters.selectedDate + 'T00:00:00');
-            timeRangeText = date.toLocaleDateString();
+            timeRangeText = date.toLocaleDateString(undefined, { 
+                weekday: 'long',
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+            });
             activeFilters.unshift(`Date: ${timeRangeText}`);
         } else {
             switch(currentFilters.timeRange) {
@@ -1392,7 +1405,10 @@ PulseApp.ui.backups = (() => {
                 selectedLabel.setAttribute('text-anchor', 'middle');
                 selectedLabel.setAttribute('fill', 'currentColor');
                 selectedLabel.setAttribute('class', 'text-xs font-medium text-amber-600 dark:text-amber-400');
-                selectedLabel.textContent = new Date(data[selectedIndex].timestamp).toLocaleDateString();
+                selectedLabel.textContent = new Date(data[selectedIndex].timestamp).toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric'
+                });
                 g.appendChild(selectedLabel);
             }
         }
@@ -1755,7 +1771,12 @@ PulseApp.ui.backups = (() => {
                 
                 // Format date
                 const date = new Date(point.timestamp);
-                const dateStr = date.toLocaleDateString();
+                const dateStr = date.toLocaleDateString(undefined, {
+                    weekday: 'short',
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric'
+                });
                 
                 // Build tooltip content based on chart type
                 let tooltipContent = `<strong>${dateStr}</strong><br>`;
@@ -1817,7 +1838,12 @@ PulseApp.ui.backups = (() => {
                 // Show selected date in filter info area
                 const timeRangeText = document.getElementById('time-range-text');
                 if (timeRangeText) {
-                    const dateStr = new Date(point.timestamp).toLocaleDateString();
+                    const dateStr = new Date(point.timestamp).toLocaleDateString(undefined, {
+                        weekday: 'short',
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric'
+                    });
                     timeRangeText.innerHTML = `Showing backups for: <span class="font-medium text-amber-600 dark:text-amber-400">${dateStr}</span> <button onclick="PulseApp.ui.backups.clearDateFilter()" class="ml-2 text-blue-600 dark:text-blue-400 hover:underline">Clear</button>`;
                 }
             }
