@@ -246,12 +246,19 @@ PulseApp.ui.backups = (() => {
                     
                     <div class="flex items-center gap-2 ml-auto">
                         <span class="text-xs text-gray-500 dark:text-gray-400 font-medium">Group:</span>
-                        <select id="backup-grouping" class="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none cursor-pointer">
-                            <option value="none">None</option>
-                            <option value="guest">By Guest</option>
-                            <option value="node">By Node</option>
-                            <option value="date">By Date</option>
-                        </select>
+                        <div class="segmented-control inline-flex border border-gray-300 dark:border-gray-600 rounded overflow-hidden">
+                            <input type="radio" id="group-none" name="backup-group" value="none" class="hidden peer/none" ${currentGrouping === 'none' ? 'checked' : ''}>
+                            <label for="group-none" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 peer-checked/none:bg-gray-100 dark:peer-checked/none:bg-gray-700 peer-checked/none:text-blue-600 dark:peer-checked/none:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">None</label>
+                            
+                            <input type="radio" id="group-guest" name="backup-group" value="guest" class="hidden peer/guest" ${currentGrouping === 'guest' ? 'checked' : ''}>
+                            <label for="group-guest" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/guest:bg-gray-100 dark:peer-checked/guest:bg-gray-700 peer-checked/guest:text-blue-600 dark:peer-checked/guest:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Guest</label>
+                            
+                            <input type="radio" id="group-node" name="backup-group" value="node" class="hidden peer/node" ${currentGrouping === 'node' ? 'checked' : ''}>
+                            <label for="group-node" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/node:bg-gray-100 dark:peer-checked/node:bg-gray-700 peer-checked/node:text-blue-600 dark:peer-checked/node:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Node</label>
+                            
+                            <input type="radio" id="group-date" name="backup-group" value="date" class="hidden peer/date" ${currentGrouping === 'date' ? 'checked' : ''}>
+                            <label for="group-date" class="flex items-center justify-center px-3 py-1 text-xs cursor-pointer bg-white dark:bg-gray-800 border-l border-gray-300 dark:border-gray-600 peer-checked/date:bg-gray-100 dark:peer-checked/date:bg-gray-700 peer-checked/date:text-blue-600 dark:peer-checked/date:text-blue-400 hover:bg-gray-50 dark:hover:bg-gray-700 select-none">Date</label>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -820,17 +827,18 @@ PulseApp.ui.backups = (() => {
             });
         }
         
-        // Grouping selector
-        const groupingSelect = document.getElementById('backup-grouping');
-        if (groupingSelect) {
-            groupingSelect.addEventListener('change', (e) => {
-                currentGrouping = e.target.value;
-                const tbody = document.querySelector('#backups-content tbody');
-                if (tbody) {
-                    tbody.innerHTML = renderBackupRows();
+        // Grouping radio buttons
+        document.querySelectorAll('input[name="backup-group"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    currentGrouping = e.target.value;
+                    const tbody = document.querySelector('#backups-content tbody');
+                    if (tbody) {
+                        tbody.innerHTML = renderBackupRows();
+                    }
                 }
             });
-        }
+        });
     }
 
     function sortBackups(backups) {
