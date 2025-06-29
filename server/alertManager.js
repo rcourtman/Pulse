@@ -729,49 +729,31 @@ class AlertManager extends EventEmitter {
             return;
         }
         
-        // Check global settings first - these act as master switches
-        const globalEmailEnabled = process.env.GLOBAL_EMAIL_ENABLED === 'true';
-        const globalWebhookEnabled = process.env.GLOBAL_WEBHOOK_ENABLED === 'true';
-        
-        console.log(`[AlertManager] Email notification check - GLOBAL_EMAIL_ENABLED: ${process.env.GLOBAL_EMAIL_ENABLED}, globalEmailEnabled: ${globalEmailEnabled}`);
-        
         let sendEmail, sendWebhook;
         
-        // Global email acts as master switch - if disabled, never send emails
-        if (!globalEmailEnabled) {
-            sendEmail = false;
-            console.log(`[AlertManager] Email disabled globally - sendEmail set to false`);
-        } else {
-            // Global email is enabled - check individual rule preferences and transporter
-            let ruleEmailEnabled = true; // Default to true for system rules
-            if (alert.rule) {
-                if (alert.rule.notifications && typeof alert.rule.notifications.email === 'boolean') {
-                    ruleEmailEnabled = alert.rule.notifications.email;
-                } else if (typeof alert.rule.sendEmail === 'boolean') {
-                    ruleEmailEnabled = alert.rule.sendEmail;
-                }
+        // For emails - check if email transporter exists and if rule has email enabled
+        let ruleEmailEnabled = true; // Default to true for system rules
+        if (alert.rule) {
+            if (alert.rule.notifications && typeof alert.rule.notifications.email === 'boolean') {
+                ruleEmailEnabled = alert.rule.notifications.email;
+            } else if (typeof alert.rule.sendEmail === 'boolean') {
+                ruleEmailEnabled = alert.rule.sendEmail;
             }
-            sendEmail = ruleEmailEnabled && !!this.emailTransporter;
-            console.log(`[AlertManager] Email enabled globally - ruleEmailEnabled: ${ruleEmailEnabled}, hasTransporter: ${!!this.emailTransporter}, sendEmail: ${sendEmail}`);
         }
+        sendEmail = ruleEmailEnabled && !!this.emailTransporter;
+        console.log(`[AlertManager] Email check - ruleEnabled: ${ruleEmailEnabled}, hasTransporter: ${!!this.emailTransporter}, sendEmail: ${sendEmail}`);
         
-        // Global webhook acts as master switch - if disabled, never send webhooks  
-        if (!globalWebhookEnabled) {
-            sendWebhook = false;
-            console.log(`[AlertManager] Webhook disabled globally - sendWebhook set to false`);
-        } else {
-            // Global webhook is enabled - check individual rule preferences
-            let ruleWebhookEnabled = false; // Default to false for webhooks
-            if (alert.rule) {
-                if (alert.rule.notifications && typeof alert.rule.notifications.webhook === 'boolean') {
-                    ruleWebhookEnabled = alert.rule.notifications.webhook;
-                } else if (typeof alert.rule.sendWebhook === 'boolean') {
-                    ruleWebhookEnabled = alert.rule.sendWebhook;
-                }
+        // For webhooks - check if webhook URL exists and if rule has webhooks enabled
+        let ruleWebhookEnabled = false; // Default to false for webhooks
+        if (alert.rule) {
+            if (alert.rule.notifications && typeof alert.rule.notifications.webhook === 'boolean') {
+                ruleWebhookEnabled = alert.rule.notifications.webhook;
+            } else if (typeof alert.rule.sendWebhook === 'boolean') {
+                ruleWebhookEnabled = alert.rule.sendWebhook;
             }
-            sendWebhook = ruleWebhookEnabled && process.env.WEBHOOK_URL;
-            console.log(`[AlertManager] Webhook check - globalEnabled: ${globalWebhookEnabled}, ruleEnabled: ${ruleWebhookEnabled}, hasURL: ${!!process.env.WEBHOOK_URL}, sendWebhook: ${sendWebhook}`);
         }
+        sendWebhook = ruleWebhookEnabled && !!process.env.WEBHOOK_URL;
+        console.log(`[AlertManager] Webhook check - ruleEnabled: ${ruleWebhookEnabled}, hasURL: ${!!process.env.WEBHOOK_URL}, sendWebhook: ${sendWebhook}`);
         
         // Initialize notification status tracking for this alert
         const alertId = alert.id;

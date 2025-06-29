@@ -93,9 +93,7 @@ class ConfigApi {
                     (key.startsWith('PBS_') && key.includes('_')) ||
                     key.startsWith('WEBHOOK_') ||
                     key.startsWith('SMTP_') ||
-                    key.startsWith('ALERT_') ||
-                    key === 'GLOBAL_EMAIL_ENABLED' ||
-                    key === 'GLOBAL_WEBHOOK_ENABLED') {
+                    key.startsWith('ALERT_')) {
                     response[key] = config[key];
                 }
             });
