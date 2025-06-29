@@ -149,10 +149,9 @@ PulseApp.ui.backups = (() => {
                     <div>
                         <div class="text-gray-500 dark:text-gray-400">Total Size</div>
                         <div class="text-xl font-semibold">${formatBytes(summary.totalSize).text}</div>
-                        ${summary.pbsDedupInfo ? `
-                            <div class="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                                <span class="text-green-600 dark:text-green-400">↓ ${summary.pbsDedupInfo.actualSize}</span>
-                                <span class="ml-1">(${summary.pbsDedupInfo.ratio} dedup)</span>
+                        ${summary.pbsDedupInfo && summary.pbs > 0 ? `
+                            <div class="text-xs text-green-600 dark:text-green-400 mt-0.5">
+                                ${summary.pbsDedupInfo.actualSize} actual
                             </div>
                         ` : ''}
                     </div>
@@ -251,6 +250,7 @@ PulseApp.ui.backups = (() => {
         // Render the chart after a small delay to ensure data is loaded
         setTimeout(() => {
             renderBackupTrendChart();
+            updateSummary(); // Update summary to add deduplication info
         }, 100);
     }
 
@@ -266,43 +266,25 @@ PulseApp.ui.backups = (() => {
             if (backupsData.pbsEnabled && summaryElements.length >= 4) {
                 summaryElements[2].textContent = summary.pbs;
                 summaryElements[3].textContent = formatBytes(summary.totalSize).text;
+                
+                // Add dedup info below total size
+                const sizeContainer = container.querySelector('.grid > div:last-child');
+                if (sizeContainer && summary.pbsDedupInfo && summary.pbs > 0) {
+                    const dedupDiv = sizeContainer.querySelector('.text-xs.text-green-600') || 
+                                    sizeContainer.querySelector('.text-xs.text-green-600');
+                    if (dedupDiv) {
+                        dedupDiv.textContent = `${summary.pbsDedupInfo.actualSize} actual`;
+                    }
+                }
             } else {
                 summaryElements[2].textContent = formatBytes(summary.totalSize).text;
             }
         }
         
-        // Update deduplication info
-        const sizeContainer = container.querySelector('.grid > div:last-child');
-        if (sizeContainer && summary.pbsDedupInfo) {
-            // First check if we need to add a wrapper for the size display
-            let sizeDisplay = sizeContainer.querySelector('.text-xl.font-semibold');
-            if (sizeDisplay) {
-                // Update the main size display to show the logical size
-                sizeDisplay.textContent = summary.pbsDedupInfo.logicalSize;
-                
-                // Add/update deduplication info
-                const dedupDiv = sizeContainer.querySelector('.dedup-info') || document.createElement('div');
-                dedupDiv.className = 'dedup-info text-xs text-gray-600 dark:text-gray-400 mt-1';
-                dedupDiv.innerHTML = `
-                    <div class="flex items-center gap-2">
-                        <span class="text-green-600 dark:text-green-400">
-                            <i class="fas fa-compress text-xs"></i>
-                            ${summary.pbsDedupInfo.actualSize} actual
-                        </span>
-                        <span class="text-gray-500 dark:text-gray-400">•</span>
-                        <span>${summary.pbsDedupInfo.ratio} dedup</span>
-                        <span class="text-gray-500 dark:text-gray-400">•</span>
-                        <span class="text-green-600 dark:text-green-400">${summary.pbsDedupInfo.savings}% saved</span>
-                    </div>
-                `;
-                if (!sizeContainer.querySelector('.dedup-info')) {
-                    sizeContainer.appendChild(dedupDiv);
-                }
-            }
-        } else if (sizeContainer) {
-            // Remove dedup info if not applicable
-            const dedupDiv = sizeContainer.querySelector('.dedup-info');
-            if (dedupDiv) dedupDiv.remove();
+        // Update table rows to refresh dedup info
+        const tbody = container.querySelector('tbody');
+        if (tbody) {
+            tbody.innerHTML = renderBackupRows();
         }
     }
 
