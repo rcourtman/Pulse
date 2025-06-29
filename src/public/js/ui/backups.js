@@ -325,7 +325,7 @@ PulseApp.ui.backups = (() => {
             const sizeLabel = summaryCards[sizeCardIndex].querySelector('.text-gray-500');
             const sizeValue = summaryCards[sizeCardIndex].querySelector('.text-xl.font-semibold');
             const dedupText = summaryCards[sizeCardIndex].querySelector('.text-xs.text-green-600');
-            const growthText = summaryCards[sizeCardIndex].querySelectorAll('.text-xs')[1] || summaryCards[sizeCardIndex].querySelector('.text-xs.text-gray-600');
+            const growthText = summaryCards[sizeCardIndex].querySelector('.text-xs.text-gray-600');
             
             if (sizeLabel) {
                 const labelText = sizeLabel.childNodes[sizeLabel.childNodes.length - 1];
